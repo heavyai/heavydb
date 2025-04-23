@@ -181,7 +181,9 @@ void InternalSystemDataWrapper::populateChunkMetadata(
       chunk_key.emplace_back(1);
     }
     chunk_metadata_vector.emplace_back(
-        chunk_key, get_placeholder_metadata(column->columnType, row_count_));
+        chunk_key,
+        std::make_shared<ChunkMetadata>(
+            get_placeholder_metadata(column->columnType, row_count_, {})));
   }
 }
 

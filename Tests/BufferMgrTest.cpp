@@ -451,12 +451,9 @@ class BufferMgrTest : public testing::TestWithParam<MgrType> {
     ASSERT_TRUE(buffer_2->hasEncoder());
     EXPECT_EQ(buffer_1->getSqlType(), buffer_2->getSqlType());
 
-    auto source_chunk_metadata = std::make_shared<ChunkMetadata>();
-    buffer_1->getEncoder()->getMetadata(source_chunk_metadata);
-
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    buffer_2->getEncoder()->getMetadata(chunk_metadata);
-    EXPECT_EQ(*source_chunk_metadata, *chunk_metadata);
+    auto source_chunk_metadata = buffer_1->getEncoder()->getMetadata();
+    auto chunk_metadata = buffer_2->getEncoder()->getMetadata();
+    EXPECT_EQ(source_chunk_metadata, chunk_metadata);
   }
 
   void assertSegmentCount(size_t expected_segment_count) {
@@ -1174,15 +1171,12 @@ TEST_P(BufferMgrTest, PutBufferExistingBufferPartialUpdate) {
   ASSERT_TRUE(buffer->hasEncoder());
   EXPECT_EQ(source_buffer->getSqlType(), buffer->getSqlType());
 
-  auto source_chunk_metadata = std::make_shared<ChunkMetadata>();
-  source_buffer->getEncoder()->getMetadata(source_chunk_metadata);
+  auto source_chunk_metadata = source_buffer->getEncoder()->getMetadata();
+  auto chunk_metadata = buffer->getEncoder()->getMetadata();
 
-  auto chunk_metadata = std::make_shared<ChunkMetadata>();
-  buffer->getEncoder()->getMetadata(chunk_metadata);
-
-  EXPECT_EQ(source_chunk_metadata->sqlType, chunk_metadata->sqlType);
-  EXPECT_EQ(source_chunk_metadata->numBytes, size_t(2));
-  EXPECT_EQ(chunk_metadata->numBytes, size_t(4));
+  EXPECT_EQ(source_chunk_metadata.sqlType, chunk_metadata.sqlType);
+  EXPECT_EQ(source_chunk_metadata.numBytes, size_t(2));
+  EXPECT_EQ(chunk_metadata.numBytes, size_t(4));
 
   assertExpectedBufferMgrAttributes();
 }

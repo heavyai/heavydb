@@ -212,20 +212,12 @@ void AbstractTextFileDataWrapper::updateMetadata(
         data_chunk_key.emplace_back(1);
       }
       CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
+      CHECK_EQ(entry.second.getBuffer()->getEncoder()->getNumElems(),
+               chunk_metadata_map_[data_chunk_key]->numElements);
       // Allocate new shared_ptr for metadata so we dont modify old one which may be
       // used by executor
-      auto cached_metadata_previous =
-          shared::get_from_map(chunk_metadata_map_, data_chunk_key);
-      shared::get_from_map(chunk_metadata_map_, data_chunk_key) =
-          std::make_shared<ChunkMetadata>();
-      auto cached_metadata = shared::get_from_map(chunk_metadata_map_, data_chunk_key);
-      *cached_metadata = *cached_metadata_previous;
-      auto chunk_metadata =
-          entry.second.getBuffer()->getEncoder()->getMetadata(column->columnType);
-      cached_metadata->chunkStats.max = chunk_metadata->chunkStats.max;
-      cached_metadata->chunkStats.min = chunk_metadata->chunkStats.min;
-      cached_metadata->chunkStats.has_nulls = chunk_metadata->chunkStats.has_nulls;
-      cached_metadata->numBytes = entry.second.getBuffer()->size();
+      chunk_metadata_map_[data_chunk_key] = std::make_shared<ChunkMetadata>(
+          entry.second.getBuffer()->getEncoder()->getMetadata());
     }
   }
 }
@@ -1362,8 +1354,8 @@ void add_placeholder_metadata(
                               : foreign_table->maxFragRows;
 
     chunk_key[CHUNK_KEY_FRAGMENT_IDX] = fragment_id;
-    chunk_metadata_map[chunk_key] =
-        get_placeholder_metadata(column->columnType, num_elements);
+    chunk_metadata_map[chunk_key] = std::make_shared<ChunkMetadata>(
+        get_placeholder_metadata(column->columnType, num_elements, RasterTileInfo{}));
   }
 }
 
@@ -1530,20 +1522,20 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     CHECK(column_entry != column_by_id.end());
     const auto& column_type = column_entry->second->columnType;
     auto chunk_metadata = buffer->getEncoder()->getMetadata(column_type);
-    chunk_metadata->numElements = buffer->getEncoder()->getNumElems();
+    chunk_metadata.numElements = buffer->getEncoder()->getNumElems();
     const auto& cached_chunks = multi_threading_params.cached_chunks;
     if (!column_type.is_varlen_indeed()) {
-      chunk_metadata->numBytes = column_type.get_size() * chunk_metadata->numElements;
+      chunk_metadata.numBytes = column_type.get_size() * chunk_metadata.numElements;
     } else if (auto chunk_entry = cached_chunks.find(chunk_key);
                chunk_entry != cached_chunks.end()) {
       auto cached_buffer = chunk_entry->second.getBuffer();
       CHECK(cached_buffer);
-      chunk_metadata->numBytes = cached_buffer->size();
+      chunk_metadata.numBytes = cached_buffer->size();
       buffer->setSize(cached_buffer->size());
     } else {
-      chunk_metadata->numBytes = buffer->size();
+      chunk_metadata.numBytes = buffer->size();
     }
-    chunk_metadata_map_[chunk_key] = chunk_metadata;
+    chunk_metadata_map_[chunk_key] = std::make_shared<ChunkMetadata>(chunk_metadata);
   }
 
   for (auto column : columns) {
@@ -1763,8 +1755,10 @@ void AbstractTextFileDataWrapper::updateRolledOffChunks(
       CHECK(partially_deleted_fragment_row_count.has_value());
       auto old_chunk_stats = chunk_metadata->chunkStats;
       auto cd = shared::get_from_map(column_by_id, chunk_key[CHUNK_KEY_COLUMN_IDX]);
-      chunk_metadata = get_placeholder_metadata(
-          cd->columnType, partially_deleted_fragment_row_count.value());
+      chunk_metadata = std::make_shared<ChunkMetadata>(
+          get_placeholder_metadata(cd->columnType,
+                                   partially_deleted_fragment_row_count.value(),
+                                   RasterTileInfo{}));
       // Old chunk stats will still be correct (since only row deletion is occurring)
       // and more accurate than that of the placeholder metadata.
       chunk_metadata->chunkStats = old_chunk_stats;
@@ -1823,19 +1817,13 @@ void AbstractTextFileDataWrapper::restoreDataWrapperInternals(
   CHECK(chunk_metadata_map_.empty());
   CHECK(chunk_encoder_buffers_.empty());
 
-  for (auto& pair : chunk_metadata) {
-    chunk_metadata_map_[pair.first] = pair.second;
+  for (const auto& [key, meta] : chunk_metadata) {
+    chunk_metadata_map_[key] = meta;
 
     if (foreign_table_->isAppendMode()) {
       // Restore encoder state for append mode
-      chunk_encoder_buffers_[pair.first] = std::make_unique<ForeignStorageBuffer>();
-      chunk_encoder_buffers_[pair.first]->initEncoder(pair.second->sqlType);
-      chunk_encoder_buffers_[pair.first]->setSize(pair.second->numBytes);
-      chunk_encoder_buffers_[pair.first]->getEncoder()->setNumElems(
-          pair.second->numElements);
-      chunk_encoder_buffers_[pair.first]->getEncoder()->resetChunkStats(
-          pair.second->chunkStats);
-      chunk_encoder_buffers_[pair.first]->setUpdated();
+      chunk_encoder_buffers_[key] = std::make_unique<ForeignStorageBuffer>();
+      chunk_encoder_buffers_[key]->setMetadata(*meta);
     }
   }
   is_restored_ = true;

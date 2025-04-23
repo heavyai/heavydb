@@ -986,7 +986,7 @@ void InsertOrderFragmenter::updateColumnMetadata(
   auto td = updel_roll.catalog->getMetadataForTable(cd->tableId);
   auto chunk_metadata =
       updel_roll.getChunkMetadata({td, &fragment}, cd->columnId, fragment);
-  buffer->getEncoder()->getMetadata(chunk_metadata);
+  *chunk_metadata = buffer->getEncoder()->getMetadata();
 }
 
 void InsertOrderFragmenter::updateMetadata(const Catalog_Namespace::Catalog* catalog,

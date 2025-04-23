@@ -39,14 +39,6 @@ void iterate_over_matching_prefix(Func func,
     func(*chunk_it);
   }
 }
-
-void set_metadata_for_buffer(AbstractBuffer* buffer, ChunkMetadata* meta) {
-  buffer->initEncoder(meta->sqlType);
-  buffer->setSize(meta->numBytes);
-  buffer->getEncoder()->setNumElems(meta->numElements);
-  buffer->getEncoder()->resetChunkStats(meta->chunkStats);
-  buffer->setUpdated();
-}
 }  // namespace
 
 ForeignStorageCache::ForeignStorageCache(const File_Namespace::DiskCacheConfig& config) {
@@ -146,16 +138,14 @@ void ForeignStorageCache::cacheMetadataVec(const ChunkMetadataVector& metadata_v
 
       // We should have already cleared the data unless we are appending
       // If the buffer metadata has changed, we need to remove this chunk
-      if (buf->getEncoder() != nullptr) {
-        const std::shared_ptr<ChunkMetadata> buf_metadata =
-            std::make_shared<ChunkMetadata>();
-        buf->getEncoder()->getMetadata(buf_metadata);
-        chunk_in_cache = *metadata.get() == *buf_metadata;
+      if (auto encoder_ptr = buf->getEncoder(); encoder_ptr != nullptr) {
+        const auto buf_metadata = encoder_ptr->getMetadata();
+        chunk_in_cache = *metadata.get() == buf_metadata;
       }
     }
 
     if (!chunk_in_cache) {
-      set_metadata_for_buffer(buf, metadata.get());
+      buf->setMetadata(*metadata);
       eraseChunk(chunk_key);
 
       if (!index_chunk_key.empty()) {

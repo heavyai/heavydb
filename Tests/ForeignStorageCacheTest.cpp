@@ -75,8 +75,8 @@ class ForeignStorageCacheUnitTest : public testing::Test {
     }
 
     void cacheMetadata(const ChunkKey& chunk_key) {
-      std::shared_ptr<ChunkMetadata> cached_meta = std::make_shared<ChunkMetadata>();
-      chunk->getBuffer()->getEncoder()->getMetadata(cached_meta);
+      auto cached_meta = std::make_shared<ChunkMetadata>(
+          chunk->getBuffer()->getEncoder()->getMetadata());
       cache_->cacheMetadataVec({std::make_pair(chunk_key, cached_meta)});
     }
 
@@ -118,7 +118,7 @@ class ForeignStorageCacheUnitTest : public testing::Test {
     min.intval = in_min;
     max.intval = in_max;
     return std::make_shared<ChunkMetadata>(
-        kINT, num_bytes, num_elements, ChunkStats{min, max, has_nulls});
+        kINT, num_bytes, num_elements, ChunkStats{min, max, has_nulls}, RasterTileInfo{});
   }
 
   static void assertMetadataEqual(const std::shared_ptr<ChunkMetadata> left_metadata,
@@ -375,8 +375,8 @@ TEST_F(ForeignStorageCacheFileTest, FileCreation) {
     ASSERT_EQ(cache.getCachedChunkIfExists(chunk_key1), nullptr);
     TestBuffer source_buffer{std::vector<int8_t>{1, 2, 3, 4}};
     source_buffer.initEncoder(kINT);
-    std::shared_ptr<ChunkMetadata> cached_meta = std::make_shared<ChunkMetadata>();
-    source_buffer.getEncoder()->getMetadata(cached_meta);
+    auto cached_meta =
+        std::make_shared<ChunkMetadata>(source_buffer.getEncoder()->getMetadata());
     cache.cacheMetadataVec({std::make_pair(chunk_key1, cached_meta)});
     auto buffer_map = cache.getChunkBuffersForCaching(std::set<ChunkKey>{chunk_key1});
     buffer_map[chunk_key1]->append(source_buffer.getMemoryPtr(), source_buffer.size());

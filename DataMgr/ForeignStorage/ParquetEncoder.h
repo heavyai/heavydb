@@ -94,12 +94,10 @@ class ParquetEncoder {
   bool validate_metadata_stats_;
 
   static std::shared_ptr<ChunkMetadata> createMetadata(const SQLTypeInfo& column_type) {
-    auto metadata = std::make_shared<ChunkMetadata>();
     ForeignStorageBuffer buffer;
     buffer.initEncoder(column_type.is_array() ? column_type.get_elem_type()
                                               : column_type);
-    auto encoder = buffer.getEncoder();
-    encoder->getMetadata(metadata);
+    auto metadata = std::make_shared<ChunkMetadata>(buffer.getEncoder()->getMetadata());
     metadata->sqlType = column_type;
     return metadata;
   }
