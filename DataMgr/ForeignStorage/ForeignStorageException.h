@@ -41,8 +41,8 @@ struct InvalidIntOptionException : public ForeignStorageException {
   InvalidIntOptionException(const std::string& table,
                             const std::string& option,
                             const std::string& value)
-      : ForeignStorageException("Foreign table '" + table + "' with " + option + "='" +
-                                value + "': " + option +
+      : ForeignStorageException("Table '" + table + "' with " + option + "='" + value +
+                                "': " + option +
                                 " must be an integer value greater than zero") {}
 };
 

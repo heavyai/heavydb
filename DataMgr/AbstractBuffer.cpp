@@ -20,6 +20,7 @@ outside of the header file in order to prevent unnecessary re-compilation.
 */
 
 #include "AbstractBuffer.h"
+#include "DataMgr/ChunkMetadata.h"
 
 namespace Data_Namespace {
 
@@ -65,5 +66,12 @@ void AbstractBuffer::copyTo(AbstractBuffer* destination_buffer, const size_t num
 void AbstractBuffer::resetToEmpty() {
   encoder_ = nullptr;
   size_ = 0;
+}
+
+void AbstractBuffer::setMetadata(const ChunkMetadata& meta) {
+  initEncoder(meta.sqlType);
+  setSize(meta.numBytes);
+  getEncoder()->setMetadata(meta);
+  setUpdated();
 }
 }  // namespace Data_Namespace

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "DataMgr/ChunkMetadata.h"
 #include "LeafHostInfo.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/ExecutorDeviceType.h"
@@ -39,6 +40,69 @@
 #include <iostream>
 #endif
 #endif
+
+// per-component comparison with epsilon tolerance for floating-point values
+// EXPECT_EQ of the whole object does not tolerate x86/ARM differences
+// Part of the reason we want this in a macro intead of a function is so that it correctly
+// identifies the source line during a test failure.
+#define EXPECT_CHUNK_METADATA_EQ(a, b)                                                  \
+  {                                                                                     \
+    auto const& found = (a);                                                            \
+    auto const& expected = (b);                                                         \
+    ASSERT_EQ(found.sqlType, expected.sqlType);                                         \
+    EXPECT_EQ(found.numBytes, expected.numBytes);                                       \
+    EXPECT_EQ(found.numElements, expected.numElements);                                 \
+    switch (found.sqlType.get_type()) {                                                 \
+      case kBOOLEAN:                                                                    \
+        EXPECT_EQ(found.chunkStats.min.tinyintval, expected.chunkStats.min.tinyintval); \
+        EXPECT_EQ(found.chunkStats.max.tinyintval, expected.chunkStats.max.tinyintval); \
+        break;                                                                          \
+      case kTINYINT:                                                                    \
+        EXPECT_EQ(found.chunkStats.min.tinyintval, expected.chunkStats.min.tinyintval); \
+        EXPECT_EQ(found.chunkStats.max.tinyintval, expected.chunkStats.max.tinyintval); \
+        break;                                                                          \
+      case kSMALLINT:                                                                   \
+        EXPECT_EQ(found.chunkStats.min.smallintval,                                     \
+                  expected.chunkStats.min.smallintval);                                 \
+        EXPECT_EQ(found.chunkStats.max.smallintval,                                     \
+                  expected.chunkStats.max.smallintval);                                 \
+        break;                                                                          \
+      case kINT:                                                                        \
+        EXPECT_EQ(found.chunkStats.min.intval, expected.chunkStats.min.intval);         \
+        EXPECT_EQ(found.chunkStats.max.intval, expected.chunkStats.max.intval);         \
+        break;                                                                          \
+      case kBIGINT:                                                                     \
+      case kNUMERIC:                                                                    \
+      case kDECIMAL:                                                                    \
+        EXPECT_EQ(found.chunkStats.min.bigintval, expected.chunkStats.min.bigintval);   \
+        EXPECT_EQ(found.chunkStats.max.bigintval, expected.chunkStats.max.bigintval);   \
+        break;                                                                          \
+      case kFLOAT:                                                                      \
+        EXPECT_FLOAT_EQ(found.chunkStats.min.floatval,                                  \
+                        expected.chunkStats.min.floatval);                              \
+        EXPECT_FLOAT_EQ(found.chunkStats.max.floatval,                                  \
+                        expected.chunkStats.max.floatval);                              \
+        break;                                                                          \
+      case kDOUBLE:                                                                     \
+        EXPECT_DOUBLE_EQ(found.chunkStats.min.doubleval,                                \
+                         expected.chunkStats.min.doubleval);                            \
+        EXPECT_DOUBLE_EQ(found.chunkStats.max.doubleval,                                \
+                         expected.chunkStats.max.doubleval);                            \
+        break;                                                                          \
+      case kVARCHAR:                                                                    \
+      case kCHAR:                                                                       \
+      case kTEXT:                                                                       \
+        if (found.sqlType.get_compression() == kENCODING_DICT) {                        \
+          EXPECT_EQ(found.chunkStats.min.intval, expected.chunkStats.min.intval);       \
+          EXPECT_EQ(found.chunkStats.max.intval, expected.chunkStats.max.intval);       \
+        }                                                                               \
+        break;                                                                          \
+      default:                                                                          \
+        UNREACHABLE() << "Unknown metadata type";                                       \
+    }                                                                                   \
+    EXPECT_EQ(found.chunkStats.has_nulls, expected.chunkStats.has_nulls);               \
+    EXPECT_EQ(found.rasterTile, expected.rasterTile);                                   \
+  }
 
 namespace TestHelpers {
 

@@ -452,8 +452,11 @@ void FileBuffer::readMetadata(const Page& page) {
       NUM_METADATA);  // assumes we will encode hasEncoder, bufferType,
                       // encodingType, encodingBits all as int
   fread((int8_t*)&(typeData[0]), sizeof(int32_t), typeData.size(), f);
-  int32_t version = typeData[0];
-  CHECK(version == METADATA_VERSION);  // add backward compatibility code here
+  int32_t disk_version = typeData[0];
+  auto system_version = Encoder::metadata_version_;
+  CHECK_GE(system_version, disk_version)
+      << "Encountered unsupported metadata version (" << disk_version << ") on disk for "
+      << fm_->describeSelf() << ". Current version is (" << system_version << ").";
   bool has_encoder = static_cast<bool>(typeData[1]);
   if (has_encoder) {
     sql_type_.set_type(static_cast<SQLTypes>(typeData[2]));
@@ -465,7 +468,7 @@ void FileBuffer::readMetadata(const Page& page) {
     sql_type_.set_comp_param(typeData[8]);
     sql_type_.set_size(typeData[9]);
     initEncoder(sql_type_);
-    encoder_->readMetadata(f);
+    encoder_->readMetadata(f, disk_version);
   }
 }
 
@@ -481,7 +484,7 @@ void FileBuffer::writeMetadata(const int32_t epoch) {
   vector<int32_t> typeData(
       NUM_METADATA);  // assumes we will encode hasEncoder, bufferType,
                       // encodingType, encodingBits all as int32_t
-  typeData[0] = METADATA_VERSION;
+  typeData[0] = Encoder::metadata_version_;
   typeData[1] = static_cast<int32_t>(hasEncoder());
   if (hasEncoder()) {
     typeData[2] = static_cast<int32_t>(sql_type_.get_type());
@@ -666,5 +669,4 @@ size_t FileBuffer::numChunkPages() const {
   }
   return total_size;
 }
-
 }  // namespace File_Namespace

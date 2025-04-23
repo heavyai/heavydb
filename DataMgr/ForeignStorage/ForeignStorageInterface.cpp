@@ -131,16 +131,14 @@ void ForeignStorageBufferMgr::getChunkMetadataVecForKeyPrefix(
         subkey[4] = 2;
         auto& index_buf = *(chunk_index_.find(subkey)->second);
         auto bs = index_buf.size() / index_buf.getSqlType().get_size();
-        auto chunk_metadata =
-            std::make_shared<ChunkMetadata>(type, size, bs, ChunkStats{});
+        auto chunk_metadata = std::make_shared<ChunkMetadata>(
+            type, size, bs, ChunkStats{}, RasterTileInfo{});
         chunkMetadataVec.emplace_back(chunk_key, chunk_metadata);
       }
     } else {
       const auto& buffer = *chunk_it->second;
-      auto chunk_metadata = std::make_shared<ChunkMetadata>();
-      chunk_metadata->sqlType = buffer.getSqlType();
-      buffer.getEncoder()->getMetadata(chunk_metadata);
-      chunkMetadataVec.emplace_back(chunk_key, chunk_metadata);
+      chunkMetadataVec.emplace_back(
+          chunk_key, std::make_shared<ChunkMetadata>(buffer.getEncoder()->getMetadata()));
     }
     chunk_it++;
   }

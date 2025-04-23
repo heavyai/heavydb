@@ -5968,7 +5968,7 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
       max = StringToDatum(s_max, elem_type);
     }
     return std::make_shared<ChunkMetadata>(
-        type, num_bytes, num_elements, ChunkStats{min, max, has_nulls});
+        type, num_bytes, num_elements, ChunkStats{min, max, has_nulls}, RasterTileInfo{});
   }
 
   static void assertMetadataEqual(const std::shared_ptr<ChunkMetadata> left_metadata,

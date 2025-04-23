@@ -243,7 +243,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   void getChunkMetadata();
 
   void lockInsertCheckpointData(const InsertData& insertDataStruct);
-  void insertDataImpl(InsertData& insert_data);
+  virtual void insertDataImpl(InsertData& insert_data);
   virtual void insertChunksImpl(const InsertChunks& insert_chunk);
   void addColumns(const InsertData& insertDataStruct);
 
@@ -260,7 +260,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   auto vacuum_varlen_rows(const FragmentInfo& fragment,
                           const std::shared_ptr<Chunk_NS::Chunk>& chunk,
                           const std::vector<uint64_t>& frag_offsets);
-  void dropFragmentsToSizeNoInsertLock(const size_t max_rows);
+  virtual void dropFragmentsToSizeNoInsertLock(const size_t max_rows);
   void insertChunksIntoFragment(const InsertChunks& insert_chunks,
                                 const std::optional<int> delete_column_id,
                                 FragmentInfo* current_fragment,

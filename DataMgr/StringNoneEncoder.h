@@ -36,7 +36,7 @@ using Data_Namespace::AbstractBuffer;
 class StringNoneEncoder : public Encoder {
  public:
   StringNoneEncoder(AbstractBuffer* buffer)
-      : Encoder(buffer), index_buf(nullptr), last_offset(-1), has_nulls(false) {}
+      : Encoder(buffer), index_buf_(nullptr), last_offset_(-1), has_nulls_(false) {}
 
   size_t getNumElemsForBytesInsertData(const std::string* srcData,
                                        const int start_idx,
@@ -79,10 +79,9 @@ class StringNoneEncoder : public Encoder {
                                             const size_t numAppendElems,
                                             const bool replicating = false);
 
-  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override;
+  ChunkStats getChunkStats() const override;
 
-  // Only called from the executor for synthesized meta-information.
-  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override;
+  ChunkStats synthesizeChunkStats(const SQLTypeInfo&) const override;
 
   void updateStats(const int64_t, const bool) override { CHECK(false); }
 
@@ -114,35 +113,30 @@ class StringNoneEncoder : public Encoder {
 
   void reduceStats(const Encoder&) override { CHECK(false); }
 
-  void writeMetadata(FILE* f) override {
-    // assumes pointer is already in right place
-    fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
-    fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
+  void writeChunkStats(FILE* f) override {
+    fwrite((int8_t*)&has_nulls_, sizeof(bool), 1, f);
   }
 
-  void readMetadata(FILE* f) override {
-    // assumes pointer is already in right place
-    CHECK_NE(fread((int8_t*)&num_elems_, sizeof(size_t), size_t(1), f), size_t(0));
-    CHECK_NE(fread((int8_t*)&has_nulls, sizeof(bool), size_t(1), f), size_t(0));
+  void readChunkStats(FILE* f) override {
+    CHECK_NE(fread((int8_t*)&has_nulls_, sizeof(bool), size_t(1), f), size_t(0));
   }
 
-  void copyMetadata(const Encoder* copyFromEncoder) override {
-    num_elems_ = copyFromEncoder->getNumElems();
-    has_nulls = static_cast<const StringNoneEncoder*>(copyFromEncoder)->has_nulls;
+  void copyChunkStats(const Encoder* copyFromEncoder) override {
+    has_nulls_ = static_cast<const StringNoneEncoder*>(copyFromEncoder)->has_nulls_;
   }
 
-  AbstractBuffer* getIndexBuf() const { return index_buf; }
-  void setIndexBuffer(AbstractBuffer* buf) { index_buf = buf; }
+  AbstractBuffer* getIndexBuf() const { return index_buf_; }
+  void setIndexBuffer(AbstractBuffer* buf) { index_buf_ = buf; }
 
-  bool resetChunkStats(const ChunkStats& stats) override {
-    if (has_nulls == stats.has_nulls) {
+  bool setChunkStats(const ChunkStats& stats) override {
+    if (has_nulls_ == stats.has_nulls) {
       return false;
     }
-    has_nulls = stats.has_nulls;
+    has_nulls_ = stats.has_nulls;
     return true;
   }
 
-  void resetChunkStats() override { has_nulls = false; }
+  void resetChunkStats() override { has_nulls_ = false; }
 
   static std::string_view getStringAtIndex(const int8_t* index_data,
                                            const int8_t* data,
@@ -155,9 +149,9 @@ class StringNoneEncoder : public Encoder {
 
   static size_t getStringSizeAtIndex(const int8_t* index_data, size_t index);
 
-  AbstractBuffer* index_buf;
-  StringOffsetT last_offset;
-  bool has_nulls;
+  AbstractBuffer* index_buf_;
+  StringOffsetT last_offset_;
+  bool has_nulls_;
 
   template <typename StringType>
   void update_elem_stats(const StringType& elem);

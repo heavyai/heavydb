@@ -389,7 +389,9 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
     for (size_t i = 0; i < rows->colCount(); ++i) {
       decoders.emplace_back(Encoder::Create(nullptr, rows->getColType(i)));
       const auto it_ok =
-          metadata_map.emplace(i, decoders.back()->getMetadata(rows->getColType(i)));
+          metadata_map.emplace(i,
+                               std::make_shared<ChunkMetadata>(
+                                   decoders.back()->getMetadata(rows->getColType(i))));
       CHECK(it_ok.second);
     }
     return metadata_map;
@@ -504,7 +506,9 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
   // Add each column's results to the metadata map.
   for (size_t i = 0; i < rows->colCount(); ++i) {
     const auto it_ok =
-        metadata_map.emplace(i, dummy_encoders[0][i]->getMetadata(rows->getColType(i)));
+        metadata_map.emplace(i,
+                             std::make_shared<ChunkMetadata>(
+                                 dummy_encoders[0][i]->getMetadata(rows->getColType(i))));
     CHECK(it_ok.second);
   }
   return metadata_map;

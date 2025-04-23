@@ -74,25 +74,27 @@ void init_chunk_for_column(
   chunk.initEncoder();
 }
 
-std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const SQLTypeInfo& type,
-                                                        size_t num_elements) {
+ChunkMetadata get_placeholder_metadata(const SQLTypeInfo& type,
+                                       const size_t num_elements,
+                                       const RasterTileInfo& raster_tile) {
   ForeignStorageBuffer empty_buffer;
   // Use default encoder metadata as in parquet wrapper
   empty_buffer.initEncoder(type);
 
-  auto chunk_metadata = empty_buffer.getEncoder()->getMetadata(type);
-  chunk_metadata->numElements = num_elements;
+  auto chunk_metadata = empty_buffer.getEncoder()->getMetadata();
+  chunk_metadata.numElements = num_elements;
+  chunk_metadata.rasterTile = raster_tile;
 
   if (!type.is_varlen_indeed()) {
-    chunk_metadata->numBytes = type.get_size() * num_elements;
+    chunk_metadata.numBytes = type.get_size() * num_elements;
   }
   // min/max not set by default for arrays, so get from elem type encoder
   if (type.is_array()) {
     ForeignStorageBuffer scalar_buffer;
     scalar_buffer.initEncoder(type.get_elem_type());
-    auto scalar_metadata = scalar_buffer.getEncoder()->getMetadata(type.get_elem_type());
-    chunk_metadata->chunkStats.min = scalar_metadata->chunkStats.min;
-    chunk_metadata->chunkStats.max = scalar_metadata->chunkStats.max;
+    auto scalar_metadata = scalar_buffer.getEncoder()->getMetadata();
+    chunk_metadata.chunkStats.min = scalar_metadata.chunkStats.min;
+    chunk_metadata.chunkStats.max = scalar_metadata.chunkStats.max;
   }
 
   return chunk_metadata;

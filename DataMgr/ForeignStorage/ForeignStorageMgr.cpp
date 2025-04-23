@@ -175,11 +175,10 @@ void ForeignStorageMgr::updateFragmenterMetadata(const ChunkToBufferMap& buffers
       continue;
     }
     auto encoder = buffer->getEncoder();
-    CHECK(encoder);
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    encoder->getMetadata(chunk_metadata);
     fragmenter->updateColumnChunkMetadata(
-        column, key[CHUNK_KEY_FRAGMENT_IDX], chunk_metadata);
+        column,
+        key[CHUNK_KEY_FRAGMENT_IDX],
+        std::make_shared<ChunkMetadata>(encoder->getMetadata()));
   }
 }
 
@@ -217,7 +216,7 @@ void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
     throw ForeignStorageException{
         "Query cannot be executed for foreign table because FSI is currently disabled."};
   }
-  CHECK(is_table_key(key_prefix));
+  CHECK(has_table_prefix(key_prefix));
 
   if (!is_table_enabled_on_node(key_prefix)) {
     // If the table is not enabled for this node then the request should do nothing.
@@ -266,6 +265,7 @@ bool ForeignStorageMgr::hasDataWrapperForChunk(const ChunkKey& chunk_key) const 
 
 std::shared_ptr<ForeignDataWrapper> ForeignStorageMgr::getDataWrapper(
     const ChunkKey& chunk_key) const {
+  CHECK(has_table_prefix(chunk_key));
   std::shared_lock data_wrapper_lock(data_wrapper_mutex_);
   ChunkKey table_key{chunk_key[CHUNK_KEY_DB_IDX], chunk_key[CHUNK_KEY_TABLE_IDX]};
   CHECK(data_wrapper_map_.find(table_key) != data_wrapper_map_.end());
@@ -676,7 +676,7 @@ void ForeignStorageMgr::evictChunkFromCache(const ChunkKey& chunk_key) {
 
 // Determine if a wrapper is enabled on the current distributed node.
 bool is_table_enabled_on_node(const ChunkKey& chunk_key) {
-  CHECK(is_table_key(chunk_key));
+  CHECK(has_table_prefix(chunk_key));
 
   // Replicated tables, system tables, and non-distributed tables are on all nodes by
   // default.  Leaf nodes are on, but will filter their results later by their node index.

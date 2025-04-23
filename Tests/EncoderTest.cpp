@@ -153,9 +153,8 @@ class EncoderUpdateStatsTest : public EncoderTest {
   template <typename T>
   void assertExpectedStats(const T& min, const T& max, const bool has_nulls) {
     auto encoder = buffer_->getEncoder();
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    encoder->getMetadata(chunk_metadata);
-    const auto& chunkStats = chunk_metadata->chunkStats;
+    auto chunk_metadata = encoder->getMetadata();
+    const auto& chunkStats = chunk_metadata.chunkStats;
     auto stats_min = DatumFetcher::getDatumVal<T>(chunkStats.min);
     auto stats_max = DatumFetcher::getDatumVal<T>(chunkStats.max);
     ASSERT_EQ(stats_min, min);
@@ -165,9 +164,8 @@ class EncoderUpdateStatsTest : public EncoderTest {
 
   void assertHasNulls(bool has_nulls) {
     auto encoder = buffer_->getEncoder();
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    encoder->getMetadata(chunk_metadata);
-    const auto& chunkStats = chunk_metadata->chunkStats;
+    auto chunk_metadata = encoder->getMetadata();
+    const auto& chunkStats = chunk_metadata.chunkStats;
     ASSERT_EQ(chunkStats.has_nulls, has_nulls);
   }
 

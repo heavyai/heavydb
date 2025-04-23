@@ -30,8 +30,9 @@ void init_chunk_for_column(
     Chunk_NS::Chunk& chunk);
 
 // Construct default metadata for given column descriptor with num_elements
-std::shared_ptr<ChunkMetadata> get_placeholder_metadata(const SQLTypeInfo& type,
-                                                        size_t num_elements);
+ChunkMetadata get_placeholder_metadata(const SQLTypeInfo& type,
+                                       const size_t num_elements,
+                                       const RasterTileInfo& raster_tile);
 /*
   Splits up a set of items to be processed into multiple partitions, with the intention
   that each thread will process a separate part.

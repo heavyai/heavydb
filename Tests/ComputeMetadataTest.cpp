@@ -1248,11 +1248,10 @@ class OpportunisticVacuumingTest : public OptimizeTableVacuumTest {
                                  size_t num_elements,
                                  bool has_nulls) {
     ASSERT_TRUE(buffer->hasEncoder());
-    std::shared_ptr<ChunkMetadata> chunk_metadata = std::make_shared<ChunkMetadata>();
-    buffer->getEncoder()->getMetadata(chunk_metadata);
-    EXPECT_EQ(buffer->size(), chunk_metadata->numBytes);
-    EXPECT_EQ(num_elements, chunk_metadata->numElements);
-    EXPECT_EQ(has_nulls, chunk_metadata->chunkStats.has_nulls);
+    auto chunk_metadata = buffer->getEncoder()->getMetadata();
+    EXPECT_EQ(buffer->size(), chunk_metadata.numBytes);
+    EXPECT_EQ(num_elements, chunk_metadata.numElements);
+    EXPECT_EQ(has_nulls, chunk_metadata.chunkStats.has_nulls);
   }
 
   void assertShardChunkContentAndMetadata(int32_t shard_index,
@@ -1326,9 +1325,8 @@ class OpportunisticVacuumingTest : public OptimizeTableVacuumTest {
     }
     chunk.setBuffer(data_mgr.getChunkBuffer(chunk_key, MemoryLevel::DISK_LEVEL));
     CHECK(chunk.getBuffer()->hasEncoder());
-    std::shared_ptr<ChunkMetadata> chunk_metadata = std::make_shared<ChunkMetadata>();
-    chunk.getBuffer()->getEncoder()->getMetadata(chunk_metadata);
-    return {chunk, chunk_metadata};
+    auto chunk_metadata = chunk.getBuffer()->getEncoder()->getMetadata();
+    return {chunk, std::make_shared<ChunkMetadata>(chunk_metadata)};
   }
 
   std::shared_ptr<StringDictionary> getStringDictionary(const std::string& column_name) {

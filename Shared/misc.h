@@ -31,6 +31,7 @@
 #include <ostream>
 #include <set>
 #include <string_view>
+#include <type_traits>
 #include <unordered_set>
 #include <vector>
 
@@ -57,6 +58,22 @@ constexpr std::array<double, sizeof...(Indices)> inversePowersOfImpl(
   return {(1.0 / power(a, static_cast<double>(Indices)))...};
 }
 
+// A helper trait to check if a given type is streamable (has << operator)
+template <class T>
+class is_streamable {
+  // match if streaming is supported
+  template <class V>
+  static auto test(int)
+      -> decltype(std::declval<std::ostream&>() << std::declval<V>(), std::true_type());
+
+  // match if streaming is not supported
+  template <class>
+  static auto test(...) -> std::false_type;
+
+ public:
+  // check return value from the matching "test" overload:
+  static constexpr bool value = decltype(test<T>(0))::value;
+};
 }  // namespace
 
 namespace shared {
@@ -64,14 +81,32 @@ namespace shared {
 template <typename K, typename V, typename comp>
 V& get_from_map(std::map<K, V, comp>& map, const K& key) {
   auto find_it = map.find(key);
+  // The logger does not support logging in CHECK() calls in cuda code.
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
+  if constexpr (is_streamable<K>::value) {
+    CHECK(find_it != map.end()) << "Key not found: " << key;
+  } else {
+    CHECK(find_it != map.end());
+  }
+#else
   CHECK(find_it != map.end());
+#endif
   return find_it->second;
 }
 
 template <typename K, typename V, typename comp>
 const V& get_from_map(const std::map<K, V, comp>& map, const K& key) {
   auto find_it = map.find(key);
+  // The logger does not support logging in CHECK() calls in cuda code.
+#if !(defined(__CUDACC__) || defined(NO_BOOST))
+  if constexpr (is_streamable<K>::value) {
+    CHECK(find_it != map.end()) << "Key not found: " << key;
+  } else {
+    CHECK(find_it != map.end());
+  }
+#else
   CHECK(find_it != map.end());
+#endif
   return find_it->second;
 }
 

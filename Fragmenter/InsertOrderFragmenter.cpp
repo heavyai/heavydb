@@ -287,8 +287,8 @@ class GeoAlterColumnContext : public BaseAlterColumnContext {
 
       auto encoder = chunk.getBuffer()->getEncoder();
       CHECK(encoder);
-      encoder->resetChunkStats(metadata->chunkStats);
-      encoder->setNumElems(num_elements_);
+      CHECK(metadata);
+      encoder->setMetadata(*metadata);
 
       ChunkKey dst_key =
           get_chunk_key(chunk_key_prefix_, dst_cd->columnId, fragment_info_->fragmentId);
@@ -398,9 +398,8 @@ class NonGeoAlterColumnContext : public BaseAlterColumnContext {
     auto metadata = convert_encoder->getMetadata(
         dst_cd_->columnType.is_array() ? param_.scalar_temp_chunk : dst_chunk);
 
-    buffer_->getEncoder()->resetChunkStats(metadata->chunkStats);
-    buffer_->getEncoder()->setNumElems(num_elements_);
-
+    buffer_->getEncoder()->setMetadata(*metadata);
+    CHECK_EQ(buffer_->getEncoder()->getNumElems(), num_elements_);
     buffer_->setUpdated();
     if (index_buffer_) {
       index_buffer_->setUpdated();
@@ -689,12 +688,9 @@ void InsertOrderFragmenter::updateChunkStats(
       auto encoder = buf->getEncoder();
 
       auto chunk_stats = stats_itr->second;
+      const auto& old_chunk_stats = encoder->getChunkStats();
 
-      auto old_chunk_metadata = std::make_shared<ChunkMetadata>();
-      encoder->getMetadata(old_chunk_metadata);
-      auto& old_chunk_stats = old_chunk_metadata->chunkStats;
-
-      const bool didResetStats = encoder->resetChunkStats(chunk_stats);
+      const bool didResetStats = encoder->setChunkStats(chunk_stats);
       // Use the logical type to display data, since the encoding should be ignored
       const auto logical_ti = cd->columnType.is_dict_encoded_string()
                                   ? SQLTypeInfo(kBIGINT)
@@ -717,12 +713,8 @@ void InsertOrderFragmenter::updateChunkStats(
       VLOG(2) << "Nulls: " << (chunk_stats.has_nulls ? "True" : "False");
 
       // Reset fragment metadata map and set buffer to dirty
-      auto new_metadata = std::make_shared<ChunkMetadata>();
-      // Run through fillChunkStats to ensure any transformations to the raw metadata
-      // values get applied (e.g. for date in days)
-      encoder->getMetadata(new_metadata);
-
-      fragment->setChunkMetadata(column_id, new_metadata);
+      fragment->setChunkMetadata(column_id,
+                                 std::make_shared<ChunkMetadata>(encoder->getMetadata()));
       fragment->shadowChunkMetadataMap =
           fragment->getChunkMetadataMapPhysicalCopy();  // TODO(adb): needed?
       if (defaultInsertLevel_ == Data_Namespace::DISK_LEVEL) {

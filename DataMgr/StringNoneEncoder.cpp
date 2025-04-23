@@ -102,26 +102,26 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(const StringType* s
                                                              const int start_idx,
                                                              const size_t numAppendElems,
                                                              const bool replicating) {
-  CHECK(index_buf);  // index_buf must be set before this.
+  CHECK(index_buf_);  // index_buf must be set before this.
   size_t append_index_size = numAppendElems * sizeof(StringOffsetT);
   if (num_elems_ == 0) {
     append_index_size += sizeof(StringOffsetT);  // plus one for the initial offset of 0.
   }
-  index_buf->reserve(index_buf->size() + append_index_size);
+  index_buf_->reserve(index_buf_->size() + append_index_size);
   StringOffsetT offset = 0;
   if (num_elems_ == 0) {
-    index_buf->append((int8_t*)&offset,
-                      sizeof(StringOffsetT));  // write the inital 0 offset
-    last_offset = 0;
+    index_buf_->append((int8_t*)&offset,
+                       sizeof(StringOffsetT));  // write the inital 0 offset
+    last_offset_ = 0;
   } else {
     // always need to read a valid last offset from buffer/disk
     // b/c now due to vacuum "last offset" may go backward and if
     // index chunk was not reloaded last_offset would go way off!
-    index_buf->read((int8_t*)&last_offset,
-                    sizeof(StringOffsetT),
-                    index_buf->size() - sizeof(StringOffsetT),
-                    Data_Namespace::CPU_LEVEL);
-    CHECK_GE(last_offset, 0);
+    index_buf_->read((int8_t*)&last_offset_,
+                     sizeof(StringOffsetT),
+                     index_buf_->size() - sizeof(StringOffsetT),
+                     Data_Namespace::CPU_LEVEL);
+    CHECK_GE(last_offset_, 0);
   }
   size_t append_data_size = 0;
   for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
@@ -138,10 +138,11 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(const StringType* s
     size_t i;
     for (i = 0; num_appended < numAppendElems && i < inbuf_size / sizeof(StringOffsetT);
          i++, num_appended++) {
-      p[i] = last_offset + (srcData)[replicating ? 0 : num_appended + start_idx].length();
-      last_offset = p[i];
+      p[i] =
+          last_offset_ + (srcData)[replicating ? 0 : num_appended + start_idx].length();
+      last_offset_ = p[i];
     }
-    index_buf->append(inbuf.get(), i * sizeof(StringOffsetT));
+    index_buf_->append(inbuf.get(), i * sizeof(StringOffsetT));
   }
 
   for (size_t num_appended = 0; num_appended < numAppendElems;) {
@@ -180,9 +181,7 @@ std::shared_ptr<ChunkMetadata> StringNoneEncoder::appendData(const StringType* s
   }
 
   num_elems_ += numAppendElems;
-  auto chunk_metadata = std::make_shared<ChunkMetadata>();
-  getMetadata(chunk_metadata);
-  return chunk_metadata;
+  return std::make_shared<ChunkMetadata>(getMetadata());
 }
 
 void StringNoneEncoder::updateStats(const std::vector<std::string>* const src_data,
@@ -196,7 +195,7 @@ void StringNoneEncoder::updateStats(const std::string* src_data,
                                     const size_t num_elements) {
   for (size_t n = start_idx; n < start_idx + num_elements; n++) {
     update_elem_stats(src_data[n]);
-    if (has_nulls) {
+    if (has_nulls_) {
       break;
     }
   }
@@ -204,8 +203,8 @@ void StringNoneEncoder::updateStats(const std::string* src_data,
 
 template <typename StringType>
 void StringNoneEncoder::update_elem_stats(const StringType& elem) {
-  if (!has_nulls && elem.empty()) {
-    has_nulls = true;
+  if (!has_nulls_ && elem.empty()) {
+    has_nulls_ = true;
   }
 }
 
@@ -264,18 +263,14 @@ template void StringNoneEncoder::update_elem_stats<std::string>(const std::strin
 template void StringNoneEncoder::update_elem_stats<std::string_view>(
     const std::string_view& elem);
 
-void StringNoneEncoder::getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) {
-  Encoder::getMetadata(chunkMetadata);  // call on parent class
-  chunkMetadata->chunkStats.min.stringval = nullptr;
-  chunkMetadata->chunkStats.max.stringval = nullptr;
-  chunkMetadata->chunkStats.has_nulls = has_nulls;
-}
-
-// Only called from the executor for synthesized meta-information.
-std::shared_ptr<ChunkMetadata> StringNoneEncoder::getMetadata(const SQLTypeInfo& ti) {
+ChunkStats StringNoneEncoder::getChunkStats() const {
   auto chunk_stats = ChunkStats{};
   chunk_stats.min.stringval = nullptr;
   chunk_stats.max.stringval = nullptr;
-  chunk_stats.has_nulls = has_nulls;
-  return std::make_shared<ChunkMetadata>(ti, 0, 0, chunk_stats);
+  chunk_stats.has_nulls = has_nulls_;
+  return chunk_stats;
+}
+
+ChunkStats StringNoneEncoder::synthesizeChunkStats(const SQLTypeInfo&) const {
+  return getChunkStats();
 }

@@ -85,16 +85,13 @@ class NoneEncoder : public Encoder {
         src_data, num_elems_to_append, replicating, offset, false);
   }
 
-  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
-    Encoder::getMetadata(chunkMetadata);  // call on parent class
-    chunkMetadata->fillChunkStats(dataMin, dataMax, has_nulls);
+  ChunkStats getChunkStats() const override {
+    CHECK(buffer_);
+    return ChunkStats(dataMin, dataMax, has_nulls, buffer_->getSqlType());
   }
 
-  // Only called from the executor for synthesized meta-information.
-  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
-    auto chunk_metadata = std::make_shared<ChunkMetadata>(ti, 0, 0, ChunkStats{});
-    chunk_metadata->fillChunkStats(dataMin, dataMax, has_nulls);
-    return chunk_metadata;
+  ChunkStats synthesizeChunkStats(const SQLTypeInfo& ti) const override {
+    return ChunkStats(dataMin, dataMax, has_nulls, ti);
   }
 
   // Only called from the executor for synthesized meta-information.
@@ -186,23 +183,19 @@ class NoneEncoder : public Encoder {
     dataMax = std::max(dataMax, that_typed.dataMax);
   }
 
-  void writeMetadata(FILE* f) override {
-    // assumes pointer is already in right place
-    fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
+  void writeChunkStats(FILE* f) override {
     fwrite((int8_t*)&dataMin, sizeof(T), 1, f);
     fwrite((int8_t*)&dataMax, sizeof(T), 1, f);
     fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
   }
 
-  void readMetadata(FILE* f) override {
-    // assumes pointer is already in right place
-    fread((int8_t*)&num_elems_, sizeof(size_t), 1, f);
+  void readChunkStats(FILE* f) override {
     fread((int8_t*)&dataMin, sizeof(T), 1, f);
     fread((int8_t*)&dataMax, sizeof(T), 1, f);
     fread((int8_t*)&has_nulls, sizeof(bool), 1, f);
   }
 
-  bool resetChunkStats(const ChunkStats& stats) override {
+  bool setChunkStats(const ChunkStats& stats) override {
     const auto new_min = DatumFetcher::getDatumVal<T>(stats.min);
     const auto new_max = DatumFetcher::getDatumVal<T>(stats.max);
 
@@ -216,8 +209,7 @@ class NoneEncoder : public Encoder {
     return true;
   }
 
-  void copyMetadata(const Encoder* copyFromEncoder) override {
-    num_elems_ = copyFromEncoder->getNumElems();
+  void copyChunkStats(const Encoder* copyFromEncoder) override {
     auto castedEncoder = reinterpret_cast<const NoneEncoder<T>*>(copyFromEncoder);
     dataMin = castedEncoder->dataMin;
     dataMax = castedEncoder->dataMax;
@@ -272,9 +264,7 @@ class NoneEncoder : public Encoder {
       buffer_->write(
           src_data, num_elems_to_append * sizeof(T), static_cast<size_t>(offset));
     }
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    getMetadata(chunk_metadata);
-    return chunk_metadata;
+    return std::make_shared<ChunkMetadata>(getMetadata());
   }
 
   T validateDataAndUpdateStats(const T& unencoded_data,

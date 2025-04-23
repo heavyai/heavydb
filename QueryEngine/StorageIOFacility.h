@@ -78,17 +78,16 @@ bool should_recompute_metadata(
   CHECK(update_stats->chunk->getBuffer());
   CHECK(update_stats->chunk->getBuffer()->getEncoder());
 
-  auto chunk_metadata = std::make_shared<ChunkMetadata>();
-  update_stats->chunk->getBuffer()->getEncoder()->getMetadata(chunk_metadata);
+  auto chunk_metadata = update_stats->chunk->getBuffer()->getEncoder()->getMetadata();
   auto cd = update_stats.value().chunk->getColumnDesc();
   if (cd->columnType.is_fp()) {
     double min, max;
     if (cd->columnType.get_type() == kDOUBLE) {
-      min = chunk_metadata->chunkStats.min.doubleval;
-      max = chunk_metadata->chunkStats.max.doubleval;
+      min = chunk_metadata.chunkStats.min.doubleval;
+      max = chunk_metadata.chunkStats.max.doubleval;
     } else if (cd->columnType.get_type() == kFLOAT) {
-      min = chunk_metadata->chunkStats.min.floatval;
-      max = chunk_metadata->chunkStats.max.floatval;
+      min = chunk_metadata.chunkStats.min.floatval;
+      max = chunk_metadata.chunkStats.max.floatval;
     } else {
       min = 0;  // resolve compiler warning about uninitialized variables
       max = -1;
@@ -96,8 +95,8 @@ bool should_recompute_metadata(
     }
     return is_chunk_min_max_updated(update_stats.value(), min, max);
   } else {
-    auto min = extract_min_stat_int_type(chunk_metadata->chunkStats, cd->columnType);
-    auto max = extract_max_stat_int_type(chunk_metadata->chunkStats, cd->columnType);
+    auto min = extract_min_stat_int_type(chunk_metadata.chunkStats, cd->columnType);
+    auto max = extract_max_stat_int_type(chunk_metadata.chunkStats, cd->columnType);
     return is_chunk_min_max_updated(update_stats.value(), min, max);
   }
 }

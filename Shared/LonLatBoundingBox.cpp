@@ -49,4 +49,9 @@ std::optional<LonLatBoundingBox> LonLatBoundingBox::parse(const std::string& str
   return bb;
 }
 
+bool LonLatBoundingBox::hasNoOverlapWith(const LonLatBoundingBox& other) const {
+  return (max_lon < other.min_lon || min_lon > other.max_lon || max_lat < other.min_lat ||
+          min_lat > other.max_lat);
+}
+
 }  // namespace shared

@@ -35,11 +35,11 @@
 // ChunkKey (also referred to as the keyspace id)
 using ChunkKey = std::vector<int>;
 
-#define CHUNK_KEY_DB_IDX 0
-#define CHUNK_KEY_TABLE_IDX 1
-#define CHUNK_KEY_COLUMN_IDX 2
-#define CHUNK_KEY_FRAGMENT_IDX 3
-#define CHUNK_KEY_VARLEN_IDX 4
+#define CHUNK_KEY_DB_IDX 0U
+#define CHUNK_KEY_TABLE_IDX 1U
+#define CHUNK_KEY_COLUMN_IDX 2U
+#define CHUNK_KEY_FRAGMENT_IDX 3U
+#define CHUNK_KEY_VARLEN_IDX 4U
 
 inline bool is_table_key(const ChunkKey& key) {
   return key.size() == 2;
@@ -49,8 +49,23 @@ inline bool has_table_prefix(const ChunkKey& key) {
   return key.size() >= 2;
 }
 
+inline int get_db(const ChunkKey& key) {
+  CHECK_GT(key.size(), CHUNK_KEY_DB_IDX);
+  return key[CHUNK_KEY_DB_IDX];
+}
+
+inline int get_table(const ChunkKey& key) {
+  CHECK_GT(key.size(), CHUNK_KEY_TABLE_IDX);
+  return key[CHUNK_KEY_TABLE_IDX];
+}
+
+inline int get_column(const ChunkKey& key) {
+  CHECK_GT(key.size(), CHUNK_KEY_COLUMN_IDX);
+  return key[CHUNK_KEY_COLUMN_IDX];
+}
+
 inline int get_fragment(const ChunkKey& key) {
-  CHECK(key.size() > CHUNK_KEY_FRAGMENT_IDX);
+  CHECK_GT(key.size(), CHUNK_KEY_FRAGMENT_IDX);
   return key[CHUNK_KEY_FRAGMENT_IDX];
 }
 
@@ -65,7 +80,7 @@ inline std::pair<int, int> get_table_prefix(const ChunkKey& key) {
 }
 
 inline std::tuple<int, int, int, int> split_key(const ChunkKey& key) {
-  CHECK(key.size() > CHUNK_KEY_FRAGMENT_IDX);
+  CHECK_GT(key.size(), CHUNK_KEY_FRAGMENT_IDX);
   return {key[CHUNK_KEY_DB_IDX],
           key[CHUNK_KEY_TABLE_IDX],
           key[CHUNK_KEY_COLUMN_IDX],
@@ -86,6 +101,18 @@ inline bool is_varlen_data_key(const ChunkKey& key) {
 
 inline bool is_varlen_index_key(const ChunkKey& key) {
   return key.size() == 5 && key[4] == 2;
+}
+
+inline bool is_prefix_of(const ChunkKey& prefix, const ChunkKey& full) {
+  if (prefix.size() > full.size()) {
+    return false;
+  }
+  for (auto i = 0U; i < prefix.size(); ++i) {
+    if (prefix[i] != full[i]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 inline bool in_same_table(const ChunkKey& left_key, const ChunkKey& right_key) {
