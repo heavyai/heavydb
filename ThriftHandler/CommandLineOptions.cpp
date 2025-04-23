@@ -896,6 +896,26 @@ void CommandLineOptions::fillDeveloperOptions() {
                          ->default_value(g_enable_data_mgr_global_lock)
                          ->implicit_value(true),
                      "Enable use of a global lock when accessing or updating table data");
+  desc.add_options()(
+      "jump-buffer-size",
+      po::value<size_t>(&g_jump_buffer_size)->default_value(g_jump_buffer_size),
+      "Size of pinned jump buffer per GPU (used to accelerate data transfers to and "
+      "from GPU) in bytes. 0 means no jump buffer.");
+  desc.add_options()(
+      "jump-buffer-parallel-copy-threads",
+      po::value<size_t>(&g_jump_buffer_parallel_copy_threads)
+          ->default_value(g_jump_buffer_parallel_copy_threads),
+      "Number of threads to parallelize copy to and from pinned jump buffers per GPU.");
+  desc.add_options()("jump-buffer-min-h2d-transfer-threshold",
+                     po::value<size_t>(&g_jump_buffer_min_h2d_transfer_threshold)
+                         ->default_value(g_jump_buffer_min_h2d_transfer_threshold),
+                     "Minimum host-to-device transfer size in bytes above which jump "
+                     "buffers will be used for data transfer.");
+  desc.add_options()("jump-buffer-min-d2h-transfer-threshold",
+                     po::value<size_t>(&g_jump_buffer_min_d2h_transfer_threshold)
+                         ->default_value(g_jump_buffer_min_d2h_transfer_threshold),
+                     "Minimum device-to-host transfer size in bytes above which jump "
+                     "buffers will be used for data transfer.");
   desc.add_options()("num-executors",
                      po::value<int>(&system_parameters.num_executors)
                          ->default_value(system_parameters.num_executors),
@@ -1831,6 +1851,19 @@ void CommandLineOptions::validate() {
                              ") cannot be greater than max-gpu-slab-size (" +
                              std::to_string(system_parameters.max_gpu_slab_size) + ").");
   }
+
+  LOG(INFO) << "Jump buffer size is set to " << g_jump_buffer_size;
+
+  LOG(INFO) << "Jump buffer parallel copy thread count is set to "
+            << g_jump_buffer_parallel_copy_threads;
+  if (g_jump_buffer_parallel_copy_threads < 1) {
+    throw std::runtime_error(
+        "jump-buffer-parallel-copy-threads must be greater than or equal to 1");
+  }
+  LOG(INFO) << "Jump buffer minimum host-to-device transfer threshold is set to "
+            << g_jump_buffer_min_h2d_transfer_threshold;
+  LOG(INFO) << "Jump buffer minimum device-to-host transfer threshold is set to "
+            << g_jump_buffer_min_d2h_transfer_threshold;
 }
 
 SystemParameters::RuntimeUdfRegistrationPolicy construct_runtime_udf_registration_policy(

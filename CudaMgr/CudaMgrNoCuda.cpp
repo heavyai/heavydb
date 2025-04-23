@@ -19,6 +19,12 @@
 
 bool g_enable_gpu_dynamic_smem{true};
 
+// Stub global variable definitions for when CUDA is disabled.
+size_t g_jump_buffer_size{0};
+size_t g_jump_buffer_parallel_copy_threads{0};
+size_t g_jump_buffer_min_h2d_transfer_threshold{0};
+size_t g_jump_buffer_min_d2h_transfer_threshold{0};
+
 namespace CudaMgr_Namespace {
 
 CudaMgr::CudaMgr(const int, const int) : device_count_(-1), start_gpu_(-1) {
@@ -66,19 +72,13 @@ void CudaMgr::copyDeviceToDevice(int8_t* dest_ptr,
   CHECK(false);
 }
 
-int8_t* CudaMgr::allocatePinnedHostMem(const size_t num_bytes) {
-  CHECK(false);
-  return nullptr;
-}
 int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes,
                                    const int device_num,
                                    const bool is_slab) {
   CHECK(false);
   return nullptr;
 }
-void CudaMgr::freePinnedHostMem(int8_t* host_ptr) {
-  CHECK(false);
-}
+
 void CudaMgr::freeDeviceMem(int8_t* device_ptr) {
   CHECK(false);
 }
