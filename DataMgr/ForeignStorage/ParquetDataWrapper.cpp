@@ -58,17 +58,15 @@ void reduce_metadata(std::shared_ptr<ChunkMetadata> reduce_to,
   ForeignStorageBuffer buffer_to;
   buffer_to.initEncoder(column_type);
   auto encoder_to = buffer_to.getEncoder();
-  encoder_to->resetChunkStats(reduce_to->chunkStats);
+  encoder_to->setChunkStats(reduce_to->chunkStats);
 
   ForeignStorageBuffer buffer_from;
   buffer_from.initEncoder(column_type);
   auto encoder_from = buffer_from.getEncoder();
-  encoder_from->resetChunkStats(reduce_from->chunkStats);
+  encoder_from->setChunkStats(reduce_from->chunkStats);
 
   encoder_to->reduceStats(*encoder_from);
-  auto updated_metadata = std::make_shared<ChunkMetadata>();
-  encoder_to->getMetadata(updated_metadata);
-  reduce_to->chunkStats = updated_metadata->chunkStats;
+  reduce_to->chunkStats = encoder_to->getChunkStats();
 }
 }  // namespace
 
@@ -161,9 +159,7 @@ void ParquetDataWrapper::initializeChunkBuffers(
       CHECK(metadata_it != chunk_metadata_map_.end());
       auto buffer = chunk.getBuffer();
       auto& metadata = metadata_it->second;
-      auto encoder = buffer->getEncoder();
-      encoder->resetChunkStats(metadata->chunkStats);
-      encoder->setNumElems(metadata->numElements);
+      buffer->getEncoder()->setMetadata(*metadata);
       if ((column->columnType.is_string() &&
            column->columnType.get_compression() == kENCODING_NONE) ||
           column->columnType.is_geometry()) {
@@ -606,7 +602,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       // Update stats on buffer so it is saved in cache
       shared::get_from_map(required_buffers, data_chunk_key)
           ->getEncoder()
-          ->resetChunkStats(cached_metadata->chunkStats);
+          ->setChunkStats(cached_metadata->chunkStats);
     }
   }
 }

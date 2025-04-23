@@ -145,6 +145,8 @@ class DateDaysOverflowValidator {
 
 class Encoder {
  public:
+  enum MetadataVersion : int32_t { kBase = 0, kRaster };
+
   static Encoder* Create(Data_Namespace::AbstractBuffer* buffer,
                          const SQLTypeInfo sqlType);
   Encoder(Data_Namespace::AbstractBuffer* buffer);
@@ -213,9 +215,6 @@ class Encoder {
                                                     const SQLTypeInfo& ti,
                                                     const bool replicating = false,
                                                     const int64_t offset = -1) = 0;
-  virtual void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata);
-  // Only called from the executor for synthesized meta-information.
-  virtual std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) = 0;
   virtual void updateStats(const int64_t val, const bool is_null) = 0;
   virtual void updateStats(const double val, const bool is_null) = 0;
 
@@ -269,9 +268,18 @@ class Encoder {
                            const size_t num_elements) = 0;
 
   virtual void reduceStats(const Encoder&) = 0;
-  virtual void copyMetadata(const Encoder* copyFromEncoder) = 0;
-  virtual void writeMetadata(FILE* f /*, const size_t offset*/) = 0;
-  virtual void readMetadata(FILE* f /*, const size_t offset*/) = 0;
+
+  void copyMetadata(const Encoder* copy_from_encoder);
+  void writeMetadata(FILE* f);
+  void readMetadata(FILE* f, int32_t version);
+  ChunkMetadata getMetadata() const;
+  ChunkMetadata getMetadata(const SQLTypeInfo& ti);
+
+  virtual void readChunkStats(FILE* f) = 0;
+  virtual void writeChunkStats(FILE* f) = 0;
+  virtual void copyChunkStats(const Encoder* copy_from_encoder) = 0;
+  virtual ChunkStats getChunkStats() const = 0;
+  virtual ChunkStats synthesizeChunkStats(const SQLTypeInfo& ti) const = 0;
 
   /**
    * @brief: Reset chunk level stats (min, max, nulls) using new values from the argument.
@@ -279,10 +287,7 @@ class Encoder {
    * otherwise. Default false if metadata update is unsupported. Only reset chunk stats if
    * the incoming stats differ from the current stats.
    */
-  virtual bool resetChunkStats(const ChunkStats&) {
-    UNREACHABLE() << "Attempting to reset stats for unsupported type.";
-    return false;
-  }
+  virtual bool setChunkStats(const ChunkStats&) = 0;
 
   /**
    * Resets chunk metadata stats to their default values.
@@ -291,9 +296,15 @@ class Encoder {
 
   size_t getNumElems() const { return num_elems_; }
   void setNumElems(const size_t num_elems) { num_elems_ = num_elems; }
+  RasterTileInfo getRasterTileInfo() const { return raster_tile_; }
+  void setRasterTileInfo(const RasterTileInfo& tile) { raster_tile_ = tile; }
+  void setMetadata(const ChunkMetadata& meta);
+
+  static inline constexpr int32_t metadata_version_ = MetadataVersion::kRaster;
 
  protected:
   size_t num_elems_;
+  RasterTileInfo raster_tile_;
 
   Data_Namespace::AbstractBuffer* buffer_;
 

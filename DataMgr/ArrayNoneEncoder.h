@@ -241,21 +241,15 @@ class ArrayNoneEncoder : public Encoder {
       update_elem_stats(srcData[replicating ? 0 : n]);
     }
     num_elems_ += numAppendElems;
-    auto chunk_metadata = std::make_shared<ChunkMetadata>();
-    getMetadata(chunk_metadata);
-    return chunk_metadata;
+    return std::make_shared<ChunkMetadata>(getMetadata());
   }
 
-  void getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) override {
-    Encoder::getMetadata(chunkMetadata);  // call on parent class
-    chunkMetadata->fillChunkStats(elem_min, elem_max, has_nulls);
+  ChunkStats getChunkStats() const override {
+    return ChunkStats(elem_min, elem_max, has_nulls);
   }
 
-  // Only called from the executor for synthesized meta-information.
-  std::shared_ptr<ChunkMetadata> getMetadata(const SQLTypeInfo& ti) override {
-    auto chunk_metadata = std::make_shared<ChunkMetadata>(
-        ti, 0, 0, ChunkStats{elem_min, elem_max, has_nulls});
-    return chunk_metadata;
+  ChunkStats synthesizeChunkStats(const SQLTypeInfo&) const override {
+    return ChunkStats(elem_min, elem_max, has_nulls);
   }
 
   void updateStats(const int64_t, const bool) override { CHECK(false); }
@@ -294,26 +288,21 @@ class ArrayNoneEncoder : public Encoder {
 
   void reduceStats(const Encoder&) override { CHECK(false); }
 
-  void writeMetadata(FILE* f) override {
-    // assumes pointer is already in right place
-    fwrite((int8_t*)&num_elems_, sizeof(size_t), 1, f);
+  void writeChunkStats(FILE* f) override {
     fwrite((int8_t*)&elem_min, sizeof(Datum), 1, f);
     fwrite((int8_t*)&elem_max, sizeof(Datum), 1, f);
     fwrite((int8_t*)&has_nulls, sizeof(bool), 1, f);
     fwrite((int8_t*)&initialized, sizeof(bool), 1, f);
   }
 
-  void readMetadata(FILE* f) override {
-    // assumes pointer is already in right place
-    fread((int8_t*)&num_elems_, sizeof(size_t), 1, f);
+  void readChunkStats(FILE* f) override {
     fread((int8_t*)&elem_min, sizeof(Datum), 1, f);
     fread((int8_t*)&elem_max, sizeof(Datum), 1, f);
     fread((int8_t*)&has_nulls, sizeof(bool), 1, f);
     fread((int8_t*)&initialized, sizeof(bool), 1, f);
   }
 
-  void copyMetadata(const Encoder* copyFromEncoder) override {
-    num_elems_ = copyFromEncoder->getNumElems();
+  void copyChunkStats(const Encoder* copyFromEncoder) override {
     auto array_encoder = dynamic_cast<const ArrayNoneEncoder*>(copyFromEncoder);
     elem_min = array_encoder->elem_min;
     elem_max = array_encoder->elem_max;
@@ -323,7 +312,7 @@ class ArrayNoneEncoder : public Encoder {
 
   AbstractBuffer* getIndexBuf() const { return index_buf; }
 
-  bool resetChunkStats(const ChunkStats& stats) override {
+  bool setChunkStats(const ChunkStats& stats) override {
     auto elem_type = buffer_->getSqlType().get_elem_type();
     if (initialized && DatumEqual(elem_min, stats.min, elem_type) &&
         DatumEqual(elem_max, stats.max, elem_type) && has_nulls == stats.has_nulls) {

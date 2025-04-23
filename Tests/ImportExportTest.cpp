@@ -39,6 +39,7 @@
 #include "DataMgr/HeavyDbAwsSdk.h"
 #endif  // HAVE_AWS_S3
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
+#include "Fragmenter/RasterFragmenter.h"
 #include "Geospatial/ColumnNames.h"
 #include "Geospatial/GDAL.h"
 #include "Geospatial/Types.h"
@@ -6770,6 +6771,91 @@ TEST_P(RasterImportFsiOnlyTest, FragmentsAlignToTilesMultiImport) {
   EXPECT_EQ(fragments_with_num_rows.count(20 * 100), 4U);
   EXPECT_EQ(fragments_with_num_rows.count(100 * 25), 6U);
   EXPECT_EQ(fragments_with_num_rows.count(20 * 25), 2U);
+}
+
+// We need to test that the fragmenter properly appends new fragment neighbour metadata
+// when data is imported through multiple import steps.
+TEST_P(RasterImportFsiOnlyTest, NeighbourMetadataMultiImport) {
+  auto& cat = getCatalog();
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       "",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+  auto td = cat.getMetadataForTable("raster", false);
+  {
+    // Raster metadata will be the same for all columns in a table, so just take the first
+    // column.
+    auto meta_vec =
+        dynamic_cast<Fragmenter_Namespace::RasterFragmenter*>(td->fragmenter.get())
+            ->computeRasterMeshRenderingMetadata();
+    std::vector<Fragmenter_Namespace::RasterMeshRenderingMetadata> expected{
+        {320, 225, 0, {-1, -1, -1, -1}}};
+    EXPECT_EQ(meta_vec, expected);
+  }
+
+  auto const abs_file_name = get_raster_dir() + kPNG;
+  sql("COPY raster FROM '" + abs_file_name +
+      "' WITH (source_type='raster_file', raster_tile_width=200, "
+      "raster_tile_height=200)");
+
+  auto meta_vec =
+      dynamic_cast<Fragmenter_Namespace::RasterFragmenter*>(td->fragmenter.get())
+          ->computeRasterMeshRenderingMetadata();
+
+  std::vector<Fragmenter_Namespace::RasterMeshRenderingMetadata> expected{
+      {320, 225, 0, {-1, -1, -1, -1}},  // first file.
+      {200, 200, 1, {-1, 2, -1, 3}},
+      {120, 200, 2, {1, -1, -1, 4}},
+      {200, 25, 3, {-1, 4, 1, -1}},
+      {120, 25, 4, {3, -1, 2, -1}}};
+  EXPECT_EQ(meta_vec, expected);
+}
+
+TEST_P(RasterImportFsiOnlyTest, NeighbourMetadataMultiImportWithRestart) {
+  auto& cat = getCatalog();
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       "",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+  auto td = cat.getMetadataForTable("raster", false);
+  {
+    // Raster metadata will be the same for all columns in a table, so just take the first
+    // column.
+    auto meta_vec =
+        dynamic_cast<Fragmenter_Namespace::RasterFragmenter*>(td->fragmenter.get())
+            ->computeRasterMeshRenderingMetadata();
+    std::vector<Fragmenter_Namespace::RasterMeshRenderingMetadata> expected{
+        {320, 225, 0, {-1, -1, -1, -1}}};
+    EXPECT_EQ(meta_vec, expected);
+  }
+
+  cat.removeFragmenterForTable(td->tableId);
+
+  auto const abs_file_name = get_raster_dir() + kPNG;
+  sql("COPY raster FROM '" + abs_file_name +
+      "' WITH (source_type='raster_file', raster_tile_width=200, "
+      "raster_tile_height=200)");
+
+  cat.removeFragmenterForTable(td->tableId);
+  cat.getMetadataForTable("raster", true);
+
+  auto meta_vec =
+      dynamic_cast<Fragmenter_Namespace::RasterFragmenter*>(td->fragmenter.get())
+          ->computeRasterMeshRenderingMetadata();
+
+  std::vector<Fragmenter_Namespace::RasterMeshRenderingMetadata> expected{
+      {320, 225, 0, {-1, -1, -1, -1}},  // first file.
+      {200, 200, 1, {-1, 2, -1, 3}},
+      {120, 200, 2, {1, -1, -1, 4}},
+      {200, 25, 3, {-1, 4, 1, -1}},
+      {120, 25, 4, {3, -1, 2, -1}}};
+  EXPECT_EQ(meta_vec, expected);
 }
 
 INSTANTIATE_TEST_SUITE_P(RasterImportTest,

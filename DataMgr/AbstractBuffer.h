@@ -36,6 +36,8 @@
 #include "Shared/sqltypes.h"
 #include "Shared/types.h"
 
+struct ChunkMetadata;
+
 namespace Data_Namespace {
 
 /**
@@ -129,6 +131,7 @@ class AbstractBuffer {
   void syncEncoder(const AbstractBuffer* src_buffer);
   void copyTo(AbstractBuffer* destination_buffer, const size_t num_bytes = 0);
   void resetToEmpty();
+  void setMetadata(const ChunkMetadata& meta);
 
  protected:
   std::unique_ptr<Encoder> encoder_;
