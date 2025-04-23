@@ -36,11 +36,7 @@ llvm::AttributeList make_attribute_list(llvm::Module const* const mod,
   static_assert((std::is_same_v<llvm::Attribute::AttrKind, ATTRS> && ...));
   // llvm::AttrBuilder basically wraps a llvm::SmallVector<llvm::Attribute, 8>.
   static_assert(sizeof...(ATTRS) <= 8, "Use a llvm::SmallVector with a larger size.");
-#if 14 <= LLVM_VERSION_MAJOR
   llvm::AttrBuilder attr_builder(mod->getContext());
-#else
-  llvm::AttrBuilder attr_builder;
-#endif
   (attr_builder.addAttribute(attrs), ...);
   return llvm::AttributeList::get(mod->getContext(), index, attr_builder);
 }

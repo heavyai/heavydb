@@ -16,8 +16,8 @@
 
 #include "QueryEngine/Execute.h"
 
-#if LLVM_VERSION_MAJOR < 9
-static_assert(false, "LLVM Version >= 9 is required.");
+#if LLVM_VERSION_MAJOR < 14
+static_assert(false, "LLVM Version >= 14 is required.");
 #endif
 
 #include <llvm/Analysis/ScopedNoAliasAA.h>
@@ -33,11 +33,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/IRReader/IRReader.h>
-#if 14 <= LLVM_VERSION_MAJOR
 #include <llvm/MC/TargetRegistry.h>
-#else
-#include <llvm/Support/TargetRegistry.h>
-#endif
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FormattedStream.h>
@@ -64,7 +60,7 @@ static_assert(false, "LLVM Version >= 9 is required.");
 
 #if LLVM_VERSION_MAJOR >= 17
 #include <llvm/TargetParser/Host.h>
-#elif LLVM_VERSION_MAJOR >= 11
+#else
 #include <llvm/Support/Host.h>
 #endif
 
@@ -470,13 +466,8 @@ std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
   CHECK(cpu_target_machine);
   llvm::SmallString<256> code_str;
   llvm::raw_svector_ostream os(code_str);
-#if LLVM_VERSION_MAJOR >= 10
   cpu_target_machine->addPassesToEmitFile(
       pass_manager, os, nullptr, llvm::CGFT_AssemblyFile);
-#else
-  cpu_target_machine->addPassesToEmitFile(
-      pass_manager, os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
-#endif
   pass_manager.run(*llvm_module);
   return "Assembly for the CPU:\n" + std::string(code_str.str()) + "\nEnd of assembly";
 }
@@ -1289,15 +1280,11 @@ void CodeGenerator::linkModuleWithLibdevice(
   }
 
   // activate nvvm-reflect-ftz flag on the module
-#if LLVM_VERSION_MAJOR >= 11
   llvm::LLVMContext& ctx = llvm_module.getContext();
   llvm_module.setModuleFlag(llvm::Module::Override,
                             "nvvm-reflect-ftz",
                             llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(
                                 llvm::Type::getInt32Ty(ctx), uint32_t(1))));
-#else
-  llvm_module.addModuleFlag(llvm::Module::Override, "nvvm-reflect-ftz", uint32_t(1));
-#endif
   for (llvm::Function& fn : llvm_module) {
     fn.addFnAttr("nvptx-f32ftz", "true");
   }
@@ -1616,21 +1603,12 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
     llvm::legacy::PassManager ptxgen_pm;
     llvm_module->setDataLayout(nvptx_target_machine->createDataLayout());
 
-#if LLVM_VERSION_MAJOR >= 10
     nvptx_target_machine->addPassesToEmitFile(
         ptxgen_pm, formatted_os, nullptr, llvm::CGFT_AssemblyFile);
-#else
-    nvptx_target_machine->addPassesToEmitFile(
-        ptxgen_pm, formatted_os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
-#endif
     ptxgen_pm.run(*llvm_module);
   }
 
-#if LLVM_VERSION_MAJOR >= 11
   return std::string(code_str);
-#else
-  return code_str.str();
-#endif
 }
 
 std::mutex CodeGenerator::initialize_nvptx_mutex_;
