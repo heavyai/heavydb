@@ -15,37 +15,19 @@
  */
 
 #include "CudaMgr/CudaMgr.h"
-#include "QueryEngine/NvidiaKernel.h"
-#include "Shared/boost_stacktrace.hpp"
 
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
 
 #include <boost/filesystem.hpp>
+
 #include "Logger/Logger.h"
+#include "QueryEngine/NvidiaKernel.h"
 
 bool g_enable_gpu_dynamic_smem{true};
 
 namespace CudaMgr_Namespace {
-
-CudaErrorException::CudaErrorException(CUresult status)
-    : std::runtime_error(errorMessage(status)), status_(status) {
-  // cuda already de-initialized can occur during system shutdown. avoid making calls to
-  // the logger to prevent failing during a standard teardown.
-  if (status != CUDA_ERROR_DEINITIALIZED) {
-    VLOG(1) << errorMessage(status);
-    VLOG(1) << boost::stacktrace::stacktrace();
-  }
-}
-
-std::string errorMessage(CUresult const status) {
-  const char* errorString{nullptr};
-  cuGetErrorString(status, &errorString);
-  return errorString
-             ? "CUDA Error (" + std::to_string(status) + "): " + std::string(errorString)
-             : "CUDA Driver API error code " + std::to_string(status);
-}
 
 CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
     : start_gpu_(start_gpu)
@@ -62,9 +44,12 @@ CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
     // if we are using all gpus we cannot start on a gpu other than 0
     CHECK_EQ(start_gpu_, 0);
   }
+
+  // Fill device properties and initialize group/contexts
   fillDeviceProperties();
   initDeviceGroup();
   createDeviceContexts();
+
   logDeviceProperties();
 
   // warm up the GPU JIT
@@ -72,6 +57,9 @@ CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
   setContext(0);
   nvidia_jit_warmup();
   LOG(INFO) << "GPU JIT Compiler initialized.";
+
+  jump_buffer_transfer_mgr_ =
+      std::make_unique<JumpBufferTransferMgr>(device_count_, device_contexts_);
 }
 
 void CudaMgr::initDeviceGroup() {
@@ -87,6 +75,8 @@ CudaMgr::~CudaMgr() {
     // We don't want to remove the cudaMgr before all other processes have cleaned up.
     // This should be enforced by the lifetime policies, but take this lock to be safe.
     std::lock_guard<std::mutex> device_lock(device_mutex_);
+    jump_buffer_transfer_mgr_.reset();
+
     synchronizeDevices();
 
     CHECK(getDeviceMemoryAllocationMap().mapEmpty());
@@ -134,15 +124,24 @@ void CudaMgr::copyHostToDevice(int8_t* device_ptr,
                                const int device_num,
                                std::optional<std::string_view> tag,
                                CUstream cuda_stream) {
-  setContext(device_num);
-  if (!cuda_stream) {
-    checkError(
-        cuMemcpyHtoD(reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes));
-  } else {
-    checkError(cuMemcpyHtoDAsync(
-        reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes, cuda_stream));
-    checkError(cuStreamSynchronize(cuda_stream));
+  bool jump_buffer_used{false};
+  if (jump_buffer_transfer_mgr_->shouldUseForHostToDeviceTransfer(num_bytes)) {
+    jump_buffer_used = jump_buffer_transfer_mgr_->copyHostToDevice(
+        device_ptr, host_ptr, num_bytes, device_num, cuda_stream);
   }
+
+  if (!jump_buffer_used) {
+    setContext(device_num);
+    if (!cuda_stream) {
+      checkError(
+          cuMemcpyHtoD(reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes));
+    } else {
+      checkError(cuMemcpyHtoDAsync(
+          reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes, cuda_stream));
+      checkError(cuStreamSynchronize(cuda_stream));
+    }
+  }
+
   if (log_memory_activity_ && tag) {
     VLOG(1) << "CUDA H2D, tag: " << *tag
             << ", host address: " << static_cast<const void*>(host_ptr)
@@ -166,22 +165,30 @@ void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
                                const size_t num_bytes,
                                std::optional<std::string_view> tag,
                                CUstream cuda_stream) {
-  // set device_num based on device_ptr
   auto const cu_device_ptr = reinterpret_cast<CUdeviceptr>(device_ptr);
   int const device_num = getDeviceNumFromDevicePtr(cu_device_ptr, num_bytes);
-  // todo (yoonmin) : should we revert to the previous context after finishing D2H?
-  setContext(device_num);
-  if (!cuda_stream) {
-    checkError(cuMemcpyDtoH(host_ptr, cu_device_ptr, num_bytes));
-  } else {
-    checkError(cuMemcpyDtoHAsync(host_ptr, cu_device_ptr, num_bytes, cuda_stream));
-    checkError(cuStreamSynchronize(cuda_stream));
+
+  bool jump_buffer_used{false};
+  if (jump_buffer_transfer_mgr_->shouldUseForDeviceToHostTransfer(num_bytes)) {
+    jump_buffer_used = jump_buffer_transfer_mgr_->copyDeviceToHost(
+        host_ptr, device_ptr, num_bytes, device_num, cuda_stream);
   }
+
+  if (!jump_buffer_used) {
+    setContext(device_num);
+    if (!cuda_stream) {
+      checkError(cuMemcpyDtoH(host_ptr, cu_device_ptr, num_bytes));
+    } else {
+      checkError(cuMemcpyDtoHAsync(host_ptr, cu_device_ptr, num_bytes, cuda_stream));
+      checkError(cuStreamSynchronize(cuda_stream));
+    }
+  }
+
   if (log_memory_activity_ && tag) {
     VLOG(1) << "CUDA D2H, tag: " << *tag
             << ", host address: " << static_cast<void*>(host_ptr)
             << ", size: " << num_bytes << ", device: " << device_num
-            << ",  device address: " << static_cast<const void*>(device_ptr);
+            << ", device address: " << static_cast<const void*>(device_ptr);
   }
 }
 
@@ -374,13 +381,6 @@ void CudaMgr::fillDeviceProperties() {
   min_shared_memory_per_block_for_all_devices =
       computeMinSharedMemoryPerBlockForAllDevices();
   min_num_mps_for_all_devices = computeMinNumMPsForAllDevices();
-}
-
-int8_t* CudaMgr::allocatePinnedHostMem(const size_t num_bytes) {
-  setContext(0);
-  void* host_ptr;
-  checkError(cuMemHostAlloc(&host_ptr, num_bytes, CU_MEMHOSTALLOC_PORTABLE));
-  return reinterpret_cast<int8_t*>(host_ptr);
 }
 
 int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes,
@@ -577,7 +577,7 @@ void CudaMgr::createDeviceContexts() {
                      << " with " << e.what()
                      << ". CUDA contexts were being destroyed due to an error creating "
                         "CUDA context for device ID "
-                     << d << " out of " << device_count_ << " (" << errorMessage(status)
+                     << d << " out of " << device_count_ << " (" << error_message(status)
                      << ").";
         }
       }
@@ -590,7 +590,7 @@ void CudaMgr::createDeviceContexts() {
 void CudaMgr::setContext(const int device_num) const {
   // deviceNum is the device number relative to startGpu (realDeviceNum - startGpu_)
   CHECK_LT(device_num, device_count_);
-  cuCtxSetCurrent(device_contexts_[device_num]);
+  set_context(device_contexts_, device_num);
 }
 
 int CudaMgr::getContext() const {
@@ -646,9 +646,7 @@ void CudaMgr::logDeviceProperties() const {
 }
 
 void CudaMgr::checkError(CUresult status) const {
-  if (status != CUDA_SUCCESS) {
-    throw CudaErrorException(status);
-  }
+  check_error(status);
 }
 
 DeviceMemoryAllocationMap& CudaMgr::getDeviceMemoryAllocationMap() {
@@ -671,6 +669,15 @@ bool CudaMgr::logMemoryActivity() const {
   return log_memory_activity_;
 }
 
+std::ostream& operator<<(std::ostream& os, NvidiaDeviceArch device_arch) {
+  constexpr size_t array_size{8};
+  constexpr char const* strings[array_size]{
+      "Kepler", "Maxwell", "Pascal", "Volta", "Turing", "Ampere", "Ada", "Hopper"};
+
+  auto index = static_cast<size_t>(device_arch);
+  CHECK_LT(index, array_size);
+  return os << strings[index];
+}
 }  // namespace CudaMgr_Namespace
 
 std::string get_cuda_home(void) {
