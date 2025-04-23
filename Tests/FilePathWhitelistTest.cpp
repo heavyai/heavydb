@@ -29,6 +29,7 @@
 #include "DataMgr/HeavyDbAwsSdk.h"
 #endif  // HAVE_AWS_S3
 #include "Geospatial/ColumnNames.h"
+#include "Geospatial/GDAL.h"
 #include "ImportExport/ForeignDataImporter.h"
 #include "Shared/SysDefinitions.h"
 #include "Tests/DBHandlerTestHelpers.h"
@@ -706,6 +707,8 @@ int main(int argc, char** argv) {
 #ifdef HAVE_AWS_S3
   heavydb_aws_sdk::init_sdk();
 #endif
+
+  Geospatial::GDAL::init();
 
   int err{0};
   try {

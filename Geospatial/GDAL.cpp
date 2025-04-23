@@ -65,91 +65,75 @@ void gdal_error_handler(CPLErr err_class, int err_no, const char* err_msg) {
 
 bool GDAL::initialized_ = false;
 
-std::mutex GDAL::init_mutex_;
-
 void GDAL::init() {
-  // this should not be called from multiple threads, but...
-  std::lock_guard<std::mutex> guard(init_mutex_);
+  // only initialize once
+  CHECK(!initialized_) << "GDAL already initialized!";
 
-  // init under mutex
-  if (!initialized_) {
-    // set the search path for the GDAL helper files
-    auto const gdal_data_str = heavyai::get_root_abs_path() + "/ThirdParty/gdal";
-    heavyai::setenv("GDAL_DATA", gdal_data_str);
+  // set the search path for the GDAL helper files
+  auto const gdal_data_str = heavyai::get_root_abs_path() + "/ThirdParty/gdal";
+  heavyai::setenv("GDAL_DATA", gdal_data_str);
 
-    // set the search path(s) for the PROJ helper files
-    // allow for a second path to be provided in the config
-    auto proj_data_str = heavyai::get_root_abs_path() + "/ThirdParty/proj";
-    if (g_importer_additional_proj_data_path.length()) {
-      if (boost::filesystem::is_directory(g_importer_additional_proj_data_path)) {
-        proj_data_str +=
-            heavyai::env_path_separator() + g_importer_additional_proj_data_path;
-      } else {
-        LOG(FATAL) << "Invalid importer_additional_proj_data_path config value";
-      }
-      LOG(INFO) << "Using additional PROJ_DATA path: "
-                << g_importer_additional_proj_data_path;
+  // set the search path(s) for the PROJ helper files
+  // allow for a second path to be provided in the config
+  auto proj_data_str = heavyai::get_root_abs_path() + "/ThirdParty/proj";
+  if (g_importer_additional_proj_data_path.length()) {
+    if (boost::filesystem::is_directory(g_importer_additional_proj_data_path)) {
+      proj_data_str +=
+          heavyai::env_path_separator() + g_importer_additional_proj_data_path;
+    } else {
+      LOG(FATAL) << "Invalid importer_additional_proj_data_path config value";
     }
+    LOG(INFO) << "Using additional PROJ_DATA path: "
+              << g_importer_additional_proj_data_path;
+  }
 
-    // for PROJ >= 9.1, PROJ_LIB has been deprecated by PROJ_DATA
-    // the PROJ version is not exposed, but we can check the GDAL version
-    // if we see GDAL 3.7.x or higher, we can be assured we have PROJ 9.3.1 or higher
+  // for PROJ >= 9.1, PROJ_LIB has been deprecated by PROJ_DATA
+  // the PROJ version is not exposed, but we can check the GDAL version
+  // if we see GDAL 3.7.x or higher, we can be assured we have PROJ 9.3.1 or higher
 #if (GDAL_VERSION_MAJOR > 3) || ((GDAL_VERSION_MAJOR == 3) && (GDAL_VERSION_MINOR >= 7))
-    heavyai::setenv("PROJ_DATA", proj_data_str);
+  heavyai::setenv("PROJ_DATA", proj_data_str);
 #else
-    heavyai::setenv("PROJ_LIB", proj_data_str);
+  heavyai::setenv("PROJ_LIB", proj_data_str);
 #endif
 
 #ifndef _WIN32  // TODO
-    // configure SSL certificate path (per S3Archive::init_for_read)
-    // in a production build, GDAL and Curl will have been built on
-    // CentOS, so the baked-in system path will be wrong for Ubuntu
-    // and other Linux distros. Unless the user is deliberately
-    // overriding it by setting SSL_CERT_FILE explicitly in the server
-    // environment, we set it to whichever CA bundle directory exists
-    // on the machine we're running on
-    static constexpr std::array<const char*, 6> known_ca_paths{
-        "/etc/ssl/certs/ca-certificates.crt",
-        "/etc/pki/tls/certs/ca-bundle.crt",
-        "/usr/share/ssl/certs/ca-bundle.crt",
-        "/usr/local/share/certs/ca-root.crt",
-        "/etc/ssl/cert.pem",
-        "/etc/ssl/ca-bundle.pem"};
-    for (const auto& known_ca_path : known_ca_paths) {
-      if (boost::filesystem::exists(known_ca_path)) {
-        LOG(INFO) << "GDAL SSL Certificate path: " << known_ca_path;
-        heavyai::setenv("SSL_CERT_FILE", known_ca_path, false);  // no overwrite
-        break;
-      }
+  // configure SSL certificate path (per S3Archive::init_for_read)
+  // in a production build, GDAL and Curl will have been built on
+  // CentOS, so the baked-in system path will be wrong for Ubuntu
+  // and other Linux distros. Unless the user is deliberately
+  // overriding it by setting SSL_CERT_FILE explicitly in the server
+  // environment, we set it to whichever CA bundle directory exists
+  // on the machine we're running on
+  static constexpr std::array<const char*, 6> known_ca_paths{
+      "/etc/ssl/certs/ca-certificates.crt",
+      "/etc/pki/tls/certs/ca-bundle.crt",
+      "/usr/share/ssl/certs/ca-bundle.crt",
+      "/usr/local/share/certs/ca-root.crt",
+      "/etc/ssl/cert.pem",
+      "/etc/ssl/ca-bundle.pem"};
+  for (const auto& known_ca_path : known_ca_paths) {
+    if (boost::filesystem::exists(known_ca_path)) {
+      LOG(INFO) << "GDAL SSL Certificate path: " << known_ca_path;
+      heavyai::setenv("SSL_CERT_FILE", known_ca_path, false);  // no overwrite
+      break;
     }
-#endif
-
-    GDALAllRegister();
-    OGRRegisterAll();
-    CPLSetErrorHandler(*gdal_error_handler);
-    LOG(INFO) << "GDAL Initialized: " << GDALVersionInfo("--version");
-    initialized_ = true;
   }
-}
-
-bool GDAL::supportsNetworkFileAccess() {
-#if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 2)
-  return true;
-#else
-  return false;
 #endif
+
+  GDALAllRegister();
+  OGRRegisterAll();
+  CPLSetErrorHandler(*gdal_error_handler);
+  LOG(INFO) << "GDAL Initialized: " << GDALVersionInfo("--version");
+  initialized_ = true;
 }
 
 bool GDAL::supportsDriver(const std::string& driver_name) {
-  // lazy init
-  init();
-
+  CHECK(initialized_) << "GDAL not initialized!";
   return GetGDALDriverManager()->GetDriverByName(driver_name.c_str()) != nullptr;
 }
 
 void GDAL::setAuthorizationTokens(const shared::S3Config& s3_config) {
-  // lazy init
-  init();
+  CHECK(initialized_) << "GDAL not initialized!";
 
   // set tokens
   if (s3_config.region.size()) {
@@ -188,8 +172,7 @@ void GDAL::setAuthorizationTokens(const shared::S3Config& s3_config) {
 
 GDAL::DataSourceUqPtr GDAL::openDataSource(const std::string& name,
                                            const import_export::SourceType source_type) {
-  // lazy init
-  init();
+  CHECK(initialized_) << "GDAL not initialized!";
 
   // how should we try to open it?
   unsigned int open_flags{0u};
@@ -217,8 +200,7 @@ GDAL::DataSourceUqPtr GDAL::openDataSource(const std::string& name,
 }
 
 import_export::SourceType GDAL::getDataSourceType(const std::string& name) {
-  // lazy init
-  init();
+  CHECK(initialized_) << "GDAL not initialized!";
 
   // attempt to open datasource as either vector or raster
   DataSourceUqPtr datasource(openDataSource(name, import_export::SourceType::kUnknown));
@@ -252,6 +234,7 @@ import_export::SourceType GDAL::getDataSourceType(const std::string& name) {
 }
 
 std::vector<std::string> GDAL::unpackMetadata(char** metadata) {
+  CHECK(initialized_) << "GDAL not initialized!";
   std::vector<std::string> strings;
   if (metadata) {
     while (*metadata) {

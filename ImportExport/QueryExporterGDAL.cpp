@@ -181,9 +181,6 @@ void QueryExporterGDAL::beginExport(const std::string& file_path,
                          file_type_names[SCI(file_type_)],
                          file_type_valid_extensions[SCI(file_type_)]);
 
-  // lazy init GDAL
-  Geospatial::GDAL::init();
-
   // capture these
   copy_params_ = copy_params;
   array_null_handling_ = array_null_handling;

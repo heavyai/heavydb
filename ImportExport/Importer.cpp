@@ -4705,7 +4705,6 @@ void Loader::setTableEpochs(
 Geospatial::GDAL::DataSourceUqPtr Importer::openGDALDataSource(
     const std::string& file_name,
     const CopyParams& copy_params) {
-  Geospatial::GDAL::init();
   Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
   if (copy_params.source_type != import_export::SourceType::kGeoFile) {
     throw std::runtime_error("Unexpected CopyParams.source_type (" +
@@ -4952,7 +4951,6 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsRaster(
     const std::string& geo_column_name,
     const CopyParams& copy_params) {
   // lazy init GDAL
-  Geospatial::GDAL::init();
   Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
 
   // check for unsupported options
@@ -5141,8 +5139,6 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptorsGeo(
 bool Importer::gdalStatInternal(const std::string& path,
                                 const CopyParams& copy_params,
                                 bool also_dir) {
-  // lazy init GDAL
-  Geospatial::GDAL::init();
   Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
 
 #if (GDAL_VERSION_MAJOR > 2) || (GDAL_VERSION_MAJOR == 2 && GDAL_VERSION_MINOR >= 3)
@@ -5249,8 +5245,6 @@ void gdalGatherFilesInArchiveRecursive(const std::string& archive_path,
 std::vector<std::string> Importer::gdalGetAllFilesInArchive(
     const std::string& archive_path,
     const CopyParams& copy_params) {
-  // lazy init GDAL
-  Geospatial::GDAL::init();
   Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
 
   // prepare to gather files
@@ -5272,8 +5266,6 @@ std::vector<std::string> Importer::gdalGetAllFilesInArchive(
 std::vector<Importer::GeoFileLayerInfo> Importer::gdalGetLayersInGeoFile(
     const std::string& file_name,
     const CopyParams& copy_params) {
-  // lazy init GDAL
-  Geospatial::GDAL::init();
   Geospatial::GDAL::setAuthorizationTokens(copy_params.s3_config);
 
   // prepare to gather layer info

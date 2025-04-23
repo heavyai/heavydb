@@ -36,6 +36,7 @@
 #include <thrift/transport/TServerSocket.h>
 #include "Shared/ThriftJSONProtocolInclude.h"
 
+#include "Geospatial/GDAL.h"
 #include "Logger/Logger.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
@@ -404,6 +405,7 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
 #ifdef HAVE_AWS_S3
   heavydb_aws_sdk::init_sdk();
 #endif  // HAVE_AWS_S3
+  Geospatial::GDAL::init();
   std::set<std::unique_ptr<std::thread>> server_threads;
   auto wait_for_server_threads = [&] {
     for (auto& th : server_threads) {
