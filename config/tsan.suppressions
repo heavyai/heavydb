@@ -44,5 +44,6 @@ mutex:SemaphoreShim_Namespace::BinarySemaphore::release
 race:SemaphoreShim_Namespace::BinarySemaphore::release
 # QE-1225 double lock of a mutex
 mutex:Aws::Http::HttpClient::RetryRequestSleep
+deadlock:Aws::Http::HttpClient::RetryRequestSleep
 # QE-1226 libarchive function calls mktime -> tzset_internal but are not in stacktrace
 race:zip_time

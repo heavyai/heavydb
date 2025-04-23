@@ -125,6 +125,10 @@ namespace {
     GTEST_SKIP() << msg;         \
   }
 
+#define SKIP_AND_DISABLE_TEARDOWN(msg) \
+  skip_teardown_ = true;               \
+  GTEST_SKIP() << msg;
+
 // These need to be done as macros because GTEST_SKIP() invokes "return" in the function
 // it is called in as well as setting IsSkipped().
 #define SKIP_SETUP_IF_ODBC_DISABLED() \
