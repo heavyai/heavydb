@@ -199,12 +199,8 @@ void CgenState::maybeCloneFunctionRecursive(llvm::Function* fn) {
   }
 
   llvm::SmallVector<llvm::ReturnInst*, 8> Returns;  // Ignore returns cloned.
-#if LLVM_VERSION_MAJOR > 12
   llvm::CloneFunctionInto(
       fn, func_impl, vmap_, llvm::CloneFunctionChangeType::DifferentModule, Returns);
-#else
-  llvm::CloneFunctionInto(fn, func_impl, vmap_, /*ModuleLevelChanges=*/true, Returns);
-#endif
 
   for (auto it = llvm::inst_begin(fn), e = llvm::inst_end(fn); it != e; ++it) {
     if (llvm::isa<llvm::CallInst>(*it)) {
@@ -434,11 +430,7 @@ llvm::Value* CgenState::emitExternalCall(
     const auto arg_ti = func_type->getParamType(0);
     CHECK(arg_ti->isPointerTy() && arg_ti->getPointerElementType()->isStructTy());
     auto attr_list = func->getAttributes();
-#if 14 <= LLVM_VERSION_MAJOR
     llvm::AttrBuilder arr_arg_builder(context_, attr_list.getParamAttrs(0));
-#else
-    llvm::AttrBuilder arr_arg_builder(attr_list.getParamAttributes(0));
-#endif
     arr_arg_builder.addAttribute(llvm::Attribute::StructRet);
     func->addParamAttrs(0, arr_arg_builder);
   }

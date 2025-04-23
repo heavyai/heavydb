@@ -42,7 +42,7 @@
 
 #if LLVM_VERSION_MAJOR >= 17
 #include <llvm/TargetParser/Host.h>
-#elif LLVM_VERSION_MAJOR >= 11
+#else
 #include <llvm/Support/Host.h>
 #endif
 
@@ -152,13 +152,8 @@ class HandleDeclAction : public ASTFrontendAction {
 
 class ToolFactory : public FrontendActionFactory {
  public:
-#if LLVM_VERSION_MAJOR >= 10
   using FrontendActionPtr = std::unique_ptr<clang::FrontendAction>;
 #define CREATE_FRONTEND_ACTION(ast_file_) std::make_unique<HandleDeclAction>(ast_file_)
-#else
-  using FrontendActionPtr = clang::FrontendAction*;
-#define CREATE_FRONTEND_ACTION(ast_file_) new HandleDeclAction(ast_file_)
-#endif
 
   ToolFactory(llvm::raw_fd_ostream& ast_file) : ast_file_(ast_file) {}
 
@@ -279,16 +274,9 @@ UdfClangDriver::UdfClangDriver(
   }
 
   // QE-720
-#if LLVM_VERSION_MAJOR >= 10
-  diags.setSeverity(
-#if LLVM_VERSION_MAJOR >= 14
-      clang::diag::warn_drv_new_cuda_version,
-#else
-      clang::diag::warn_drv_unknown_cuda_version,
-#endif
-      clang::diag::Severity::Ignored,
-      clang::SourceLocation());
-#endif
+  diags.setSeverity(clang::diag::warn_drv_new_cuda_version,
+                    clang::diag::Severity::Ignored,
+                    clang::SourceLocation());
 
   // Ignore `error: cannot find libdevice for sm_75` as irrelevant for
   // astparser as well as for LLVM IR generation
@@ -659,13 +647,8 @@ void UdfCompiler::generateAST(const std::string& file_name) const {
       arg_vector.begin(), arg_vector.end(), std::back_inserter(arg_vec2), convert);
 
   int num_args = arg_vec2.size();
-#if LLVM_VERSION_MAJOR > 12
   auto op = CommonOptionsParser::create(num_args, &arg_vec2[0], ToolingSampleCategory);
   ClangTool tool(op->getCompilations(), op->getSourcePathList());
-#else
-  CommonOptionsParser op(num_args, &arg_vec2[0], ToolingSampleCategory);
-  ClangTool tool(op.getCompilations(), op.getSourcePathList());
-#endif
 
   std::string out_name(file_name);
   std::string file_ext("ast");

@@ -68,11 +68,7 @@ llvm::StructType* get_buffer_struct_type(CgenState* cgen_state,
     }
 
     llvm::StringRef struct_name = struct_type->getStructName();
-#if LLVM_VERSION_MAJOR >= 12
     return struct_type->getTypeByName(cgen_state->context_, struct_name);
-#else
-    return cgen_state->module_->getTypeByName(struct_name);
-#endif
   }
   return generated_struct_type;
 }
@@ -791,12 +787,8 @@ llvm::StructType* CodeGenerator::createPointStructType(const std::string& udf_fu
     }
 
     llvm::StringRef struct_name = struct_type->getStructName();
-#if LLVM_VERSION_MAJOR >= 12
     llvm::StructType* point_type =
         struct_type->getTypeByName(cgen_state_->context_, struct_name);
-#else
-    llvm::StructType* point_type = module_for_lookup->getTypeByName(struct_name);
-#endif
     CHECK(point_type);
 
     return point_type;
@@ -881,12 +873,8 @@ llvm::StructType* CodeGenerator::createMultiPointStructType(
     }
 
     llvm::StringRef struct_name = struct_type->getStructName();
-#if LLVM_VERSION_MAJOR >= 12
     llvm::StructType* multi_point_type =
         struct_type->getTypeByName(cgen_state_->context_, struct_name);
-#else
-    llvm::StructType* multi_point_type = module_for_lookup->getTypeByName(struct_name);
-#endif
     CHECK(multi_point_type);
 
     return multi_point_type;
@@ -972,12 +960,8 @@ llvm::StructType* CodeGenerator::createLineStringStructType(
     }
 
     llvm::StringRef struct_name = struct_type->getStructName();
-#if LLVM_VERSION_MAJOR >= 12
     llvm::StructType* line_string_type =
         struct_type->getTypeByName(cgen_state_->context_, struct_name);
-#else
-    llvm::StructType* line_string_type = module_for_lookup->getTypeByName(struct_name);
-#endif
     CHECK(line_string_type);
 
     return line_string_type;
@@ -1065,13 +1049,8 @@ llvm::StructType* CodeGenerator::createMultiLineStringStructType(
     }
 
     llvm::StringRef struct_name = struct_type->getStructName();
-#if LLVM_VERSION_MAJOR >= 12
     llvm::StructType* multi_linestring_type =
         struct_type->getTypeByName(cgen_state_->context_, struct_name);
-#else
-    llvm::StructType* multi_linestring_type =
-        module_for_lookup->getTypeByName(struct_name);
-#endif
     CHECK(multi_linestring_type);
 
     return multi_linestring_type;
@@ -1182,12 +1161,8 @@ llvm::StructType* CodeGenerator::createPolygonStructType(const std::string& udf_
 
     llvm::StringRef struct_name = struct_type->getStructName();
 
-#if LLVM_VERSION_MAJOR >= 12
     llvm::StructType* polygon_type =
         struct_type->getTypeByName(cgen_state_->context_, struct_name);
-#else
-    llvm::StructType* polygon_type = module_for_lookup->getTypeByName(struct_name);
-#endif
     CHECK(polygon_type);
 
     return polygon_type;
@@ -1289,12 +1264,8 @@ llvm::StructType* CodeGenerator::createMultiPolygonStructType(
     }
     llvm::StringRef struct_name = struct_type->getStructName();
 
-#if LLVM_VERSION_MAJOR >= 12
     llvm::StructType* polygon_type =
         struct_type->getTypeByName(cgen_state_->context_, struct_name);
-#else
-    llvm::StructType* polygon_type = cgen_state_->module_->getTypeByName(struct_name);
-#endif
     CHECK(polygon_type);
 
     return polygon_type;
