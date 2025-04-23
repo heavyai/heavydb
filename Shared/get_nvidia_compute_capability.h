@@ -48,11 +48,6 @@ inline std::vector<size_t> get_nvidia_compute_capability() {
       throw std::runtime_error("unexpected cuda compute capability: minor "s +
                                std::to_string(deviceProp.minor));
     }
-
-    if (deviceProp.major >= 10) {
-      throw std::runtime_error("unexpected cuda compute capability: major "s +
-                               std::to_string(deviceProp.major));
-    }
     if (deviceProp.minor >= 10) {
       throw std::runtime_error("unexpected cuda compute capability: minor "s +
                                std::to_string(deviceProp.minor));
