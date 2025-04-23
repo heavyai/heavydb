@@ -214,6 +214,18 @@ endif()
 
 ##########
 
+if(ENABLE_CUDA)
+  add_executable(CudaMgrTest CudaMgrTest.cpp)
+
+  # CudaMgr constructor requires the dependency on QueryEngine.
+  target_link_libraries(CudaMgrTest CudaMgr gtest QueryEngine)
+
+  add_test(CudaMgrTest CudaMgrTest ${TEST_ARGS})
+  list(APPEND SANITY_TEST_PROGRAMS CudaMgrTest)
+endif()
+
+##########
+
 add_executable(DashboardAndCustomExpressionTest DashboardAndCustomExpressionTest.cpp)
 target_link_libraries(DashboardAndCustomExpressionTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(DashboardAndCustomExpressionTest DashboardAndCustomExpressionTest ${TEST_ARGS})
@@ -420,6 +432,17 @@ if(NOT MSVC)
   add_test(JSONTest JSONTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS JSONTest)
 endif()
+
+if(ENABLE_CUDA)
+  add_executable(JumpBufferBenchmark JumpBufferBenchmark/JumpBufferBenchmark.cpp)
+
+  # CudaMgr constructor requires the dependency on QueryEngine.
+  target_link_libraries(JumpBufferBenchmark CudaMgr benchmark::benchmark gtest QueryEngine)
+
+  target_include_directories(JumpBufferBenchmark INTERFACE ThirdParty/googlebenchmark/include)
+endif()
+
+##########
 
 ##########
 

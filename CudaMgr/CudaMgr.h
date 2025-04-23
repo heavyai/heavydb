@@ -23,15 +23,19 @@
 #include <string>
 #include <vector>
 
-#include "CudaMgr/DeviceMemoryAllocationMap.h"
-#include "Logger/Logger.h"
-#include "Shared/DeviceGroup.h"
-
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #else
 #include "Shared/nocuda.h"
 #endif  // HAVE_CUDA
+
+#include "CudaMgr/CudaShared.h"
+#include "CudaMgr/DeviceMemoryAllocationMap.h"
+#ifdef HAVE_CUDA
+#include "CudaMgr/JumpBufferTransferMgr.h"
+#endif
+#include "Logger/Logger.h"
+#include "Shared/DeviceGroup.h"
 
 namespace CudaMgr_Namespace {
 
@@ -47,19 +51,7 @@ enum class NvidiaDeviceArch {
   Blackwell  // compute major = 10 or 12
 };
 
-#ifdef HAVE_CUDA
-std::string errorMessage(CUresult const);
-
-class CudaErrorException : public std::runtime_error {
- public:
-  CudaErrorException(CUresult status);
-
-  CUresult getStatus() const { return status_; }
-
- private:
-  CUresult const status_;
-};
-#endif
+std::ostream& operator<<(std::ostream& os, const NvidiaDeviceArch device_arch);
 
 struct DeviceProperties {
   CUdevice device;
@@ -117,11 +109,9 @@ class CudaMgr {
                           std::optional<std::string_view> tag,
                           CUstream cuda_stream = 0);
 
-  int8_t* allocatePinnedHostMem(const size_t num_bytes);
   virtual int8_t* allocateDeviceMem(const size_t num_bytes,
                                     const int device_num,
                                     const bool is_slab = false);
-  void freePinnedHostMem(int8_t* host_ptr);
   void freeDeviceMem(int8_t* device_ptr);
   void zeroDeviceMem(int8_t* device_ptr,
                      const size_t num_bytes,
@@ -306,6 +296,7 @@ class CudaMgr {
 #ifdef HAVE_CUDA
   bool log_memory_activity_;
   DeviceMemoryAllocationMapUqPtr device_memory_allocation_map_;
+  std::unique_ptr<JumpBufferTransferMgr> jump_buffer_transfer_mgr_;
 #endif
 };
 

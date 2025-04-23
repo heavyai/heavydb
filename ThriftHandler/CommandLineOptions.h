@@ -242,6 +242,10 @@ extern bool g_enable_smem_non_grouped_agg;
 extern bool g_enable_smem_grouped_non_count_agg;
 extern bool g_use_estimator_result_cache;
 extern bool g_enable_lazy_fetch;
+extern size_t g_jump_buffer_size;
+extern size_t g_jump_buffer_parallel_copy_threads;
+extern size_t g_jump_buffer_min_h2d_transfer_threshold;
+extern size_t g_jump_buffer_min_d2h_transfer_threshold;
 
 extern int64_t g_omni_kafka_seek;
 extern size_t g_leaf_count;
