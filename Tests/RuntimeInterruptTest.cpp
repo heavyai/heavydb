@@ -24,6 +24,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Geospatial/ColumnNames.h"
+#include "Geospatial/GDAL.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/ErrorHandling.h"
@@ -1048,6 +1049,8 @@ int main(int argc, char* argv[]) {
   g_enable_non_kernel_time_query_interrupt = true;
 
   QR::init(BASE_PATH);
+
+  Geospatial::GDAL::init();
 
   int err{0};
   try {

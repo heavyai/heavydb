@@ -118,7 +118,6 @@ using TransformationMap =
 
 // Return reference to static TransformationMap singleton.
 TransformationMap& get_transformation_map() {
-  GDAL::init();
   static TransformationMap transformation_map;
   return transformation_map;
 }

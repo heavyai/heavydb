@@ -27,6 +27,7 @@
 #include "Shared/ThriftTypesConvert.h"
 #endif  // HAVE_AWS_S3
 #include "Geospatial/ColumnNames.h"
+#include "Geospatial/GDAL.h"
 #include "Shared/ArrowUtil.h"
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
@@ -1607,6 +1608,8 @@ int main(int argc, char** argv) {
 #ifdef HAVE_AWS_S3
   heavydb_aws_sdk::init_sdk();
 #endif
+
+  Geospatial::GDAL::init();
 
   int err{0};
   try {

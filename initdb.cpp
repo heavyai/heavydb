@@ -24,6 +24,7 @@
 #include <string>
 
 #include "Catalog/Catalog.h"
+#include "Geospatial/GDAL.h"
 #include "Logger/Logger.h"
 #include "OSDependent/heavyai_path.h"
 #include "Shared/SysDefinitions.h"
@@ -317,6 +318,8 @@ int main(int argc, char* argv[]) {
 
   log_options.set_base_path(base_path);
   logger::init(log_options);
+
+  Geospatial::GDAL::init();
 
   try {
     SystemParameters sys_parms;
