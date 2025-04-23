@@ -1030,10 +1030,10 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadata
                      chunkIt->first.begin() + keyPrefix.size(),
                      keyPrefix.begin(),
                      keyPrefix.end()) != chunkIt->first.begin() + keyPrefix.size()) {
-    if (chunkIt->second->hasEncoder()) {
-      auto chunk_metadata = std::make_shared<ChunkMetadata>();
-      chunkIt->second->encoder_->getMetadata(chunk_metadata);
-      chunkMetadataVec.emplace_back(chunkIt->first, chunk_metadata);
+    const auto& [key, buf] = *chunkIt;
+    if (buf->hasEncoder()) {
+      chunkMetadataVec.emplace_back(
+          key, std::make_shared<ChunkMetadata>(buf->encoder_->getMetadata()));
     }
     chunkIt++;
   }

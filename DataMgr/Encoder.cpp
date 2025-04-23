@@ -228,8 +228,53 @@ Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)
     , decimal_overflow_validator_(buffer ? buffer->getSqlType() : SQLTypeInfo())
     , date_days_overflow_validator_(buffer ? buffer->getSqlType() : SQLTypeInfo()){};
 
-void Encoder::getMetadata(const std::shared_ptr<ChunkMetadata>& chunkMetadata) {
-  chunkMetadata->sqlType = buffer_->getSqlType();
-  chunkMetadata->numBytes = buffer_->size();
-  chunkMetadata->numElements = num_elems_;
+ChunkMetadata Encoder::getMetadata() const {
+  CHECK(buffer_);
+  return ChunkMetadata(
+      buffer_->getSqlType(), buffer_->size(), num_elems_, getChunkStats(), raster_tile_);
+}
+
+ChunkMetadata Encoder::getMetadata(const SQLTypeInfo& ti) {
+  return ChunkMetadata(ti, 0, 0, synthesizeChunkStats(ti), raster_tile_);
+}
+
+void Encoder::readMetadata(FILE* f, int32_t version) {
+  // assumes pointer is already in right place
+  CHECK_EQ(fread(reinterpret_cast<int8_t*>(&num_elems_), sizeof(size_t), size_t(1), f),
+           1U);
+  readChunkStats(f);
+  if (version >= MetadataVersion::kRaster) {
+    auto& [width, height, local_coords] = raster_tile_;
+    auto& [file_id, x, y] = local_coords;
+    CHECK_EQ(fread(reinterpret_cast<int8_t*>(&width), sizeof(width), 1, f), 1U);
+    CHECK_EQ(fread(reinterpret_cast<int8_t*>(&height), sizeof(height), 1, f), 1U);
+    CHECK_EQ(fread(reinterpret_cast<int8_t*>(&file_id), sizeof(file_id), 1, f), 1U);
+    CHECK_EQ(fread(reinterpret_cast<int8_t*>(&x), sizeof(x), 1, f), 1U);
+    CHECK_EQ(fread(reinterpret_cast<int8_t*>(&y), sizeof(y), 1, f), 1U);
+  }
+}
+
+void Encoder::writeMetadata(FILE* f) {
+  // assumes pointer is already in right place
+  CHECK_EQ(fwrite(reinterpret_cast<int8_t*>(&num_elems_), sizeof(size_t), 1, f), 1U);
+  writeChunkStats(f);
+  const auto& [width, height, local_coords] = raster_tile_;
+  const auto& [file_id, x, y] = local_coords;
+  CHECK_EQ(fwrite(reinterpret_cast<const int8_t*>(&width), sizeof(width), 1, f), 1U);
+  CHECK_EQ(fwrite(reinterpret_cast<const int8_t*>(&height), sizeof(height), 1, f), 1U);
+  CHECK_EQ(fwrite(reinterpret_cast<const int8_t*>(&file_id), sizeof(file_id), 1, f), 1U);
+  CHECK_EQ(fwrite(reinterpret_cast<const int8_t*>(&x), sizeof(x), 1, f), 1U);
+  CHECK_EQ(fwrite(reinterpret_cast<const int8_t*>(&y), sizeof(y), 1, f), 1U);
+}
+
+void Encoder::copyMetadata(const Encoder* copy_from_encoder) {
+  num_elems_ = copy_from_encoder->getNumElems();
+  raster_tile_ = copy_from_encoder->getRasterTileInfo();
+  copyChunkStats(copy_from_encoder);
+}
+
+void Encoder::setMetadata(const ChunkMetadata& meta) {
+  setNumElems(meta.numElements);
+  setRasterTileInfo(meta.rasterTile);
+  setChunkStats(meta.chunkStats);
 }

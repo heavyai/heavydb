@@ -11,6 +11,8 @@ struct LonLatBoundingBox {
   double max_lon = 0.0;
   double max_lat = 0.0;
   static std::optional<LonLatBoundingBox> parse(const std::string& str);
+
+  bool hasNoOverlapWith(const LonLatBoundingBox& other) const;
 };
 
 }  // namespace shared

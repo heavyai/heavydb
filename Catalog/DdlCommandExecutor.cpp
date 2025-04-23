@@ -1564,6 +1564,11 @@ void CreateForeignTableCommand::setTableDetails(
         "\" does not exist."};
   }
 
+  if (foreign_table.foreign_server->data_wrapper_type ==
+      foreign_storage::DataWrapperType::RASTER) {
+    td.fragType = Fragmenter_Namespace::FragmenterType::RASTER;
+  }
+
   // check server usage privileges
   if (!is_default_server(server_name) &&
       !session_ptr_->checkDBAccessPrivileges(DBObjectType::ServerDBObjectType,

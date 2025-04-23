@@ -24,10 +24,110 @@
 #include "Shared/sqltypes.h"
 #include "Shared/types.h"
 
+// A way to represent a Tile's position relative to other tiles in the original file.
+struct FileLocalCoords {
+  int32_t file_id = -1, x = -1, y = -1;
+
+  bool operator==(const FileLocalCoords& o) const {
+    return file_id == o.file_id && x == o.x && y == o.y;
+  }
+};
+
+inline std::ostream& operator<<(std::ostream& out, const FileLocalCoords& flc) {
+  out << flc.file_id << ": " << flc.x << ", " << flc.y;
+  return out;
+}
+
+struct RasterTileInfo {
+  int32_t width = 0, height = 0;
+  FileLocalCoords local_coords;
+
+  bool operator==(const RasterTileInfo& o) const {
+    return width == o.width && height == o.height && local_coords == o.local_coords;
+  }
+};
+
+inline std::ostream& operator<<(std::ostream& out, const RasterTileInfo& tile) {
+  out << "width: " << tile.width << ", height: " << tile.height << " LocalCoords: {"
+      << tile.local_coords << "}";
+  return out;
+}
+
 struct ChunkStats {
   Datum min;
   Datum max;
   bool has_nulls;
+
+  ChunkStats() {}
+
+  ChunkStats(const Datum new_min, const Datum new_max, const bool new_has_nulls)
+      : min(new_min), max(new_max), has_nulls(new_has_nulls) {}
+
+  template <typename T>
+  ChunkStats(const T new_min,
+             const T new_max,
+             const bool new_has_nulls,
+             const SQLTypeInfo& ti) {
+    has_nulls = new_has_nulls;
+    switch (ti.get_type()) {
+      case kBOOLEAN: {
+        min.tinyintval = new_min;
+        max.tinyintval = new_max;
+        break;
+      }
+      case kTINYINT: {
+        min.tinyintval = new_min;
+        max.tinyintval = new_max;
+        break;
+      }
+      case kSMALLINT: {
+        min.smallintval = new_min;
+        max.smallintval = new_max;
+        break;
+      }
+      case kINT: {
+        min.intval = new_min;
+        max.intval = new_max;
+        break;
+      }
+      case kBIGINT:
+      case kNUMERIC:
+      case kDECIMAL: {
+        min.bigintval = new_min;
+        max.bigintval = new_max;
+        break;
+      }
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE: {
+        min.bigintval = new_min;
+        max.bigintval = new_max;
+        break;
+      }
+      case kFLOAT: {
+        min.floatval = new_min;
+        max.floatval = new_max;
+        break;
+      }
+      case kDOUBLE: {
+        min.doubleval = new_min;
+        max.doubleval = new_max;
+        break;
+      }
+      case kVARCHAR:
+      case kCHAR:
+      case kTEXT:
+        if (ti.get_compression() == kENCODING_DICT) {
+          min.intval = new_min;
+          max.intval = new_max;
+        }
+        break;
+      default: {
+        UNREACHABLE() << "Unknown type";
+        break;
+      }
+    }
+  }
 };
 
 struct ChunkMetadata {
@@ -35,84 +135,24 @@ struct ChunkMetadata {
   size_t numBytes;
   size_t numElements;
   ChunkStats chunkStats;
+  RasterTileInfo rasterTile;
 
   ChunkMetadata(const SQLTypeInfo& sql_type,
                 const size_t num_bytes,
                 const size_t num_elements,
-                const ChunkStats& chunk_stats)
+                const ChunkStats& chunk_stats,
+                const RasterTileInfo& raster_tile)
       : sqlType(sql_type)
       , numBytes(num_bytes)
       , numElements(num_elements)
-      , chunkStats(chunk_stats) {}
+      , chunkStats(chunk_stats)
+      , rasterTile(raster_tile) {}
 
   ChunkMetadata() {}
 
   template <typename T>
   void fillChunkStats(const T min, const T max, const bool has_nulls) {
-    chunkStats.has_nulls = has_nulls;
-    switch (sqlType.get_type()) {
-      case kBOOLEAN: {
-        chunkStats.min.tinyintval = min;
-        chunkStats.max.tinyintval = max;
-        break;
-      }
-      case kTINYINT: {
-        chunkStats.min.tinyintval = min;
-        chunkStats.max.tinyintval = max;
-        break;
-      }
-      case kSMALLINT: {
-        chunkStats.min.smallintval = min;
-        chunkStats.max.smallintval = max;
-        break;
-      }
-      case kINT: {
-        chunkStats.min.intval = min;
-        chunkStats.max.intval = max;
-        break;
-      }
-      case kBIGINT:
-      case kNUMERIC:
-      case kDECIMAL: {
-        chunkStats.min.bigintval = min;
-        chunkStats.max.bigintval = max;
-        break;
-      }
-      case kTIME:
-      case kTIMESTAMP:
-      case kDATE: {
-        chunkStats.min.bigintval = min;
-        chunkStats.max.bigintval = max;
-        break;
-      }
-      case kFLOAT: {
-        chunkStats.min.floatval = min;
-        chunkStats.max.floatval = max;
-        break;
-      }
-      case kDOUBLE: {
-        chunkStats.min.doubleval = min;
-        chunkStats.max.doubleval = max;
-        break;
-      }
-      case kVARCHAR:
-      case kCHAR:
-      case kTEXT:
-        if (sqlType.get_compression() == kENCODING_DICT) {
-          chunkStats.min.intval = min;
-          chunkStats.max.intval = max;
-        }
-        break;
-      default: {
-        break;
-      }
-    }
-  }
-
-  void fillChunkStats(const Datum min, const Datum max, const bool has_nulls) {
-    chunkStats.has_nulls = has_nulls;
-    chunkStats.min = min;
-    chunkStats.max = max;
+    chunkStats = ChunkStats(min, max, has_nulls, sqlType);
   }
 
   bool operator==(const ChunkMetadata& that) const {
@@ -124,7 +164,8 @@ struct ChunkMetadata {
            DatumEqual(chunkStats.max,
                       that.chunkStats.max,
                       sqlType.is_array() ? sqlType.get_elem_type() : sqlType) &&
-           chunkStats.has_nulls == that.chunkStats.has_nulls;
+           chunkStats.has_nulls == that.chunkStats.has_nulls &&
+           rasterTile == that.rasterTile;
   }
 
   bool isPlaceholder() const {
@@ -177,9 +218,10 @@ inline std::ostream& operator<<(std::ostream& out, const ChunkMetadata& chunk_me
     max = DatumToString(chunk_metadata.chunkStats.max, type);
   }
   out << "type: " << chunk_metadata.sqlType.toString()
-      << " numBytes: " << chunk_metadata.numBytes << " numElements "
-      << chunk_metadata.numElements << " min: " << min << " max: " << max
-      << " has_nulls: " << std::to_string(chunk_metadata.chunkStats.has_nulls);
+      << ", numBytes: " << chunk_metadata.numBytes << ", numElements "
+      << chunk_metadata.numElements << ", min: " << min << ", max: " << max
+      << ", has_nulls: " << std::to_string(chunk_metadata.chunkStats.has_nulls)
+      << ", rasterTile: (" << chunk_metadata.rasterTile << ")";
   return out;
 }
 

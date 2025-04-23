@@ -336,10 +336,7 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
         }
 
         auto [stats_min, stats_max] = getEncodedStats(parquet_column_descriptor, stats);
-        auto updated_chunk_stats = getUpdatedStats(stats_min, stats_max, column_type);
-        metadata->fillChunkStats(updated_chunk_stats.min,
-                                 updated_chunk_stats.max,
-                                 metadata->chunkStats.has_nulls);
+        metadata->chunkStats = getUpdatedStats(stats_min, stats_max, column_type);
       }
       auto null_count = stats->null_count();
       validateNullCount(group_metadata->schema()->Column(parquet_column_index)->name(),
@@ -386,9 +383,7 @@ class TypedParquetInPlaceEncoder : public ParquetInPlaceEncoder {
       encoder->updateStats(reinterpret_cast<int8_t*>(&stats_min), 1);
       encoder->updateStats(reinterpret_cast<int8_t*>(&stats_max), 1);
     }
-    auto updated_chunk_stats_metadata = std::make_shared<ChunkMetadata>();
-    encoder->getMetadata(updated_chunk_stats_metadata);
-    return updated_chunk_stats_metadata->chunkStats;
+    return encoder->getChunkStats();
   }
 
   std::pair<V, V> getEncodedStats(
