@@ -25,7 +25,6 @@
 #include "GpuInitGroups.h"
 #include "InPlaceSort.h"
 #include "LLVMFunctionAttributesUtil.h"
-#include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
 #include "TargetExprBuilder.h"
 
@@ -1069,9 +1068,6 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
   {
     const bool is_group_by{!ra_exe_unit_.groupby_exprs.empty()};
 
-    if (executor_->isArchMaxwell(co.device_type)) {
-      prependForceSync();
-    }
     DiamondCodegen filter_cfg(filter_result,
                               executor_,
                               !is_group_by || query_mem_desc.usesGetGroupValueFast(),

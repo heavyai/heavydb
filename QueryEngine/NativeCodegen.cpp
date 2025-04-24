@@ -2754,18 +2754,13 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
   }
   CHECK(query_mem_desc_ptr);
   CHECK(cuda_mgr);
-  /*
-   * We only use shared memory strategy if GPU hardware provides native shared
-   * memory atomics support. From CUDA Toolkit documentation:
-   * https://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#atomic-ops "Like
-   * Maxwell, Pascal [and Volta] provides native shared memory atomic operations
-   * for 32-bit integer arithmetic, along with native 32 or 64-bit compare-and-swap
-   * (CAS)."
-   *
-   */
-  if (!cuda_mgr->isArchMaxwellOrLaterForAll()) {
-    return false;
-  }
+  // We only use shared memory strategy if GPU hardware provides native shared
+  // memory atomics support. From CUDA Toolkit documentation:
+  // https://docs.nvidia.com/cuda/pascal-tuning-guide/index.html#atomic-ops "Like
+  // Pascal and later provide native shared memory atomic operations for 32-bit
+  // integer arithmetic, along with native 32 or 64-bit compare-and-swap (CAS)."
+  // *EXCEPT*
+  // apparently it doesn't work on Pascal, only Volta or later
   if (cuda_mgr->isArchPascal() && !ra_exe_unit.join_quals.empty() &&
       has_count_expr(ra_exe_unit) && has_case_expr_within_groupby_expr(ra_exe_unit)) {
     return false;
