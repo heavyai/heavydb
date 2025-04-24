@@ -83,7 +83,6 @@ set(query_engine_source_files
   LogicalIR.cpp
   LLVMFunctionAttributesUtil.cpp
   LLVMGlobalContext.cpp
-  MaxwellCodegenPatch.cpp
   MLPredictCodegen.cpp
   MurmurHash.cpp
   NativeCodegen.cpp

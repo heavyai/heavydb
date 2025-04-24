@@ -480,7 +480,7 @@ void DBHandler::initialize(const bool is_new_db) {
       const auto cuda_mgr = data_mgr_->getCudaMgr();
       const CudaMgr_Namespace::NvidiaDeviceArch device_arch =
           cuda_mgr ? cuda_mgr->getDeviceArch()
-                   : CudaMgr_Namespace::NvidiaDeviceArch::Kepler;
+                   : CudaMgr_Namespace::NvidiaDeviceArch::Pascal;
       UdfCompiler compiler(device_arch, clang_path_, clang_options_);
 
       const auto [cpu_udf_ir_file, cuda_udf_ir_file] = compiler.compileUdf(udf_filename_);

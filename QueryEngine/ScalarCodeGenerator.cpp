@@ -186,7 +186,7 @@ std::unordered_map<int, void*> ScalarCodeGenerator::generateNativeGPUCode(
     const CompilationOptions& co) {
   if (!nvptx_target_machine_) {
     nvptx_target_machine_ =
-        initializeNVPTXBackend(CudaMgr_Namespace::NvidiaDeviceArch::Kepler);
+        initializeNVPTXBackend(CudaMgr_Namespace::NvidiaDeviceArch::Pascal);
   }
   if (!cuda_mgr_) {
     cuda_mgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
