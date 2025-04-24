@@ -114,7 +114,7 @@ CudaMgr_Namespace::NvidiaDeviceArch init_nvidia_device_arch() {
   CHECK(cuda_mgr);
   return cuda_mgr->getDeviceArch();
 #else
-  return CudaMgr_Namespace::NvidiaDeviceArch::Kepler;
+  return CudaMgr_Namespace::NvidiaDeviceArch::Pascal;
 #endif
 }
 

@@ -2701,15 +2701,6 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(
     return ExecutorDeviceType::CPU;
   }
   for (const auto target_expr : ra_exe_unit.target_exprs) {
-    const auto agg_info = get_target_info(target_expr, g_bigint_count);
-    if (!ra_exe_unit.groupby_exprs.empty() &&
-        !isArchPascalOrLater(requested_device_type)) {
-      if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM ||
-           agg_info.agg_kind == kSUM_IF) &&
-          agg_info.agg_arg_type.get_type() == kDOUBLE) {
-        return ExecutorDeviceType::CPU;
-      }
-    }
     if (dynamic_cast<const Analyzer::RegexpExpr*>(target_expr)) {
       return ExecutorDeviceType::CPU;
     }

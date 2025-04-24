@@ -40,8 +40,6 @@
 namespace CudaMgr_Namespace {
 
 enum class NvidiaDeviceArch {
-  Kepler,    // compute major = 3
-  Maxwell,   // compute major = 5
   Pascal,    // compute major = 6
   Volta,     // compute major = 7, compute minor = 0
   Turing,    // compute major = 7, compute minor = 5
@@ -143,33 +141,15 @@ class CudaMgr {
                              " is out of range of number of devices (" +
                              std::to_string(device_properties_.size()) + ")");
   }
-  inline bool isArchMaxwell() const {
-    CHECK(device_properties_initialized_);
-    return (getDeviceCount() > 0 && device_properties_[0].computeMajor == 5);
-  }
-  inline bool isArchMaxwellOrLater() const {
-    CHECK(device_properties_initialized_);
-    return (getDeviceCount() > 0 && device_properties_[0].computeMajor >= 5);
-  }
   inline bool isArchPascal() const {
     CHECK(device_properties_initialized_);
     return (getDeviceCount() > 0 && device_properties_[0].computeMajor == 6);
   }
-  inline bool isArchPascalOrLater() const {
-    CHECK(device_properties_initialized_);
-    return (getDeviceCount() > 0 && device_properties_[0].computeMajor >= 6);
-  }
-  bool isArchMaxwellOrLaterForAll() const;
   bool isArchVoltaOrGreaterForAll() const;
-  bool isArchPascalOrGreaterForAll() const;
 
   static std::string deviceArchToSM(const NvidiaDeviceArch arch) {
     // Must match ${CUDA_COMPILATION_ARCH} CMAKE flag
     switch (arch) {
-      case NvidiaDeviceArch::Kepler:
-        return "sm_35";
-      case NvidiaDeviceArch::Maxwell:
-        return "sm_50";
       case NvidiaDeviceArch::Pascal:
         return "sm_60";
       case NvidiaDeviceArch::Volta:
@@ -195,11 +175,7 @@ class CudaMgr {
         << "Failed to fetch CUDA device properties. Server cannot start.";
     auto const compute_major = device_properties_.front().computeMajor;
     auto const compute_minor = device_properties_.front().computeMinor;
-    if (compute_major == 3) {
-      return NvidiaDeviceArch::Kepler;
-    } else if (compute_major == 5) {
-      return NvidiaDeviceArch::Maxwell;
-    } else if (compute_major == 6) {
+    if (compute_major == 6) {
       return NvidiaDeviceArch::Pascal;
     } else if (compute_major == 7) {
       if (compute_minor < 5) {
@@ -224,7 +200,7 @@ class CudaMgr {
     }
     LOG(FATAL) << "Unsupported CUDA device (compute version " << compute_major << "."
                << compute_minor << ")";
-    return NvidiaDeviceArch::Kepler;
+    return NvidiaDeviceArch::Pascal;
   }
 
   void setContext(const int device_num) const;

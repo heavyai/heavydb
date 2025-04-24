@@ -371,12 +371,6 @@ void CudaMgr::fillDeviceProperties() {
     device_properties_[device_num].allocationGranularity = getGranularity(device_num);
   }
   finishDevicePropertiesInitialization();
-  if (g_enable_gpu_dynamic_smem && !isArchPascalOrGreaterForAll()) {
-    VLOG(1) << "Not all GPUs support extended dynamic shared memory, so the feature is "
-               "turned off. The maximum size of shared memory is limited to "
-            << computeMinSharedMemoryPerBlockForAllDevices();
-    g_enable_gpu_dynamic_smem = false;
-  }
 
   min_shared_memory_per_block_for_all_devices =
       computeMinSharedMemoryPerBlockForAllDevices();
@@ -494,20 +488,6 @@ void CudaMgr::setDeviceMem(int8_t* device_ptr,
 }
 
 /**
- * Returns true if all devices have Maxwell micro-architecture, or later.
- * Returns false, if there is any device with compute capability of < 5.0
- */
-bool CudaMgr::isArchMaxwellOrLaterForAll() const {
-  CHECK(device_properties_initialized_);
-  for (int i = 0; i < device_count_; i++) {
-    if (device_properties_[i].computeMajor < 5) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/**
  * Returns true if all devices have Volta micro-architecture
  * Returns false, if there is any non-Volta device available.
  */
@@ -521,16 +501,6 @@ bool CudaMgr::isArchVoltaOrGreaterForAll() const {
   return true;
 }
 
-bool CudaMgr::isArchPascalOrGreaterForAll() const {
-  CHECK(device_properties_initialized_);
-  for (int i = 0; i < device_count_; i++) {
-    if (device_properties_[i].computeMajor < 6) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /**
  * This function returns the minimum available dynamic shared memory that is available per
  * block for all GPU devices.
@@ -538,10 +508,9 @@ bool CudaMgr::isArchPascalOrGreaterForAll() const {
 size_t CudaMgr::computeMinSharedMemoryPerBlockForAllDevices() const {
   CHECK(device_properties_initialized_);
   int shared_mem_size = 0;
-  bool const optin = g_enable_gpu_dynamic_smem && isArchPascalOrGreaterForAll();
   for (int d = 0; d < device_count_; d++) {
-    int size = optin ? device_properties_[d].sharedMemPerBlockOptIn
-                     : device_properties_[d].sharedMemPerBlock;
+    int size = g_enable_gpu_dynamic_smem ? device_properties_[d].sharedMemPerBlockOptIn
+                                         : device_properties_[d].sharedMemPerBlock;
     shared_mem_size = (d == 0) ? size : std::min(shared_mem_size, size);
   }
   return shared_mem_size;

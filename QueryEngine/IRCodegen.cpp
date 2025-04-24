@@ -18,7 +18,6 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 #include "ExternalExecutor.h"
-#include "MaxwellCodegenPatch.h"
 #include "RelAlgTranslator.h"
 
 #include "QueryEngine/JoinHashTable/RangeJoinHashTable.h"
@@ -1480,12 +1479,7 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
         array_at_fname,
         ar_ret_ty,
         {group_key, code_generator.posArg(arr_expr), array_idx});
-    if (need_patch_unnest_double(
-            elem_ti, isArchMaxwell(co.device_type), thread_mem_shared)) {
-      key_to_cache = spillDoubleElement(group_key, ar_ret_ty);
-    } else {
-      key_to_cache = group_key;
-    }
+    key_to_cache = group_key;
     CHECK(array_loop_head);
     array_loops.push(array_loop_head);
   }

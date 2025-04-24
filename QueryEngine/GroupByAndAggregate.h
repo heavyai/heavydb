@@ -202,13 +202,6 @@ class GroupByAndAggregate {
 
   void checkErrorCode(llvm::Value* retCode);
 
-  bool needsUnnestDoublePatch(llvm::Value const* val_ptr,
-                              const std::string& agg_base_name,
-                              const bool threads_share_memory,
-                              const CompilationOptions& co) const;
-
-  void prependForceSync();
-
   Executor* executor_;
   const RelAlgExecutionUnit& ra_exe_unit_;
   const std::vector<InputTableInfo>& query_infos_;

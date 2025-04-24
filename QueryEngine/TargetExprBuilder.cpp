@@ -26,7 +26,6 @@
 #include "Execute.h"
 #include "GroupByAndAggregate.h"
 #include "Logger/Logger.h"
-#include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
 
 #define LL_CONTEXT executor->cgen_state_->context_
@@ -485,19 +484,14 @@ void TargetExprCodegen::codegenAggregate(
     }
 
     auto target_lv = target_lvs[target_lv_idx];
-    const auto needs_unnest_double_patch = group_by_and_agg->needsUnnestDoublePatch(
-        target_lv, agg_base_name, query_mem_desc.threadsShareMemory(), co);
-    const auto need_skip_null = !needs_unnest_double_patch && target_info.skip_null_val;
-    if (!needs_unnest_double_patch) {
-      if (need_skip_null && !is_agg_domain_range_equivalent(target_info.agg_kind)) {
-        target_lv = group_by_and_agg->convertNullIfAny(arg_type, target_info, target_lv);
-      } else if (is_fp_arg) {
-        target_lv = executor->castToFP(target_lv, arg_type, target_info.sql_type);
-      }
-      if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
-        target_lv =
-            executor->cgen_state_->castToTypeIn(target_lv, (agg_chosen_bytes << 3));
-      }
+    const auto need_skip_null = target_info.skip_null_val;
+    if (need_skip_null && !is_agg_domain_range_equivalent(target_info.agg_kind)) {
+      target_lv = group_by_and_agg->convertNullIfAny(arg_type, target_info, target_lv);
+    } else if (is_fp_arg) {
+      target_lv = executor->castToFP(target_lv, arg_type, target_info.sql_type);
+    }
+    if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
+      target_lv = executor->cgen_state_->castToTypeIn(target_lv, (agg_chosen_bytes << 3));
     }
 
     const bool is_simple_count_target = is_simple_count(target_info);
@@ -586,9 +580,6 @@ void TargetExprCodegen::codegenAggregate(
         if (co.device_type == ExecutorDeviceType::GPU &&
             query_mem_desc.threadsShareMemory()) {
           agg_fname += "_shared";
-          if (needs_unnest_double_patch) {
-            agg_fname = patch_agg_fname(agg_fname);
-          }
         }
         auto agg_fname_call_ret_lv = group_by_and_agg->emitCall(agg_fname, agg_args);
 
