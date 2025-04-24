@@ -21,7 +21,7 @@ bool g_enable_gpu_dynamic_smem{true};
 
 // Stub global variable definitions for when CUDA is disabled.
 size_t g_jump_buffer_size{0};
-size_t g_jump_buffer_parallel_copy_threads{0};
+size_t g_jump_buffer_parallel_copy_threads{4};
 size_t g_jump_buffer_min_h2d_transfer_threshold{0};
 size_t g_jump_buffer_min_d2h_transfer_threshold{0};
 
