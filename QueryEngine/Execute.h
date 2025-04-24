@@ -610,8 +610,6 @@ class Executor {
 
   bool isCPUOnly() const;
 
-  bool isArchMaxwell(const ExecutorDeviceType dt) const;
-
   bool containsLeftDeepOuterJoin() const {
     return cgen_state_->contains_left_deep_outer_join_;
   }
@@ -893,13 +891,6 @@ class Executor {
     auto cuda_mgr = data_mgr_->getCudaMgr();
     CHECK(cuda_mgr);
     return cuda_mgr;
-  }
-
-  bool isArchPascalOrLater(const ExecutorDeviceType dt) const {
-    if (dt == ExecutorDeviceType::GPU) {
-      return cudaMgr()->isArchPascalOrLater();
-    }
-    return false;
   }
 
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
@@ -1555,8 +1546,6 @@ class Executor {
     CgenState* cgen_state_;
     std::unordered_map<size_t, std::vector<llvm::Value*>> saved_fetch_cache;
   };
-
-  llvm::Value* spillDoubleElement(llvm::Value* elem_val, llvm::Type* elem_ty);
 
   std::unique_ptr<PlanState> plan_state_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;

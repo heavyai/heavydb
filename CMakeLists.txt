@@ -318,7 +318,6 @@ if(ENABLE_CUDA)
   else()
     # set all supported archs for regular CUDA compiles
     set(CMAKE_CUDA_ARCHITECTURES
-        50-virtual
         60-virtual
         70-virtual
         75-virtual
@@ -329,7 +328,6 @@ if(ENABLE_CUDA)
     list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
     # set all supported archs for custom_command CUDA compiles
     set(CUSTOM_COMMAND_CUDA_ARCHITECTURES
-      -gencode=arch=compute_50,code=compute_50;
       -gencode=arch=compute_60,code=compute_60;
       -gencode=arch=compute_70,code=compute_70;
       -gencode=arch=compute_75,code=compute_75;

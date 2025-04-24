@@ -96,15 +96,7 @@ void CudaMgr::setDeviceMem(int8_t* device_ptr,
   CHECK(false);
 }
 
-bool CudaMgr::isArchMaxwellOrLaterForAll() const {
-  CHECK(false);
-  return false;
-}
 bool CudaMgr::isArchVoltaOrGreaterForAll() const {
-  CHECK(false);
-  return false;
-}
-bool CudaMgr::isArchPascalOrGreaterForAll() const {
   CHECK(false);
   return false;
 }
