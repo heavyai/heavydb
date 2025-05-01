@@ -50,6 +50,8 @@ class QueryExporter {
   virtual void exportResults(const std::vector<AggregatedResult>& query_results) = 0;
   virtual void endExport() = 0;
 
+  static std::string formatTemporal(const SQLTypeInfo& type_info, int64_t unix_time);
+
  protected:
   const FileType file_type_;
 

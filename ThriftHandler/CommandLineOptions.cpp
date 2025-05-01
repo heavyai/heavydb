@@ -830,7 +830,12 @@ void CommandLineOptions::fillOptions() {
                      "Enable column-level security, column-level privileges granted and "
                      "revoked will be respected. Use of views in a query automatically "
                      "disables column-level security for that query.");
-
+  desc.add_options()(
+      "export-timestamps-in-iso-format",
+      po::value<bool>(&g_export_timestamps_in_iso_format)
+          ->default_value(g_export_timestamps_in_iso_format)
+          ->implicit_value(true),
+      "Export timestamp query (COPY TO) projections in the ISO 8601 format.");
   desc.add(log_options_.get_options());
 }
 
@@ -1864,6 +1869,9 @@ void CommandLineOptions::validate() {
             << g_jump_buffer_min_h2d_transfer_threshold;
   LOG(INFO) << "Jump buffer minimum device-to-host transfer threshold is set to "
             << g_jump_buffer_min_d2h_transfer_threshold;
+
+  LOG(INFO) << "Export timestamps in ISO format set to "
+            << g_export_timestamps_in_iso_format;
 }
 
 SystemParameters::RuntimeUdfRegistrationPolicy construct_runtime_udf_registration_policy(

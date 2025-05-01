@@ -477,7 +477,7 @@ void insert_scalar_column(const ScalarTargetValue* scalar_tv,
     } else if (ti.is_time()) {
       CHECK(field_type == OFTString || field_type == OFTDate || field_type == OFTTime ||
             field_type == OFTDateTime);
-      auto str = shared::convert_temporal_to_iso_format(ti, int_val);
+      auto str = QueryExporter::formatTemporal(ti, int_val);
       ogr_feature->SetField(field_index, str.c_str());
     } else if (is_int64) {
       CHECK_EQ(field_type, OFTInteger64);
@@ -608,7 +608,7 @@ void insert_array_column(const ArrayTargetValue* array_tv,
           string_values.emplace_back("");
         } else {
           string_values.emplace_back(
-              shared::convert_temporal_to_iso_format(ti.get_elem_type(), int_val));
+              QueryExporter::formatTemporal(ti.get_elem_type(), int_val));
         }
       } else if (is_int64) {
         if (is_null && force_null_to_zero) {
