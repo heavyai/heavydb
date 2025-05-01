@@ -299,3 +299,4 @@ extern bool g_multi_instance;
 extern size_t g_lockfile_lock_extension_milliseconds;
 extern bool g_allow_invalid_literal_buffer_reads;
 extern bool g_optimize_cuda_block_and_grid_sizes;
+extern bool g_export_timestamps_in_iso_format;

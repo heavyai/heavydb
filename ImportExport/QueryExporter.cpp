@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 
-#include <ImportExport/QueryExporter.h>
+#include "ImportExport/QueryExporter.h"
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 
-#include <ImportExport/QueryExporterCSV.h>
-#include <ImportExport/QueryExporterGDAL.h>
+#include "ImportExport/QueryExporterCSV.h"
+#include "ImportExport/QueryExporterGDAL.h"
+#include "Shared/misc.h"
+
+bool g_export_timestamps_in_iso_format{true};
 
 namespace import_export {
 
@@ -60,4 +63,16 @@ std::string QueryExporter::safeColumnName(const std::string& resname,
   return resname;
 }
 
+std::string QueryExporter::formatTemporal(const SQLTypeInfo& type_info,
+                                          int64_t unix_time) {
+  std::string timestamp_str;
+  if (g_export_timestamps_in_iso_format || !type_info.is_timestamp()) {
+    timestamp_str = shared::convert_temporal_to_iso_format(type_info, unix_time);
+  } else {
+    Datum datum;
+    datum.bigintval = unix_time;
+    timestamp_str = DatumToString(datum, type_info);
+  }
+  return timestamp_str;
+}
 }  // namespace import_export

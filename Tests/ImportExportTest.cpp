@@ -76,6 +76,8 @@ extern bool g_enable_legacy_parquet_import;
 #endif
 extern bool g_enable_fsi_regex_import;
 
+extern bool g_export_timestamps_in_iso_format;
+
 namespace {
 #ifdef HAVE_AWS_S3
 std::string get_source_type(const std::string& file_type) {
@@ -5680,9 +5682,20 @@ TEST_F(ExportTest, Array_Null_Handling_NullField) {
                               ", array_null_handling='nullfield'"));
 }
 
-class TemporalColumnExportTest : public DBHandlerTestFixture {
+class TemporalColumnExportTest : public DBHandlerTestFixture,
+                                 public ::testing::WithParamInterface<bool> {
  protected:
+  static void SetupTestSuite() {
+    orig_g_export_timestamps_in_iso_format_ = g_export_timestamps_in_iso_format;
+  }
+
+  static void TearDownTestSuite() {
+    g_export_timestamps_in_iso_format = orig_g_export_timestamps_in_iso_format_;
+  }
+
   void SetUp() override {
+    g_export_timestamps_in_iso_format = GetParam();
+
     DBHandlerTestFixture::SetUp();
     remove_all_files_from_export();
     sql("DROP TABLE IF EXISTS test_table;");
@@ -5730,13 +5743,27 @@ class TemporalColumnExportTest : public DBHandlerTestFixture {
     size_t line_index{};
     while (std::getline(file, line)) {
       ASSERT_LT(line_index, rows.size());
-      EXPECT_EQ(rows[line_index], line) << "At line: " << line_index;
+      EXPECT_EQ(reformatLineIfNeeded(rows[line_index]), line)
+          << "At line: " << line_index;
       line_index++;
     }
   }
+
+  std::string reformatLineIfNeeded(const std::string& line) {
+    if (g_export_timestamps_in_iso_format) {
+      return line;
+    }
+
+    std::string result{line};
+    std::replace(result.begin(), result.end(), 'T', ' ');
+    result.erase(std::remove(result.begin(), result.end(), 'Z'), result.end());
+    return result;
+  }
+
+  static inline bool orig_g_export_timestamps_in_iso_format_;
 };
 
-TEST_F(TemporalColumnExportTest, Quoted) {
+TEST_P(TemporalColumnExportTest, Quoted) {
   sql("COPY (SELECT * FROM test_table ORDER BY index) TO 'temporal_columns_quoted.csv' "
       "WITH(header='false');");
   assertExpectedFileContent(
@@ -5759,7 +5786,7 @@ TEST_F(TemporalColumnExportTest, Quoted) {
        "\"{23:59:59}\",\"{9999-12-31}\",\"{2262-04-11T23:47:16.854775807Z}\""});
 }
 
-TEST_F(TemporalColumnExportTest, Unquoted) {
+TEST_P(TemporalColumnExportTest, Unquoted) {
   sql("COPY (SELECT * FROM test_table ORDER BY index) TO 'temporal_columns_unquoted.csv' "
       "WITH (quoted='false', header='false');");
   assertExpectedFileContent(
@@ -5781,6 +5808,14 @@ TEST_F(TemporalColumnExportTest, Unquoted) {
        "999Z,2900-12-31T23:59:59.999999Z,2262-04-11T23:47:16.854775807Z,"
        "{23:59:59},{9999-12-31},{2262-04-11T23:47:16.854775807Z}"});
 }
+
+INSTANTIATE_TEST_SUITE_P(TemporalColumnExportTest,
+                         TemporalColumnExportTest,
+                         ::testing::Values(true, false),
+                         [](const auto& param_info) {
+                           return param_info.param ? "IsoTimestampFormat"
+                                                   : "NonIsoTimestampFormat";
+                         });
 
 //
 // Raster Tests

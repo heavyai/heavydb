@@ -114,7 +114,7 @@ std::string target_value_to_string(const TargetValue& tv,
   }
   const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
   if (ti.is_time()) {
-    return shared::convert_temporal_to_iso_format(ti, *boost::get<int64_t>(scalar_tv));
+    return QueryExporter::formatTemporal(ti, *boost::get<int64_t>(scalar_tv));
   }
   if (ti.is_decimal()) {
     Datum datum;
@@ -209,7 +209,7 @@ void QueryExporterCSV::exportResults(const std::vector<AggregatedResult>& query_
           if (is_null) {
             outfile_ << copy_params_.null_str;
           } else if (ti.is_time()) {
-            outfile_ << shared::convert_temporal_to_iso_format(ti, int_val);
+            outfile_ << formatTemporal(ti, int_val);
           } else if (ti.is_boolean()) {
             outfile_ << (int_val ? "true" : "false");
           } else {
