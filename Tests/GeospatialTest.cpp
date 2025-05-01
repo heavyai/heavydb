@@ -1149,6 +1149,11 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     ASSERT_EQ(inline_int_null_value<int>(),
               v<int64_t>(run_simple_agg(
                   "SELECT ST_NRings(mpoly_null) from geospatial_test limit 1;", dt)));
+    // unsupported (pending fix)
+    EXPECT_THROW(
+        run_simple_agg(
+            "SELECT ST_NRings(ST_Buffer(mpoly, 0)) from geospatial_test limit 1", dt),
+        std::runtime_error);
 
     // ST_NPoints
     ASSERT_EQ(static_cast<int64_t>(1),
@@ -1192,6 +1197,11 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
     ASSERT_EQ(inline_int_null_value<int>(),
               v<int64_t>(run_simple_agg(
                   "SELECT ST_NPoints(ST_Point(CAST(NULL AS DOUBLE), 1.0))", dt)));
+    // unsupported (pending fix)
+    EXPECT_THROW(
+        run_simple_agg(
+            "SELECT ST_NPoints(ST_Buffer(mpoly, 0)) from geospatial_test limit 1", dt),
+        std::runtime_error);
 
     // ST_SRID, ST_SetSRID
     ASSERT_EQ(static_cast<int64_t>(0),
