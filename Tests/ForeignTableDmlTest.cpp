@@ -1698,14 +1698,8 @@ TEST_F(SelectQueryTest, DirectoryWithDifferentSchema_DifferentNumberOfColumns) {
   sql(query);
   queryAndAssertException(
       default_select,
-      "Parquet file \"" + getDataFilesPath() +
-          "different_parquet_schemas_2/two_col_1_2.parquet\" has a different schema. "
-          "Please ensure that all Parquet files use the same schema. Reference Parquet "
-          "file: \"" +
-          getDataFilesPath() +
-          "different_parquet_schemas_2/1.parquet\" has 1 columns. New Parquet file \"" +
-          getDataFilesPath() +
-          "different_parquet_schemas_2/two_col_1_2.parquet\" has 2 columns.");
+      "Mismatched number of logical columns: (expected 1 columns, has 2): in file '" +
+          getDataFilesPath() + "different_parquet_schemas_2/two_col_1_2.parquet'");
 }
 
 TEST_F(SelectQueryTest, SchemaMismatch_CSV_Multithreaded) {

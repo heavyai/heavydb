@@ -1102,11 +1102,19 @@ ImportStatus ForeignDataImporter::importParquet(
 
 ImportStatus ForeignDataImporter::import(
     const Catalog_Namespace::SessionInfo* session_info) {
-  if (shared::is_s3_uri(copy_from_source_)
-  ) {
-    return importGeneralS3(session_info);
+  ImportStatus status;
+  try {
+    if (shared::is_s3_uri(copy_from_source_)) {
+      status = importGeneralS3(session_info);
+    } else {
+      status = importGeneral(session_info);
+    }
+
+  } catch (std::exception& except) {
+    connector_->rollback(*session_info, table_->tableId);
+    throw;
   }
-  return importGeneral(session_info);
+  return status;
 }
 
 }  // namespace import_export
