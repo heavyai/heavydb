@@ -2628,12 +2628,12 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
             get_or_insert_reader_timer_ms.stop();
 
             validation_timer_ms.start();
-            validate_equal_schema(first_reader, reader, first_path, path);
             auto local_max_row_group_stats =
                 validate_parquet_metadata(reader->parquet_reader()->metadata(),
                                           path,
                                           schema,
                                           do_metadata_stats_validation);
+            validate_equal_schema(first_reader, reader, first_path, path);
             if (local_max_row_group_stats.max_row_group_size >
                 max_row_group_stats.max_row_group_size) {
               max_row_group_stats = local_max_row_group_stats;

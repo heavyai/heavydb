@@ -4481,7 +4481,16 @@ void DataStreamSink::import_compressed(
 }
 
 ImportStatus Importer::import(const Catalog_Namespace::SessionInfo* session_info) {
-  return DataStreamSink::archivePlumber(session_info);
+  ImportStatus status;
+  auto table_epochs = loader->getTableEpochs();
+  try {
+    status = DataStreamSink::archivePlumber(session_info);
+  } catch (...) {
+    loader->setTableEpochs(table_epochs);
+    throw;
+  }
+
+  return status;
 }
 
 ImportStatus Importer::importDelimited(

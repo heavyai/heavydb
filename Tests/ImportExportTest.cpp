@@ -809,6 +809,23 @@ using FragmentSize = int32_t;
 using MaxChunkSize = int32_t;
 
 namespace {
+
+void validate_table_epoch(const int32_t expected_epoch,
+                          const int32_t table_id,
+                          const Catalog_Namespace::Catalog* catalog,
+                          const bool is_distributed_mode) {
+  if (!is_distributed_mode) {
+    ASSERT_EQ(expected_epoch, catalog->getTableEpoch(catalog->getDatabaseId(), table_id));
+  } else {
+    auto epochs = catalog->getTableEpochs(catalog->getDatabaseId(), table_id);
+    for (const auto& epoch : epochs) {
+      if (epoch.leaf_index >= 0) {
+        ASSERT_EQ(expected_epoch, epoch.table_epoch);
+      }
+    }
+  }
+}
+
 void validate_import_status(
     const std::string& import_id,
     const TImportStatus& thrift_import_status,
@@ -865,16 +882,7 @@ void validate_import_status(
   ASSERT_EQ(failed_status, import_status.load_failed)
       << " incorrect load_failed flag in import status";
 
-  if (!is_distributed_mode) {
-    ASSERT_EQ(expected_epoch, catalog->getTableEpoch(catalog->getDatabaseId(), table_id));
-  } else {
-    auto epochs = catalog->getTableEpochs(catalog->getDatabaseId(), table_id);
-    for (const auto& epoch : epochs) {
-      if (epoch.leaf_index >= 0) {
-        ASSERT_EQ(expected_epoch, epoch.table_epoch);
-      }
-    }
-  }
+  validate_table_epoch(expected_epoch, table_id, catalog, is_distributed_mode);
 }
 
 std::string get_copy_from_result_str(const TQueryResult& copy_from_query_result) {
@@ -1176,19 +1184,21 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
                            error_message);
   }
 
-  TQueryResult copyFromAndSelect(const std::string& in_schema,
-                                 const std::string& file_id,
-                                 const std::string& select_query,
-                                 const std::string& line_regex,
-                                 const bool geo_validate_geometry = false,
-                                 const std::string& odbc_select = {},
-                                 const std::string& odbc_order_by = {},
-                                 const bool is_dir = false,
-                                 const std::optional<int64_t> max_reject = std::nullopt,
-                                 const std::list<std::pair<std::string, std::string>>&
-                                     odbc_schema_modifications = {},
-                                 const std::optional<int> threads = std::nullopt,
-                                 const std::optional<size_t> buffer_size = std::nullopt) {
+  TQueryResult copyFromAndSelect(
+      const std::string& in_schema,
+      const std::string& file_id,
+      const std::string& select_query,
+      const std::string& line_regex,
+      const bool geo_validate_geometry = false,
+      const std::string& odbc_select = {},
+      const std::string& odbc_order_by = {},
+      const bool is_dir = false,
+      const std::optional<int64_t> max_reject = std::nullopt,
+      const std::list<std::pair<std::string, std::string>>& odbc_schema_modifications =
+          {},
+      const std::optional<int> threads = std::nullopt,
+      const std::optional<size_t> buffer_size = std::nullopt,
+      const std::optional<std::string> line_start_regex = std::nullopt) {
     auto schema = applyOdbcSchemaModifications(in_schema);
     std::string odbc_schema = schema;
     if (!odbc_schema_modifications.empty()) {
@@ -1240,7 +1250,8 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
                                odbc_order_by,
                                threads,
                                buffer_size,
-                               geo_validate_geometry) +
+                               geo_validate_geometry,
+                               line_start_regex) +
             ";");
     copy_from_result_ = get_copy_from_result_str(copy_from_result);
 
@@ -1265,7 +1276,8 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
       const std::list<std::pair<std::string, std::string>>& odbc_schema_modifications =
           {},
       const std::optional<int> threads = std::nullopt,
-      const std::optional<size_t> buffer_size = std::nullopt) {
+      const std::optional<size_t> buffer_size = std::nullopt,
+      const std::optional<std::string> line_start_regex = std::nullopt) {
     auto& import_type = param_.import_type;
     auto& data_source_type = param_.data_source_type;
     auto& fragment_size = param_.fragment_size;
@@ -1316,7 +1328,8 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
                              max_reject,
                              odbc_schema_modifications,
                              threads,
-                             buffer_size);
+                             buffer_size,
+                             line_start_regex);
   }
 
   std::string getCopyFromOptions(
@@ -1327,7 +1340,8 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
       const std::optional<std::string> odbc_order_by = {},
       const std::optional<int> threads = std::nullopt,
       const std::optional<size_t> buffer_size = std::nullopt,
-      const std::optional<bool> geo_validate_geometry = std::nullopt) {
+      const std::optional<bool> geo_validate_geometry = std::nullopt,
+      const std::optional<std::string> line_start_regex = std::nullopt) {
     std::vector<std::string> options;
     if (buffer_size.has_value()) {
       options.emplace_back("buffer_size=" + std::to_string(buffer_size.value()) + "");
@@ -1341,6 +1355,9 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     if (import_type == "regex_parser") {
       options.emplace_back("source_type='regex_parsed_file'");
       options.emplace_back("line_regex='" + line_regex + "'");
+      if (line_start_regex.has_value()) {
+        options.emplace_back("line_start_regex='" + line_start_regex.value() + "'");
+      }
       options.emplace_back("header='true'");
     }
     if (import_type == "parquet") {
@@ -6328,7 +6345,14 @@ class RasterImportTest : public DBHandlerTestFixture,
     auto table = cat.getMetadataForTable(table_name, false);
     CHECK(table);
     std::multiset<int> fragments_with_num_rows;
-    auto& fragmenter = table->fragmenter;
+    auto fragmenter = table->fragmenter;
+    // It is possible for fragmenter to be a nullptr if an exception occured, in such a
+    // case, repopulate fragmenter
+    if (!fragmenter.get()) {
+      table = cat.getMetadataForTable(table_name, true);
+      CHECK(table);
+      fragmenter = table->fragmenter;
+    }
     for (int i = 0; i < static_cast<int>(fragmenter->getNumFragments()); ++i) {
       fragments_with_num_rows.emplace(fragmenter->getFragmentInfo(i)->getNumTuples());
     }
@@ -6977,6 +7001,95 @@ INSTANTIATE_TEST_SUITE_P(RasterImportTest,
                          [](const auto& param_info) {
                            return (param_info.param ? "Legacy" : "FSI");
                          });
+
+#ifdef HAVE_AWS_S3
+
+class S3PublicImportAndSelectTest : public ImportAndSelectTest {
+ protected:
+  void SetUp() override { ImportAndSelectTest::SetUp(); }
+
+  void TearDown() override { ImportAndSelectTest::TearDown(); }
+
+  ImportAndSelectTestParameters TestParam() override {
+    ImportAndSelectTestParameters param = ImportAndSelectTest::TestParam();
+    std::get<1>(param) = "s3_public";
+    return param;
+  }
+
+  std::string getExpectedExceptionForDatawarpper() {
+    if (param_.import_type == "parquet") {
+      return "Mismatched number of logical columns: (expected 12 columns, has 1): in "
+             "file "
+             "'omnisci-fsi-test-public/FsiDataFiles/"
+             "multifile_scalar_one_invalid_schema_parquet_dir/"
+             "scalar_types_zzlastzz_invalid.parquet'";
+    } else if (param_.import_type == "csv") {
+      return "Unable to find a matching end quote for the quote character '\"' after "
+             "reading 143 characters. Please ensure that all data fields are correctly "
+             "formatted or update the \"buffer_size\" option appropriately.";
+    } else if (param_.import_type == "regex_parser") {
+      return "First line in file "
+             "\"omnisci-fsi-test-public/FsiDataFiles/"
+             "multifile_scalar_one_invalid_schema_csv_dir/"
+             "scalar_types_zzlastzz_invalid.csv\" does not match line start regex "
+             "\"^[^,]*,\"";
+    }
+    UNREACHABLE() << "Unexpected data wrapper type";
+    return {};
+  }
+};
+
+TEST_P(S3PublicImportAndSelectTest, OneInvalidSchema) {
+  // Note, this test is designed to fail in different ways for different data
+  // wrappers. There does not exist a single failure mode that would work
+  // exactly the same in each case. Please see
+  // `getExpectedExceptionForDatawarpper` for more information on what the
+  // expected error is in each case.
+
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm TIME "
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE";
+  executeLambdaAndAssertPartialException(
+      [&] {
+        createTableCopyFromAndSelect(schema,
+                                     "multifile_scalar_one_invalid_schema",
+                                     "SELECT * FROM import_test_new ORDER BY s;",
+                                     get_line_regex(12),
+                                     14,
+                                     false,
+                                     {},
+                                     {},
+                                     {},
+                                     /*is_dir=*/true,
+                                     std::nullopt,
+                                     {},
+                                     std::nullopt,
+                                     std::nullopt,
+                                     /*line_start_regex=*/"^[^,]*,");
+      },
+      getExpectedExceptionForDatawarpper());
+  validate_table_epoch(
+      0, getTableId("import_test_new"), &getCatalog(), isDistributedMode());
+  sqlAndCompareResult("SELECT count(*) FROM import_test_new;", {{0L}});
+}
+
+INSTANTIATE_TEST_SUITE_P(FileTypeS3PublicImportAndSelectTest,
+                         S3PublicImportAndSelectTest,
+                         ::testing::Combine(::testing::Values("csv",
+                                                              "regex_parser"
+#ifdef ENABLE_IMPORT_PARQUET
+                                                              ,
+                                                              "parquet"
+#endif
+                                                              ),
+                                            ::testing::Values("s3_public"),
+                                            ::testing::Values(DEFAULT_FRAGMENT_ROWS),
+                                            ::testing::Values(1000000)),
+                         print_import_and_select_test_param);
+
+
+#endif
 
 //
 // Metadata Column Tests
