@@ -104,7 +104,11 @@ class NPoints : public Codegen {
                      << child_geo_oper->getName();
       }
     }
-    CHECK(coords_arr_sz_lv);
+    // avoid crash pending proper fix
+    // CHECK(coords_arr_sz_lv);
+    if (!coords_arr_sz_lv) {
+      throw std::runtime_error("ST_NPoints unsupported for input type");
+    }
     return std::make_tuple(std::vector<llvm::Value*>{coords_arr_sz_lv}, coords_arr_sz_lv);
   }
 

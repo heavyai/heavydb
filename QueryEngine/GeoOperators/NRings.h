@@ -36,7 +36,11 @@ class NRings : public Codegen {
 
     const auto operand = operator_->getOperand(0);
     auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(operand);
-    CHECK(col_var);
+    // avoid crash pending proper fix
+    // CHECK(col_var);
+    if (!col_var) {
+      throw std::runtime_error("ST_NRings unsupported for input type");
+    }
 
     const auto& geo_ti = col_var->get_type_info();
     CHECK(geo_ti.is_geometry());
