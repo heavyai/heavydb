@@ -828,15 +828,9 @@ add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 ##########
 
 add_executable(StringDictionaryBenchmark StringDictionaryBenchmark.cpp)
-if(CPR_FOUND)
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils
-    $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${Boost_LIBRARIES} ${CPR_LIBRARY} ${CURL_LIBRARIES} ${ZLIB_LIBRARIES})
-else()
-  target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils
-    $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
-    ${Boost_LIBRARIES} ${CPR_1.2_LIBRARY} ${CURL_LIBRARIES} ${ZLIB_LIBRARIES})
-endif()
+target_link_libraries(StringDictionaryBenchmark benchmark gtest mapd_thrift StringDictionary StringOps Logger Utils
+  $<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_LESS:$<CXX_COMPILER_VERSION>,9.0>>:stdc++fs>
+  ${Boost_LIBRARIES} ${CPR_LIBRARY} ${CURL_LIBRARIES} ${ZLIB_LIBRARIES})
 
 ##########
 
