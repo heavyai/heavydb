@@ -35,11 +35,9 @@
 bool g_allow_s3_server_privileges{false};
 bool g_allow_s3_imds_check{false};
 
-#ifdef AWS_SDK_VERSION_MAJOR  // AWS_SDK_VERSION_MAJOR was first defined in 1.9.6
+// custom operator<<() for members of ClientConfiguration
 namespace boost {
 namespace log {
-// ClientConfiguration::followRedirects was converted
-// from bool to class enum FollowRedirectsPolicy in 1.8.0.
 formatting_ostream& operator<<(formatting_ostream& os,
                                Aws::Client::FollowRedirectsPolicy frp) {
   switch (frp) {
@@ -53,15 +51,12 @@ formatting_ostream& operator<<(formatting_ostream& os,
       return os << "UNKNOWN_VALUE(" << static_cast<int>(frp) << ')';
   }
 }
-// ClientConfiguration::enableEndpointDiscovery was converted
-// from bool to Aws::Crt::Optional<bool> in 1.9.0.
 formatting_ostream& operator<<(formatting_ostream& os,
                                Aws::Crt::Optional<bool> opt_bool) {
   return os << (opt_bool ? *opt_bool ? "true" : "false" : "nullopt");
 }
 }  // namespace log
 }  // namespace boost
-#endif  // AWS_SDK_VERSION_MAJOR
 
 namespace {
 void get_s3_parameter_from_env_if_unset_or_empty(std::string& param,

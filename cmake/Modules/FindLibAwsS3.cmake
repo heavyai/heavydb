@@ -129,14 +129,7 @@ find_library(LibAwsCI_LIBRARY
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
-#
-# Moving to the new aws-sdk-cpp, the supplied cmake files
-# added an -fPIC to the global compiler options, causing
-# an issue with our inline macros.
-# Keeping our original .cmake files and finding specific files
-# get around this. However for the  newer version extra aws
-# libraries are required
-#
+
 get_filename_component(Aws_LIBRARY_DIR ${LibAwsCI_LIBRARY} DIRECTORY)
 include(${Aws_LIBRARY_DIR}/cmake/AWSSDK/AWSSDKConfigVersion.cmake)
 message(STATUS "AWSSDK version ${PACKAGE_VERSION}")
@@ -144,117 +137,106 @@ message(STATUS "AWSSDK version ${PACKAGE_VERSION}")
 # Extra libraries needed for linking versions > 1.7
 #
 
-if(NOT "${PACKAGE_VERSION}" VERSION_EQUAL "1.7.301")
-  find_library(libAwsCrt_LIBRARY
-    NAMES aws-crt-cpp
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-
-  find_library(libAwsCIo_LIBRARY
-    NAMES aws-c-io
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-
-  find_library(libAwsCAuth_LIBRARY
-    NAMES aws-c-auth
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-
-  find_library(libAwsCHttp
-    NAMES aws-c-http
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-
-  find_library(libAwsCSdkUtils
-    NAMES aws-c-sdkutils
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-
-  find_library(libAwsCCal
-    NAMES aws-c-cal
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-
-  find_library(LibS2N_LIBRARY
-    NAMES s2n
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-
-  find_library(libAwsCompression
-    NAMES aws-c-compression
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-
-  find_library(libAwsCMqtt
-    NAMES aws-c-mqtt
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-
-  find_library(libAwsCS3
-    NAMES aws-c-s3
-    HINTS ENV LD_LIBRARY_PATH
-    HINTS ENV DYLD_LIBRARY_PATH
-    HINTS ${PREFIX_LIBAWSS3}/lib
-    PATHS
-    /usr/lib
-    /usr/local/lib
-    /usr/local/homebrew/lib
-    /opt/local/lib)
-endif()
+find_library(libAwsCrt_LIBRARY
+  NAMES aws-crt-cpp
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+find_library(libAwsCIo_LIBRARY
+  NAMES aws-c-io
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+find_library(libAwsCAuth_LIBRARY
+  NAMES aws-c-auth
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+find_library(libAwsCHttp
+  NAMES aws-c-http
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+find_library(libAwsCSdkUtils
+  NAMES aws-c-sdkutils
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+find_library(libAwsCCal
+  NAMES aws-c-cal
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+find_library(LibS2N_LIBRARY
+  NAMES s2n
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+find_library(libAwsCompression
+  NAMES aws-c-compression
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+find_library(libAwsCMqtt
+  NAMES aws-c-mqtt
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
+find_library(libAwsCS3
+  NAMES aws-c-s3
+  HINTS ENV LD_LIBRARY_PATH
+  HINTS ENV DYLD_LIBRARY_PATH
+  HINTS ${PREFIX_LIBAWSS3}/lib
+  PATHS
+  /usr/lib
+  /usr/local/lib
+  /usr/local/homebrew/lib
+  /opt/local/lib)
 
 get_filename_component(LibAwsS3_LIBRARY_DIR ${LibAwsS3_LIBRARY} DIRECTORY)
 find_path(LibAwsS3_INCLUDE_DIR
