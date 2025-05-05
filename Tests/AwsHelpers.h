@@ -18,21 +18,19 @@
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/s3/S3Client.h>
+#include <aws/s3/S3ClientConfiguration.h>
+#include <aws/s3/S3EndpointProvider.h>
 #include <aws/s3/model/DeleteObjectRequest.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/sts/STSClient.h>
 #include <aws/sts/model/Credentials.h>
 #include <aws/sts/model/GetSessionTokenRequest.h>
+
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
 
 #include "Catalog/ForeignServer.h"
-
-#ifdef HEAVYAI_S3_HAS_S3CLIENT_CONFIGURATION
-#include <aws/s3/S3ClientConfiguration.h>
-#include <aws/s3/S3EndpointProvider.h>
-#endif
 
 bool is_valid_aws_key(std::pair<std::string, std::string> key) {
   return (key.first.size() > 0) && (key.second.size() > 0);
@@ -136,21 +134,12 @@ void restore_env_vars(const std::map<std::string, std::string>& env_vars,
 
 Aws::S3::S3Client create_s3_client_for_region(const std::string& aws_region) {
   const auto [access_key, secret_key] = get_aws_keys_from_env();
-#ifdef HEAVYAI_S3_HAS_S3CLIENT_CONFIGURATION
   Aws::S3::S3ClientConfiguration s3_client_config;
   s3_client_config.region = aws_region;
   auto endpoint_provider = foreign_storage::get_endpoint_provider(s3_client_config);
   Aws::S3::S3Client s3_client(Aws::Auth::AWSCredentials(access_key, secret_key),
                               std::move(endpoint_provider),
                               s3_client_config);
-#else
-  Aws::Client::ClientConfiguration client_config;
-  client_config.region = aws_region;
-  Aws::S3::S3Client s3_client(Aws::Auth::AWSCredentials(access_key, secret_key),
-                              client_config,
-                              Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-                              true);
-#endif
   return s3_client;
 }
 }  // namespace
