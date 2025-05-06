@@ -392,6 +392,18 @@ if(ENABLE_GEOS)
 endif()
 
 add_custom_command(
+  DEPENDS H3Runtime.cpp H3Runtime.h ${SHARED_SQL_TYPES_H_AND_DEPS}
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/H3Runtime.bc
+  COMMAND ${llvm_clangpp_cmd}
+  ARGS -DNO_BOOST -std=c++${CMAKE_CXX_STANDARD} ${RT_OPT_FLAGS} -c -emit-llvm
+  ${CLANG_SDK_INC}
+  ${CLANG_CRT_INC}
+  ${MAPD_DEFINITIONS}
+  -I ${CMAKE_SOURCE_DIR}
+  -Qy
+  ${CMAKE_CURRENT_SOURCE_DIR}/H3Runtime.cpp)
+
+add_custom_command(
   DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp ExtensionFunctionsText.hpp ExtensionFunctionsTesting.hpp ExtensionFunctionsArrayTesting.hpp ExtensionFunctionsTextTesting.hpp ExtensionFunctionsH3.hpp
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast.raw
   COMMAND ${llvm_clangpp_cmd}
@@ -409,12 +421,14 @@ if(ENABLE_GEOS)
     ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
     ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc
+    ${CMAKE_CURRENT_BINARY_DIR}/H3Runtime.bc
   )
 else()
   add_custom_target(QueryEngineFunctionsTargets
     DEPENDS
     ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
     ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
+    ${CMAKE_CURRENT_BINARY_DIR}/H3Runtime.bc
   )
 endif()
 
@@ -428,7 +442,7 @@ add_custom_target(QueryEngineTableFunctionsFactory_init
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/heavydbTypes.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/)
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Utils/FlatBuffer.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/Utils/)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/heavydbTypes.h ${CMAKE_CURRENT_BINARY_DIR}/Utils/FlatBuffer.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine COMPONENT "QE")
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/heavydbTypes.h ${CMAKE_CURRENT_BINARY_DIR}/Utils/FlatBuffer.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/GeosRuntime.bc ${CMAKE_CURRENT_BINARY_DIR}/H3Runtime.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine COMPONENT "QE")
 
 target_precompile_headers(QueryEngine PRIVATE
   [["QueryEngine/Execute.h"]]

@@ -343,6 +343,10 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
     addOperator(new LLMTransform());
 
+    // H3 functions
+    addOperator(new H3_CellToBoundary_POLYGON());
+    addOperator(new H3_CellToPoint());
+
     if (extSigs == null) {
       return;
     }
@@ -4227,6 +4231,46 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public boolean allowsFraming() {
       return false;
+    }
+  }
+
+  //
+  // H3 functions
+  //
+
+  static class H3_CellToBoundary_POLYGON extends SqlFunction {
+    H3_CellToBoundary_POLYGON() {
+      super("H3_CellToBoundary_POLYGON",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.INTEGER),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+  }
+
+  static class H3_CellToPoint extends SqlFunction {
+    H3_CellToPoint() {
+      super("H3_CellToPoint",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.INTEGER),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
     }
   }
 }

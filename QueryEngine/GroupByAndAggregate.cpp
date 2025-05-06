@@ -2216,7 +2216,8 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
         }
         const auto geo_uoper = dynamic_cast<const Analyzer::GeoUOper*>(target_expr);
         const auto geo_binoper = dynamic_cast<const Analyzer::GeoBinOper*>(target_expr);
-        if (geo_uoper || geo_binoper) {
+        const auto geo_h3oper = dynamic_cast<const Analyzer::GeoH3Oper*>(target_expr);
+        if (geo_uoper || geo_binoper || geo_h3oper) {
           CHECK(target_expr->get_type_info().is_geometry());
           CHECK_EQ(2 * static_cast<size_t>(target_ti.get_physical_coord_cols()),
                    target_lvs.size());
