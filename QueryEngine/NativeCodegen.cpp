@@ -566,9 +566,10 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     return cached_code;
   }
 
+  auto llvm_module = multifrag_query_func->getParent();
+
   if (cgen_state_->needs_geos_) {
 #ifdef ENABLE_GEOS
-    auto llvm_module = multifrag_query_func->getParent();
     load_geos_dynamic_library();
 
     // Read geos runtime module and bind GEOS API function references to GEOS library
@@ -596,6 +597,12 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenCPU(
     throw std::runtime_error("GEOS is disabled in this build");
 #endif
   }
+
+  // link H3 module
+  CodeGenerator::link_udf_module(get_h3_module(),
+                                 *llvm_module,
+                                 cgen_state_.get(),
+                                 llvm::Linker::Flags::LinkOnlyNeeded);
 
   auto execution_engine =
       CodeGenerator::generateNativeCPUCode(query_func, live_funcs, co);

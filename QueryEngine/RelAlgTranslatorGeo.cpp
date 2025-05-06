@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "Geospatial/Compression.h"
+#include "Geospatial/H3Shim.h"
 #include "Geospatial/Types.h"
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/GeoOperators/Transform.h"
@@ -712,10 +713,11 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       if (const_coord1 && const_coord2 && !use_geo_expressions) {
         CHECK(const_coord1->get_type_info().get_type() == kDOUBLE);
         CHECK(const_coord2->get_type_info().get_type() == kDOUBLE);
-        std::string wkt = "POINT(" +
-                          std::to_string(const_coord1->get_constval().doubleval) + " " +
-                          std::to_string(const_coord2->get_constval().doubleval) + ")";
-        RexLiteral rex_literal{wkt, kTEXT, kNULLT, 0, 0, 0, 0};
+        std::ostringstream ss;
+        ss << std::setprecision(std::numeric_limits<double>::digits10 + 1) << std::fixed;
+        ss << "POINT(" << const_coord1->get_constval().doubleval << " "
+           << const_coord2->get_constval().doubleval << ")";
+        RexLiteral rex_literal{ss.str(), kTEXT, kNULLT, 0, 0, 0, 0};
         auto args = translateGeoLiteral(&rex_literal, arg_ti, false);
         CHECK(arg_ti.get_type() == kPOINT);
         return args;
@@ -754,6 +756,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       SQLTypeInfo tia_ti = da_ti;
       tia_ti.set_subtype(kTINYINT);
       return {makeExpr<Analyzer::UOper>(tia_ti, false, kCAST, ae)};
+    } else if (func_resolve(rex_function->getName(),
+                            "H3_CellToBoundary_POLYGON"sv,
+                            "H3_CellToPoint"sv)) {
+      return {translateGeoH3Function(rex_function, arg_ti)};
     } else if (rex_function->getName() == "ST_Centroid"sv) {
       CHECK_EQ(size_t(1), rex_function->size());
       arg_ti.set_type(kPOINT);
@@ -929,6 +935,39 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
   }
   return makeExpr<Analyzer::GeoUOper>(
       Geospatial::GeoBase::GeoOp::kPROJECTION, ti, ti, geoargs);
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoH3Function(
+    const RexFunctionOperator* rex_function,
+    SQLTypeInfo& ti) const {
+  // populate the type info
+  // we preset the SRIDs to 4326 rather than zero like other ops
+  // this may mean we need more code to support ST_Transform but we'll cross that bridge
+  // when we get to it
+  if (rex_function->getName() == "H3_CellToPoint") {
+    ti.set_type(kPOINT);
+  } else if (rex_function->getName() == "H3_CellToBoundary_POLYGON") {
+    ti.set_type(kPOLYGON);
+  } else {
+    CHECK(false) << "Unexpected function name '" << rex_function->getName() << "'";
+  }
+  ti.set_subtype(kGEOMETRY);
+  ti.set_input_srid(4326);
+  ti.set_output_srid(4326);
+  ti.set_comp_param(0);
+  ti.set_compression(kENCODING_NONE);
+
+  // the input parameter should be a single BIGINT which could either be a constant
+  // literal or the output from another H3 function, so we fold it regardless
+  // @TODO optimize constant literal case, but that's really not that likely
+  CHECK_EQ(size_t(1), rex_function->size());
+  auto cell = translateScalarRex(rex_function->getOperand(0));
+  auto cast_cell = cell->add_cast(SQLTypeInfo(kBIGINT, false));
+  auto folded_cell = fold_expr(cast_cell.get());
+  auto folded_cell_args = {folded_cell};
+
+  // create the GeoH3Oper
+  return makeExpr<Analyzer::GeoH3Oper>(rex_function->getName(), ti, folded_cell_args);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(

@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_RUNTIMEFUNCTIONSGEOS_H
-#define QUERYENGINE_RUNTIMEFUNCTIONSGEOS_H
+#pragma once
 
 extern "C" RUNTIME_EXPORT bool Geos_Wkb_Wkb(int op,
                                             int arg1_type,
@@ -103,5 +102,3 @@ extern "C" RUNTIME_EXPORT bool Geos_Wkb(int op,
                                         int32_t arg_srid_in,
                                         int32_t arg_srid_out,
                                         bool* result);
-
-#endif  // QUERYENGINE_RUNTIMEFUNCTIONSGEOS_H
