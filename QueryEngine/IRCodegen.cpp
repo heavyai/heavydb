@@ -217,6 +217,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (geo_binop) {
     return {codegenGeoBinOper(geo_binop, co)};
   }
+  auto geo_h3op = dynamic_cast<const Analyzer::GeoH3Oper*>(expr);
+  if (geo_h3op) {
+    return {codegenGeoH3Oper(geo_h3op, co)};
+  }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};

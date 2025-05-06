@@ -293,14 +293,19 @@ class CodeGenerator {
   std::vector<llvm::Value*> codegenGeoBinOper(const Analyzer::GeoBinOper*,
                                               const CompilationOptions&);
 
+  std::vector<llvm::Value*> codegenGeoH3Oper(const Analyzer::GeoH3Oper*,
+                                             const CompilationOptions&);
+
   std::vector<llvm::Value*> codegenGeosPredicateCall(const std::string&,
                                                      std::vector<llvm::Value*>,
                                                      const CompilationOptions&);
 
-  std::vector<llvm::Value*> codegenGeosConstructorCall(const std::string&,
-                                                       std::vector<llvm::Value*>,
-                                                       llvm::Value*,
-                                                       const CompilationOptions&);
+  std::vector<llvm::Value*> codegenGeoConstructorCall(const std::string&,
+                                                      const SQLTypes output_type,
+                                                      const bool needs_geos,
+                                                      std::vector<llvm::Value*>,
+                                                      llvm::Value*,
+                                                      const CompilationOptions&);
 
   std::vector<llvm::Value*> codegenGeoArgs(
       const std::vector<std::shared_ptr<Analyzer::Expr>>&,

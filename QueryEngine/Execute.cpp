@@ -319,6 +319,10 @@ void Executor::initialize_extension_module_sources() {
     Executor::extension_module_sources[Executor::ExtModuleKinds::rt_geos_module] =
         rt_geos_path;
 #endif
+    auto rt_h3_path = root_path + "/QueryEngine/H3Runtime.bc";
+    CHECK(boost::filesystem::exists(rt_h3_path));
+    Executor::extension_module_sources[Executor::ExtModuleKinds::rt_h3_module] =
+        rt_h3_path;
 #ifdef HAVE_CUDA
     auto rt_libdevice_path = get_cuda_libdevice_dir() + "/libdevice.10.bc";
     if (boost::filesystem::exists(rt_libdevice_path)) {
@@ -368,6 +372,7 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
     switch (module_kind) {
       case Executor::ExtModuleKinds::template_module:
       case Executor::ExtModuleKinds::rt_geos_module:
+      case Executor::ExtModuleKinds::rt_h3_module:
       case Executor::ExtModuleKinds::rt_libdevice_module: {
         return read_llvm_module_from_bc_file(source, getContext());
       }
@@ -429,6 +434,7 @@ void Executor::update_extension_modules(bool update_runtime_modules_only) {
 #ifdef ENABLE_GEOS
     update_module(Executor::ExtModuleKinds::rt_geos_module);
 #endif
+    update_module(Executor::ExtModuleKinds::rt_h3_module);
     // load-time modules, these are optional:
     update_module(Executor::ExtModuleKinds::udf_cpu_module, true);
 #ifdef HAVE_CUDA
@@ -4054,7 +4060,7 @@ int32_t Executor::executePlanWithoutGroupBy(
                      ErrorCode::OUT_OF_TIME,
                      ErrorCode::INTERRUPTED,
                      ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES,
-                     ErrorCode::GEOS,
+                     ErrorCode::GEOS_OR_H3,
                      ErrorCode::WIDTH_BUCKET_INVALID_ARGUMENT,
                      ErrorCode::BBOX_OVERLAPS_LIMIT_EXCEEDED>::check(error_code)) {
     return error_code;
@@ -4325,7 +4331,7 @@ int32_t Executor::executePlanWithGroupBy(
                      ErrorCode::OUT_OF_TIME,
                      ErrorCode::INTERRUPTED,
                      ErrorCode::SINGLE_VALUE_FOUND_MULTIPLE_VALUES,
-                     ErrorCode::GEOS,
+                     ErrorCode::GEOS_OR_H3,
                      ErrorCode::WIDTH_BUCKET_INVALID_ARGUMENT,
                      ErrorCode::BBOX_OVERLAPS_LIMIT_EXCEEDED>::check(error_code)) {
     return error_code;
