@@ -2195,6 +2195,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     SQLTypeInfo ti;
     return translateGeoProjection(rex_function, ti, false);
   }
+  if (func_resolve(
+          rex_function->getName(), "H3_CellToBoundary_POLYGON"sv, "H3_CellToPoint"sv)) {
+    SQLTypeInfo ti;
+    return translateGeoH3Function(rex_function, ti);
+  }
   if (func_resolve(rex_function->getName(),
                    "ST_Intersection"sv,
                    "ST_Difference"sv,

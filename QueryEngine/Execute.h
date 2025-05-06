@@ -517,13 +517,14 @@ class Executor {
   static void addUdfIrToModule(const std::string& udf_ir_filename, const bool is_cuda_ir);
 
   enum class ExtModuleKinds {
-    template_module,     // RuntimeFunctions.bc
-    udf_cpu_module,      // Load-time UDFs for CPU execution
-    udf_gpu_module,      // Load-time UDFs for GPU execution
-    rt_udf_cpu_module,   // Run-time UDF/UDTFs for CPU execution
-    rt_udf_gpu_module,   // Run-time UDF/UDTFs for GPU execution
-    rt_geos_module,      // geos functions
-    rt_libdevice_module  // math library functions for GPU execution
+    template_module,      // RuntimeFunctions.bc
+    udf_cpu_module,       // Load-time UDFs for CPU execution
+    udf_gpu_module,       // Load-time UDFs for GPU execution
+    rt_udf_cpu_module,    // Run-time UDF/UDTFs for CPU execution
+    rt_udf_gpu_module,    // Run-time UDF/UDTFs for GPU execution
+    rt_geos_module,       // geos functions
+    rt_libdevice_module,  // math library functions for GPU execution,
+    rt_h3_module          // H3 geo functions
   };
   // Globally available mapping of extension module sources. Not thread-safe.
   static std::map<ExtModuleKinds, std::string> extension_module_sources;
@@ -546,6 +547,9 @@ class Executor {
   const std::unique_ptr<llvm::Module>& get_geos_module() const {
     return get_extension_module(ExtModuleKinds::rt_geos_module);
   }
+  const std::unique_ptr<llvm::Module>& get_h3_module() const {
+    return get_extension_module(ExtModuleKinds::rt_h3_module);
+  }
   const std::unique_ptr<llvm::Module>& get_libdevice_module() const {
     return get_extension_module(ExtModuleKinds::rt_libdevice_module);
   }
@@ -563,6 +567,9 @@ class Executor {
   }
   bool has_geos_module() const {
     return has_extension_module(ExtModuleKinds::rt_geos_module);
+  }
+  bool has_h3_module() const {
+    return has_extension_module(ExtModuleKinds::rt_h3_module);
   }
   bool has_libdevice_module() const {
     return has_extension_module(ExtModuleKinds::rt_libdevice_module);
@@ -1726,6 +1733,8 @@ inline std::string toString(const Executor::ExtModuleKinds& kind) {
       return "template_module";
     case Executor::ExtModuleKinds::rt_geos_module:
       return "rt_geos_module";
+    case Executor::ExtModuleKinds::rt_h3_module:
+      return "rt_h3_module";
     case Executor::ExtModuleKinds::rt_libdevice_module:
       return "rt_libdevice_module";
     case Executor::ExtModuleKinds::udf_cpu_module:

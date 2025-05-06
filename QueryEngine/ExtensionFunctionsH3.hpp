@@ -19,34 +19,24 @@
 
 #ifndef __CUDACC__
 
-namespace {
-
-std::pair<double, double> unpack_geopoint(const GeoPoint& p) {
-  int8_t* ptr = p.ptr;
-  int32_t lsize = p.getSize();
-  int32_t ic = p.getCompression();
-  int32_t isr = p.getInputSrid();
-  int32_t osr = p.getOutputSrid();
-  double x = ST_X_Point(ptr, lsize, ic, isr, osr);
-  double y = ST_Y_Point(ptr, lsize, ic, isr, osr);
-  return {x, y};
-}
-
-}  // namespace
-
 //
-// H3_PointToCell
+// H3_PointToCell(POINT p) -> BIGINT
 //
 
 EXTENSION_NOINLINE int64_t H3_PointToCell__cpu_(RowFunctionManager& mgr,
                                                 GeoPoint& p,
                                                 int32_t resolution) {
-  auto const [lon, lat] = unpack_geopoint(p);
+  const int32_t psize = p.getSize();
+  const int32_t ic = p.getCompression();
+  const int32_t isr = p.getInputSrid();
+  const int32_t osr = p.getOutputSrid();
+  const double lon = ST_X_Point(p.ptr, psize, ic, isr, osr);
+  const double lat = ST_Y_Point(p.ptr, psize, ic, isr, osr);
   return Geospatial::H3_LonLatToCell(lon, lat, resolution);
 }
 
 //
-// H3_LonLatToCell
+// H3_LonLatToCell(DOUBLE lon, DOUBLE lat) -> BIGINT
 //
 
 EXTENSION_NOINLINE int64_t H3_LonLatToCell__cpu_(RowFunctionManager& mgr,
@@ -57,7 +47,7 @@ EXTENSION_NOINLINE int64_t H3_LonLatToCell__cpu_(RowFunctionManager& mgr,
 }
 
 //
-// H3_CellToLon/Lat
+// H3_CellToLon/Lat(BIGINT cell) -> DOUBLE
 //
 
 EXTENSION_NOINLINE double H3_CellToLon__cpu_(RowFunctionManager& mgr, int64_t cell) {
@@ -69,7 +59,7 @@ EXTENSION_NOINLINE double H3_CellToLat__cpu_(RowFunctionManager& mgr, int64_t ce
 }
 
 //
-// H3_CellToString
+// H3_CellToString(BIGINT cell) -> TEXT
 //
 
 EXTENSION_NOINLINE TextEncodingNone
@@ -85,7 +75,7 @@ EXTENSION_NOINLINE TextEncodingDict H3_CellToString_TEXT__cpu_(RowFunctionManage
 }
 
 //
-// H3_StringToCell
+// H3_StringToCell(TEXT hex) -> BIGINT
 //
 
 EXTENSION_NOINLINE int64_t H3_StringToCell__1__cpu_(RowFunctionManager& mgr,
@@ -100,7 +90,7 @@ EXTENSION_NOINLINE int64_t H3_StringToCell__2__cpu_(RowFunctionManager& mgr,
 }
 
 //
-// H3_CellToParent
+// H3_CellToParent(BIGINT cell) -> BIGINT
 //
 
 EXTENSION_NOINLINE int64_t H3_CellToParent__cpu_(RowFunctionManager& mgr,
@@ -110,7 +100,7 @@ EXTENSION_NOINLINE int64_t H3_CellToParent__cpu_(RowFunctionManager& mgr,
 }
 
 //
-// H3_IsValidCell
+// H3_IsValidCell(BIGINT cell) -> BOOL
 //
 
 EXTENSION_NOINLINE bool H3_IsValidCell__cpu_(RowFunctionManager& mgr, int64_t cell) {
@@ -118,7 +108,7 @@ EXTENSION_NOINLINE bool H3_IsValidCell__cpu_(RowFunctionManager& mgr, int64_t ce
 }
 
 //
-// H3_CellToBoundary
+// H3_CellToBoundary_WKT(BIGINT cell) -> TEXT
 //
 
 EXTENSION_NOINLINE TextEncodingDict H3_CellToBoundary_WKT__cpu_(RowFunctionManager& mgr,
@@ -126,5 +116,12 @@ EXTENSION_NOINLINE TextEncodingDict H3_CellToBoundary_WKT__cpu_(RowFunctionManag
   auto const wkt_string = Geospatial::H3_CellToBoundary_WKT(cell);
   return mgr.getOrAddTransient(TRANSIENT_DICT_DB_ID, TRANSIENT_DICT_ID, wkt_string);
 }
+
+//
+// H3_CellToBoundary(BIGINT cell) -> POLYGON
+// H3_CellToPoint(BIGINT cell) -> POINT
+//
+// These are implemented in H3Runtime.cpp
+//
 
 #endif  // __CUDACC__

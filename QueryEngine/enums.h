@@ -42,7 +42,7 @@ HEAVYAI_DEFINE_ENUM_CLASS_WITH_DESCRIPTIONS(ErrorCode
   , (STRING_CONST_IN_RESULTSET, "NONE ENCODED String types are not supported as input result set.")
   , (STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY, "Streaming-Top-N not supported in Render Query")
   , (SINGLE_VALUE_FOUND_MULTIPLE_VALUES, "Multiple distinct values encountered")
-  , (GEOS, "Geo-related error")
+  , (GEOS_OR_H3, "GEOS or H3 error")
   , (WIDTH_BUCKET_INVALID_ARGUMENT, "Arguments of WIDTH_BUCKET function does not satisfy the condition")
   , (BBOX_OVERLAPS_LIMIT_EXCEEDED, "Maximum supported number of bounding box overlaps exceeded")
   , (PROBING_LENGTH_EXCEEDED, "Hash table probing length exceeded on insert.")

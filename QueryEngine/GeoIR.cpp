@@ -257,7 +257,9 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoUOper(
 
     auto result_srid = cgen_state_->llInt(geo_expr->get_type_info().get_output_srid());
 
-    return codegenGeosConstructorCall(func, argument_list, result_srid, co);
+    static constexpr bool kNeedsGeos = true;
+    return codegenGeoConstructorCall(
+        func, kMULTIPOLYGON, kNeedsGeos, argument_list, result_srid, co);
   }
 
   throw std::runtime_error("Unsupported unary geo operation.");
@@ -369,7 +371,39 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeoBinOper(
 
   auto result_srid = cgen_state_->llInt(geo_expr->get_type_info().get_output_srid());
 
-  return codegenGeosConstructorCall(func, argument_list, result_srid, co);
+  static constexpr bool kNeedsGeos = true;
+  return codegenGeoConstructorCall(
+      func, kMULTIPOLYGON, kNeedsGeos, argument_list, result_srid, co);
+}
+
+std::vector<llvm::Value*> CodeGenerator::codegenGeoH3Oper(
+    const Analyzer::GeoH3Oper* geo_expr,
+    const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  if (co.device_type == ExecutorDeviceType::GPU) {
+    throw QueryMustRunOnCpu();
+  }
+
+  // get and validate the single BIGINT input arg
+  auto const args0 = geo_expr->getArgs0();
+  CHECK_EQ(args0.size(), 1u);
+  auto const cell_arg = args0[0];
+  CHECK_EQ(cell_arg->get_type_info().get_type(), kBIGINT);
+
+  // the output type
+  auto const output_type = geo_expr->get_type_info().get_type();
+
+  // codegen the argument
+  auto argument_list = codegen(cell_arg.get(), true, co);
+
+  // codegen the function call, passing cell, returning geo
+  static constexpr bool kNeedsGeos = false;
+  return codegenGeoConstructorCall(std::string(geo_expr->getFuncName()),
+                                   output_type,
+                                   kNeedsGeos,
+                                   argument_list,
+                                   nullptr,  // H3 funcs don't have result_srid
+                                   co);
 }
 
 std::vector<llvm::Value*> CodeGenerator::codegenGeoArgs(
@@ -478,7 +512,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosPredicateCall(
   }
   cgen_state_->ir_builder_.CreateCondBr(status_lv, geos_pred_ok_bb, geos_pred_fail_bb);
   cgen_state_->ir_builder_.SetInsertPoint(geos_pred_fail_bb);
-  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(ErrorCode::GEOS)));
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(ErrorCode::GEOS_OR_H3)));
   cgen_state_->needs_error_check_ = true;
   cgen_state_->ir_builder_.SetInsertPoint(geos_pred_ok_bb);
   auto res = cgen_state_->ir_builder_.CreateLoad(
@@ -486,12 +520,22 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosPredicateCall(
   return {res};
 }
 
-std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
+std::vector<llvm::Value*> CodeGenerator::codegenGeoConstructorCall(
     const std::string& func,
+    const SQLTypes output_type,
+    const bool needs_geos,
     std::vector<llvm::Value*> argument_list,
     llvm::Value* result_srid,
     const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
+
+  // decide what buffers we need
+  CHECK(IS_GEO(output_type));
+  const bool need_ring_sizes =
+      (output_type == kPOLYGON || output_type == kMULTILINESTRING ||
+       output_type == kMULTIPOLYGON);
+  const bool need_poly_rings = (output_type == kMULTIPOLYGON);
+
   // Create output buffer pointers, append pointers to output args to
   auto i8_type = get_int_type(8, cgen_state_->context_);
   auto i32_type = get_int_type(32, cgen_state_->context_);
@@ -505,47 +549,62 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
       cgen_state_->ir_builder_.CreateAlloca(pi8_type, nullptr, "result_coords");
   auto result_coords_size =
       cgen_state_->ir_builder_.CreateAlloca(i64_type, nullptr, "result_coords_size");
-  auto result_ring_sizes =
-      cgen_state_->ir_builder_.CreateAlloca(pi32_type, nullptr, "result_ring_sizes");
-  auto result_ring_sizes_size =
-      cgen_state_->ir_builder_.CreateAlloca(i64_type, nullptr, "result_ring_sizes_size");
-  auto result_poly_rings =
-      cgen_state_->ir_builder_.CreateAlloca(pi32_type, nullptr, "result_poly_rings");
-  auto result_poly_rings_size =
-      cgen_state_->ir_builder_.CreateAlloca(i64_type, nullptr, "result_poly_rings_size");
+
+  llvm::AllocaInst* result_ring_sizes{};
+  llvm::AllocaInst* result_ring_sizes_size{};
+  llvm::AllocaInst* result_poly_rings{};
+  llvm::AllocaInst* result_poly_rings_size{};
+  if (need_ring_sizes) {
+    result_ring_sizes =
+        cgen_state_->ir_builder_.CreateAlloca(pi32_type, nullptr, "result_ring_sizes");
+    result_ring_sizes_size = cgen_state_->ir_builder_.CreateAlloca(
+        i64_type, nullptr, "result_ring_sizes_size");
+    if (need_poly_rings) {
+      result_poly_rings =
+          cgen_state_->ir_builder_.CreateAlloca(pi32_type, nullptr, "result_poly_rings");
+      result_poly_rings_size = cgen_state_->ir_builder_.CreateAlloca(
+          i64_type, nullptr, "result_poly_rings_size");
+    }
+  }
 
   argument_list.emplace_back(result_type);
   argument_list.emplace_back(result_coords);
   argument_list.emplace_back(result_coords_size);
-  argument_list.emplace_back(result_ring_sizes);
-  argument_list.emplace_back(result_ring_sizes_size);
-  argument_list.emplace_back(result_poly_rings);
-  argument_list.emplace_back(result_poly_rings_size);
-  argument_list.emplace_back(result_srid);
 
-  // Generate call to GEOS wrapper
-  cgen_state_->needs_geos_ = true;
+  if (need_ring_sizes) {
+    argument_list.emplace_back(result_ring_sizes);
+    argument_list.emplace_back(result_ring_sizes_size);
+    if (need_poly_rings) {
+      argument_list.emplace_back(result_poly_rings);
+      argument_list.emplace_back(result_poly_rings_size);
+    }
+  }
+  if (result_srid) {
+    argument_list.emplace_back(result_srid);
+  }
+
+  // Generate call to GEOS or H3 wrapper
+  cgen_state_->needs_geos_ = needs_geos;
   auto status_lv = cgen_state_->emitExternalCall(
       func, llvm::Type::getInt1Ty(cgen_state_->context_), argument_list);
   // Need to check the status and throw an error if this call has failed.
-  llvm::BasicBlock* geos_ok_bb{nullptr};
-  llvm::BasicBlock* geos_fail_bb{nullptr};
-  geos_ok_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "geos_ok_bb", cgen_state_->current_func_);
-  geos_fail_bb = llvm::BasicBlock::Create(
-      cgen_state_->context_, "geos_fail_bb", cgen_state_->current_func_);
+  llvm::BasicBlock* ok_bb{nullptr};
+  llvm::BasicBlock* fail_bb{nullptr};
+  ok_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "geos_or_h3_ok_bb", cgen_state_->current_func_);
+  fail_bb = llvm::BasicBlock::Create(
+      cgen_state_->context_, "geos_or_h3_fail_bb", cgen_state_->current_func_);
   if (!status_lv) {
     status_lv = cgen_state_->llBool(false);
   }
-  cgen_state_->ir_builder_.CreateCondBr(status_lv, geos_ok_bb, geos_fail_bb);
-  cgen_state_->ir_builder_.SetInsertPoint(geos_fail_bb);
-  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(ErrorCode::GEOS)));
+  cgen_state_->ir_builder_.CreateCondBr(status_lv, ok_bb, fail_bb);
+  cgen_state_->ir_builder_.SetInsertPoint(fail_bb);
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(ErrorCode::GEOS_OR_H3)));
   cgen_state_->needs_error_check_ = true;
-  cgen_state_->ir_builder_.SetInsertPoint(geos_ok_bb);
+  cgen_state_->ir_builder_.SetInsertPoint(ok_bb);
 
-  // TODO: Currently forcing the output to MULTIPOLYGON, but need to handle
-  // other possible geometries that geos may return, e.g. a POINT, a LINESTRING
-  // Need to handle empty result, e.g. empty intersection.
+  // @TODO
+  // Handle empty result, e.g. empty intersection.
   // The type of result is returned in `result_type`
 
   // Load return values
@@ -553,14 +612,25 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
       result_coords->getType()->getPointerElementType(), result_coords);
   auto buf1s = cgen_state_->ir_builder_.CreateLoad(
       result_coords_size->getType()->getPointerElementType(), result_coords_size);
-  auto buf2 = cgen_state_->ir_builder_.CreateLoad(
-      result_ring_sizes->getType()->getPointerElementType(), result_ring_sizes);
-  auto buf2s = cgen_state_->ir_builder_.CreateLoad(
-      result_ring_sizes_size->getType()->getPointerElementType(), result_ring_sizes_size);
-  auto buf3 = cgen_state_->ir_builder_.CreateLoad(
-      result_poly_rings->getType()->getPointerElementType(), result_poly_rings);
-  auto buf3s = cgen_state_->ir_builder_.CreateLoad(
-      result_poly_rings_size->getType()->getPointerElementType(), result_poly_rings_size);
+
+  llvm::LoadInst* buf2{};
+  llvm::LoadInst* buf2s{};
+  llvm::LoadInst* buf3{};
+  llvm::LoadInst* buf3s{};
+  if (need_ring_sizes) {
+    buf2 = cgen_state_->ir_builder_.CreateLoad(
+        result_ring_sizes->getType()->getPointerElementType(), result_ring_sizes);
+    buf2s = cgen_state_->ir_builder_.CreateLoad(
+        result_ring_sizes_size->getType()->getPointerElementType(),
+        result_ring_sizes_size);
+    if (need_poly_rings) {
+      buf3 = cgen_state_->ir_builder_.CreateLoad(
+          result_poly_rings->getType()->getPointerElementType(), result_poly_rings);
+      buf3s = cgen_state_->ir_builder_.CreateLoad(
+          result_poly_rings_size->getType()->getPointerElementType(),
+          result_poly_rings_size);
+    }
+  }
 
   // generate register_buffer_with_executor_rsm() calls to register all output buffers
   cgen_state_->emitExternalCall(
@@ -568,21 +638,34 @@ std::vector<llvm::Value*> CodeGenerator::codegenGeosConstructorCall(
       llvm::Type::getVoidTy(cgen_state_->context_),
       {cgen_state_->llInt(reinterpret_cast<int64_t>(executor())),
        cgen_state_->ir_builder_.CreatePointerCast(buf1, pi8_type)});
-  cgen_state_->emitExternalCall(
-      "register_buffer_with_executor_rsm",
-      llvm::Type::getVoidTy(cgen_state_->context_),
-      {cgen_state_->llInt(reinterpret_cast<int64_t>(executor())),
-       cgen_state_->ir_builder_.CreatePointerCast(buf2, pi8_type)});
-  cgen_state_->emitExternalCall(
-      "register_buffer_with_executor_rsm",
-      llvm::Type::getVoidTy(cgen_state_->context_),
-      {cgen_state_->llInt(reinterpret_cast<int64_t>(executor())),
-       cgen_state_->ir_builder_.CreatePointerCast(buf3, pi8_type)});
 
-  return {cgen_state_->ir_builder_.CreatePointerCast(buf1, pi8_type),
-          buf1s,
-          cgen_state_->ir_builder_.CreatePointerCast(buf2, pi32_type),
-          buf2s,
-          cgen_state_->ir_builder_.CreatePointerCast(buf3, pi32_type),
-          buf3s};
+  if (need_ring_sizes) {
+    cgen_state_->emitExternalCall(
+        "register_buffer_with_executor_rsm",
+        llvm::Type::getVoidTy(cgen_state_->context_),
+        {cgen_state_->llInt(reinterpret_cast<int64_t>(executor())),
+         cgen_state_->ir_builder_.CreatePointerCast(buf2, pi8_type)});
+    if (need_poly_rings) {
+      cgen_state_->emitExternalCall(
+          "register_buffer_with_executor_rsm",
+          llvm::Type::getVoidTy(cgen_state_->context_),
+          {cgen_state_->llInt(reinterpret_cast<int64_t>(executor())),
+           cgen_state_->ir_builder_.CreatePointerCast(buf3, pi8_type)});
+    }
+  }
+
+  if (need_ring_sizes && need_poly_rings) {
+    return {cgen_state_->ir_builder_.CreatePointerCast(buf1, pi8_type),
+            buf1s,
+            cgen_state_->ir_builder_.CreatePointerCast(buf2, pi32_type),
+            buf2s,
+            cgen_state_->ir_builder_.CreatePointerCast(buf3, pi32_type),
+            buf3s};
+  } else if (need_ring_sizes) {
+    return {cgen_state_->ir_builder_.CreatePointerCast(buf1, pi8_type),
+            buf1s,
+            cgen_state_->ir_builder_.CreatePointerCast(buf2, pi32_type),
+            buf2s};
+  }
+  return {cgen_state_->ir_builder_.CreatePointerCast(buf1, pi8_type), buf1s};
 }

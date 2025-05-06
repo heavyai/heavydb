@@ -3256,6 +3256,30 @@ class GeoBinOper : public Expr {
 };
 
 /*
+ * @type GeoH3Oper
+ * @brief Geo H3 operation (BIGINT in, geo out)
+ */
+class GeoH3Oper : public Expr {
+ public:
+  GeoH3Oper(const std::string_view func_name,
+            const SQLTypeInfo& ti,
+            const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+      : Expr(ti), func_name_{func_name}, args0_(args){};
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+
+  const std::string_view getFuncName() const { return func_name_; }
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs0() const { return args0_; }
+
+ private:
+  const std::string_view func_name_;
+  const std::vector<std::shared_ptr<Analyzer::Expr>> args0_;
+};
+
+/*
  * @type TargetEntry
  * @brief Target list defines a relational projection.  It is a list of TargetEntry's.
  */

@@ -142,6 +142,10 @@ class ScalarExprVisitor {
     if (geo_binop) {
       return visitGeoBinOper(geo_binop);
     }
+    const auto geo_h3op = dynamic_cast<const Analyzer::GeoH3Oper*>(expr);
+    if (geo_h3op) {
+      return visitGeoH3Oper(geo_h3op);
+    }
     const auto datediff = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
     if (datediff) {
       return visitDatediffExpr(datediff);
@@ -363,6 +367,14 @@ class ScalarExprVisitor {
       result = aggregateResult(result, visit(arg.get()));
     }
     for (const auto& arg : geo_expr->getArgs1()) {
+      result = aggregateResult(result, visit(arg.get()));
+    }
+    return result;
+  }
+
+  virtual T visitGeoH3Oper(const Analyzer::GeoH3Oper* geo_expr) const {
+    T result = defaultResult();
+    for (const auto& arg : geo_expr->getArgs0()) {
       result = aggregateResult(result, visit(arg.get()));
     }
     return result;

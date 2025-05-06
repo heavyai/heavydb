@@ -197,6 +197,9 @@ class RelAlgTranslator {
                                                          SQLTypeInfo&,
                                                          const bool with_bounds) const;
 
+  std::shared_ptr<Analyzer::Expr> translateGeoH3Function(const RexFunctionOperator*,
+                                                         SQLTypeInfo&) const;
+
   std::shared_ptr<Analyzer::Expr> translateUnaryGeoPredicate(
       const RexFunctionOperator*,
       SQLTypeInfo&,

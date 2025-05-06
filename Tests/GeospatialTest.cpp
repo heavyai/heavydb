@@ -4324,7 +4324,7 @@ class GeoSpatialH3Test : public ::testing::Test {
   static constexpr std::string_view kCellString = "CAST(644605580338790528 AS BIGINT)";
   static constexpr std::string_view kCellHexString = "8f2195c2c540080";
   static constexpr int64_t kParent = static_cast<int64_t>(631094781456679423LL);
-  static constexpr std::array<double, 12> kWKTValues = {59.9999887940966801,
+  static constexpr std::array<double, 14> kWKTValues = {59.9999887940966801,
                                                         40.0000005857359184,
                                                         59.9999930723770873,
                                                         39.9999959172691604,
@@ -4335,7 +4335,11 @@ class GeoSpatialH3Test : public ::testing::Test {
                                                         59.9999991984775178,
                                                         40.0000061506173239,
                                                         59.9999918571464477,
-                                                        40.0000057024101636};
+                                                        40.0000057024101636,
+                                                        59.9999887940966801,
+                                                        40.0000005857359184};
+  static std::vector<double> poly_coords;
+  static std::vector<int32_t> poly_ring_sizes;
 
   void validateWKT(const std::string& wkt_str) {
     // WKT will be of the form
@@ -4347,16 +4351,29 @@ class GeoSpatialH3Test : public ::testing::Test {
     boost::erase_all(values_str, ",");
     // split by space
     auto const values = split(values_str, " ");
-    CHECK_EQ(values.size(), 12u);
+    CHECK_EQ(values.size(), kWKTValues.size());
     // validate
-    for (int i = 0; i < 12; i++) {
+    for (size_t i = 0; i < kWKTValues.size(); i++) {
       ASSERT_NEAR(std::stod(values[i]), kWKTValues[i], 0.00000000001);
     }
   }
 };
 
-TEST_F(GeoSpatialH3Test, H3_PointToCell) {
-  // literal
+std::vector<double> GeoSpatialH3Test::poly_coords = {kWKTValues[0],
+                                                     kWKTValues[1],
+                                                     kWKTValues[2],
+                                                     kWKTValues[3],
+                                                     kWKTValues[4],
+                                                     kWKTValues[5],
+                                                     kWKTValues[6],
+                                                     kWKTValues[7],
+                                                     kWKTValues[8],
+                                                     kWKTValues[9],
+                                                     kWKTValues[10],
+                                                     kWKTValues[11]};
+std::vector<int32_t> GeoSpatialH3Test::poly_ring_sizes = {6};
+
+TEST_F(GeoSpatialH3Test, DISABLED_H3_PointToCell_literal) {
   // @TODO this doesn't work, reports:
   // Cannot apply 'H3_PointToCell' to arguments of type 'H3_PointToCell(<INTEGER>,
   // <INTEGER>)'. Supported form(s): 'H3_PointToCell(<GEO>, <NUMERIC>)'
@@ -4365,26 +4382,29 @@ TEST_F(GeoSpatialH3Test, H3_PointToCell) {
   //             15);",
   //                                       ExecutorDeviceType::CPU)));
   // leave disabled for now
+}
+
+TEST_F(GeoSpatialH3Test, H3_PointToCell_column) {
   // column
   ASSERT_EQ(kCell,
             v<int64_t>(run_simple_agg("SELECT H3_PointToCell(p, 15) FROM h3_tests;",
                                       ExecutorDeviceType::CPU)));
 }
 
-TEST_F(GeoSpatialH3Test, H3_LonLatToCell) {
-  // literals
+TEST_F(GeoSpatialH3Test, H3_LonLatToCell_literal) {
   ASSERT_EQ(kCell,
             v<int64_t>(run_simple_agg("SELECT H3_LonLatToCell(60.0, 40.0, 15);",
                                       ExecutorDeviceType::CPU)));
-  // columns
+}
+
+TEST_F(GeoSpatialH3Test, H3_LonLatToCell_column) {
   ASSERT_EQ(
       kCell,
       v<int64_t>(run_simple_agg("SELECT H3_LonLatToCell(lon, lat, 15) FROM h3_tests;",
                                 ExecutorDeviceType::CPU)));
 }
 
-TEST_F(GeoSpatialH3Test, H3_CellToLonLat) {
-  // literal
+TEST_F(GeoSpatialH3Test, H3_CellToLonLat_literal) {
   ASSERT_NEAR(
       static_cast<double>(60.0),
       v<double>(run_simple_agg("SELECT H3_CellToLon(" + std::string(kCellString) + ");",
@@ -4395,7 +4415,9 @@ TEST_F(GeoSpatialH3Test, H3_CellToLonLat) {
       v<double>(run_simple_agg("SELECT H3_CellToLat(" + std::string(kCellString) + ");",
                                ExecutorDeviceType::CPU)),
       static_cast<double>(0.0001));
-  // column
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToLonLat_column) {
   ASSERT_NEAR(static_cast<double>(60.0),
               v<double>(run_simple_agg("SELECT H3_CellToLon(cell) FROM h3_tests;",
                                        ExecutorDeviceType::CPU)),
@@ -4406,7 +4428,31 @@ TEST_F(GeoSpatialH3Test, H3_CellToLonLat) {
               static_cast<double>(0.0001));
 }
 
-TEST_F(GeoSpatialH3Test, H3_CellToString) {
+TEST_F(GeoSpatialH3Test, H3_CellToPoint_literal) {
+  ASSERT_NEAR(static_cast<double>(60.0),
+              v<double>(run_simple_agg(
+                  "SELECT ST_X(H3_CellToPoint(" + std::string(kCellString) + "));",
+                  ExecutorDeviceType::CPU)),
+              static_cast<double>(0.0001));
+  ASSERT_NEAR(static_cast<double>(40.0),
+              v<double>(run_simple_agg(
+                  "SELECT ST_Y(H3_CellToPoint(" + std::string(kCellString) + "));",
+                  ExecutorDeviceType::CPU)),
+              static_cast<double>(0.0001));
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToPoint_column) {
+  ASSERT_NEAR(static_cast<double>(60.0),
+              v<double>(run_simple_agg("SELECT ST_X(H3_CellToPoint(cell)) FROM h3_tests;",
+                                       ExecutorDeviceType::CPU)),
+              static_cast<double>(0.0001));
+  ASSERT_NEAR(static_cast<double>(40.0),
+              v<double>(run_simple_agg("SELECT ST_Y(H3_CellToPoint(cell)) FROM h3_tests;",
+                                       ExecutorDeviceType::CPU)),
+              static_cast<double>(0.0001));
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToString_literal) {
   SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   // literal
   ASSERT_EQ(kCellHexString,
@@ -4417,7 +4463,9 @@ TEST_F(GeoSpatialH3Test, H3_CellToString) {
             boost::get<std::string>(v<NullableString>(run_simple_agg(
                 "SELECT H3_CellToString_TEXT_NONE(" + std::string(kCellString) + ");",
                 ExecutorDeviceType::CPU))));
-  // column
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToString_column) {
   ASSERT_EQ(
       kCellHexString,
       boost::get<std::string>(v<NullableString>(run_simple_agg(
@@ -4428,14 +4476,16 @@ TEST_F(GeoSpatialH3Test, H3_CellToString) {
                                ExecutorDeviceType::CPU))));
 }
 
-TEST_F(GeoSpatialH3Test, H3_StringToCell) {
+TEST_F(GeoSpatialH3Test, H3_StringToCell_literal) {
   SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
-  // literal
   ASSERT_EQ(kCell,
             v<int64_t>(run_simple_agg(
                 "SELECT H3_StringToCell('" + std::string(kCellHexString) + "');",
                 ExecutorDeviceType::CPU)));
-  // columns
+}
+
+TEST_F(GeoSpatialH3Test, H3_StringToCell_column) {
+  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   ASSERT_EQ(kCell,
             v<int64_t>(run_simple_agg("SELECT H3_StringToCell(text_none) FROM h3_tests;",
                                       ExecutorDeviceType::CPU)));
@@ -4444,44 +4494,68 @@ TEST_F(GeoSpatialH3Test, H3_StringToCell) {
                                       ExecutorDeviceType::CPU)));
 }
 
-TEST_F(GeoSpatialH3Test, H3_IsValidCell) {
-  // literal, true
+TEST_F(GeoSpatialH3Test, H3_IsValidCell_literal) {
   ASSERT_EQ(static_cast<int64_t>(1),
             v<int64_t>(
                 run_simple_agg("SELECT H3_IsValidCell(" + std::string(kCellString) + ");",
                                ExecutorDeviceType::CPU)));
-  // literal, false
   ASSERT_EQ(static_cast<int64_t>(0),
             v<int64_t>(run_simple_agg("SELECT H3_IsValidCell(CAST(12345 AS BIGINT));",
                                       ExecutorDeviceType::CPU)));
-  // column, true
+}
+
+TEST_F(GeoSpatialH3Test, H3_IsValidCell_column) {
   ASSERT_EQ(static_cast<int64_t>(1),
             v<int64_t>(run_simple_agg("SELECT H3_IsValidCell(cell) FROM h3_tests;",
                                       ExecutorDeviceType::CPU)));
 }
 
-TEST_F(GeoSpatialH3Test, H3_CellToParent) {
-  // literal
+TEST_F(GeoSpatialH3Test, H3_CellToParent_literal) {
   ASSERT_EQ(kParent,
             v<int64_t>(run_simple_agg(
                 "SELECT H3_CellToParent(" + std::string(kCellString) + ", 12);",
                 ExecutorDeviceType::CPU)));
-  // column
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToParent_column) {
   ASSERT_EQ(kParent,
             v<int64_t>(run_simple_agg("SELECT H3_CellToParent(cell, 12) FROM h3_tests;",
                                       ExecutorDeviceType::CPU)));
 }
 
-TEST_F(GeoSpatialH3Test, H3_CellToBoundary) {
+TEST_F(GeoSpatialH3Test, H3_CellToBoundary_WKT_literal) {
   SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
-  // @TODO concerned about precision non-determinism breaking the string comparison
-  // literal
   ASSERT_NO_THROW(validateWKT(boost::get<std::string>(v<NullableString>(
       run_simple_agg("SELECT H3_CellToBoundary_WKT(" + std::string(kCellString) + ");",
                      ExecutorDeviceType::CPU)))));
-  // column
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToBoundary_WKT_column) {
+  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   ASSERT_NO_THROW(validateWKT(boost::get<std::string>(v<NullableString>(run_simple_agg(
       "SELECT H3_CellToBoundary_WKT(cell) FROM h3_tests;", ExecutorDeviceType::CPU)))));
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToBoundary_POLYGON_literal) {
+  compare_geo_target(run_simple_agg("SELECT H3_CellToBoundary_POLYGON(" +
+                                        std::string(kCellString) + ");",
+                                    ExecutorDeviceType::CPU),
+                     GeoPolyTargetValue(poly_coords, poly_ring_sizes));
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToBoundary_POLYGON_column) {
+  compare_geo_target(
+      run_simple_agg("SELECT H3_CellToBoundary_POLYGON(cell) FROM h3_tests;",
+                     ExecutorDeviceType::CPU),
+      GeoPolyTargetValue(poly_coords, poly_ring_sizes));
+}
+
+TEST_F(GeoSpatialH3Test, H3_CellToBoundary_POLYGON_nested) {
+  compare_geo_target(
+      run_simple_agg("SELECT H3_CellToBoundary_POLYGON(H3_LonLatToCell(lon, lat, 15)) "
+                     "FROM h3_tests;",
+                     ExecutorDeviceType::CPU),
+      GeoPolyTargetValue(poly_coords, poly_ring_sizes));
 }
 
 int main(int argc, char** argv) {

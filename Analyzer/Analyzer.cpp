@@ -279,6 +279,10 @@ std::shared_ptr<Analyzer::Expr> GeoBinOper::deep_copy() const {
   return makeExpr<GeoBinOper>(op_, type_info, ti0_, ti1_, args0_, args1_);
 }
 
+std::shared_ptr<Analyzer::Expr> GeoH3Oper::deep_copy() const {
+  return makeExpr<GeoH3Oper>(func_name_, type_info, args0_);
+}
+
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
                                        const SQLTypeInfo& left_type,
                                        const SQLTypeInfo& right_type,
@@ -2772,6 +2776,18 @@ bool GeoBinOper::operator==(const Expr& rhs) const {
          expr_list_match(args1_, rhs_geo->getArgs1());
 }
 
+bool GeoH3Oper::operator==(const Expr& rhs) const {
+  const auto rhs_geo = dynamic_cast<const GeoH3Oper*>(&rhs);
+  if (!rhs_geo) {
+    return false;
+  }
+  if (std::string(func_name_) != std::string(rhs_geo->getFuncName()) ||
+      args0_.size() != rhs_geo->getArgs0().size()) {
+    return false;
+  }
+  return expr_list_match(args0_, rhs_geo->getArgs0());
+}
+
 std::string ColumnVar::toString() const {
   std::stringstream ss;
   ss << "(ColumnVar " << column_key_ << ", rte: " << std::to_string(rte_idx_) << " "
@@ -3293,6 +3309,14 @@ std::string GeoBinOper::toString() const {
     result += " " + arg->toString();
   }
   for (const auto& arg : args1_) {
+    result += " " + arg->toString();
+  }
+  return result + " ) ";
+}
+
+std::string GeoH3Oper::toString() const {
+  std::string result = std::string(func_name_) + "(";
+  for (const auto& arg : args0_) {
     result += " " + arg->toString();
   }
   return result + " ) ";
