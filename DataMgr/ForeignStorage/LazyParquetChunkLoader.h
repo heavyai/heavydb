@@ -31,6 +31,8 @@ extern size_t g_max_import_threads;
 
 namespace foreign_storage {
 
+using HeavyColumnToParquetColumnMap = std::map<int, std::vector<int>>;
+
 /**
  * A lazy parquet to chunk loader
  */
@@ -43,6 +45,7 @@ class LazyParquetChunkLoader {
 
   LazyParquetChunkLoader(std::shared_ptr<arrow::fs::FileSystem> file_system,
                          FileReaderMap* file_reader_cache,
+                         HeavyColumnToParquetColumnMap* column_map,
                          const ForeignTable* foreign_table);
 
   /**
@@ -102,6 +105,10 @@ class LazyParquetChunkLoader {
   static bool isColumnMappingSupported(const ColumnDescriptor* omnisci_column,
                                        const parquet::ColumnDescriptor* parquet_column);
 
+  static HeavyColumnToParquetColumnMap createColumnMap(const ForeignTableSchema& schema,
+                                                       const ReaderPtr& reader,
+                                                       const bool lat_lon_order);
+
   /**
    * @brief Load row groups of data into given chunks
    *
@@ -159,7 +166,6 @@ class LazyParquetChunkLoader {
 
   std::list<std::unique_ptr<ChunkMetadata>> appendRowGroups(
       const std::vector<RowGroupInterval>& row_group_intervals,
-      const int parquet_column_index,
       const ColumnDescriptor* column_descriptor,
       std::list<Chunk_NS::Chunk>& chunks,
       StringDictionary* string_dictionary,
@@ -169,6 +175,7 @@ class LazyParquetChunkLoader {
 
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
   FileReaderMap* file_reader_cache_;
+  HeavyColumnToParquetColumnMap* column_map_;
 
   const ForeignTable* foreign_table_;
 };
