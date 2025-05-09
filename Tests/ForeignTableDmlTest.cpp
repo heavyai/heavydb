@@ -5053,21 +5053,17 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
          // no ties, otherwise results are non-deterministic
       ));
 
-  // Temporarily disable metadata check for ODBC (until fix is put in)
-  if (!is_odbc(wrapper_type_)) {
-    // Initial select count(*) for metadata scan prior to loading
-    {
-      TQueryResult result;
-      sql(result, "SELECT COUNT(*) FROM " + default_table_name + ";");
-    }
+  // Initial select count(*) for metadata scan prior to loading
+  {
+    TQueryResult result;
+    sql(result, "SELECT COUNT(*) FROM " + default_table_name + ";");
+  }
 
-    std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
+  std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
 
-    // Compare expected metadata if we are loading all values into a single fragment
-    if (fragment_size_ >= 4) {
-      assertExpectedChunkMetadata(getExpectedScalarTypeMetadata(false),
-                                  default_table_name);
-    }
+  // Compare expected metadata if we are loading all values into a single fragment
+  if (fragment_size_ >= 4) {
+    assertExpectedChunkMetadata(getExpectedScalarTypeMetadata(false), default_table_name);
   }
 
   queryAndAssertScalarTypesResult();
