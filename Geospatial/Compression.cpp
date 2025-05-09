@@ -49,6 +49,7 @@ uint64_t compress_null_point(const SQLTypeInfo& ti, bool x) {
 }
 
 // Compress non-NULL geo coords; and also NULL POINT coords (special case)
+// coords is assumed to be a series of alternating x/y values.
 std::vector<uint8_t> compress_coords(const std::vector<double>& coords,
                                      const SQLTypeInfo& ti) {
   CHECK(!coords.empty()) << "Coord compression received no data";

@@ -318,7 +318,7 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
     const std::array<char, 3> array_marker{
         copy_params.array_begin, copy_params.array_end, 0};
     foreign_table->options[CsvFileBufferParser::ARRAY_MARKER_KEY] = array_marker.data();
-    foreign_table->options[CsvFileBufferParser::LONLAT_KEY] =
+    foreign_table->options[AbstractFileStorageDataWrapper::LONLAT_KEY] =
         bool_to_option_value(copy_params.lonlat);
     if (copy_params.geo_explode_collections) {
       throw std::runtime_error(
@@ -334,6 +334,12 @@ std::unique_ptr<ForeignTable> ForeignDataWrapperFactory::createForeignTableProxy
 
     foreign_table->options[CsvFileBufferParser::TRIM_SPACES_KEY] =
         bool_to_option_value(copy_params.trim_spaces);
+  }
+
+  // for Parquet import
+  if (copy_params.source_type == import_export::SourceType::kParquetFile) {
+    foreign_table->options[AbstractFileStorageDataWrapper::LONLAT_KEY] =
+        bool_to_option_value(copy_params.lonlat);
   }
 
   foreign_table->initializeOptions();

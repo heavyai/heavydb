@@ -233,7 +233,8 @@ ParquetImporter::ParquetImporter(const int db_id,
     , foreign_table_(foreign_table)
     , num_threads_(1)
     , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
-    , file_reader_cache_(std::make_unique<FileReaderMap>()) {
+    , file_reader_cache_(std::make_unique<FileReaderMap>())
+    , column_map_(std::make_unique<HeavyColumnToParquetColumnMap>()) {
   auto& server_options = foreign_table->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     file_system_ = std::make_shared<arrow::fs::LocalFileSystem>();
@@ -329,7 +330,7 @@ std::unique_ptr<import_export::ImportBatchResult> ParquetImporter::getNextImport
   }
 
   LazyParquetChunkLoader chunk_loader(
-      file_system_, file_reader_cache_.get(), foreign_table_);
+      file_system_, file_reader_cache_.get(), column_map_.get(), foreign_table_);
 
   std::optional<RowGroupInterval> next_row_group;
   {
