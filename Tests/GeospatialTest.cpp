@@ -4454,7 +4454,6 @@ TEST_F(GeoSpatialH3Test, H3_CellToPoint_column) {
 
 TEST_F(GeoSpatialH3Test, H3_CellToString_literal) {
   SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
-  // literal
   ASSERT_EQ(kCellHexString,
             boost::get<std::string>(v<NullableString>(run_simple_agg(
                 "SELECT H3_CellToString_TEXT(" + std::string(kCellString) + ");",
@@ -4466,6 +4465,7 @@ TEST_F(GeoSpatialH3Test, H3_CellToString_literal) {
 }
 
 TEST_F(GeoSpatialH3Test, H3_CellToString_column) {
+  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   ASSERT_EQ(
       kCellHexString,
       boost::get<std::string>(v<NullableString>(run_simple_agg(
