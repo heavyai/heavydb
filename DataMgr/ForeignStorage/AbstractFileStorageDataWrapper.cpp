@@ -233,7 +233,8 @@ const std::set<std::string_view> AbstractFileStorageDataWrapper::supported_table
     FILE_SORT_ORDER_BY_KEY,
     FILE_SORT_REGEX_KEY,
     ALLOW_FILE_ROLL_OFF_KEY,
-    THREADS_KEY};
+    THREADS_KEY,
+    LONLAT_KEY};
 
 const std::set<std::string_view>
     AbstractFileStorageDataWrapper::supported_server_options_{STORAGE_TYPE_KEY,

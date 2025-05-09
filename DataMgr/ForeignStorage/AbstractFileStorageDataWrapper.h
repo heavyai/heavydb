@@ -37,6 +37,7 @@ class AbstractFileStorageDataWrapper : public ForeignDataWrapper {
   inline static const std::string FILE_SORT_REGEX_KEY = shared::FILE_SORT_REGEX_KEY;
   inline static const std::string ALLOW_FILE_ROLL_OFF_KEY = "ALLOW_FILE_ROLL_OFF";
   inline static const std::string THREADS_KEY = "THREADS";
+  inline static const std::string LONLAT_KEY = "LONLAT";
 
   inline static const std::array<std::string, 1> supported_storage_types{
       LOCAL_FILE_STORAGE_TYPE};

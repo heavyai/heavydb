@@ -56,7 +56,6 @@ class CsvFileBufferParser : public TextFileBufferParser {
   inline static const std::string LINE_DELIMITER_KEY = "LINE_DELIMITER";
   inline static const std::string ARRAY_DELIMITER_KEY = "ARRAY_DELIMITER";
   inline static const std::string ARRAY_MARKER_KEY = "ARRAY_MARKER";
-  inline static const std::string LONLAT_KEY = "LONLAT";
   inline static const std::string GEO_EXPLODE_COLLECTIONS_KEY = "GEO_EXPLODE_COLLECTIONS";
   inline static const std::string SOURCE_SRID_KEY = "SOURCE_SRID";
   inline static const std::string TRIM_SPACES_KEY = "TRIM_SPACES";

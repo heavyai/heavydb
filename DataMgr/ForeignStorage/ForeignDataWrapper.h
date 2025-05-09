@@ -29,7 +29,7 @@ struct ForeignServer;
 struct ForeignTable;
 struct UserMapping;
 using ChunkToBufferMap = std::map<ChunkKey, AbstractBuffer*>;
-using ChunkToBatchBufferMap = std::map<ChunkKey, std::vector<AbstractBuffer*> >;
+using ChunkToBatchBufferMap = std::map<ChunkKey, std::vector<AbstractBuffer*>>;
 
 /**
  * A helper function to decay a map of batched buffers to an equivalent map of

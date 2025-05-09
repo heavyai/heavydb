@@ -378,8 +378,9 @@ import_export::CopyParams CsvFileBufferParser::validateAndGetCopyParams(
     copy_params.array_begin = value[0];
     copy_params.array_end = value[1];
   }
-  copy_params.lonlat =
-      validate_and_get_bool_value(foreign_table, LONLAT_KEY).value_or(copy_params.lonlat);
+  copy_params.lonlat = validate_and_get_bool_value(
+                           foreign_table, AbstractFileStorageDataWrapper::LONLAT_KEY)
+                           .value_or(copy_params.lonlat);
   copy_params.geo_explode_collections =
       validate_and_get_bool_value(foreign_table, GEO_EXPLODE_COLLECTIONS_KEY)
           .value_or(copy_params.geo_explode_collections);

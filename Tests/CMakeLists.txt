@@ -367,6 +367,13 @@ list(APPEND SANITY_TEST_PROGRAMS ForeignTableDmlTest)
 
 ##########
 
+add_executable(ForeignDataWrapperUnitTest ForeignDataWrapperUnitTest.cpp)
+target_link_libraries(ForeignDataWrapperUnitTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(ForeignDataWrapperUnitTest ForeignDataWrapperUnitTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS ForeignDataWrapperUnitTest)
+
+##########
+
 add_executable(FromTableReorderingTest FromTableReorderingTest.cpp)
 target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
 add_test(FromTableReorderingTest FromTableReorderingTest ${TEST_ARGS})

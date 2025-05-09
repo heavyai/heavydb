@@ -143,6 +143,7 @@ class ParquetDataWrapper : public AbstractFileStorageDataWrapper {
   std::unique_ptr<ForeignTableSchema> schema_;
   std::shared_ptr<arrow::fs::FileSystem> file_system_;
   std::unique_ptr<FileReaderMap> file_reader_cache_;
+  std::unique_ptr<HeavyColumnToParquetColumnMap> column_map_;
 
   std::mutex delete_buffer_mutex_;
 };

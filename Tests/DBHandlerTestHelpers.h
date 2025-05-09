@@ -519,6 +519,37 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
     db_handler_.reset();
   }
 
+  template <typename Lambda>
+  static void executeLambdaAndAssertException(Lambda lambda,
+                                              const std::string& error_message,
+                                              const bool i_case = false) {
+    try {
+      lambda();
+      FAIL() << "An exception should have been thrown for this test case, exception "
+                "expected: "
+             << error_message;
+    } catch (const TDBException& e) {
+      assertExceptionMessage(e, error_message, i_case);
+    } catch (const std::runtime_error& e) {
+      assertExceptionMessage(e, error_message, i_case);
+    }
+  }
+
+  // sometime error message have non deterministic portions
+  // used to check a meaningful portion of an error message
+  template <typename Lambda>
+  static void executeLambdaAndAssertPartialException(Lambda lambda,
+                                                     const std::string& error_message) {
+    try {
+      lambda();
+      FAIL() << "An exception should have been thrown for this test case.";
+    } catch (const TDBException& e) {
+      assertPartialExceptionMessage(e, error_message);
+    } catch (const std::runtime_error& e) {
+      assertPartialExceptionMessage(e, error_message);
+    }
+  }
+
  protected:
   friend class DBHandlerTestEnvironment;
 
@@ -660,45 +691,16 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
     return db_leaves_;
   }
 
-  template <typename Lambda>
-  void executeLambdaAndAssertException(Lambda lambda,
-                                       const std::string& error_message,
-                                       const bool i_case = false) {
-    try {
-      lambda();
-      FAIL() << "An exception should have been thrown for this test case, exception "
-                "expected: "
-             << error_message;
-    } catch (const TDBException& e) {
-      assertExceptionMessage(e, error_message, i_case);
-    } catch (const std::runtime_error& e) {
-      assertExceptionMessage(e, error_message, i_case);
-    }
+  static void assertPartialExceptionMessage(const TDBException& e,
+                                            const std::string& error_message) {
+    ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos)
+        << "Found:\n  " << e.error_msg << "\nExpected:\n  " << error_message;
   }
 
-  // sometime error message have non deterministic portions
-  // used to check a meaningful portion of an error message
-  template <typename Lambda>
-  void executeLambdaAndAssertPartialException(Lambda lambda,
-                                              const std::string& error_message) {
-    try {
-      lambda();
-      FAIL() << "An exception should have been thrown for this test case.";
-    } catch (const TDBException& e) {
-      assertPartialExceptionMessage(e, error_message);
-    } catch (const std::runtime_error& e) {
-      assertPartialExceptionMessage(e, error_message);
-    }
-  }
-
-  void assertPartialExceptionMessage(const TDBException& e,
-                                     const std::string& error_message) {
-    ASSERT_TRUE(e.error_msg.find(error_message) != std::string::npos);
-  }
-
-  void assertPartialExceptionMessage(const std::runtime_error& e,
-                                     const std::string& error_message) {
-    ASSERT_TRUE(std::string(e.what()).find(error_message) != std::string::npos);
+  static void assertPartialExceptionMessage(const std::runtime_error& e,
+                                            const std::string& error_message) {
+    ASSERT_TRUE(std::string(e.what()).find(error_message) != std::string::npos)
+        << "Found:\n  " << e.what() << "\nExpected:\n  " << error_message;
   }
 
   void queryAndAssertException(const std::string& sql_statement,

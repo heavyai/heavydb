@@ -847,6 +847,34 @@ std::shared_ptr<ParquetEncoder> create_parquet_geospatial_encoder(
     const bool is_for_import,
     const bool geo_validate_geometry) {
   auto column_type = omnisci_column->columnType;
+  if (column_type.get_type() == kPOINT &&
+      (parquet_column->physical_type() == parquet::Type::DOUBLE ||
+       parquet_column->physical_type() == parquet::Type::FLOAT)) {
+    // Whether float->point compression is possible should already have been validated, so
+    // we assume that if we are trying it now the type conditions already align for both
+    // columns.
+    if (is_metadata_scan) {
+      if (parquet_column->physical_type() == parquet::Type::DOUBLE) {
+        return std::make_shared<ParquetLatLonGeospatialEncoder<double>>(
+            geo_validate_geometry);
+      } else {
+        return std::make_shared<ParquetLatLonGeospatialEncoder<float>>(
+            geo_validate_geometry);
+      }
+    } else {
+      for (const auto& chunk : chunks) {
+        chunk_metadata.emplace_back(std::make_unique<ChunkMetadata>())->sqlType =
+            chunk.getColumnDesc()->columnType;
+      }
+      if (parquet_column->physical_type() == parquet::Type::DOUBLE) {
+        return std::make_shared<ParquetLatLonGeospatialEncoder<double>>(
+            chunks, chunk_metadata, geo_validate_geometry);
+      } else {
+        return std::make_shared<ParquetLatLonGeospatialEncoder<float>>(
+            chunks, chunk_metadata, geo_validate_geometry);
+      }
+    }
+  }
   if (!is_valid_parquet_string(parquet_column) || !column_type.is_geometry()) {
     return {};
   }
@@ -863,7 +891,7 @@ std::shared_ptr<ParquetEncoder> create_parquet_geospatial_encoder(
     chunk_metadata_ptr->sqlType = chunks_iter->getColumnDesc()->columnType;
   }
   return std::make_shared<ParquetGeospatialEncoder>(
-      parquet_column, chunks, chunk_metadata, geo_validate_geometry);
+      chunks, chunk_metadata, geo_validate_geometry);
 }
 
 // forward declare `create_parquet_array_encoder`: `create_parquet_encoder` and
@@ -1511,6 +1539,8 @@ void validate_equal_schema(const parquet::arrow::FileReader* reference_file_read
                            const parquet::arrow::FileReader* new_file_reader,
                            const std::string& reference_file_path,
                            const std::string& new_file_path) {
+  CHECK(reference_file_reader);
+  CHECK(new_file_reader);
   const auto reference_num_columns =
       reference_file_reader->parquet_reader()->metadata()->num_columns();
   const auto new_num_columns =
@@ -1533,8 +1563,24 @@ void validate_equal_schema(const parquet::arrow::FileReader* reference_file_read
   }
 }
 
+bool is_compressable_mapping(const ColumnDescriptor* heavy_column,
+                             const parquet::ColumnDescriptor* parquet_column,
+                             const parquet::ColumnDescriptor* next_parquet_column) {
+  // Currently the only compressed mapping we support is two parquet doubles to a heavy
+  // kPOINT.
+  if (heavy_column && parquet_column && next_parquet_column &&
+      heavy_column->columnType.get_type() == kPOINT &&
+      parquet_column->physical_type() == next_parquet_column->physical_type() &&
+      (parquet_column->physical_type() == parquet::Type::FLOAT ||
+       (parquet_column->physical_type() == parquet::Type::DOUBLE))) {
+    return true;
+  }
+  return false;
+}
+
 void validate_allowed_mapping(const parquet::ColumnDescriptor* parquet_column,
                               const ColumnDescriptor* omnisci_column) {
+  CHECK(omnisci_column);
   validate_max_repetition_and_definition_level(omnisci_column, parquet_column);
   bool allowed_type = false;
   if (omnisci_column->columnType.is_array()) {
@@ -1623,9 +1669,31 @@ void validate_number_of_columns(
     const std::shared_ptr<parquet::FileMetaData>& file_metadata,
     const std::string& file_path,
     const ForeignTableSchema& schema) {
-  if (schema.numLogicalColumns() != file_metadata->num_columns()) {
+  const auto parquet_num_columns = file_metadata->num_columns();
+  const auto heavy_num_columns = schema.numLogicalColumns();
+
+  int32_t parquet_col_idx = 0, num_parquet_cols_skipped = 0;
+  for (const auto& col : schema.getLogicalColumns()) {
+    if (parquet_col_idx < parquet_num_columns) {
+      const auto& parquet_col = file_metadata->schema()->Column(parquet_col_idx);
+      if (col->columnType.get_type() == kPOINT &&
+          !validate_geospatial_mapping(col, parquet_col) &&
+          parquet_col_idx + 1 < parquet_num_columns) {
+        if (is_compressable_mapping(
+                col, parquet_col, file_metadata->schema()->Column(parquet_col_idx + 1))) {
+          // kPOINT is being mapped to a non-geo parquet type.  This could be valid if we
+          // are performing a lon/lat (double/double) conversion to kPOINT.
+          parquet_col_idx++;
+          num_parquet_cols_skipped++;
+        }
+      }
+    }
+    parquet_col_idx++;
+  }
+
+  if (heavy_num_columns != parquet_num_columns - num_parquet_cols_skipped) {
     throw_number_of_columns_mismatch_error(
-        schema.numLogicalColumns(), file_metadata->num_columns(), file_path);
+        heavy_num_columns, parquet_num_columns, file_path);
   }
 }
 
@@ -1666,16 +1734,29 @@ MaxRowGroupSizeStats validate_column_mapping_and_row_group_metadata(
     const std::string& file_path,
     const ForeignTableSchema& schema,
     const bool do_metadata_stats_validation) {
-  auto column_it = schema.getLogicalColumns().begin();
   MaxRowGroupSizeStats max_row_group_stats{0, 0};
-  for (int i = 0; i < file_metadata->num_columns(); ++i, ++column_it) {
-    const parquet::ColumnDescriptor* descr = file_metadata->schema()->Column(i);
+  const auto num_parquet_cols = file_metadata->num_columns();
+
+  int pcol_idx = 0;
+  for (const auto& heavy_col : schema.getLogicalColumns()) {
+    CHECK(heavy_col);
+    const auto parquet_col = file_metadata->schema()->Column(pcol_idx);
+    CHECK(parquet_col);
+    const auto next_parquet_col = (pcol_idx + 1 < num_parquet_cols)
+                                      ? file_metadata->schema()->Column(pcol_idx)
+                                      : nullptr;
     try {
-      validate_allowed_mapping(descr, *column_it);
+      if (is_compressable_mapping(heavy_col, parquet_col, next_parquet_col)) {
+        // If we are compressing columns, skip the next parquet col.
+        pcol_idx++;
+      } else {
+        validate_allowed_mapping(parquet_col, heavy_col);
+      }
     } catch (std::runtime_error& e) {
       std::stringstream error_message;
-      error_message << e.what() << " Parquet column: " << descr->path()->ToDotString()
-                    << ", HeavyDB column: " << (*column_it)->columnName
+      error_message << e.what()
+                    << " Parquet column: " << parquet_col->path()->ToDotString()
+                    << ", HeavyDB column: " << heavy_col->columnName
                     << ", Parquet file: " << file_path << ".";
       throw std::runtime_error(error_message.str());
     }
@@ -1692,12 +1773,13 @@ MaxRowGroupSizeStats validate_column_mapping_and_row_group_metadata(
       }
 
       if (do_metadata_stats_validation) {
-        auto column_chunk = group_metadata->ColumnChunk(i);
+        auto column_chunk = group_metadata->ColumnChunk(pcol_idx);
         bool contains_metadata = column_chunk->is_stats_set();
         if (contains_metadata) {
           auto stats = column_chunk->statistics();
           bool is_all_nulls = stats->null_count() == column_chunk->num_values();
-          bool is_list = is_valid_parquet_list_column(file_metadata->schema()->Column(i));
+          bool is_list =
+              is_valid_parquet_list_column(file_metadata->schema()->Column(pcol_idx));
           // Given a list, it is possible it has no min or max if it is comprised
           // only of empty lists & nulls. This can not be detected by comparing
           // the null count; therefore we afford list types the benefit of the
@@ -1708,10 +1790,11 @@ MaxRowGroupSizeStats validate_column_mapping_and_row_group_metadata(
         }
 
         if (!contains_metadata) {
-          throw_missing_metadata_error(r, i, file_path);
+          throw_missing_metadata_error(r, pcol_idx, file_path);
         }
       }
     }
+    pcol_idx++;
   }
   return max_row_group_stats;
 }
@@ -1730,7 +1813,8 @@ std::list<RowGroupMetadata> metadata_scan_rowgroup_interval(
     const std::map<int, std::shared_ptr<ParquetEncoder>>& encoder_map,
     const RowGroupInterval& row_group_interval,
     const ReaderPtr& reader,
-    const ForeignTableSchema& schema) {
+    const ForeignTableSchema& schema,
+    const HeavyColumnToParquetColumnMap& column_map) {
   std::list<RowGroupMetadata> row_group_metadata;
   auto column_interval =
       Interval<ColumnType>{schema.getLogicalAndPhysicalColumns().front()->columnId,
@@ -1749,12 +1833,12 @@ std::list<RowGroupMetadata> metadata_scan_rowgroup_interval(
 
     for (const auto& column_descriptor : schema.getColumnsInInterval(column_interval)) {
       const auto column_id = column_descriptor->columnId;
-      auto parquet_column_index = schema.getParquetColumnIndex(column_id);
-      auto encoder_map_iter =
-          encoder_map.find(schema.getLogicalColumn(column_id)->columnId);
-      CHECK(encoder_map_iter != encoder_map.end());
+      const auto logical_column_id = schema.getLogicalColumn(column_id)->columnId;
+      auto parquet_column_index =
+          *(shared::get_from_map(column_map, logical_column_id).begin());
+      auto encoder = shared::get_from_map(encoder_map, logical_column_id);
       try {
-        auto metadata = encoder_map_iter->second->getRowGroupMetadata(
+        auto metadata = encoder->getRowGroupMetadata(
             group_metadata.get(), parquet_column_index, column_descriptor->columnType);
         row_group_metadata_item.column_chunk_metadata.emplace_back(metadata);
       } catch (const std::exception& e) {
@@ -1814,6 +1898,7 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_metadata
     const Interval<ColumnType>& column_interval,
     const ForeignTableSchema& schema,
     const ReaderPtr& reader,
+    const HeavyColumnToParquetColumnMap& column_map,
     const bool do_metadata_stats_validation,
     const bool geo_validate_geometry) {
   std::map<int, std::shared_ptr<ParquetEncoder>> encoder_map;
@@ -1823,8 +1908,10 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_metadata
       continue;
     }
     const auto column_id = column_descriptor->columnId;
+    const auto parquet_col_idxs = shared::get_from_map(column_map, column_id);
     auto parquet_column_descriptor =
-        file_metadata->schema()->Column(schema.getParquetColumnIndex(column_id));
+        file_metadata->schema()->Column(*(parquet_col_idxs.begin()));
+
     encoder_map[column_id] = create_parquet_encoder_for_metadata_scan(
         column_descriptor, parquet_column_descriptor, geo_validate_geometry);
     if (!do_metadata_stats_validation) {
@@ -1833,25 +1920,31 @@ std::map<int, std::shared_ptr<ParquetEncoder>> populate_encoder_map_for_metadata
   }
   return encoder_map;
 }
+
+bool all_readers_has_next(
+    const std::vector<std::shared_ptr<parquet::ColumnReader>>& col_readers) {
+  bool has_next = true;
+  for (auto& col_reader : col_readers) {
+    if (!col_reader->HasNext()) {
+      has_next = false;
+    }
+  }
+  return has_next;
+}
 }  // namespace
 
 std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroups(
     const std::vector<RowGroupInterval>& row_group_intervals,
-    const int parquet_column_index,
     const ColumnDescriptor* column_descriptor,
     std::list<Chunk_NS::Chunk>& chunks,
     StringDictionary* string_dictionary,
     RejectedRowIndices* rejected_row_indices,
     const bool is_for_detect,
     const std::optional<int64_t> max_rows_to_read) {
+  const auto batch_size = LazyParquetChunkLoader::batch_reader_num_elements;
+
   auto timer = DEBUG_TIMER(__func__);
   std::list<std::unique_ptr<ChunkMetadata>> chunk_metadata;
-  // `def_levels` and `rep_levels` below are used to store the read definition
-  // and repetition levels of the Dremel encoding implemented by the Parquet
-  // format
-  std::vector<int16_t> def_levels(LazyParquetChunkLoader::batch_reader_num_elements);
-  std::vector<int16_t> rep_levels(LazyParquetChunkLoader::batch_reader_num_elements);
-  std::vector<int8_t> values;
 
   // Timing information used in logging
   Timer<> summary_timer;
@@ -1867,10 +1960,34 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
   CHECK(!row_group_intervals.empty());
   const auto& first_file_path = row_group_intervals.front().file_path;
 
+  CHECK(column_map_);
+
+  // Size of parquet_column_indexes will determine if we are compressing multiple columns
+  // into one, or if it's a one-to-one mapping.
+  const auto parquet_column_indexes =
+      shared::get_from_map(*column_map_, column_descriptor->columnId);
+  const auto num_p_cols = parquet_column_indexes.size();
+
+  // `def_levels` and `rep_levels` below are used to store the read definition
+  // and repetition levels of the Dremel encoding implemented by the Parquet
+  // format
+  using LevelsType = std::vector<int16_t>;
+  std::vector<LevelsType> def_levels(num_p_cols, LevelsType(batch_size)),
+      rep_levels(num_p_cols, LevelsType(batch_size));
+  std::vector<std::vector<int8_t>> values(num_p_cols);
+  std::vector<int64_t> values_read_per_col(num_p_cols), levels_read_per_col(num_p_cols);
+  std::vector<int16_t*> def_ptrs(num_p_cols), rep_ptrs(num_p_cols);
+  std::vector<int8_t*> value_ptrs(num_p_cols);
+
+  const auto parquet_column_index = *(parquet_column_indexes.begin());
+
   auto first_file_reader = file_reader_cache_->getOrInsert(first_file_path, file_system_);
   auto first_parquet_column_descriptor =
       get_column_descriptor(first_file_reader, parquet_column_index);
-  resize_values_buffer(column_descriptor, first_parquet_column_descriptor, values);
+
+  for (size_t i = 0; i < values.size(); ++i) {
+    resize_values_buffer(column_descriptor, first_parquet_column_descriptor, values[i]);
+  }
 
   const bool geo_validate_geometry =
       foreign_table_->getOptionAsBool(ForeignTable::GEO_VALIDATE_GEOMETRY_KEY);
@@ -1891,6 +2008,7 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
   encoder->initializeColumnType(column_descriptor->columnType);
   initialization_timer_ms.stop();
 
+  // Above was metadata setup, now we are actually reading data.
   bool early_exit = false;
   int64_t total_rows_read = 0;
   for (const auto& row_group_interval : row_group_intervals) {
@@ -1901,70 +2019,100 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
     auto [num_row_groups, num_columns] = get_parquet_table_size(file_reader);
     CHECK(row_group_interval.start_index >= 0 &&
           row_group_interval.end_index < num_row_groups);
-    CHECK(parquet_column_index >= 0 && parquet_column_index < num_columns);
-
     parquet::ParquetFileReader* parquet_reader = file_reader->parquet_reader();
-    auto parquet_column_descriptor =
-        get_column_descriptor(file_reader, parquet_column_index);
-
     initialization_timer_ms.stop();
 
     validation_timer_ms.start();
-    validate_equal_column_descriptor(first_parquet_column_descriptor,
-                                     parquet_column_descriptor,
-                                     first_file_path,
-                                     file_path);
+    {
+      int heavy_col_idx = 0;
+      for (auto parquet_column_index : parquet_column_indexes) {
+        CHECK(parquet_column_index >= 0 && parquet_column_index < num_columns);
+        auto current_file_col = get_column_descriptor(file_reader, parquet_column_index);
+        auto first_file_col =
+            get_column_descriptor(first_file_reader, parquet_column_index);
+        validate_equal_column_descriptor(
+            first_file_col, current_file_col, first_file_path, file_path);
 
-    validate_max_repetition_and_definition_level(column_descriptor,
-                                                 parquet_column_descriptor);
-    set_definition_levels_for_zero_max_definition_level_case(parquet_column_descriptor,
-                                                             def_levels);
+        validate_max_repetition_and_definition_level(column_descriptor, current_file_col);
+        set_definition_levels_for_zero_max_definition_level_case(
+            current_file_col, def_levels[heavy_col_idx]);
+        heavy_col_idx++;
+      }
+    }
     validation_timer_ms.stop();
 
-    int64_t values_read = 0;
+    // The encoder interfaces use a collection of pointers, so add these wrappers.
+    for (auto i = 0U; i < num_p_cols; i++) {
+      def_ptrs[i] = def_levels[i].data();
+      rep_ptrs[i] = rep_levels[i].data();
+      value_ptrs[i] = values[i].data();
+    }
+
     for (int row_group_index = row_group_interval.start_index;
          row_group_index <= row_group_interval.end_index;
          ++row_group_index) {
       total_row_groups_read++;
       parquet_read_timer_ms.start();
       auto group_reader = parquet_reader->RowGroup(row_group_index);
-      std::shared_ptr<parquet::ColumnReader> col_reader =
-          group_reader->Column(parquet_column_index);
+      std::vector<std::shared_ptr<parquet::ColumnReader>> col_readers;
+      for (auto parquet_column_index : parquet_column_indexes) {
+        col_readers.emplace_back(group_reader->Column(parquet_column_index));
+      }
       parquet_read_timer_ms.stop();
 
       try {
-        while (col_reader->HasNext()) {
+        while (all_readers_has_next(col_readers)) {
           parquet_read_timer_ms.start();
-          int64_t levels_read =
-              parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
-                                     def_levels.data(),
-                                     rep_levels.data(),
-                                     reinterpret_cast<uint8_t*>(values.data()),
-                                     &values_read,
-                                     col_reader.get());
+          for (auto i = 0U; i < num_p_cols; ++i) {
+            auto& col_reader = col_readers[i];
+            levels_read_per_col[i] =
+                parquet::ScanAllValues(LazyParquetChunkLoader::batch_reader_num_elements,
+                                       def_ptrs[i],
+                                       rep_ptrs[i],
+                                       reinterpret_cast<uint8_t*>(value_ptrs[i]),
+                                       &(values_read_per_col[i]),
+                                       col_reader.get());
+            // We only need one levels/values read, but we need to make sure each scan
+            // read the same number of levels/values.
+            // These values will only be the same for non-array types, but we should never
+            // be compressing array types for the moment.
+            if (col_reader->descr()->logical_type()->is_list() && num_p_cols > 1) {
+              throw std::runtime_error{
+                  "Attempting to compress parquet columns with array types "
+                  "(unsupported)."};
+            }
+            if (values_read_per_col[0] != values_read_per_col[i] ||
+                levels_read_per_col[0] != levels_read_per_col[i]) {
+              // The levels/values read should be the same for every column as long as we
+              // are not reading array (list) types.  Throwing here indicates a
+              // malformed/corrupted set of files.
+              throw std::runtime_error{
+                  "Attempting to compress parquet columns of different length."};
+            }
+          }
+          // values_read and levels_read should be the same for all columns (checked
+          // above).
+          auto values_read = values_read_per_col[0];
+          auto levels_read = levels_read_per_col[0];
           parquet_read_timer_ms.stop();
 
           encoding_timer_ms.start();
           if (rejected_row_indices) {  // error tracking is enabled
-            encoder->appendDataTrackErrors(def_levels.data(),
-                                           rep_levels.data(),
-                                           values_read,
-                                           levels_read,
-                                           values.data());
+            encoder->appendDataTrackErrors(
+                def_ptrs, rep_ptrs, values_read, levels_read, value_ptrs);
           } else {  // no error tracking enabled
+            auto parquet_column_descriptor =
+                get_column_descriptor(file_reader, *(parquet_column_indexes.begin()));
+
             validate_list_column_metadata_statistics(
                 parquet_reader,  // this validation only in effect for foreign tables
                 row_group_index,
                 parquet_column_index,
-                def_levels.data(),
-                levels_read,
+                def_ptrs[0],
+                levels_read_per_col[0],
                 parquet_column_descriptor);
 
-            encoder->appendData(def_levels.data(),
-                                rep_levels.data(),
-                                values_read,
-                                levels_read,
-                                values.data());
+            encoder->appendData(def_ptrs, rep_ptrs, values_read, levels_read, value_ptrs);
           }
           encoding_timer_ms.stop();
 
@@ -1975,8 +2123,8 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
               CHECK(array_encoder);
               total_rows_read = array_encoder->getArraysCount();
             } else {
-              // For scalar types it is safe to assume the number of levels read is equal
-              // to the number of rows read
+              // For scalar types it is safe to assume the number of levels read is
+              // equal to the number of rows read
               total_rows_read += levels_read;
             }
 
@@ -1985,7 +2133,7 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
               break;
             }
           }
-        }
+        }  // while col_reader->HasNext()
         encoding_timer_ms.start();
         if (auto array_encoder = dynamic_cast<ParquetArrayEncoder*>(encoder.get())) {
           array_encoder->finalizeRowGroup();
@@ -1997,7 +2145,8 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
         if (boost::regex_search(error.what(),
                                 boost::regex{"Deserializing page header failed."})) {
           throw ForeignStorageException(
-              "Unable to read from foreign data source, possible cause is an unexpected "
+              "Unable to read from foreign data source, possible cause is an "
+              "unexpected "
               "change of source. Please use the \"REFRESH FOREIGN TABLES\" command on "
               "the "
               "foreign table "
@@ -2005,19 +2154,26 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::appendRowGroup
               foreign_table_->tableName);
         }
 
-        throw ForeignStorageException(
-            std::string(error.what()) + " Row group: " + std::to_string(row_group_index) +
-            ", Parquet column: '" + col_reader->descr()->path()->ToDotString() +
-            "', Parquet file: '" + file_path + "'");
+        std::stringstream ss;
+        ss << std::string(error.what())
+           << " Row group: " << std::to_string(row_group_index)
+           << ", Parquet column(s): '{";
+        std::string delimiter = "";
+        for (const auto& col_reader : col_readers) {
+          ss << delimiter << col_reader->descr()->path()->ToDotString();
+          delimiter = ", ";
+        }
+        ss << "}', Parquet file: '" << file_path + "'";
+        throw ForeignStorageException(ss.str());
       }
       if (max_rows_to_read.has_value() && early_exit) {
         break;
       }
-    }
+    }  // for row group index
     if (max_rows_to_read.has_value() && early_exit) {
       break;
     }
-  }
+  }  // for row group interval
 
   encoding_timer_ms.start();
   if (rejected_row_indices) {  // error tracking is enabled
@@ -2097,9 +2253,11 @@ bool LazyParquetChunkLoader::isColumnMappingSupported(
 LazyParquetChunkLoader::LazyParquetChunkLoader(
     std::shared_ptr<arrow::fs::FileSystem> file_system,
     FileReaderMap* file_map,
+    HeavyColumnToParquetColumnMap* column_map,
     const ForeignTable* foreign_table)
     : file_system_(file_system)
     , file_reader_cache_(file_map)
+    , column_map_(column_map)
     , foreign_table_(foreign_table) {
   CHECK(foreign_table_) << "LazyParquetChunkLoader: null Foreign Table ptr";
 }
@@ -2118,7 +2276,6 @@ std::list<std::unique_ptr<ChunkMetadata>> LazyParquetChunkLoader::loadChunk(
 
   try {
     auto metadata = appendRowGroups(row_group_intervals,
-                                    parquet_column_index,
                                     column_descriptor,
                                     chunks,
                                     string_dictionary,
@@ -2230,6 +2387,8 @@ std::pair<size_t, size_t> LazyParquetChunkLoader::loadRowGroups(
   auto file_metadata = file_reader->parquet_reader()->metadata();
 
   validate_number_of_columns(file_metadata, file_path, schema);
+
+  CHECK_GT(column_map_->size(), 0U);
 
   // check for fixed length encoded columns and indicate to the user
   // they should not be used
@@ -2432,6 +2591,7 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
       auto& chunk = preview_context.column_chunks.emplace_back(&cd);
       chunk.setPinnable(false);
       chunk.setBuffer(detect_buffer.get());
+      (*column_map_)[cd.columnId] = {i};
     }
 
     std::function<void(const std::vector<int>&)> append_row_groups_for_column =
@@ -2445,7 +2605,6 @@ DataPreview LazyParquetChunkLoader::previewFiles(const std::vector<std::string>&
             auto& rejected_row_indices =
                 preview_context.rejected_row_indices_per_column[column_index];
             appendRowGroups(row_group_intervals,
-                            column_index,
                             chunk.getColumnDesc(),
                             chunk_list,
                             nullptr,
@@ -2574,6 +2733,14 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
     validate_equal_schema(base_reader, first_reader, base_path, first_path);
   }
 
+  // We have now validated that the column mapping can work with number/types so map them
+  // here.
+  CHECK(column_map_);
+  *column_map_ = createColumnMap(
+      schema,
+      first_reader,
+      foreign_table_->getOptionAsBool(AbstractFileStorageDataWrapper::LONLAT_KEY, true));
+
   // Iterate asynchronously over any paths beyond the first.
   auto table_ptr = schema.getForeignTable();
   CHECK(table_ptr);
@@ -2585,12 +2752,18 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   auto encoder_map = populate_encoder_map_for_metadata_scan(column_interval,
                                                             schema,
                                                             first_reader,
+                                                            *column_map_,
                                                             do_metadata_stats_validation,
                                                             geo_validate_geometry);
+
   const auto num_row_groups = get_parquet_table_size(first_reader).first;
   VLOG(1) << "Starting metadata scan of path " << first_path;
-  auto row_group_metadata = metadata_scan_rowgroup_interval(
-      encoder_map, {first_path, 0, num_row_groups - 1}, first_reader, schema);
+  auto row_group_metadata =
+      metadata_scan_rowgroup_interval(encoder_map,
+                                      {first_path, 0, num_row_groups - 1},
+                                      first_reader,
+                                      schema,
+                                      *column_map_);
   VLOG(1) << "Completed metadata scan of path " << first_path;
 
   // We want each (filepath->FileReader) pair in the cache to be initialized before we
@@ -2647,7 +2820,8 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
             const auto interval = RowGroupInterval{path, 0, num_row_groups - 1};
             reduced_metadata.splice(
                 reduced_metadata.end(),
-                metadata_scan_rowgroup_interval(encoder_map, interval, reader, schema));
+                metadata_scan_rowgroup_interval(
+                    encoder_map, interval, reader, schema, *column_map_));
             metadata_scan_timer.stop();
 
             VLOG(1) << "Completed metadata scan of path " << path;
@@ -2689,4 +2863,32 @@ std::list<RowGroupMetadata> LazyParquetChunkLoader::metadataScan(
   return row_group_metadata;
 }
 
+HeavyColumnToParquetColumnMap LazyParquetChunkLoader::createColumnMap(
+    const ForeignTableSchema& schema,
+    const ReaderPtr& reader,
+    const bool lat_lon_order) {
+  HeavyColumnToParquetColumnMap column_map;
+  auto file_metadata = reader->parquet_reader()->metadata();
+  const auto num_parquet_cols = file_metadata->num_columns();
+  auto parquet_schema = file_metadata->schema();
+  int pcol_idx = 0;
+  for (const auto& heavy_col : schema.getLogicalColumns()) {
+    const auto parquet_col = parquet_schema->Column(pcol_idx);
+    const auto next_parquet_col =
+        (pcol_idx + 1 < num_parquet_cols) ? parquet_schema->Column(pcol_idx) : nullptr;
+
+    if (is_compressable_mapping(heavy_col, parquet_col, next_parquet_col)) {
+      if (lat_lon_order) {
+        column_map[heavy_col->columnId] = {pcol_idx, pcol_idx + 1};
+      } else {
+        column_map[heavy_col->columnId] = {pcol_idx + 1, pcol_idx};
+      }
+      pcol_idx++;
+    } else {
+      column_map[heavy_col->columnId] = {pcol_idx};
+    }
+    pcol_idx++;
+  }
+  return column_map;
+}
 }  // namespace foreign_storage

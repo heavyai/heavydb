@@ -47,6 +47,7 @@
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
+#include "Tests/ForeignTableTestHelpers.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -2365,7 +2366,7 @@ TEST_P(DataWrapperSelectQueryTest, InvalidPolygon) {
       queryAndAssertException(
           "SELECT p FROM "s + default_table_name,
           "Failed to extract valid geometry in HeavyDB column 'p'. Row "
-          "group: 1, Parquet column: 'polygon', Parquet file: '" +
+          "group: 1, Parquet column(s): '{polygon}', Parquet file: '" +
               getDataFilesPath() + "invalid_polygon.parquet'");
     }
   } else {
@@ -2410,7 +2411,7 @@ TEST_P(DataWrapperSelectQueryTest, InvalidMultiPolygon) {
       queryAndAssertException(
           "SELECT mp FROM "s + default_table_name,
           "Failed to extract valid geometry in HeavyDB column 'mp'. Row "
-          "group: 1, Parquet column: 'multipolygon', Parquet file: '" +
+          "group: 1, Parquet column(s): '{multipolygon}', Parquet file: '" +
               getDataFilesPath() + "invalid_multipolygon.parquet'");
     }
   } else {
@@ -5219,10 +5220,10 @@ TEST_F(SelectQueryTest, ParquetArrayInt8EmptyWithFixedLengthArray) {
 
   queryAndAssertException(
       default_select,
-
       "Detected an empty array being loaded into HeavyDB column "
       "'tinyint_arr_empty' which has a fixed length array type, expecting 1 elements. "
-      "Row group: 0, Parquet column: 'tinyint_arr_empty.list.item', Parquet file: '" +
+      "Row group: 0, Parquet column(s): '{tinyint_arr_empty.list.item}', Parquet file: "
+      "'" +
           getDataFilesPath() + "int8_empty_array.parquet'");
 }
 
@@ -5289,7 +5290,7 @@ TEST_F(SelectQueryTest, ParquetFixedLengthArrayMalformed) {
       default_select,
       "Detected a row with 2 elements being loaded into HeavyDB column "
       "'bigint_array' which has a fixed length array type, expecting 3 elements. Row "
-      "group: 2, Parquet column: 'i64.list.item', Parquet file: '" +
+      "group: 2, Parquet column(s): '{i64.list.item}', Parquet file: '" +
           getDataFilesPath() + "array_fixed_len_malformed.parquet'");
 }
 
@@ -5474,7 +5475,7 @@ TEST_F(SelectQueryTest, ParquetMalformedGeoPoint) {
   TQueryResult result;
   queryAndAssertException(default_select,
                           "Failed to extract valid geometry in HeavyDB column 'p'. Row "
-                          "group: 0, Parquet column: 'point', Parquet file: '" +
+                          "group: 0, Parquet column(s): '{point}', Parquet file: '" +
                               getDataFilesPath() + "geo_point_malformed.parquet'");
 }
 
@@ -5487,7 +5488,7 @@ TEST_F(SelectQueryTest, ParquetWrongGeoType) {
   queryAndAssertException(
       default_select,
       "Imported geometry doesn't match the geospatial type of HeavyDB column "
-      "'p'. Row group: 0, Parquet column: 'point', Parquet file: '" +
+      "'p'. Row group: 0, Parquet column(s): '{point}', Parquet file: '" +
           getDataFilesPath() + "geo_point.parquet'");
 }
 
@@ -8044,6 +8045,54 @@ TEST_F(UntouchedRefreshTest, AppendRefresh) {
   queryAndAssertException("SELECT COUNT(*) FROM " + default_table_name,
                           "populateChunkMetadata mock exception");
 }
+
+class PointCompressionIntegrationTest
+    : public SelectQueryTest,
+      public ::testing::WithParamInterface<std::string> {
+ protected:
+  void SetUp() override {
+    wrapper_type_ = GetParam();
+    SelectQueryTest::SetUp();
+  }
+};
+
+TEST_P(PointCompressionIntegrationTest, Basic) {
+  sql(createForeignTableQuery(
+      {{"idx", "INT"}, {"p", "POINT"}, {"space", "INT"}, {"p2", "POINT"}},
+      getDataFilesPath() + "GeoTypes/idx_lon_lat_space_lon_lat" + wrapper_ext(GetParam()),
+      wrapper_type_));
+  sqlAndCompareResult("select * from " + default_table_name,
+                      {{i(0), "POINT (0 3)", i(0), "POINT (6 9)"},
+                       {i(1), "POINT (1 4)", i(1), "POINT (7 10)"},
+                       {i(2), "POINT (2 5)", i(2), "POINT (8 11)"}});
+}
+
+TEST_P(PointCompressionIntegrationTest, Nulls) {
+  if (GetParam() == "csv") {
+    GTEST_SKIP()
+        << "TEMPORARILY DISABLED - CSV currently does not parse nulls correctly.";
+  }
+  sql(createForeignTableQuery(
+      {{"idx", "INT"}, {"p", "POINT"}},
+      getDataFilesPath() + "GeoTypes/lon_lat_nulls" + wrapper_ext(GetParam()),
+      wrapper_type_));
+  sqlAndCompareResult("select * from " + default_table_name,
+                      {{i(0), "POINT (0 1)"}, {i(1), Null}, {i(2), Null}});
+}
+
+TEST_P(PointCompressionIntegrationTest, Reversed) {
+  sql(createForeignTableQuery(
+      {{"idx", "INT"}, {"p", "POINT"}},
+      getDataFilesPath() + "GeoTypes/lon_lat_reversed" + wrapper_ext(GetParam()),
+      wrapper_type_,
+      {{"lonlat", "false"}}));
+  sqlAndCompareResult("select * from " + default_table_name, {{i(0), "POINT (0 1)"}});
+}
+
+INSTANTIATE_TEST_SUITE_P(PointCompressionIntegrationTest,
+                         PointCompressionIntegrationTest,
+                         ::testing::Values("csv", "parquet"),
+                         [](const auto& param_info) { return param_info.param; });
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;

@@ -36,11 +36,38 @@ class ParquetEncoder {
       , validate_metadata_stats_(true) {}
   virtual ~ParquetEncoder() = default;
 
+  virtual void appendDataTrackErrors(const std::vector<int16_t*>& def_levels,
+                                     const std::vector<int16_t*>& rep_levels,
+                                     const int64_t values_read,
+                                     const int64_t levels_read,
+                                     std::vector<int8_t*>& values) {
+    // Unless overwritten we default to a scalar implementation and assert the vector size
+    // is "1".
+    CHECK_EQ(values.size(), 1UL);
+    CHECK_EQ(def_levels.size(), 1UL);
+    CHECK_EQ(rep_levels.size(), 1UL);
+    appendDataTrackErrors(
+        def_levels[0], rep_levels[0], values_read, levels_read, values[0]);
+  }
+
   virtual void appendDataTrackErrors(const int16_t* def_levels,
                                      const int16_t* rep_levels,
                                      const int64_t values_read,
                                      const int64_t levels_read,
                                      int8_t* values) = 0;
+
+  virtual void appendData(const std::vector<int16_t*>& def_levels,
+                          const std::vector<int16_t*>& rep_levels,
+                          const int64_t values_read,
+                          const int64_t levels_read,
+                          std::vector<int8_t*>& values) {
+    // Unless overwritten we default to a scalar implementation and assert the vector size
+    // is "1".
+    CHECK_EQ(values.size(), 1UL);
+    CHECK_EQ(def_levels.size(), 1UL);
+    CHECK_EQ(rep_levels.size(), 1UL);
+    appendData(def_levels[0], rep_levels[0], values_read, levels_read, values[0]);
+  }
 
   virtual void appendData(const int16_t* def_levels,
                           const int16_t* rep_levels,
@@ -133,6 +160,26 @@ class ParquetImportEncoder {
                                      int8_t* values,
                                      const SQLTypeInfo& column_type, /* may not be used */
                                      InvalidRowGroupIndices& invalid_indices) = 0;
+
+  virtual void validateAndAppendData(const std::vector<int16_t*>& def_levels,
+                                     const std::vector<int16_t*>& rep_levels,
+                                     const int64_t values_read,
+                                     const int64_t levels_read,
+                                     std::vector<int8_t*> values,
+                                     const SQLTypeInfo& column_type, /* may not be used */
+                                     InvalidRowGroupIndices& invalid_indices) {
+    // Unless overridden, default to scalar.
+    CHECK_EQ(def_levels.size(), 1U);
+    CHECK_EQ(rep_levels.size(), 1U);
+    CHECK_EQ(values.size(), 1U);
+    validateAndAppendData(def_levels[0],
+                          rep_levels[0],
+                          values_read,
+                          levels_read,
+                          values[0],
+                          column_type,
+                          invalid_indices);
+  }
 };
 
 class ParquetScalarEncoder : public ParquetEncoder, public ParquetImportEncoder {
