@@ -85,7 +85,8 @@ ParquetDataWrapper::ParquetDataWrapper(const ForeignTable* foreign_table,
     , last_row_group_(0)
     , is_restored_(false)
     , file_system_(file_system)
-    , file_reader_cache_(std::make_unique<FileReaderMap>()) {}
+    , file_reader_cache_(std::make_unique<FileReaderMap>())
+    , column_map_(std::make_unique<HeavyColumnToParquetColumnMap>()) {}
 
 ParquetDataWrapper::ParquetDataWrapper(const int db_id,
                                        const ForeignTable* foreign_table,
@@ -100,7 +101,8 @@ ParquetDataWrapper::ParquetDataWrapper(const int db_id,
     , last_row_group_(0)
     , is_restored_(false)
     , schema_(std::make_unique<ForeignTableSchema>(db_id, foreign_table))
-    , file_reader_cache_(std::make_unique<FileReaderMap>()) {
+    , file_reader_cache_(std::make_unique<FileReaderMap>())
+    , column_map_(std::make_unique<HeavyColumnToParquetColumnMap>()) {
   auto& server_options = foreign_table->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     file_system_ = std::make_shared<arrow::fs::LocalFileSystem>();
@@ -119,6 +121,7 @@ void ParquetDataWrapper::resetParquetMetadata() {
   total_row_count_ = 0;
   last_file_row_count_ = 0;
   file_reader_cache_->clear();
+  column_map_->clear();
 }
 
 std::list<const ColumnDescriptor*> ParquetDataWrapper::getColumnsToInitialize(
@@ -244,8 +247,8 @@ void ParquetDataWrapper::fetchChunkMetadata() {
   CHECK(catalog);
   std::vector<std::string> new_file_paths;
   auto processed_file_paths = getOrderedProcessedFilePaths();
+  const auto all_file_paths = getAllFilePaths();
   if (foreign_table_->isAppendMode() && !processed_file_paths.empty()) {
-    auto all_file_paths = getAllFilePaths();
     if (allowFileRollOff(foreign_table_)) {
       const auto rolled_off_files =
           shared::check_for_rolled_off_file_paths(all_file_paths, processed_file_paths);
@@ -288,12 +291,27 @@ void ParquetDataWrapper::fetchChunkMetadata() {
     }
   } else {
     CHECK(chunk_metadata_map_.empty());
-    new_file_paths = getAllFilePaths();
+    new_file_paths = all_file_paths;
     resetParquetMetadata();
   }
 
   if (!new_file_paths.empty()) {
     metadataScanFiles(new_file_paths);
+  } else {
+    CHECK(file_reader_cache_);
+    CHECK(file_system_);
+    CHECK(foreign_table_);
+
+    // If we are refreshing the cache, then we may not have any new file paths (and
+    // therefore we will not scan the new files for metadata), but we still need to
+    // populate the column map as long as there are files that can be read.
+    if (!file_reader_cache_->isEmpty()) {
+      auto [path, reader] = file_reader_cache_->getFirst();
+      bool lat_lon_order = foreign_table_->getOptionAsBool(
+          AbstractFileStorageDataWrapper::LONLAT_KEY, true);
+      *column_map_ =
+          LazyParquetChunkLoader::createColumnMap(*schema_, reader, lat_lon_order);
+    }
   }
 }
 
@@ -428,7 +446,7 @@ void ParquetDataWrapper::metadataScanRowGroupMetadata(
 std::list<RowGroupMetadata> ParquetDataWrapper::getRowGroupMetadataForFilePaths(
     const std::vector<std::string>& file_paths) const {
   LazyParquetChunkLoader chunk_loader(
-      file_system_, file_reader_cache_.get(), foreign_table_);
+      file_system_, file_reader_cache_.get(), column_map_.get(), foreign_table_);
   return chunk_loader.metadataScan(file_paths, *schema_, do_metadata_stats_validation_);
 }
 
@@ -536,7 +554,7 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     rejected_row_indices = std::make_unique<RejectedRowIndices>();
   }
   LazyParquetChunkLoader chunk_loader(
-      file_system_, file_reader_cache_.get(), foreign_table_);
+      file_system_, file_reader_cache_.get(), column_map_.get(), foreign_table_);
   auto metadata = chunk_loader.loadChunk(row_group_intervals,
                                          parquet_column_index,
                                          chunks,
@@ -714,6 +732,20 @@ void ParquetDataWrapper::restoreDataWrapperInternals(
   for (const auto& [chunk_key, chunk_metadata] : chunk_metadata_vector) {
     chunk_metadata_map_[chunk_key] = chunk_metadata;
   }
+
+  auto file_paths = getAllFilePaths();
+  if (!file_paths.empty()) {
+    CHECK(foreign_table_);
+    auto lat_lon_order =
+        foreign_table_->getOptionAsBool(AbstractFileStorageDataWrapper::LONLAT_KEY, true);
+    CHECK(schema_);
+    //  Metadata scan expects an empty file_reader_cache, so don't use it here as adding a
+    //  new file reader to the cache outside of metadata scan will cause issues.
+    auto reader = open_parquet_table(*file_paths.begin(), file_system_);
+    *column_map_ =
+        LazyParquetChunkLoader::createColumnMap(*schema_, reader.get(), lat_lon_order);
+  }
+
   is_restored_ = true;
 }
 
@@ -723,7 +755,7 @@ bool ParquetDataWrapper::isRestored() const {
 
 DataPreview ParquetDataWrapper::getDataPreview(const size_t num_rows) {
   LazyParquetChunkLoader chunk_loader(
-      file_system_, file_reader_cache_.get(), foreign_table_);
+      file_system_, file_reader_cache_.get(), column_map_.get(), foreign_table_);
   auto file_paths = getAllFilePaths();
   if (file_paths.empty()) {
     throw ForeignStorageException{"No file found at \"" +

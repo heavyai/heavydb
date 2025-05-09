@@ -1010,6 +1010,54 @@ TEST_F(ParquetImportErrorHandling, MismatchColumnType) {
       "Parquet file: ../../Tests/FsiDataFiles/two_col_1_2.parquet.");
 }
 
+class ParamImportErrorHandling : public ParquetImportErrorHandling,
+                                 public testing::WithParamInterface<std::string> {};
+
+TEST_P(ParamImportErrorHandling, PointCompressRejectNotNull) {
+  sql("CREATE TABLE test_table (idx INT, p POINT NOT NULL);");
+  TQueryResult copy_from_result;
+  const std::string file_path =
+      fsi_file_base_dir + "/GeoTypes/lon_lat_nulls." + GetParam();
+  std::string file_type = (GetParam() == "parquet") ? "source_type='parquet_file', " : "";
+  sql(copy_from_result,
+      "COPY test_table FROM '" + file_path + "' WITH (" + file_type + "max_reject=6);");
+  TQueryResult query;
+  sql(query, "SELECT count(*) FROM test_table;");
+  assertResultSetEqual({{1L}}, query);
+  validateImportStatus(get_import_id(file_path),
+                       get_copy_from_result_str(copy_from_result),
+                       1,
+                       2,
+                       false,
+                       "test_table",
+                       1);
+}
+
+TEST_P(ParamImportErrorHandling, PointCompressRejectNotNullMaxReject) {
+  sql("CREATE TABLE test_table (idx INT, p POINT NOT NULL);");
+  TQueryResult copy_from_result;
+  const std::string file_path =
+      fsi_file_base_dir + "/GeoTypes/lon_lat_nulls." + GetParam();
+  std::string file_type = (GetParam() == "parquet") ? "source_type='parquet_file', " : "";
+  sql(copy_from_result,
+      "COPY test_table FROM '" + file_path + "' WITH (" + file_type + "max_reject=0);");
+  TQueryResult query;
+  sql(query, "SELECT count(*) FROM test_table;");
+  assertResultSetEqual({{0L}}, query);  // confirm no data was loaded into table
+  validateImportStatus(get_import_id(file_path),
+                       get_copy_from_result_str(copy_from_result),
+                       0,
+                       0,
+                       true,
+                       "test_table",
+                       0);
+}
+
+INSTANTIATE_TEST_SUITE_P(ParamImportErrorHandling,
+                         ParamImportErrorHandling,
+                         ::testing::Values("csv", "parquet"),
+                         [](const auto& param_info) { return param_info.param; });
+
 INSTANTIATE_TEST_SUITE_P(ColumnType,
                          ParquetImportErrorHandlingOfTypes,
                          ::testing::Values("int",
@@ -1451,6 +1499,29 @@ class ImportAndSelectTest
   static inline boost::filesystem::path generated_files_dir_;
 };
 
+// TODO(Misiu): Change this to only try and run on csv + parquet instead of trying all
+// types and skipping.
+TEST_P(ImportAndSelectTest, DoubleToPointConvert) {
+  if (!does_wrapper_support_geo_type(param_.import_type)) {
+    GTEST_SKIP() << param_.import_type << " does not support geometry types";
+  }
+  if (param_.import_type != "parquet" && param_.import_type != "csv") {
+    GTEST_SKIP() << " only testing for parquet and csv at the moment: "
+                 << param_.import_type;
+  }
+
+  sql("create table import_test_new (index INT, p POINT)");
+  if (param_.import_type == "parquet") {
+    sql("copy import_test_new from '../../Tests/FsiDataFiles/GeoTypes/lon_lat_separate." +
+        param_.import_type + "' WITH (source_type='parquet_file')");
+  } else {
+    sql("copy import_test_new from '../../Tests/FsiDataFiles/GeoTypes/lon_lat_separate." +
+        param_.import_type + "'");
+  }
+  sqlAndCompareResult("select * from import_test_new order by index",
+                      {{i(0), "POINT (0 1)"}});
+}
+
 TEST_P(ImportAndSelectTest, GeoTypes) {
   if (!does_wrapper_support_geo_type(param_.import_type)) {
     GTEST_SKIP() << param_.import_type << " does not support geometry types";
@@ -1484,12 +1555,12 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"
     },
     {
-      i(4), "POINT (2 2)", 
-      param_.import_type == "bigquery" 
-        ? "MULTIPOINT (1 0,2 2,5 5)" 
+      i(4), "POINT (2 2)",
+      param_.import_type == "bigquery"
+        ? "MULTIPOINT (1 0,2 2,5 5)"
         : "MULTIPOINT (5 5,2 2,1 0)",
       "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))", "POLYGON ((1 1,3 1,2 3,1 1))",
-      param_.import_type == "bigquery" 
+      param_.import_type == "bigquery"
         ? "MULTIPOLYGON (((11 11,10 12,10 10,11 11)),((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)))"
         : "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
     },

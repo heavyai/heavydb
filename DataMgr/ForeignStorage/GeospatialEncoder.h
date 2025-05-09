@@ -150,13 +150,13 @@ class GeospatialEncoder {
         *base_column_encoder_->appendData(&base_values_, 0, row_count);
   }
 
-  void validateChunksSizing(std::list<Chunk_NS::Chunk>& chunks) const {
+  void validateChunksSizing(const std::list<Chunk_NS::Chunk>& chunks) const {
     size_t expected_size = geo_column_descriptor_->columnType.get_physical_cols() + 1;
     CHECK_EQ(chunks.size(), expected_size);
   }
 
   void validateMetadataSizing(
-      std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata) const {
+      const std::list<std::unique_ptr<ChunkMetadata>>& chunk_metadata) const {
     size_t expected_size = geo_column_descriptor_->columnType.get_physical_cols() + 1;
     CHECK_EQ(chunk_metadata.size(), expected_size);
   }

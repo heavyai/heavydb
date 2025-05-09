@@ -1836,5 +1836,4 @@ bool AbstractTextFileDataWrapper::isRestored() const {
 std::optional<size_t> AbstractTextFileDataWrapper::getMaxFileCount() const {
   return {};
 }
-
 }  // namespace foreign_storage
