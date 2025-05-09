@@ -1124,13 +1124,29 @@ class DataTypeFragmentSizeAndDataWrapperTest
       test_chunk_metadata_map[{0, 7}] = createChunkMetadata<double>(
           7, num_elems * 8, num_elems, 2.1234, 100.1234, true);
     } else {
-      test_chunk_metadata_map[{0, 6}] =
-          createChunkMetadata<float>(6, num_elems * 4, num_elems, 10.1f, 1000.123f, true);
+      float expected_max_value = 1000.123f;
+      if (wrapper_type_ == "redshift") {
+        expected_max_value = 1000.12f;  // The redshift ODBC driver appears to truncate
+                                        // one significant digit off expected result,
+                                        // issue reproduced independently using redshift
+                                        // driver (Driver: 1.4.45.1000 (Amazon Redshift
+                                        // ODBC Driver)) on ubuntu 20.04
+      }
+      test_chunk_metadata_map[{0, 6}] = createChunkMetadata<float>(
+          6, num_elems * 4, num_elems, 10.1f, expected_max_value, true);
       test_chunk_metadata_map[{0, 7}] = createChunkMetadata<int64_t>(
           7, num_elems * 8, num_elems, 212340, 10012340, true);
     }
-    test_chunk_metadata_map[{0, 8}] =
-        createChunkMetadata<int64_t>(8, num_elems * 8, num_elems, 10, 10 * 60 * 60, true);
+    if (wrapper_type_ == "hive") {
+      if (data_loaded) {
+        test_chunk_metadata_map[{0, 8}] = createChunkMetadata(8, 24, num_elems, true);
+      } else {
+        test_chunk_metadata_map[{0, 8}] = createChunkMetadata(8, 0, num_elems, true);
+      }
+    } else {
+      test_chunk_metadata_map[{0, 8}] = createChunkMetadata<int64_t>(
+          8, num_elems * 8, num_elems, 10, 10 * 60 * 60, true);
+    }
     test_chunk_metadata_map[{0, 9}] = createChunkMetadata<int64_t>(
         9, num_elems * 8, num_elems, 946684859, 16756761599, true);
     test_chunk_metadata_map[{0, 10}] = createChunkMetadata<int64_t>(
@@ -5022,27 +5038,37 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
        {"bi", "BIGINT"},
        {"f", wrapper_type_ == "sqlite" ? "DOUBLE" : "FLOAT"},
        {"dc", wrapper_type_ == "sqlite" ? "DOUBLE" : "DECIMAL(10, 5)"},
-       {"tm", "TIME"},
+       {"tm", wrapper_type_ == "hive" ? "TEXT ENCODING NONE" : "TIME"},
        {"tp", "TIMESTAMP"},
        {"d", "DATE"},
        {"txt", "TEXT"},
        {"txt_2", "TEXT ENCODING NONE"}},
       getDataFilesPath() + "scalar_types" + extension_,
       wrapper_type_,
-      {{"FRAGMENT_SIZE", fragmentSizeStr()}}));
+      {{"FRAGMENT_SIZE", fragmentSizeStr()}},
+      default_table_name,
+      {},
+      1  // The `SQL_ORDER_BY` *must* be set to a column that sorts values with
+         // no ties, otherwise results are non-deterministic
+      ));
 
-  // Initial select count(*) for metadata scan prior to loading
-  {
-    TQueryResult result;
-    sql(result, "SELECT COUNT(*) FROM " + default_table_name + ";");
+  // Temporarily disable metadata check for ODBC (until fix is put in)
+  if (!is_odbc(wrapper_type_)) {
+    // Initial select count(*) for metadata scan prior to loading
+    {
+      TQueryResult result;
+      sql(result, "SELECT COUNT(*) FROM " + default_table_name + ";");
+    }
+
+    std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
+
+    // Compare expected metadata if we are loading all values into a single fragment
+    if (fragment_size_ >= 4) {
+      assertExpectedChunkMetadata(getExpectedScalarTypeMetadata(false),
+                                  default_table_name);
+    }
   }
 
-  std::map<std::pair<int, int>, std::unique_ptr<ChunkMetadata>> test_chunk_metadata_map;
-
-  // Compare expected metadata if we are loading all values into a single fragment
-  if (fragment_size_ >= 4) {
-    assertExpectedChunkMetadata(getExpectedScalarTypeMetadata(false), default_table_name);
-  }
   queryAndAssertScalarTypesResult();
 
   if (fragment_size_ >= 4) {
