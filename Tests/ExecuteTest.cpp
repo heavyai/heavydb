@@ -88,6 +88,9 @@ extern bool g_cluster;
 
 extern bool g_is_test_env;
 
+extern int g_hll_precision_bits;
+extern bool g_force_exact_count_for_approx_count_distinct;
+
 using QR = QueryRunner::QueryRunner;
 
 namespace {
@@ -4321,6 +4324,64 @@ TEST_F(Select, ApproxCountDistinct) {
                        "data_types_basic3 GROUP BY key0;",
                        ExecutorDeviceType::CPU,
                        false));
+}
+
+class ForceExactCountTest : public Select {
+ public:
+  static void SetUpTestSuite() {
+    Select::SetUpTestSuite();
+    orig_g_force_exact_count_for_approx_count_distinct =
+        g_force_exact_count_for_approx_count_distinct;
+    orig_g_hll_precision_bits = g_hll_precision_bits;
+
+    // Use a lower number of bits in order to force an inaccurate count.
+    g_hll_precision_bits = 1;
+
+    run_ddl_statement("CREATE TABLE force_exact_count_test(i INTEGER);");
+    run_multiple_agg("INSERT INTO force_exact_count_test VALUES (1), (1000000);",
+                     ExecutorDeviceType::CPU);
+  }
+
+  static void TearDownTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS force_exact_count_test;");
+
+    g_hll_precision_bits = orig_g_hll_precision_bits;
+    g_force_exact_count_for_approx_count_distinct =
+        orig_g_force_exact_count_for_approx_count_distinct;
+    Select::TearDownTestSuite();
+  }
+
+ private:
+  static inline int orig_g_hll_precision_bits;
+  static inline bool orig_g_force_exact_count_for_approx_count_distinct;
+};
+
+TEST_F(ForceExactCountTest, ServerConfigEnabled) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  g_force_exact_count_for_approx_count_distinct = true;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT APPROX_COUNT_DISTINCT(i) FROM force_exact_count_test;", dt)));
+  }
+}
+
+TEST_F(ForceExactCountTest, ServerConfigDisabled) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  g_force_exact_count_for_approx_count_distinct = false;
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_EQ(int64_t(9),
+              v<int64_t>(run_simple_agg(
+                  "SELECT APPROX_COUNT_DISTINCT(i) FROM force_exact_count_test;", dt)));
+  }
 }
 
 class AggDistinct

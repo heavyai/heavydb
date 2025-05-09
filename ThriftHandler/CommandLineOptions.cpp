@@ -96,6 +96,8 @@ extern int64_t g_llm_transform_max_num_unique_value;
 
 extern bool g_enable_gpu_dynamic_smem;
 
+extern bool g_force_exact_count_for_approx_count_distinct;
+
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
 }
@@ -543,6 +545,16 @@ void CommandLineOptions::fillOptions() {
           ->default_value(g_hll_precision_bits)
           ->implicit_value(g_hll_precision_bits),
       "Number of bits used from the hash value used to specify the bucket number.");
+
+  desc.add_options()(
+      "force-exact-count-for-approx-count-distinct",
+      po::value<bool>(&g_force_exact_count_for_approx_count_distinct)
+          ->default_value(g_force_exact_count_for_approx_count_distinct)
+          ->implicit_value(true),
+      "Always return an exact distinct count for APPROX_COUNT_DISTINCT function calls. "
+      "Note that this may result in higher memory utilization and more latency for "
+      "queries with APPROX_COUNT_DISTINCT function calls.");
+
   if (!dist_v5_) {
     desc.add_options()("http-port",
                        po::value<int>(&http_port)->default_value(http_port),

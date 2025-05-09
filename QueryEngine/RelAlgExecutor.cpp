@@ -62,6 +62,7 @@ size_t g_estimator_failure_max_groupby_size{256000000};
 double g_ndv_groups_estimator_multiplier{1.5};
 bool g_columnar_large_projections{true};
 size_t g_columnar_large_projections_threshold{1000000};
+bool g_force_exact_count_for_approx_count_distinct{false};
 
 extern bool g_enable_watchdog;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
@@ -3811,55 +3812,62 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     CHECK(dynamic_cast<const Analyzer::AggExpr*>(target_expr));
     const auto arg = static_cast<Analyzer::AggExpr*>(target_expr)->get_own_arg();
     CHECK(arg);
-    const auto& arg_ti = arg->get_type_info();
-    // Avoid calling getExpressionRange for variable length types (string and array),
-    // it'd trigger an assertion since that API expects to be called only for types
-    // for which the notion of range is well-defined. A bit of a kludge, but the
-    // logic to reject these types anyway is at lower levels in the stack and not
-    // really worth pulling into a separate function for now.
-    if (!(arg_ti.is_number() || arg_ti.is_boolean() || arg_ti.is_time() ||
-          (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_DICT))) {
-      continue;
-    }
-    const auto arg_range = getExpressionRange(arg.get(), table_infos, executor);
-    if (arg_range.getType() != ExpressionRangeType::Integer) {
-      continue;
-    }
-    // When running distributed, the threshold for using the precise implementation
-    // must be consistent across all leaves, otherwise we could have a mix of precise
-    // and approximate bitmaps and we cannot aggregate them.
-    const auto device_type = g_cluster ? ExecutorDeviceType::GPU : device_type_in;
-    const auto bitmap_sz_bits = arg_range.getIntMax() - arg_range.getIntMin() + 1;
-    const auto sub_bitmap_count =
-        get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
-    int64_t approx_bitmap_sz_bits{0};
-    const auto error_rate_expr = static_cast<Analyzer::AggExpr*>(target_expr)->get_arg1();
-    if (error_rate_expr) {
-      CHECK(error_rate_expr->get_type_info().get_type() == kINT);
-      auto const error_rate =
-          dynamic_cast<Analyzer::Constant const*>(error_rate_expr.get());
-      CHECK(error_rate);
-      CHECK_GE(error_rate->get_constval().intval, 1);
-      approx_bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().intval);
+    bool use_precise_count_distinct{false};
+    if (g_force_exact_count_for_approx_count_distinct) {
+      use_precise_count_distinct = true;
     } else {
-      approx_bitmap_sz_bits = g_hll_precision_bits;
+      const auto& arg_ti = arg->get_type_info();
+      // Avoid calling getExpressionRange for variable length types (string and array),
+      // it'd trigger an assertion since that API expects to be called only for types
+      // for which the notion of range is well-defined. A bit of a kludge, but the
+      // logic to reject these types anyway is at lower levels in the stack and not
+      // really worth pulling into a separate function for now.
+      if (!(arg_ti.is_number() || arg_ti.is_boolean() || arg_ti.is_time() ||
+            (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_DICT))) {
+        continue;
+      }
+      const auto arg_range = getExpressionRange(arg.get(), table_infos, executor);
+      if (arg_range.getType() != ExpressionRangeType::Integer) {
+        continue;
+      }
+      // When running distributed, the threshold for using the precise implementation
+      // must be consistent across all leaves, otherwise we could have a mix of precise
+      // and approximate bitmaps and we cannot aggregate them.
+      const auto device_type = g_cluster ? ExecutorDeviceType::GPU : device_type_in;
+      const auto bitmap_sz_bits = arg_range.getIntMax() - arg_range.getIntMin() + 1;
+      const auto sub_bitmap_count =
+          get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
+      int64_t approx_bitmap_sz_bits{0};
+      const auto error_rate_expr =
+          static_cast<Analyzer::AggExpr*>(target_expr)->get_arg1();
+      if (error_rate_expr) {
+        CHECK(error_rate_expr->get_type_info().get_type() == kINT);
+        auto const error_rate =
+            dynamic_cast<Analyzer::Constant const*>(error_rate_expr.get());
+        CHECK(error_rate);
+        CHECK_GE(error_rate->get_constval().intval, 1);
+        approx_bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().intval);
+      } else {
+        approx_bitmap_sz_bits = g_hll_precision_bits;
+      }
+      CountDistinctDescriptor approx_count_distinct_desc{CountDistinctImplType::Bitmap,
+                                                         arg_range.getIntMin(),
+                                                         0,
+                                                         approx_bitmap_sz_bits,
+                                                         true,
+                                                         device_type,
+                                                         sub_bitmap_count};
+      CountDistinctDescriptor precise_count_distinct_desc{CountDistinctImplType::Bitmap,
+                                                          arg_range.getIntMin(),
+                                                          0,
+                                                          bitmap_sz_bits,
+                                                          false,
+                                                          device_type,
+                                                          sub_bitmap_count};
+      use_precise_count_distinct = (approx_count_distinct_desc.bitmapPaddedSizeBytes() >=
+                                    precise_count_distinct_desc.bitmapPaddedSizeBytes());
     }
-    CountDistinctDescriptor approx_count_distinct_desc{CountDistinctImplType::Bitmap,
-                                                       arg_range.getIntMin(),
-                                                       0,
-                                                       approx_bitmap_sz_bits,
-                                                       true,
-                                                       device_type,
-                                                       sub_bitmap_count};
-    CountDistinctDescriptor precise_count_distinct_desc{CountDistinctImplType::Bitmap,
-                                                        arg_range.getIntMin(),
-                                                        0,
-                                                        bitmap_sz_bits,
-                                                        false,
-                                                        device_type,
-                                                        sub_bitmap_count};
-    if (approx_count_distinct_desc.bitmapPaddedSizeBytes() >=
-        precise_count_distinct_desc.bitmapPaddedSizeBytes()) {
+    if (use_precise_count_distinct) {
       auto precise_count_distinct = makeExpr<Analyzer::AggExpr>(
           get_agg_type(kCOUNT, arg.get()), kCOUNT, arg, true, nullptr);
       target_exprs_owned.push_back(precise_count_distinct);
