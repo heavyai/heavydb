@@ -2091,8 +2091,10 @@ TEST_P(ImportAndSelectTest, MaxRejectReached) {
 }
 
 TEST_P(ImportAndSelectTest, MaxRejectReachedMultifile) {
-  std::string sql_select_stmt =
-      "";
+  if (is_odbc(param_.import_type)) {
+    GTEST_SKIP() << " this test provides no additonal coverage for ODBC";
+  }
+  std::string sql_select_stmt = "";
   std::string schema =
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
       "DECIMAL(10,5), tm " +
