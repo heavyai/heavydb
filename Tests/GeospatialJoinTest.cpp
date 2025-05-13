@@ -105,7 +105,9 @@ const auto cleanup_stmts = {
     R"(drop table if exists does_intersect_b;)",
     R"(drop table if exists does_not_intersect_a;)",
     R"(drop table if exists does_not_intersect_b;)",
-    R"(drop table if exists empty_table;)"
+    R"(drop table if exists empty_table;)",
+    R"(drop table if exists text_and_geom_table_1;)",
+    R"(drop table if exists text_and_geom_table_2;)"
 };
 
 // clang-format off
@@ -136,6 +138,12 @@ const auto init_stmts_ddl = {
                            poly geometry(polygon, 4326),
                            mpoly geometry(multipolygon, 4326),
                            pt geometry(point, 4326));
+    )",
+    R"(create table text_and_geom_table_1 (name text,
+                                           geom geometry(point));
+    )",
+    R"(create table text_and_geom_table_2 (name text,
+                                           geom geometry(point));
     )"
 };
 
@@ -195,6 +203,13 @@ const auto init_stmts_dml = {
               'polygon((2 2,2 4,4 2,4 4,2 2))',
               'multipolygon(((2 2,2 4,4 2,4 4,2 2)))',
               'point(2 2)');
+    )",
+    R"(insert into text_and_geom_table_1
+       values ('a', 'point (0 0)'),
+              ('b', 'point (1 1)');
+    )",
+    R"(insert into text_and_geom_table_2
+       values ('c', 'point (2 2)');
     )"
 };
 // clang-format on
@@ -786,6 +801,24 @@ TEST_F(GeospatialJoinTest, STContainsBetweenMPolyAndCompressedPtWithNullptr) {
     ASSERT_EQ(static_cast<int64_t>(0), v<int64_t>(execSQL(query, dt)));
   }
   drop_tables();
+}
+
+TEST_F(GeospatialJoinTest, STDistanceWithEncodedTextPredicateAndProjection) {
+  auto const query =
+      "SELECT t2.name FROM text_and_geom_table_1 AS t1 JOIN text_and_geom_table_2 AS t2 "
+      "ON ST_DISTANCE(t1.geom, t2.geom) < 3.0 WHERE t1.name ILIKE '%a%';";
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    ASSERT_EQ("c", boost::get<std::string>(v<NullableString>(execSQL(query, dt))));
+  }
+}
+
+TEST_F(GeospatialJoinTest, STDistanceWithEncodedTextProjection) {
+  auto const query =
+      "SELECT t2.name FROM text_and_geom_table_1 AS t1 JOIN text_and_geom_table_2 AS t2 "
+      "ON ST_DISTANCE(t1.geom, t2.geom) < 1.5;";
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    ASSERT_EQ("c", boost::get<std::string>(v<NullableString>(execSQL(query, dt))));
+  }
 }
 
 class BoundingBoxIntersectJoinHashTableMock : public BoundingBoxIntersectJoinHashTable {
