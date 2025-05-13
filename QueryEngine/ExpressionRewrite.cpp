@@ -854,19 +854,20 @@ int update_input_desc(std::vector<InputDescriptor>& input_descs,
   return -1;
 }
 
-auto update_input_col_desc(
+bool update_input_col_desc(
     std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc,
     shared::ColumnKey const& column_key,
     int target_nest_lv) {
+  bool input_column_updated{false};
   for (auto it = input_col_desc.begin(); it != input_col_desc.end(); it++) {
     auto const tbl_key = (*it)->getScanDesc().getTableKey();
     if (tbl_key.db_id == column_key.db_id && tbl_key.table_id == column_key.table_id) {
       (*it) = std::make_shared<InputColDescriptor>(
           (*it)->getColId(), tbl_key.table_id, tbl_key.db_id, target_nest_lv);
-      return it;
+      input_column_updated = true;
     }
   }
-  return input_col_desc.end();
+  return input_column_updated;
 }
 
 }  // namespace
@@ -988,12 +989,8 @@ translate_bounding_box_intersect_with_reordering(
           auto const l_input_desc_idx =
               update_input_desc(input_descs, l_col_key, r_rte_idx);
           CHECK_GE(l_input_desc_idx, 0);
-          auto r_input_col_desc_it =
-              update_input_col_desc(input_col_desc, r_col_key, l_rte_idx);
-          CHECK(r_input_col_desc_it != input_col_desc.end());
-          auto l_input_col_desc_it =
-              update_input_col_desc(input_col_desc, l_col_key, r_rte_idx);
-          CHECK(l_input_col_desc_it != input_col_desc.end());
+          CHECK(update_input_col_desc(input_col_desc, r_col_key, l_rte_idx));
+          CHECK(update_input_col_desc(input_col_desc, l_col_key, r_rte_idx));
           if (!input_permutation.empty()) {
             auto r_itr =
                 std::find(input_permutation.begin(), input_permutation.end(), r_rte_idx);
@@ -1004,7 +1001,6 @@ translate_bounding_box_intersect_with_reordering(
             std::swap(*r_itr, *l_itr);
           }
           std::swap(input_descs[r_input_desc_idx], input_descs[l_input_desc_idx]);
-          std::swap(r_input_col_desc_it, l_input_col_desc_it);
           r_arg = lhs->getOperand(0);
           l_arg = lhs->getOperand(1);
           VLOG(1) << "Swap range join qual's input arguments to exploit hash join "
