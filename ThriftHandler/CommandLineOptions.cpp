@@ -381,6 +381,13 @@ void CommandLineOptions::fillOptions() {
                      "by `auto-resultset-caching-threshold-bytes`, in bytes (to "
                      "enable this, query resultset recycler "
                      "should be enabled, default: 1048576 bytes (or 1MB)).");
+  desc.add_options()("allow-approx-quantile-query-resultset-caching",
+                     po::value<bool>(&g_allow_approx_quantile_resultset_caching)
+                         ->default_value(g_allow_approx_quantile_resultset_caching)
+                         ->implicit_value(true),
+                     "Allow query resultset caching when approximate quantile-like "
+                     "query functions are used (such as approx_median, or "
+                     "approx_quantile) and query resultset caching is enabled. ");
   desc.add_options()(
       "auto-resultset-caching-threshold-bytes",
       po::value<size_t>(&g_auto_resultset_caching_threshold)
