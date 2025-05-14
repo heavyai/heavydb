@@ -36,7 +36,7 @@ namespace Geospatial {
 
 int64_t H3_LonLatToCell(const double lon, const double lat, const int32_t resolution) {
   if (resolution < MIN_RESOLUTION || resolution > MAX_RESOLUTION) {
-    throw std::runtime_error("H3_PolygonToCells: invalid resolution (" +
+    throw std::runtime_error("H3_LonLatToCell: invalid resolution (" +
                              std::to_string(resolution) + ")");
   }
   if (lon == NULL_DOUBLE || lat == NULL_DOUBLE) {
@@ -78,7 +78,7 @@ int64_t H3_StringToCell(const std::string& str) {
 
 int64_t H3_CellToParent(const int64_t cell_in, const int32_t resolution) {
   if (resolution < MIN_RESOLUTION || resolution > MAX_RESOLUTION) {
-    throw std::runtime_error("H3_PolygonToCells: invalid resolution (" +
+    throw std::runtime_error("H3_CellToParent: invalid resolution (" +
                              std::to_string(resolution) + ")");
   }
   auto const cell = shared::reinterpret_bits<H3Index>(cell_in);
