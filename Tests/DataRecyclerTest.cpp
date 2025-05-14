@@ -490,6 +490,153 @@ TEST(DataRecycler, Update_QueryPlanDagHash_After_DeadColumnElimination) {
   ASSERT_NE(q1_project_hash_val, q2_project_hash_val);
 }
 
+namespace {
+
+size_t get_query_dag_hash_value(const std::string& query) {
+  auto executor = QR::get()->getExecutor().get();
+  auto ra_dag = QR::get()->getRelAlgDag(query);
+  auto ed_seq = RaExecutionSequence(&ra_dag->getRootNode(), executor, false);
+  CHECK_EQ(ed_seq.size(), static_cast<size_t>(1));  // expect only one node
+
+  return ed_seq.getDescriptor(0)->getBody()->getQueryPlanDagHash();
+};
+
+}  // namespace
+
+TEST(DataRecycler, QueryPlanDagHash_ApproxQuantileDisabled_ApproxPercentile) {
+  g_allow_approx_quantile_resultset_caching = false;
+  auto drop_tables = []() { run_ddl_statement("DROP TABLE IF EXISTS flights_test;"); };
+  ScopeGuard cleanup_after_test = [drop_tables]() {
+    drop_tables();
+    g_allow_approx_quantile_resultset_caching = true;
+  };
+  drop_tables();
+
+  run_ddl_statement(
+      "CREATE TABLE flights_test (\n"
+      "  delay FLOAT);");
+
+  std::string query = "SELECT APPROX_PERCENTILE(delay, 0.25) FROM flights_test;";
+
+  // Verify the hash value is not computed, implying that the data recycler
+  // will not store this query
+  auto hash_val = get_query_dag_hash_value(query);
+  ASSERT_EQ(hash_val, EMPTY_HASHED_PLAN_DAG_KEY);
+}
+
+TEST(DataRecycler, QueryPlanDagHash_ApproxQuantileEnabled_ApproxPercentile) {
+  auto drop_tables = []() { run_ddl_statement("DROP TABLE IF EXISTS flights_test;"); };
+  ScopeGuard cleanup_after_test = [drop_tables]() { drop_tables(); };
+  drop_tables();
+
+  run_ddl_statement(
+      "CREATE TABLE flights_test (\n"
+      "  delay FLOAT, "
+      "  flight_time  FLOAT);");
+
+  std::string query_1 = "SELECT APPROX_PERCENTILE(delay, 0.25) FROM flights_test;";
+  std::string query_2 = "SELECT APPROX_PERCENTILE(delay, 0.75) FROM flights_test;";
+  std::string query_3 = "SELECT APPROX_PERCENTILE(flight_time, 0.75) FROM flights_test;";
+
+  auto hash_value_1 = get_query_dag_hash_value(query_1);
+  auto hash_value_2 = get_query_dag_hash_value(query_2);
+  auto hash_value_3 = get_query_dag_hash_value(query_3);
+
+  // Verify the hash values *are* computed, implying that the data recycler
+  // will store these queries if enabled
+  ASSERT_NE(hash_value_1, EMPTY_HASHED_PLAN_DAG_KEY);
+  ASSERT_NE(hash_value_2, EMPTY_HASHED_PLAN_DAG_KEY);
+  ASSERT_NE(hash_value_3, EMPTY_HASHED_PLAN_DAG_KEY);
+
+  // Verify the hash values are unique due to changes in arguments
+  ASSERT_NE(hash_value_1, hash_value_2);
+  ASSERT_NE(hash_value_1, hash_value_3);
+  ASSERT_NE(hash_value_2, hash_value_3);
+
+  // Recompute each hash and verify hash values are stable
+  auto hash_value_1_recomputed = get_query_dag_hash_value(query_1);
+  auto hash_value_2_recomputed = get_query_dag_hash_value(query_2);
+  auto hash_value_3_recomputed = get_query_dag_hash_value(query_3);
+
+  ASSERT_EQ(hash_value_1, hash_value_1_recomputed);
+  ASSERT_EQ(hash_value_2, hash_value_2_recomputed);
+  ASSERT_EQ(hash_value_3, hash_value_3_recomputed);
+}
+
+TEST(DataRecycler, QueryPlanDagHash_ApproxQuantileDisabled_ApproxMedian) {
+  g_allow_approx_quantile_resultset_caching = false;
+  auto drop_tables = []() { run_ddl_statement("DROP TABLE IF EXISTS flights_test;"); };
+  ScopeGuard cleanup_after_test = [drop_tables]() {
+    drop_tables();
+    g_allow_approx_quantile_resultset_caching = true;
+  };
+  drop_tables();
+
+  run_ddl_statement(
+      "CREATE TABLE flights_test (\n"
+      "  delay FLOAT);");
+
+  std::string query = "SELECT APPROX_MEDIAN(delay) FROM flights_test;";
+
+  // Verify the hash value is not computed, implying that the data recycler
+  // will not store this query
+  auto hash_val = get_query_dag_hash_value(query);
+  ASSERT_EQ(hash_val, EMPTY_HASHED_PLAN_DAG_KEY);
+}
+
+TEST(DataRecycler, QueryPlanDagHash_ApproxQuantileEnabled_ApproxMedian) {
+  auto drop_tables = []() { run_ddl_statement("DROP TABLE IF EXISTS flights_test;"); };
+  ScopeGuard cleanup_after_test = [drop_tables]() { drop_tables(); };
+  drop_tables();
+
+  run_ddl_statement(
+      "CREATE TABLE flights_test (\n"
+      "  delay FLOAT, "
+      "  flight_time  FLOAT);");
+
+  std::string query_1 = "SELECT APPROX_MEDIAN(delay) FROM flights_test;";
+  std::string query_2 = "SELECT APPROX_MEDIAN(flight_time) FROM flights_test;";
+
+  auto hash_value_1 = get_query_dag_hash_value(query_1);
+  auto hash_value_2 = get_query_dag_hash_value(query_2);
+
+  // Verify the hash values *are* computed, implying that the data recycler
+  // will store these queries if enabled
+  ASSERT_NE(hash_value_1, EMPTY_HASHED_PLAN_DAG_KEY);
+  ASSERT_NE(hash_value_2, EMPTY_HASHED_PLAN_DAG_KEY);
+
+  // Verify the hash values are unique due to changes in arguments
+  ASSERT_NE(hash_value_1, hash_value_2);
+
+  // Recompute each hash and verify hash values are stable
+  auto hash_value_1_recomputed = get_query_dag_hash_value(query_1);
+  auto hash_value_2_recomputed = get_query_dag_hash_value(query_2);
+
+  ASSERT_EQ(hash_value_1, hash_value_1_recomputed);
+  ASSERT_EQ(hash_value_2, hash_value_2_recomputed);
+}
+
+TEST(DataRecycler,
+     QueryPlanDagHash_ApproxQuantileEnabled_Compare_ApproxMedianVsApproxPercentile) {
+  auto drop_tables = []() { run_ddl_statement("DROP TABLE IF EXISTS flights_test;"); };
+  ScopeGuard cleanup_after_test = [drop_tables]() { drop_tables(); };
+  drop_tables();
+
+  run_ddl_statement(
+      "CREATE TABLE flights_test (\n"
+      "  delay FLOAT, "
+      "  flight_time  FLOAT);");
+
+  std::string query_1 = "SELECT APPROX_PERCENTILE(delay, .5) FROM flights_test;";
+  std::string query_2 = "SELECT APPROX_MEDIAN(delay) FROM flights_test;";
+
+  auto hash_value_1 = get_query_dag_hash_value(query_1);
+  auto hash_value_2 = get_query_dag_hash_value(query_2);
+
+  // Verify the hash values are computed off different DAGs
+  ASSERT_NE(hash_value_1, hash_value_2);
+}
+
 TEST(DataRecycler, DAG_Cache_Size_Management) {
   // test if DAG cache becomes full
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();

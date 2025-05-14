@@ -16,6 +16,8 @@
 
 #include "QueryPlanDagChecker.h"
 
+bool g_allow_approx_quantile_resultset_caching{true};
+
 bool QueryPlanDagChecker::getCheckResult() const {
   return detect_non_supported_node_;
 }
@@ -68,7 +70,8 @@ void QueryPlanDagChecker::visit(const RelCompound* rel_alg_node) {
       auto agg_expr = dynamic_cast<const RexAgg*>(target_expr);
       if (agg_expr && (agg_expr->getKind() == SQLAgg::kSINGLE_VALUE ||
                        agg_expr->getKind() == SQLAgg::kSAMPLE ||
-                       agg_expr->getKind() == SQLAgg::kAPPROX_QUANTILE)) {
+                       (!g_allow_approx_quantile_resultset_caching &&
+                        agg_expr->getKind() == SQLAgg::kAPPROX_QUANTILE))) {
         detectNonSupportedNode(
             "Detect non-supported aggregation function: "
             "SINGLE_VALUE/SAMPLE/APPROX_QUANTILE");

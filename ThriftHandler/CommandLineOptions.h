@@ -292,6 +292,7 @@ extern size_t g_query_resultset_cache_total_bytes;
 extern size_t g_max_cacheable_query_resultset_size_bytes;
 extern bool g_use_chunk_metadata_cache;
 extern bool g_allow_auto_resultset_caching;
+extern bool g_allow_approx_quantile_resultset_caching;
 extern size_t g_auto_resultset_caching_threshold;
 extern bool g_allow_query_step_skipping;
 extern bool g_query_engine_cuda_streams;
