@@ -148,6 +148,11 @@ struct ChunkMetadata {
       , chunkStats(chunk_stats)
       , rasterTile(raster_tile) {}
 
+  ChunkMetadata(const SQLTypeInfo& sql_type,
+                const size_t num_bytes,
+                const size_t num_elements)
+      : sqlType(sql_type), numBytes(num_bytes), numElements(num_elements) {}
+
   ChunkMetadata() {}
 
   template <typename T>
