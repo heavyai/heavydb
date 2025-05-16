@@ -269,12 +269,12 @@ class ImportExportTestBase : public DBHandlerTestFixture {
     }
 
     return importTestCommon(
-        string("COPY trips FROM '") + "s3://mapd-parquet-testdata/" + prefix + "/" +
+        string("COPY trips FROM '") + "s3://heavyai-import-test/Trips/" + prefix + "/" +
             filename + "' WITH (header='true'" +
             (s3_access_key.size() ? ",s3_access_key='" + s3_access_key + "'" : "") +
             (s3_secret_key.size() ? ",s3_secret_key='" + s3_secret_key + "'" : "") +
             (s3_region.size() ? ",s3_region='" + s3_region + "'" : "") +
-            (prefix.find(".parquet") != std::string::npos ||
+            (prefix.find("Parquet") != std::string::npos ||
                      filename.find(".parquet") != std::string::npos
                  ? ",source_type='parquet_file'"
                  : "") +
@@ -287,7 +287,7 @@ class ImportExportTestBase : public DBHandlerTestFixture {
                               const int64_t cnt,
                               const double avg,
                               const std::map<std::string, std::string>& options = {}) {
-    return importTestS3("trip.compressed", filename, cnt, avg, options);
+    return importTestS3("Compressed", filename, cnt, avg, options);
   }
 
 #endif
@@ -3204,25 +3204,27 @@ TEST_F(ImportTest, S3_All_parquet_file_drop) {
 TEST_F(ImportTest, S3_Regex_path_filter_parquet_match) {
   executeLambdaAndAssertException(
       [&]() {
-        EXPECT_TRUE(importTestS3("trip.parquet",
+        EXPECT_TRUE(importTestS3("Parquet",
                                  "",
                                  100,
                                  1.0,
                                  {{"REGEX_PATH_FILTER",
-                                   ".*part-00000-9109acad-a559-4a00-b05c-878aeb8bca24-"
+                                   ".*part-00000-027865e6-e4d9-40b9-97ff-83c5c5531154-"
                                    "c000.snappy.parquet$"}}));
       },
       "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
       "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
       " "OmniSci column: pickup_datetime, Parquet file: "
-      "mapd-parquet-testdata/trip.parquet/"
-      "part-00000-9109acad-a559-4a00-b05c-878aeb8bca24-c000.snappy.parquet.");
+      "heavyai-import-test/Trips/Parquet/"
+      "part-00000-027865e6-e4d9-40b9-97ff-83c5c5531154-c000.snappy.parquet.");
 }
 TEST_F(ImportTest, S3_Regex_path_filter_parquet_no_match) {
-  EXPECT_THROW(
-      importTestS3(
-          "trip.parquet", "", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?pattern"}}),
-      TDBException);
+  executeLambdaAndAssertPartialException(
+      [this] {
+        importTestS3(
+            "Parquet", "", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?pattern"}});
+      },
+      "No files matched the regex file path");
 }
 TEST_F(ImportTest, S3_Null_Prefix) {
   EXPECT_THROW(sql("copy trips from 's3://omnisci_ficticiousbucket/' WITH "
@@ -4329,51 +4331,54 @@ TEST_F(ImportTestGDAL, Bounding_Box_Invalid4) {
 
 #ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases
-TEST_F(ImportTest, DISABLED_S3_One_csv_file) {
-  EXPECT_TRUE(importTestS3Compressed("trip_data_9.csv", 100, 1.0));
+TEST_F(ImportTest, S3_One_csv_file) {
+  EXPECT_TRUE(importTestS3("CSV", "trip_data_9.csv", 100, 1.0, {}));
 }
 
-TEST_F(ImportTest, DISABLED_S3_One_gz_file) {
+TEST_F(ImportTest, S3_One_gz_file) {
   EXPECT_TRUE(importTestS3Compressed("trip_data_9.gz", 100, 1.0));
 }
 
-TEST_F(ImportTest, DISABLED_S3_One_bz2_file) {
+TEST_F(ImportTest, S3_One_bz2_file) {
   EXPECT_TRUE(importTestS3Compressed("trip_data_9.bz2", 100, 1.0));
 }
 
-TEST_F(ImportTest, DISABLED_S3_One_tar_with_many_csv_files) {
+TEST_F(ImportTest, S3_One_tar_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.tar", 1000, 1.0));
 }
 
-TEST_F(ImportTest, DISABLED_S3_One_tgz_with_many_csv_files) {
+TEST_F(ImportTest, S3_One_tgz_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.tgz", 100000, 1.0));
 }
 
-TEST_F(ImportTest, DISABLED_S3_One_rar_with_many_csv_files) {
+TEST_F(ImportTest, S3_One_rar_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.rar", 1000, 1.0));
 }
 
-TEST_F(ImportTest, DISABLED_S3_One_zip_with_many_csv_files) {
+TEST_F(ImportTest, S3_One_zip_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.zip", 1000, 1.0));
 }
 
-TEST_F(ImportTest, DISABLED_S3_One_7z_with_many_csv_files) {
+TEST_F(ImportTest, S3_One_7z_with_many_csv_files) {
   EXPECT_TRUE(importTestS3Compressed("trip_data.7z", 1000, 1.0));
 }
 
-TEST_F(ImportTest, DISABLED_S3_All_files) {
-  EXPECT_TRUE(importTestS3Compressed("", 105200, 1.0));
+TEST_F(ImportTest, S3_All_files) {
+  EXPECT_TRUE(importTestS3Compressed("", 104200, 1.0));
 }
 
-TEST_F(ImportTest, DISABLED_S3_Regex_path_filter_match) {
-  EXPECT_TRUE(importTestS3Compressed(
-      "", 300, 1.0, {{"REGEX_PATH_FILTER", ".*trip_data_[5-7]\\.csv"}}));
+TEST_F(ImportTest, S3_Regex_path_filter_match) {
+  EXPECT_TRUE(importTestS3(
+      "CSV", "", 300, 1.0, {{"REGEX_PATH_FILTER", ".*trip_data_[5-7]\\.csv"}}));
 }
 
-TEST_F(ImportTest, DISABLED_S3_Regex_path_filter_no_match) {
-  EXPECT_THROW(importTestS3Compressed(
-                   "", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?pattern"}}),
-               TDBException);
+TEST_F(ImportTest, S3_Regex_path_filter_no_match) {
+  executeLambdaAndAssertPartialException(
+      [this] {
+        importTestS3Compressed(
+            "", -1, -1.0, {{"REGEX_PATH_FILTER", "very?obscure?pattern"}});
+      },
+      "No files matched the regex file path");
 }
 
 TEST_F(ImportTest, S3_GCS_One_gz_file) {
