@@ -43,6 +43,10 @@
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
 
 #include "Geospatial/Types.h"
+#if defined(HAVE_AWS_S3)
+#include "AwsHelpers.h"
+#include "DataMgr/HeavyDbAwsSdk.h"
+#endif
 #include "ImportExport/DelimitedParserUtils.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"

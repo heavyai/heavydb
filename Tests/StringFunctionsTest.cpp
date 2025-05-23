@@ -2221,6 +2221,7 @@ TEST_P(StringFunctionTest, endswith) {
 
   // Note: pattern requires literal string so this is not currently valid
   //   "select endswith('94104-8123', zip_plus_4) from string_function_test_people;"
+}
 
 TEST_P(StringFunctionTest, lcase) {
   sqlAndCompareResult(

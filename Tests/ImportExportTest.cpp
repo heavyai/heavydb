@@ -3155,9 +3155,9 @@ TEST_F(ImportTest, S3_One_parquet_file) {
             1.0,
             {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
       },
-      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
-      " "OmniSci column: pickup_datetime, Parquet file: "
+      "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,"
+      " HeavyDB column: pickup_datetime, Parquet file: "
       "mapd-parquet-testdata/trip.parquet/"
       "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet.");
 }
@@ -3171,8 +3171,8 @@ TEST_F(ImportTest, S3_One_parquet_file_drop) {
             1.0,
             {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
       },
-      "Conversion from Parquet type \"String\" to OmniSci type \"SMALLINT\" is not "
-      "allowed. Please use an appropriate column type. Parquet column: _c3, OmniSci "
+      "Conversion from Parquet type \"String\" to HeavyDB type \"SMALLINT\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: _c3, HeavyDB "
       "column: rate_code_id, Parquet file: "
       "mapd-parquet-testdata/trip+1.parquet/"
       "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
@@ -3183,9 +3183,9 @@ TEST_F(ImportTest, S3_All_parquet_file) {
         EXPECT_TRUE(importTestS3(
             "trip.parquet", "", 1200, 1.0, {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
       },
-      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
-      " "OmniSci column: pickup_datetime, Parquet file: "
+      "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,"
+      " HeavyDB column: pickup_datetime, Parquet file: "
       "mapd-parquet-testdata/trip.parquet/"
       "part-00000-0284f745-1595-4743-b5c4-3aa0262e4de3-c000.snappy.parquet.");
 }
@@ -3195,8 +3195,8 @@ TEST_F(ImportTest, S3_All_parquet_file_drop) {
         EXPECT_TRUE(importTestS3(
             "trip+1.parquet", "", 1200, 1.0, {{"REGEX_PATH_FILTER", ".*\\.parquet$"}}));
       },
-      "Conversion from Parquet type \"String\" to OmniSci type \"SMALLINT\" is not "
-      "allowed. Please use an appropriate column type. Parquet column: _c3, OmniSci "
+      "Conversion from Parquet type \"String\" to HeavyDB type \"SMALLINT\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: _c3, HeavyDB "
       "column: rate_code_id, Parquet file: "
       "mapd-parquet-testdata/trip+1.parquet/"
       "part-00000-00496d78-a271-4067-b637-cf955cc1cece-c000.snappy.parquet.");
@@ -3212,9 +3212,9 @@ TEST_F(ImportTest, S3_Regex_path_filter_parquet_match) {
                                    ".*part-00000-027865e6-e4d9-40b9-97ff-83c5c5531154-"
                                    "c000.snappy.parquet$"}}));
       },
-      "Conversion from Parquet type \"INT96\" to OmniSci type \"TIMESTAMP(0)\" is not "
-      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,
-      " "OmniSci column: pickup_datetime, Parquet file: "
+      "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
+      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,"
+      " HeavyDB column: pickup_datetime, Parquet file: "
       "heavyai-import-test/Trips/Parquet/"
       "part-00000-027865e6-e4d9-40b9-97ff-83c5c5531154-c000.snappy.parquet.");
 }
@@ -5912,90 +5912,6 @@ INSTANTIATE_TEST_SUITE_P(TemporalColumnExportTest,
                                                    : "NonIsoTimestampFormat";
                          });
 
-//
-// Raster Tests
-//
-
-class BasicRasterImporterTest : public DBHandlerTestFixture,
-                                public ::testing::WithParamInterface<bool> {
- public:
-  static void TearDownTestSuite() {
-    DBHandlerTestFixture::TearDownTestSuite();
-    g_enable_legacy_raster_import = false;
-  }
-
- protected:
-  void SetUp() override {
-    g_enable_legacy_raster_import = GetParam();
-    DBHandlerTestFixture::SetUp();
-    sql("DROP TABLE IF EXISTS import_test_table;");
-  }
-
-  void TearDown() override {
-    sql("DROP TABLE IF EXISTS import_test_table;");
-    DBHandlerTestFixture::TearDown();
-  }
-};
-
-INSTANTIATE_TEST_SUITE_P(BasicRasterImporterTest,
-                         BasicRasterImporterTest,
-                         ::testing::Values(true, false),
-                         [](const auto& param_info) {
-                           return std::to_string(param_info.param);
-                         });
-
-TEST_P(BasicRasterImporterTest, HDF5Image) {
-  SKIP_ALL_ON_AGGREGATOR();
-  auto hdf5_filename =
-      boost::filesystem::canonical(
-          "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
-          .string();
-  sql("CREATE table import_test_table (raster_x smallint, raster_y smallint, band_1_1 "
-      "float);");
-  sql("COPY import_test_table FROM '" + hdf5_filename +
-      "' WITH (source_type='raster_file', raster_import_bands='band_1_1', threads=1);");
-
-  sqlAndCompareResult("SELECT COUNT(*) FROM import_test_table;", {{64800L}});
-}
-
-TEST_P(BasicRasterImporterTest, HDF5ImageDefaultThreads) {
-  SKIP_ALL_ON_AGGREGATOR();
-  auto hdf5_filename =
-      boost::filesystem::canonical(
-          "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
-          .string();
-  sql("CREATE table import_test_table (raster_x smallint, raster_y smallint, band_1_1 "
-      "float);");
-  sql("COPY import_test_table FROM '" + hdf5_filename +
-      "' WITH (source_type='raster_file', raster_import_bands='band_1_1');");
-
-  sqlAndCompareResult("SELECT COUNT(*) FROM import_test_table;", {{64800L}});
-}
-
-TEST_P(BasicRasterImporterTest, HDF5ImageMultiThreaded) {
-  SKIP_ALL_ON_AGGREGATOR();
-  if (!GetParam()) {
-    GTEST_SKIP() << "FSI Raster import is currently single-threaded";
-  }
-  auto hdf5_filename =
-      boost::filesystem::canonical(
-          "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
-          .string();
-  // NOTE: A partial exception is checked for below due to the exception
-  // arising from DBHandler, which is not typical in most cases of COPY FROM,
-  // however, raster import is unique.
-  sql("CREATE table import_test_table (raster_x smallint, raster_y smallint, band_1_1 "
-      "float);");
-  queryAndAssertPartialException(
-      "COPY import_test_table FROM '" + hdf5_filename +
-          "' WITH (source_type='raster_file', raster_import_bands='band_1_1', "
-          "threads=32);",
-      "GDAL driver HDF5Image "
-      "requires use of HDF5 library which is incompatible with multithreading.");
-}
-
-#define DEBUG_RASTER_TESTS 0
-
 static constexpr const char* kPNG = "beach.png";
 static constexpr const char* kGeoTIFF = "USGS_1m_x30y441_OH_Columbus_2019_small.tif";
 static constexpr const char* kGeoTIFFLastPixelNull =
@@ -6372,15 +6288,10 @@ class RasterImportTest : public DBHandlerTestFixture,
  public:
   static void TearDownTestSuite() {
     DBHandlerTestFixture::TearDownTestSuite();
-    g_enable_legacy_raster_import = false;
   }
 
  protected:
   void SetUp() override {
-    g_enable_legacy_raster_import = GetParam();
-    if (!g_enable_legacy_raster_import && isDistributedMode()) {
-      GTEST_SKIP() << "fsi raster not currently supported in distributed mode";
-    }
     DBHandlerTestFixture::SetUp();
     sql("drop table if exists raster;");
   }
@@ -7561,8 +7472,6 @@ int main(int argc, char** argv) {
   logger::init(log_options);
 
   import_export::ForeignDataImporter::setDefaultImportPath(BASE_PATH);
-
-  g_enable_legacy_raster_import = true;
 
 #ifdef HAVE_AWS_S3
   heavydb_aws_sdk::init_sdk();
