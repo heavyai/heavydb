@@ -1152,19 +1152,12 @@ SortedStringPermutation StringDictionary::getSortedPermutation(
   auto timer = DEBUG_TIMER(__func__);
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
 
-  if (client_) {
-    if (sorted_permutation_cache_.size() != storageEntryCountUnlocked()) {
-      sorted_permutation_cache_ = client_->get_persisted_sorted_permutation();
-    }
-  } else {
-    permuteSortedCache();
-  }
+  permuteSortedCache();
   SortedStringPermutation sorted_string_permutation(should_sort_descending);
   sorted_string_permutation.persisted_permutation = sorted_permutation_cache_;
   if (!transient_string_to_id_map.empty()) {
     if (client_) {
-      sorted_string_permutation.transient_permutation =
-          client_->get_transient_sorted_permutation(transient_string_to_id_map);
+      UNREACHABLE();
     } else {
       sorted_string_permutation.transient_permutation =
           getTransientSortPermutation(transient_string_to_id_map);

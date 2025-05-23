@@ -98,7 +98,7 @@ if(ENABLE_CUDA)
   target_link_libraries(BufferMgrTest CudaMgr)
 endif()
 target_link_libraries(BufferMgrTest gtest DataMgr QueryEngine Geospatial LockMgr ${Parquet_LIBRARIES}
-    ImportExport Distributed Parser)
+    ImportExport Parser)
 if(ENABLE_RENDERING)
   target_link_libraries(BufferMgrTest GfxDriver GfxInterop)
 endif()
@@ -286,7 +286,7 @@ endif()
 
 add_executable(EncoderTest EncoderTest.cpp)
 target_link_libraries(EncoderTest gtest DataMgr Catalog Shared Logger Geospatial LockMgr ${Parquet_LIBRARIES}
-    ImportExport Distributed Parser)
+    ImportExport Parser)
 if(ENABLE_RENDERING)
   target_link_libraries(EncoderTest GfxDriver GfxInterop)
 endif()
