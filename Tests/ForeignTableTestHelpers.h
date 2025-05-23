@@ -305,7 +305,7 @@ class ForeignDataWrapperUnitTest : public ::testing::Test {
     cat_ptr_->createTable(*foreign_table_, columns, {}, true);
 
     user_mapping_ = nullptr;
-    wrapper_ = createWrapperPtr(db_id_, foreign_table_.get(), user_mapping_.get());
+    wrapper_ = createWrapperPtr(db_id_, foreign_table_.get(), user_mapping_);
 
     // These validation steps would usually happen in the catalog during table creation.
     wrapper_->validateServerOptions(foreign_table_->foreign_server);
@@ -320,7 +320,8 @@ class ForeignDataWrapperUnitTest : public ::testing::Test {
   }
 
   std::unique_ptr<ForeignTable> foreign_table_;
-  std::unique_ptr<UserMapping> user_mapping_;
+  //std::unique_ptr<UserMapping> user_mapping_;
+  UserMapping* user_mapping_;
   std::unique_ptr<ForeignDataWrapper> wrapper_;
 };
 }  // namespace foreign_storage

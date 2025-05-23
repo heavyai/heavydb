@@ -47,10 +47,10 @@ class DoubleToPointCompressionUnitTest
                                                        UserMapping* um) const override {
     if (GetParam() == "csv") {
       return std::make_unique<CsvDataWrapper>(
-          db_id_, foreign_table_.get(), user_mapping_.get());
+          db_id_, foreign_table_.get(), user_mapping_);
     } else if (GetParam() == "parquet") {
       return std::make_unique<ParquetDataWrapper>(
-          db_id_, foreign_table_.get(), user_mapping_.get());
+          db_id_, foreign_table_.get(), user_mapping_);
     } else {
       UNREACHABLE();
       return nullptr;
@@ -186,7 +186,7 @@ class ParquetUnitTest : public ForeignDataWrapperUnitTest {
                                                        ForeignTable* ft,
                                                        UserMapping* um) const override {
     return std::make_unique<ParquetDataWrapper>(
-        db_id_, foreign_table_.get(), user_mapping_.get());
+        db_id_, foreign_table_.get(), user_mapping_);
   }
 };
 
