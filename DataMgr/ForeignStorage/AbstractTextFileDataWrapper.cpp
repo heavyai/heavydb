@@ -1628,7 +1628,7 @@ void AbstractTextFileDataWrapper::iterativeFileScan(
   auto& server_options = foreign_table_->foreign_server->options;
 
   if (is_first_file_scan_call_) {
-    iterative_scan_last_fragment_id_ = -1;
+    iterative_scan_last_scanned_fragment_id_ = -1;
     initialize_non_append_mode_scan(
         chunk_metadata_map_,
         fragment_id_to_file_regions_map_,
