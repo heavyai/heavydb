@@ -139,11 +139,6 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(g_bigint_count)
                          ->implicit_value(true),
                      "Use 64-bit count.");
-  desc.add_options()("llm-transform-max-num-unique-value",
-                     po::value<int64_t>(&g_llm_transform_max_num_unique_value)
-                         ->default_value(g_llm_transform_max_num_unique_value),
-                     "The maximum number of unique values of the input expression of the "
-                     "LLM_TRANSFORM operator.");
 
   desc.add_options()(
       "enable-executor-resource-mgr",
