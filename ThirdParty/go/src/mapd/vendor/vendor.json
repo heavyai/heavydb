@@ -169,11 +169,6 @@
 			"revisionTime": "2016-08-17T18:46:32Z"
 		},
 		{
-			"path": "github.com/gorilla/handlers",
-			"revision": "b3aff83722cb2ae031a70cae984650e3a16cd20e",
-			"revisionTime": "2016-02-01T11:49:43-08:00"
-		},
-		{
 			"checksumSHA1": "ucTBCc7dDRKLGPsYfAzu/Gq63qA=",
 			"path": "github.com/gorilla/securecookie",
 			"revision": "e59506cc896acb7f7bf732d4fdf5e25f7ccd8983",
