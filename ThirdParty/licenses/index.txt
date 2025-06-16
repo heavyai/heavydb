@@ -59,7 +59,6 @@
   ---                                       ---                                                                                                ---
   generate\_cert (Go)                       [BSD](https://github.com/golang/go/blob/master/LICENSE)                                            HTTPS certificate generator
   gorilla/context                           [BSD](https://github.com/gorilla/context/blob/master/LICENSE)                                      HTTP session handlers
-  gorilla/handlers                          [BSD](https://github.com/gorilla/handlers/blob/master/LICENSE)                                     HTTP service handlers
   gorilla/securecookie                      [BSD](https://github.com/gorilla/securecookie/blob/master/LICENSE)                                 HTTP session handlers
   gorilla/sessions                          [BSD](https://github.com/gorilla/sessions/blob/master/LICENSE)                                     HTTP session handlers
   pelletier/go-toml                         [MIT](https://github.com/pelletier/go-toml/blob/master/LICENSE)                                    Config file parser
