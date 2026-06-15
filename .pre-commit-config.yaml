@@ -32,7 +32,7 @@ repos:
 
   # Insert/maintain the NVIDIA SPDX header.
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.5.0
+    rev: v1.5.1
     hooks:
       - id: verify-copyright
         args: [--fix, --spdx]
