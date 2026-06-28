@@ -13,10 +13,7 @@ find_package(Clang REQUIRED)
 include_directories(SYSTEM ${CLANG_INCLUDE_DIRS})
 add_definitions(${CLANG_DEFINITIONS})
 
-# g++ 13.2.1 when building in RelWithDebInfo mode emits an error which requires suppression:
-# /usr/lib/llvm14/include/clang/AST/ExternalASTSource.h:378:54: error: ‘this’ pointer is null [-Werror=nonnull]
-#   378 |       Ptr = reinterpret_cast<uint64_t>((Source->*Get)(Ptr >> 1));
-#       |                                        ~~~~~~~~~~~~~~^~~~~~~~~~
+# Clang headers may emit -Werror=nonnull in RelWithDebInfo builds.
 if (ENABLE_WARNINGS_AS_ERRORS
     AND ${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU"
     AND "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "relwithdebinfo")

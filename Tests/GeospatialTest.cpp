@@ -393,6 +393,61 @@ void import_geospatial_multi_frag_test(const bool use_temporary_tables) {
                    ExecutorDeviceType::CPU);
 }
 
+struct GeoCoordDecompressExpectations {
+  bool x_present;
+  bool y_present;
+};
+
+std::string getOptimizedExplainIr(const std::string& query, const ExecutorDeviceType dt) {
+  const auto query_explain_result = QR::get()->runSelectQuery(query,
+                                                              dt,
+                                                              g_hoist_literals,
+                                                              /*allow_loop_joins=*/false,
+                                                              /*just_explain=*/true);
+  const auto explain_result = query_explain_result->getRows();
+  CHECK_EQ(size_t(1), explain_result->rowCount());
+  const auto crt_row = explain_result->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  return boost::get<std::string>(v<NullableString>(crt_row[0]));
+}
+
+void assertGeoCoordDecompressInOptimizedIr(
+    const std::string& explain,
+    const GeoCoordDecompressExpectations expected) {
+  const bool has_x = explain.find("decompress_x_coord_geoint") != std::string::npos;
+  const bool has_y = explain.find("decompress_y_coord_geoint") != std::string::npos;
+  EXPECT_EQ(has_x, expected.x_present) << "decompress_x_coord_geoint presence mismatch\n"
+                                       << explain;
+  EXPECT_EQ(has_y, expected.y_present) << "decompress_y_coord_geoint presence mismatch\n"
+                                       << explain;
+}
+
+// Compile-only coord projection checks: ST_X/ST_Y over ST_Transform(column) must not
+// decompress both axes when only one coordinate is requested.
+void runCoordProjectionIrChecks(const ExecutorDeviceType dt) {
+  ScopeGuard reset_explain_type = [] {
+    QR::get()->setExplainType(ExecutorExplainType::Default);
+  };
+  QR::get()->setExplainType(ExecutorExplainType::Optimized);
+
+  assertGeoCoordDecompressInOptimizedIr(
+      getOptimizedExplainIr(
+          "SELECT ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;", dt),
+      GeoCoordDecompressExpectations{false, true});
+
+  assertGeoCoordDecompressInOptimizedIr(
+      getOptimizedExplainIr(
+          "SELECT ST_X(ST_Transform(gp4326, 900913)) from geospatial_test;", dt),
+      GeoCoordDecompressExpectations{true, false});
+
+  assertGeoCoordDecompressInOptimizedIr(
+      getOptimizedExplainIr(
+          "SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) "
+          "from geospatial_test;",
+          dt),
+      GeoCoordDecompressExpectations{true, true});
+}
+
 }  // namespace
 
 class GeoSpatialTestTablesFixture : public ::testing::TestWithParam<bool> {
@@ -1553,49 +1608,29 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
 }
 
 TEST_P(GeoSpatialTestTablesFixture, LLVMOptimization) {
-  ScopeGuard reset_explain_type = [] {
-    QR::get()->setExplainType(ExecutorExplainType::Default);
-  };
-  QR::get()->setExplainType(ExecutorExplainType::Optimized);
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    runCoordProjectionIrChecks(dt);
+  }
+}
 
-    auto get_explain_result = [](const std::string& query, const ExecutorDeviceType dt) {
-      const auto query_explain_result =
-          QR::get()->runSelectQuery(query,
-                                    dt,
-                                    /*hoist_literals=*/true,
-                                    /*allow_loop_joins=*/false,
-                                    /*just_explain=*/true);
-      const auto explain_result = query_explain_result->getRows();
-      EXPECT_EQ(size_t(1), explain_result->rowCount());
-      const auto crt_row = explain_result->getNextRow(true, true);
-      EXPECT_EQ(size_t(1), crt_row.size());
-      return boost::get<std::string>(v<NullableString>(crt_row[0]));
-    };
+class GeoSpatialCoordProjectionIrFixture : public ::testing::Test {
+ protected:
+  void SetUp() override { import_geospatial_test(/*with_temporary_tables=*/true); }
 
-    // expect the x decompression code to be absent in optimized IR
-    std::string explain = get_explain_result(
-        "SELECT ST_Y(ST_Transform(gp4326, 900913)) from geospatial_test;", dt);
-    EXPECT_EQ(explain.find("decompress_x_coord_geoint"), std::string::npos) << explain;
+  void TearDown() override {
+    if (!g_keep_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
+    }
+  }
+};
 
-    // expect the y decompression code to be absent in optimized IR
-    explain = get_explain_result(
-        "SELECT ST_X(ST_Transform(gp4326, 900913)) from geospatial_test;", dt);
-    EXPECT_EQ(explain.find("decompress_y_coord_geoint"), std::string::npos) << explain;
-
-    // expect both decompression codes to be present
-    explain = get_explain_result(
-        "SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) "
-        "from geospatial_test;",
-        dt);
-    EXPECT_NE(explain.find("decompress_y_coord_geoint"), std::string::npos) << explain;
-    explain = get_explain_result(
-        "SELECT ST_X(ST_Transform(gp4326, 900913)), ST_Y(ST_Transform(gp4326, 900913)) "
-        "from geospatial_test;",
-        dt);
-    EXPECT_NE(explain.find("decompress_y_coord_geoint"), std::string::npos) << explain;
+// Compile-only regression for coord projection IR. Filter with:
+//   --gtest_filter='*CoordProjectionIr*OptimizedIr*'
+TEST_F(GeoSpatialCoordProjectionIrFixture, CoordProjectionOptimizedIr) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    runCoordProjectionIrChecks(dt);
   }
 }
 

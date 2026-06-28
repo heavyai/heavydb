@@ -37,7 +37,8 @@ RUN if command -v apt-get >/dev/null; then \
             libegl1 \
             wget \
             curl \
-            clang-14 \
+            clang-17 \
+            llvm-17-dev \
             liblz4-tool \
             default-jre-headless \
             software-properties-common \
@@ -47,9 +48,10 @@ RUN if command -v apt-get >/dev/null; then \
             python3.10 \
             python3.10-venv \
             libpython3.10 && \
-        update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100 && \
+        update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-17 100 && \
+        clang_resource_dir="$(llvm-config-17 --print-resource-dir)" && \
         mkdir -p /usr/local/include && \
-        ln -sfn /usr/lib/llvm-14/lib/clang/14.0.0/include /usr/local/include/clang-resource && \
+        ln -sfn "$clang_resource_dir/include" /usr/local/include/clang-resource && \
         apt-get remove --purge -y && \
         rm -rf /var/lib/apt/lists/*; \
     elif command -v dnf >/dev/null || command -v yum >/dev/null; then \

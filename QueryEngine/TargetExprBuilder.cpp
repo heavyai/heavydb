@@ -217,31 +217,29 @@ void TargetExprCodegen::codegen(
             LL_BUILDER.CreateAdd(std::get<1>(agg_out_ptr_w_idx), LL_INT(col_off));
         auto* bit_cast = LL_BUILDER.CreateBitCast(
             std::get<0>(agg_out_ptr_w_idx),
-            llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
-        agg_col_ptr = LL_BUILDER.CreateGEP(
-            bit_cast->getType()->getScalarType()->getPointerElementType(),
-            bit_cast,
-            offset);
+            typed_ptr_ty(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
+        agg_col_ptr = typed_gep(
+            LL_BUILDER, get_int_type((chosen_bytes << 3), LL_CONTEXT), bit_cast, offset);
       } else {
         col_off = query_mem_desc.getColOnlyOffInBytes(slot_index);
         CHECK_EQ(size_t(0), col_off % chosen_bytes);
         col_off /= chosen_bytes;
         auto* bit_cast = LL_BUILDER.CreateBitCast(
             std::get<0>(agg_out_ptr_w_idx),
-            llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
-        agg_col_ptr = LL_BUILDER.CreateGEP(
-            bit_cast->getType()->getScalarType()->getPointerElementType(),
-            bit_cast,
-            LL_INT(col_off));
+            typed_ptr_ty(get_int_type((chosen_bytes << 3), LL_CONTEXT), 0));
+        agg_col_ptr = typed_gep(LL_BUILDER,
+                                get_int_type((chosen_bytes << 3), LL_CONTEXT),
+                                bit_cast,
+                                LL_INT(col_off));
       }
     }
 
     if (chosen_bytes != sizeof(int32_t)) {
       CHECK_EQ(8, chosen_bytes);
       if (g_bigint_count) {
-        const auto acc_i64 = LL_BUILDER.CreateBitCast(
-            is_group_by ? agg_col_ptr : agg_out_vec[slot_index],
-            llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0));
+        const auto acc_i64 =
+            LL_BUILDER.CreateBitCast(is_group_by ? agg_col_ptr : agg_out_vec[slot_index],
+                                     get_int_ptr_type(64, LL_CONTEXT));
         if (gpu_smem_context.isSharedMemoryUsed()) {
           group_by_and_agg->emitCall(
               "agg_count_shared", std::vector<llvm::Value*>{acc_i64, LL_INT(int64_t(1))});
@@ -253,12 +251,12 @@ void TargetExprCodegen::codegen(
                                      llvm::AtomicOrdering::Monotonic);
         }
       } else {
-        auto acc_i32 = LL_BUILDER.CreateBitCast(
-            is_group_by ? agg_col_ptr : agg_out_vec[slot_index],
-            llvm::PointerType::get(get_int_type(32, LL_CONTEXT), 0));
+        auto acc_i32 =
+            LL_BUILDER.CreateBitCast(is_group_by ? agg_col_ptr : agg_out_vec[slot_index],
+                                     get_int_ptr_type(32, LL_CONTEXT));
         if (gpu_smem_context.isSharedMemoryUsed()) {
           acc_i32 = LL_BUILDER.CreatePointerCast(
-              acc_i32, llvm::Type::getInt32PtrTy(LL_CONTEXT, 3));
+              acc_i32, typed_ptr_ty(get_int_type(32, LL_CONTEXT), 3));
         }
         LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                    acc_i32,
@@ -271,7 +269,7 @@ void TargetExprCodegen::codegen(
       if (gpu_smem_context.isSharedMemoryUsed()) {
         // Atomic operation on address space level 3 (Shared):
         const auto shared_acc_i32 = LL_BUILDER.CreatePointerCast(
-            acc_i32, llvm::Type::getInt32PtrTy(LL_CONTEXT, 3));
+            acc_i32, typed_ptr_ty(get_int_type(32, LL_CONTEXT), 3));
         LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
                                    shared_acc_i32,
                                    LL_INT(1),
@@ -339,12 +337,10 @@ void TargetExprCodegen::codegenAggregate(
       executor->cgen_state_->emitExternalCall(
           "agg_count_distinct_array_" + numeric_type_name(elem_ti),
           llvm::Type::getVoidTy(LL_CONTEXT),
-          {is_group_by ? LL_BUILDER.CreateGEP(std::get<0>(agg_out_ptr_w_idx)
-                                                  ->getType()
-                                                  ->getScalarType()
-                                                  ->getPointerElementType(),
-                                              std::get<0>(agg_out_ptr_w_idx),
-                                              LL_INT(col_off))
+          {is_group_by ? typed_gep(LL_BUILDER,
+                                   get_int_type(64, LL_CONTEXT),
+                                   std::get<0>(agg_out_ptr_w_idx),
+                                   LL_INT(col_off))
                        : agg_out_vec[slot_index],
            target_lvs[target_lv_idx],
            code_generator.posArg(arg_expr),
@@ -368,6 +364,8 @@ void TargetExprCodegen::codegenAggregate(
             : target_info.sql_type;
     const bool is_fp_arg =
         !lazy_fetched && arg_type.get_type() != kNULLT && arg_type.is_fp();
+    // agg_col_ptr is only valid when is_group_by; projection and other non-group-by
+    // paths must use agg_out_vec[slot_index] (see varlen POINT projection, 54ad0bce8).
     if (is_group_by) {
       agg_col_ptr = group_by_and_agg->codegenAggColumnPtr(output_buffer_byte_stream,
                                                           out_row_idx,
@@ -400,11 +398,10 @@ void TargetExprCodegen::codegenAggregate(
       auto orig_bb = builder.GetInsertBlock();
       auto target_ptr_type = llvm::dyn_cast<llvm::PointerType>(target_lv->getType());
       CHECK(target_ptr_type) << "Varlen projections expect a pointer input.";
-      auto is_nullptr =
-          builder.CreateICmp(llvm::CmpInst::ICMP_EQ,
-                             target_lv,
-                             llvm::ConstantPointerNull::get(llvm::PointerType::get(
-                                 target_ptr_type->getPointerElementType(), 0)));
+      auto is_nullptr = builder.CreateICmp(llvm::CmpInst::ICMP_EQ,
+                                           target_lv,
+                                           llvm::ConstantPointerNull::get(opaque_ptr_ty(
+                                               executor->cgen_state_->context_, 0)));
       llvm::BasicBlock* true_bb{nullptr};
       {
         DiamondCodegen nullcheck_diamond(
@@ -414,13 +411,12 @@ void TargetExprCodegen::codegenAggregate(
         // if not null, process the pointer and insert it into the varlen buffer
         builder.SetInsertPoint(nullcheck_diamond.cond_false_);
         auto arr_ptr_lv = executor->cgen_state_->ir_builder_.CreateBitCast(
-            target_lv,
-            llvm::PointerType::get(get_int_type(8, executor->cgen_state_->context_), 0));
+            target_lv, get_int_ptr_type(8, executor->cgen_state_->context_));
         const int64_t chosen_bytes =
             target_info.sql_type.get_compression() == kENCODING_GEOINT ? 8 : 16;
         auto* arg = get_arg_by_name(ROW_FUNC, "old_total_matched");
         const auto output_buffer_slot = LL_BUILDER.CreateZExt(
-            LL_BUILDER.CreateLoad(arg->getType()->getPointerElementType(), arg),
+            typed_load(LL_BUILDER, get_int_type(32, LL_CONTEXT), arg),
             llvm::Type::getInt64Ty(LL_CONTEXT));
         const auto varlen_buffer_row_sz = query_mem_desc.varlenOutputBufferElemSize();
         CHECK(varlen_buffer_row_sz);
@@ -452,7 +448,10 @@ void TargetExprCodegen::codegenAggregate(
         output_phi->addIncoming(executor->cgen_state_->llInt(static_cast<int64_t>(0)),
                                 orig_bb);
 
-        std::vector<llvm::Value*> agg_args{agg_col_ptr, output_phi};
+        std::vector<llvm::Value*> agg_args{
+            executor->castToIntPtrTyIn(
+                is_group_by ? agg_col_ptr : agg_out_vec[slot_index], 64),
+            output_phi};
         group_by_and_agg->emitCall("agg_id" + agg_fname_suffix, agg_args);
       }
       CHECK(true_bb);

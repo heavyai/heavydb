@@ -6,6 +6,7 @@
 #pragma once
 
 #include "QueryEngine/GeoOperators/Codegen.h"
+#include "QueryEngine/GeoOperators/Transform.h"
 
 namespace spatial_type {
 
@@ -14,11 +15,21 @@ class PointAccessors : public Codegen {
  public:
   PointAccessors(const Analyzer::GeoOperator* geo_operator) : Codegen(geo_operator) {
     CHECK_EQ(operator_->size(), size_t(1));
+    initColumnTransformOp();
   }
 
   size_t size() const final { return 1; }
 
   SQLTypeInfo getNullType() const final { return SQLTypeInfo(kBOOLEAN); }
+
+  const Analyzer::Expr* getOperand(const size_t index) final {
+    CHECK_EQ(index, size_t(0));
+    initColumnTransformOp();
+    if (column_transform_op_) {
+      return column_transform_op_->getOperand(0);
+    }
+    return operator_->getOperand(0);
+  }
 
   llvm::Value* codegenCmpEqNullptr(llvm::IRBuilder<>& builder, llvm::Value* arg_lv) {
     auto* const ptr_type = llvm::dyn_cast<llvm::PointerType>(arg_lv->getType());
@@ -32,16 +43,20 @@ class PointAccessors : public Codegen {
       const std::vector<llvm::Value*>& pos_lvs,
       CgenState* cgen_state) final {
     CHECK_EQ(pos_lvs.size(), size());
-    auto operand = getOperand(0);
-    CHECK(operand);
-    const auto& geo_ti = operand->get_type_info();
+    initColumnTransformOp();
+    const auto analyzer_operand = operator_->getOperand(0);
+    CHECK(analyzer_operand);
+    const auto& geo_ti = column_transform_op_
+                             ? column_transform_op_->getOperand(0)->get_type_info()
+                             : analyzer_operand->get_type_info();
     CHECK(geo_ti.is_geometry());
     auto& builder = cgen_state->ir_builder_;
 
     llvm::Value* array_buff_ptr{nullptr};
     llvm::Value* is_null{nullptr};
     if (arg_lvs.size() == 1) {
-      if (dynamic_cast<const Analyzer::GeoExpr*>(operand)) {
+      if (dynamic_cast<const Analyzer::GeoExpr*>(analyzer_operand) &&
+          !column_transform_op_) {
         is_null = codegenCmpEqNullptr(builder, arg_lvs.front());
         return std::make_tuple(arg_lvs, is_null);
       }
@@ -53,7 +68,7 @@ class PointAccessors : public Codegen {
     } else {
       // ptr and size
       CHECK_EQ(arg_lvs.size(), size_t(2));
-      if (dynamic_cast<const Analyzer::GeoOperator*>(operand)) {
+      if (dynamic_cast<const Analyzer::GeoOperator*>(analyzer_operand)) {
         if (geo_ti.get_type() == kPOINT && !geo_ti.is_variable_size()) {
           char const* const fname = pointIsNullFunctionName(geo_ti);
           is_null = cgen_state->emitCall(fname, {arg_lvs.front()});
@@ -61,7 +76,8 @@ class PointAccessors : public Codegen {
           // The above branch tests for both nullptr and null sentinel, whereas this
           // branch only tests for nullptr. If not for this branch, the GeospatialTest
           // LLVMOptimization test fails due to non-removal of the
-          // decompress_{x,y}_coord_geoint function call in the generated IR. See QE-1007.
+          // decompress_{x,y}_coord_geoint function call in the generated IR. Required for
+          // coord projection / LLVMOptimization (see GeospatialTest).
           is_null = codegenCmpEqNullptr(builder, arg_lvs.front());
         }
       }
@@ -82,44 +98,34 @@ class PointAccessors : public Codegen {
     CHECK_EQ(args.size(), size_t(1));
     const auto array_buff_ptr = args.front();
 
-    const auto& geo_ti = getOperand(0)->get_type_info();
+    initColumnTransformOp();
+    const auto analyzer_operand = operator_->getOperand(0);
+    CHECK(analyzer_operand);
+    const auto& geo_ti = column_transform_op_
+                             ? column_transform_op_->getOperand(0)->get_type_info()
+                             : analyzer_operand->get_type_info();
     CHECK(geo_ti.is_geometry());
-    auto& builder = cgen_state->ir_builder_;
 
     const bool is_x = operator_->getName() == "ST_X";
-    const std::string expr_name = is_x ? "x" : "y";
-
     llvm::Value* coord_lv;
-    if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      auto compressed_arr_ptr = builder.CreateBitCast(
-          array_buff_ptr, llvm::Type::getInt32PtrTy(cgen_state->context_));
-      auto coord_index = is_x ? cgen_state->llInt(0) : cgen_state->llInt(1);
-      auto coord_lv_ptr = builder.CreateGEP(
-          compressed_arr_ptr->getType()->getScalarType()->getPointerElementType(),
-          compressed_arr_ptr,
-          coord_index,
-          expr_name + "_coord_ptr");
-      auto compressed_coord_lv =
-          builder.CreateLoad(coord_lv_ptr->getType()->getPointerElementType(),
-                             coord_lv_ptr,
-                             expr_name + "_coord_compressed");
-
-      coord_lv =
-          cgen_state->emitExternalCall("decompress_" + expr_name + "_coord_geoint",
-                                       llvm::Type::getDoubleTy(cgen_state->context_),
-                                       {compressed_coord_lv});
+    if (column_transform_op_) {
+      const auto zero_lv =
+          llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state->context_), 0.0);
+      coord_lv = Transform::codegenPointCoord(
+          array_buff_ptr,
+          geo_ti,
+          is_x ? Transform::PointCoordAxis::X : Transform::PointCoordAxis::Y,
+          static_cast<unsigned>(column_transform_op_->getInputSRID()),
+          static_cast<unsigned>(column_transform_op_->getOutputSRID()),
+          cgen_state,
+          co,
+          zero_lv);
     } else {
-      auto coord_arr_ptr = builder.CreateBitCast(
-          array_buff_ptr, llvm::Type::getDoublePtrTy(cgen_state->context_));
-      auto coord_index = is_x ? cgen_state->llInt(0) : cgen_state->llInt(1);
-      auto coord_lv_ptr = builder.CreateGEP(
-          coord_arr_ptr->getType()->getScalarType()->getPointerElementType(),
-          coord_arr_ptr,
-          coord_index,
-          expr_name + "_coord_ptr");
-      coord_lv = builder.CreateLoad(coord_lv_ptr->getType()->getPointerElementType(),
-                                    coord_lv_ptr,
-                                    expr_name + "_coord");
+      coord_lv = Transform::loadPointCoord(
+          array_buff_ptr,
+          geo_ti,
+          is_x ? Transform::PointCoordAxis::X : Transform::PointCoordAxis::Y,
+          cgen_state);
     }
 
     auto ret = coord_lv;
@@ -132,6 +138,23 @@ class PointAccessors : public Codegen {
     CHECK(cgen_state->geo_target_cache_.insert(std::make_pair(key, ret)).second);
     return {ret};
   }
+
+ private:
+  void initColumnTransformOp() {
+    if (column_transform_op_initialized_) {
+      return;
+    }
+    column_transform_op_initialized_ = true;
+    const auto* transform_op =
+        dynamic_cast<const Analyzer::GeoTransformOperator*>(operator_->getOperand(0));
+    if (transform_op &&
+        dynamic_cast<const Analyzer::ColumnVar*>(transform_op->getOperand(0))) {
+      column_transform_op_ = transform_op;
+    }
+  }
+
+  const Analyzer::GeoTransformOperator* column_transform_op_{nullptr};
+  bool column_transform_op_initialized_{false};
 };
 
 }  // namespace spatial_type

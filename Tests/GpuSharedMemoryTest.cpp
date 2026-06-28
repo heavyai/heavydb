@@ -5,6 +5,7 @@
 
 #include "GpuSharedMemoryTest.h"
 #include "CudaMgr/CudaMgr.h"
+#include "QueryEngine/IRCodegenUtils.h"
 #include "QueryEngine/LLVMGlobalContext.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryEngine.h"
@@ -60,11 +61,11 @@ void init_storage_buffer(int8_t* buffer,
 
 void GpuReductionTester::codegenWrapperKernel() {
   const unsigned address_space = 0;
-  auto pi8_type = llvm::Type::getInt8PtrTy(context_, address_space);
+  auto pi8_type = typed_ptr_ty(get_int_type(8, context_), address_space);
   std::vector<llvm::Type*> input_arguments;
-  input_arguments.push_back(llvm::PointerType::get(pi8_type, address_space));
+  input_arguments.push_back(typed_ptr_ty(pi8_type, address_space));
   input_arguments.push_back(llvm::Type::getInt64Ty(context_));  // num input buffers
-  input_arguments.push_back(llvm::Type::getInt8PtrTy(context_, address_space));
+  input_arguments.push_back(typed_ptr_ty(get_int_type(8, context_), address_space));
 
   llvm::FunctionType* ft =
       llvm::FunctionType::get(llvm::Type::getVoidTy(context_), input_arguments, false);
@@ -97,16 +98,17 @@ void GpuReductionTester::codegenWrapperKernel() {
 
   // locate the corresponding input buffer:
   ir_builder.SetInsertPoint(bb_body);
-  auto input_buffer_gep = ir_builder.CreateGEP(
-      input_ptrs->getType()->getScalarType()->getPointerElementType(),
-      input_ptrs,
-      block_index);
+  auto input_buffer_gep =
+      typed_gep(ir_builder,
+                typed_ptr_ty(get_int_type(8, context_), address_space),
+                input_ptrs,
+                block_index);
   auto input_buffer = ir_builder.CreateLoad(
-      llvm::Type::getInt8PtrTy(context_, address_space), input_buffer_gep);
-  auto input_buffer_ptr =
-      ir_builder.CreatePointerCast(input_buffer,
-                                   llvm::Type::getInt64PtrTy(context_, address_space),
-                                   "input_buffer_ptr");
+      typed_ptr_ty(get_int_type(8, context_), address_space), input_buffer_gep);
+  auto input_buffer_ptr = ir_builder.CreatePointerCast(
+      input_buffer,
+      typed_ptr_ty(get_int_type(64, context_), address_space),
+      "input_buffer_ptr");
   const auto buffer_size = ll_int(
       static_cast<int32_t>(query_mem_desc_.getBufferSizeBytes(ExecutorDeviceType::GPU)),
       context_);
@@ -120,10 +122,10 @@ void GpuReductionTester::codegenWrapperKernel() {
                                                      },
                                                      "smem_input_buffer_ptr");
 
-  auto output_buffer_ptr =
-      ir_builder.CreatePointerCast(output_buffer,
-                                   llvm::Type::getInt64PtrTy(context_, address_space),
-                                   "output_buffer_ptr");
+  auto output_buffer_ptr = ir_builder.CreatePointerCast(
+      output_buffer,
+      typed_ptr_ty(get_int_type(64, context_), address_space),
+      "output_buffer_ptr");
   // call the reduction function
   CHECK(reduction_func_);
   std::vector<llvm::Value*> reduction_args{

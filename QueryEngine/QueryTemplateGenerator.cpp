@@ -79,11 +79,11 @@ Params<NTYPES> make_params(llvm::Module const* const mod, bool const hoist_liter
   auto* const i8_type = llvm::IntegerType::get(mod->getContext(), 8);
   auto* const i32_type = llvm::IntegerType::get(mod->getContext(), 32);
   auto* const i64_type = llvm::IntegerType::get(mod->getContext(), 64);
-  auto* const pi8_type = llvm::PointerType::get(i8_type, 0);
-  auto* const ppi8_type = llvm::PointerType::get(pi8_type, 0);
-  auto* const pi32_type = llvm::PointerType::get(i32_type, 0);
-  auto* const pi64_type = llvm::PointerType::get(i64_type, 0);
-  auto* const ppi64_type = llvm::PointerType::get(pi64_type, 0);
+  auto* const pi8_type = typed_ptr_ty(i8_type, 0);
+  auto* const ppi8_type = typed_ptr_ty(pi8_type, 0);
+  auto* const pi32_type = typed_ptr_ty(i32_type, 0);
+  auto* const pi64_type = typed_ptr_ty(i64_type, 0);
+  auto* const ppi64_type = typed_ptr_ty(pi64_type, 0);
 
   // Must match parameter order in QueryExecutionContext::launchCpuCode()
   // hoist_literals is true iff literals is included in the parameter list.
@@ -127,15 +127,6 @@ Params<NTYPES> make_params(llvm::Module const* const mod, bool const hoist_liter
     params.pushBack(pi8_type, "row_func_mgr", NoCapture);
   }
   return params;
-}
-
-inline llvm::Type* get_pointer_element_type(llvm::Value* value) {
-  CHECK(value);
-  auto type = value->getType();
-  CHECK(type && type->isPointerTy());
-  auto pointer_type = llvm::dyn_cast<llvm::PointerType>(type);
-  CHECK(pointer_type);
-  return pointer_type->getPointerElementType();
 }
 
 llvm::Function* default_func_builder(llvm::Module* mod, const std::string& name) {
@@ -201,8 +192,8 @@ llvm::Function* row_process(llvm::Module* mod,
   auto i8_type = IntegerType::get(mod->getContext(), 8);
   auto i32_type = IntegerType::get(mod->getContext(), 32);
   auto i64_type = IntegerType::get(mod->getContext(), 64);
-  auto pi32_type = PointerType::get(i32_type, 0);
-  auto pi64_type = PointerType::get(i64_type, 0);
+  auto pi32_type = typed_ptr_ty(i32_type, 0);
+  auto pi64_type = typed_ptr_ty(i64_type, 0);
 
   if (aggr_col_count) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
@@ -224,7 +215,7 @@ llvm::Function* row_process(llvm::Module* mod,
   func_args.push_back(pi32_type);  // frag_id_ptr
   func_args.push_back(pi64_type);  // row_count_ptr
   if (hoist_literals) {
-    func_args.push_back(PointerType::get(i8_type, 0));  // literals
+    func_args.push_back(typed_ptr_ty(i8_type, 0));  // literals
   }
   FunctionType* func_type = FunctionType::get(
       /*Result=*/i32_type,
@@ -274,6 +265,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
 
   constexpr bool IS_GROUP_BY = false;
   Params query_func_params = make_params<IS_GROUP_BY>(mod, hoist_literals);
+  auto* const pi64_type = typed_ptr_ty(i64_type, 0);
 
   FunctionType* query_func_type = FunctionType::get(
       /*Result=*/Type::getVoidTy(mod->getContext()),
@@ -327,25 +319,17 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
   }
 
   llvm::Value* const row_count_ptr = get_arg_by_name(query_func_ptr, "row_count_ptr");
-  LoadInst* row_count = new LoadInst(get_pointer_element_type(row_count_ptr),
-                                     row_count_ptr,
-                                     "row_count",
-                                     false,
-                                     bb_entry);
+  LoadInst* row_count =
+      new LoadInst(i64_type, row_count_ptr, "row_count", false, bb_entry);
   row_count->setAlignment(LLVM_ALIGN(8));
   row_count->setName("row_count");
   std::vector<Value*> agg_init_val_vec;
   if (!is_estimate_query) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
       auto idx_lv = ConstantInt::get(i32_type, i);
-      auto agg_init_gep = GetElementPtrInst::CreateInBounds(
-          agg_init_val->getType()->getPointerElementType(),
-          agg_init_val,
-          idx_lv,
-          "",
-          bb_entry);
-      auto agg_init_val = new LoadInst(
-          get_pointer_element_type(agg_init_gep), agg_init_gep, "", false, bb_entry);
+      auto agg_init_gep =
+          GetElementPtrInst::CreateInBounds(i64_type, agg_init_val, idx_lv, "", bb_entry);
+      auto agg_init_val = new LoadInst(i64_type, agg_init_gep, "", false, bb_entry);
       agg_init_val->setAlignment(LLVM_ALIGN(8));
       agg_init_val_vec.push_back(agg_init_val);
       auto init_val_st = new StoreInst(agg_init_val, result_ptr_vec[i], false, bb_entry);
@@ -394,8 +378,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
   row_process_params.insert(
       row_process_params.end(), result_ptr_vec.begin(), result_ptr_vec.end());
   if (is_estimate_query) {
-    row_process_params.push_back(
-        new LoadInst(get_pointer_element_type(out), out, "", false, bb_forbody));
+    row_process_params.push_back(new LoadInst(pi64_type, out, "", false, bb_forbody));
   }
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
@@ -422,11 +405,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
   std::vector<Instruction*> result_vec_pre;
   if (!is_estimate_query) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
-      auto result = new LoadInst(get_pointer_element_type(result_ptr_vec[i]),
-                                 result_ptr_vec[i],
-                                 ".pre.result",
-                                 false,
-                                 bb_crit_edge);
+      auto result =
+          new LoadInst(i64_type, result_ptr_vec[i], ".pre.result", false, bb_crit_edge);
       result->setAlignment(LLVM_ALIGN(8));
       result_vec_pre.push_back(result);
     }
@@ -461,11 +441,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
       auto col_idx = ConstantInt::get(i32_type, i);
       if (gpu_smem_context.isSharedMemoryUsed()) {
         auto target_addr = GetElementPtrInst::CreateInBounds(
-            smem_output_buffer->getType()->getPointerElementType(),
-            smem_output_buffer,
-            col_idx,
-            "",
-            bb_exit);
+            i64_type, smem_output_buffer, col_idx, "", bb_exit);
         // TODO: generalize this once we want to support other types of aggregate
         // functions besides COUNT.
         auto agg_func = mod->getFunction("agg_sum_shared");
@@ -473,10 +449,9 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
         CallInst::Create(
             agg_func, std::vector<llvm::Value*>{target_addr, result_vec[i]}, "", bb_exit);
       } else {
-        auto out_gep = GetElementPtrInst::CreateInBounds(
-            out->getType()->getPointerElementType(), out, col_idx, "", bb_exit);
-        auto col_buffer =
-            new LoadInst(get_pointer_element_type(out_gep), out_gep, "", false, bb_exit);
+        auto out_gep =
+            GetElementPtrInst::CreateInBounds(pi64_type, out, col_idx, "", bb_exit);
+        auto col_buffer = new LoadInst(pi64_type, out_gep, "", false, bb_exit);
         col_buffer->setAlignment(LLVM_ALIGN(8));
         auto slot_idx = BinaryOperator::CreateAdd(
             group_buff_idx,
@@ -484,11 +459,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
             "",
             bb_exit);
         auto target_addr = GetElementPtrInst::CreateInBounds(
-            col_buffer->getType()->getPointerElementType(),
-            col_buffer,
-            slot_idx,
-            "",
-            bb_exit);
+            i64_type, col_buffer, slot_idx, "", bb_exit);
         StoreInst* result_st = new StoreInst(result_vec[i], target_addr, false, bb_exit);
         result_st->setAlignment(LLVM_ALIGN(8));
       }
@@ -504,13 +475,9 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
       // If there are more targets than threads we do not currently use shared memory
       // optimization. This can be relaxed if necessary
       for (size_t i = 0; i < aggr_col_count; i++) {
-        auto out_gep =
-            GetElementPtrInst::CreateInBounds(out->getType()->getPointerElementType(),
-                                              out,
-                                              ConstantInt::get(i32_type, i),
-                                              "",
-                                              bb_exit);
-        auto gmem_output_buffer = new LoadInst(get_pointer_element_type(out_gep),
+        auto out_gep = GetElementPtrInst::CreateInBounds(
+            pi64_type, out, ConstantInt::get(i32_type, i), "", bb_exit);
+        auto gmem_output_buffer = new LoadInst(pi64_type,
                                                out_gep,
                                                "gmem_output_buffer_" + std::to_string(i),
                                                false,
@@ -572,6 +539,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
 
   constexpr bool IS_GROUP_BY = true;
   Params query_func_params = make_params<IS_GROUP_BY>(mod, hoist_literals);
+  auto* const pi64_type = typed_ptr_ty(i64_type, 0);
 
   FunctionType* query_func_type = FunctionType::get(
       /*Result=*/Type::getVoidTy(mod->getContext()),
@@ -601,14 +569,12 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
 
   // Block  .entry
   llvm::Value* const row_count_ptr = get_arg_by_name(query_func_ptr, "row_count_ptr");
-  LoadInst* row_count = new LoadInst(
-      get_pointer_element_type(row_count_ptr), row_count_ptr, "", false, bb_entry);
+  LoadInst* row_count = new LoadInst(i64_type, row_count_ptr, "", false, bb_entry);
   row_count->setAlignment(LLVM_ALIGN(8));
   row_count->setName("row_count");
 
   llvm::Value* const max_matched_ptr = get_arg_by_name(query_func_ptr, "max_matched_ptr");
-  LoadInst* max_matched = new LoadInst(
-      get_pointer_element_type(max_matched_ptr), max_matched_ptr, "", false, bb_entry);
+  LoadInst* max_matched = new LoadInst(i32_type, max_matched_ptr, "", false, bb_entry);
   max_matched->setAlignment(LLVM_ALIGN(8));
 
   auto crt_matched_ptr = new AllocaInst(i32_type, 0, "crt_matched", bb_entry);
@@ -641,17 +607,13 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
     // make the varlen buffer the _first_ 8 byte value in the group by buffers double ptr,
     // and offset the group by buffers index by 8 bytes
     auto varlen_output_buffer_gep = GetElementPtrInst::Create(
-        Ty->getPointerElementType(),
+        pi64_type,
         group_by_buffers,
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(mod->getContext()), 0),
         "",
         bb_entry);
-    varlen_output_buffer =
-        new LoadInst(get_pointer_element_type(varlen_output_buffer_gep),
-                     varlen_output_buffer_gep,
-                     "varlen_output_buffer",
-                     false,
-                     bb_entry);
+    varlen_output_buffer = new LoadInst(
+        pi64_type, varlen_output_buffer_gep, "varlen_output_buffer", false, bb_entry);
 
     group_buff_idx = BinaryOperator::Create(
         Instruction::Add,
@@ -660,19 +622,15 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
         "group_buff_idx_varlen_offset",
         bb_entry);
   } else {
-    varlen_output_buffer =
-        ConstantPointerNull::get(Type::getInt64PtrTy(mod->getContext()));
+    varlen_output_buffer = ConstantPointerNull::get(typed_ptr_ty(i64_type, 0));
   }
   CHECK(varlen_output_buffer);
 
   CastInst* pos_start_i64 = new SExtInst(pos_start, i64_type, "", bb_entry);
   GetElementPtrInst* group_by_buffers_gep = GetElementPtrInst::Create(
-      Ty->getPointerElementType(), group_by_buffers, group_buff_idx, "", bb_entry);
-  LoadInst* col_buffer = new LoadInst(get_pointer_element_type(group_by_buffers_gep),
-                                      group_by_buffers_gep,
-                                      "",
-                                      false,
-                                      bb_entry);
+      pi64_type, group_by_buffers, group_buff_idx, "", bb_entry);
+  LoadInst* col_buffer =
+      new LoadInst(pi64_type, group_by_buffers_gep, "", false, bb_entry);
   col_buffer->setName("col_buffer");
   col_buffer->setAlignment(LLVM_ALIGN(8));
 
@@ -739,19 +697,12 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
   ICmpInst* loop_or_exit =
       new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
   if (check_scan_limit) {
-    auto crt_matched = new LoadInst(get_pointer_element_type(crt_matched_ptr),
-                                    crt_matched_ptr,
-                                    "crt_matched",
-                                    false,
-                                    bb_forbody);
+    auto crt_matched =
+        new LoadInst(i32_type, crt_matched_ptr, "crt_matched", false, bb_forbody);
     auto filter_match = BasicBlock::Create(
         mod->getContext(), "filter_match", query_func_ptr, bb_crit_edge);
     llvm::Value* new_total_matched =
-        new LoadInst(get_pointer_element_type(old_total_matched_ptr),
-                     old_total_matched_ptr,
-                     "",
-                     false,
-                     filter_match);
+        new LoadInst(i32_type, old_total_matched_ptr, "", false, filter_match);
     new_total_matched =
         BinaryOperator::CreateAdd(new_total_matched, crt_matched, "", filter_match);
     CHECK(new_total_matched);

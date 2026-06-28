@@ -29,11 +29,7 @@
 #include <locale>
 #include "clang/Basic/Version.h"
 
-#if LLVM_VERSION_MAJOR >= 17
 #include <llvm/TargetParser/Host.h>
-#else
-#include <llvm/Support/Host.h>
-#endif
 
 #include "Logger/Logger.h"
 
@@ -77,11 +73,7 @@ class FunctionDeclVisitor : public RecursiveASTVisitor<FunctionDeclVisitor> {
 
  private:
   std::string getMainFileName() const {
-#if LLVM_VERSION_MAJOR >= 17
     auto f_entry = source_manager_.getFileEntryRefForID(source_manager_.getMainFileID());
-#else
-    auto f_entry = source_manager_.getFileEntryForID(source_manager_.getMainFileID());
-#endif
     return f_entry->getName().str();
   }
 

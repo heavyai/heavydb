@@ -358,6 +358,13 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         auto arg0_ti = arg0.front()->get_type_info();  // make a copy so we can override
         arg0_ti.set_output_srid(srid);
         if (arg0_ti.get_type() == kPOINT) {
+          if (auto geo_constant =
+                  std::dynamic_pointer_cast<Analyzer::GeoConstant>(arg0.front())) {
+            // fold transform for constant points, same as other geo constants
+            auto cast_geo_constant = geo_constant->add_cast(arg0_ti);
+            arg_ti = cast_geo_constant->get_type_info();
+            return {cast_geo_constant};
+          }
           // the output type is going to be fully transformed, so set the input srid to
           // the output srid
           const auto input_srid = arg0_ti.get_input_srid();
