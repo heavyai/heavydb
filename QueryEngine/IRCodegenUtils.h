@@ -50,18 +50,23 @@ inline llvm::VectorType* get_int_vector_type(int const width,
                                              llvm::LLVMContext& context) {
   switch (width) {
     case 64:
-      return llvm::VectorType::get(llvm::Type::getInt64Ty(context), count, false);
+      return llvm::VectorType::get(llvm::Type::getInt64Ty(context),
+                                   llvm::ElementCount::getFixed(count));
     case 32:
-      return llvm::VectorType::get(llvm::Type::getInt32Ty(context), count, false);
+      return llvm::VectorType::get(llvm::Type::getInt32Ty(context),
+                                   llvm::ElementCount::getFixed(count));
       break;
     case 16:
-      return llvm::VectorType::get(llvm::Type::getInt16Ty(context), count, false);
+      return llvm::VectorType::get(llvm::Type::getInt16Ty(context),
+                                   llvm::ElementCount::getFixed(count));
       break;
     case 8:
-      return llvm::VectorType::get(llvm::Type::getInt8Ty(context), count, false);
+      return llvm::VectorType::get(llvm::Type::getInt8Ty(context),
+                                   llvm::ElementCount::getFixed(count));
       break;
     case 1:
-      return llvm::VectorType::get(llvm::Type::getInt1Ty(context), count, false);
+      return llvm::VectorType::get(llvm::Type::getInt1Ty(context),
+                                   llvm::ElementCount::getFixed(count));
       break;
     default:
       LOG(FATAL) << "Unsupported integer width: " << width;

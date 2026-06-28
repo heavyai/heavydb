@@ -1632,7 +1632,7 @@ HashJoinMatchingSet BoundingBoxIntersectJoinHashTable::codegenMatchingSet(
     auto many_to_many_args = codegenManyKey(co);
     auto hash_ptr = HashJoin::codegenHashTableLoad(index, executor_);
     const auto composite_dict_ptr_type =
-        llvm::Type::getIntNPtrTy(LL_CONTEXT, key_component_width * 8);
+        get_int_ptr_type(key_component_width * 8, LL_CONTEXT);
     const auto composite_key_dict =
         hash_ptr->getType()->isPointerTy()
             ? LL_BUILDER.CreatePointerCast(hash_ptr, composite_dict_ptr_type)
@@ -1669,25 +1669,26 @@ HashJoinMatchingSet BoundingBoxIntersectJoinHashTable::codegenMatchingSet(
     const auto candidate_count_lv = executor_->cgen_state_->emitExternalCall(
         "get_candidate_rows",
         llvm::Type::getInt64Ty(LL_CONTEXT),
-        {rowid_ptr_i32,
-         error_code_ptr,
-         LL_INT(kMaxBBoxOverlapsCount),
-         many_to_many_args[1],
-         LL_INT(0),
-         LL_FP(inverse_bucket_sizes_for_dimension_[0]),
-         LL_FP(inverse_bucket_sizes_for_dimension_[1]),
-         many_to_many_args[0],
-         LL_INT(key_component_count),                // key_component_count
-         composite_key_dict,                         // ptr to hash table
-         LL_INT(getEntryCount()),                    // entry_count
-         LL_INT(composite_key_dict_size),            // offset_buffer_ptr_offset
-         LL_INT(getEntryCount() * sizeof(int32_t)),  // sub_buff_size
-         LL_INT(int32_t(heavyai::ErrorCode::BBOX_OVERLAPS_LIMIT_EXCEEDED))});
+        std::vector<llvm::Value*>{
+            rowid_ptr_i32,
+            error_code_ptr,
+            LL_INT(kMaxBBoxOverlapsCount),
+            many_to_many_args[1],
+            LL_INT(0),
+            LL_FP(inverse_bucket_sizes_for_dimension_[0]),
+            LL_FP(inverse_bucket_sizes_for_dimension_[1]),
+            many_to_many_args[0],
+            LL_INT(key_component_count),
+            composite_key_dict,
+            LL_INT(getEntryCount()),
+            LL_INT(composite_key_dict_size),
+            LL_INT(getEntryCount() * sizeof(int32_t)),
+            LL_INT(int32_t(heavyai::ErrorCode::BBOX_OVERLAPS_LIMIT_EXCEEDED))});
 
     const auto slot_lv = LL_INT(int64_t(0));
     auto error_code_lv =
         typed_load(LL_BUILDER, get_int_type(32, LL_CONTEXT), error_code_ptr);
-    return {rowid_ptr_i32, candidate_count_lv, slot_lv, error_code_lv};
+    return HashJoinMatchingSet{rowid_ptr_i32, candidate_count_lv, slot_lv, error_code_lv};
   } else {
     VLOG(1) << "Building codegenMatchingSet for Baseline";
     // TODO: duplicated w/ BaselineJoinHashTable -- push into the hash table builder?
@@ -1697,7 +1698,7 @@ HashJoinMatchingSet BoundingBoxIntersectJoinHashTable::codegenMatchingSet(
     CHECK(getHashType() == HashType::OneToMany);
     auto hash_ptr = HashJoin::codegenHashTableLoad(index, executor_);
     const auto composite_dict_ptr_type =
-        llvm::Type::getIntNPtrTy(LL_CONTEXT, key_component_width * 8);
+        get_int_ptr_type(key_component_width * 8, LL_CONTEXT);
     const auto composite_key_dict =
         hash_ptr->getType()->isPointerTy()
             ? LL_BUILDER.CreatePointerCast(hash_ptr, composite_dict_ptr_type)
@@ -1706,10 +1707,10 @@ HashJoinMatchingSet BoundingBoxIntersectJoinHashTable::codegenMatchingSet(
     const auto key = executor_->cgen_state_->emitExternalCall(
         "get_composite_key_index_" + std::to_string(key_component_width * 8),
         get_int_type(64, LL_CONTEXT),
-        {key_buff_lv,
-         LL_INT(key_component_count),
-         composite_key_dict,
-         LL_INT(getEntryCount())});
+        std::vector<llvm::Value*>{key_buff_lv,
+                                  LL_INT(key_component_count),
+                                  composite_key_dict,
+                                  LL_INT(getEntryCount())});
     auto one_to_many_ptr = hash_ptr;
     if (one_to_many_ptr->getType()->isPointerTy()) {
       one_to_many_ptr =

@@ -360,7 +360,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
 
   CastInst* pos_start_i64 = new SExtInst(pos_start, i64_type, "", bb_entry);
   ICmpInst* enter_or_not =
-      new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
+      new ICmpInst(bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
   BranchInst::Create(bb_preheader, bb_exit, enter_or_not, bb_entry);
 
   // Block .loop.preheader
@@ -398,7 +398,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
   BinaryOperator* pos_inc =
       BinaryOperator::CreateNSW(Instruction::Add, pos, pos_step_i64, "", bb_forbody);
   ICmpInst* loop_or_exit =
-      new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
+      new ICmpInst(bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
   BranchInst::Create(bb_forbody, bb_crit_edge, loop_or_exit, bb_forbody);
 
   // Block ._crit_edge
@@ -644,7 +644,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
                        bb_entry);
 
   ICmpInst* enter_or_not =
-      new ICmpInst(*bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
+      new ICmpInst(bb_entry, ICmpInst::ICMP_SLT, pos_start_i64, row_count, "");
   BranchInst::Create(bb_preheader, bb_exit, enter_or_not, bb_entry);
 
   // Block .loop.preheader
@@ -695,7 +695,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
   BinaryOperator* pos_inc =
       BinaryOperator::Create(Instruction::Add, pos, pos_step_i64, "", bb_forbody);
   ICmpInst* loop_or_exit =
-      new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
+      new ICmpInst(bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
   if (check_scan_limit) {
     auto crt_matched =
         new LoadInst(i32_type, crt_matched_ptr, "crt_matched", false, bb_forbody);
@@ -706,7 +706,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
     new_total_matched =
         BinaryOperator::CreateAdd(new_total_matched, crt_matched, "", filter_match);
     CHECK(new_total_matched);
-    ICmpInst* limit_not_reached = new ICmpInst(*filter_match,
+    ICmpInst* limit_not_reached = new ICmpInst(filter_match,
                                                ICmpInst::ICMP_SLT,
                                                new_total_matched,
                                                max_matched,
@@ -721,7 +721,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
         mod->getContext(), "filter_nomatch", query_func_ptr, bb_crit_edge);
     BranchInst::Create(bb_forbody, bb_crit_edge, loop_or_exit, filter_nomatch);
     ICmpInst* crt_matched_nz = new ICmpInst(
-        *bb_forbody, ICmpInst::ICMP_NE, crt_matched, ConstantInt::get(i32_type, 0), "");
+        bb_forbody, ICmpInst::ICMP_NE, crt_matched, ConstantInt::get(i32_type, 0), "");
     BranchInst::Create(filter_match, filter_nomatch, crt_matched_nz, bb_forbody);
     pos->addIncoming(pos_start_i64, bb_preheader);
     pos->addIncoming(pos_pre, filter_match);
