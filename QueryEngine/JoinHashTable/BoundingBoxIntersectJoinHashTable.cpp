@@ -1509,7 +1509,7 @@ llvm::Value* BoundingBoxIntersectJoinHashTable::codegenKey(const CompilationOpti
 
       const auto array_ptr = executor_->cgen_state_->emitExternalCall(
           "array_buff",
-          llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
+          typed_ptr_ty(get_int_type(8, executor_->cgen_state_->context_), 0),
           {outer_geo_col_lvs.front(), code_generator.posArg(outer_geo_col)});
       CHECK(coords_cd->columnType.get_elem_type().get_type() == kTINYINT)
           << "Bounding box intersection only supports TINYINT coordinates columns.";
@@ -1543,10 +1543,7 @@ llvm::Value* BoundingBoxIntersectJoinHashTable::codegenKey(const CompilationOpti
     const auto outer_geo_constructed_lvs = code_generator.codegen(outer_geo, true, co);
     // CHECK_EQ(outer_geo_constructed_lvs.size(), size_t(2));     // Pointer and size
     const auto array_ptr = outer_geo_constructed_lvs.front();  // Just need the pointer
-    arr_ptr = LL_BUILDER.CreateGEP(
-        array_ptr->getType()->getScalarType()->getPointerElementType(),
-        array_ptr,
-        LL_INT(0));
+    arr_ptr = typed_gep(LL_BUILDER, get_int_type(8, LL_CONTEXT), array_ptr, LL_INT(0));
     arr_ptr = code_generator.castArrayPointer(array_ptr, SQLTypeInfo(kTINYINT, true));
   }
   if (!arr_ptr) {
@@ -1556,10 +1553,8 @@ llvm::Value* BoundingBoxIntersectJoinHashTable::codegenKey(const CompilationOpti
   }
 
   for (size_t i = 0; i < 2; i++) {
-    const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(
-        key_buff_lv->getType()->getScalarType()->getPointerElementType(),
-        key_buff_lv,
-        LL_INT(i));
+    const auto key_comp_dest_lv =
+        typed_gep(LL_BUILDER, get_int_type(64, LL_CONTEXT), key_buff_lv, LL_INT(i));
 
     // Note that get_bucket_key_for_range_compressed will need to be specialized for
     // future compression schemes
@@ -1605,7 +1600,7 @@ std::vector<llvm::Value*> BoundingBoxIntersectJoinHashTable::codegenManyKey(
 
   const auto array_ptr = executor_->cgen_state_->emitExternalCall(
       "array_buff",
-      llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
+      typed_ptr_ty(get_int_type(8, executor_->cgen_state_->context_), 0),
       {col_lvs.front(), code_generator.posArg(outer_col)});
 
   // TODO(jclay): this seems to cast to double, and causes the GPU build to fail.
@@ -1661,13 +1656,11 @@ HashJoinMatchingSet BoundingBoxIntersectJoinHashTable::codegenMatchingSet(
     const auto out_arr_lv = LL_BUILDER.CreateAlloca(arr_type);
     out_arr_lv->setName("out_arr");
 
-    const auto casted_out_arr_lv =
-        LL_BUILDER.CreatePointerCast(out_arr_lv, arr_type->getPointerTo());
-
-    const auto element_ptr = LL_BUILDER.CreateGEP(arr_type, casted_out_arr_lv, LL_INT(0));
+    const auto element_ptr =
+        typed_array_element_ptr(LL_BUILDER, arr_type, out_arr_lv, LL_INT(0));
 
     auto rowid_ptr_i32 =
-        LL_BUILDER.CreatePointerCast(element_ptr, llvm::Type::getInt32PtrTy(LL_CONTEXT));
+        LL_BUILDER.CreatePointerCast(element_ptr, get_int_ptr_type(32, LL_CONTEXT));
 
     const auto error_code_ptr = LL_BUILDER.CreateAlloca(
         get_int_type(32, LL_CONTEXT), nullptr, "candidate_rows_error_code");
@@ -1692,8 +1685,8 @@ HashJoinMatchingSet BoundingBoxIntersectJoinHashTable::codegenMatchingSet(
          LL_INT(int32_t(heavyai::ErrorCode::BBOX_OVERLAPS_LIMIT_EXCEEDED))});
 
     const auto slot_lv = LL_INT(int64_t(0));
-    auto error_code_lv = LL_BUILDER.CreateLoad(
-        error_code_ptr->getType()->getPointerElementType(), error_code_ptr);
+    auto error_code_lv =
+        typed_load(LL_BUILDER, get_int_type(32, LL_CONTEXT), error_code_ptr);
     return {rowid_ptr_i32, candidate_count_lv, slot_lv, error_code_lv};
   } else {
     VLOG(1) << "Building codegenMatchingSet for Baseline";

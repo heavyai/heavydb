@@ -538,28 +538,19 @@ function install_awscpp() {
   check_artifact_cleanup aws-sdk-cpp-${AWSCPP_VERSION}.tar.gz aws-sdk-cpp-${AWSCPP_VERSION}
 }
 
-LLVM_VERSION=14.0.6
+LLVM_VERSION=17.0.6
 
 function install_llvm() {
     local VERS=${LLVM_VERSION}
     local remote_repo="https://github.com/llvm/llvm-project/releases/download/llvmorg-${VERS}"
-    download ${remote_repo}/llvm-$VERS.src.tar.xz
-    download ${remote_repo}/clang-$VERS.src.tar.xz
-    download ${remote_repo}/compiler-rt-$VERS.src.tar.xz
-    download ${remote_repo}/clang-tools-extra-$VERS.src.tar.xz
-    rm -rf llvm-$VERS.src
-    extract llvm-$VERS.src.tar.xz
-    extract clang-$VERS.src.tar.xz
-    extract compiler-rt-$VERS.src.tar.xz
-    extract clang-tools-extra-$VERS.src.tar.xz
-    mv clang-$VERS.src llvm-$VERS.src/tools/clang
-    mv compiler-rt-$VERS.src llvm-$VERS.src/projects/compiler-rt
-    mkdir -p llvm-$VERS.src/tools/clang/tools
-    mv clang-tools-extra-$VERS.src llvm-$VERS.src/tools/clang/tools/extra
+    local src_dir="llvm-project-${VERS}.src"
 
-    rm -rf build.llvm-$VERS
-    mkdir build.llvm-$VERS
-    pushd build.llvm-$VERS
+    download ${remote_repo}/llvm-project-${VERS}.src.tar.xz
+    rm -rf ${src_dir} build.llvm-${VERS}
+    extract llvm-project-${VERS}.src.tar.xz
+
+    mkdir build.llvm-${VERS}
+    pushd build.llvm-${VERS}
 
     LLVM_SHARED=""
     if [ "$LIBRARY_TYPE" == "shared" ]; then
@@ -579,24 +570,25 @@ function install_llvm() {
     cmake \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX=$PREFIX \
-      -DLLVM_ENABLE_RTTI=on \
-      -DLLVM_USE_INTEL_JITEVENTS=on \
-      -DLLVM_ENABLE_LIBEDIT=off \
-      -DLLVM_ENABLE_ZLIB=off \
-      -DLLVM_INCLUDE_BENCHMARKS=off \
-      -DLLVM_ENABLE_LIBXML2=off \
+      -DLLVM_ENABLE_PROJECTS="clang;clang-tools-extra" \
+      -DLLVM_ENABLE_RUNTIMES="compiler-rt" \
+      -DLLVM_ENABLE_RTTI=ON \
+      -DLLVM_USE_INTEL_JITEVENTS=ON \
+      -DLLVM_ENABLE_LIBEDIT=OFF \
+      -DLLVM_ENABLE_ZLIB=OFF \
+      -DLLVM_INCLUDE_BENCHMARKS=OFF \
+      -DLLVM_ENABLE_LIBXML2=OFF \
       -DLLVM_TARGETS_TO_BUILD="${LLVM_TARGETS_TO_BUILD}" \
       $LLVM_SHARED \
-      ../llvm-$VERS.src
+      ../${src_dir}/llvm
+
     makej
     make install
     popd
-    check_artifact_cleanup clang-$VERS.src.tar.xz llvm-$VERS.src/tools/clang
-    check_artifact_cleanup compiler-rt-$VERS.src.tar.xz llvm-$VERS.src/projects/compiler-rt
-    check_artifact_cleanup clang-tools-extra-$VERS.src.tar.xz llvm-$VERS.src/tools/clang/tools/extra
-    check_artifact_cleanup llvm-$VERS.src.tar.xz  llvm-$VERS.src
+
+    check_artifact_cleanup llvm-project-${VERS}.src.tar.xz ${src_dir}
     if [[ $SAVE_SPACE == 'true' ]]; then
-      rm -rf build.llvm-$VERS
+      rm -rf build.llvm-${VERS}
     fi
 }
 
@@ -913,8 +905,8 @@ function install_geos() {
     check_artifact_cleanup geos-${GEOS_VERSION}.tar.bz2 geos-${GEOS_VERSION}
 }
 
-IWYU_VERSION=0.18
-LLVM_VERSION_USED_FOR_IWYU=14.0.6
+IWYU_VERSION=0.21
+LLVM_VERSION_USED_FOR_IWYU=17.0.6
 if [ "$LLVM_VERSION" != "$LLVM_VERSION_USED_FOR_IWYU" ]; then
   # NOTE: If you get this error, somebody upgraded LLVM, but they need to go
   # to https://include-what-you-use.org/ then scroll down, figure out which
@@ -930,7 +922,7 @@ function install_iwyu() {
   mkdir -p $BUILD_DIR
   pushd $BUILD_DIR
   cmake -G "Unix Makefiles" \
-        -DCMAKE_PREFIX_PATH=${PREFIX}/lib \
+        -DCMAKE_PREFIX_PATH=${PREFIX} \
         -DCMAKE_INSTALL_PREFIX=${PREFIX} \
         ..
   cmake_build_and_install

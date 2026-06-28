@@ -15,7 +15,7 @@ namespace {
 // Creates an empty stub function, with the fixed signature required by the interpreter.
 llvm::Function* create_stub_function(const std::string& name, CgenState* cgen_state) {
   auto void_type = llvm::Type::getVoidTy(cgen_state->context_);
-  auto int8_ptr_type = llvm::PointerType::get(get_int_type(8, cgen_state->context_), 0);
+  auto int8_ptr_type = get_int_ptr_type(8, cgen_state->context_);
   std::vector<llvm::Type*> parameter_types(2, int8_ptr_type);
   const auto func_type = llvm::FunctionType::get(void_type, parameter_types, false);
   auto function = llvm::Function::Create(

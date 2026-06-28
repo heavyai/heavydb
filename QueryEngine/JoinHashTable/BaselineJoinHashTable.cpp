@@ -892,8 +892,8 @@ llvm::Value* BaselineJoinHashTable::codegenSlot(const CompilationOptions& co,
   CHECK(key_component_width == 4 || key_component_width == 8);
   auto key_buff_lv = codegenKey(co);
   const auto hash_ptr = hashPtr(index);
-  const auto key_ptr_lv =
-      LL_BUILDER.CreatePointerCast(key_buff_lv, llvm::Type::getInt8PtrTy(LL_CONTEXT));
+  const auto key_ptr_lv = LL_BUILDER.CreatePointerCast(
+      key_buff_lv, typed_ptr_ty(get_int_type(8, LL_CONTEXT), 0));
   const auto key_size_lv = LL_INT(getKeyComponentCount() * key_component_width);
   const auto hash_table = getAnyHashTableForDevice();
   return executor_->cgen_state_->emitExternalCall(
@@ -1003,10 +1003,11 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
 
   CodeGenerator code_generator(executor_);
   for (size_t i = 0; i < getKeyComponentCount(); ++i) {
-    const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(
-        key_buff_lv->getType()->getScalarType()->getPointerElementType(),
-        key_buff_lv,
-        LL_INT(i));
+    const auto key_comp_dest_lv =
+        typed_gep(LL_BUILDER,
+                  get_int_type(key_component_width * 8, LL_CONTEXT),
+                  key_buff_lv,
+                  LL_INT(i));
     const auto& inner_outer_pair = inner_outer_pairs_[i];
     const auto outer_col = inner_outer_pair.second;
     const auto key_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);
@@ -1036,7 +1037,7 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
 llvm::Value* BaselineJoinHashTable::hashPtr(const size_t index) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   auto hash_ptr = HashJoin::codegenHashTableLoad(index, executor_);
-  const auto pi8_type = llvm::Type::getInt8PtrTy(LL_CONTEXT);
+  const auto pi8_type = typed_ptr_ty(get_int_type(8, LL_CONTEXT), 0);
   return hash_ptr->getType()->isPointerTy()
              ? LL_BUILDER.CreatePointerCast(hash_ptr, pi8_type)
              : LL_BUILDER.CreateIntToPtr(hash_ptr, pi8_type);

@@ -786,7 +786,9 @@ std::tuple<T, std::vector<SQLTypeInfo>> bind_function(
           return {ext_funcs[optimal], type_info};
         }
       }
-      UNREACHABLE();
+      throw ExtensionFunctionBindingError("Could not resolve default-sizer UDTF " +
+                                          ext_funcs[optimal].getName() + " to a " +
+                                          processor + " implementation.");
     }
   }
 

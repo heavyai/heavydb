@@ -79,7 +79,7 @@ llvm::Value* CodeGenerator::codegenCase(const Analyzer::CaseExpr* case_expr,
     if (is_real_str) {
       if (then_bb_lvs.size() == 3) {
         auto char_ptr_lv = cgen_state_->ir_builder_.CreateBitCast(
-            then_bb_lvs[1], llvm::Type::getInt8PtrTy(cgen_state_->context_, 0));
+            then_bb_lvs[1], typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0));
         auto size_lv = cgen_state_->ir_builder_.CreateSExt(
             then_bb_lvs[2], llvm::Type::getInt64Ty(cgen_state_->context_));
         then_lvs.push_back(cgen_state_->getStringView(char_ptr_lv, size_lv));
@@ -104,7 +104,7 @@ llvm::Value* CodeGenerator::codegenCase(const Analyzer::CaseExpr* case_expr,
   llvm::Value* else_lv{nullptr};
   if (else_lvs.size() == 3) {
     auto char_ptr_lv = cgen_state_->ir_builder_.CreateBitCast(
-        else_lvs[1], llvm::Type::getInt8PtrTy(cgen_state_->context_, 0));
+        else_lvs[1], typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0));
     auto size_lv = cgen_state_->ir_builder_.CreateSExt(
         else_lvs[2], llvm::Type::getInt64Ty(cgen_state_->context_));
     else_lv = cgen_state_->getStringView(char_ptr_lv, size_lv);

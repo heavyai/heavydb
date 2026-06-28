@@ -142,7 +142,7 @@ struct DotProductArg {
       type = "ArrayExpr";
       params[0] = array_expr->isLocalAlloc()
                       ? cgen_state->ir_builder_.CreateBitCast(
-                            value, llvm::Type::getInt8PtrTy(cgen_state->context_))
+                            value, typed_ptr_ty(get_int_type(8, cgen_state->context_), 0))
                       : value;
       params[1] = cgen_state->llInt(array_expr->getElementCount());
       params[2] = cgen_state->llInt(uint32_t{});  // unused but needed for common API
@@ -252,15 +252,14 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
       array_element_size_bytes * 8, array_expr->getElementCount(), cgen_state_->context_);
 
   if (array_expr->isNull()) {
-    return {llvm::ConstantPointerNull::get(
-                llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0)),
+    return {llvm::ConstantPointerNull::get(get_int_ptr_type(64, cgen_state_->context_)),
             cgen_state_->llInt(0)};
   }
 
   if (0 == array_expr->getElementCount()) {
     llvm::Constant* dead_const = cgen_state_->llInt(0xdead);
     llvm::Value* dead_pointer = llvm::ConstantExpr::getIntToPtr(
-        dead_const, llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0));
+        dead_const, get_int_ptr_type(64, cgen_state_->context_));
     return {dead_pointer, cgen_state_->llInt(0)};
   }
 
@@ -272,11 +271,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
       throw QueryMustRunOnCpu();
     }
 
-    allocated_target_buffer =
-        cgen_state_->emitExternalCall("allocate_varlen_buffer",
-                                      llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                      {cgen_state_->llInt(array_expr->getElementCount()),
-                                       cgen_state_->llInt(array_element_size_bytes)});
+    allocated_target_buffer = cgen_state_->emitExternalCall(
+        "allocate_varlen_buffer",
+        typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0),
+        {cgen_state_->llInt(array_expr->getElementCount()),
+         cgen_state_->llInt(array_element_size_bytes)});
     cgen_state_->emitExternalCall(
         "register_buffer_with_executor_rsm",
         llvm::Type::getVoidTy(cgen_state_->context_),
@@ -288,10 +287,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
 
   for (size_t i = 0; i < array_expr->getElementCount(); i++) {
     auto* element = argument_list[i];
-    auto* element_ptr = ir_builder.CreateGEP(
-        array_type,
-        casted_allocated_target_buffer,
-        std::vector<llvm::Value*>{cgen_state_->llInt(0), cgen_state_->llInt(i)});
+    auto* element_ptr = typed_array_element_ptr(
+        ir_builder, array_type, casted_allocated_target_buffer, cgen_state_->llInt(i));
 
     const auto& elem_ti = return_type.get_elem_type();
     if (elem_ti.is_boolean()) {
@@ -302,13 +299,13 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
       switch (elem_ti.get_size()) {
         case sizeof(double): {
           const auto double_element_ptr = ir_builder.CreatePointerCast(
-              element_ptr, llvm::Type::getDoublePtrTy(cgen_state_->context_));
+              element_ptr, get_fp_ptr_type(64, cgen_state_->context_));
           ir_builder.CreateStore(element, double_element_ptr);
           break;
         }
         case sizeof(float): {
           const auto float_element_ptr = ir_builder.CreatePointerCast(
-              element_ptr, llvm::Type::getFloatPtrTy(cgen_state_->context_));
+              element_ptr, get_fp_ptr_type(32, cgen_state_->context_));
           ir_builder.CreateStore(element, float_element_ptr);
           break;
         }
@@ -326,7 +323,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
     }
   }
 
-  return {ir_builder.CreateGEP(
-              array_type, casted_allocated_target_buffer, cgen_state_->llInt(0)),
-          cgen_state_->llInt(array_expr->getElementCount())};
+  return {
+      typed_array_element_ptr(
+          ir_builder, array_type, casted_allocated_target_buffer, cgen_state_->llInt(0)),
+      cgen_state_->llInt(array_expr->getElementCount())};
 }

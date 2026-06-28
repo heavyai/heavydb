@@ -5,7 +5,19 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
+#include "IRCodegenUtils.h"
 #include "StringDictionaryTranslationMgr.h"
+
+namespace {
+
+llvm::StructType* text_encoding_none_struct_ty(llvm::LLVMContext& ctx) {
+  return llvm::StructType::get(ctx,
+                               {typed_ptr_ty(get_int_type(8, ctx), 0),
+                                get_int_type(64, ctx),
+                                get_int_type(8, ctx)});
+}
+
+}  // namespace
 
 llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
                                         const CompilationOptions& co) {
@@ -22,7 +34,7 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
         codegen(operand_as_const, ti.get_compression(), ti.getStringDictKey(), co);
     if (operand_lvs.size() == 3) {
       auto char_ptr_lv = cgen_state_->ir_builder_.CreateBitCast(
-          operand_lvs[1], llvm::Type::getInt8PtrTy(cgen_state_->context_, 0));
+          operand_lvs[1], typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0));
       auto size_lv = cgen_state_->ir_builder_.CreateSExt(
           operand_lvs[2], llvm::Type::getInt64Ty(cgen_state_->context_));
       operand_lv = cgen_state_->getStringView(char_ptr_lv, size_lv);
@@ -37,7 +49,7 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
   // unpack it into an int64_t using "string_pack" so that codegenCast
   // can properly cast it to a TextEncodingDict
   if (operand_lv->getType()->isPointerTy() &&
-      operand_lv->getType()->getPointerElementType()->isStructTy()) {
+      operand->get_type_info().is_text_encoding_none()) {
     bool const register_varlen_buffer_to_rsmo = true;
     operand_lv = codegenCallStringPackForTextEncodingNone(operand_lv,
                                                           register_varlen_buffer_to_rsmo);
@@ -632,9 +644,8 @@ llvm::Value* CodeGenerator::codegenCallStringPackForTextEncodingNone(
     llvm::Value* operand_lv,
     bool register_buffer_to_rsmo) {
   CHECK(operand_lv->getType()->isPointerTy());
-  CHECK(operand_lv->getType()->getPointerElementType()->isStructTy());
-  auto struct_lv = cgen_state_->ir_builder_.CreateLoad(
-      operand_lv->getType()->getPointerElementType(), operand_lv);
+  auto const none_enc_string_ty = text_encoding_none_struct_ty(cgen_state_->context_);
+  auto struct_lv = typed_load(cgen_state_->ir_builder_, none_enc_string_ty, operand_lv);
   auto ptr_lv = cgen_state_->ir_builder_.CreateExtractValue(struct_lv, {0});
   auto len_lv = cgen_state_->ir_builder_.CreateTrunc(
       cgen_state_->ir_builder_.CreateExtractValue(struct_lv, {1}),
@@ -646,7 +657,7 @@ llvm::Value* CodeGenerator::codegenCallStringPackForTextEncodingNone(
         {executor_->cgen_state_->llInt(reinterpret_cast<int64_t>(executor_)), ptr_lv});
   }
   auto char_ptr_lv = cgen_state_->ir_builder_.CreateBitCast(
-      ptr_lv, llvm::Type::getInt8PtrTy(cgen_state_->context_, 0));
+      ptr_lv, typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0));
   auto size_lv = cgen_state_->ir_builder_.CreateSExt(
       len_lv, llvm::Type::getInt64Ty(cgen_state_->context_));
   return cgen_state_->getStringView(char_ptr_lv, size_lv);
@@ -655,9 +666,7 @@ llvm::Value* CodeGenerator::codegenCallStringPackForTextEncodingNone(
 bool CodeGenerator::isTextEncodingNoneStringPtr(SQLTypeInfo const& lv_ti,
                                                 llvm::Value* str_lv) {
   auto lv_type = str_lv->getType();
-  return lv_ti.is_text_encoding_none() && lv_type->isPointerTy() &&
-         lv_type->getPointerElementType()->isStructTy() &&
-         lv_type->getPointerElementType()->getNumContainedTypes() == 3u;
+  return lv_ti.is_text_encoding_none() && lv_type->isPointerTy();
 }
 
 // this function returns a pair of start address of the string buffer
@@ -666,16 +675,15 @@ bool CodeGenerator::isTextEncodingNoneStringPtr(SQLTypeInfo const& lv_ti,
 std::tuple<llvm::Value*, llvm::Value*> CodeGenerator::extractTextEncodedNonePtrBufAndSize(
     llvm::Value* struct_ptr_lv) {
   CHECK(struct_ptr_lv->getType()->isPointerTy());
-  CHECK(struct_ptr_lv->getType()->getPointerElementType()->isStructTy());
-  CHECK_EQ(struct_ptr_lv->getType()->getPointerElementType()->getNumContainedTypes(), 3u);
-  auto struct_lv = cgen_state_->ir_builder_.CreateLoad(
-      struct_ptr_lv->getType()->getPointerElementType(), struct_ptr_lv);
+  auto const none_enc_string_ty = text_encoding_none_struct_ty(cgen_state_->context_);
+  auto struct_lv =
+      typed_load(cgen_state_->ir_builder_, none_enc_string_ty, struct_ptr_lv);
   auto ptr_lv = cgen_state_->ir_builder_.CreateExtractValue(struct_lv, {0});
   auto len_lv = cgen_state_->ir_builder_.CreateTrunc(
       cgen_state_->ir_builder_.CreateExtractValue(struct_lv, {1}),
       get_int_type(32, cgen_state_->context_));
   auto char_ptr_lv = cgen_state_->ir_builder_.CreateBitCast(
-      ptr_lv, llvm::Type::getInt8PtrTy(cgen_state_->context_, 0));
+      ptr_lv, typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0));
   auto size_lv = cgen_state_->ir_builder_.CreateSExt(
       len_lv, llvm::Type::getInt64Ty(cgen_state_->context_));
   return {char_ptr_lv, size_lv};

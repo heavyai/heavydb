@@ -5,8 +5,8 @@
 
 #include "QueryEngine/Execute.h"
 
-#if LLVM_VERSION_MAJOR < 14
-static_assert(false, "LLVM Version >= 14 is required.");
+#if LLVM_VERSION_MAJOR < 17
+static_assert(false, "LLVM Version >= 17 is required.");
 #endif
 
 #include <llvm/Analysis/ScopedNoAliasAA.h>
@@ -20,38 +20,40 @@ static_assert(false, "LLVM Version >= 14 is required.");
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/MC/TargetRegistry.h>
+#include <llvm/Passes/PassBuilder.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/TargetSelect.h>
-#if LLVM_VERSION_MAJOR >= 16
 #include <llvm/Support/Threading.h>
-#endif
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
+#include <llvm/Transforms/IPO/GlobalOpt.h>
 #include <llvm/Transforms/IPO/InferFunctionAttrs.h>
-#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation.h>
-#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Scalar/DeadStoreElimination.h>
+#include <llvm/Transforms/Scalar/EarlyCSE.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
+#include <llvm/Transforms/Scalar/JumpThreading.h>
+#include <llvm/Transforms/Scalar/LICM.h>
+#include <llvm/Transforms/Scalar/SROA.h>
+#include <llvm/Transforms/Scalar/SimplifyCFG.h>
 #include <llvm/Transforms/Utils.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Transforms/Utils/Mem2Reg.h>
 
-#if LLVM_VERSION_MAJOR >= 17
 #include <llvm/TargetParser/Host.h>
-#else
-#include <llvm/Support/Host.h>
-#endif
 
 #include "CudaMgr/CudaMgr.h"
 #include "Geospatial/GeosVersion.h"
@@ -69,6 +71,11 @@ static_assert(false, "LLVM Version >= 14 is required.");
 #include "Shared/InlineNullValues.h"
 #include "Shared/MathUtils.h"
 #include "StreamingTopN.h"
+
+namespace llvm {
+class ModulePass;
+llvm::ModulePass* createNVVMReflectPass(unsigned SmVersion);
+}  // namespace llvm
 
 using heavyai::ErrorCode;
 
@@ -354,49 +361,72 @@ void add_intrinsics_to_module(llvm::Module* llvm_module) {
 
 #endif
 
+template <typename AddPassesFn>
+void run_module_pass_pipeline(llvm::Module& module,
+                              llvm::TargetMachine* target_machine,
+                              AddPassesFn add_passes) {
+  llvm::PassBuilder pass_builder(target_machine);
+  llvm::LoopAnalysisManager loop_am;
+  llvm::FunctionAnalysisManager function_am;
+  llvm::CGSCCAnalysisManager cgscc_am;
+  llvm::ModuleAnalysisManager module_am;
+  pass_builder.registerModuleAnalyses(module_am);
+  pass_builder.registerFunctionAnalyses(function_am);
+  pass_builder.registerLoopAnalyses(loop_am);
+  pass_builder.registerCGSCCAnalyses(cgscc_am);
+  pass_builder.crossRegisterProxies(loop_am, function_am, cgscc_am, module_am);
+  if (target_machine) {
+    target_machine->registerPassBuilderCallbacks(pass_builder);
+  }
+  llvm::ModulePassManager module_pm;
+  add_passes(module_pm);
+  module_pm.run(module, module_am);
+}
+
+void run_annotate_internal_functions_pass(llvm::Module& module) {
+  run_module_pass_pipeline(module, nullptr, [](llvm::ModulePassManager& module_pm) {
+    module_pm.addPass(AnnotateInternalFunctionsPass());
+  });
+}
+
 void optimize_ir(llvm::Function* query_func,
                  llvm::Module* llvm_module,
                  llvm::legacy::PassManager& pass_manager,
                  const std::unordered_set<llvm::Function*>& live_funcs,
                  const bool is_gpu_smem_used,
                  const CompilationOptions& co) {
+  (void)query_func;
+  (void)co;
+  (void)pass_manager;
   auto timer = DEBUG_TIMER(__func__);
-  // the always inliner legacy pass must always run first
-  pass_manager.add(llvm::createVerifierPass());
-  pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
+  run_annotate_internal_functions_pass(*llvm_module);
+  run_module_pass_pipeline(
+      *llvm_module, nullptr, [&](llvm::ModulePassManager& module_pm) {
+        module_pm.addPass(llvm::VerifierPass());
+        module_pm.addPass(llvm::AlwaysInlinerPass());
 
-  pass_manager.add(new AnnotateInternalFunctionsPass());
+        llvm::FunctionPassManager function_pm;
+        function_pm.addPass(llvm::SROAPass(llvm::SROAOptions::ModifyCFG));
+        function_pm.addPass(llvm::EarlyCSEPass(/*UseMemSSA=*/true));
+        if (!is_gpu_smem_used) {
+          function_pm.addPass(llvm::JumpThreadingPass());
+        }
+        function_pm.addPass(llvm::SimplifyCFGPass());
+        function_pm.addPass(llvm::GVNPass());
+        function_pm.addPass(llvm::DSEPass());
+        function_pm.addPass(llvm::createFunctionToLoopPassAdaptor(
+            llvm::LICMPass(llvm::LICMOptions{}), /*UseMemorySSA=*/true));
+        function_pm.addPass(llvm::InstCombinePass());
+        function_pm.addPass(llvm::PromotePass());
+        module_pm.addPass(
+            llvm::createModuleToFunctionPassAdaptor(std::move(function_pm)));
 
-  pass_manager.add(llvm::createSROAPass());
-  // mem ssa drops unused load and store instructions, e.g. passing variables directly
-  // where possible
-  pass_manager.add(
-      llvm::createEarlyCSEPass(/*enable_mem_ssa=*/true));  // Catch trivial redundancies
+        module_pm.addPass(llvm::GlobalOptPass());
 
-  if (!is_gpu_smem_used) {
-    // thread jumps can change the execution order around SMEM sections guarded by
-    // `__syncthreads()`, which results in race conditions. For now, disable jump
-    // threading for shared memory queries. In the future, consider handling shared
-    // memory aggregations with a separate kernel launch
-    pass_manager.add(llvm::createJumpThreadingPass());  // Thread jumps.
-  }
-  pass_manager.add(llvm::createCFGSimplificationPass());
-
-  // remove load/stores in PHIs if instructions can be accessed directly post thread jumps
-  pass_manager.add(llvm::createNewGVNPass());
-
-  pass_manager.add(llvm::createDeadStoreEliminationPass());
-  pass_manager.add(llvm::createLICMPass());
-
-  pass_manager.add(llvm::createInstructionCombiningPass());
-
-  // module passes
-  pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
-  pass_manager.add(llvm::createGlobalOptimizerPass());
-
-  pass_manager.add(llvm::createCFGSimplificationPass());  // cleanup after everything
-
-  pass_manager.run(*llvm_module);
+        llvm::FunctionPassManager cleanup_pm;
+        cleanup_pm.addPass(llvm::SimplifyCFGPass());
+        module_pm.addPass(llvm::createModuleToFunctionPassAdaptor(std::move(cleanup_pm)));
+      });
 
   eliminate_dead_self_recursive_funcs(*llvm_module, live_funcs);
 }
@@ -1080,11 +1110,7 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
 
   result.insert(std::make_pair("cpu_name", llvm::sys::getHostCPUName()));
   result.insert(std::make_pair("cpu_triple", llvm::sys::getProcessTriple()));
-#if LLVM_VERSION_MAJOR >= 16
   auto const cpu_cores = llvm::get_physical_cores();
-#else
-  auto const cpu_cores = llvm::sys::getHostNumPhysicalCores();
-#endif
   result.insert(std::make_pair("cpu_cores", std::to_string(cpu_cores)));
   result.insert(std::make_pair("cpu_threads", std::to_string(cpu_threads())));
 
@@ -1228,15 +1254,29 @@ std::unordered_set<llvm::Function*> findAliveRuntimeFuncs(
   }
   return visited;
 }
+
+unsigned get_nvptx_sm_version(const llvm::TargetMachine& target_machine) {
+  llvm::StringRef cpu = target_machine.getTargetCPU();
+  unsigned sm_version = 0;
+  if (cpu.startswith("sm_")) {
+    cpu.drop_front(3).getAsInteger(10, sm_version);
+  }
+  return sm_version;
+}
+
+void run_nvvm_reflect_pass(llvm::Module& llvm_module,
+                           llvm::TargetMachine& target_machine) {
+  llvm::legacy::PassManager reflect_pm;
+  reflect_pm.add(llvm::createNVVMReflectPass(get_nvptx_sm_version(target_machine)));
+  reflect_pm.run(llvm_module);
+}
 #endif
 
 }  // namespace
 
-void CodeGenerator::linkModuleWithLibdevice(
-    Executor* executor,
-    llvm::Module& llvm_module,
-    llvm::PassManagerBuilder& pass_manager_builder,
-    const GPUTarget& gpu_target) {
+void CodeGenerator::linkModuleWithLibdevice(Executor* executor,
+                                            llvm::Module& llvm_module,
+                                            const GPUTarget& gpu_target) {
 #ifdef HAVE_CUDA
   auto timer = DEBUG_TIMER(__func__);
 
@@ -1285,17 +1325,8 @@ void CodeGenerator::linkModuleWithLibdevice(
     fn.addFnAttr("nvptx-f32ftz", "true");
   }
 
-  // add nvvm reflect pass replacing any NVVM conditionals with constants
-  gpu_target.nvptx_target_machine->adjustPassManager(pass_manager_builder);
-  llvm::legacy::FunctionPassManager FPM(&llvm_module);
-  pass_manager_builder.populateFunctionPassManager(FPM);
-
   // Run the NVVMReflectPass here rather than inside optimize_ir
-  FPM.doInitialization();
-  for (auto& F : llvm_module) {
-    FPM.run(F);
-  }
-  FPM.doFinalization();
+  run_nvvm_reflect_pass(llvm_module, *gpu_target.nvptx_target_machine);
 #endif
 }
 
@@ -1340,16 +1371,12 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
   llvm_module->setTargetTriple("nvptx64-nvidia-cuda");
   CHECK(gpu_target.nvptx_target_machine);
-  llvm::PassManagerBuilder pass_manager_builder = llvm::PassManagerBuilder();
-
-  pass_manager_builder.OptLevel = 0;
   llvm::legacy::PassManager module_pass_manager;
-  pass_manager_builder.populateModulePassManager(module_pass_manager);
 
   bool requires_libdevice = check_module_requires_libdevice(llvm_module);
 
   if (requires_libdevice) {
-    linkModuleWithLibdevice(executor, *llvm_module, pass_manager_builder, gpu_target);
+    linkModuleWithLibdevice(executor, *llvm_module, gpu_target);
   }
 
   // run optimizations
@@ -1477,8 +1504,15 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     throw QueryMustRunOnCpu();
   }
   LOG(PTX) << "PTX for the GPU:\n" << ptx << "\nEnd of PTX";
-  CubinResult cubin_result = ptx_to_cubin(
-      ptx, gpu_target.cuda_mgr, *executor->getAvailableDevicesToProcessQuery().begin());
+  CubinResult cubin_result;
+  try {
+    cubin_result = ptx_to_cubin(
+        ptx, gpu_target.cuda_mgr, *executor->getAvailableDevicesToProcessQuery().begin());
+  } catch (const CudaMgr_Namespace::CudaErrorException& e) {
+    LOG(WARNING) << "Failed to link PTX to cubin: " << e.what()
+                 << ". Switching to CPU execution target.";
+    throw QueryMustRunOnCpu();
+  }
   VLOG(1) << "GPU code compilation finished: " << timer_stop(compile_start_timer)
           << " ms";
   auto gpu_compilation_context = std::make_shared<GpuCompilationContext>(
@@ -1841,53 +1875,53 @@ llvm::Function* create_row_function(const size_t in_col_count,
   if (agg_col_count) {
     // output (aggregate) arguments
     for (size_t i = 0; i < agg_col_count; ++i) {
-      row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+      row_process_arg_types.push_back(get_int_ptr_type(64, context));
     }
   } else {
     // group by buffer
-    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+    row_process_arg_types.push_back(get_int_ptr_type(64, context));
     // varlen output buffer
-    row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+    row_process_arg_types.push_back(get_int_ptr_type(64, context));
     // current match count
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(get_int_ptr_type(32, context));
     // total match count passed from the caller
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(get_int_ptr_type(32, context));
     // old total match count returned to the caller
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(get_int_ptr_type(32, context));
     // max matched (total number of slots in the output buffer)
-    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    row_process_arg_types.push_back(get_int_ptr_type(32, context));
   }
 
   // aggregate init values
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(get_int_ptr_type(64, context));
 
   // position argument
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
 
   // fragment row offset argument
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(get_int_ptr_type(64, context));
 
   // fragment ids argument
-  row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+  row_process_arg_types.push_back(get_int_ptr_type(32, context));
 
   // number of rows for each scan
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(get_int_ptr_type(64, context));
 
   // literals buffer argument
   if (hoist_literals) {
-    row_process_arg_types.push_back(llvm::Type::getInt8PtrTy(context));
+    row_process_arg_types.push_back(typed_ptr_ty(get_int_type(8, context), 0));
   }
 
   // column buffer arguments
   for (size_t i = 0; i < in_col_count; ++i) {
-    row_process_arg_types.emplace_back(llvm::Type::getInt8PtrTy(context));
+    row_process_arg_types.emplace_back(typed_ptr_ty(get_int_type(8, context), 0));
   }
 
   // join hash table argument
-  row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
+  row_process_arg_types.push_back(get_int_ptr_type(64, context));
 
   // row function manager
-  row_process_arg_types.push_back(llvm::Type::getInt8PtrTy(context));
+  row_process_arg_types.push_back(typed_ptr_ty(get_int_type(8, context), 0));
 
   // generate the function
   auto ft =
@@ -2583,14 +2617,8 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
   // copy the row_func function body over
   // see
   // https://stackoverflow.com/questions/12864106/move-function-body-avoiding-full-cloning/18751365
-#if LLVM_VERSION_MAJOR >= 16
   row_func_with_hoisted_literals->splice(row_func_with_hoisted_literals->begin(),
                                          cgen_state_->row_func_);
-#else
-  row_func_with_hoisted_literals->getBasicBlockList().splice(
-      row_func_with_hoisted_literals->begin(),
-      cgen_state_->row_func_->getBasicBlockList());
-#endif
 
   // also replace row_func arguments with the arguments from row_func_hoisted_literals
   for (llvm::Function::arg_iterator I = cgen_state_->row_func_->arg_begin(),
@@ -2634,14 +2662,8 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
     // copy the filter_func function body over
     // see
     // https://stackoverflow.com/questions/12864106/move-function-body-avoiding-full-cloning/18751365
-#if LLVM_VERSION_MAJOR >= 16
     filter_func_with_hoisted_literals->splice(filter_func_with_hoisted_literals->begin(),
                                               cgen_state_->filter_func_);
-#else
-    filter_func_with_hoisted_literals->getBasicBlockList().splice(
-        filter_func_with_hoisted_literals->begin(),
-        cgen_state_->filter_func_->getBasicBlockList());
-#endif
     // also replace filter_func arguments with the arguments from
     // filter_func_hoisted_literals
     for (llvm::Function::arg_iterator I = cgen_state_->filter_func_->arg_begin(),
@@ -3088,10 +3110,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   auto& fetch_bb = query_func->front();
   llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
   fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
-  auto col_heads = generate_column_heads_load(ra_exe_unit.input_col_descs.size(),
-                                              get_arg_by_name(query_func, "byte_stream"),
-                                              fetch_ir_builder,
-                                              cgen_state_->context_);
+  auto col_heads =
+      generate_column_heads_load(ra_exe_unit.input_col_descs.size(),
+                                 get_arg_by_name(query_func, "byte_stream"),
+                                 fetch_ir_builder,
+                                 cgen_state_->context_,
+                                 typed_ptr_ty(get_int_type(8, cgen_state_->context_), 0));
   CHECK_EQ(ra_exe_unit.input_col_descs.size(), col_heads.size());
 
   cgen_state_->row_func_ = create_row_function(ra_exe_unit.input_col_descs.size(),
@@ -3532,8 +3556,8 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
           cgen_state_->context_, "loop_done_true", cgen_state_->row_func_);
       auto loop_done_false = llvm::BasicBlock::Create(
           cgen_state_->context_, "loop_done_false", cgen_state_->row_func_);
-      auto loop_done_flag = cgen_state_->ir_builder_.CreateLoad(
-          loop_done->getType()->getPointerElementType(), loop_done);
+      auto loop_done_flag = typed_load(
+          cgen_state_->ir_builder_, get_int_type(1, cgen_state_->context_), loop_done);
       cgen_state_->ir_builder_.CreateCondBr(
           loop_done_flag, loop_done_true, loop_done_false);
       cgen_state_->ir_builder_.SetInsertPoint(loop_done_true);
@@ -3549,17 +3573,21 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
 std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
                                                      llvm::Value* byte_stream_arg,
                                                      llvm::IRBuilder<>& ir_builder,
-                                                     llvm::LLVMContext& ctx) {
+                                                     llvm::LLVMContext& ctx,
+                                                     llvm::Type* element_ty) {
+  // Under opaque pointers the element type of each head slot must be passed
+  // explicitly (e.g. i8* for column buffers, i64 for row counts).
   CHECK(byte_stream_arg);
+  CHECK(element_ty);
   const auto max_col_local_id = num_columns - 1;
 
   std::vector<llvm::Value*> col_heads;
   for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
-    auto* gep = ir_builder.CreateGEP(
-        byte_stream_arg->getType()->getScalarType()->getPointerElementType(),
-        byte_stream_arg,
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), col_id));
-    auto* load_gep = ir_builder.CreateLoad(gep->getType()->getPointerElementType(), gep);
+    auto* gep = typed_gep(ir_builder,
+                          element_ty,
+                          byte_stream_arg,
+                          llvm::ConstantInt::get(get_int_type(32, ctx), col_id));
+    auto* load_gep = typed_load(ir_builder, element_ty, gep);
     load_gep->setName(byte_stream_arg->getName() + "_" + std::to_string(col_id) + "_ptr");
     col_heads.emplace_back(load_gep);
   }

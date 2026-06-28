@@ -19,6 +19,7 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_os_ostream.h>
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -122,7 +123,10 @@ std::pair<void*, std::unique_ptr<llvm::ExecutionEngine>> native_codegen(
   CHECK(execution_engine);
 
   execution_engine->finalizeObject();
-  auto native_code = execution_engine->getPointerToFunction(func);
+  const uint64_t native_addr =
+      execution_engine->getFunctionAddress(func->getName().str());
+  CHECK(native_addr);
+  auto native_code = reinterpret_cast<void*>(static_cast<uintptr_t>(native_addr));
 
   CHECK(native_code);
   return {native_code, std::unique_ptr<llvm::ExecutionEngine>(execution_engine)};
