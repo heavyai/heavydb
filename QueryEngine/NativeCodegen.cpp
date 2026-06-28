@@ -5,8 +5,8 @@
 
 #include "QueryEngine/Execute.h"
 
-#if LLVM_VERSION_MAJOR < 17
-static_assert(false, "LLVM Version >= 17 is required.");
+#if LLVM_VERSION_MAJOR < 19
+static_assert(false, "LLVM Version >= 19 is required.");
 #endif
 
 #include <llvm/Analysis/ScopedNoAliasAA.h>
@@ -331,7 +331,7 @@ void eliminate_dead_self_recursive_funcs(
 bool check_module_requires_libdevice(llvm::Module* llvm_module) {
   auto timer = DEBUG_TIMER(__func__);
   for (llvm::Function& F : *llvm_module) {
-    if (F.hasName() && F.getName().startswith("__nv_")) {
+    if (F.hasName() && F.getName().starts_with("__nv_")) {
       LOG(INFO) << "Module requires linking with libdevice: " << std::string(F.getName());
       return true;
     }
@@ -486,7 +486,7 @@ std::string assemblyForCPU(ExecutionEngineWrapper& execution_engine,
   llvm::SmallString<256> code_str;
   llvm::raw_svector_ostream os(code_str);
   cpu_target_machine->addPassesToEmitFile(
-      pass_manager, os, nullptr, llvm::CGFT_AssemblyFile);
+      pass_manager, os, nullptr, llvm::CodeGenFileType::AssemblyFile);
   pass_manager.run(*llvm_module);
   return "Assembly for the CPU:\n" + std::string(code_str.str()) + "\nEnd of assembly";
 }
@@ -552,7 +552,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   to.EnableFastISel = true;
   eb.setTargetOptions(to);
   if (co.opt_level == ExecutorOptLevel::ReductionJIT) {
-    eb.setOptLevel(llvm::CodeGenOpt::None);
+    eb.setOptLevel(llvm::CodeGenOptLevel::None);
   }
 
   return create_execution_engine(llvm_module, eb, co);
@@ -1166,8 +1166,8 @@ std::map<std::string, std::string> get_device_parameters(bool cpu_only) {
 
   result.insert(std::make_pair("null_values", null_values));
 
-  llvm::StringMap<bool> cpu_features;
-  if (llvm::sys::getHostCPUFeatures(cpu_features)) {
+  const auto cpu_features = llvm::sys::getHostCPUFeatures();
+  if (!cpu_features.empty()) {
     std::string features_str = "";
     for (auto it = cpu_features.begin(); it != cpu_features.end(); ++it) {
       features_str += (it->getValue() ? " +" : " -");
@@ -1258,7 +1258,7 @@ std::unordered_set<llvm::Function*> findAliveRuntimeFuncs(
 unsigned get_nvptx_sm_version(const llvm::TargetMachine& target_machine) {
   llvm::StringRef cpu = target_machine.getTargetCPU();
   unsigned sm_version = 0;
-  if (cpu.startswith("sm_")) {
+  if (cpu.starts_with("sm_")) {
     cpu.drop_front(3).getAsInteger(10, sm_version);
   }
   return sm_version;
@@ -1421,7 +1421,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
       // __internal_lgamma_pos
       // Those functions have a "noinline" attribute which prevents the optimizer from
       // inlining them into the body of @query_func
-      if (F.hasName() && F.getName().startswith("__internal") && !F.isDeclaration()) {
+      if (F.hasName() && F.getName().starts_with("__internal") && !F.isDeclaration()) {
         roots.insert(&F);
       }
       legalize_nvvm_ir(&F);
@@ -1634,7 +1634,7 @@ std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
     llvm_module->setDataLayout(nvptx_target_machine->createDataLayout());
 
     nvptx_target_machine->addPassesToEmitFile(
-        ptxgen_pm, formatted_os, nullptr, llvm::CGFT_AssemblyFile);
+        ptxgen_pm, formatted_os, nullptr, llvm::CodeGenFileType::AssemblyFile);
     ptxgen_pm.run(*llvm_module);
   }
 
@@ -2641,7 +2641,7 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
             e = llvm::inst_end(row_func_with_hoisted_literals);
        it != e;
        ++it) {
-    if (it->hasName() && it->getName().startswith(prefix)) {
+    if (it->hasName() && it->getName().starts_with(prefix)) {
       auto offset_and_index_entry =
           cgen_state_->row_func_hoisted_literals_.find(llvm::dyn_cast<llvm::Value>(&*it));
       CHECK(offset_and_index_entry != cgen_state_->row_func_hoisted_literals_.end());
@@ -2685,7 +2685,7 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
               e = llvm::inst_end(filter_func_with_hoisted_literals);
          it != e;
          ++it) {
-      if (it->hasName() && it->getName().startswith(prefix)) {
+      if (it->hasName() && it->getName().starts_with(prefix)) {
         auto offset_and_index_entry = cgen_state_->row_func_hoisted_literals_.find(
             llvm::dyn_cast<llvm::Value>(&*it));
         CHECK(offset_and_index_entry != cgen_state_->row_func_hoisted_literals_.end());

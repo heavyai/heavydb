@@ -913,7 +913,7 @@ HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
   CHECK(getHashType() == HashType::OneToMany);
   auto hash_ptr = HashJoin::codegenHashTableLoad(index, executor_);
   const auto composite_dict_ptr_type =
-      llvm::Type::getIntNPtrTy(LL_CONTEXT, key_component_width * 8);
+      get_int_ptr_type(key_component_width * 8, LL_CONTEXT);
   const auto composite_key_dict =
       hash_ptr->getType()->isPointerTy()
           ? LL_BUILDER.CreatePointerCast(hash_ptr, composite_dict_ptr_type)
@@ -922,10 +922,10 @@ HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
   const auto key = executor_->cgen_state_->emitExternalCall(
       "get_composite_key_index_" + std::to_string(key_component_width * 8),
       get_int_type(64, LL_CONTEXT),
-      {key_buff_lv,
-       LL_INT(key_component_count),
-       composite_key_dict,
-       LL_INT(hash_table->getEntryCount())});
+      std::vector<llvm::Value*>{key_buff_lv,
+                                LL_INT(key_component_count),
+                                composite_key_dict,
+                                LL_INT(hash_table->getEntryCount())});
   auto one_to_many_ptr = hash_ptr;
   if (one_to_many_ptr->getType()->isPointerTy()) {
     one_to_many_ptr =
@@ -937,7 +937,10 @@ HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
   one_to_many_ptr =
       LL_BUILDER.CreateAdd(one_to_many_ptr, LL_INT(composite_key_dict_size));
   return HashJoin::codegenMatchingSet(
-      {one_to_many_ptr, key, LL_INT(int64_t(0)), LL_INT(hash_table->getEntryCount() - 1)},
+      std::vector<llvm::Value*>{one_to_many_ptr,
+                                key,
+                                LL_INT(int64_t(0)),
+                                LL_INT(hash_table->getEntryCount() - 1)},
       false,
       false,
       false,
