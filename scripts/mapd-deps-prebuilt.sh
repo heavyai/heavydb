@@ -22,8 +22,9 @@ function untar_deps(){
 # Establish distro
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
-  if [ "$VERSION_ID" != "22.04" ]; then
-    echo "Ubuntu 22.04 is the only Debian-based OS supported by this script"
+  if [ "$VERSION_ID" != "24.04" ] && [ "$VERSION_ID" != "22.04" ]; then
+    echo "Ubuntu 24.04 and 22.04 are the only Debian-based OSs supported by this script"
+    echo "If you are still using 20.04 or 23.10 then you need to upgrade!"
     exit 1
   fi
 elif [ "$ID" == "rocky" ] ; then
@@ -44,6 +45,7 @@ ENABLE=false
 LIBRARY_TYPE=
 INCLUDED_FILES_DIR=
 TSAN=false
+TZ="America/Los_Angeles"
 
 function help_msg(){
   cat << _HELP
@@ -112,6 +114,9 @@ while (( $# )); do
     --tsan)
       TSAN=true
       ;;
+    --tz=*)
+      TZ="${1#*=}"
+      ;;
     --help)
       help_msg
       ;;
@@ -131,7 +136,6 @@ fi
 
 # Establish architecture
 ARCH=$(uname -m)
-
 
 # update packages if requested
 # pass options to allow dodging broken updates if necessary (e.g. --ignore=package1,package2)
@@ -177,13 +181,15 @@ source ${INCLUDED_FILES_DIR}/common-functions.sh
 if [ "$ID" == "ubuntu" ] ; then
   install_required_ubuntu_packages
 
-  sudo apt install -y gcc-11 g++-11
+  if [[ "${VERSION_ID}" == "22.04" ]]; then
+    sudo apt install -y gcc-11 g++-11
 
-  # Set up gcc-11 as default gcc
-  sudo update-alternatives \
-    --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
-    --slave /usr/bin/g++ g++ /usr/bin/g++-11
-  sudo update-alternatives --set gcc /usr/bin/gcc-11
+    # Set up gcc-11 as default gcc
+    sudo update-alternatives \
+      --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
+      --slave /usr/bin/g++ g++ /usr/bin/g++-11
+    sudo update-alternatives --set gcc /usr/bin/gcc-11
+  fi
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX

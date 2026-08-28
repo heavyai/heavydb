@@ -1,0 +1,10 @@
+--- a/vendor/lazperf/Inserter.hpp	2025-11-19 17:30:35.188696754 -0800
++++ b/vendor/lazperf/Inserter.hpp	2025-11-19 17:34:11.934850669 -0800
+@@ -34,6 +34,7 @@
+ #pragma once
+ 
+ #include <cstring>
++#include <cstdint>
+ 
+ #include "portable_endian.hpp"
+ 

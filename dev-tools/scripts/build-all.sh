@@ -194,7 +194,7 @@ Component options:
                           source. Falls back to --ref when not set.
   --repos-dir=<path>      Parent dir for component repo clones.
                           Default: parent directory of this repo.
-  --distro=ubuntu22.04|rockylinux8
+  --distro=ubuntu22.04|ubuntu24.04|rockylinux8
                           Distro variant. Selects HeavyIQ build script and
                           filters deps image auto-detection. (default: ubuntu22.04)
 
