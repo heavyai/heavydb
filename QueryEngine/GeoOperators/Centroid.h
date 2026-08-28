@@ -76,21 +76,13 @@ class Centroid : public Codegen {
     }
     CHECK_EQ(operand_lvs.size(),
              size_t(2 * operand_ti.get_physical_coord_cols()));  // array ptr and size
+    narrow_geo_size_slots_to_i32(builder, operand_lvs);
 
     // note that this block is the only one that differs from Area/Perimeter
     // use the points array size argument for nullability
     llvm::Value* null_check_operand_lv{nullptr};
     if (is_nullable_) {
       null_check_operand_lv = operand_lvs[1];
-      if (null_check_operand_lv->getType() !=
-          llvm::Type::getInt32Ty(cgen_state->context_)) {
-        CHECK(null_check_operand_lv->getType() ==
-              llvm::Type::getInt64Ty(cgen_state->context_));
-        // Geos functions come out 64-bit, cast down to 32 for now
-
-        null_check_operand_lv = builder.CreateTrunc(
-            null_check_operand_lv, llvm::Type::getInt32Ty(cgen_state->context_));
-      }
     }
 
     return std::make_tuple(operand_lvs, null_check_operand_lv);

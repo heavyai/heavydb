@@ -145,9 +145,9 @@ extern "C" RUNTIME_EXPORT const int32_t* read_stub_arg_pi32(const void* inputs_h
   return static_cast<const int32_t*>(read_stub_arg_pvoid(inputs_handle, i));
 }
 
-extern "C" RUNTIME_EXPORT const int32_t* read_stub_arg_pi64(const void* inputs_handle,
+extern "C" RUNTIME_EXPORT const int64_t* read_stub_arg_pi64(const void* inputs_handle,
                                                             const int32_t i) {
-  return static_cast<const int32_t*>(read_stub_arg_pvoid(inputs_handle, i));
+  return static_cast<const int64_t*>(read_stub_arg_pvoid(inputs_handle, i));
 }
 
 extern "C" RUNTIME_EXPORT const int64_t* const* read_stub_arg_ppi64(
@@ -205,8 +205,14 @@ StubGenerator::Stub StubGenerator::generateStub(const size_t executor_id,
     const auto arg_type = arg_types[i];
     const auto read_arg_name = get_stub_read_argument_name(arg_type);
     const auto llvm_arg_type = llvm_type(arg_type, ctx);
+    // All integer widths share read_stub_arg_int, which returns int64_t, so the call
+    // must be emitted with the runtime signature and narrowed afterwards. Requesting
+    // the argument's own width instead would declare the same callee with conflicting
+    // signatures whenever a stub mixes integer widths.
+    auto* const read_arg_ret_type =
+        is_integer_type(arg_type) ? get_int_type(64, ctx) : llvm_arg_type;
     auto callee_arg = cgen_state->emitExternalCall(
-        read_arg_name, llvm_arg_type, {&*inputs_it, cgen_state->llInt<int32_t>(i)});
+        read_arg_name, read_arg_ret_type, {&*inputs_it, cgen_state->llInt<int32_t>(i)});
     if (is_integer_type(arg_type)) {
       CHECK(llvm_arg_type->isIntegerTy());
       callee_arg = cgen_state->ir_builder_.CreateTrunc(callee_arg, llvm_arg_type);

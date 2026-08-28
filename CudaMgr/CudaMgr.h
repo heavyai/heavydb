@@ -147,13 +147,13 @@ class CudaMgr {
         return "sm_75";
       case NvidiaDeviceArch::Ampere:
         return "sm_80";
-      // LLVM 19.1.7 NVPTX supports sm_89 and sm_90; no native sm_100 yet for Blackwell.
+      // LLVM 21.1.8 NVPTX supports sm_89, sm_90, and sm_100 (Blackwell).
       case NvidiaDeviceArch::Ada:
         return "sm_89";
       case NvidiaDeviceArch::Hopper:
         return "sm_90";
       case NvidiaDeviceArch::Blackwell:
-        return "sm_90";
+        return "sm_100";
     }
     UNREACHABLE();
     return "";

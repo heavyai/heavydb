@@ -5,8 +5,8 @@
 
 #include "QueryEngine/Execute.h"
 
-#if LLVM_VERSION_MAJOR < 19
-static_assert(false, "LLVM Version >= 19 is required.");
+#if LLVM_VERSION_MAJOR < 21
+static_assert(false, "LLVM Version >= 21 is required.");
 #endif
 
 #include <llvm/Analysis/ScopedNoAliasAA.h>
@@ -39,7 +39,6 @@ static_assert(false, "LLVM Version >= 19 is required.");
 #include <llvm/Transforms/IPO/GlobalOpt.h>
 #include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
-#include <llvm/Transforms/Instrumentation.h>
 #include <llvm/Transforms/Scalar/DeadStoreElimination.h>
 #include <llvm/Transforms/Scalar/EarlyCSE.h>
 #include <llvm/Transforms/Scalar/GVN.h>
@@ -51,6 +50,7 @@ static_assert(false, "LLVM Version >= 19 is required.");
 #include <llvm/Transforms/Utils.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Transforms/Utils/Instrumentation.h>
 #include <llvm/Transforms/Utils/Mem2Reg.h>
 
 #include <llvm/TargetParser/Host.h>
@@ -347,12 +347,12 @@ void add_intrinsics_to_module(llvm::Module* llvm_module) {
       if (llvm::IntrinsicInst* ii = llvm::dyn_cast<llvm::IntrinsicInst>(&I)) {
         if (llvm::Intrinsic::isOverloaded(ii->getIntrinsicID())) {
           llvm::Type* Tys[] = {ii->getFunctionType()->getReturnType()};
-          llvm::Function& decl_fn =
-              *llvm::Intrinsic::getDeclaration(llvm_module, ii->getIntrinsicID(), Tys);
+          llvm::Function& decl_fn = *llvm::Intrinsic::getOrInsertDeclaration(
+              llvm_module, ii->getIntrinsicID(), Tys);
           ii->setCalledFunction(&decl_fn);
         } else {
           // inserts the declaration into the module if not present
-          llvm::Intrinsic::getDeclaration(llvm_module, ii->getIntrinsicID());
+          llvm::Intrinsic::getOrInsertDeclaration(llvm_module, ii->getIntrinsicID());
         }
       }
     }
@@ -1369,7 +1369,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
       "i16:16:16-i32:32:32-i64:64:64-"
       "f32:32:32-f64:64:64-v16:16:16-"
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
-  llvm_module->setTargetTriple("nvptx64-nvidia-cuda");
+  llvm_module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
   CHECK(gpu_target.nvptx_target_machine);
   llvm::legacy::PassManager module_pass_manager;
 
@@ -1658,7 +1658,7 @@ std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
     LOG(FATAL) << err;
   }
   return std::unique_ptr<llvm::TargetMachine>(
-      target->createTargetMachine("nvptx64-nvidia-cuda",
+      target->createTargetMachine(llvm::Triple("nvptx64-nvidia-cuda"),
                                   CudaMgr_Namespace::CudaMgr::deviceArchToSM(arch),
                                   "",
                                   llvm::TargetOptions(),
@@ -3065,7 +3065,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   auto is_gpu = co.device_type == ExecutorDeviceType::GPU;
   if (is_gpu) {
     cgen_state_->module_->setDataLayout(get_gpu_data_layout());
-    cgen_state_->module_->setTargetTriple(get_gpu_target_triple_string());
+    cgen_state_->module_->setTargetTriple(llvm::Triple(get_gpu_target_triple_string()));
   }
   if (has_udf_module(/*is_gpu=*/is_gpu)) {
     CodeGenerator::link_udf_module(

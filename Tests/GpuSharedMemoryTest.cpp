@@ -147,7 +147,7 @@ void prepare_generated_gpu_kernel(llvm::Module* module,
       "i16:16:16-i32:32:32-i64:64:64-"
       "f32:32:32-f64:64:64-v16:16:16-"
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
-  module->setTargetTriple("nvptx64-nvidia-cuda");
+  module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
 
   llvm::NamedMDNode* md = module->getOrInsertNamedMetadata("nvvm.annotations");
 
@@ -311,7 +311,7 @@ void perform_test_and_verify_results(TestInputData input) {
       "i16:16:16-i32:32:32-i64:64:64-"
       "f32:32:32-f64:64:64-v16:16:16-"
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
-  module->setTargetTriple("nvptx64-nvidia-cuda");
+  module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
   auto cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(1);
   const auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
       Executor::getArenaBlockSize(), executor->getExecutorId());

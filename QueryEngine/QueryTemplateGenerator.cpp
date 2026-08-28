@@ -7,6 +7,7 @@
 #include "IRCodegenUtils.h"
 #include "Logger/Logger.h"
 
+#include <llvm/IR/Attributes.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Instructions.h>
@@ -18,6 +19,10 @@
 
 namespace {
 
+// Tag for LLVM 21 captures(none), which replaced the nocapture enum attribute.
+struct NoCaptureTag {};
+constexpr NoCaptureTag NoCapture{};
+
 template <typename... ATTRS>
 llvm::AttributeList make_attribute_list(llvm::Module const* const mod,
                                         unsigned const index,
@@ -26,6 +31,18 @@ llvm::AttributeList make_attribute_list(llvm::Module const* const mod,
   // llvm::AttrBuilder basically wraps a llvm::SmallVector<llvm::Attribute, 8>.
   static_assert(sizeof...(ATTRS) <= 8, "Use a llvm::SmallVector with a larger size.");
   llvm::AttrBuilder attr_builder(mod->getContext());
+  (attr_builder.addAttribute(attrs), ...);
+  return llvm::AttributeList::get(mod->getContext(), index, attr_builder);
+}
+
+template <typename... ATTRS>
+llvm::AttributeList make_nocapture_attribute_list(llvm::Module const* const mod,
+                                                  unsigned const index,
+                                                  ATTRS const... attrs) {
+  static_assert((std::is_same_v<llvm::Attribute::AttrKind, ATTRS> && ...));
+  static_assert(sizeof...(ATTRS) <= 8, "Use a llvm::SmallVector with a larger size.");
+  llvm::AttrBuilder attr_builder(mod->getContext());
+  attr_builder.addCapturesAttr(llvm::CaptureInfo::none());
   (attr_builder.addAttribute(attrs), ...);
   return llvm::AttributeList::get(mod->getContext(), index, attr_builder);
 }
@@ -63,6 +80,18 @@ class Params {
     }
   }
 
+  template <typename... ATTRS>
+  void pushBack(llvm::Type* const type,
+                char const* const name,
+                NoCaptureTag,
+                ATTRS const... attrs) {
+    static_assert((std::is_same_v<llvm::Attribute::AttrKind, ATTRS> && ...));
+    types_.push_back(type);
+    names_.push_back(name);
+    static_assert(1u == llvm::AttributeList::AttrIndex::FirstArgIndex);
+    attrs_.push_back(make_nocapture_attribute_list(mod_, types_.size(), attrs...));
+  }
+
   void setNames(llvm::Function::arg_iterator itr) const {
     for (char const* const name : names_) {
       itr++->setName(name);
@@ -75,7 +104,6 @@ class Params {
 // NTYPES = max number of types. Used by llvm::SmallVector to avoid dynamic memory allocs.
 template <bool IS_GROUP_BY, size_t NTYPES = 14u>
 Params<NTYPES> make_params(llvm::Module const* const mod, bool const hoist_literals) {
-  constexpr llvm::Attribute::AttrKind NoCapture = llvm::Attribute::NoCapture;
   auto* const i8_type = llvm::IntegerType::get(mod->getContext(), 8);
   auto* const i32_type = llvm::IntegerType::get(mod->getContext(), 32);
   auto* const i64_type = llvm::IntegerType::get(mod->getContext(), 64);

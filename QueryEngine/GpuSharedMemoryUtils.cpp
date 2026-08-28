@@ -150,7 +150,7 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
       "i16:16:16-i32:32:32-i64:64:64-"
       "f32:32:32-f64:64:64-v16:16:16-"
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
-  reduction_code.module->setTargetTriple("nvptx64-nvidia-cuda");
+  reduction_code.module->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
   llvm::Linker linker(*module_);
   std::unique_ptr<llvm::Module> owner(reduction_code.module);
   bool link_error = linker.linkInModule(std::move(owner));

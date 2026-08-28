@@ -538,7 +538,7 @@ function install_awscpp() {
   check_artifact_cleanup aws-sdk-cpp-${AWSCPP_VERSION}.tar.gz aws-sdk-cpp-${AWSCPP_VERSION}
 }
 
-LLVM_VERSION=19.1.7
+LLVM_VERSION=21.1.8
 
 function install_llvm() {
     local VERS=${LLVM_VERSION}
@@ -906,8 +906,8 @@ function install_geos() {
     check_artifact_cleanup geos-${GEOS_VERSION}.tar.bz2 geos-${GEOS_VERSION}
 }
 
-IWYU_VERSION=0.23
-LLVM_VERSION_USED_FOR_IWYU=19.1.7
+IWYU_VERSION=0.25
+LLVM_VERSION_USED_FOR_IWYU=21.1.8
 if [ "$LLVM_VERSION" != "$LLVM_VERSION_USED_FOR_IWYU" ]; then
   # NOTE: If you get this error, somebody upgraded LLVM, but they need to go
   # to https://include-what-you-use.org/ then scroll down, figure out which
