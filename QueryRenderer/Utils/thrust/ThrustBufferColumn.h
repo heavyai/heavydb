@@ -9,6 +9,7 @@
 #include <cuda_runtime.h>
 #endif
 #include <thrust/device_ptr.h>
+#include <cuda/std/iterator>
 
 #include "GfxDriver/Resources/BufferLayout.h"
 #include "GfxDriver/Resources/Enums.h"
@@ -22,19 +23,20 @@ class ThrustBufferColumnIterator;
 
 template <typename T, int NUM_ELEMS = 1>
 struct ThrustBufferColumnIteratorBase {
-  using TypedIterator = typename ::thrust::device_ptr<T>;
-  using Value = typename ::thrust::iterator_value<TypedIterator>::type;
+  using TypedIterator = ::thrust::device_ptr<T>;
+  using Value = cuda::std::iter_value_t<TypedIterator>;
   using System = typename ::thrust::iterator_system<TypedIterator>::type;
   using Traversal = typename ::thrust::iterator_traversal<TypedIterator>::type;
-  using Reference = typename ::thrust::iterator_reference<TypedIterator>::type;
-  using DifferenceType = std::ptrdiff_t;
+  using Reference = typename cuda::std::iterator_traits<TypedIterator>::reference;
+  using DifferenceType =
+      typename cuda::std::iterator_traits<TypedIterator>::difference_type;
 
   using type = ::thrust::iterator_facade<ThrustBufferColumnIterator<T, NUM_ELEMS>,
                                          Value,
                                          System,
                                          Traversal,
                                          Reference,
-                                         std::ptrdiff_t>;
+                                         DifferenceType>;
 };
 
 template <typename T, int NUM_ELEMS = 1>

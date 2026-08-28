@@ -46,7 +46,11 @@ int main(int argc, char** argv) {
   std::string str((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
 
   // Create driver context
+#if CUDA_VERSION >= 13000
+  checkCudaErrors(cuCtxCreate(&context, nullptr, 0, device));
+#else
   checkCudaErrors(cuCtxCreate(&context, 0, device));
+#endif
 
   // Create module for object
   checkCudaErrors(cuModuleLoadDataEx(&cudaModule, str.c_str(), 0, 0, 0));

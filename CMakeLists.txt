@@ -215,9 +215,18 @@ option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   enable_language(CUDA)
   include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+  include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/cccl)
   include_directories(ThirdParty/warpcore/include)
   include_directories(ThirdParty/hpc_helpers/include)
-  list(APPEND CUDA_LIBRARIES cuda)
+  # Link the toolkit's driver stub explicitly. Some NVIDIA CUDA container
+  # images contain zero-byte driver placeholders in the system library path,
+  # which otherwise shadow the usable stub when resolving a bare "-lcuda".
+  find_library(CUDA_DRIVER_LIBRARY
+    NAMES cuda
+    PATHS "${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}/../lib/stubs"
+    NO_DEFAULT_PATH
+    REQUIRED)
+  list(APPEND CUDA_LIBRARIES "${CUDA_DRIVER_LIBRARY}")
   list(APPEND CMAKE_CUDA_FLAGS --extended-lambda)  # required by warpcore
   add_definitions("-DHAVE_CUDA")
 else()
@@ -278,25 +287,41 @@ if(ENABLE_CUDA)
     add_dependencies(clean-all clean_nvidia_compute_capability)
   else()
     # set all supported archs for regular CUDA compiles
-    set(CMAKE_CUDA_ARCHITECTURES
-        60-virtual
-        70-virtual
-        75-virtual
-        80-virtual
-        86-virtual
-        89-virtual
-        90-virtual)
+    # CUDA 13+ drops sm_60/sm_70; keep them for CUDA 12.x (22.04 / 12.9.2 track)
+    if(CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 13.0)
+      set(CMAKE_CUDA_ARCHITECTURES
+          75-virtual
+          80-virtual
+          86-virtual
+          89-virtual
+          90-virtual)
+      set(CUSTOM_COMMAND_CUDA_ARCHITECTURES
+        -gencode=arch=compute_75,code=compute_75;
+        -gencode=arch=compute_80,code=compute_80;
+        -gencode=arch=compute_86,code=compute_86;
+        -gencode=arch=compute_89,code=compute_89;
+        -gencode=arch=compute_90,code=compute_90;
+        -Wno-deprecated-gpu-targets)
+    else()
+      set(CMAKE_CUDA_ARCHITECTURES
+          60-virtual
+          70-virtual
+          75-virtual
+          80-virtual
+          86-virtual
+          89-virtual
+          90-virtual)
+      set(CUSTOM_COMMAND_CUDA_ARCHITECTURES
+        -gencode=arch=compute_60,code=compute_60;
+        -gencode=arch=compute_70,code=compute_70;
+        -gencode=arch=compute_75,code=compute_75;
+        -gencode=arch=compute_80,code=compute_80;
+        -gencode=arch=compute_86,code=compute_86;
+        -gencode=arch=compute_89,code=compute_89;
+        -gencode=arch=compute_90,code=compute_90;
+        -Wno-deprecated-gpu-targets)
+    endif()
     list(APPEND MAPD_CUDA_OPTIONS -Wno-deprecated-gpu-targets)
-    # set all supported archs for custom_command CUDA compiles
-    set(CUSTOM_COMMAND_CUDA_ARCHITECTURES
-      -gencode=arch=compute_60,code=compute_60;
-      -gencode=arch=compute_70,code=compute_70;
-      -gencode=arch=compute_75,code=compute_75;
-      -gencode=arch=compute_80,code=compute_80;
-      -gencode=arch=compute_86,code=compute_86;
-      -gencode=arch=compute_89,code=compute_89;
-      -gencode=arch=compute_90,code=compute_90;
-      -Wno-deprecated-gpu-targets)
     if(ENABLE_ONLY_ONE_ARCH)
       message(STATUS "ENABLE_ONLY_ONE_ARCH ignored because NvidiaComputeCapability.txt not found or not readable")
     endif()
@@ -920,7 +945,7 @@ if(ENABLE_RUNTIME_LIBS)
       find_package(Torch REQUIRED)
       if (DEFINED TORCH_CUDA_LIBRARIES)
         # Torch removes the CUDA Driver target from CUDA_LIBRARIES when doing its own CUDA CMake setup, so we have to re-add it
-        list(APPEND CUDA_LIBRARIES cuda)
+        list(APPEND CUDA_LIBRARIES "${CUDA_DRIVER_LIBRARY}")
         add_compile_definitions("HAVE_CUDA_TORCH")
       endif()
       add_compile_definitions("HAVE_TORCH_TFS")
@@ -1181,7 +1206,7 @@ if(MAPD_IMMERSE_DOWNLOAD)
   externalproject_get_property(frontend source_dir)
 
   install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
-  add_custom_command(TARGET frontend COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
+  add_custom_command(TARGET frontend POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} frontend)
   list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/frontend)
 
   ## Go web server

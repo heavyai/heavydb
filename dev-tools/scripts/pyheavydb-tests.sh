@@ -73,7 +73,7 @@ Test selection (default: --unit):
 Options:
   --deps-image=<image>   Deps container image to build/run in. Auto-detected
                          from local Docker images if omitted.
-  --distro=ubuntu22.04|rockylinux8
+  --distro=ubuntu22.04|ubuntu24.04|rockylinux8
                          Distro for deps/product image auto-detection.
                          Default: ubuntu22.04
   --repos-dir=<path>     Parent dir for the pyheavydb clone.
