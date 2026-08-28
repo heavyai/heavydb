@@ -331,8 +331,32 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     args.insert(args.begin(), buffer_ret);
   }
 
-  const auto ext_call = cgen_state_->emitExternalCall(
-      ext_func_sig.getName(), ret_ty, args, {}, ret_ti.is_buffer());
+  // ExtArgumentType::Bool maps to i8 (see ext_arg_type_to_llvm_type) whereas clang lowers
+  // a C++ `bool` to i1, so the signature derived from the catalog can disagree with the
+  // one the function was actually compiled with. Reconcile against the callee's real
+  // type: an i1 return only defines the low bit, so reading it back as i8 picks up
+  // garbage in the upper bits.
+  llvm::Type* call_ret_ty = ret_ty;
+  if (auto* callee = cgen_state_->module_->getFunction(ext_func_sig.getName())) {
+    auto* callee_ty = callee->getFunctionType();
+    if (callee_ty->getNumParams() == args.size()) {
+      for (unsigned i = 0; i < callee_ty->getNumParams(); ++i) {
+        auto* param_ty = callee_ty->getParamType(i);
+        if (param_ty->isIntegerTy(1) && args[i]->getType()->isIntegerTy(8)) {
+          args[i] = cgen_state_->ir_builder_.CreateTrunc(args[i], param_ty);
+        }
+      }
+    }
+    if (ret_ty->isIntegerTy(8) && callee_ty->getReturnType()->isIntegerTy(1)) {
+      call_ret_ty = callee_ty->getReturnType();
+    }
+  }
+
+  llvm::Value* ext_call = cgen_state_->emitExternalCall(
+      ext_func_sig.getName(), call_ret_ty, args, {}, ret_ti.is_buffer());
+  if (call_ret_ty != ret_ty) {
+    ext_call = cgen_state_->ir_builder_.CreateZExt(ext_call, ret_ty);
+  }
 
   if (ret_ti.is_buffer() && ret_ti.is_text_encoding_none()) {
     // we are at the `arg_notnull` code block, so let's initialize `is_null_` variable to

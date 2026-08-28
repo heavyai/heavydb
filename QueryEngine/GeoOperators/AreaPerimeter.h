@@ -64,6 +64,7 @@ class AreaPerimeter : public Codegen {
     }
     CHECK_EQ(operand_lvs.size(),
              size_t(2 * operand_ti.get_physical_coord_cols()));  // array ptr and size
+    narrow_geo_size_slots_to_i32(cgen_state->ir_builder_, operand_lvs);
 
     // use the points array size argument for nullability
     return std::make_tuple(operand_lvs, is_nullable_ ? operand_lvs[1] : nullptr);

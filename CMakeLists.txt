@@ -595,7 +595,7 @@ include_directories(${CMAKE_SOURCE_DIR}
 ## Dependencies
 
 # LLVM
-find_package(LLVM CONFIG REQUIRED)
+find_package(LLVM 21.1.8 EXACT CONFIG REQUIRED)
 if (TARGET LLVM)
   get_target_property(LLVM_LIB LLVM IMPORTED_LOCATION_RELEASE)
 endif()

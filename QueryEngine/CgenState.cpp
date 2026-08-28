@@ -244,7 +244,7 @@ namespace {
 
 // clang-format off
 template <typename T>
-llvm::Type* getTy(llvm::LLVMContext& ctx) { return getTy<std::remove_pointer_t<T>>(ctx)->getPointerTo(); }
+llvm::Type* getTy(llvm::LLVMContext& ctx) { return llvm::PointerType::get(ctx, 0); }
 // Commented out to avoid -Wunused-function warnings, but enable as needed.
 // template<> llvm::Type* getTy<bool>(llvm::LLVMContext& ctx) { return llvm::Type::getInt1Ty(ctx); }
 //template<> llvm::Type* getTy<int8_t>(llvm::LLVMContext& ctx) { return llvm::Type::getInt8Ty(ctx); }
@@ -444,6 +444,13 @@ llvm::Value* CgenState::emitExternalCall(
   CHECK(func);
   llvm::FunctionType* func_type = func_p.getFunctionType();
   CHECK(func_type);
+  // With opaque pointers, getOrInsertFunction() no longer bitcasts a mismatched
+  // declaration; it hands back the existing llvm::Function paired with the requested
+  // type, and the call we emit would then silently disagree with the callee's ABI.
+  CHECK(func->getFunctionType() == func_type)
+      << "Signature mismatch for '" << fname << "': callee is declared as "
+      << serialize_llvm_object(func->getFunctionType()) << " but the call site requests "
+      << serialize_llvm_object(func_type);
   if (has_struct_return) {
     // Buffer-returning extension functions use the sret calling convention: void
     // return type with the output struct passed as the first pointer argument.

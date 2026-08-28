@@ -283,7 +283,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
          allocated_target_buffer});
   }
   llvm::Value* casted_allocated_target_buffer =
-      ir_builder.CreatePointerCast(allocated_target_buffer, array_type->getPointerTo());
+      ir_builder.CreatePointerCast(allocated_target_buffer, typed_ptr_ty(array_type));
 
   for (size_t i = 0; i < array_expr->getElementCount(); i++) {
     auto* element = argument_list[i];

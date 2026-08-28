@@ -76,7 +76,7 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
   if (byte_array_cast(operand_ti, ti)) {
     auto* byte_array_type = get_int_array_type(8, ti.get_size(), cgen_state_->context_);
     return cgen_state_->ir_builder_.CreatePointerCast(operand_lv,
-                                                      byte_array_type->getPointerTo());
+                                                      typed_ptr_ty(byte_array_type));
   } else if (!operand_ti.is_string() && ti.is_text_encoding_dict()) {
     return codegenCastNonStringToString(operand_lv, operand_ti, ti, operand_is_const, co);
   } else if (operand_ti.is_string()) {
