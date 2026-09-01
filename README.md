@@ -4,7 +4,7 @@
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-blue?logo=github)](https://github.com/orgs/heavyai/discussions)
 
 
-# Announcing HeavyAI 10.0 - Sept. 2026
+# Announcing HeavyAI 10.0 - ETA Sept. 2026
 A special performance branch, previewed at VLDB 2026, will be made available (soon) and will be merged into master after the release.
 
 ***
