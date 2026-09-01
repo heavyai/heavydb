@@ -4,24 +4,17 @@
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-blue?logo=github)](https://github.com/orgs/heavyai/discussions)
 
 
+# Announcing soon to be released HeavyAI 10.0 - Sept. 2026
+
+
+
 HeavyDB is an open source SQL-based, relational, columnar database engine that leverages the full performance and parallelism of modern hardware (both CPUs and GPUs) to enable querying of multi-billion row datasets in milliseconds, without the need for indexing, pre-aggregation, or downsampling.  HeavyDB can be run on hybrid CPU/GPU systems (Nvidia GPUs are currently supported), as well as on CPU-only systems featuring X86, Power, and ARM (experimental support) architectures. To achieve maximum performance, HeavyDB features multi-tiered caching of data between storage, CPU memory, and GPU memory, and an innovative Just-In-Time (JIT) query compilation framework.
 
 For usage info, see the [product documentation](https://docs.nvidia.com/heavyai), and for more details about the system's internal architecture, check out the [developer documentation](https://heavyai.github.io/heavydb/). 
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
 
-# Downloads and Installation Instructions
 
-HEAVY.AI provides pre-built binaries for Linux for stable releases of the project:
-
-| Distro | Package type | CPU/GPU | Repository | Docs |
-| --- | --- | --- | --- | --- |
-| CentOS | RPM | CPU | https://releases.heavy.ai/os/yum/stable/cpu |  https://docs.heavy.ai/installation-and-configuration/installation/installing-on-centos/centos-yum-gpu-ee |
-| CentOS | RPM | GPU | https://releases.heavy.ai/os/yum/stable/cuda | https://docs.heavy.ai/installation-and-configuration/installation/installing-on-centos/centos-yum-gpu-ee |
-| Ubuntu | DEB | CPU | https://releases.heavy.ai/os/apt/dists/stable/cpu | https://docs.heavy.ai/installation-and-configuration/installation/installing-on-ubuntu/centos-yum-gpu-ee |
-| Ubuntu | DEB | GPU | https://releases.heavy.ai/os/apt/dists/stable/cuda | https://docs.heavy.ai/installation-and-configuration/installation/installing-on-ubuntu/centos-yum-gpu-ee |
-| * | tarball | CPU | https://releases.heavy.ai/os/tar/heavyai-os-latest-Linux-x86_64-cpu.tar.gz |  |
-| * | tarball | GPU | https://releases.heavy.ai/os/tar/heavyai-os-latest-Linux-x86_64.tar.gz |  |
 ***
 
 # Developing HeavyDB: Table of Contents
