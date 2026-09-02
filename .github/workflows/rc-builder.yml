@@ -382,5 +382,11 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -rf "${{ github.workspace }}/heavyiq" "${{ github.workspace }}/immerse" "${{ github.workspace }}/webserver" || true
-          rm -rf "${{ env.WORKDIR }}/build" || true
+          echo "Cleaning up workspace..."
+          sudo rm -rf "${{ github.workspace }}/heavyiq" || true
+          sudo rm -rf "${{ github.workspace }}/immerse" || true
+          sudo rm -rf "${{ github.workspace }}/webserver" || true
+          sudo rm -rf "${{ github.workspace }}/pyheavydb" || true
+          sudo rm -rf "${{ github.workspace }}/.heavyai-dev" || true
+          echo "Cleaning up build..."
+          sudo rm -rf "${{ env.WORKDIR }}/build" || true
