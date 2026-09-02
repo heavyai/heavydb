@@ -54,6 +54,42 @@ const RelProject* find_top_level_project_node(const RelAlgNode* curr_node) {
   return nullptr;
 }
 
+[[noreturn]] void throw_mismatched_rex_input_source(const RelAlgNode* source,
+                                                    const RelAlgNode* expected_lhs) {
+  auto cfg = RelRexToStringConfig::defaults();
+  cfg.attributes_only = true;
+  throw std::runtime_error(
+      "RelScanTree::getScanNodeForOutputIndex: RexInput source (" +
+      (source ? source->toString(cfg) : std::string("null")) +
+      ") does not match project input (" +
+      (expected_lhs ? expected_lhs->toString(cfg) : std::string("null")) + ")");
+}
+
+// After bind_inputs(), a RelProject over a RelJoin binds RexInputs to the join's
+// children (see get_node_output(RelJoin)), not the join itself. Convert that
+// child-local index to a join-local index so the RelJoin visitor can pick lhs vs
+// rhs. Also accept a RexInput already sourced at the join (injectInputColumn).
+bool set_join_local_index_from_rex_input(const RexInput* input_node,
+                                         const RelAlgNode& lhs_ra,
+                                         uint32_t& current_index) {
+  auto const* join = dynamic_cast<const RelJoin*>(&lhs_ra);
+  if (!join) {
+    return false;
+  }
+  auto const* src = input_node->getSourceNode();
+  if (src == join->getInput(0) || src == join) {
+    current_index = input_node->getIndex();
+    return true;
+  }
+  if (src == join->getInput(1)) {
+    current_index =
+        input_node->getIndex() + static_cast<uint32_t>(join->getInput(0)->size());
+    return true;
+  }
+  throw_mismatched_rex_input_source(src, &lhs_ra);
+  return false;
+}
+
 }  // namespace
 
 std::unique_ptr<RelScanTree> RelScanTree::create(RelAlgDag& rel_alg_dag) {
@@ -107,13 +143,15 @@ std::pair<const RelScan*, uint32_t> RelScanTree::getScanNodeForOutputIndex(
             if (auto const* input_node = dynamic_cast<const RexInput*>(scalar_input);
                 input_node != nullptr) {
               if (current_tree_node->lhs) {
-                if (input_node->getSourceNode() !=
-                    &current_tree_node->lhs->rel_alg_node) {
-                  throw std::runtime_error(
-                      "Error in RelAlgTree.cpp: input_node != "
-                      "current_tree_node->lhs->rel_alg_node");
+                auto const& lhs_ra = current_tree_node->lhs->rel_alg_node;
+                if (!set_join_local_index_from_rex_input(
+                        input_node, lhs_ra, current_index)) {
+                  if (input_node->getSourceNode() != &lhs_ra) {
+                    throw_mismatched_rex_input_source(input_node->getSourceNode(),
+                                                      &lhs_ra);
+                  }
+                  current_index = input_node->getIndex();
                 }
-                current_index = input_node->getIndex();
               } else {
                 return nullptr;
               }
