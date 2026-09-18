@@ -32,4 +32,4 @@ export CMAKE_FLAGS="-GNinja \
 # This job's unique value is the rendering+CUDA+relwithdebinfo product build.
 export MAKE_TARGETS="mapd_java_components heavydb render_sanity_tests_build_only"
 
-export BASE_IMAGE="ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+export BASE_IMAGE="ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"

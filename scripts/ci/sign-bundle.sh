@@ -98,7 +98,7 @@ brew install cosign
 ```
 cosign verify-blob \\
   --bundle={tarname}.bundle \\
-  --certificate-identity-regexp="https://github.com/heavyai/heavydb-internal/.github/workflows/rc-builder.yml@refs/heads/.*" \\
+  --certificate-identity-regexp="https://github.com/heavyai/heavydb/.github/workflows/rc-builder.yml@refs/heads/.*" \\
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \\
   {tarname}
 ```

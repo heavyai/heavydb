@@ -10,7 +10,7 @@
 #
 # --build-dir is CMAKE_BINARY_DIR (must contain bin/heavydb).
 # HEAVYDB_SOURCE is three levels above this script (repo root).
-# In-container paths are fixed: /heavydb-internal, /heavydb-build, /tmp/heavydb-data (default storage), /heavydb-ca-info (TLS volume).
+# In-container paths are fixed: /heavydb, /heavydb-build, /tmp/heavydb-data (default storage), /heavydb-ca-info (TLS volume).
 # TLS assets live on a named compose volume (removed on exit).
 # Host ~/.m2 is bind-mounted for JDBC verify by default; --empty-m2 uses a container-only cache instead.
 # By default HeavyDB storage lives inside the container and is removed with compose down.
@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/../load-build-env.sh"
 
-DEFAULT_IMAGE='ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest'
+DEFAULT_IMAGE='ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest'
 USE_HOST_STORAGE="${USE_HOST_STORAGE:-0}"
 USE_EMPTY_M2="${USE_EMPTY_M2:-0}"
 BUILD_DIR_ARG=""

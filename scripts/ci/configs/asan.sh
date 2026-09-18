@@ -18,7 +18,7 @@ export CMAKE_FLAGS="-GNinja \
 export MAKE_TARGETS="mapd_java_components sanity_tests_build_only"
 
 export IMAGE_NAME="pr-build/asan"
-export BASE_IMAGE="ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+export BASE_IMAGE="ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
 export INCLUDE_PATHS="build Tests config QueryEngine Shared Geospatial Logger scripts"
 export STRIP=debug
 

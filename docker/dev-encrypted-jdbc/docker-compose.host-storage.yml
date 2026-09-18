@@ -15,7 +15,7 @@ services:
     volumes:
       - type: bind
         source: ${HEAVYDB_SOURCE}
-        target: /heavydb-internal
+        target: /heavydb
       - type: bind
         source: ${HEAVYDB_BUILD}
         target: /heavydb-build

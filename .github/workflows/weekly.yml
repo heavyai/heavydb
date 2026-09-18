@@ -76,7 +76,7 @@ jobs:
     if: ${{ contains(fromJSON('["all","arrow-ipc","ctas","read-only","extended-geo","warmup"]'), needs.setup.outputs.jobs_filter) }}
     runs-on: linux-amd64-cpu32
     container:
-      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      image: ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -96,7 +96,7 @@ jobs:
       MAKE_TARGETS: "mapd_java_components heavydb initheavy heavysql ArrowIpcIntegrationTest CtasIntegrationTest GeospatialTest"
       IMAGE_NAME: "pr-build/gpu-release"
       IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
-      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
       INCLUDE_PATHS: "build Tests config scripts startheavy"
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -269,7 +269,7 @@ jobs:
     if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'valgrind' }}
     runs-on: linux-amd64-cpu32
     container:
-      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      image: ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -289,7 +289,7 @@ jobs:
       MAKE_TARGETS: "mapd_java_components ExecuteTest"
       IMAGE_NAME: "pr-build/valgrind"
       IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
-      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
       INCLUDE_PATHS: "build Tests config scripts"
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -354,7 +354,7 @@ jobs:
     if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'disk-cache-tsan' }}
     runs-on: linux-amd64-cpu32
     container:
-      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      image: ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -378,7 +378,7 @@ jobs:
       MAKE_TARGETS: "mapd_java_components UpdelStorageTest ExecuteTest CtasUpdateTest"
       IMAGE_NAME: "pr-build/disk-cache-tsan"
       IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
-      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
       INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
       STRIP: debug
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -455,7 +455,7 @@ jobs:
     if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'minio' }}
     runs-on: linux-amd64-cpu32
     container:
-      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      image: ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -475,7 +475,7 @@ jobs:
       MAKE_TARGETS: "mapd_java_components ImportExportTest ForeignTableDmlTest"
       IMAGE_NAME: "pr-build/minio"
       IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
-      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
       INCLUDE_PATHS: "build Tests config scripts"
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:

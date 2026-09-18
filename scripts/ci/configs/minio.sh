@@ -13,5 +13,5 @@ export CMAKE_FLAGS="-DENABLE_CUDA=OFF \
 export MAKE_TARGETS="mapd_java_components ImportExportTest ForeignTableDmlTest"
 
 export IMAGE_NAME="pr-build/minio"
-export BASE_IMAGE="ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+export BASE_IMAGE="ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
 export INCLUDE_PATHS="build Tests config scripts"

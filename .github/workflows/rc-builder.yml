@@ -15,8 +15,8 @@ run-name: ${{ inputs.description != '' && format('Product Builder — {0}', inpu
 on:
   workflow_dispatch:
     inputs:
-      sha1_heavydb_internal:
-        description: 'heavydb-internal branch or SHA to build'
+      sha1_heavydb:
+        description: 'heavydb branch or SHA to build'
         type: string
         default: 'master'
       heavyiq_ref:
@@ -47,7 +47,7 @@ on:
       images:
         description: 'GHCR build image(s), semicolon (;) separated'
         type: string
-        default: 'ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb-internal/core-build-rockylinux8-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-aarch64:latest;ghcr.io/heavyai/heavydb-internal/core-build-rockylinux8-static-cuda12.9.2-aarch64:latest'
+        default: 'ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb/core-build-rockylinux8-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-aarch64:latest;ghcr.io/heavyai/heavydb/core-build-rockylinux8-static-cuda12.9.2-aarch64:latest'
       recipes:
         description: 'Build recipes, semicolon (;) separated (compiler,render|norender,cuda|cpu,static|shared)'
         type: string
@@ -193,7 +193,7 @@ jobs:
       packages: read
       id-token: write  # required for cosign OIDC keyless signing
     env:
-      WORKDIR: ${{ github.workspace }}/heavydb-internal
+      WORKDIR: ${{ github.workspace }}/heavydb
       # Cloning the component repos (heavyiq/immerse/webserver) uses a token so
       # it works whether a given repo is still private or already public.
       COMPONENT_DOWNLOAD_TOKEN: ${{ secrets.COMPONENT_DOWNLOAD_TOKEN }}
@@ -246,11 +246,11 @@ jobs:
         # those calls work without modifying the shared dev-tools scripts.
         run: sudo chmod 666 /var/run/docker.sock || true
 
-      - name: Checkout heavydb-internal
+      - name: Checkout heavydb
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.sha1_heavydb_internal }}
-          path: heavydb-internal
+          ref: ${{ inputs.sha1_heavydb }}
+          path: heavydb
 
       - name: Configure git for component clones
         # build-component.sh clones the component repos via git@github.com: SSH

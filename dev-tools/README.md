@@ -216,7 +216,7 @@ dev-tools/dev.sh list
 ## Deps image auto-detection
 
 All build/test subcommands auto-detect a local deps image matching
-`ghcr.io/heavyai/heavydb-internal/core-build-*-<lib-type>-*-<arch>`. Candidates
+`ghcr.io/heavyai/heavydb/core-build-*-<lib-type>-*-<arch>`. Candidates
 are deduplicated by image ID; the `:latest` tag is preferred when multiple tags
 point to the same image. Override with `--deps-image=<image>` or narrow with
 `--distro=<distro>` and/or `--cuda-version=<ver>`. Ambiguous results (multiple

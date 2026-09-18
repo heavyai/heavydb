@@ -23,7 +23,7 @@ Builds a local deps container image (~2 hours).
 
 **Preconditions:** `nvcr.io/nvidia/cuda:<ver>-devel-<distro>` available locally.
 
-**Output:** `ghcr.io/heavyai/heavydb-internal/core-build-<distro>-<lib>-cuda<ver>-<arch>:<tag>`
+**Output:** `ghcr.io/heavyai/heavydb/core-build-<distro>-<lib>-cuda<ver>-<arch>:<tag>`
 
 ---
 
@@ -217,7 +217,7 @@ inside it. Use this to reproduce exact CI behaviour without a local build.
 
 Called by: `build heavydb`, `build [all]`, `build immerse/webserver/heavyiq/geos-dsos`, `test`, `shell`.
 
-Scans local Docker images matching `ghcr.io/heavyai/heavydb-internal/core-build-*-<lib_type>-*-<arch>`.
+Scans local Docker images matching `ghcr.io/heavyai/heavydb/core-build-*-<lib_type>-*-<arch>`.
 Filters by `--distro` and `--cuda-version` when supplied. Deduplicates by image ID (multiple tags of the same image count as one; when an image has multiple tags, the one listed first by `docker images` is used). Errors if:
 - **0 matches** → `ERROR: no local deps image found. Run: build deps`
 - **2+ distinct images remain** → `ERROR: multiple deps images found. Use --deps-image or narrow with --distro / --cuda-version`

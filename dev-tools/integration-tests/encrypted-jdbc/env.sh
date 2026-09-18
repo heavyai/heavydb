@@ -5,7 +5,7 @@
 # Shared container environment defaults for encrypted-jdbc integration test services.
 # Source this after mapd-deps.sh (if present) in each container entrypoint script.
 
-HEAVYDB_SOURCE="${HEAVYDB_SOURCE:-/heavydb-internal}"
+HEAVYDB_SOURCE="${HEAVYDB_SOURCE:-/heavydb}"
 HEAVYDB_BUILD="${HEAVYDB_BUILD:-/heavydb-build}"
 CA_INFO_DIR="${CA_INFO_DIR:-/heavydb-ca-info}"
 HEAVYDB_HOST="${HEAVYDB_HOST:-heavydb}"

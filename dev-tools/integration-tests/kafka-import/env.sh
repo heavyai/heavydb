@@ -5,7 +5,7 @@
 # Shared container environment defaults for kafka-import integration test services.
 # Source this after mapd-deps.sh (if present) in each container entrypoint script.
 
-HEAVYDB_SOURCE="${HEAVYDB_SOURCE:-/heavydb-internal}"
+HEAVYDB_SOURCE="${HEAVYDB_SOURCE:-/heavydb}"
 HEAVYDB_BUILD="${HEAVYDB_BUILD:-/heavydb-build}"
 HEAVYDB_HOST="${HEAVYDB_HOST:-heavydb}"
 HEAVYDB_PORT="${HEAVYDB_PORT:-6274}"

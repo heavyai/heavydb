@@ -6,8 +6,8 @@ services:
     image: docker-internal.mapd.com/mapd/core-build-centos7-cuda11.4
     volumes:
       - type: bind
-        source: ${BUILD_TMP_DIR}/heavydb-internal
-        target: /heavydb-internal
+        source: ${BUILD_TMP_DIR}/heavydb
+        target: /heavydb
       - type: bind
         source: ${MVNHOME}
         target: /root/.m2

@@ -66,7 +66,7 @@ jobs:
     if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi' }}
     runs-on: linux-amd64-cpu32
     container:
-      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      image: ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -92,7 +92,7 @@ jobs:
       MAKE_TARGETS: "mapd_java_components heavydb sanity_tests_build_only"
       IMAGE_NAME: "pr-build/multi-cuda-gcc"
       IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}"
-      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
       INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
@@ -155,7 +155,7 @@ jobs:
     if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi' }}
     runs-on: linux-amd64-cpu32
     container:
-      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      image: ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -185,7 +185,7 @@ jobs:
     if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi' }}
     runs-on: linux-amd64-cpu32
     container:
-      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      image: ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -215,7 +215,7 @@ jobs:
     if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-render' }}
     runs-on: linux-amd64-cpu32
     container:
-      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      image: ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
       credentials:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
@@ -239,7 +239,7 @@ jobs:
       MAKE_TARGETS: "mapd_java_components render_sanity_tests_build_only"
       IMAGE_NAME: "pr-build/multi-render"
       IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
-      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
       INCLUDE_PATHS: "build Tests config scripts"
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:

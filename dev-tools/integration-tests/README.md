@@ -33,7 +33,7 @@ The `run.sh` script performs the following general actions:
 
 All traffic stays on the **Docker Compose network**. There are **no host port mappings**, so tests do not conflict with a local HeavyDB install on 6274/6278/6279.
 
-Scripts invoked inside containers live in the scripts directory next to each test’s `run.sh` and are bind-mounted via the repo root (`/heavydb-internal`). Compose files in `docker/` only describe services, volumes, healthchecks, and entrypoints.
+Scripts invoked inside containers live in the scripts directory next to each test’s `run.sh` and are bind-mounted via the repo root (`/heavydb`). Compose files in `docker/` only describe services, volumes, healthchecks, and entrypoints.
 
 **Requirements**
 
@@ -41,13 +41,13 @@ Scripts invoked inside containers live in the scripts directory next to each tes
 - A prior CMake build whose binary directory is passed as **`--build-dir`** (see **Build dependencies** below)
 - NVIDIA GPU available in Docker for HeavyDB services (compose `deploy.resources.reservations.devices`)
 - Default container images (override with `--image` / `--kafka-image` in `run.sh`):
-  - **HeavyDB** (all HeavyDB services): `ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest`
+  - **HeavyDB** (all HeavyDB services): `ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest`
   - **Kafka** (kafka-import test only): `apache/kafka:3.7.2`
 - For encrypted JDBC: Maven dependency cache — see **Maven cache (`~/.m2`)** under the encrypted JDBC test below.
 
 ## Build dependencies
 
-These tests do **not** compile HeavyDB inside Docker. They bind-mount your CMake binary directory (`--build-dir`, exposed in containers as `/heavydb-build`) and, for JDBC verification, the repo source tree (`HEAVYDB_SOURCE` → `/heavydb-internal`). You must build the required targets on the host **before** running a test.
+These tests do **not** compile HeavyDB inside Docker. They bind-mount your CMake binary directory (`--build-dir`, exposed in containers as `/heavydb-build`) and, for JDBC verification, the repo source tree (`HEAVYDB_SOURCE` → `/heavydb`). You must build the required targets on the host **before** running a test.
 
 `run.sh` only checks that **`bin/heavydb`** exists and is executable; other missing artifacts surface as runtime failures inside the containers.
 
@@ -126,7 +126,7 @@ Dataset: `SampleData/100_flights.csv`.
 ```text
 dev-tools/dev.sh test integration-kafka-import --build-dir build
 dev-tools/integration-tests/kafka-import/run.sh --build-dir build
-    [--host-storage --image ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest --kafka-image apache/kafka:3.7.2]
+    [--host-storage --image ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest --kafka-image apache/kafka:3.7.2]
 ```
 
 Bracketed flags are optional. See `run.sh --help` for defaults.
@@ -150,7 +150,7 @@ TLS material is generated at startup into a named compose volume (`/heavydb-ca-i
 ```text
 dev-tools/dev.sh test integration-encrypted-jdbc --build-dir build
 dev-tools/integration-tests/encrypted-jdbc/run.sh --build-dir build
-    [--host-storage --empty-m2 --image ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest]
+    [--host-storage --empty-m2 --image ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest]
 ```
 
 Bracketed flags are optional. See `run.sh --help` for defaults.

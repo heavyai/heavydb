@@ -17,7 +17,7 @@
 #
 # Prerequisites:
 #   - Docker installed and running.
-#   - A local deps image (ghcr.io/heavyai/heavydb-internal/core-build-*) for
+#   - A local deps image (ghcr.io/heavyai/heavydb/core-build-*) for
 #     build and test commands; run 'dev.sh build deps' to build one locally.
 #   - Once per machine: 'gh auth refresh -h github.com -s read:packages'
 #     (needed to pull CI images for 'shell <config>' / 'test in-image').
@@ -30,7 +30,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SCRIPTS_DIR="$REPO_ROOT/scripts"
 CONFIGS_DIR="$SCRIPTS_DIR/ci/configs"
 GHCR_OWNER="heavyai"
-GHCR_REPO="heavydb-internal"
+GHCR_REPO="heavydb"
 # NODE_VERSION and GO_VERSION are read from the respective external repos at
 # build time (.nvmrc in immerse, toolchain directive in webserver/go.mod).
 # They must not be pinned here — bump them in the source repo instead.
@@ -207,7 +207,7 @@ _resolve_deps_image() {
   # Include the image ID so we can collapse multiple tags of the same image.
   local raw_candidates
   raw_candidates=$(docker images --format '{{.ID}}\t{{.Repository}}:{{.Tag}}' \
-    | grep "ghcr.io/heavyai/heavydb-internal/core-build.*${lib_type}.*${arch}" \
+    | grep "ghcr.io/heavyai/heavydb/core-build.*${lib_type}.*${arch}" \
     | grep -v '<none>' || true)
 
   # Narrow by distro if given.

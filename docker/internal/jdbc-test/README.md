@@ -23,7 +23,7 @@ Docker, Docker Compose and a vpn connection to the HEAVY.AI network.
 3. Set the environment variable VER to the current jdbc release.  For example '6.1.0-SNAPSHOT'
 
 
-4. Run `sudo docker-compose exec -T buildhost bash -c "cd /heavydb-internal/java/heavyaijdbc/; mvn test -DskipTests=false -Domnisci.release.version=$VER -Dthrift.version=0.13.0 -Dtest=!ai.heavy.jdbc.HeavyAIConnectionTest#*_encrypted*+tst2_http_unencrypted+tst5_properties_connection"`
+4. Run `sudo docker-compose exec -T buildhost bash -c "cd /heavydb/java/heavyaijdbc/; mvn test -DskipTests=false -Domnisci.release.version=$VER -Dthrift.version=0.13.0 -Dtest=!ai.heavy.jdbc.HeavyAIConnectionTest#*_encrypted*+tst2_http_unencrypted+tst5_properties_connection"`
 
 
 ###Caveats 

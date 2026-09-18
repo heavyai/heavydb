@@ -8,7 +8,7 @@ set -euo pipefail
 KAFKA_BIN="/opt/kafka/bin"
 BOOTSTRAP="${BOOTSTRAP_SERVER:-kafka:9092}"
 TOPIC="${KAFKA_TOPIC:-flights}"
-SAMPLE_FILE="/heavydb-internal/SampleData/100_flights.csv"
+SAMPLE_FILE="/heavydb/SampleData/100_flights.csv"
 
 log() { echo "[kafka-import] $*"; }
 die() { echo "[kafka-import] ERROR: $*" >&2; exit 1; }

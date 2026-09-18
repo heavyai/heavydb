@@ -11,8 +11,8 @@
 #   PACKAGE_NAME            - GHCR package path under the org/user, INCLUDING
 #                             the repo segment for repo-linked packages.
 #                             For an image pushed to
-#                             ghcr.io/heavyai/heavydb-internal/pr-build/debug-static
-#                             this is "heavydb-internal/pr-build/debug-static".
+#                             ghcr.io/heavyai/heavydb/pr-build/debug-static
+#                             this is "heavydb/pr-build/debug-static".
 #
 # Optional env vars:
 #   OWNER                   - GHCR org or user (default: $GITHUB_REPOSITORY_OWNER)

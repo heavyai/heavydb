@@ -18,5 +18,5 @@ export CMAKE_FLAGS="-GNinja \
 export MAKE_TARGETS="mapd_java_components render_sanity_tests_build_only"
 
 export IMAGE_NAME="pr-build/multi-render"
-export BASE_IMAGE="ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.2.2-x86_64:rc.v9.0.0"
+export BASE_IMAGE="ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.2.2-x86_64:rc.v9.0.0"
 export INCLUDE_PATHS="build Tests config scripts"

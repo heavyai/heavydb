@@ -33,20 +33,20 @@ jobs:
         # segment (that's how GHCR addresses repo-linked container packages
         # via the API).
         package:
-          - heavydb-internal/pr-build/debug-static
-          - heavydb-internal/pr-build/tsan
-          - heavydb-internal/pr-build/multi-cuda-gcc
-          - heavydb-internal/pr-build/multi-render
+          - heavydb/pr-build/debug-static
+          - heavydb/pr-build/tsan
+          - heavydb/pr-build/multi-cuda-gcc
+          - heavydb/pr-build/multi-render
           # nightly / weekly / concurrency build images (same pr-build/* namespace)
-          - heavydb-internal/pr-build/asan
-          - heavydb-internal/pr-build/columnar-asan
-          - heavydb-internal/pr-build/columnar-tsan
-          - heavydb-internal/pr-build/gpu-release
-          - heavydb-internal/pr-build/valgrind
-          - heavydb-internal/pr-build/disk-cache-tsan
-          - heavydb-internal/pr-build/minio
-          - heavydb-internal/pr-build/sql-importer
-          - heavydb-internal/pr-build/concurrency-tsan
+          - heavydb/pr-build/asan
+          - heavydb/pr-build/columnar-asan
+          - heavydb/pr-build/columnar-tsan
+          - heavydb/pr-build/gpu-release
+          - heavydb/pr-build/valgrind
+          - heavydb/pr-build/disk-cache-tsan
+          - heavydb/pr-build/minio
+          - heavydb/pr-build/sql-importer
+          - heavydb/pr-build/concurrency-tsan
     env:
       PACKAGE_NAME: ${{ matrix.package }}
       MAX_AGE_DAYS: '14'

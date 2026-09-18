@@ -98,7 +98,7 @@ void serialize(Archive& ar, std::optional<T>& in_opt, const unsigned int version
   //                  from /usr/include/c++/9/utility:70,
   //                  from /usr/include/c++/9/algorithm:60,
   //                  from ../QueryEngine/Execute.h:20,
-  //                  from heavydb-internal/build/QueryEngine/CMakeFiles/QueryEngine.dir/cmake_pch.hxx:5,
+  //                  from heavydb/build/QueryEngine/CMakeFiles/QueryEngine.dir/cmake_pch.hxx:5,
   //                  from <command-line>:
   // /usr/include/c++/9/type_traits: In instantiation of ‘struct std::__is_trivially_copy_constructible_impl<boost::serialization::U, true>’:
   // /usr/include/c++/9/type_traits:1157:12:   required from ‘struct std::is_trivially_copy_constructible<boost::serialization::U>’
@@ -127,7 +127,7 @@ void serialize(Archive& ar, std::optional<T>& in_opt, const unsigned int version
   //                  from /usr/include/c++/9/utility:70,
   //                  from /usr/include/c++/9/algorithm:60,
   //                  from ../QueryEngine/Execute.h:20,
-  //                  from heavydb-internal/build/QueryEngine/CMakeFiles/QueryEngine.dir/cmake_pch.hxx:5,
+  //                  from heavydb/build/QueryEngine/CMakeFiles/QueryEngine.dir/cmake_pch.hxx:5,
   //                  from <command-line>:
   //
   //

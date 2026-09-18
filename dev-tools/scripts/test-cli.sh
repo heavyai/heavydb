@@ -190,27 +190,27 @@ then
   # --- Deps image candidates: ID<TAB>Repository:Tag ---
   case "$scenario" in
     one-deps-ubuntu22)
-      printf 'abc123def456\tghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
+      printf 'abc123def456\tghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
       ;;
     two-same-id-deps)
       # Same image ID, two tags → deduplication collapses to one
-      printf 'abc123def456\tghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
-      printf 'abc123def456\tghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-%s:20260101\n' "$arch"
+      printf 'abc123def456\tghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
+      printf 'abc123def456\tghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-%s:20260101\n' "$arch"
       ;;
     two-diff-id-deps)
       # Two distinct images → ambiguity error
-      printf 'abc123def456\tghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
-      printf 'fed987654321\tghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-%s:20260101\n' "$arch"
+      printf 'abc123def456\tghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
+      printf 'fed987654321\tghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-%s:20260101\n' "$arch"
       ;;
     multi-distro-deps)
       # Ubuntu and Rocky present → needs --distro to disambiguate
-      printf 'abc123def456\tghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
-      printf 'fed987654321\tghcr.io/heavyai/heavydb-internal/core-build-rockylinux8-static-cuda12.9.2-%s:latest\n' "$arch"
+      printf 'abc123def456\tghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
+      printf 'fed987654321\tghcr.io/heavyai/heavydb/core-build-rockylinux8-static-cuda12.9.2-%s:latest\n' "$arch"
       ;;
     multi-cuda-deps)
       # Same distro, two CUDA versions → needs --cuda-version to disambiguate
-      printf 'abc123def456\tghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
-      printf 'fed987654321\tghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.6.0-%s:latest\n' "$arch"
+      printf 'abc123def456\tghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-%s:latest\n' "$arch"
+      printf 'fed987654321\tghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.6.0-%s:latest\n' "$arch"
       ;;
     # default (empty): no output
   esac

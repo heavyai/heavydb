@@ -564,7 +564,7 @@ if(ENABLE_CUDA)
   # warning #20014-D: calling a __host__ function from a __host__ __device__ function is not allowed
   # (stack of mostly boost::fusion headers omitted)
   # instantiation of "robin_hood::detail::Table<...>" at line 126 of
-  #   /home/simon.eves/work/master/heavydb-internal/QueryEngine/Aggregate/AggModeHashTableGpu.cu
+  #   /home/simon.eves/work/master/heavydb/QueryEngine/Aggregate/AggModeHashTableGpu.cu
   target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=20014>)
 
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a DESTINATION QueryEngine COMPONENT "QE")
