@@ -3,12 +3,979 @@
 
 name: Nightly Tests
 
+# Ported from Jenkins nightly-job-pipeline-1/2/3. Built on the same
+# container/build->image->test framework as pr-required-checks.yml: a build
+# job (in the deps container) compiles a config and packs the outputs into a
+# pr-build/* GHCR image via scripts/ci/build.sh + pack_image.sh; a test job
+# pulls that image as its container and runs scripts/ci/run_*.sh.
+#
+# Triggering: workflow_dispatch only for now. The original Jenkins schedules
+# are preserved (commented) for later enablement. Crons are UTC, pinned to
+# PST (+8); under PDT they fire 1h later, fine for nightlies.
+#
+# on:
+#   schedule:
+#     - cron: "15 8 * * *"    # nightly-1 (00:15 PT)
+#     - cron: "15 10 * * *"   # nightly-2 (02:15 PT)
+#     - cron: "15 12 * * *"   # nightly-3 (04:15 PT)
+
 on:
   workflow_dispatch:
+    inputs:
+      sha1:
+        description: "SHA or branch to test"
+        default: ""
+      jobs:
+        description: "Subset of jobs to run"
+        type: choice
+        default: all
+        options:
+          - all
+          - clang-tidy
+          - asan
+          - tsan
+          - columnar           # build-debug-static + test-columnar + test-sharding
+          - columnar-asan
+          - columnar-tsan
+          - multi-periodic     # build-multi-cuda-gcc + test + multi-static-debug
+          - multi-render-periodic
+          - heavydb-ee-debug
+          - sql-importer
+
+permissions:
+  contents: read
+  packages: write
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  placeholder:
+  setup:
+    name: setup
+    runs-on: linux-amd64-cpu16
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      jobs_filter: ${{ steps.resolve.outputs.jobs_filter }}
+    steps:
+      - id: resolve
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const input = ((context.payload.inputs || {}).sha1 || '').trim();
+            let sha = context.sha;
+            if (input) {
+              const { data } = await github.rest.repos.getCommit({ owner, repo, ref: input });
+              sha = data.sha;
+            }
+            core.setOutput('sha', sha);
+            core.setOutput('jobs_filter', ((context.payload.inputs || {}).jobs || 'all'));
+
+  # ===========================================================================
+  # Lint
+  # ===========================================================================
+  clang-tidy:
+    name: clang-tidy
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'clang-tidy' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - name: Check clang-tidy
+        run: scripts/ci/check_clang_tidy.sh
+      - name: Upload diff artifact
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: clang-tidy-diff-${{ github.sha }}
+          path: build/clang-tidy-diff-${{ github.sha }}.txt
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # ASAN (matrix: 4 partitions) — build + run sanity tests in ONE job.
+  # Unlike the GPU jobs (build on cpu, test on gpu), asan builds and tests both
+  # run on cpu32, so we skip pack_image entirely: its ~2x staging copy of the
+  # large ASAN binaries ENOSPC'd the runner disk. Building and testing in place
+  # avoids the extra copy.
+  # ===========================================================================
+  asan:
+    name: asan (partition ${{ matrix.partition }})
+    # ASAN-instrumented builds + tests are slow; raise above the 360-min default.
+    timeout-minutes: 720
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'asan' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      # NO_ASLR uses setarch -R (init_heavy/run_ctest), which needs an
+      # unconfined seccomp profile to set the ADDR_NO_RANDOMIZE personality.
+      options: --security-opt seccomp=unconfined
+    strategy:
+      # Cap concurrent partitions so the 4-way matrix doesn't oversubscribe the
+      # shared self-hosted runner pool (unscheduled legs get cancelled when the
+      # whole nightly runs at once). 2 at a time.
+      max-parallel: 2
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    env:
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_ASAN=ON
+        -DENABLE_CUDA=OFF
+        -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+        -DPREFER_STATIC_LIBS=ON
+        -DHEAVYAI_PARTITION=${{ matrix.partition }}
+        -DCMAKE_JOB_POOLS=link=4
+        -DCMAKE_JOB_POOL_LINK=link
+      MAKE_TARGETS: "mapd_java_components sanity_tests_build_only"
+      BUILD_DIR: build
+      # OmniSQLUtilitiesTest.CommandHistoryFile.* asserts getpwuid(getuid())->pw_dir
+      # == $HOME; pin HOME to root's passwd dir so the two agree (matches the
+      # framework's other sanity test jobs).
+      HOME: /root
+      LABEL_REGEX: "_sanity_"
+      CTEST_TIMEOUT_SECS: "7200"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      # heavydb intentionally poisons memory; the ASAN default trips
+      # use-after-poison (and the report deadlocks) in initheavy and the tests.
+      ASAN_OPTIONS: "allow_user_poisoning=false"
+      NO_ASLR: "true"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - name: Set LSAN suppressions path
+        # Use the in-container workspace ($GITHUB_WORKSPACE), resolved at runtime
+        # — NOT ${{ github.workspace }}, which is the host path and is not mounted
+        # inside the container (ASAN then can't read the suppressions file).
+        run: echo "LSAN_OPTIONS=suppressions=$GITHUB_WORKSPACE/config/asan.suppressions" >> "$GITHUB_ENV"
+      - name: Build (no pack)
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          pack: "false"
+          mvn-log-name: asan-partition-${{ matrix.partition }}-mvn-build-log
+        env:
+          # Build-time initheavy (init_test_dir) must not leak-check or abort the build.
+          ASAN_OPTIONS: "allow_user_poisoning=false:detect_leaks=0:halt_on_error=0"
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run ASAN sanity tests
+        run: scripts/ci/run_ctest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-asan-partition-${{ matrix.partition }}
+          path: build/*.xml
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # TSAN (matrix: 4 partitions) — config: tsan, test: tsan
+  # ===========================================================================
+  build-tsan:
+    name: build (tsan partition ${{ matrix.partition }})
+    # Instrumented build; raise above the GHA default 360-min cap defensively.
+    timeout-minutes: 720
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'tsan' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Cap concurrent partitions so the 4-way matrix doesn't oversubscribe the
+      # shared self-hosted runner pool (unscheduled legs get cancelled when the
+      # whole nightly runs at once). 2 at a time.
+      max-parallel: 2
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    env:
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_TSAN=ON
+        -DENABLE_CUDA=OFF
+        -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+        -DPREFER_STATIC_LIBS=ON
+        -DHEAVYAI_PARTITION=${{ matrix.partition }}
+        -DHAVE_STD_REGEX=ON
+        -DCMAKE_JOB_POOLS=link=4
+        -DCMAKE_JOB_POOL_LINK=link
+      MAKE_TARGETS: "mapd_java_components sanity_tests_build_only"
+      IMAGE_NAME: "pr-build/tsan"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
+      STRIP: debug
+      DEBUG_ARTIFACTS_DIR: ${{ github.workspace }}/tsan-debug-symbols
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: tsan-partition-${{ matrix.partition }}-mvn-build-log
+      - name: Upload debug symbols
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tsan-debug-symbols-partition-${{ matrix.partition }}
+          path: ${{ github.workspace }}/tsan-debug-symbols
+          if-no-files-found: ignore
+          retention-days: 14
+
+  test-tsan:
+    name: test (tsan partition ${{ matrix.partition }})
+    needs: [setup, build-tsan]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'tsan' }}
+    timeout-minutes: 720
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/${{ github.repository }}/pr-build/tsan:${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --security-opt seccomp=unconfined
+    strategy:
+      # Cap concurrent partitions so the 4-way matrix doesn't oversubscribe the
+      # shared self-hosted runner pool (unscheduled legs get cancelled when the
+      # whole nightly runs at once). 2 at a time.
+      max-parallel: 2
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      LABEL_REGEX: "_sanity_"
+      CTEST_TIMEOUT_SECS: "7200"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      TSAN_OPTIONS: "suppressions=/workspace/config/tsan.suppressions,history_size=7,second_deadlock_stack=1,halt_on_error=0"
+      NO_ASLR: "true"
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Restore debug symbols
+        uses: actions/download-artifact@v8
+        with:
+          name: tsan-debug-symbols-partition-${{ matrix.partition }}
+          path: /workspace
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run TSAN sanity tests
+        run: scripts/ci/run_ctest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-tsan-partition-${{ matrix.partition }}
+          path: /workspace/build/*.xml
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # columnar / sharding — one debug-static build, two gtest variants
+  # ===========================================================================
+  build-debug-static:
+    name: build (debug-static)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'columnar' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: "-DPREFER_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=debug"
+      MAKE_TARGETS: "mapd_java_components ExecuteTest"
+      IMAGE_NAME: "pr-build/debug-static"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests scripts"
+      STRIP: debug
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: debug-static-mvn-build-log
+
+  test-columnar:
+    name: test (columnar)
+    needs: [setup, build-debug-static]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'columnar' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-debug-static.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: Tests/ExecuteTest
+      EXTRA_ARGS: --enable-columnar-output=true
+      RESULTS_FILE: test-results-columnar.xml
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Test
+        run: scripts/ci/run_gtest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-columnar
+          path: /workspace/build/test-results-columnar.xml
+          if-no-files-found: ignore
+
+  test-sharding:
+    name: test (sharding)
+    needs: [setup, build-debug-static]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'columnar' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-debug-static.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: Tests/ExecuteTest
+      EXTRA_ARGS: --with-sharding
+      RESULTS_FILE: test-results-sharding.xml
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Test
+        run: scripts/ci/run_gtest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-sharding
+          path: /workspace/build/test-results-sharding.xml
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # columnar-asan — ExecuteTest --enable-columnar-output under ASAN
+  # ===========================================================================
+  build-columnar-asan:
+    name: build (columnar-asan)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'columnar-asan' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_ASAN=ON
+        -DENABLE_CUDA=OFF
+        -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+        -DPREFER_STATIC_LIBS=ON
+      MAKE_TARGETS: "mapd_java_components ExecuteTest"
+      # ExecuteTest depends on init_test_dir (runs initheavy at build time); under
+      # ASAN that trips a use-after-poison on heavydb's intentional poisoning and
+      # hangs. Suppress user poisoning, as the test jobs do.
+      ASAN_OPTIONS: "allow_user_poisoning=false:detect_leaks=0:halt_on_error=0"
+      IMAGE_NAME: "pr-build/columnar-asan"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
+      STRIP: debug
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: columnar-asan-mvn-build-log
+
+  test-columnar-asan:
+    name: test (columnar-asan)
+    needs: [setup, build-columnar-asan]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'columnar-asan' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.build-columnar-asan.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --security-opt seccomp=unconfined
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: Tests/ExecuteTest
+      EXTRA_ARGS: --enable-columnar-output=true
+      RESULTS_FILE: test-results-columnar-asan.xml
+      LSAN_OPTIONS: "suppressions=/workspace/config/asan.suppressions"
+      ASAN_OPTIONS: "allow_user_poisoning=false"
+      NO_ASLR: "true"
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Test
+        run: scripts/ci/run_gtest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-columnar-asan
+          path: /workspace/build/test-results-columnar-asan.xml
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # columnar-tsan — ExecuteTest --enable-columnar-output under TSAN
+  # ===========================================================================
+  build-columnar-tsan:
+    name: build (columnar-tsan)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'columnar-tsan' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_TSAN=ON
+        -DENABLE_CUDA=OFF
+        -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+        -DPREFER_STATIC_LIBS=ON
+        -DHAVE_STD_REGEX=ON
+      MAKE_TARGETS: "mapd_java_components ExecuteTest"
+      IMAGE_NAME: "pr-build/columnar-tsan"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
+      STRIP: debug
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: columnar-tsan-mvn-build-log
+
+  test-columnar-tsan:
+    name: test (columnar-tsan)
+    needs: [setup, build-columnar-tsan]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'columnar-tsan' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.build-columnar-tsan.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --security-opt seccomp=unconfined
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: Tests/ExecuteTest
+      EXTRA_ARGS: --enable-columnar-output=true
+      RESULTS_FILE: test-results-columnar-tsan.xml
+      TSAN_OPTIONS: "suppressions=/workspace/config/tsan.suppressions,history_size=7,second_deadlock_stack=1,halt_on_error=0"
+      NO_ASLR: "true"
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Test
+        run: scripts/ci/run_gtest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-columnar-tsan
+          path: /workspace/build/test-results-columnar-tsan.xml
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # multi-periodic — release+CUDA gcc sanity (matrix) + build-only variants
+  # ===========================================================================
+  build-multi-cuda-gcc:
+    name: build (multi gcc cuda-static partition ${{ matrix.partition }})
+    # Large CUDA build; raise above the GHA default 360-min cap defensively.
+    timeout-minutes: 720
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-periodic' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Cap concurrent partitions so the 4-way matrix doesn't oversubscribe the
+      # shared self-hosted runner pool (unscheduled legs get cancelled when the
+      # whole nightly runs at once). 2 at a time.
+      max-parallel: 2
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=ON
+        -DHEAVYAI_PARTITION=${{ matrix.partition }}
+      MAKE_TARGETS: "mapd_java_components heavydb sanity_tests_build_only"
+      IMAGE_NAME: "pr-build/multi-cuda-gcc"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: multi-cuda-gcc-partition-${{ matrix.partition }}-mvn-build-log
+
+  test-multi-cuda-gcc:
+    name: test (multi gcc cuda-static sanity partition ${{ matrix.partition }})
+    needs: [setup, build-multi-cuda-gcc]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-periodic' }}
+    timeout-minutes: 720
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ghcr.io/${{ github.repository }}/pr-build/multi-cuda-gcc:${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      # Cap concurrent partitions so the 4-way matrix doesn't oversubscribe the
+      # shared self-hosted runner pool (unscheduled legs get cancelled when the
+      # whole nightly runs at once). 2 at a time.
+      max-parallel: 2
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      LABEL_REGEX: "_sanity_"
+      CTEST_TIMEOUT_SECS: "7200"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run sanity tests
+        run: scripts/ci/run_ctest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-multi-cuda-gcc-partition-${{ matrix.partition }}
+          path: /workspace/build/*.xml
+          if-no-files-found: ignore
+
+  build-multi-cuda-clang:
+    name: build (multi clang cuda-static)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-periodic' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      CC: clang
+      CXX: clang++
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=OFF
+      MAKE_TARGETS: "mapd_java_components heavydb"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          pack: 'false'
+          mvn-log-name: multi-cuda-clang-mvn-build-log
+
+  build-multi-static-debug:
+    name: build (multi gcc static debug)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-periodic' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=OFF
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=debug
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=OFF
+      MAKE_TARGETS: "mapd_java_components heavydb"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          pack: 'false'
+          mvn-log-name: multi-static-debug-mvn-build-log
+
+  # ===========================================================================
+  # multi-render-periodic — release+CUDA+rendering, render_sanity_tests
+  # ===========================================================================
+  build-multi-render:
+    name: build (multi-render)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-render-periodic' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.pack.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=ON
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_RENDER_TESTS=ON
+        -DENABLE_TESTS=OFF
+        -DENABLE_ONLY_ONE_ARCH=ON
+        -DUSE_ALTERNATE_LINKER=mold
+      MAKE_TARGETS: "mapd_java_components render_sanity_tests_build_only"
+      IMAGE_NAME: "pr-build/multi-render"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config scripts"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: pack
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: multi-render-mvn-build-log
+
+  test-multi-render:
+    name: test (multi-render)
+    needs: [setup, build-multi-render]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-render-periodic' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-multi-render.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --gpus all --env NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      LABEL_REGEX: "render_sanity"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Run render sanity tests
+        run: scripts/ci/run_ctest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-multi-render
+          path: /workspace/build/*.xml
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # heavydb-ee-debug — full product build, build-only sanity (no run)
+  # ===========================================================================
+  build-heavydb-ee-debug:
+    name: build (heavydb-ee-debug)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'heavydb-ee-debug' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      # Immerse/HeavyIQ downloads OFF: building the product with rendering would
+      # otherwise fetch frontend/web-server/heavyiq assets (unavailable in CI).
+      # Ninja + link JOB_POOL=2 + mold: relwithdebinfo links are memory-heavy;
+      # building the full product + all test binaries at -j$(nproc) OOM-killed
+      # the runner (exit 137). Cap concurrent links and use mold.
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_RENDERING=ON
+        -DENABLE_RENDER_TESTS=ON
+        -DENABLE_CUDA=ON
+        -DCMAKE_BUILD_TYPE=relwithdebinfo
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=ON
+        -DMAPD_IMMERSE_DOWNLOAD=OFF
+        -DHEAVYIQ_DOWNLOAD=OFF
+        -DUSE_ALTERNATE_LINKER=mold
+        -DCMAKE_JOB_POOLS=link=2
+        -DCMAKE_JOB_POOL_LINK=link
+      # Product + render tests only. Building the full sanity_tests (~85
+      # binaries) in relwithdebinfo overflows the cpu32 disk (ENOSPC); the
+      # partitioned release/tsan/asan jobs already cover sanity-test compilation.
+      MAKE_TARGETS: "mapd_java_components heavydb render_sanity_tests_build_only"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          pack: 'false'
+          mvn-log-name: heavydb-ee-debug-mvn-build-log
+
+  # ===========================================================================
+  # sql-importer — build jars + server, import into a locally-started server
+  # ===========================================================================
+  build-sql-importer:
+    name: build (sql-importer)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'sql-importer' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=OFF
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DMAPD_IMMERSE_DOWNLOAD=OFF
+        -DENABLE_TESTS=OFF
+      MAKE_TARGETS: "mapd_java_components heavydb initheavy"
+      IMAGE_NAME: "pr-build/sql-importer"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config scripts"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: sql-importer-mvn-build-log
+
+  test-sql-importer:
+    name: test (sql-importer)
+    needs: [setup, build-sql-importer]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'sql-importer' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.build-sql-importer.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      # ADAPTED: start the locally-built server and import into it (the Jenkins
+      # job used a mapd-cpu product container). Relies on the default geo
+      # sample table heavyai_us_states (initheavy without --skip-geo).
+      SERVER_WAIT: "45"
+      CLIENT_CMD: >-
+        JDBC_JAR=$(ls bin/heavyai-jdbc*.jar); UTIL_JAR=$(ls bin/heavyai-util*.jar);
+        java -cp "${JDBC_JAR}:${UTIL_JAR}" com.mapd.utility.SQLImporter
+        -t heavyai_us_states_cpy -u admin -p HyperInteractive
+        -db heavyai -s localhost --port 6274
+        -su admin -sp HyperInteractive
+        -ss "SELECT id, abbr, name from heavyai_us_states"
+        -c "jdbc:heavyai:localhost:6274:heavyai" | grep "result set count is 52 read time is"
+    steps:
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run SQLImporter
+        run: scripts/ci/run_server.sh
+
+  # ===========================================================================
+  # report — single pass/fail aggregate of all jobs
+  # ===========================================================================
+  report:
+    name: report-status
+    needs:
+      - setup
+      - clang-tidy
+      - asan
+      - build-tsan
+      - test-tsan
+      - build-debug-static
+      - test-columnar
+      - test-sharding
+      - build-columnar-asan
+      - test-columnar-asan
+      - build-columnar-tsan
+      - test-columnar-tsan
+      - build-multi-cuda-gcc
+      - test-multi-cuda-gcc
+      - build-multi-cuda-clang
+      - build-multi-static-debug
+      - build-multi-render
+      - test-multi-render
+      - build-heavydb-ee-debug
+      - build-sql-importer
+      - test-sql-importer
+    if: always() && needs.setup.result == 'success'
     runs-on: linux-amd64-cpu16
     steps:
-      - name: placeholder
-        run: true
+      - name: Aggregate
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const results = ${{ toJSON(needs) }};
+            const ok = r => r === 'success' || r === 'skipped';
+            const jobs = Object.keys(results).filter(j => j !== 'setup');
+            const failed = jobs.filter(j => !ok(results[j].result));
+            if (failed.length) core.setFailed(`Did not pass: ${failed.join(', ')}`);
+            else core.info('All selected nightly jobs passed');

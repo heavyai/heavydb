@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -21,6 +10,8 @@
  */
 
 #include <fstream>
+#include <type_traits>
+#include <vector>
 
 #include <gtest/gtest.h>
 #include <picosha2.h>
@@ -48,13 +39,16 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
   static void SetUpTestSuite() {
     DBHandlerTestFixture::SetUpTestSuite();
     ddl_utils::FilePathWhitelist::clear();
-    temp_file_path_ = "/tmp/" + boost::filesystem::unique_path().string() + ".csv";
+    boost::filesystem::create_directories(TEMP_EXPORT_DIR);
+    temp_file_path_ =
+        TEMP_EXPORT_DIR + "/" + boost::filesystem::unique_path().string() + ".csv";
     std::ofstream file{temp_file_path_};
     file.close();
   }
 
   static void TearDownTestSuite() {
     boost::filesystem::remove(temp_file_path_);
+    boost::filesystem::remove_all(TEMP_EXPORT_DIR);
     boost::filesystem::remove(CONFIG_FILE_PATH);
     boost::filesystem::remove("symlink_test.csv");
     boost::filesystem::remove_all(DEFAULT_IMPORT_PATH);
@@ -204,6 +198,7 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
   }
 
   inline static const std::string CONFIG_FILE_PATH{"./file_path_whitelist_test.conf"};
+  inline static const std::string TEMP_EXPORT_DIR{"/tmp/heavyai_whitelist_export_test"};
   inline static std::string temp_file_path_;
   inline static const std::string DEFAULT_IMPORT_PATH{std::string{BASE_PATH} + "/" +
                                                       shared::kDefaultImportDirName};
@@ -392,12 +387,8 @@ TEST_F(FilePathWhitelistTest, ImportGeoTableBlacklist) {
   auto session_id = db_handler_and_session_id.second;
   executeLambdaAndAssertException(
       [&] {
-        db_handler->import_geo_table(session_id,
-                                     "test1",
-                                     file_path,
-                                     TCopyParams{},
-                                     TRowDescriptor{},
-                                     TCreateParams{});
+        db_handler->import_geo_table(
+            session_id, "test1", file_path, TCopyParams{}, TRowDescriptor{});
       },
       "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
@@ -473,13 +464,34 @@ enum class FileLocationType {
   First = RELATIVE_FT,
   Last = HTTPS
 };
+
+constexpr char kRemoteFixtureHostAndPath[] =
+    "raw.githubusercontent.com/heavyai/heavydb/master/Tests/FilePathWhitelist/";
+
+using FileLocationTypeValue = std::underlying_type_t<FileLocationType>;
+
+constexpr FileLocationTypeValue fileLocationTypeValue(
+    const FileLocationType file_location_type) {
+  return static_cast<FileLocationTypeValue>(file_location_type);
+}
+
+std::vector<FileLocationTypeValue> getEnabledFileLocationTypes() {
+  std::vector<FileLocationTypeValue> enabled_file_location_types{
+      fileLocationTypeValue(FileLocationType::RELATIVE_FT),
+      fileLocationTypeValue(FileLocationType::ABSOLUTE_FT),
+      fileLocationTypeValue(FileLocationType::HTTP),
+      fileLocationTypeValue(FileLocationType::HTTPS)};
+
+  return enabled_file_location_types;
+}
 }  // namespace
 
 class DBHandlerFilePathTest
     : public DBHandlerTestFixture,
-      public testing::WithParamInterface<std::tuple<int, std::string>> {
+      public testing::WithParamInterface<std::tuple<FileLocationTypeValue, std::string>> {
  public:
-  static std::string testParamsToString(const std::tuple<int, std::string>& params) {
+  static std::string testParamsToString(
+      const std::tuple<FileLocationTypeValue, std::string>& params) {
     auto [file_location_type, suffix] = getTestParams(params);
     std::string param_str;
     if (file_location_type == FileLocationType::RELATIVE_FT) {
@@ -527,9 +539,9 @@ class DBHandlerFilePathTest
     std::string file_name = file_name_prefix + suffix;
     std::string path;
     if (file_location_type == FileLocationType::HTTPS) {
-      path = "https://omnisci-import-test.s3-us-west-1.amazonaws.com/" + file_name;
+      path = std::string("https://") + kRemoteFixtureHostAndPath + file_name;
     } else if (file_location_type == FileLocationType::HTTP) {
-      path = "http://omnisci-import-test.s3-us-west-1.amazonaws.com/" + file_name;
+      path = std::string("http://") + kRemoteFixtureHostAndPath + file_name;
 #ifdef HAVE_AWS_S3
     } else if (file_location_type == FileLocationType::S3) {
       path = "s3://omnisci-import-test/" + file_name;
@@ -569,7 +581,7 @@ class DBHandlerFilePathTest
   }
 
   static std::pair<FileLocationType, std::string> getTestParams(
-      const std::tuple<int, std::string>& params = GetParam()) {
+      const std::tuple<FileLocationTypeValue, std::string>& params = GetParam()) {
     return {static_cast<FileLocationType>(std::get<0>(params)), std::get<1>(params)};
   }
 };
@@ -592,6 +604,26 @@ TEST_P(DBHandlerFilePathTest, ImportTable) {
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
   db_handler->import_table(
       session_id, "test_table", getFilePath("example.csv"), getCopyParams());
+}
+
+TEST_P(DBHandlerFilePathTest, ImportGeoTable) {
+// TODO: Undo test case skipping when GDAL failure is resolved
+#ifdef HAVE_AWS_S3
+  if (auto [file_location_type, suffix] = getTestParams();
+      file_location_type == FileLocationType::S3 && suffix == "_tar_gz") {
+    GTEST_SKIP();
+  }
+#endif  // HAVE_AWS_S3
+
+  TCopyParams copy_params;
+  copy_params.source_type = TSourceType::GEO_FILE;
+
+  auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  db_handler->import_geo_table(session_id,
+                               "test_table_2",
+                               getFilePath("example.geojson"),
+                               copy_params,
+                               TRowDescriptor{});
 }
 
 TEST_P(DBHandlerFilePathTest, GetFirstGeoFileInArchive) {
@@ -629,9 +661,8 @@ TEST_P(DBHandlerFilePathTest, GetLayersInGeoFile) {
 INSTANTIATE_TEST_SUITE_P(
     DBHandlerFilePathTest,
     DBHandlerFilePathTest,
-    testing::Combine(testing::Range(static_cast<int>(FileLocationType::First),
-                                    static_cast<int>(FileLocationType::Last) + 1),
-                     testing::Values("", "_gz", "_tar_gz")),
+    testing::Combine(testing::ValuesIn(getEnabledFileLocationTypes()),
+                     testing::Values("", "_tar", "_gz", "_tar_gz")),
     [](const auto& param_info) {
       return DBHandlerFilePathTest::testParamsToString(param_info.param);
     });

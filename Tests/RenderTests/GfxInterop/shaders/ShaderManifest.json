@@ -1,0 +1,32 @@
+{
+  "sources": [
+    {
+      "filename": "drawOneInteropTriangleTest.vert",
+      "file_path": ".",
+      "internal_path": "RenderTests/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "drawOneInteropTriangleTest.frag",
+      "file_path": ".",
+      "internal_path": "RenderTests/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "importCudaBufferTest.vert",
+      "file_path": ".",
+      "internal_path": "RenderTests/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "importCudaBufferTest.frag",
+      "file_path": ".",
+      "internal_path": "RenderTests/",
+      "language": "glsl",
+      "class": "fragment"
+    }
+  ]
+}

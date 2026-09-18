@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "AbstractTextFileDataWrapper.h"
@@ -28,6 +17,9 @@
 #include "DataMgr/ForeignStorage/FileReader.h"
 #include "DataMgr/ForeignStorage/ForeignTableSchema.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
+#if defined(HAVE_AWS_S3)
+#include "DataMgr/ForeignStorage/FileReaderS3.h"
+#endif  //  defined(HAVE_AWS_S3)
 #include "ForeignStorageException.h"
 #include "Shared/JsonUtils.h"
 #include "Shared/misc.h"
@@ -223,8 +215,7 @@ void AbstractTextFileDataWrapper::updateMetadata(
 }
 
 /**
- * Data structure containing data and metadata gotten from parsing a set of file
- * regions.
+ * Data structure containing data and metadata gotten from parsing a set of file regions.
  */
 struct ParseFileRegionResult {
   size_t file_offset;
@@ -482,7 +473,16 @@ void AbstractTextFileDataWrapper::populateChunks(
       file_readers.emplace_back(std::make_unique<LocalMultiFileReader>(
           file_path, copy_params, reader_metadata));
     } else {
+#if defined(HAVE_AWS_S3)
+      file_readers.emplace_back(
+          std::make_unique<MultiS3Reader>(file_path,
+                                          copy_params,
+                                          foreign_table_->foreign_server,
+                                          user_mapping_,
+                                          reader_metadata));
+#else
       UNREACHABLE();
+#endif  // defined(HAVE_AWS_S3)
     }
   }
 
@@ -671,13 +671,6 @@ void cache_blocks(std::map<ChunkKey, Chunk_NS::Chunk>& cached_chunks,
   CHECK(catalog);
   auto cache = get_cache_if_enabled(catalog, disable_cache);
   if (cache) {
-    // This extra filter needs to be here because this wrapper is the only one that
-    // accesses the cache directly and it should not be inserting chunks which are not
-    // mapped to the current leaf (in distributed mode).
-    if (key_does_not_shard_to_leaf(chunk_key)) {
-      return;
-    }
-
     ChunkKey index_key = {chunk_key[CHUNK_KEY_DB_IDX],
                           chunk_key[CHUNK_KEY_TABLE_IDX],
                           chunk_key[CHUNK_KEY_COLUMN_IDX],
@@ -1193,8 +1186,8 @@ void dispatch_scan_requests(
       continue;
     } else if (size == 1 && request.buffer[0] == copy_params.line_delim) {
       // In some cases files with newlines at the end will be encoded with a second
-      // newline that can end up being the only thing in the buffer. Also add request
-      // back to the pool to be picked up again in the next iteration.
+      // newline that can end up being the only thing in the buffer. Also add request back
+      // to the pool to be picked up again in the next iteration.
       current_file_offset++;
       add_request_to_pool(multi_threading_params, request);
       continue;
@@ -1383,6 +1376,17 @@ void initialize_non_append_mode_scan(
     file_reader = std::make_unique<LocalMultiFileReader>(
         file_path, copy_params, file_path_options, max_file_count);
     parser.optionallyRemoveBadFiles(dynamic_cast<MultiFileReader*>(file_reader.get()));
+#if defined(HAVE_AWS_S3)
+  } else if (server_options
+                 .find(foreign_storage::AbstractTextFileDataWrapper::STORAGE_TYPE_KEY)
+                 ->second ==
+             foreign_storage::AbstractTextFileDataWrapper::S3_STORAGE_TYPE) {
+    // Public user mappings are always associated with the root user id.
+    // TODO: Enable use of user specific user mappings when user id/query state
+    // is passed down to the data wrappers
+    file_reader = std::make_unique<MultiS3Reader>(
+        get_s3_key(), copy_params, foreign_table, user_mapping);
+#endif  // defined(HAVE_AWS_S3)
   } else {
     UNREACHABLE();
   }
@@ -1425,6 +1429,14 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
     parser.validateFiles(file_reader_.get(), foreign_table_);
     if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
       file_reader_->checkForMoreRows(append_start_offset_, file_path_options);
+#if defined(HAVE_AWS_S3)
+    } else if (server_options.find(STORAGE_TYPE_KEY)->second == S3_STORAGE_TYPE) {
+      // Need to pass in foreign server and user mapping
+      file_reader_->checkForMoreRows(append_start_offset_,
+                                     file_path_options,
+                                     foreign_table_->foreign_server,
+                                     user_mapping_);
+#endif  // defined(HAVE_AWS_S3)
     } else {
       UNREACHABLE();
     }
@@ -1441,7 +1453,14 @@ void AbstractTextFileDataWrapper::populateChunkMetadata(
         foreign_table_,
         user_mapping_,
         parser,
-        [] { return ""; },
+#if defined(HAVE_AWS_S3)
+        [this] {
+          return getS3FileKey(foreign_table_);
+#else
+        [] {
+          return "";
+#endif  // defined(HAVE_AWS_S3)
+        },
         num_rows_,
         append_start_offset_);
   }
@@ -1585,7 +1604,11 @@ void AbstractTextFileDataWrapper::initializeIterativeScanModeIfNecessary() {
       foreign_table_,
       user_mapping_,
       parser,
+#if defined(HAVE_AWS_S3)
+      [this] { return getS3FileKey(foreign_table_); },
+#else
       [] { return ""; },
+#endif  // defined(HAVE_AWS_S3)
       num_rows_,
       append_start_offset_);
 
@@ -1624,27 +1647,6 @@ void AbstractTextFileDataWrapper::iterativeFileScan(
   auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(db_id_);
   CHECK(catalog);
   auto& parser = getFileBufferParser();
-  const auto file_path_options = getFilePathOptions(foreign_table_);
-  auto& server_options = foreign_table_->foreign_server->options;
-
-  if (is_first_file_scan_call_) {
-    iterative_scan_last_scanned_fragment_id_ = -1;
-    initialize_non_append_mode_scan(
-        chunk_metadata_map_,
-        fragment_id_to_file_regions_map_,
-        server_options,
-        file_reader_,
-        file_path,
-        copy_params,
-        file_path_options,
-        getMaxFileCount(),
-        foreign_table_,
-        user_mapping_,
-        parser,
-        [] { return ""; },
-        num_rows_,
-        append_start_offset_);
-  }
 
   auto columns =
       catalog->getAllColumnMetadataForTable(foreign_table_->tableId, false, false, true);
@@ -1759,8 +1761,8 @@ void AbstractTextFileDataWrapper::updateRolledOffChunks(
           get_placeholder_metadata(cd->columnType,
                                    partially_deleted_fragment_row_count.value(),
                                    RasterTileInfo{}));
-      // Old chunk stats will still be correct (since only row deletion is occurring)
-      // and more accurate than that of the placeholder metadata.
+      // Old chunk stats will still be correct (since only row deletion is occurring) and
+      // more accurate than that of the placeholder metadata.
       chunk_metadata->chunkStats = old_chunk_stats;
     }
   }
@@ -1807,7 +1809,15 @@ void AbstractTextFileDataWrapper::restoreDataWrapperInternals(
     file_reader_ = std::make_unique<LocalMultiFileReader>(
         full_file_path, copy_params, d["reader_metadata"]);
   } else {
+#if defined(HAVE_AWS_S3)
+    file_reader_ = std::make_unique<MultiS3Reader>(full_file_path,
+                                                   copy_params,
+                                                   foreign_table_->foreign_server,
+                                                   user_mapping_,
+                                                   d["reader_metadata"]);
+#else
     UNREACHABLE();
+#endif  // defined(HAVE_AWS_S3)
   }
 
   json_utils::get_value_from_object(d, num_rows_, "num_rows");

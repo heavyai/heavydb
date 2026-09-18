@@ -1,0 +1,12 @@
+<?xml version="1.0"?> <?xml-stylesheet type="text/xsl" href="configuration.xsl"?> 
+<configuration>
+      <property>
+         <name>hive.metastore.schema.verification</name> 
+         <value>false</value> 
+      </property> 
+     <property> 
+        <name>hive.metastore.warehouse.dir</name> 
+        <value>/HiveWarehouse</value>
+        <description></description> 
+      </property>
+</configuration>

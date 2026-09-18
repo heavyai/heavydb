@@ -15,7 +15,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
-    <thrift.version>0.17.0</thrift.version>
+    <thrift.version>0.24.0</thrift.version>
     <skipTests>true</skipTests>
     <omnisci.release.version>need-to-set-omnisci.release.version</omnisci.release.version>
   </properties>
@@ -29,6 +29,7 @@
       <groupId>junit</groupId>
       <artifactId>junit</artifactId>
       <version>4.13.1</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.apache.thrift</groupId>
@@ -36,12 +37,12 @@
       <version>${thrift.version}</version>
       <exclusions>
         <exclusion>
-          <groupId>org.apache.httpcomponents</groupId>
-          <artifactId>httpclient</artifactId>
+          <groupId>jakarta.annotation</groupId>
+          <artifactId>jakarta.annotation-api</artifactId>
         </exclusion>
         <exclusion>
-          <groupId>org.apache.httpcomponents</groupId>
-          <artifactId>httpcore</artifactId>
+          <groupId>jakarta.servlet</groupId>
+          <artifactId>jakarta.servlet-api</artifactId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -49,16 +50,6 @@
       <groupId>com.mapd</groupId>
       <artifactId>heavydbcommon</artifactId>
       <version>${omnisci.release.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpcore</artifactId>
-      <version>4.4.4</version>
-    </dependency>
-    <dependency>
-      <groupId>org.apache.httpcomponents</groupId>
-      <artifactId>httpclient</artifactId>
-      <version>4.5.13</version>
     </dependency>
   </dependencies>
   <build>
@@ -104,9 +95,9 @@
               <Multi-Release>true</Multi-Release>
             </manifestEntries>
           </archive>
-          <descriptorRefs>
-            <descriptorRef>jar-with-dependencies</descriptorRef>
-          </descriptorRefs>
+          <descriptors>
+            <descriptor>src/assembly/runtime.xml</descriptor>
+          </descriptors>
           <appendAssemblyId>false</appendAssemblyId>
         </configuration>
         <executions>

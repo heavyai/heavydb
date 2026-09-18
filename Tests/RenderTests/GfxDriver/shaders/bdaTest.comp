@@ -1,0 +1,55 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#extension GL_EXT_buffer_reference2 : require
+
+#define WIDTH 100
+#define HEIGHT 1
+#define WORKGROUP_SIZE 32
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = WORKGROUP_SIZE, local_size_z = 1) in;
+
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer BufferPointer {
+  uint64_t p[];
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer BufferInt64 {
+  int64_t i[];
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 4) buffer BufferDouble {
+  double d[];
+};
+
+layout(push_constant, std430) uniform Registers
+{
+  uint64_t qob;
+  uint64_t chunk;
+  uint64_t results;
+} registers;
+
+void main() {
+  // In order to fit the work into workgroups, some unnecessary threads are launched.
+  // We terminate those threads here.
+  if (gl_GlobalInvocationID.x >= WIDTH || gl_GlobalInvocationID.y >= HEIGHT) {
+    return;
+  }
+
+  //
+  // copy point x/y values from a chunk buffer via a pointer fetched from a QOB buffer
+  //
+
+  uint row = gl_GlobalInvocationID.x;
+  // read chunk data pointer from QOB
+  uint64_t p = BufferPointer(registers.qob).p[row];
+  // read chunk value
+  uint chunk_idx = uint((p - registers.chunk) >> 3); // sizeof(double)
+  double x = BufferDouble(registers.chunk).d[chunk_idx];
+  double y = BufferDouble(registers.chunk).d[chunk_idx + 1];
+  // write to results
+  uint result_idx = row * 2;
+  BufferDouble(registers.results).d[result_idx] = x;
+  BufferDouble(registers.results).d[result_idx + 1] = y;
+}

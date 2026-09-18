@@ -4,18 +4,9 @@
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-blue?logo=github)](https://github.com/orgs/heavyai/discussions)
 
 
-# Announcing HeavyAI 10.0 - ETA Sept. 2026
-A special performance branch, previewed at VLDB 2026, will be made available (soon) and will be merged into master after the release.
-
-***
-
-
-HeavyDB is an open source SQL-based, relational, columnar database engine that leverages the full performance and parallelism of modern hardware (both CPUs and GPUs) to enable querying of multi-billion row datasets in milliseconds, without the need for indexing, pre-aggregation, or downsampling.  HeavyDB can be run on hybrid CPU/GPU systems (Nvidia GPUs are currently supported), as well as on CPU-only systems featuring X86, Power, and ARM (experimental support) architectures. To achieve maximum performance, HeavyDB features multi-tiered caching of data between storage, CPU memory, and GPU memory, and an innovative Just-In-Time (JIT) query compilation framework.
-
-For usage info, see the [product documentation](https://docs.nvidia.com/heavyai), and for more details about the system's internal architecture, check out the [developer documentation](https://heavyai.github.io/heavydb/). 
+HeavyDB is an in-memory, column store, SQL relational database designed from the ground up to run on GPUs.
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
-
 
 ***
 
@@ -33,24 +24,19 @@ The repository includes a number of third party packages provided under separate
 
 # Links
 
-- [Developer Documentation](https://heavyai.github.io/heavydb/)
-- [Doxygen-generated Documentation](http://doxygen.mapd.com/)
-- [Product Documentation](https://docs.heavy.ai/)
-- [Release Notes](https://docs.heavy.ai/overview/release-notes)
-- [Community Forum](https://community.heavy.ai)
-- [HEAVY.AI Homepage](https://www.heavy.ai)
-- [HEAVY.AI Blog](https://www.heavy.ai/blog/)
-- [HEAVY.AI Downloads](https://www.heavy.ai/platform/downloads/)
+- [Documentation](https://docs.nvidia.com/heavyai/)
+- [Release Notes](https://docs.nvidia.com/heavyai/release-notes)
+
 
 # License
 
-This project is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+This project is licensed under the [Apache License, Version 2.0](https://github.com/heavyai/heavydb-internal/blob/master/LICENSE.txt).
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
 
 # Contributing
 
-In order to clarify the intellectual property license granted with Contributions from any person or entity, HEAVY.AI must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and keep a copy for your records.
+Follow the instructions noted in [CONTRIBUTIONING.md](https://github.com/heavyai/heavydb-internal/blob/master/CONTRIBUTING.md)
 
 # Building
 
@@ -60,27 +46,16 @@ HeavyDB uses CMake for its build system.
 
     mkdir build
     cd build
-    cmake -DCMAKE_BUILD_TYPE=debug ..
+    cmake -DCMAKE_BUILD_TYPE=Debug ..
     make -j 4
 
-The following `cmake`/`ccmake` options can enable/disable different features:
+HeavyDB requires CMake 3.25 or newer. CUDA and tests are enabled by default;
+backend rendering is disabled by default. `PREFER_STATIC_LIBS` defaults to
+`on` on RedHat-derived systems and `off` elsewhere. Optional subsystems can be
+disabled automatically if their dependencies are unavailable.
 
-- `-DCMAKE_BUILD_TYPE=release` - Build type and compiler options to use.
-                                 Options are `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`, and unset.
-- `-DENABLE_ASAN=off` - Enable address sanitizer. Default is `off`.
-- `-DENABLE_AWS_S3=on` - Enable AWS S3 support, if available. Default is `on`.
-- `-DENABLE_CUDA=off` - Disable CUDA. Default is `on`.
-- `-DENABLE_CUDA_KERNEL_DEBUG=off` - Enable debugging symbols for CUDA kernels. Will dramatically reduce kernel performance. Default is `off`.
-- `-DENABLE_DECODERS_BOUNDS_CHECKING=off` - Enable bounds checking for column decoding. Default is `off`.
-- `-DENABLE_IWYU=off` - Enable include-what-you-use. Default is `off`.
-- `-DENABLE_JIT_DEBUG=off` - Enable debugging symbols for the JIT. Default is `off`.
-- `-DENABLE_ONLY_ONE_ARCH=off` - Compile GPU code only for the host machine's architecture, speeding up compilation. Default is `off`.
-- `-DENABLE_PROFILER=off` - Enable google perftools. Default is `off`.
-- `-DENABLE_STANDALONE_CALCITE=off` - Require standalone Calcite server. Default is `off`.
-- `-DENABLE_TESTS=on` - Build unit tests. Default is `on`.
-- `-DENABLE_TSAN=off` - Enable thread sanitizer. Default is `off`.
-- `-DENABLE_CODE_COVERAGE=off` - Enable code coverage symbols (clang only). Default is `off`.
-- `-DPREFER_STATIC_LIBS=off` - Static link dependencies, if available. Default is `off`. Only works on CentOS.
+See the [build quickstart](docs/source/quickstart/build.rst) for the maintained
+list of common CMake options and defaults.
 
 # Testing
 
@@ -100,7 +75,7 @@ The `sanity_tests` target runs the most common tests. If using Makefiles to buil
 
 Finally run the tests:
 
-    export ASAN_OPTIONS=alloc_dealloc_mismatch=0:handle_segv=0
+    export ASAN_OPTIONS=alloc_dealloc_mismatch=0:handle_segv=0:protect_shadow_gap=0
     make sanity_tests
 
 ## ThreadSanitizer
@@ -113,7 +88,7 @@ Finally run the tests:
 
 We use a TSAN suppressions file to ignore warnings in third party libraries. Source the suppressions file by adding it to your `TSAN_OPTIONS` env:
 
-    export TSAN_OPTIONS="suppressions=/path/to/heavydb/config/tsan.suppressions"
+    export TSAN_OPTIONS="suppressions=/path/to/mapd/config/tsan.suppressions"
 
 Finally run the tests:
 
@@ -123,7 +98,7 @@ Finally run the tests:
 
 HeavyDB uses [CPack](https://cmake.org/cmake/help/latest/manual/cpack.1.html) to generate packages for distribution. Packages generated on CentOS with static linking enabled can be used on most other recent Linux distributions.
 
-To generate packages on CentOS (assuming starting from top level of the heavydb repository):
+To generate packages on CentOS (assuming starting from top level of the HeavyDB repository):
 
     mkdir build-package && cd build-package
     cmake -DPREFER_STATIC_LIBS=on -DCMAKE_BUILD_TYPE=release ..
@@ -140,11 +115,13 @@ The last command generates a `.tar.gz` package. The `TGZ` can be replaced with, 
 
 The [`startheavy`](startheavy) wrapper script may be used to start HeavyDB in a testing environment. This script performs the following tasks:
 
-- initializes the `data` storage directory via `initdb`, if required
+- initializes the `storage` directory via `initheavy`, if required
 - starts the main HeavyDB server, `heavydb`
-- offers to download and import a sample dataset, using the `insert_sample_data` script
+- starts `heavy_web_server` when its binary and a `frontend` directory are present
+- starts HeavyIQ when its directory is present
+- attempts to open the bundled frontend when one is available
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `heavydb` repository, `startheavy` may be run by:
+Assuming you are in the `build` directory, and it is a subdirectory of the `HeavyDB` repository, `startheavy` may be run by:
 
     ../startheavy
 
@@ -152,17 +129,18 @@ Assuming you are in the `build` directory, and it is a subdirectory of the `heav
 
 It is assumed that the following commands are run from inside the `build` directory.
 
-Initialize the `data` storage directory. This command only needs to be run once.
+Initialize the `storage` directory. This command only needs to be run once.
 
-    mkdir data && ./bin/initdb data
+    mkdir -p storage
+    ./bin/initheavy -f --data storage
 
 Start the HeavyDB server:
 
-    ./bin/heavydb
+    ./bin/heavydb storage
 
-If desired, insert a sample dataset by running the `insert_sample_data` script in a new terminal:
+If the optional web server was built, it can be started in another terminal:
 
-    ../insert_sample_data
+    ./bin/heavy_web_server
 
 You can now start using the database. The `heavysql` utility may be used to interact with the database from the command line:
 
@@ -170,13 +148,20 @@ You can now start using the database. The `heavysql` utility may be used to inte
 
 where `HyperInteractive` is the default password. The default user `admin` is assumed if not provided.
 
+When the bundled frontend is available, visit the web server's default port:
+
+[http://localhost:6273](http://localhost:6273)
+
+Note: the bundled web frontend, when present, is subject to separate license
+terms from HeavyDB itself.
+
 # Code Style
 
 Contributed code should compile without generating warnings by recent compilers on most Linux distributions. Changes to the code should follow the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines).
 
 ## clang-format
 
-A [`.clang-format`](https://clang.llvm.org/docs/ClangFormat.html) style configuration, based on the Chromium style guide, is provided at the top level of the repository. Please format your code using a recent version (8.0+ preferred) of ClangFormat before submitting.
+A [`.clang-format`](https://clang.llvm.org/docs/ClangFormat.html) style configuration, based on the Chromium style guide, is provided at the top level of the repository. Please format your code using a recent version (9.0+ preferred) of ClangFormat before submitting.
 
 To use:
 
@@ -194,136 +179,71 @@ Note: `clang-tidy` may make invalid or overly verbose changes to the source code
 
 Note: the `clang-tidy` target uses the `run-clang-tidy.py` script provided with LLVM, which may depend on `PyYAML`. The target also depends on `jq`, which is used to filter portions of the `compile_commands.json` file.
 
+## License headers
+
+Source files must carry the NVIDIA SPDX license header. For C/C++/CUDA/Java this is a leading comment block:
+
+    /*
+     * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+     * SPDX-License-Identifier: Apache-2.0
+     */
+
+(`#`-style comments are used for Python, shell, and CMake.) The header — including its copyright year range — is added and kept up to date automatically by a [pre-commit](https://pre-commit.com/) hook. Install it once:
+
+    pip install pre-commit
+    pre-commit install
+
+After that, every commit checks the files you changed; any missing or out-of-date header is fixed in place (re-stage and commit). Legacy `HEAVY.AI`/`OmniSci`/`MapD` headers are replaced with the NVIDIA header when a file is touched. Enforcement is **going forward** — only files you add or modify are checked, so the existing tree is not rewritten en masse. The same check runs in CI (the `license-headers` job in `.github/workflows/pr-required-checks.yml`).
+
+Vendored third-party code keeps its upstream license and is exempt (`ThirdParty/`, `Archive/`, `ODBC/`, and the individual third-party files listed in [`.pre-commit-config.yaml`](.pre-commit-config.yaml)).
+
+To run the check manually against the files changed on your branch:
+
+    scripts/check_license_headers.sh            # compares against origin/master
+
 # Dependencies
 
-HeavyDB has the following dependencies:
-
-| Package | Min Version | Required |
-| ------- | ----------- | -------- |
-| [CMake](https://cmake.org/) | 3.16 | yes |
-| [LLVM](http://llvm.org/) | 9.0 | yes |
-| [GCC](http://gcc.gnu.org/) | 8.4.0 | no, if building with clang |
-| [Go](https://golang.org/) | 1.12 | yes |
-| [Boost](http://www.boost.org/) | 1.72.0 | yes |
-| [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
-| [CUDA](http://nvidia.com/cuda) | 11.0 | yes, if compiling with GPU support |
-| [gperftools](https://github.com/gperftools/gperftools) | | yes |
-| [gdal](http://gdal.org/) | 2.4.2 | yes |
-| [Arrow](https://arrow.apache.org/) | 3.0.0 | yes |
-
-## CentOS 7
-
-HeavyDB requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. A prebuilt package containing all these dependencies is provided for CentOS 7 (x86_64).
-
-Use the [scripts/mapd-deps-prebuilt.sh](scripts/mapd-deps-prebuilt.sh) build script to install prebuilt dependencies.
-
-These dependencies will be installed to a directory under `/usr/local/mapd-deps`. The `mapd-deps-prebuilt.sh` script also installs [Environment Modules](http://modules.sf.net) in order to simplify managing the required environment variables. Log out and log back in after running the `mapd-deps-prebuilt.sh` script in order to active Environment Modules command, `module`.
-
-The `mapd-deps` environment module is disabled by default. To activate for your current session, run:
-
-    module load mapd-deps
-
-To disable the `mapd-deps` module:
-
-    module unload mapd-deps
-
-WARNING: The `mapd-deps` package contains newer versions of packages such as GCC and ncurses which might not be compatible with the rest of your environment. Make sure to disable the `mapd-deps` module before compiling other packages.
-
-Instructions for installing CUDA are below.
-
-### CUDA
-
-It is preferred, but not necessary, to install CUDA and the NVIDIA drivers using the .rpm using the [instructions provided by NVIDIA](https://developer.nvidia.com/cuda-downloads). The `rpm (network)` method (preferred) will ensure you always have the latest stable drivers, while the `rpm (local)` method allows you to install does not require Internet access.
-
-The .rpm method requires DKMS to be installed, which is available from the [Extra Packages for Enterprise Linux](https://fedoraproject.org/wiki/EPEL) repository:
-
-    sudo yum install epel-release
-
-Be sure to reboot after installing in order to activate the NVIDIA drivers.
-
-### Environment Variables
-
-The `mapd-deps-prebuilt.sh` script includes two files with the appropriate environment variables: `mapd-deps-<date>.sh` (for sourcing from your shell config) and `mapd-deps-<date>.modulefile` (for use with [Environment Modules](http://modules.sf.net), yum package `environment-modules`). These files are placed in mapd-deps install directory, usually `/usr/local/mapd-deps/<date>`. Either of these may be used to configure your environment: the `.sh` may be sourced in your shell config; the `.modulefile` needs to be moved to the modulespath.
-
-### Building Dependencies
-
-The [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) script is used to build the dependencies. Modify this script and run if you would like to change dependency versions or to build on alternative CPU architectures.
-
-    cd scripts
-    module unload mapd-deps
-    ./mapd-deps-centos.sh --compress
-
-## macOS
-
-[scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure macOS is completely up to date and Xcode is installed before running. Xcode can be installed from the App Store.
-
-### CUDA
-
-`mapd-deps-osx.sh` will automatically install CUDA via Homebrew and add the correct environment variables to `~/.bash_profile`.
-
-### Java
-
-`mapd-deps-osx.sh` will automatically install Java and Maven via Homebrew and add the correct environment variables to `~/.bash_profile`.
-
-## Ubuntu
-
-Most build dependencies required by HeavyDB are available via APT. Certain dependencies such as Thrift and Blosc must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 and 20.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
-
-
-### Ubuntu 16.04
-
-HeavyDB requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory.
-
-### Ubuntu 18.04
-
-Use the [scripts/mapd-deps-prebuilt.sh](scripts/mapd-deps-prebuilt.sh) build script to install prebuilt dependencies.
-
-These dependencies will be installed to a directory under `/usr/local/mapd-deps`. The `mapd-deps-prebuilt.sh` script above will generate a script named `mapd-deps.sh` containing the environment variables which need to be set. Simply source this file in your current session (or symlink it to `/etc/profile.d/mapd-deps.sh`) in order to activate it:
+The maintained dependency scripts support Ubuntu 22.04 and Rocky
+Linux 8.x. They install under `/usr/local/mapd-deps` and generate
+`/usr/local/mapd-deps/mapd-deps.sh`, which must be sourced before configuring
+HeavyDB:
 
     source /usr/local/mapd-deps/mapd-deps.sh
 
-### Environment Variables
+To install a prepared dependency archive supplied with the developer or CI
+build context, use:
 
-The CUDA and mapd-deps `lib` directories need to be added to `LD_LIBRARY_PATH`; the CUDA and mapd-deps `bin` directories need to be added to `PATH`. The `mapd-deps-ubuntu.sh` and `mapd-deps-prebuilt.sh` scripts will generate a script named `mapd-deps.sh` containing the environment variables which need to be set. Simply source this file in your current session (or symlink it to `/etc/profile.d/mapd-deps.sh`) in order to activate it:
+    sudo scripts/mapd-deps-prebuilt.sh --static
 
-    source /usr/local/mapd-deps/mapd-deps.sh
+Ubuntu also supports `--shared`; Rocky Linux supports static dependencies.
+Pass `--enable` to install a profile entry that loads the generated
+environment in future login shells.
 
-### CUDA
-
-Recent versions of Ubuntu provide the NVIDIA CUDA Toolkit and drivers in the standard repositories. To install:
-
-    sudo apt install -y \
-        nvidia-cuda-toolkit
-
-Be sure to reboot after installing in order to activate the NVIDIA drivers.
-
-### Building Dependencies
-
-The [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) and [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) scripts are used to build the dependencies for Ubuntu 18.04 and 16.04, respectively. The scripts will install all required dependencies (except CUDA) and build the dependencies which require it. Modify this script and run if you would like to change dependency versions or to build on alternative CPU architectures.
+To build dependency archives from source:
 
     cd scripts
-    ./mapd-deps-ubuntu.sh --compress
+    ./mapd-deps-ubuntu.sh --static --compress
 
-## Arch
+or, on Rocky Linux:
 
-[scripts/mapd-deps-arch.sh](scripts/mapd-deps-arch.sh) is provided that will use [yay](https://aur.archlinux.org/packages/yay/) to install packages from the [Arch User Repository](https://wiki.archlinux.org/index.php/Arch_User_Repository) and custom PKGBUILD scripts for a few packages listed below. If you don't have `yay` yet, install it first: https://github.com/Jguer/yay#installation
+    cd scripts
+    ./mapd-deps-rockylinux.sh --compress
 
-### Package Version Requirements:
+GPU builds also require a compatible NVIDIA driver and CUDA toolkit. Follow
+the [NVIDIA CUDA installation instructions](https://developer.nvidia.com/cuda-downloads)
+for the target distribution. For complete dependency-script details, see the
+[dependency quickstart](docs/source/quickstart/deps.rst).
 
-### CUDA
 
-CUDA and the NVIDIA drivers may be installed using the following.
+# Security
+> [!WARNING]
+> **Do not report security vulnerabilities through public GitHub issues!**
 
-    yay -S \
-        linux-headers \
-        cuda \
-        nvidia
+NVIDIA takes security seriously. If you discover a vulnerability in heavydb-internal, **DO NOT open a public issue**. Use one of the private reporting channels described in [SECURITY.md](https://github.com/heavyai/heavydb-internal/blob/master/SECURITY.md).
 
-Be sure to reboot after installing in order to activate the NVIDIA drivers.
+# Support
+Join the [HeavyAI GitHub Discussions](https://github.com/orgs/heavyai/discussions) to ask questions, share feedback, and report issues. HeavyAI maintainers review issues, discussions, and pull requests on a best effort basis without guaranteed response timelines.
+  
+# License
+Apache 2.0. See [LICENSE](https://github.com/heavyai/heavydb-internal/blob/master/LICENSE.txt).
 
-### Environment Variables
-
-The `cuda` package should set up the environment variables required to use CUDA. If you receive errors saying `nvcc` is not found, then CUDA `bin` directories need to be added to `PATH`: the easiest way to do so is by creating a new file named `/etc/profile.d/mapd-deps.sh` containing the following:
-
-    PATH=/opt/cuda/bin:$PATH
-    export PATH

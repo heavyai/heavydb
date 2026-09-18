@@ -1,16 +1,24 @@
 # HeavyDB Developer Documentation
 
-Documentation is available at:
+User-facing product documentation is published at:
 
-https://docs.heavy.ai
+https://docs.nvidia.com/heavyai
+
+When built via ``dev-tools``, developer documentation HTML is written to
+``build/<distro>/docs/html/`` (for example ``build/ubuntu22.04/docs/html/``).
+The CMake and manual venv paths below still write to ``docs/build/html/``.
 
 ## Sphinx docs
 
-[Sphinx](http://www.sphinx-doc.org) is a python-based tool to generate documentation. Here it will be used to generate HTML pages with the HeavyDB Developer Documentation.
+[Sphinx](https://www.sphinx-doc.org) is a Python-based tool for generating
+documentation. Here it generates HTML pages for the HeavyDB developer guide
+using the [NVIDIA Sphinx theme](https://pypi.org/project/nvidia-sphinx-theme/)
+(``nvidia_sphinx_theme``).
 
 ## Building docs
 
-Documentation can be build locally using a make target on the host machine, using a docker container, or manually.
+Documentation can be built locally using ``dev-tools``, a CMake target, a
+manual Docker invocation, or a Python virtual environment.
 
 * In the below steps, replace `make html` with `make livehtml` to have the build watch for changes and provide a live-preview.
 
@@ -22,47 +30,78 @@ and then append it to the `make html` command like so:
 ```
 make html SPHINXOPTS="-D version=$VER"
 ```
-these steps are not required when building using the make target, as it will gather the version itself.
+These steps are not required when building via ``dev-tools`` or the CMake
+target, as those gather the version themselves.
+
+### Building with dev-tools (recommended)
+
+From the repository root:
+
+```
+dev-tools/dev.sh build docs
+```
+
+HTML output: ``build/<distro>/docs/html/`` (default distro: ``ubuntu22.04``).
+
+The default ``dev-tools/dev.sh build`` / ``build all`` targets also build docs
+after heavydb. Docs run outside the heavydb deps container (Sphinx uses the
+docs Docker image). Doxygen runs only when a configured heavydb build
+(``Doxyfile``) exists and ``doxygen`` is on the host PATH; otherwise Sphinx
+continues with placeholder C++ API pages.
+
+Set ``HEAVYDB_SPHINX_IMAGE`` to override the default Sphinx image name
+(``heavydb-sphinx-doc``). The image is built from ``docs/Dockerfile`` only when
+missing; after editing ``docs/Dockerfile`` or ``docs/requirements.txt``, rebuild
+explicitly:
+
+```
+docker build -t heavydb-sphinx-doc docs/
+```
 
 #### Building with make target
 
-There is a make target, `make sphinx` that can be ran from the top-level `../build/` directory after initialized with `cmake`.
-
-### Building with Docker
-
-Docker can be used to build the documentation locally without installing any dependencies to the host system. A container is available on [docker hub](https://hub.docker.com/r/omnisci/sphinx-doc) with the name: `omnisci/sphinx-doc`. 
-
-To build the docs using the available container, from inside this `docs` directory run:
+From the repository root, run the `sphinx` target after configuring the
+top-level `build` directory with CMake:
 
 ```
-docker run --rm -v $PWD:/doc -e USER_ID=$UID docker-internal.mapd.com/mapd/sphinx-doc make html
+cmake --build build --target sphinx
 ```
 
-If there are any changes to dependencies, a new container image can be built using the `Dockerfile` in this directory.
+### Building with Docker (manual)
 
-To build a new version of the `sphinx-doc` container, from inside this `docs` directory run:
+Docker can be used to build the documentation locally without installing any
+dependencies to the host system. Prefer ``dev-tools/dev.sh build docs`` when
+possible; the steps below are the underlying image and ``docker run`` flow.
 
+Build a local image from the ``Dockerfile`` in this directory (Python 3.11,
+``nvidia-sphinx-theme``, graphviz, and plantuml):
 
 ```
-docker build -t sphinx-doc:<version> .
+docker build -t heavydb-sphinx-doc .
 ```
 
-Where <version> is any unique version number. Proceed with the above step and replace `omnisci/sphinx-doc` with `sphinx-doc:<version>` to build the docs with the updated dependencies.
+Then, from inside this ``docs`` directory, run (example writing into a heavydb
+build tree):
+
+```
+docker run --rm \
+  -v "$PWD:/doc" -v "$PWD/../build/ubuntu22.04:/build" \
+  -w /doc heavydb-sphinx-doc make html BUILDDIR=/build/docs
+```
+
+If ``/build/doxygen/xml`` is present (relative to the mounted heavydb build
+dir), ``make html`` will also generate breathe C++ API pages under
+``source/api/``. Otherwise it writes a placeholder API page and continues.
+
+If there are any changes to dependencies, rebuild the local image with the ``Dockerfile`` in this directory.
 
 
-### Building Manually
+### Building manually
 
-#### Requirements
+Sphinx requires Python 3.10 or newer (``nvidia-sphinx-theme``). Install the
+packages listed in `requirements.txt` with pip.
 
-Sphinx requires Python 3 (tested on Python 3.7) and the required python packages are installed with pip. See requirements.txt for list of required packages.
-
-#### Building Sphinx docs
-
-This will take the source docs files from the `./source/` directory and output HTML site files into the `./build/` directory.
-
-#### Manually
-
-The following steps use a python virtual environment, from inside this `docs` directory run:
+From this ``docs`` directory, create a virtual environment and build HTML:
 
 ```
 python3 -m venv sphinx-env
@@ -73,21 +112,24 @@ make html SPHINXOPTS="-D version=$(../scripts/parse-version.sh)"
 deactivate
 ```
 
+This writes to ``docs/build/html/``.
+
 ### Previewing Locally
 
-Once the docs are built, running `python -m http.server` from the `docs/build/html` directory will
-allow for viewing the docs at `localhost:8000`.
+Once the docs are built via ``dev-tools``, running `python -m http.server` from
+``build/<distro>/docs/html`` will allow for viewing the docs at `localhost:8000`.
+For the CMake/venv paths, use ``docs/build/html`` instead.
 
 #### VSCode Live Preview
 
 Install the [reStructuredText extension](https://github.com/vscode-restructuredtext/vscode-restructuredtext)
 
-Point `settings.json` to the the correct Python path. 
-Assuming the manual using `sphinx-env` virtualenv from above:
+Point ``settings.json`` to the correct Python path. Assuming the manual
+``sphinx-env`` virtualenv from above:
 
 ```json
 {
-    "python.pythonPath": "${workspaceFolder}/docs/sphinx-env/bin/python"
+    "python.defaultInterpreterPath": "${workspaceFolder}/docs/sphinx-env/bin/python"
 }
 ```
 

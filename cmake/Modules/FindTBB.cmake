@@ -1,3 +1,9 @@
+# Copyright 2010-2012 Kitware, Inc.
+# Copyright 2012      Rolf Eike Beer <eike@sf-mail.de>
+#
+# Distributed under the OSI-approved BSD License (BSD-3-Clause).
+# Derived from Kitware/VTK: https://github.com/Kitware/VTK/blob/master/CMake/FindTBB.cmake
+#
 # - Find ThreadingBuildingBlocks include dirs and libraries
 # Use this module by invoking find_package with the form:
 #  find_package(TBB

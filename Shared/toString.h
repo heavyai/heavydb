@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /*
@@ -38,9 +27,7 @@
 
 #define HAVE_TOSTRING
 
-#ifndef _WIN32
 #include <cxxabi.h>
-#endif
 
 #include <cassert>
 #include <chrono>
@@ -57,6 +44,7 @@
 #include <vector>
 
 #include "DataMgr/MemoryLevel.h"
+#include "Shared/is_shared_ptr.h"
 #include "sqldefs.h"
 
 #ifdef ENABLE_TOSTRING_RAPIDJSON
@@ -106,13 +94,9 @@ template <typename T>
 std::string typeName(const T* v) {
   std::stringstream stream;
   int status;
-#ifdef _WIN32
-  stream << std::string(typeid(T).name());
-#else
   char* demangled = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
   stream << std::string(demangled);
   free(demangled);
-#endif
   return stream.str();
 }
 
@@ -120,13 +104,9 @@ template <typename T, typename... Args>
 std::string typeName(T (*v)(Args... args)) {
   std::stringstream stream;
   int status;
-#ifdef _WIN32
-  stream << std::string(typeid(v).name());
-#else
   char* demangled = abi::__cxa_demangle(typeid(v).name(), 0, 0, &status);
   stream << std::string(demangled);
   free(demangled);
-#endif
   stream << "@0x" << std::hex << (uintptr_t)(reinterpret_cast<const void*>(v));
   return stream.str();
 }
@@ -177,7 +157,6 @@ struct has_printTo<T,
 template <class T>
 inline constexpr bool has_printTo_v = has_printTo<T>::value;
 
-#ifndef _WIN32
 template <typename T, typename = void>
 struct has_operator_lshift : std::false_type {};
 template <typename T>
@@ -186,7 +165,6 @@ struct has_operator_lshift<T,
                                     void())> : std::true_type {};
 template <class T>
 inline constexpr bool has_operator_lshift_v = has_operator_lshift<T>::value;
-#endif
 
 }  // namespace
 
@@ -276,6 +254,9 @@ std::string toString(const T& v) {
 #endif
   } else if constexpr (has_toString_v<T>) {  // NOLINT
     return v.toString();
+  } else if constexpr (shared::is_shared_ptr_v<T>) {
+    auto ptr = v.get();
+    return (ptr == nullptr ? "NULL" : toString(*ptr));
   } else if constexpr (get_has_toString_v<T>) {
     auto ptr = v.get();
     return (ptr == NULL ? "NULL" : "&" + ptr->toString());
@@ -330,12 +311,10 @@ std::string toString(const T& v) {
     std::ostringstream ss;
     v.printTo(ss);
     return ss.str();
-#ifndef _WIN32
   } else if constexpr (has_operator_lshift_v<T>) {
     std::stringstream stream;
     stream << v;
     return stream.str();
-#endif
   } else {
     return typeName(&v);
   }

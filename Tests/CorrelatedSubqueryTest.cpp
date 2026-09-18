@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../QueryRunner/QueryRunner.h"
@@ -23,7 +12,6 @@
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/Visitors/SQLOperatorDetector.h"
-#include "../Shared/file_delete.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -1650,7 +1638,7 @@ TEST(Select, InExpr_As_Child_Operand_Of_OR_Operator) {
   check_query(q4, true);
 }
 
-TEST(Select, NotSupportedDecorrelation) {
+TEST(Select, NestedCorrelatedInWithOuterLevelReference) {
   auto drop_table = []() {
     for (std::string tbl : {"test_decor1", "test_decor2", "test_decor3"}) {
       QR::get()->runDDLStatement("DROP TABLE IF EXISTS " + tbl + ";");
@@ -1662,7 +1650,12 @@ TEST(Select, NotSupportedDecorrelation) {
   QR::get()->runDDLStatement("CREATE TABLE test_decor2 (d int, e int, f int);");
   QR::get()->runDDLStatement("CREATE TABLE test_decor3 (g int, h int, i int);");
 
-  EXPECT_ANY_THROW(QR::get()->runSQL(
+  // Previously we could not decorrelate this nested correlated IN (the
+  // innermost subquery references test_decor1.c two levels out), so the
+  // planner left a $cor in the plan and threw "Unable to decorrelate one of
+  // the correlated subqueries". A more recent version of the Calcite
+  // decorrelater handles this.
+  EXPECT_NO_THROW(QR::get()->runSQL(
       "select COUNT(c) from test_decor1 where b > 0 and a in (select d from test_decor2 "
       "where e > 0 and c in (select i from test_decor3));",
       ExecutorDeviceType::CPU));
@@ -1682,6 +1675,59 @@ TEST(Select, NotSupportedDecorrelation) {
       EXPECT_NO_THROW(QR::get()->runSQL(q3, ExecutorDeviceType::CPU));
     }
   }
+}
+
+// Verifies correctness of the nested correlated IN that the Calcite
+// decorrelator upgrade newly supports. The query
+//   COUNT(c) WHERE b>0 AND a IN (SELECT d FROM t2 WHERE e>0 AND c IN (SELECT i FROM t3))
+// is provably equivalent to the flattened form
+//   COUNT(c) WHERE b>0 AND c IN (SELECT i FROM t3) AND a IN (SELECT d FROM t2 WHERE e>0)
+// because the innermost "c IN (...)" depends only on the outer row's c, so it factors
+// out. We assert the decorrelated result matches that flattened reference on populated
+// data.
+TEST(Select, NestedCorrelatedInDecorrelation) {
+  auto drop_table = []() {
+    for (std::string tbl : {"test_decor1", "test_decor2", "test_decor3"}) {
+      QR::get()->runDDLStatement("DROP TABLE IF EXISTS " + tbl + ";");
+    }
+  };
+  ScopeGuard drop_tbls = [drop_table] { drop_table(); };
+  drop_table();
+  QR::get()->runDDLStatement("CREATE TABLE test_decor1 (a int, b int, c int);");
+  QR::get()->runDDLStatement("CREATE TABLE test_decor2 (d int, e int, f int);");
+  QR::get()->runDDLStatement("CREATE TABLE test_decor3 (g int, h int, i int);");
+
+  auto insert = [](std::string const& sql) {
+    QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  };
+  // test_decor3.i = {100, 200}
+  insert("INSERT INTO test_decor3 VALUES(0, 0, 100);");
+  insert("INSERT INTO test_decor3 VALUES(0, 0, 200);");
+  // {d : test_decor2.e > 0} = {10, 20}
+  insert("INSERT INTO test_decor2 VALUES(10, 1, 0);");
+  insert("INSERT INTO test_decor2 VALUES(20, 1, 0);");
+  insert("INSERT INTO test_decor2 VALUES(30, 0, 0);");  // e=0 -> excluded
+  // outer rows: 3 qualify (b>0, c in {100,200}, a in {10,20}), 3 do not
+  insert("INSERT INTO test_decor1 VALUES(10, 1, 100);");  // qualifies
+  insert("INSERT INTO test_decor1 VALUES(20, 1, 200);");  // qualifies
+  insert("INSERT INTO test_decor1 VALUES(30, 1, 100);");  // a not in {10,20}
+  insert("INSERT INTO test_decor1 VALUES(10, 1, 999);");  // c not in {100,200}
+  insert("INSERT INTO test_decor1 VALUES(10, 0, 100);");  // b not > 0
+  insert("INSERT INTO test_decor1 VALUES(20, 2, 200);");  // qualifies
+
+  std::string const correlated =
+      "select COUNT(c) from test_decor1 where b > 0 and a in (select d from test_decor2 "
+      "where e > 0 and c in (select i from test_decor3));";
+  std::string const reference =
+      "select COUNT(c) from test_decor1 where b > 0 and c in (select i from test_decor3) "
+      "and a in (select d from test_decor2 where e > 0);";
+
+  auto corr = QR::get()->runSQL(correlated, ExecutorDeviceType::CPU);
+  auto ref = QR::get()->runSQL(reference, ExecutorDeviceType::CPU);
+  auto corr_count = getIntValue(corr->getNextRow(true, true)[0]);
+  auto ref_count = getIntValue(ref->getNextRow(true, true)[0]);
+  EXPECT_EQ(ref_count, int64_t(3)) << "flattened reference query should qualify 3 rows";
+  EXPECT_EQ(corr_count, int64_t(3)) << "3 outer rows should qualify";
 }
 
 TEST(Select, InClauseHavingInvalidInnerCol) {

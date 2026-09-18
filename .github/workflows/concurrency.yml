@@ -3,12 +3,171 @@
 
 name: Concurrency Tests
 
+# Ported from Jenkins concurrency-tests (scripts/Jenkins/ConcurrencyTests/
+# JenkinsFile). One TSAN build feeds a matrix of Java com.mapd.tests.* classes,
+# each run against a freshly-started TSAN server via scripts/ci/run_server.sh.
+# The Distributed class is excluded (distributed mode is deprecated).
+#
+# Triggering: workflow_dispatch only (the Jenkins job had no schedule).
+
 on:
   workflow_dispatch:
+    inputs:
+      sha1:
+        description: "SHA or branch to test"
+        default: ""
+      jobs:
+        description: >-
+          Comma-separated class keys, or "all". Valid: basic_query, calcite_views,
+          catalog, update_delete_insert, alter_drop_truncate_validate,
+          import_alter_validate_select, select_update_delete, heavy_connect,
+          foreign_table_refresh, system_tables, reduction
+        default: "all"
+
+permissions:
+  contents: read
+  packages: write
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  placeholder:
+  setup:
+    name: setup
     runs-on: linux-amd64-cpu16
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - name: placeholder
-        run: true
+      - id: sha
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const input = ((context.payload.inputs || {}).sha1 || '').trim();
+            let sha = context.sha;
+            if (input) {
+              const { data } = await github.rest.repos.getCommit({ owner, repo, ref: input });
+              sha = data.sha;
+            }
+            core.setOutput('sha', sha);
+      - id: matrix
+        env:
+          SELECTED: ${{ inputs.jobs }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          sel = os.environ["SELECTED"].replace(" ", "")
+          # key -> (java class, [extra args, made absolute under /workspace])
+          tests = {
+            "basic_query": ("EagainConcurrencyTest", []),
+            "calcite_views": ("CalciteViewsConcurrencyTest", []),
+            "catalog": ("CatalogConcurrencyTest", []),
+            "update_delete_insert": ("UpdateDeleteInsertConcurrencyTest", []),
+            "alter_drop_truncate_validate": ("AlterDropTruncateValidateConcurrencyTest", []),
+            "import_alter_validate_select": ("ImportAlterValidateSelectConcurrencyTest",
+              ["/workspace/Tests/Import/datafiles/mixed_varlen.txt",
+               "/workspace/Tests/Import/datafiles/geospatial_mpoly/geospatial_mpoly.shp"]),
+            "select_update_delete": ("SelectUpdateDeleteDifferentTables", []),
+            "heavy_connect": ("ForeignStorageConcurrencyTest", []),
+            "foreign_table_refresh": ("ForeignTableRefreshConcurrencyTest", []),
+            "system_tables": ("SystemTableConcurrencyTest", []),
+            "reduction": ("ReductionConcurrencyTest", []),
+          }
+          keys = list(tests) if sel == "all" else [k for k in sel.split(",") if k in tests]
+          include = [{"key": k, "class": tests[k][0], "args": " ".join(tests[k][1])} for k in keys]
+          print("matrix=" + json.dumps({"include": include}))
+          PY
+
+  build-concurrency:
+    name: build (concurrency-tsan)
+    needs: setup
+    if: ${{ fromJSON(needs.setup.outputs.matrix).include[0] != null }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_TSAN=ON
+        -DENABLE_FOLLY=OFF
+        -DENABLE_CUDA=OFF
+        -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+        -DPREFER_STATIC_LIBS=ON
+        -DHAVE_STD_REGEX=ON
+        -DCMAKE_JOB_POOLS=link=4
+        -DCMAKE_JOB_POOL_LINK=link
+      MAKE_TARGETS: "mapd_java_components heavydb initheavy"
+      IMAGE_NAME: "pr-build/concurrency-tsan"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger java/utility/target scripts"
+      STRIP: debug
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: concurrency-tsan-mvn-build-log
+
+  test:
+    name: ${{ matrix.key }}
+    needs: [setup, build-concurrency]
+    if: ${{ needs.build-concurrency.result == 'success' }}
+    timeout-minutes: 60
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.build-concurrency.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --security-opt seccomp=unconfined
+    strategy:
+      # Up to 11 class legs, each starting its own TSAN server on cpu32; cap
+      # concurrency so they don't oversubscribe the shared runner pool.
+      max-parallel: 4
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      # Init/run the catalog named "chaos" (the Jenkins run_heavy.sh convention).
+      TMP_DIR: chaos
+      DATA: chaos
+      NO_ASLR: "true"
+      SERVER_WAIT: "45"
+      SERVER_FLAGS: "--verbose --allowed-import-paths='[\"..\"]' --enable-seconds-refresh-interval"
+      TSAN_OPTIONS: "suppressions=/workspace/config/tsan.suppressions:second_deadlock_stack=true:detect_deadlocks=true:history_size=7:halt_on_error=0"
+      CLIENT_CMD: >-
+        java -Dfile.encoding=UTF-8
+        -cp ../java/utility/target/utility-1.0-SNAPSHOT-jar-with-dependencies.jar
+        "com.mapd.tests.${{ matrix.class }}" ${{ matrix.args }}
+    steps:
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run ${{ matrix.class }}
+        run: scripts/ci/run_server.sh 2>&1 | tee "/workspace/${{ matrix.key }}.log"
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: concurrency-${{ matrix.key }}
+          path: /workspace/${{ matrix.key }}.log
+          if-no-files-found: ignore

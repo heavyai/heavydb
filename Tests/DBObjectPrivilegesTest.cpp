@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <gtest/gtest.h>
@@ -48,14 +37,12 @@ using Catalog_Namespace::DBMetadata;
 using Catalog_Namespace::SysCatalog;
 using Catalog_Namespace::UserMetadata;
 
-extern size_t g_leaf_count;
 extern bool g_enable_column_level_security;
 std::string g_test_binary_file_path;
 
 namespace {
 
 std::shared_ptr<Calcite> g_calcite;
-bool g_aggregator{false};
 
 Catalog_Namespace::UserMetadata g_user;
 std::vector<DBObject> privObjects;
@@ -375,11 +362,6 @@ TEST_F(DatabaseDdlTest, ChangeOwner) {
 }
 
 TEST_F(DatabaseDdlTest, ChangeOwnerPreviousOwnerDropped) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode due to not being able to drop "
-                 "user unchecked.";
-    return;
-  }
   createTestDatabase("test_user");
   assertExpectedDatabase(createDatabaseMetadata("test_database", getTestUser().userId));
   dropTestUserUnchecked();
@@ -468,31 +450,18 @@ struct ServerObject : public DBHandlerTestFixture {
 
  protected:
   void SetUp() override {
-    if (g_aggregator) {
-      LOG(INFO) << "Test fixture not supported in distributed mode.";
-      return;
-    }
     DBHandlerTestFixture::SetUp();
     sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
         "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
   void TearDown() override {
-    if (g_aggregator) {
-      LOG(INFO) << "Test fixture not supported in distributed mode.";
-      return;
-    }
     sql("DROP SERVER IF EXISTS test_server;");
     DBHandlerTestFixture::TearDown();
   }
 };
 
 TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   auto session = QR::get()->getSession();
   CHECK(session);
   auto& cat = session->getCatalog();
@@ -525,11 +494,6 @@ TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
 }
 
 TEST_F(GrantSyntax, MultiRoleGrantRevoke) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   std::vector<std::string> roles = {"Gunners", "Sudens"};
   std::vector<std::string> grantees = {"Juventus", "Bayern"};
   auto check_grant = []() {
@@ -1364,31 +1328,18 @@ void testViewPermissions(std::string user, std::string roleToGrant) {
 }
 
 TEST_F(ViewObject, UserRoleBobGetsGrants) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
   testViewPermissions("bob", "bob");
 }
 
 TEST_F(ViewObject, GroupRoleFooGetsGrants) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
   testViewPermissions("foo", "salesDept");
 }
 
 TEST_F(ViewObject, CalciteViewResolution) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(false, false, {}, false);
+      g_calcite->getCalciteOptimizationOption(false, false, {});
 
   auto query_state1 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_table");
@@ -1642,10 +1593,6 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
 }
 
 TEST_F(ServerObject, AccessDefaultsTest) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
   Catalog_Namespace::Catalog& cat = getCatalog();
   AccessPrivileges server_priv;
   ASSERT_NO_THROW(server_priv.add(AccessPrivileges::DROP_SERVER));
@@ -1662,10 +1609,6 @@ TEST_F(ServerObject, AccessDefaultsTest) {
 }
 
 TEST_F(ServerObject, AccessAfterGrantsRevokes) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
   Catalog_Namespace::Catalog& cat = getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
@@ -1694,10 +1637,6 @@ TEST_F(ServerObject, AccessAfterGrantsRevokes) {
 }
 
 TEST_F(ServerObject, AccessWithGrantRevokeAllCompound) {
-  if (g_aggregator) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
   Catalog_Namespace::Catalog& cat = getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
@@ -2118,11 +2057,6 @@ std::unique_ptr<QR> get_qr_for_user(
 }  // namespace
 
 TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
   auto username = "chuck"s;
   auto database_name = "nydb"s;
@@ -2184,11 +2118,6 @@ TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
 }
 
 TEST(SysCatalog, RenameUser_ReloginWithOldName) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
   auto username = "chuck"s;
   auto database_name = "nydb"s;
@@ -2239,11 +2168,6 @@ TEST(SysCatalog, RenameUser_ReloginWithOldName) {
 }
 
 TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
   auto rename_successful = false;
 
@@ -2313,11 +2237,6 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
 }
 
 TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
 
   ScopeGuard s = [] {
@@ -2351,11 +2270,6 @@ TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
 }
 
 TEST(SysCatalog, RenameDatabase_Basic) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
   auto username = "magicwand"s;
   auto database_name = "gdpgrowth"s;
@@ -2403,11 +2317,6 @@ TEST(SysCatalog, RenameDatabase_Basic) {
 }
 
 TEST(SysCatalog, RenameDatabase_WrongUser) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
   auto username = "reader"s;
   auto database_name = "fnews"s;
@@ -2449,11 +2358,6 @@ TEST(SysCatalog, RenameDatabase_WrongUser) {
 }
 
 TEST(SysCatalog, RenameDatabase_SuperUser) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
   auto username = "maurypovich"s;
   auto database_name = "paternitydb"s;
@@ -2568,11 +2472,6 @@ TEST(SysCatalog, RenameDatabase_FailedCopy) {
 }
 
 TEST(SysCatalog, RenameDatabase_PrivsTest) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
   auto rename_successful = false;
 
@@ -2638,11 +2537,6 @@ TEST(SysCatalog, RenameDatabase_PrivsTest) {
 }
 
 TEST(SysCatalog, DropDatabase_ByOwner) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   const std::string username = "theowner";
   const std::string dbname = "thedb";
 
@@ -2667,11 +2561,6 @@ TEST(SysCatalog, DropDatabase_ByOwner) {
 }
 
 TEST(SysCatalog, DropDatabase_ByNonOwner) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   const std::string username = "theowner";
   const std::string dbname = "thedb";
 
@@ -2699,11 +2588,6 @@ TEST(SysCatalog, DropDatabase_ByNonOwner) {
 }
 
 TEST(SysCatalog, DropDatabase_BySuperUser) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   const std::string username = "theowner";
   const std::string dbname = "thedb";
 
@@ -2871,12 +2755,10 @@ TEST(SysCatalog, SwitchDatabase) {
   ASSERT_NO_THROW(sys_cat.switchDatabase(dbname2, username));
   ASSERT_THROW(sys_cat.switchDatabase(dbname3, username), std::runtime_error);
 
-  // // distributed test
   // // NOTE(sy): disabling for now due to consistency errors
-  // if (DQR* dqr = dynamic_cast<DQR*>(QR::get()); g_aggregator && dqr) {
+  // if (DQR* dqr = dynamic_cast<DQR*>(QR::get()); false && dqr) {
   //   static const std::string tname{"swdb_test_table"};
-  //   LeafAggregator* agg = dqr->getLeafAggregator();
-  //   agg->switch_database(dqr->getSession()->get_session_id(), dbname);
+  //   dqr->switch_database(dqr->getSession()->get_session_id(), dbname);
   //   sql("CREATE TABLE " + tname + "(i INTEGER);");
   //   ASSERT_NO_THROW(sql("SELECT i FROM " + tname + ";"));
   //   agg->switch_database(dqr->getSession()->get_session_id(), dbname2);
@@ -2907,11 +2789,6 @@ void compare_user_lists(const std::vector<std::string>& expected,
 }  // namespace
 
 TEST(SysCatalog, AllUserMetaTest) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
   Users users_;
 
@@ -2992,11 +2869,6 @@ TEST(SysCatalog, AllUserMetaTest) {
 }
 
 TEST(SysCatalog, RecursiveRolesUserMetaData) {
-  if (g_aggregator) {
-    LOG(ERROR) << "Test not supported in distributed mode.";
-    return;
-  }
-
   using namespace std::string_literals;
   Users users_;
   Roles roles_;
@@ -3334,11 +3206,6 @@ class ForeignTableAndTablePermissionsTest
  protected:
   void SetUp() override {
     TablePermissionsTest::SetUp();
-    if (g_aggregator && GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-      LOG(INFO) << "Test fixture not supported in distributed mode.";
-      GTEST_SKIP();
-      return;
-    }
     switch (GetParam()) {
       case ddl_utils::TableType::FOREIGN_TABLE:
         createTestForeignTable();
@@ -3354,13 +3221,7 @@ class ForeignTableAndTablePermissionsTest
 
 class ForeignTablePermissionsTest : public TablePermissionsTest {
  protected:
-  void SetUp() override {
-    TablePermissionsTest::SetUp();
-    if (g_aggregator) {
-      LOG(INFO) << "Test not supported in distributed mode.";
-      GTEST_SKIP();
-    }
-  }
+  void SetUp() override { TablePermissionsTest::SetUp(); }
 };
 
 INSTANTIATE_TEST_SUITE_P(ForeignTableAndTablePermissionsTest,
@@ -3394,13 +3255,6 @@ TEST_F(TablePermissionsTest, TableGrantRevokeDropPrivilege) {
 }
 
 TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeSelectPrivilege) {
-  if (g_aggregator) {
-    // TODO: select queries as a user currently do not work in distributed
-    // mode for regular tables (DistributedQueryRunner::init can not be run
-    // more than once.)
-    LOG(INFO) << "Test not supported in distributed mode.";
-    GTEST_SKIP();
-  }
   std::string privilege{"SELECT"};
   std::string query{"SELECT * FROM test_table;"};
   std::string no_privilege_exception{
@@ -3531,10 +3385,6 @@ TEST_F(TablePermissionsTest, TableGrantRevokeUpdatePrivilege) {
 }
 
 TEST_P(ForeignTableAndTablePermissionsTest, GrantRevokeShowCreateTablePrivilege) {
-  if (g_aggregator && GetParam() == ddl_utils::TableType::FOREIGN_TABLE) {
-    LOG(INFO) << "Test not supported in distributed mode.";
-    return;
-  }
   std::string privilege{"DROP"};
   std::string query{"SHOW CREATE TABLE test_table;"};
   std::string no_privilege_exception{"Table/View test_table does not exist."};
@@ -3599,12 +3449,9 @@ TEST_F(TablePermissionsTest, TableAllPrivileges) {
   runQuery("TRUNCATE TABLE test_table;");
   runQuery("INSERT INTO test_table VALUES (2);");
   runQuery("DELETE FROM test_table WHERE i = 2;");
-  if (!g_aggregator) {
-    // TODO: select queries as a user currently do not work in distributed
-    // mode for regular tables (DistributedQueryRunner::init can not be run
-    // more than once.)
-    runQuery("SELECT * FROM test_table;");
-  }
+
+  runQuery("SELECT * FROM test_table;");
+
   runQuery("ALTER TABLE test_table RENAME COLUMN i TO j;");
   runQuery("DROP TABLE test_table;");
 }
@@ -3699,11 +3546,6 @@ class ServerPrivApiTest : public DBHandlerTestFixture {
   }
 
   void SetUp() override {
-    if (g_aggregator) {
-      LOG(INFO) << "Test fixture not supported in distributed mode.";
-      GTEST_SKIP();
-      return;
-    }
     DBHandlerTestFixture::SetUp();
     loginAdmin();
     dropServer();
@@ -4607,13 +4449,7 @@ TEST_F(ReassignOwnedTest, NonExistentNewOwner) {
 
 class AlterServerOwnerTest : public ReassignOwnedTest {
  protected:
-  void SetUp() override {
-    if (g_aggregator) {
-      LOG(INFO) << "Test fixture not supported in distributed mode.";
-      GTEST_SKIP();
-    }
-    ReassignOwnedTest::dropAllDatabaseObjects();
-  }
+  void SetUp() override { ReassignOwnedTest::dropAllDatabaseObjects(); }
 
   static void createServer() {
     sql("CREATE SERVER test_server_1 FOREIGN DATA WRAPPER delimited_file WITH "
@@ -4791,7 +4627,6 @@ class CreateDropDatabaseTest : public DBHandlerTestFixture {
   // Drops a user while skipping the normal checks (like if the user owns a db).  Used to
   // create db states that are no longer valid used for legacy testsing.
   static void dropUserUnchecked(const std::string& user_name) {
-    CHECK(!isDistributedMode()) << "Can't manipulate syscat directly in distributed mode";
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     Catalog_Namespace::UserMetadata user;
     CHECK(sys_cat.getMetadataForUser(user_name, user));
@@ -4817,9 +4652,6 @@ TEST_F(CreateDropDatabaseTest, OrphanedDB) {
 // We should no longer be able to generate an orphaned db, but in case we do, we should
 // still be able to show it as a super-user.
 TEST_F(CreateDropDatabaseTest, LegacyOrphanedDB) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Can not manipulate syscat directly in distributed mode.";
-  }
   sql("create user test_admin_user (password = 'password', is_super = 'true')");
   login("test_admin_user", "password");
   sql("create database orphan_db");
@@ -4907,11 +4739,8 @@ class ColumnCapturerPermissionTest : public DBHandlerTestFixture {
 
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-    const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-        false,
-        g_enable_watchdog,
-        {},
-        Catalog_Namespace::SysCatalog::instance().isAggregator());
+    const auto calciteOptimizationOption =
+        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
     auto result =
         query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
                                                            query_state_proxy,
@@ -5601,9 +5430,6 @@ TEST_F(GrantRevokeSelectColumnTest, DropColumnReadd) {
 }
 
 TEST_F(GrantRevokeSelectColumnTest, AlterColumn) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Alter column not supported in distributed mode";
-  }
   loginTestUser();
   queryAndAssertException("SELECT str FROM test_table;",
                           "Violation of access privileges: user test_user has no "
@@ -5619,9 +5445,6 @@ TEST_F(GrantRevokeSelectColumnTest, AlterColumn) {
 }
 
 TEST_F(GrantRevokeSelectColumnTest, AlterColumnToGeo) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Alter column not supported in distributed mode";
-  }
   // NOTE: this test differs from the `AlterColumn` test above in that this
   // alters to a geo column type, which is an operation that results in columns
   // being added (the pysical columns.) The behaviour expected here is that the
@@ -5647,11 +5470,18 @@ TEST_F(GrantRevokeSelectColumnTest, AlterColumnToGeo) {
 }
 
 TEST_F(GrantRevokeSelectColumnTest, GrantEmptyColumnsPrivilege) {
-  queryAndAssertException("GRANT SELECT () ON TABLE test_table TO test_user;",
-                          "SQL Error: Encountered \")\" at line 1, column 15.\nWas "
-                          "expecting one of:\n    <BRACKET_QUOTED_IDENTIFIER> ...\n    "
-                          "<QUOTED_IDENTIFIER> ...\n    <BACK_QUOTED_IDENTIFIER> ...\n   "
-                          " <IDENTIFIER> ...\n    <UNICODE_QUOTED_IDENTIFIER> ...\n    ");
+  // Calcite 1.41 includes BigQuery as an SQL Dialect. See the
+  // Big Query specific portion of the error message below.
+  // The Big Query tokens are included in JavaCC parser grammar
+  // Removing these tokens would require us to shadow/alter Parser.jj
+  // with a resultant increase in maintenance during Calcite upgrades.
+  queryAndAssertException(
+      "GRANT SELECT () ON TABLE test_table TO test_user;",
+      "SQL Error: Encountered \")\" at line 1, column 15.\nWas "
+      "expecting one of:\n    <BRACKET_QUOTED_IDENTIFIER> ...\n    "
+      "<QUOTED_IDENTIFIER> ...\n    <BACK_QUOTED_IDENTIFIER> ...\n    "
+      "<BIG_QUERY_BACK_QUOTED_IDENTIFIER> ...\n    <HYPHENATED_IDENTIFIER> ...\n    "
+      "<IDENTIFIER> ...\n    <UNICODE_QUOTED_IDENTIFIER> ...\n    ");
 }
 
 TEST_F(GrantRevokeSelectColumnTest, GrantSelectColumnUnsupportedType) {
@@ -6049,9 +5879,6 @@ TEST_F(GrantRevokeSelectColumnTest, ExplainPlanDetailed) {
 }
 
 TEST_F(GrantRevokeSelectColumnTest, CreateModel) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Models are not supported in distributed mode";
-  }
 #if !defined(HAVE_ONEDAL) && !defined(HAVE_MLPACK)
   GTEST_SKIP() << "LINEAR_REG model requires either OneDAL or MLPACK";
 #endif
@@ -6074,9 +5901,6 @@ TEST_F(GrantRevokeSelectColumnTest, CreateModel) {
 }
 
 TEST_F(GrantRevokeSelectColumnTest, EvaluateModel) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Models are not supported in distributed mode";
-  }
 #if !defined(HAVE_ONEDAL) && !defined(HAVE_MLPACK)
   GTEST_SKIP() << "LINEAR_REG model requires either OneDAL or MLPACK";
 #endif
@@ -6320,6 +6144,7 @@ int main(int argc, char* argv[]) {
   }
 
   logger::init(log_options);
+
   DBHandlerTestFixture::createDBHandler();
   QR::init(BASE_PATH);
 
@@ -6335,6 +6160,7 @@ int main(int argc, char* argv[]) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+  DBHandlerTestFixture::destroyDBHandler();
   QR::reset();
   return err;
 }

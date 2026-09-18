@@ -1,0 +1,82 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<includes>
+#include "Utils/colorConvertSubroutines.glsl"
+#include "PPLL/ppllCommon.h"
+//</includes>
+
+#define numSamples <numSamples>
+#define workgroupSize <workgroupSize>
+
+const int kFragmentDensityMono  = 0;
+const int kFragmentDensityColor = 1;
+const int kFragmentCountMono    = 2;
+const int kFragmentCountColor   = 3;
+
+layout(r32ui) uniform restrict readonly uimage2D fragment_count_image;
+
+layout(std430) buffer PPLL_STAT_COUNTERS_SSBO {
+  PPLLFragmentStats stats;
+};
+
+layout(std430) uniform PPLL_DEBUG_VIS_UBO_TYPE {
+  int visualize_mode;
+};
+
+layout(std430, binding = 0) uniform IMAGE_INFO_UBO {
+  ImageInfo image_info;
+};
+
+// output
+#if numSamples == 1
+layout (rgba8) uniform image2D output_image;
+#else
+layout (rgba8) uniform image2DMS output_image;
+#endif
+
+layout (local_size_x = workgroupSize, local_size_y = workgroupSize, local_size_z = 1) in;
+
+void main(void) {
+  if (gl_GlobalInvocationID.x >= image_info.width ||
+      gl_GlobalInvocationID.y >= image_info.height) {
+    return;
+  }
+
+  ivec2 P = ivec2(gl_GlobalInvocationID.xy);
+  uint32_t fragment_count = imageLoad(fragment_count_image, P).r;
+  float density = float(fragment_count) / float(stats.max_per_pixel_fragment_count);
+  vec4 color;
+
+  switch (visualize_mode) {
+    // Density modes
+    case kFragmentDensityMono:
+      color = vec4(vec3(density), 1);
+      break;
+    case kFragmentDensityColor: {
+      vec4 color1 = vec4(0.226, 0.000, 0.615, 1);
+      vec4 color2 = vec4(1.9, 0.55, 0, 1);
+      color = mix(color1, color2, density);
+      break;
+    }
+    // Fragment count modes
+    case kFragmentCountMono:
+      color = vec4(vec3(float(fragment_count) / 255), 1);
+      break;
+    case kFragmentCountColor:
+      color = unpackBGRColor(fragment_count, 1);
+      break;
+    default:
+      color = vec4(1, 0, 1, 1);
+  }
+
+#if numSamples == 1
+  imageStore(output_image, P, color);
+#else
+  for (int s = 0; s < numSamples; s++) {
+    imageStore(output_image, P, s, color);
+  }
+#endif
+}

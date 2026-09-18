@@ -2,6 +2,7 @@ BasedOnStyle:  Chromium
 BinPackArguments: false
 BinPackParameters: false
 ColumnLimit:     90
+CommentPragmas:  '^\s*(IWYU pragma:|\*?\s*SPDX-)'
 IndentWidth:     2
 BreakConstructorInitializers: BeforeComma
 IncludeBlocks:   Preserve

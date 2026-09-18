@@ -1,17 +1,6 @@
 /*
- * Copyright 2020 OmniSci, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "ParquetDataWrapper.h"
@@ -22,6 +11,9 @@
 #include <boost/filesystem.hpp>
 
 #include "Catalog/Catalog.h"
+#if defined(HAVE_AWS_S3)
+#include "DataMgr/ForeignStorage/ParquetS3FileSystem.h"
+#endif  //  defined(HAVE_AWS_S3)
 #include "ForeignStorageException.h"
 #include "FsiChunkUtils.h"
 #include "LazyParquetChunkLoader.h"
@@ -90,6 +82,7 @@ ParquetDataWrapper::ParquetDataWrapper(const ForeignTable* foreign_table,
 
 ParquetDataWrapper::ParquetDataWrapper(const int db_id,
                                        const ForeignTable* foreign_table,
+                                       const UserMapping* user_mapping,
                                        const bool do_metadata_stats_validation)
     : do_metadata_stats_validation_(do_metadata_stats_validation)
     , db_id_(db_id)
@@ -106,6 +99,11 @@ ParquetDataWrapper::ParquetDataWrapper(const int db_id,
   auto& server_options = foreign_table->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     file_system_ = std::make_shared<arrow::fs::LocalFileSystem>();
+#if defined(HAVE_AWS_S3)
+  } else if (server_options.find(STORAGE_TYPE_KEY)->second == S3_STORAGE_TYPE) {
+    file_system_ =
+        ParquetS3FileSystem::create(foreign_table->foreign_server, user_mapping);
+#endif  //  defined(HAVE_AWS_S3)
   } else {
     UNREACHABLE();
   }
@@ -405,6 +403,41 @@ std::vector<std::string> ParquetDataWrapper::getAllFilePaths() {
   auto& server_options = foreign_table_->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     found_file_paths = shared::local_glob_filter_sort_files(file_path, file_path_options);
+#if defined(HAVE_AWS_S3)
+  } else if (server_options.find(STORAGE_TYPE_KEY)->second == S3_STORAGE_TYPE) {
+    auto file_info_result =
+        ParquetS3FileSystem::arrowGetFileInfo<std::string>(file_system_, file_path);
+    if (!file_info_result.ok()) {
+      throw_file_access_error(file_path, file_info_result.status().message());
+    } else {
+      auto& file_info = file_info_result.ValueOrDie();
+      if (file_info.type() == arrow::fs::FileType::NotFound) {
+        throw_file_not_found_error(file_path);
+      } else if (file_info.type() == arrow::fs::FileType::File) {
+        found_file_paths.emplace_back(file_path);
+      } else {
+        CHECK_EQ(arrow::fs::FileType::Directory, file_info.type());
+        arrow::fs::FileSelector file_selector{};
+        file_selector.base_dir = file_path;
+        file_selector.recursive = true;
+        auto selector_result =
+            ParquetS3FileSystem::arrowGetFileInfo<arrow::fs::FileSelector>(file_system_,
+                                                                           file_selector);
+        if (!selector_result.ok()) {
+          throw_file_access_error(file_path, selector_result.status().message());
+        } else {
+          auto file_info_vector = selector_result.ValueOrDie();
+          file_info_vector =
+              shared::arrow_fs_filter_sort_files(file_info_vector, file_path_options);
+          for (const auto& file_info : file_info_vector) {
+            if (file_info.type() == arrow::fs::FileType::File) {
+              found_file_paths.emplace_back(file_info.path());
+            }
+          }
+        }
+      }
+    }
+#endif  //  defined(HAVE_AWS_S3)
   } else {
     UNREACHABLE();
   }
@@ -562,8 +595,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
                                          rejected_row_indices.get());
 
   if (delete_buffer) {
-    // all modifying operations on `delete_buffer` must be synchronized as it is a
-    // shared buffer
+    // all modifying operations on `delete_buffer` must be synchronized as it is a shared
+    // buffer
     std::unique_lock<std::mutex> delete_buffer_lock(delete_buffer_mutex_);
 
     CHECK(!chunks.empty());
@@ -577,8 +610,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
       delete_buffer->append(data.data(), remaining_rows);
     }
 
-    // compute a logical OR with current `delete_buffer` contents and this chunks
-    // rejected indices
+    // compute a logical OR with current `delete_buffer` contents and this chunks rejected
+    // indices
     CHECK(rejected_row_indices);
     auto delete_buffer_data = delete_buffer->getMemoryPtr();
     for (const auto& rejected_index : *rejected_row_indices) {
@@ -597,8 +630,8 @@ void ParquetDataWrapper::loadBuffersUsingLazyParquetChunkLoader(
     }
     CHECK(chunk_metadata_map_.find(data_chunk_key) != chunk_metadata_map_.end());
 
-    // Allocate new shared_ptr for metadata so we dont modify old one which may be used
-    // by executor
+    // Allocate new shared_ptr for metadata so we dont modify old one which may be used by
+    // executor
     auto cached_metadata_previous =
         shared::get_from_map(chunk_metadata_map_, data_chunk_key);
     shared::get_from_map(chunk_metadata_map_, data_chunk_key) =

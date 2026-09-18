@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 set -e
 set -x
 
 # Parse inputs
 UPDATE_PACKAGES=false
+UPDATE_OPTIONS=
 COMPRESS=false
 TSAN=false
 NOCUDA=false
@@ -24,6 +27,9 @@ while (( $# )); do
   case "$1" in
     --update-packages)
       UPDATE_PACKAGES=true
+      ;;
+    --update-options=*)
+      UPDATE_OPTIONS="${1#*=}"
       ;;
     --compress)
       COMPRESS=true
@@ -73,17 +79,21 @@ fi
 
 echo "Building with ${NPROC} cores"
 
+# update packages if requested
+# pass options to allow dodging broken updates if necessary (e.g. --ignore=package1,package2)
+if [ "${UPDATE_PACKAGES}" = "true" ]; then
+  apt update -y ${UPDATE_OPTIONS}
+fi
+
+# install sudo if we don't have it
 if [[ ! -x  "$(command -v sudo)" ]] ; then
   if [ "$EUID" -eq 0 ] ; then
-    apt update -y
     apt install -y sudo
   else
     echo "ERROR - sudo not installed and not running as root"
     exit
   fi
 fi
-
-HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
 
 SUFFIX=${SUFFIX:=$(date +%Y%m%d)}
 PREFIX=/usr/local/mapd-deps
@@ -111,9 +121,8 @@ source $SCRIPTS_DIR/common-functions.sh
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
-  if [ "$VERSION_ID" != "24.04" ] && [ "$VERSION_ID" != "22.04" ]; then
-    echo "Ubuntu 24.04 and 22.04 are the only Debian-based releases supported by this script"
-    echo "If you are still using 20.04 or 23.10 then you need to upgrade!"
+  if [ "$VERSION_ID" != "22.04" ]; then
+    echo "Ubuntu 22.04 is the only Debian-based release supported by this script"
     exit 1
   fi
 else
@@ -125,10 +134,6 @@ safe_mkdir "$PREFIX"
 
 # this should be based on the actual distro, but they're the same files.
 DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
-
-DEBIAN_FRONTEND=noninteractive sudo apt update
-
-update_container_packages
 
 install_required_ubuntu_packages
 
@@ -167,23 +172,31 @@ install_ninja
 install_boost
 export BOOST_ROOT=$PREFIX/include
 
-VERS=3.3.2
-CFLAGS="$CFLAGS" download_make_install ${HTTP_DEPS}/libarchive-$VERS.tar.gz "" "$CONFIGURE_OPTS --without-nettle"
+install_xz
+
+LIBARCHIVE_VERSION=3.8.7
+CFLAGS="$CFLAGS" download_make_install https://libarchive.org/downloads/libarchive-${LIBARCHIVE_VERSION}.tar.gz libarchive-${LIBARCHIVE_VERSION}.tar.gz "" "$CONFIGURE_OPTS --without-nettle"
 
 install_uriparser
 
-VERS=8.9.1
-# https://curl.haxx.se/download/curl-$VERS.tar.xz
-download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps --with-openssl"
+VERS=8.20.0
+C_DLOAD=curl-$VERS.tar.xz
+download_make_install https://curl.se/download/${C_DLOAD} ${C_DLOAD} "" "--disable-ldap --disable-ldaps --with-openssl --without-libpsl --without-libidn2"
 
 # cpr
 install_cpr
+
+# libpng
+install_png
 
 # c-blosc
 install_blosc
 
 # zstd required by GDAL and Arrow
 install_zstd
+
+# SQLite (catalog, PROJ, GDAL)
+install_sqlite3
 
 # Geo Support
 install_gdal_and_pdal
@@ -200,13 +213,11 @@ install_awscpp
 install_thrift
 
 VERS=3.52.16
-CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install ${HTTP_DEPS}/libiodbc-${VERS}.tar.gz
+IO_DLOAD=libiodbc-${VERS}.tar.gz
+CFLAGS="-fPIC" CXXFLAGS="-fPIC" download_make_install https://sourceforge.net/projects/iodbc/files/iodbc/3.52.16/${IO_DLOAD}/download ${IO_DLOAD}
 
 # Include What You Use
 install_iwyu
-
-# bison
-download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
 # TBB
 install_tbb
@@ -222,57 +233,11 @@ install_lz4
 # Apache Arrow
 install_arrow
 
-# Go
-install_go
-
 # librdkafka
 install_rdkafka
 
 # abseil
 install_abseil
-
-# glslang (with spirv-tools)
-VERS=11.6.0 # stable 8/25/21
-rm -rf glslang
-mkdir -p glslang
-pushd glslang
-wget --continue https://github.com/KhronosGroup/glslang/archive/$VERS.tar.gz
-tar xvf $VERS.tar.gz
-pushd glslang-$VERS
-./update_glslang_sources.py
-mkdir build
-pushd build
-cmake \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    ..
-make -j $(nproc)
-make install
-popd # build
-popd # glslang-$VERS
-popd # glslang
-
-# spirv-cross
-VERS=2020-06-29 # latest from 6/29/20
-rm -rf spirv-cross
-mkdir -p spirv-cross
-pushd spirv-cross
-wget --continue https://github.com/KhronosGroup/SPIRV-Cross/archive/$VERS.tar.gz
-tar xvf $VERS.tar.gz
-pushd SPIRV-Cross-$VERS
-mkdir build
-pushd build
-cmake \
-    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-    -DCMAKE_INSTALL_PREFIX=$PREFIX \
-    -DCMAKE_POSITION_INDEPENDENT_CODE=on \
-    -DSPIRV_CROSS_ENABLE_TESTS=off \
-    ..
-make -j $(nproc)
-make install
-popd # build
-popd # SPIRV-Cross-$VERS
-popd # spirv-cross
 
 # Vulkan
 install_vulkan
@@ -280,59 +245,16 @@ install_vulkan
 # GLM (GL Mathematics)
 install_glm
 
-# Rendering sandbox support
-if [ "$LIBRARY_TYPE" != "static" ]; then
-  install_glfw
-  install_imgui
-  install_implot
-fi
-
 # OpenSAML
-download_make_install ${HTTP_DEPS}/xml-security-c-2.0.4.tar.gz "" "$CONFIGURE_OPTS --without-xalan"
-download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz "" "$CONFIGURE_OPTS"
-CXXFLAGS="-std=c++14" download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "$CONFIGURE_OPTS"
+install_opensaml
 
 # H3
 install_h3
 
-# Generate mapd-deps.sh
-cat > $PREFIX/mapd-deps.sh <<EOF
-HEAVY_PREFIX=$PREFIX
-
-LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH
-LD_LIBRARY_PATH=\$HEAVY_PREFIX/lib:\$LD_LIBRARY_PATH
-LD_LIBRARY_PATH=\$HEAVY_PREFIX/lib64:\$LD_LIBRARY_PATH
-
-PATH=/usr/local/cuda/bin:\$PATH
-PATH=\$HEAVY_PREFIX/go/bin:\$PATH
-PATH=\$HEAVY_PREFIX/maven/bin:\$PATH
-PATH=\$HEAVY_PREFIX/bin:\$PATH
-
-VULKAN_SDK=\$HEAVY_PREFIX
-VK_LAYER_PATH=\$HEAVY_PREFIX/share/vulkan/explicit_layer.d
-
-CMAKE_PREFIX_PATH=\$HEAVY_PREFIX:\$CMAKE_PREFIX_PATH
-
-GOROOT=\$HEAVY_PREFIX/go
-
-export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH CMAKE_PREFIX_PATH GOROOT
-EOF
-
-echo
-echo "Done. Be sure to source the 'mapd-deps.sh' file to pick up the required environment variables:"
-echo "    source $PREFIX/mapd-deps.sh"
+generate_mapd_deps_sh "$PREFIX"
+install_profile_entry "$PREFIX"
 
 if [ "$COMPRESS" = "true" ]; then
   OS=ubuntu${VERSION_ID}
-  # we don't have 24.04 builds yet, so just use the 22.04 bundle
-  if [ $VERSION_ID == "24.04" ]; then
-    OS=ubuntu22.04
-  fi
-  TARBALL_TSAN=""
-  if [ "$TSAN" = "true" ]; then
-    TARBALL_TSAN="-tsan"
-  fi
-  FILENAME=mapd-deps-${OS}${TARBALL_TSAN}-${LIBRARY_TYPE}-${ARCH}-${SUFFIX}.tar
-  tar cvf ${FILENAME} -C ${PREFIX} .
-  xz -T${NPROC} ${FILENAME}
+  compress_deps_tarball "$OS" "$LIBRARY_TYPE" "$ARCH" "$SUFFIX" "$TSAN" "$NPROC" "$PREFIX"
 fi

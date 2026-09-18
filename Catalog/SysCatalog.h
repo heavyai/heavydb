@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -41,18 +30,23 @@
 #include <utility>
 #include <vector>
 
-#include "tbb/concurrent_hash_map.h"
+#include "Grantee.h"
+#ifdef HAVE_LDAP
+#include "LdapServer.h"
+#endif  // HAVE_LDAP
+#include "ObjectRoleDescriptor.h"
+#ifdef HAVE_SAML
+#include "SamlServer.h"
+#endif  // HAVE_SAML
 
 #include "Calcite/Calcite.h"
 #include "DataMgr/DataMgr.h"
-#include "Grantee.h"
-#include "LeafHostInfo.h"
 #include "MigrationMgr/MigrationMgr.h"
-#include "OSDependent/heavyai_locks.h"
-#include "ObjectRoleDescriptor.h"
-#include "PkiServer.h"
+#include "RWLocks.h"
 #include "Shared/DbObjectKeys.h"
+#include "Shared/Restriction.h"
 #include "Shared/SysDefinitions.h"
+#include "Shared/heavyai_locks.h"
 #include "Shared/heavyai_shared_mutex.h"
 #include "SqliteConnector/SqliteConnector.h"
 
@@ -179,13 +173,16 @@ class CommonFileOperations {
  */
 class SysCatalog : private CommonFileOperations {
  public:
+  friend class read_lock<SysCatalog>;
+  friend class write_lock<SysCatalog>;
+  friend class sqlite_lock<SysCatalog>;
+  friend class cat_init_lock;
+
   void init(const std::string& basePath,
             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
             const AuthMetadata& authMetadata,
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
-            bool aggregator,
-            const std::vector<LeafHostInfo>& string_dict_hosts,
             std::optional<int32_t> max_num_users);
 
   bool isInitialized() const;
@@ -215,6 +212,24 @@ class SysCatalog : private CommonFileOperations {
   void renameDatabase(std::string const& old_name, std::string const& new_name);
   void changeDatabaseOwner(std::string const& dbname, const std::string& new_owner);
   void dropDatabase(const DBMetadata& db);
+  void createLegacyPolicyInMemory(const Catalog_Namespace::Catalog& catalog,
+                                  const std::string& column_name,
+                                  const std::string& grantee_name,
+                                  std::vector<std::string> values_list);
+  void dropLegacyPolicyInMemory(const Catalog_Namespace::Catalog& catalog,
+                                const std::string& grantee_name);
+  void createPolicy(const Catalog_Namespace::Catalog& catalog,
+                    const std::vector<std::string> column_name_components,
+                    const std::string& grantee_name,
+                    std::vector<std::string> values_list);
+  void dropPolicy(const Catalog_Namespace::Catalog& catalog,
+                  const std::vector<std::string> column_name_components,
+                  const std::string& grantee_name);
+  void dropPoliciesForTable(const Catalog_Namespace::Catalog& catalog,
+                            const std::string& table_name);
+  void dropPoliciesForColumn(const Catalog_Namespace::Catalog& catalog,
+                             const std::string& table_name,
+                             const std::string& column_name);
   std::optional<UserMetadata> getUser(std::string const& uname) {
     if (UserMetadata user; getMetadataForUser(uname, user)) {
       return user;
@@ -364,6 +379,7 @@ class SysCatalog : private CommonFileOperations {
                               const std::string& roleName,
                               bool only_direct) const;
   std::vector<std::string> getRoles(const std::string& user_name, bool effective = true);
+  Restrictions getRestrictions(const std::string& user_name, bool effective = true);
   std::vector<std::string> getRoles(bool include_user_private_role,
                                     bool is_super,
                                     const std::string& user_name,
@@ -372,20 +388,9 @@ class SysCatalog : private CommonFileOperations {
   // Get all roles that have been created, even roles that have not been assigned to other
   // users or roles.
   std::set<std::string> getCreatedRoles() const;
-  bool isAggregator() const { return aggregator_; }
-  static SysCatalog& instance() {
-    std::unique_lock lk(instance_mutex_);
-    if (!instance_) {
-      instance_.reset(new SysCatalog());
-    }
-    return *instance_;
-  }
 
-  static void destroy() {
-    std::unique_lock lk(instance_mutex_);
-    instance_.reset();
-    migrations::MigrationMgr::destroy();
-  }
+  static SysCatalog& instance();
+  static void destroy();
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return shared::kSystemCatalogName; }
@@ -396,10 +401,7 @@ class SysCatalog : private CommonFileOperations {
                                   UserAlterations alts);
   std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
       const std::vector<std::string>& dashboard_ids);
-  void check_for_session_encryption(const std::string& pki_cert, std::string& session);
   std::vector<Catalog*> getCatalogsForAllDbs();
-
-  std::shared_ptr<Catalog> getDummyCatalog() { return dummyCatalog_; }
 
   std::shared_ptr<Catalog> getCatalog(const std::string& dbName);
   std::shared_ptr<Catalog> getCatalog(const int32_t db_id);
@@ -424,7 +426,11 @@ class SysCatalog : private CommonFileOperations {
       const Catalog_Namespace::Catalog& catalog);
 
   bool hasExecutedMigration(const std::string& migration_name) const;
+
+  void checkDateInDaysMigration() const;
   void checkDropRenderGroupColumnsMigration() const;
+
+  heavyai::DistributedSharedMutex& getDistributedMutex() const;
 
   /**
    * Set the new number of allowed users across the entire system.
@@ -455,6 +461,7 @@ class SysCatalog : private CommonFileOperations {
   void checkAndExecuteMigrations();
   void importDataFromOldMapdDB();
   void createRoles();
+  void createPolicies();
   void fixRolesMigration();
   void addAdminUserRole();
   void migratePrivileges();
@@ -475,6 +482,7 @@ class SysCatalog : private CommonFileOperations {
                                 UserMetadata& user);
 
   void checkDuplicateCaseInsensitiveDbNames() const;
+  void rejectLegacyReplicatedPartitions() const;
 
   struct UpdateQuery {
     std::string query;
@@ -558,18 +566,19 @@ class SysCatalog : private CommonFileOperations {
   std::unique_ptr<SqliteConnector> sqliteConnector_;
 
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
-  std::unique_ptr<PkiServer> pki_server_;
+#ifdef HAVE_LDAP
+  std::unique_ptr<LdapServer> ldap_server_;
+#endif  // HAVE_LDAP
+#ifdef HAVE_SAML
+  std::unique_ptr<SamlServer> saml_server_;
+#endif  // HAVE_SAML
   const AuthMetadata* authMetadata_;
   std::shared_ptr<Calcite> calciteMgr_;
-  std::vector<LeafHostInfo> string_dict_hosts_;
-  bool aggregator_;
   auto yieldTransactionStreamer();
 
   // contains a map of all the catalog within this system
   // it is lazy loaded
-  // std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
-  using dbid_to_cat_map = tbb::concurrent_hash_map<std::string, std::shared_ptr<Catalog>>;
-  dbid_to_cat_map cat_map_;
+  std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
 
   static std::mutex instance_mutex_;
   static std::unique_ptr<SysCatalog> instance_;
@@ -581,16 +590,16 @@ class SysCatalog : private CommonFileOperations {
 
   std::optional<int32_t> max_num_users_{};
 
+  mutable SharedMutexWrapper mutex_desc_;           // General mutex for syscat.
+  mutable SharedMutexWrapper sqlite_mutex_desc_;    // Sqlite mutex.
+  mutable SharedMutexWrapper cat_init_mutex_desc_;  // Mutex for initializing catalogs.
+
  public:
-  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
-  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dsqliteMutex_;
-  mutable std::mutex sqliteMutex_;
-  mutable heavyai::shared_mutex sharedMutex_;
-  mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
-  mutable std::atomic<std::thread::id> thread_holding_write_lock;
+  // This value is used by read_lock when acquiring mutex_desc_ to record which thread
+  // holds a lock.  It should idealy be moved into the SharedMutexWrapper class, but it
+  // needs to be static to the SysCatalog, so some refactor would be needed.
   static thread_local bool thread_holds_read_lock;
-  // used by catalog when initially creating a catalog instance
-  std::shared_ptr<Catalog> dummyCatalog_;
+
   std::unordered_map<std::string, std::shared_ptr<UserMetadata>> temporary_users_by_name_;
   std::unordered_map<int32_t, std::shared_ptr<UserMetadata>> temporary_users_by_id_;
   int32_t next_temporary_user_id_{shared::kTempUserIdRange};

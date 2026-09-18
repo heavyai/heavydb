@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -28,10 +17,10 @@
 #include <iterator>
 #include <string>
 
+#include <boost/regex.hpp>
 #include "Logger/Logger.h"
 #include "RowToColumnLoader.h"
 #include "Shared/ThriftClient.h"
-#include "Shared/clean_boost_regex.hpp"
 #include "Shared/sqltypes.h"
 
 #include <chrono>
@@ -245,14 +234,6 @@ bool msg_consume(RdKafka::Message* message,
   return false;
 };
 
-class ConsumeCb : public RdKafka::ConsumeCb {
- public:
-  void consume_cb(RdKafka::Message& msg, void* opaque) override {
-    // reinterpret_cast<KafkaMgr*>(opaque)->
-    // msg_consume(&msg, opaque);
-  }
-};
-
 class EventCb : public RdKafka::EventCb {
  public:
   void event_cb(RdKafka::Event& event) override {
@@ -304,7 +285,6 @@ void kafka_insert(
   std::string debug;
   std::vector<std::string> topics;
   bool do_conf_dump = false;
-  int use_ccb = 0;
 
   RebalanceCb ex_rebalance_cb;
 
@@ -357,15 +337,7 @@ void kafka_insert(
     }
   }
 
-  ConsumeCb consume_cb;
-  use_ccb = 0;
-  if (use_ccb) {
-    if (conf->set("consume_cb", &consume_cb, errstr) != RdKafka::Conf::CONF_OK) {
-      LOG(FATAL) << errstr;
-    }
-    // need to set the opaque pointer here for the callbacks
-    //        rd_kafka_conf_set_opaque(conf, this);
-  }
+  // Messages are handled via consumer->consume() below, not librdkafka's consume_cb.
 
   EventCb ex_event_cb;
   if (conf->set("event_cb", &ex_event_cb, errstr) != RdKafka::Conf::CONF_OK) {
@@ -434,22 +406,20 @@ void kafka_insert(
   while (run) {
     RdKafka::Message* msg = consumer->consume(10000);
     if (msg->err() == RdKafka::ERR_NO_ERROR) {
-      if (!use_ccb) {
-        bool added =
-            msg_consume(msg, row_loader, copy_params, transformations, remove_quotes);
-        if (added) {
-          recv_rows++;
-          if (recv_rows == copy_params.batch_size) {
-            recv_rows = 0;
-            row_loader.do_load(rows_loaded, skipped, copy_params);
-            // make sure we now commit that we are up to here to cover the mesages we just
-            // loaded
-            consumer->commitSync();
-          }
-        } else {
-          // LOG(ERROR) << " messsage was skipped ";
-          skipped++;
+      bool added =
+          msg_consume(msg, row_loader, copy_params, transformations, remove_quotes);
+      if (added) {
+        recv_rows++;
+        if (recv_rows == copy_params.batch_size) {
+          recv_rows = 0;
+          row_loader.do_load(rows_loaded, skipped, copy_params);
+          // make sure we now commit that we are up to here to cover the mesages we just
+          // loaded
+          consumer->commitSync();
         }
+      } else {
+        // LOG(ERROR) << " messsage was skipped ";
+        skipped++;
       }
     }
     delete msg;

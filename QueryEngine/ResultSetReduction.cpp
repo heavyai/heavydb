@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2016-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -228,11 +217,6 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
   CHECK(that_buff);
   if (query_mem_desc_.getQueryDescriptionType() ==
       QueryDescriptionType::GroupByBaselineHash) {
-    if (!serialized_varlen_buffer.empty()) {
-      throw std::runtime_error(
-          "Projection of variable length targets with baseline hash group by is not yet "
-          "supported in Distributed mode");
-    }
     if (use_multithreaded_reduction(that_entry_count)) {
       const size_t thread_count = cpu_threads();
       std::vector<std::future<void>> reduction_threads;
@@ -617,14 +601,7 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
 
 namespace {
 
-#ifdef _MSC_VER
-#define mapd_cas(address, compare, val)                                 \
-  InterlockedCompareExchange(reinterpret_cast<volatile long*>(address), \
-                             static_cast<long>(val),                    \
-                             static_cast<long>(compare))
-#else
 #define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
-#endif
 
 GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffer,
                                                            const uint32_t h,
@@ -676,23 +653,11 @@ GroupValueInfo get_group_value_columnar_reduction(
   return {nullptr, true};
 }
 
-#ifdef _MSC_VER
-#define cas_cst(ptr, expected, desired)                                      \
-  (InterlockedCompareExchangePointer(reinterpret_cast<void* volatile*>(ptr), \
-                                     reinterpret_cast<void*>(&desired),      \
-                                     expected) == expected)
-#define store_cst(ptr, val)                                          \
-  InterlockedExchangePointer(reinterpret_cast<void* volatile*>(ptr), \
-                             reinterpret_cast<void*>(val))
-#define load_cst(ptr) \
-  InterlockedCompareExchange(reinterpret_cast<volatile long*>(ptr), 0, 0)
-#else
 #define cas_cst(ptr, expected, desired) \
   __atomic_compare_exchange_n(          \
       ptr, expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
 #define store_cst(ptr, val) __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST)
 #define load_cst(ptr) __atomic_load_n(ptr, __ATOMIC_SEQ_CST)
-#endif
 
 template <typename T = int64_t>
 GroupValueInfo get_matching_group_value_reduction(

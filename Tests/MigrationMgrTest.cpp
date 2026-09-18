@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <filesystem>
@@ -395,7 +384,6 @@ class RebrandMigrationTest : public ::testing::Test {
       for (const auto& dir_name : optional_legacy_dirs_) {
         std::filesystem::create_directory(test_dir_ / dir_name);
       }
-      createFile(test_dir_ / "omnisci.license");
       createFile(test_dir_ / "omnisci_server_pid.lck");
       createFile(test_dir_ / "mapd_server_pid.lck");
       createFile(test_dir_ / "omnisci_key_store" / "omnisci.pem");
@@ -411,7 +399,6 @@ class RebrandMigrationTest : public ::testing::Test {
       for (const auto& dir_name : optional_new_dirs_) {
         std::filesystem::create_directory(test_dir_ / dir_name);
       }
-      createFile(test_dir_ / shared::kDefaultLicenseFileName);
       createFile(test_dir_ / shared::kDefaultKeyStoreDirName /
                  shared::kDefaultKeyFileName);
     }
@@ -449,8 +436,6 @@ class RebrandMigrationTest : public ::testing::Test {
       }
     }
 
-    assertFile(test_dir_ / shared::kDefaultLicenseFileName);
-    assertSymlink(test_dir_ / "omnisci.license");
     assertFile(test_dir_ / shared::kDefaultKeyStoreDirName / shared::kDefaultKeyFileName);
     assertSymlink(test_dir_ / "omnisci_key_store" / "omnisci.pem");
 

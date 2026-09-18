@@ -1,3 +1,8 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 #.rst:
 # FindGDALExtra.cmake
 # -------------
@@ -33,11 +38,18 @@ endif()
 
 set(GDALExtra_LIBRARIES "")
 function(find_static_lib name)
+  set(_mapd_deps_lib_paths "")
+  if(MAPD_DEPS_PATH)
+    list(APPEND _mapd_deps_lib_paths
+      "${MAPD_DEPS_PATH}/lib"
+      "${MAPD_DEPS_PATH}/lib64")
+  endif()
   find_library(${name}_LIBRARY
     NAMES ${ARGN}
     HINTS ENV LD_LIBRARY_PATH
     HINTS ENV DYLD_LIBRARY_PATH
     PATHS
+    ${_mapd_deps_lib_paths}
     /usr/lib
     /usr/local/lib
     /usr/local/homebrew/lib
@@ -52,13 +64,12 @@ if(PREFER_STATIC_LIBS)
   find_static_lib(KMLBASE kmlbase)
   find_static_lib(URIPARSER uriparser)
   find_static_lib(PROJ proj)
-  find_static_lib(SQLITE3 sqlite3)
   find_static_lib(BLOSC blosc)
   find_static_lib(HDF5 hdf5)
   find_static_lib(HDF5_HL hdf5_hl)
   find_static_lib(NETCDF netcdf)
 
-  set(GDALExtra_LIBRARIES ${KMLDOM_LIBRARY} ${EXPAT_LIBRARY} ${KMLENGINE_LIBRARY} ${KMLBASE_LIBRARY} ${MINIZIP_LIBRARY} ${URIPARSER_LIBRARY} ${PROJ_LIBRARY} ${SQLITE3_LIBRARY} ${BLOSC_LIBRARY} ${NETCDF_LIBRARY} ${HDF5_LIBRARY} ${HDF5_HL_LIBRARY} ${HDF5_LIBRARY})
+  set(GDALExtra_LIBRARIES ${KMLDOM_LIBRARY} ${EXPAT_LIBRARY} ${KMLENGINE_LIBRARY} ${KMLBASE_LIBRARY} ${MINIZIP_LIBRARY} ${URIPARSER_LIBRARY} ${PROJ_LIBRARY} ${BLOSC_LIBRARY} ${NETCDF_LIBRARY} ${HDF5_LIBRARY} ${HDF5_HL_LIBRARY} ${HDF5_LIBRARY})
 
   if(GDAL_CONFIG)
     exec_program(${GDAL_CONFIG} ARGS --prefix OUTPUT_VARIABLE GDAL_CONFIG_PREFIX)
@@ -95,5 +106,7 @@ endif()
 
 include(FindPackageHandleStandardArgs)
 if(PREFER_STATIC_LIBS)
-  find_package_handle_standard_args(GDALExtra REQUIRED_VARS EXPAT_LIBRARY KMLDOM_LIBRARY MINIZIP_LIBRARY KMLENGINE_LIBRARY KMLBASE_LIBRARY URIPARSER_LIBRARY PROJ_LIBRARY SQLITE3_LIBRARY)
+  find_package_handle_standard_args(GDALExtra REQUIRED_VARS EXPAT_LIBRARY KMLDOM_LIBRARY MINIZIP_LIBRARY KMLENGINE_LIBRARY KMLBASE_LIBRARY URIPARSER_LIBRARY PROJ_LIBRARY BLOSC_LIBRARY NETCDF_LIBRARY HDF5_LIBRARY HDF5_HL_LIBRARY)
+else()
+  find_package_handle_standard_args(GDALExtra)
 endif()

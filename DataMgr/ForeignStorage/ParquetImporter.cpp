@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "ParquetImporter.h"
@@ -24,6 +13,9 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/Chunk/Chunk.h"
+#if defined(HAVE_AWS_S3)
+#include "DataMgr/ForeignStorage/ParquetS3FileSystem.h"
+#endif  //  defined(HAVE_AWS_S3)
 #include "ForeignStorageException.h"
 #include "LazyParquetChunkLoader.h"
 #include "ParquetShared.h"
@@ -238,6 +230,11 @@ ParquetImporter::ParquetImporter(const int db_id,
   auto& server_options = foreign_table->foreign_server->options;
   if (server_options.find(STORAGE_TYPE_KEY)->second == LOCAL_FILE_STORAGE_TYPE) {
     file_system_ = std::make_shared<arrow::fs::LocalFileSystem>();
+#if defined(HAVE_AWS_S3)
+  } else if (server_options.find(STORAGE_TYPE_KEY)->second == S3_STORAGE_TYPE) {
+    file_system_ =
+        ParquetS3FileSystem::create(foreign_table->foreign_server, user_mapping);
+#endif  //  defined(HAVE_AWS_S3)
   } else {
     UNREACHABLE();
   }

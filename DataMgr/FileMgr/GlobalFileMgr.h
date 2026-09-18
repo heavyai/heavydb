@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -33,8 +22,6 @@
 #include "FileMgr.h"
 #include "Shared/heavyai_shared_mutex.h"
 
-class ForeignStorageInterface;
-
 using namespace Data_Namespace;
 
 namespace File_Namespace {
@@ -54,7 +41,6 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
  public:
   /// Constructor
   GlobalFileMgr(const int32_t device_id,
-                std::shared_ptr<ForeignStorageInterface> fsi,
                 std::string base_path = ".",
                 const size_t num_reader_threads = 0,
                 const size_t page_size = DEFAULT_PAGE_SIZE,
@@ -151,21 +137,19 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   static constexpr int32_t db_version_{2};
 
  private:
-  AbstractBufferMgr* findFileMgrUnlocked(const int32_t db_id, const int32_t tb_id);
+  FileMgr* findFileMgrUnlocked(const int32_t db_id, const int32_t tb_id);
   void deleteFileMgr(const int32_t db_id, const int32_t tb_id);
 
  public:
-  AbstractBufferMgr* findFileMgr(const int32_t db_id, const int32_t tb_id) {
+  FileMgr* findFileMgr(const int32_t db_id, const int32_t tb_id) {
     heavyai::shared_lock<heavyai::shared_mutex> read_lock(fileMgrs_mutex_);
     return findFileMgrUnlocked(db_id, tb_id);
   }
   void setFileMgrParams(const int32_t db_id,
                         const int32_t tb_id,
                         const FileMgrParams& file_mgr_params);
-  AbstractBufferMgr* getFileMgr(const int32_t db_id, const int32_t tb_id);
-  AbstractBufferMgr* getFileMgr(const ChunkKey& key) {
-    return getFileMgr(key[0], key[1]);
-  }
+  FileMgr* getFileMgr(const int32_t db_id, const int32_t tb_id);
+  FileMgr* getFileMgr(const ChunkKey& key) { return getFileMgr(key[0], key[1]); }
 
   std::string getBasePath() const { return basePath_; }
   size_t getPageSize() const { return page_size_; }
@@ -190,8 +174,6 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   void closeFileMgr(const int32_t db_id,
                     const int32_t tb_id);  // A locked public wrapper for deleteFileMgr,
                                            // for now for unit testing
- protected:
-  std::shared_ptr<ForeignStorageInterface> fsi_;
 
  private:
   bool existsDiffBetweenFileMgrParamsAndFileMgr(
@@ -210,7 +192,6 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
                     /// db_version
 
   std::map<TablePair, std::shared_ptr<FileMgr>> ownedFileMgrs_;
-  std::map<TablePair, AbstractBufferMgr*> allFileMgrs_;
   std::map<TablePair, int32_t> max_rollback_epochs_per_table_;
   std::map<TablePair, StorageStats> lazy_initialized_stats_;
 

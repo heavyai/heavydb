@@ -1,3 +1,8 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 cmake_minimum_required(VERSION 3.25)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -17,26 +22,6 @@ if(IS_REDHAT)
   message(STATUS "OS is Redhat or derivative")
 endif()
 
-set(ENABLE_CONDA OFF)
-if(DEFINED ENV{CONDA_PREFIX})
-  set(ENABLE_CONDA ON)
-  list(APPEND CMAKE_PREFIX_PATH "$ENV{CONDA_PREFIX}")
-  # add a compile definition for conda build
-  add_definitions("-DCONDA_BUILD")
-  # resolves link issue for zlib
-  link_directories("$ENV{CONDA_PREFIX}/lib" "$ENV{CONDA_PREFIX}/Library/lib")
-  # various fixes and workarounds
-  add_definitions("-Dsecure_getenv=getenv")
-  # fixes `undefined reference to `boost::system::detail::system_category_instance'`:
-  add_definitions("-DBOOST_ERROR_CODE_HEADER_ONLY")
-  # Adding formating macros
-  add_definitions("-D__STDC_FORMAT_MACROS=1")
-  # fixes always_inline attribute errors
-  add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-fno-semantic-interposition>")
-  # Adding `--sysroot=...` resolves `no member named 'signbit' in the global namespace` error:
-  set(CMAKE_SYSROOT "$ENV{CONDA_BUILD_SYSROOT}")
-endif(DEFINED ENV{CONDA_PREFIX})
-
 # force `Release` build type if left unspecified
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
@@ -53,28 +38,20 @@ if(CCACHE_EXE)
   set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_EXE}")
 endif()
 
-option(ENABLE_IWYU "Enable include-what-you-use" OFF)
-if(ENABLE_IWYU)
-  find_program(IWYU_EXE include-what-you-use)
-  if(IWYU_EXE)
-    set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE "${IWYU_EXE}")
-  endif()
-endif()
-
 project(heavyai)
 
 # ENABLE_IWYU: Generates .iwyu files suitable for input into include-what-you-use's fix_includes.py tool.
 option(ENABLE_IWYU "Enable include-what-you-use advice (.iwyu files for fix_includes.py)" OFF)
 if(ENABLE_IWYU)
- if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-   find_program(IWYU_EXE include-what-you-use)
-   if(IWYU_EXE)
-     set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE "${CMAKE_SOURCE_DIR}/scripts/do-iwyu;${IWYU_EXE};-Xiwyu --cxx{CMAKE_CXX_STANDARD}ns")
-   else()
-     message(FATAL_ERROR "ENABLE_IWYU failed to find the include-what-you-use binary")
-   endif()
- else()
-   message(FATAL_ERROR "ENABLE_IWYU may only be used with the clang compiler (need to set CMAKE_CXX_COMPILER)")
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    find_program(IWYU_EXE include-what-you-use)
+    if(IWYU_EXE)
+      set(CMAKE_CXX_INCLUDE_WHAT_YOU_USE "${CMAKE_SOURCE_DIR}/scripts/do-iwyu;${IWYU_EXE};-Xiwyu --cxx${CMAKE_CXX_STANDARD}ns")
+    else()
+      message(FATAL_ERROR "ENABLE_IWYU failed to find the include-what-you-use binary")
+    endif()
+  else()
+    message(FATAL_ERROR "ENABLE_IWYU may only be used with the clang compiler (need to set CMAKE_CXX_COMPILER)")
   endif()
 endif()
 
@@ -91,25 +68,23 @@ if(ENABLE_TIME_TRACE)
     message(FATAL_ERROR "ENABLE_TIME_TRACE may only be used with the clang compiler 9.0+ (need to set CMAKE_CXX_COMPILER)")
   endif()
 endif()
- 
-if(NOT EXISTS "${CMAKE_SOURCE_DIR}/Rendering")
-  set(MAPD_EDITION "OS")
-elseif(NOT DEFINED MAPD_EDITION)
-  set(MAPD_EDITION "EE")
-endif()
-set(MAPD_EDITION "${MAPD_EDITION}" CACHE STRING "MapD edition" FORCE)
-set_property(CACHE MAPD_EDITION PROPERTY STRINGS "EE" "CE" "OS")
-add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
-string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 # HeavyDB version number
-set(MAPD_VERSION_MAJOR "9")
+set(MAPD_VERSION_MAJOR "10")
 set(MAPD_VERSION_MINOR "0")
 set(MAPD_VERSION_PATCH "0")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
+
+set(MAPD_BUILDS_REPO_URL "http://builds.mapd.com")
+set(MAPD_BUILDS_REPO_PATH "/theHoard/export/home/www/builds.mapd.com")
+
 set(MAPD_IMMERSE_BUILD_ID "immerse-v2-latest-master-prod" CACHE STRING "Immerse Build ID")
-set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/${MAPD_IMMERSE_BUILD_ID}.zip")
+set(MAPD_IMMERSE_URL "${MAPD_BUILDS_REPO_URL}/frontend/${MAPD_IMMERSE_BUILD_ID}.zip")
+
+set(MAPD_WEBSERVER_BUILD_ID "webserver/master" CACHE STRING "Web Server Build ID")
+set(MAPD_WEBSERVER_BASE_URL "${MAPD_BUILDS_REPO_URL}/frontend/${MAPD_WEBSERVER_BUILD_ID}/")
+
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
 if($ENV{BUILD_NUMBER})
@@ -135,7 +110,10 @@ if(NOT MapdDepsVersion_FILE)
 else()
   get_filename_component(MAPD_DEPS_PATH "${MapdDepsVersion_FILE}" DIRECTORY)
   message(STATUS "Found dependencies path: ${MAPD_DEPS_PATH}")
-  list(APPEND CMAKE_LIBRARY_PATH ${MAPD_DEPS_PATH})
+  list(APPEND CMAKE_LIBRARY_PATH
+    ${MAPD_DEPS_PATH}
+    ${MAPD_DEPS_PATH}/lib
+    ${MAPD_DEPS_PATH}/lib64)
 endif()
 
 macro(set_alternate_linker linker)
@@ -185,22 +163,10 @@ if(NOT "${USE_ALTERNATE_LINKER}" STREQUAL "")
   set_alternate_linker(${USE_ALTERNATE_LINKER})
 endif()
 
-# Ensure that boost's uuid implementation links bcrypt correctly under windows;
-# see issue described here: https://github.com/microsoft/vcpkg/issues/4481
-if(WIN32)
-  message(STATUS "Defining BOOST_UUID_FORCE_AUTO_LINK")
-  add_definitions(-DBOOST_UUID_FORCE_AUTO_LINK)
-endif()
-
-set(OS_SPECIFIC_LICENSING_LIBS "")
 if (IS_REDHAT)
   # RedHat currently can't link without static libraries, so default to ON.
   option(PREFER_STATIC_LIBS "Prefer linking against static libraries" ON)
   message("Redhat system detected, setting PREFER_STATIC_LIBS=ON by default.")
-  # On RHEL/Rocky8, the Go/JWT libraries have a dependency on libresolv and
-  # the final link of some executables fails with missing res_search symbol
-  # unless that library is explicitly included in the link
-  set(OS_SPECIFIC_LICENSING_LIBS "resolv")
 else()
   option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
 endif (IS_REDHAT)
@@ -230,7 +196,7 @@ else()
   add_definitions("-DBOOST_LOG_DYN_LINK")
 endif()
 
-# Required for macOS with Boost 1.71.0+
+# Required with Boost 1.71.0+
 # See https://gitlab.kitware.com/cmake/cmake/issues/19714
 set(Boost_NO_BOOST_CMAKE 1)
 
@@ -245,17 +211,12 @@ if(ENABLE_UTM_TRANSFORM )
   add_definitions("-DENABLE_UTM_TRANSFORM")
 endif()
 
-option(ENABLE_L0 "Enable level zero support" OFF)
-if(ENABLE_L0)
-  find_package(LevelZero REQUIRED COMPONENTS ${LevelZero_COMPONENTS})
-  add_definitions("-DHAVE_L0")
-endif()
-
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   enable_language(CUDA)
   include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
   include_directories(ThirdParty/warpcore/include)
+  include_directories(ThirdParty/hpc_helpers/include)
   list(APPEND CUDA_LIBRARIES cuda)
   list(APPEND CMAKE_CUDA_FLAGS --extended-lambda)  # required by warpcore
   add_definitions("-DHAVE_CUDA")
@@ -387,51 +348,24 @@ if (ENABLE_JIT_DEBUG)
   add_definitions("-DWITH_JIT_DEBUG")
 endif()
 
-if(XCODE)
-  if(ENABLE_CUDA)
-    set(CMAKE_EXE_LINKER_FLAGS "-F/Library/Frameworks -framework CUDA")
-  endif()
-  add_definitions("-DXCODE")
-endif()
-
 option(ENABLE_GEOS "Enable GEOS Support" ON)
 if (ENABLE_GEOS)
-  if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  find_package(GEOS)
+  if(GEOS_NOTFOUND)
     set(ENABLE_GEOS OFF CACHE BOOL "Enable GEOS support" FORCE)
-    message(STATUS "GEOS functionality is not supported on macOS.")
+    message(STATUS "GEOS not found, disabling support.")
   else()
-    find_package(GEOS)
-    if(GEOS_NOTFOUND)
-      set(ENABLE_GEOS OFF CACHE BOOL "Enable GEOS support" FORCE)
-      message(STATUS "GEOS not found, disabling support.")
-    else()
-      set(GEOS_LIBRARY_FILENAME '"${GEOS_LIBRARY}"')
-      add_definitions("-DENABLE_GEOS -DGEOS_LIBRARY_FILENAME=${GEOS_LIBRARY_FILENAME}")
-      set(GEOS_RT_DEFINITIONS "-DENABLE_GEOS")
-    endif()
+    set(GEOS_LIBRARY_FILENAME '"${GEOS_LIBRARY}"')
+    add_definitions("-DENABLE_GEOS -DGEOS_LIBRARY_FILENAME=${GEOS_LIBRARY_FILENAME}")
+    set(GEOS_RT_DEFINITIONS "-DENABLE_GEOS")
   endif()
-endif()
-
-# fixme: hack works for Homebrew, might not work for Conda
-if(ENABLE_CONDA)
-  set(OPENSSL_ROOT_DIR "$ENV{CONDA_PREFIX}")
-elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin" )
-  set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
 endif()
 
 find_package(OpenSSL REQUIRED)
 add_definitions("-DOPENSSL_SUPPRESS_DEPRECATED")
 include_directories(${OPENSSL_INCLUDE_DIR})
 
-if(MSVC)
-  add_definitions(/bigobj)
-  find_package(Thrift CONFIG REQUIRED)
-  set(Thrift_INCLUDE_DIRS ${THRIFT_INCLUDE_DIR})
-  set(Thrift_EXECUTABLE "${THRIFT_BIN_DIR}/thrift.exe")
-  set(Thrift_LIBRARIES ${THRIFT_LIBRARIES})
-else()
-  find_package(Thrift REQUIRED)
-endif()
+find_package(Thrift REQUIRED)
 include_directories(${Thrift_INCLUDE_DIRS})
 if("${Thrift_VERSION}" VERSION_LESS "0.13.0")
   add_definitions("-DHAVE_THRIFT_PLATFORMTHREADFACTORY")
@@ -466,7 +400,7 @@ endif()
 find_library(XML2_LIBRARY xml2 REQUIRED)
 list(APPEND GDAL_LIBRARIES ${PNG_LIBRARIES} ${GDALExtra_LIBRARIES} ${EXPAT_LIBRARIES})
 if (NOT IS_REDHAT)
-  list (APPEND GDAL_LIBRARIES ${PROJ_LIBRARIES} ${TIFF_LIBRARIES})
+  list (APPEND GDAL_LIBRARIES ${PROJ_LIBRARIES} ${TIFF_LIBRARIES}) 
 endif()
 list (APPEND GDAL_LIBRARIES ${XML2_LIBRARY})
 include_directories(${GDAL_INCLUDE_DIRS})
@@ -505,23 +439,15 @@ endif()
 
 if(ENABLE_SYSTEM_TFS)
   add_definitions ("-DHAVE_SYSTEM_TFS")
-  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    if(ENABLE_RF_PROP_TFS)
-      add_definitions ("-DHAVE_RF_PROP_TFS")
-    endif()
-    if (ENABLE_POINT_CLOUD_TFS)
-      add_definitions("-DHAVE_POINT_CLOUD_TFS")
-    endif()
+  if(ENABLE_RF_PROP_TFS)
+    add_definitions ("-DHAVE_RF_PROP_TFS")
+  endif()
+  if (ENABLE_POINT_CLOUD_TFS)
+    add_definitions("-DHAVE_POINT_CLOUD_TFS")
   endif()
 else()
   set(ENABLE_POINT_CLOUD_TFS OFF CACHE BOOL "Enable point cloud table functions" FORCE)
   set(ENABLE_RF_PROP_TFS OFF CACHE BOOL "Enable RF Propagation module" FORCE)
-endif()
-
-if(ENABLE_RF_PROP_TFS)
-  if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    set(ENABLE_RF_PROP_TFS OFF CACHE BOOL "Enable RF Propagation module" FORCE)
-  endif()
 endif()
 
 if(ENABLE_ML_ONEDAL_TFS)
@@ -562,14 +488,10 @@ if(ENABLE_ML_MLPACK_TFS)
   endif()
 endif()
 
-if(MSVC)
-  include_directories(include_directories("${LIBS_PATH}/include/pdcurses"))
-else()
-  find_package(Curses)
-  include_directories(${CURSES_INCLUDE_DIRS})
-  if (CURSES_HAVE_NCURSES_CURSES_H AND NOT CURSES_HAVE_CURSES_H)
-    include_directories(${CURSES_INCLUDE_DIRS}/ncurses/)
-  endif()
+find_package(Curses)
+include_directories(${CURSES_INCLUDE_DIRS})
+if (CURSES_HAVE_NCURSES_CURSES_H AND NOT CURSES_HAVE_CURSES_H)
+  include_directories(${CURSES_INCLUDE_DIRS}/ncurses/)
 endif()
 
 function(install_thirdparty_files src_hdr_list lib_base_path_list)
@@ -588,62 +510,36 @@ endfunction()
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 
-if(MSVC)
-  option(ENABLE_NO_WINWARNINGS "disable most windows warnings" ON)
-  add_compile_definitions("_USE_MATH_DEFINES") # M_PI https://stackoverflow.com/q/6563810/2700898
-  add_compile_definitions("NOMINMAX")
-  add_compile_definitions("WIN32_LEAN_AND_MEAN")
-  # Fix for thrift_handler.lib(DBHandler.cpp.obj) : error LNK2038: mismatch detected for
-  # 'boost_log_abi': value 'v2_mt_nt6' doesn't match value 'v2_mt_nt62' in initdb.cpp.obj
-  # https://github.com/microsoft/vcpkg/discussions/22762
-  # If a future vcpkg release causes the reverse error message, then this line should be removed.
-  add_compile_definitions("BOOST_USE_WINAPI_VERSION=0x0601") #=BOOST_WINAPI_VERSION_WIN7
-  if(ENABLE_NO_WINWARNINGS)
-    add_compile_definitions("_STL_EXTRA_DISABLED_WARNINGS=4146 4242 4244 4267 4355 4365 4458 4624 4820 4996 5204 5219" "NOMINMAX")
-    # disable 4702 unreachable code warning
-    # with /Qspectre set, disable the warning C5045
-    add_compile_options(/W0 /wd4702 /wd5045)
-  else()
-    add_compile_options(/W4 /permisive-)
+option(ENABLE_WARNINGS_AS_ERRORS "Enable treat warnings as errors" ON)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -Wvla -fdiagnostics-color=auto -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
+if (ENABLE_WARNINGS_AS_ERRORS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
+  if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+    # Allow maybe-uninitialized warnings with GCC as it is prone to false positives
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=maybe-uninitialized")
+  elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Disable warnings as errors for misleading-indentation due to a boost header issue
+    # This can be removed once the boost fix is in our deps https://github.com/boostorg/serialization/pull/262/files
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=misleading-indentation")
   endif()
-  add_compile_options(/EHsc /std:c++${CMAKE_CXX_STANDARD} /Qspectre)
-else()
-  option(ENABLE_WARNINGS_AS_ERRORS "Enable treat warnings as errors" ON)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -Wvla -fdiagnostics-color=auto -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
-  if (ENABLE_WARNINGS_AS_ERRORS)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
-    if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-      # Allow maybe-uninitialized warnings with GCC as it is prone to false positives
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=maybe-uninitialized")
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-      # Disable warnings as errors for misleading-indentation due to a boost header issue
-      # This can be removed once the boost fix is in our deps https://github.com/boostorg/serialization/pull/262/files
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=misleading-indentation")
-    endif()
-  endif()
-  if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
-  endif()
-  if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
-  endif()
-  if (${ARCH} STREQUAL "aarch64")
-    # Disable floating point expression contraction which allows FMA in baseline aarch64
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off")
-    if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
-      # Suppress "parameter passing for argument of type 'std::pair<X,X>' notes" on ARM
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
-    endif()
+endif()
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
+endif()
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
+endif()
+if (${ARCH} STREQUAL "aarch64")
+  # Disable floating point expression contraction which allows FMA in baseline aarch64
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffp-contract=off")
+  if (${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+    # Suppress "parameter passing for argument of type 'std::pair<X,X>' notes" on ARM
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
   endif()
 endif()
 
 if (ENABLE_ML_MLPACK_TFS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-endif()
-
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-deprecated-declarations")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 endif()
 
 # address and thread sanitizer
@@ -673,18 +569,6 @@ if(ENABLE_ASAN OR ENABLE_TSAN OR ENABLE_UBSAN)
   set(ENABLE_STANDALONE_CALCITE ON)
 endif()
 
-# Embedded database
-option(ENABLE_DBE "Enable embedded database" OFF)
-if(ENABLE_DBE)
-  if(NOT MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
-  endif(NOT MSVC)
-  set(ENABLE_STANDALONE_CALCITE ON)
-  add_definitions("-DENABLE_EMBEDDED_DATABASE")
-  add_definitions("-DDBEngine_LIBNAME=\"${CMAKE_SHARED_LIBRARY_PREFIX}DBEngine${CMAKE_SHARED_LIBRARY_SUFFIX}\"")
-endif()
-
 # Code coverage
 option(ENABLE_CODE_COVERAGE "Enable compile time code coverage" OFF)
 if(ENABLE_CODE_COVERAGE)
@@ -711,9 +595,6 @@ include_directories(${CMAKE_SOURCE_DIR}
 ## Dependencies
 
 # LLVM
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  list(APPEND CMAKE_PREFIX_PATH "/usr/local/opt/llvm")
-endif()
 find_package(LLVM CONFIG REQUIRED)
 if (TARGET LLVM)
   get_target_property(LLVM_LIB LLVM IMPORTED_LOCATION_RELEASE)
@@ -738,11 +619,8 @@ endif()
 message(STATUS "Using CLANG_LIB: ${CLANG_LIB}")
 
 # Deps builds use separate libs for each clang component, while some distros now bundle into a single lib
-if (${CMAKE_SYSTEM_NAME} STREQUAL "Darwin" OR NOT LLVM_LIB)
+if (NOT LLVM_LIB)
   set(LLVM_COMPONENTS support mcjit core irreader option linker)
-  if(MSVC)
-    list(APPEND LLVM_COMPONENTS Passes)
-  endif(MSVC)
   option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
   if(ENABLE_INTEL_JIT_LISTENER)
     list(APPEND LLVM_COMPONENTS inteljitevents)
@@ -798,35 +676,27 @@ if(Boost_VERSION GREATER_EQUAL 108600)
   add_definitions("-DHAVE_BOOST_1_86")
 endif()
 
-# Allow explicit include statements to access third party headers directly.
-# Ex: raft/canonical/include/raft.h
-include_directories(ThirdParty/)
-
 # EGL
 include_directories(ThirdParty/egl)
 
 # Google Test and Google Mock
-if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-  add_definitions("-DGTEST_USE_OWN_TR1_TUPLE=0")
-endif()
+add_definitions("-DGTEST_USE_OWN_TR1_TUPLE=0")
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 
 # Google Benchmark
 set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Suppressing benchmark's tests" FORCE)
-if(WIN32)
-  set(HAVE_POSIX_REGEX 0)
-endif()
+set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "Suppress benchmark install rules for packaging" FORCE)
 add_subdirectory(ThirdParty/googlebenchmark)
-
-# idn2
-find_library(IDN2_LIBRARY idn2 REQUIRED) # Required by curl and gnutls
-find_library(UNISTRING_LIBRARY unistring REQUIRED) # Required by idn2
-set(IDN2_LIBRARIES ${IDN2_LIBRARY} ${UNISTRING_LIBRARY})
 
 # aws-sdk
 find_package(CURL REQUIRED QUIET)
-list(APPEND CURL_LIBRARIES ${OPENSSL_LIBRARIES} ${IDN2_LIBRARIES})
+# static libcurl may require OpenSSL/zlib (and optional zstd below) at link time
+list(APPEND CURL_LIBRARIES ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES})
+find_library(ZSTD_LIBRARY zstd)
+if(ZSTD_LIBRARY)
+  list(APPEND CURL_LIBRARIES ${ZSTD_LIBRARY})
+endif()
 option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
 if(ENABLE_AWS_S3)
   find_package(LibAwsS3)
@@ -837,7 +707,6 @@ if(ENABLE_AWS_S3)
   else()
     add_definitions("-DHAVE_AWS_S3")
     set(AwsS3_CURL_SUPPORT ${CURL_LIBRARIES})
-    list (APPEND LibAwsS3_LIBRARIES ${AwsS3_CURL_SUPPORT})
   endif()
 endif()
 # Arrow
@@ -874,28 +743,18 @@ endif()
 # RapidJSON
 include_directories(ThirdParty/rapidjson)
 add_definitions(-DRAPIDJSON_HAS_STDSTRING)
-if(NOT MSVC)
-  # At the present time the current vcpkg version of rapidjson is 2020-09-14:
-  # https://github.com/microsoft/vcpkg/blob/master/versions/r-/rapidjson.json
-  # and the Windows build fails because it does not have this fix:
-  # https://github.com/Tencent/rapidjson/pull/1568
-  # Once vcpkg's rapidjson has this fix then let's try not making this exception for MSVC.
-  # When this changes, remove this exception from all other similar CMakeLists.txt files too.
-  add_definitions(-DRAPIDJSON_NOMEMBERITERATORCLASS)
-endif()
+add_definitions(-DRAPIDJSON_NOMEMBERITERATORCLASS)
 
 
 # Linenoise
 add_subdirectory(ThirdParty/linenoise)
 
-# SQLite
-include_directories(ThirdParty/sqlite3)
-add_subdirectory(ThirdParty/sqlite3)
-
-# raft/canonical
-option(ENABLE_CANONICAL_RAFT "Enable Canonical Raft" OFF)
-if(ENABLE_CANONICAL_RAFT)
-  add_subdirectory(ThirdParty/raft/canonical)
+# SQLite3
+find_package(SQLite3 3.53 REQUIRED)
+if(PREFER_STATIC_LIBS)
+  # Static GDAL/PROJ (via GDALExtra) reference sqlite3 symbols; not every
+  # target that links GDAL also links SqliteConnector (e.g. GeoTypesTest).
+  list(APPEND GDAL_LIBRARIES SQLite::SQLite3)
 endif()
 
 # rdkafka
@@ -910,11 +769,6 @@ find_package(LibArchive REQUIRED)
 include_directories(${LibArchive_INCLUDE_DIRS})
 list(APPEND LibArchive_LIBRARIES ${MD_LIBRARY})
 
-#find_package(CURL REQUIRED QUIET)
-#if(CURL_FOUND)
-  #set(CURL_LIBRARIES ${LibAwsS3_SUPPORT_LIBRARIES})
-#endif()
-
 # bcrypt
 include_directories(ThirdParty/bcrypt)
 add_subdirectory(ThirdParty/bcrypt)
@@ -922,16 +776,20 @@ add_subdirectory(ThirdParty/bcrypt)
 # PicoSHA2
 include_directories(ThirdParty/PicoSHA2)
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+# ldap
+option(ENABLE_LDAP "Enable LDAP support" ON)
+if(ENABLE_LDAP)
+  add_definitions("-DHAVE_LDAP")
+endif()
+
 # opensaml
-  option(ENABLE_SAML "Enable SAML support" ON)
-  if(ENABLE_SAML)
-    find_package(OpenSaml)
-    if(NOT OpenSaml_FOUND)
-      set(ENABLE_SAML OFF CACHE BOOL "Enable SAML support" FORCE)
-    else()
-      add_definitions("-DHAVE_SAML")
-    endif()
+option(ENABLE_SAML "Enable SAML support" ON)
+if(ENABLE_SAML)
+  find_package(OpenSaml)
+  if(NOT OpenSaml_FOUND)
+    set(ENABLE_SAML OFF CACHE BOOL "Enable SAML support" FORCE)
+  else()
+    add_definitions("-DHAVE_SAML")
   endif()
 endif()
 
@@ -985,56 +843,11 @@ add_custom_target(thrift_gen DEPENDS ${gen_cpp_files})
 
 add_library(mapd_thrift ${gen_cpp_files})
 
-if(NOT MSVC)
-  target_compile_options(mapd_thrift PRIVATE -fPIC)
-endif()
+target_compile_options(mapd_thrift PRIVATE -fPIC)
 
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  option(ENABLE_OMNIVERSE_CONNECTOR "Enable Omniverse Connector" ON)
-  include_directories(Catalog/ee)
-  include_directories(Distributed/ee)
-else()
-  include_directories(Catalog/os)
-  include_directories(Distributed/os)
-endif()
-
-include_directories(ThirdParty/muparserx)
-add_subdirectory(ThirdParty/muparserx)
-
-set(MAPD_RENDERING_LIBRARIES "")
-if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
-  option(ENABLE_RENDERING "Build backend renderer" OFF)
-  if(ENABLE_RENDERING)
-    option(ENABLE_RENDER_TESTS "Build backend renderer tests" ON)
-    option(ENABLE_RENDER_LOGGER "Enable detailed render logging in debug builds" OFF)
-    option(ENABLE_SHADER_DEBUG_PRINTF "Enable Vulkan Shader Debug printf extension" OFF)
-
-    add_definitions("-DHAVE_RENDERING")
-    add_subdirectory(Rendering)
-    add_subdirectory(QueryRenderer)
-
-    include_directories(${RENDERING_INCLUDE_DIRS})
-    set(MAPD_RENDERING_LIBRARIES QueryRenderer Rendering)
-
-    set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-render")
-    if(${RENDERER_CONTEXT_TYPE} STREQUAL "GLX")
-      set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-glx")
-    endif()
-  endif()
-else()
-  set(ENABLE_RENDERING OFF CACHE BOOL "Build backend renderer" FORCE)
-endif()
-
-set(TIME_LIMITED_NUMBER_OF_DAYS "30" CACHE STRING "Number of days this build is valid for if build is time limited")
-
-option(TIME_LIMITED_BUILD "Build Time Limited Build" OFF)
-if(TIME_LIMITED_BUILD)
-  list(APPEND TIME_LIMITED_DEFINITIONS "TIME_LIMITED_BUILD")
-  list(APPEND TIME_LIMITED_DEFINITIONS "TIME_LIMITED_NUMBER_OF_DAYS=${TIME_LIMITED_NUMBER_OF_DAYS}")
-  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-${TIME_LIMITED_NUMBER_OF_DAYS}d")
-endif()
+option(ENABLE_OMNIVERSE_CONNECTOR "Enable Omniverse Connector" ON)
 
 option(ENABLE_PROFILER "Enable google perftools" OFF)
 if(ENABLE_PROFILER)
@@ -1049,8 +862,17 @@ else()
   set(PROFILER_LIBS "")
 endif()
 
+option(ENABLE_FSI_ODBC "Enable ODBC data wrapper" ON)
+if(ENABLE_FSI_ODBC)
+  add_definitions("-DEE_FSI_ODBC")
+endif()
+
 # Set RPATH for all executables
-set(CMAKE_INSTALL_RPATH "$ORIGIN/../ThirdParty/lib")
+if(IS_REDHAT)
+  set(CMAKE_INSTALL_RPATH "$ORIGIN/../ThirdParty/lib64")
+else()
+  set(CMAKE_INSTALL_RPATH "$ORIGIN/../ThirdParty/lib")
+endif()
 
 # Some subdirectories will add optional dependencies to initheavy so we want to declare
 # it before subdirs since it is otherwise independent.
@@ -1063,16 +885,31 @@ add_subdirectory(Calcite)
 get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
 include_directories(${CalciteThrift_BINARY_DIR})
 
-find_package(CPR)
-if (CPR_FOUND)
-  message(STATUS "Using cpr from deps")
-else()
-  # build old cpr_1.2 in ThirdParty sub-project
-  message(STATUS "Using ThirdParty/cpr_1.2")
-  set(USE_SYSTEM_CURL ON CACHE BOOL "Use the system curl for faster builds")
-  set(BUILD_CPR_TESTS OFF CACHE BOOL "Don't build cpr tests")
-  add_subdirectory(ThirdParty/cpr_1.2/cpr)
+include_directories(ThirdParty/muparserx)
+add_subdirectory(ThirdParty/muparserx)
+
+set(MAPD_RENDERING_LIBRARIES "")
+option(ENABLE_RENDERING "Build backend renderer" OFF)
+if(ENABLE_RENDERING)
+  option(ENABLE_RENDER_TESTS "Build backend renderer tests" ON)
+  option(ENABLE_RENDER_LOGGER "Enable detailed render logging in debug builds" OFF)
+  option(ENABLE_SHADER_DEBUG_PRINTF "Enable Vulkan Shader Debug printf extension" OFF)
+
+  option(HOTLOAD_SHADER_TEMPLATE_FILES "Enable dynamic reloading of glsl shader templates" OFF)
+
+  add_definitions("-DHAVE_RENDERING")
+  add_subdirectory(GfxDriver)
+  add_subdirectory(GfxInterop)
+  add_subdirectory(QueryRenderer)
+  add_subdirectory(ExecuteRenderInterface)
+
+  include_directories(${GFXDRIVER_INCLUDE_DIRS})
+  set(MAPD_RENDERING_LIBRARIES ExecuteRenderInterface QueryRenderer GfxInterop GfxDriver)
+
+  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-render")
 endif()
+
+find_package(CPR REQUIRED)
 
 if(ENABLE_RUNTIME_LIBS)
   if(ENABLE_TORCH_TFS)
@@ -1101,42 +938,20 @@ add_subdirectory(ImportExport)
 add_subdirectory(QueryEngine)
 add_subdirectory(DataMgr)
 add_subdirectory(CudaMgr)
-add_subdirectory(L0Mgr)
 add_subdirectory(LockMgr)
 add_subdirectory(Logger)
 add_subdirectory(MigrationMgr)
 add_subdirectory(Fragmenter)
 add_subdirectory(Shared)
-add_subdirectory(OSDependent)
 add_subdirectory(Utils)
 add_subdirectory(QueryRunner)
 add_subdirectory(SQLFrontend)
-if (NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
-  add_subdirectory(Licensing)
-endif()
 add_subdirectory(TableArchiver)
 add_subdirectory(Geospatial)
-add_subdirectory(Distributed)
 add_subdirectory(UdfCompiler)
 add_subdirectory(ThriftHandler)
 
-if(ENABLE_DBE)
-  add_subdirectory(Embedded)
-endif()
-
-option(ENABLE_ODBC "Build ODBC driver" OFF)
-if(ENABLE_ODBC)
-  add_subdirectory(ODBC)
-endif()
-
-set(MAPD_LIBRARIES OSDependent Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer StringOps ImportExport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Logger Geospatial)
-
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  list(APPEND MAPD_LIBRARIES Distributed)
-  if(ENABLE_DISTRIBUTED_5_0)
-    list(APPEND MAPD_LIBRARIES StringDictionaryThread)
-  endif()
-endif()
+set(MAPD_LIBRARIES Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer StringOps ImportExport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Logger Geospatial)
 
 list(APPEND MAPD_LIBRARIES Calcite)
 
@@ -1148,13 +963,7 @@ endif()
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 if(ENABLE_PDAL)
-  # Correct link issue in test programs
-  list(APPEND GDAL_LIBRARIES ${CURL_LIBRARIES})
   list(APPEND MAPD_LIBRARIES ${PDAL_LIBRARIES} ${GDAL_LIBRARIES} ${GDALExtra_LIBRARIES})
-endif()
-
-if(ENABLE_LICENSING_AWS)
-  list(APPEND MAPD_LIBRARIES AWSMarketplace)
 endif()
 
 if (ENABLE_ML_ONEDAL_TFS)
@@ -1168,12 +977,8 @@ endif()
 
 list(APPEND MAPD_LIBRARIES ${TBB_LIBS})
 
-if(ENABLE_CANONICAL_RAFT)
-  list(APPEND MAPD_LIBRARIES raft_canonical)
-endif()
-
 if(CPR_FOUND)
-  list(APPEND MAPD_LIBRARIES ${CPR_LIBRARY})
+  list(APPEND MAPD_LIBRARIES ${CPR_LIBRARIES})
 endif()
 
 option(ENABLE_TESTS "Build unit tests" ON)
@@ -1203,7 +1008,7 @@ add_custom_command(
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/TRow.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/heavy.thrift)
+    ARGS -gen java:generated_annotations=suppress -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/heavy.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
@@ -1211,7 +1016,7 @@ add_custom_command(
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/common.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/common.thrift)
+    ARGS -gen java:generated_annotations=suppress -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/common.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
@@ -1219,14 +1024,14 @@ add_custom_command(
         ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/serialized_result_set.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)
+    ARGS -gen java:generated_annotations=suppress -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/calciteserver/CalciteServer.java
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -I ${CMAKE_SOURCE_DIR} -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
+    ARGS -gen java:generated_annotations=suppress -r -I ${CMAKE_SOURCE_DIR} -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
 
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/)
 
@@ -1271,11 +1076,14 @@ add_custom_target(get_git_hash ALL
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
-target_link_libraries(heavydb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT} ${OS_SPECIFIC_LICENSING_LIBS})
+# note if aws isn't enabled Aws_CURL_SUPPORT is empty
+target_link_libraries(heavydb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+    ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
+    ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT})
 
 target_link_libraries(initheavy mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
-    ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT} ${OS_SPECIFIC_LICENSING_LIBS})
+    ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")
@@ -1294,6 +1102,8 @@ find_program(JQ_EXECUTABLE NAMES jq)
 if (NOT ${JQ_EXECUTABLE} STREQUAL "JQ_EXECUTABLE-NOTFOUND")
   file(WRITE ${CMAKE_BINARY_DIR}/jq.filter "map(select(.file | test(\".*/(build|ThirdParty)/.*\") | not))")
   add_custom_target(run-clang-tidy
+# For now add these as a dependency, do it better later
+    DEPENDS ${CMAKE_BINARY_DIR}/gen-cpp/Heavy.h ${CMAKE_BINARY_DIR}/Parser/parser.h
     COMMAND mkdir -p clang-tidy
     COMMAND ${JQ_EXECUTABLE} -f jq.filter ${CMAKE_BINARY_DIR}/compile_commands.json > clang-tidy/compile_commands.json
     COMMAND cd clang-tidy && ${CMAKE_SOURCE_DIR}/ThirdParty/clang/run-clang-tidy.py -quiet -format -fix -header-filter="${CMAKE_SOURCE_DIR}/.*" 2> /dev/null
@@ -1306,7 +1116,21 @@ endif()
 # doxygen
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/docs/CMakeLists.txt)
+  configure_file(
+    ${CMAKE_SOURCE_DIR}/Doxyfile.in ${CMAKE_BINARY_DIR}/Doxyfile @ONLY)
+  add_custom_target(doxygen ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Generate API documentation with Doxygen"
+    VERBATIM
+    USES_TERMINAL
+  )
+  add_custom_target(doxygen_zip zip -r doxygen-${MAPD_GIT_HASH}.zip doxygen
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Generating .zip with API documentation from Doxygen"
+    VERBATIM
+    USES_TERMINAL
+  )
+  add_dependencies(doxygen_zip doxygen)
 endif(DOXYGEN_FOUND)
 
 # Packaging
@@ -1316,22 +1140,23 @@ if(NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "debug" AND NOT "${CMAKE_BUILD_TYPE_
 else()
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-debug")
 endif()
-set(CPACK_PACKAGE_VENDOR "HEAVY.AI, Inc.")
-set(CPACK_PACKAGE_CONTACT "support@heavy.ai")
+set(CPACK_PACKAGE_VENDOR "NVIDIA Corporation")
+#set(CPACK_PACKAGE_CONTACT "TBD")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "HeavyDB Database")
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/CMakePackaging.txt)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "default-jre-headless | openjdk-8-jre-headless | java8-runtime-headless, bsdmainutils, curl | wget")
 set(CPACK_RPM_PACKAGE_REQUIRES "java-headless, util-linux, curl")
 set(CPACK_RPM_PACKAGE_AUTOREQ OFF)
 set(CPACK_RPM_SPEC_MORE_DEFINE "%define __jar_repack %{nil}")
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libldap-2.4-2")
-endif()
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libldap-2.4-2")
 if(ENABLE_RENDERING)
-  set(CPACK_RPM_PACKAGE_REQUIRES "${CPACK_RPM_PACKAGE_REQUIRES}, libX11, libXext")
-  set(CPACK_DEBIAN_PACKAGE_DEPENDS "${CPACK_DEBIAN_PACKAGE_DEPENDS}, libx11-6, libxext6")
-  get_filename_component(VULKAN_LIBRARY_PATH ${VULKAN_LIBRARY} DIRECTORY)
-  install(DIRECTORY ${VULKAN_LIBRARY_PATH} DESTINATION "ThirdParty" FILES_MATCHING PATTERN "libvulkan.so*")
+  get_filename_component(VULKAN_LIBRARY_DIR ${VULKAN_LIBRARY} DIRECTORY)
+  file(GLOB VULKAN_LOADER_LIBS "${VULKAN_LIBRARY_DIR}/libvulkan.so*")
+  if(IS_REDHAT)
+    install(FILES ${VULKAN_LOADER_LIBS} DESTINATION "ThirdParty/lib64")
+  else()
+    install(FILES ${VULKAN_LOADER_LIBS} DESTINATION "ThirdParty/lib")
+  endif()
 endif()
 
 set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
@@ -1346,21 +1171,13 @@ install(FILES Logger/Logger.h DESTINATION "Logger/" COMPONENT "include")
 # Frontend
 message(STATUS "Webserver URL: \"${MAPD_WEBSERVER_BASE_URL}\"")
 
-option(MAPD_IMMERSE_DOWNLOAD "Download OmniSci Immerse for packaging" OFF)
+option(MAPD_IMMERSE_DOWNLOAD "Download HEAVY.AI Immerse for packaging" ON)
 set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
+set(MAPD_IMMERSE_FILE "${MAPD_BUILDS_REPO_PATH}/frontend/${MAPD_IMMERSE_BUILD_ID}.zip" CACHE STRING "Local path to Immerse frontend zip")
 if(MAPD_IMMERSE_DOWNLOAD)
-  message(STATUS "Immerse URL: \"${MAPD_IMMERSE_URL}\"")
   include(ExternalProject)
-  externalproject_add(frontend
-    URL ${MAPD_IMMERSE_URL}
-    PREFIX external
-    CONFIGURE_COMMAND ""
-    UPDATE_COMMAND ""
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-    LOG_DOWNLOAD on
-    DOWNLOAD_EXTRACT_TIMESTAMP true
-    )
+  include(heavyai_functions)
+  externalproject_add_url_or_file(frontend ${MAPD_IMMERSE_URL} ${MAPD_IMMERSE_FILE})
   externalproject_get_property(frontend source_dir)
 
   install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
@@ -1368,7 +1185,7 @@ if(MAPD_IMMERSE_DOWNLOAD)
   list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/frontend)
 
   ## Go web server
-  if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Immerse")
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Immerse")
     add_subdirectory(Immerse)
   endif()
 endif()
@@ -1376,20 +1193,15 @@ endif()
 # HeavyIQ
 option(HEAVYIQ_DOWNLOAD "Download HeavyIQ for packaging" ON)
 if(HEAVYIQ_DOWNLOAD)
-  if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/HeavyIQ")
+  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/HeavyIQ")
     add_subdirectory(HeavyIQ)
   endif()
 endif()
 
-add_subdirectory(ThirdParty/generate_cert)
-
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    install(FILES systemd/heavydb_sd_server.service.in systemd/heavydb_sd_server@.service.in DESTINATION systemd)
-    install(FILES systemd/heavy-sds.conf.in DESTINATION systemd)
-  endif()
   install(FILES systemd/heavydb.service.in systemd/heavydb@.service.in DESTINATION systemd)
+  install(FILES systemd/heavy_web_server.service.in systemd/heavy_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/heavyiq.service.in DESTINATION systemd)
   install(FILES systemd/heavy.conf.in DESTINATION systemd)
   install(PROGRAMS systemd/install_heavy_systemd.sh DESTINATION systemd)
@@ -1405,6 +1217,9 @@ file(GLOB_RECURSE JAVA_FTL RELATIVE ${CMAKE_SOURCE_DIR} java/calcite/src/main/co
 file(GLOB_RECURSE JAVA_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} java/**/*.java)
 list(FILTER JAVA_SOURCES EXCLUDE REGEX ".*/gen/.*")
 list(FILTER JAVA_SOURCES EXCLUDE REGEX ".*/generated-sources/.*")
+set(JAVA_ASSEMBLY_DESCRIPTORS
+  ${CMAKE_SOURCE_DIR}/java/heavyaijdbc/src/assembly/runtime.xml
+  ${CMAKE_SOURCE_DIR}/java/heavydb/src/assembly/production-utilities.xml)
 
 set(OMNISCI_JAR_RELEASE_VERSION "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}")
 if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
@@ -1414,21 +1229,18 @@ endif()
 set (JDBC_JAR "heavyai-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 set (UTILITY_JAR "heavyai-utility-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
-set(MVN_PATH_COMMAND "")
-if(NOT MSVC)
-    set(MVN_PATH_COMMAND "MVNPATH=${CMAKE_SOURCE_DIR}/java")
-endif()
+set(MVN_PATH_COMMAND "MVNPATH=${CMAKE_SOURCE_DIR}/java")
 
-set(THRIFT_MVN_VERSION "0.17.0") # independent of Thrift C++ version
+set(THRIFT_MVN_VERSION "0.24.0") # independent of Thrift C++ version
 add_custom_command(
   OUTPUT
     ${CMAKE_BINARY_DIR}/bin/${UTILITY_JAR}
     ${CMAKE_BINARY_DIR}/bin/${JDBC_JAR}
-    ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
+    ${CMAKE_BINARY_DIR}/bin/calcite-1.41.0-SNAPSHOT-jar-with-dependencies.jar
     COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -T 4 -l ${CMAKE_BINARY_DIR}/mvn_build.log -e clean install -Dthrift.version="${THRIFT_MVN_VERSION}" -Dmaven.compiler.showDeprecation=true -Dmaven.compiler.showWarnings=true -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}" -Djava.net.preferIPv4Stack=true -Dmaven.wagon.http.retryHandler.count=3 -DLOG_DIR="${CMAKE_BINARY_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/heavydb/target/${UTILITY_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/heavyaijdbc/target/${JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.41.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
     ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ai/heavy/thrift/server/Heavy.java
@@ -1436,6 +1248,7 @@ add_custom_command(
     ${CMAKE_SOURCE_DIR}/java/calcite/src/main/codegen/config.fmpp
     ${CMAKE_SOURCE_DIR}/java/pom.xml
     ${CMAKE_SOURCE_DIR}/heavy.thrift
+    ${JAVA_ASSEMBLY_DESCRIPTORS}
     ${JAVA_POM}
     ${JAVA_SOURCES}
     ${JAVA_FTL}
@@ -1443,7 +1256,7 @@ add_custom_command(
 add_custom_target(mapd_java_components ALL DEPENDS
   ${CMAKE_BINARY_DIR}/bin/${UTILITY_JAR}
   ${CMAKE_BINARY_DIR}/bin/${JDBC_JAR}
-  ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
+  ${CMAKE_BINARY_DIR}/bin/calcite-1.41.0-SNAPSHOT-jar-with-dependencies.jar)
 add_custom_target(mapd_java_clean
   COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -q clean -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
@@ -1451,13 +1264,14 @@ add_custom_target(mapd_java_clean
 add_dependencies(clean-all mapd_java_clean)
 install(FILES ${CMAKE_SOURCE_DIR}/java/heavydb/target/${UTILITY_JAR} DESTINATION bin COMPONENT "jar")
 install(FILES ${CMAKE_SOURCE_DIR}/java/heavyaijdbc/target/${JDBC_JAR} DESTINATION bin COMPONENT "jar")
-install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
+install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.41.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin COMPONENT "jar")
 
 add_custom_target(maven_populate_cache
   COMMAND ${MVN_PATH_COMMAND} ${MVN_EXECUTABLE} -q verify -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   )
 
+set_directory_properties(PROPERTIES ADDITIONAL_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
 install(TARGETS initheavy heavydb DESTINATION bin COMPONENT "exe")
@@ -1471,37 +1285,15 @@ install(FILES common.thrift DESTINATION "." COMPONENT "thrift")
 install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
 install(FILES QueryEngine/extension_functions.thrift DESTINATION "QueryEngine/" COMPONENT "thrift")
 
-if(NOT PREFER_STATIC_LIBS AND NOT ENABLE_CONDA)
+if(NOT PREFER_STATIC_LIBS)
   install(FILES ${Boost_LIBRARIES} DESTINATION ThirdParty/lib)
 endif()
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  set(EULA_FILE "${CMAKE_SOURCE_DIR}/EULA-EE.txt")
-else()
-  set(EULA_FILE "${CMAKE_SOURCE_DIR}/LICENSE.md")
-endif()
-
-if("${MAPD_EDITION_LOWER}" STREQUAL "os")
-  install(FILES LICENSE.md DESTINATION "." COMPONENT "doc")
-endif()
-
-set(CPACK_RESOURCE_FILE_LICENSE "${EULA_FILE}")
-install(FILES "${EULA_FILE}" DESTINATION "."  COMPONENT "doc")
-
 install(PROGRAMS startheavy DESTINATION ".")
+install(PROGRAMS scripts/nvidia-graphics-env.sh DESTINATION "scripts")
 install(PROGRAMS scripts/innerstartheavy DESTINATION "scripts")
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  install(PROGRAMS scripts/ee/start_heavyiq.sh DESTINATION "scripts/ee")
-endif()
-install(PROGRAMS insert_sample_data DESTINATION ".")
+install(PROGRAMS scripts/start_heavyiq.sh DESTINATION "scripts")
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  if(ENABLE_CUDA)
-    install(FILES docker/sds/Dockerfile.cuda RENAME Dockerfile DESTINATION "docker/sds")
-  else()
-    install(FILES docker/sds/Dockerfile.cpu RENAME Dockerfile DESTINATION "docker/sds")
-  endif()
-endif()
 install(FILES docker/README.md DESTINATION "docker")
 if(ENABLE_CUDA OR ENABLE_RENDERING)
   install(FILES docker/Dockerfile.cuda RENAME Dockerfile DESTINATION "docker")
@@ -1509,9 +1301,32 @@ else()
   install(FILES docker/Dockerfile.cpu RENAME Dockerfile DESTINATION "docker")
 endif()
 
-# does not account for cross-compiling or Windows
+
+# provide backwards compatible symlinks to the old names through < v6.3.0
+if("${MAPD_VERSION_RAW}" VERSION_LESS "6.3" AND ${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E create_symlink heavydb omnisci_server
+    COMMAND ${CMAKE_COMMAND} -E create_symlink heavy_web_server omnisci_web_server
+    COMMAND ${CMAKE_COMMAND} -E create_symlink heavysql omnisql
+    COMMAND ${CMAKE_COMMAND} -E create_symlink initheavy initdb
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+  )
+  install(FILES
+    ${CMAKE_BINARY_DIR}/bin/omnisci_server
+    ${CMAKE_BINARY_DIR}/bin/omnisci_web_server
+    ${CMAKE_BINARY_DIR}/bin/omnisql
+    ${CMAKE_BINARY_DIR}/bin/initdb
+    DESTINATION "bin"
+  )
+endif()
+
 execute_process(COMMAND uname -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${MAPD_EDITION_LOWER}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${MAPD_HOST_SYSTEM_ARCHITECTURE}${MAPD_PACKAGE_FLAGS}")
+# OS/distro segment of the package filename. Defaults to CMAKE_SYSTEM_NAME (e.g.
+# "Linux"); pass -DMAPD_PACKAGE_DISTRO_NAME=ubuntu22.04 to embed the distro
+# instead — "Linux" is implicit for these packages.
+set(MAPD_PACKAGE_DISTRO_NAME "${CMAKE_SYSTEM_NAME}" CACHE STRING
+  "OS/distro segment of the cpack package filename (e.g. ubuntu22.04, rockylinux8)")
+set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${CPACK_PACKAGE_VERSION}-${MAPD_PACKAGE_DISTRO_NAME}-${MAPD_HOST_SYSTEM_ARCHITECTURE}${MAPD_PACKAGE_FLAGS}")
 
 set(CPACK_GENERATOR "STGZ")
 

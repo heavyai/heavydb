@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../Shared/DateConverters.h"
@@ -20,15 +9,9 @@
 #include "arrow/ipc/dictionary.h"
 #include "arrow/ipc/options.h"
 
-#ifndef _MSC_VER
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <sys/types.h>
-#else
-// IPC shared memory not yet supported on windows
-using key_t = size_t;
-#define IPC_PRIVATE 0
-#endif
 
 #include <algorithm>
 #include <cerrno>
@@ -316,7 +299,6 @@ void convert_column(ResultSetPtr result,
   }
 }
 
-#ifndef _MSC_VER
 std::pair<key_t, void*> get_shm(size_t shmsz) {
   if (!shmsz) {
     return std::make_pair(IPC_PRIVATE, nullptr);
@@ -353,19 +335,13 @@ std::pair<key_t, void*> get_shm(size_t shmsz) {
 
   return std::make_pair(key, ipc_ptr);
 }
-#endif
 
 std::pair<key_t, std::shared_ptr<arrow::Buffer>> get_shm_buffer(size_t size) {
-#ifdef _MSC_VER
-  throw std::runtime_error("Arrow IPC not yet supported on Windows.");
-  return std::make_pair(0, nullptr);
-#else
   auto [key, ipc_ptr] = get_shm(size);
   std::shared_ptr<arrow::Buffer> buffer(
       new arrow::MutableBuffer(static_cast<uint8_t*>(ipc_ptr), size));
   return std::make_pair<key_t, std::shared_ptr<arrow::Buffer>>(std::move(key),
                                                                std::move(buffer));
-#endif
 }
 
 void remap_string_values(const ArrowResultSetConverter::ColumnBuilder& column_builder,
@@ -424,9 +400,6 @@ void remap_string_values(const ArrowResultSetConverter::ColumnBuilder& column_bu
 namespace arrow {
 
 key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
-#ifdef _MSC_VER
-  throw std::runtime_error("Arrow IPC not yet supported on Windows.");
-#else
   auto [key, ipc_ptr] = get_shm(data->size());
   // copy the arrow records buffer to shared memory
   // TODO(ptaylor): I'm sure it's possible to tell Arrow's RecordBatchStreamWriter to
@@ -435,7 +408,6 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
   // detach from the shared memory segment
   shmdt(ipc_ptr);
   return key;
-#endif
 }
 
 }  // namespace arrow
@@ -1214,7 +1186,6 @@ void ArrowResultSet::deallocateArrowResultBuffer(
     const ExecutorDeviceType device_type,
     const size_t device_id,
     std::shared_ptr<Data_Namespace::DataMgr>& data_mgr) {
-#ifndef _MSC_VER
   // CPU buffers skip the sm handle, serializing the entire RecordBatch to df.
   // Remove shared memory on sysmem
   if (!result.sm_handle.empty()) {
@@ -1246,7 +1217,6 @@ void ArrowResultSet::deallocateArrowResultBuffer(
   // CUDA buffers become owned by the caller, and will automatically be freed
   // TODO: What if the client never takes ownership of the result? we may want to
   // establish a check to see if the GPU buffer still exists, and then free it.
-#endif
 }
 
 void ArrowResultSetConverter::initializeColumnBuilder(

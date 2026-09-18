@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -190,28 +179,6 @@ struct FileContentsEscaper {
   void quoteAndPrint(std::ostream&) const;
 };
 std::ostream& operator<<(std::ostream&, FileContentsEscaper const&);
-
-// Same as strftime(buf, max, "%F", tm) but guarantees that the year is
-// zero-padded to a minimum length of 4. Return the number of characters
-// written, not including null byte. If max is not large enough, return 0.
-size_t formatDate(char* buf, size_t const max, int64_t const unixtime);
-
-// Same as strftime(buf, max, "%F %T", tm) but guarantees that the year is
-// zero-padded to a minimum length of 4. Return the number of characters
-// written, not including null byte. If max is not large enough, return 0.
-// Requirement: 0 <= dimension <= 9.
-size_t formatDateTime(char* buf,
-                      size_t const max,
-                      int64_t const timestamp,
-                      int const dimension,
-                      bool use_iso_format = false);
-
-// Write unixtime in seconds since epoch as "HH:MM:SS" format.
-size_t formatHMS(char* buf, size_t const max, int64_t const unixtime);
-
-// Write unix time in seconds since epoch as ISO 8601 format for the given temporal type.
-std::string convert_temporal_to_iso_format(const SQLTypeInfo& type_info,
-                                           int64_t unix_time);
 
 // Result of division where quot is floored and rem is unsigned.
 struct DivUMod {
@@ -414,14 +381,6 @@ enum class endian {
 
 }  // namespace shared
 
-#elif defined(_WIN32)  // compiler
-
-namespace shared {
-
-enum class endian { little = 0, big = 1, native = little };
-
-}  // namespace shared
-
 #else  // compiler
 
 #error "unexpected compiler"
@@ -491,7 +450,7 @@ constexpr T byteswap(T n) noexcept {
 
 namespace shared {
 
-using byteswap = std::byteswap;  // expected in C++23
+using std::byteswap;
 
 }  // namespace shared
 

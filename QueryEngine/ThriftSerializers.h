@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -26,11 +15,9 @@
 #include "gen-cpp/serialized_result_set_types.h"
 
 #include "Logger/Logger.h"
-#include "QueryEngine/AggregatedColRange.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/Descriptors/CountDistinctDescriptor.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
-#include "QueryEngine/StringDictionaryGenerations.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TargetMetaInfo.h"
 #include "Shared/TargetInfo.h"
@@ -124,59 +111,6 @@ inline SQLAgg agg_kind_from_thrift(const TAggKind::type agg) {
 }
 
 #undef UNTHRIFT_AGGKIND_CASE
-
-inline AggregatedColRange column_ranges_from_thrift(
-    const std::vector<TColumnRange>& thrift_column_ranges) {
-  AggregatedColRange column_ranges;
-  for (const auto& thrift_column_range : thrift_column_ranges) {
-    PhysicalInput phys_input{thrift_column_range.col_id,
-                             thrift_column_range.table_id,
-                             thrift_column_range.db_id};
-    switch (thrift_column_range.type) {
-      case TExpressionRangeType::INTEGER:
-        column_ranges.setColRange(
-            phys_input,
-            ExpressionRange::makeIntRange(thrift_column_range.int_min,
-                                          thrift_column_range.int_max,
-                                          thrift_column_range.bucket,
-                                          thrift_column_range.has_nulls));
-        break;
-      case TExpressionRangeType::FLOAT:
-        column_ranges.setColRange(
-            phys_input,
-            ExpressionRange::makeFloatRange(thrift_column_range.fp_min,
-                                            thrift_column_range.fp_max,
-                                            thrift_column_range.has_nulls));
-        break;
-      case TExpressionRangeType::DOUBLE:
-        column_ranges.setColRange(
-            phys_input,
-            ExpressionRange::makeDoubleRange(thrift_column_range.fp_min,
-                                             thrift_column_range.fp_max,
-                                             thrift_column_range.has_nulls));
-        break;
-      case TExpressionRangeType::INVALID:
-        column_ranges.setColRange(phys_input, ExpressionRange::makeInvalidRange());
-        break;
-      default:
-        CHECK(false);
-    }
-  }
-  return column_ranges;
-}
-
-inline StringDictionaryGenerations string_dictionary_generations_from_thrift(
-    const std::vector<TDictionaryGeneration>& thrift_string_dictionary_generations) {
-  StringDictionaryGenerations string_dictionary_generations;
-  for (const auto& thrift_string_dictionary_generation :
-       thrift_string_dictionary_generations) {
-    string_dictionary_generations.setGeneration(
-        {thrift_string_dictionary_generation.db_id,
-         thrift_string_dictionary_generation.dict_id},
-        thrift_string_dictionary_generation.entry_count);
-  }
-  return string_dictionary_generations;
-}
 
 inline TTypeInfo type_info_to_thrift(const SQLTypeInfo& ti) {
   TTypeInfo thrift_ti;

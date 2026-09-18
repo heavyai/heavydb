@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "GroupByAndAggregate.h"
@@ -49,7 +38,6 @@
 #include <string_view>
 #include <thread>
 
-bool g_cluster{false};
 bool g_bigint_count{false};
 bool g_enable_mode_on_gpu{false};
 int g_hll_precision_bits{11};
@@ -60,7 +48,6 @@ extern size_t g_approx_quantile_buffer;
 extern size_t g_approx_quantile_centroids;
 extern int64_t g_bitmap_memory_limit;
 extern size_t g_default_max_groups_buffer_entry_guess;
-extern size_t g_leaf_count;
 extern size_t g_baseline_groupby_threshold;
 
 bool ColRangeInfo::isEmpty() const {
@@ -446,29 +433,19 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
   if (shard_count) {
     CHECK(!col_range_info.bucket);
     /*
-      when a node has fewer devices than shard count,
-      a) In a distributed setup, the minimum distance between two keys would be
-      device_count because shards are stored consecutively across the physical tables,
-      i.e if a shard column has values 0 to 9, and 3 shards on each leaf, then node 1
-      would have values: 0,1,2,6,7,8 and node 2 would have values: 3,4,5,9. If each leaf
-      node has only 1 device, in this case, all the keys from each node are loaded on
-      the device each.
-
-      b) In a single node setup, the distance would be minimum of device_count or
-      difference of device_count - shard_count. For example: If a single node server
-      running on 3 devices a shard column has values 0 to 9 in a table with 4 shards,
+      When a node has fewer devices than shard count, the minimum distance between two
+      keys depends on device count and shard count. For example, on a single-node server
+      with 3 devices and a shard column with values 0 to 9 in a table with 4 shards,
       device to fragment keys mapping would be: device 1 - 4,8,3,7 device 2 - 1,5,9
-      device 3 - 2, 6 The bucket value would be 4(shards) - 3(devices) = 1 i.e. minimum
-      of device_count or difference.
+      device 3 - 2, 6. The bucket value would be 4(shards) - 3(devices) = 1.
 
       When a node has device count equal to or more than shard count then the
-      minimum distance is always at least shard_count * no of leaf nodes.
+      minimum distance is always at least shard_count.
     */
     if (device_count < shard_count) {
-      bucket = g_leaf_count ? std::max(device_count, static_cast<size_t>(1))
-                            : std::min(device_count, shard_count - device_count);
+      bucket = std::min(device_count, shard_count - device_count);
     } else {
-      bucket = shard_count * std::max(g_leaf_count, static_cast<size_t>(1));
+      bucket = shard_count;
     }
   }
 
@@ -1710,7 +1687,7 @@ bool GroupByAndAggregate::codegenAggCalls(
   // different sizes (only used when actual column width sizes are used)
   llvm::Value* output_buffer_byte_stream{nullptr};
   llvm::Value* out_row_idx{nullptr};
-  if (query_mem_desc.didOutputColumnar() && !g_cluster &&
+  if (query_mem_desc.didOutputColumnar() &&
       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
     output_buffer_byte_stream = LL_BUILDER.CreateBitCast(
         std::get<0>(agg_out_ptr_w_idx),
@@ -1762,8 +1739,7 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
   if (query_mem_desc.didOutputColumnar()) {
     // TODO(Saman): remove the second columnar branch, and support all query description
     // types through the first branch. Then, input arguments should also be cleaned up
-    if (!g_cluster &&
-        query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+    if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
       CHECK(chosen_bytes == 1 || chosen_bytes == 2 || chosen_bytes == 4 ||
             chosen_bytes == 8);
       CHECK(output_buffer_byte_stream);
@@ -1771,11 +1747,7 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
       size_t col_off = query_mem_desc.getColOffInBytes(agg_out_off);
       // multiplying by chosen_bytes, i.e., << log2(chosen_bytes)
       auto out_per_col_byte_idx =
-#ifdef _WIN32
-          LL_BUILDER.CreateShl(out_row_idx, __lzcnt(chosen_bytes) - 1);
-#else
           LL_BUILDER.CreateShl(out_row_idx, __builtin_ffs(chosen_bytes) - 1);
-#endif
       auto byte_offset = LL_BUILDER.CreateAdd(out_per_col_byte_idx,
                                               LL_INT(static_cast<int64_t>(col_off)));
       byte_offset->setName("out_byte_off_target_" + std::to_string(target_idx));

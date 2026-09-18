@@ -3,12 +3,575 @@
 
 name: Weekly Tests
 
+# Ported from Jenkins weekly-job-pipeline onto the same container/build->image
+# ->test framework as pr-required-checks.yml. Excluded per scope: distributed
+# (warmup-dist), product-image (trivy, jdbc), external-repo (pyheavydb,
+# heavyconnect benchmark), ODBC/Windows.
+#
+# De-duplication: arrow-ipc, ctas, read-only, extended-geo and warmup all run
+# against one shared gpu-release build image (build once, fan out).
+#
+# Triggering: workflow_dispatch only. Original schedule preserved (commented):
+# on:
+#   schedule:
+#     - cron: "0 14 * * 0"   # Sun 06:00 PT (PST+8)
+
 on:
   workflow_dispatch:
+    inputs:
+      sha1:
+        description: "SHA or branch to test"
+        default: ""
+      jobs:
+        description: "Subset of jobs to run"
+        type: choice
+        default: all
+        options:
+          - all
+          - arrow-ipc
+          - ctas
+          - read-only
+          - extended-geo
+          - warmup
+          - valgrind
+          - disk-cache-tsan
+          - minio
+
+permissions:
+  contents: read
+  packages: write
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  placeholder:
+  setup:
+    name: setup
+    runs-on: linux-amd64-cpu16
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      jobs_filter: ${{ steps.resolve.outputs.jobs_filter }}
+    steps:
+      - id: resolve
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const input = ((context.payload.inputs || {}).sha1 || '').trim();
+            let sha = context.sha;
+            if (input) {
+              const { data } = await github.rest.repos.getCommit({ owner, repo, ref: input });
+              sha = data.sha;
+            }
+            core.setOutput('sha', sha);
+            core.setOutput('jobs_filter', ((context.payload.inputs || {}).jobs || 'all'));
+
+  # ===========================================================================
+  # Shared GPU release build -> arrow-ipc, ctas, read-only, extended-geo, warmup
+  # ===========================================================================
+  build-gpu-release:
+    name: build (gpu-release)
+    needs: setup
+    if: ${{ contains(fromJSON('["all","arrow-ipc","ctas","read-only","extended-geo","warmup"]'), needs.setup.outputs.jobs_filter) }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=ON
+      MAKE_TARGETS: "mapd_java_components heavydb initheavy heavysql ArrowIpcIntegrationTest CtasIntegrationTest GeospatialTest"
+      IMAGE_NAME: "pr-build/gpu-release"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config scripts startheavy"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: gpu-release-mvn-build-log
+
+  arrow-ipc:
+    name: test (arrow-ipc)
+    needs: [setup, build-gpu-release]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'arrow-ipc' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-gpu-release.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: Tests/ArrowIpcIntegrationTest
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run ArrowIpcIntegrationTest (against live server)
+        run: scripts/ci/run_server.sh
+
+  ctas:
+    name: test (ctas)
+    needs: [setup, build-gpu-release]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'ctas' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-gpu-release.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: Tests/CtasIntegrationTest
+      SERVER_FLAGS: "--allowed-import-paths='[\"/\"]' --allowed-export-paths='[\"/\"]'"
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run CtasIntegrationTest (against live server)
+        run: scripts/ci/run_server.sh
+
+  read-only:
+    name: test (read-only)
+    needs: [setup, build-gpu-release]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'read-only' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-gpu-release.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      SERVER_CMD: "../startheavy --read-only"
+      CLIENT_CMD: |
+        echo "select count(*) from heavyai_us_states;" | ./bin/heavysql -a -p HyperInteractive
+        echo "update heavyai_us_states set abbr='22' where abbr='11';" | ./bin/heavysql -a -p HyperInteractive || echo "IGNORE ERRORS (read-only)"
+        echo "delete from heavyai_us_states where abbr='11';" | ./bin/heavysql -a -p HyperInteractive || echo "IGNORE ERRORS (read-only)"
+        echo "select count(*) from heavyai_us_states;" | ./bin/heavysql -a -p HyperInteractive
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run read-only assertions
+        run: scripts/ci/run_server.sh
+
+  extended-geo:
+    name: test (extended-geo)
+    needs: [setup, build-gpu-release]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'extended-geo' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-gpu-release.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: Tests/GeospatialTest
+      EXTRA_ARGS: --all-utm-zones
+      RESULTS_FILE: test-results-extended-geo.xml
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run GeospatialTest (all UTM zones)
+        run: scripts/ci/run_gtest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-extended-geo
+          path: /workspace/build/test-results-extended-geo.xml
+          if-no-files-found: ignore
+
+  warmup:
+    name: test (warmup)
+    needs: [setup, build-gpu-release]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'warmup' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-gpu-release.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+    steps:
+      - name: Run warmup queries
+        run: scripts/ci/run_warmup.sh
+
+  # ===========================================================================
+  # valgrind — ExecuteTest under memcheck (own build)
+  # ===========================================================================
+  build-valgrind:
+    name: build (valgrind)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'valgrind' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=OFF
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=ON
+      MAKE_TARGETS: "mapd_java_components ExecuteTest"
+      IMAGE_NAME: "pr-build/valgrind"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config scripts"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: valgrind-mvn-build-log
+
+  valgrind:
+    name: test (valgrind)
+    needs: [setup, build-valgrind]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'valgrind' }}
+    timeout-minutes: 720
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.build-valgrind.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: Tests/ExecuteTest
+      RESULTS_FILE: test-results-valgrind.xml
+      GTEST_FILTER: "-Select.CanReuseCompiledCodeForStringPatternMatchQuery:Select.IREquivalenceForStringPatternMatchQuery"
+    steps:
+      - name: Ensure valgrind present
+        # Prefer baking valgrind into the deps image; install on the fly until then.
+        run: command -v valgrind >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq valgrind; }
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run ExecuteTest under valgrind
+        run: scripts/ci/run_valgrind.sh
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-valgrind
+          path: |
+            /workspace/build/test-results-valgrind.xml
+            /workspace/build/valgrind-memcheck.xml
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # disk-cache-tsan — ExecuteTest/UpdelStorageTest/CtasUpdateTest --use-disk-cache
+  # ===========================================================================
+  build-disk-cache-tsan:
+    name: build (disk-cache-tsan)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'disk-cache-tsan' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_TSAN=ON
+        -DENABLE_FOLLY=OFF
+        -DENABLE_CUDA=OFF
+        -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+        -DPREFER_STATIC_LIBS=ON
+        -DHAVE_STD_REGEX=ON
+        -DCMAKE_JOB_POOLS=link=4
+        -DCMAKE_JOB_POOL_LINK=link
+      MAKE_TARGETS: "mapd_java_components UpdelStorageTest ExecuteTest CtasUpdateTest"
+      IMAGE_NAME: "pr-build/disk-cache-tsan"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
+      STRIP: debug
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: disk-cache-tsan-mvn-build-log
+
+  disk-cache-tsan:
+    name: test (disk-cache-tsan ${{ matrix.name }})
+    needs: [setup, build-disk-cache-tsan]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'disk-cache-tsan' }}
+    timeout-minutes: 720
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.build-disk-cache-tsan.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --security-opt seccomp=unconfined
+    strategy:
+      # Cap concurrent legs so the matrix doesn't oversubscribe the shared
+      # self-hosted runner pool. 2 at a time.
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        include:
+          - name: execute
+            binary: Tests/ExecuteTest
+          - name: updel
+            binary: Tests/UpdelStorageTest
+          - name: ctas
+            binary: Tests/CtasUpdateTest
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: ${{ matrix.binary }}
+      EXTRA_ARGS: --use-disk-cache
+      RESULTS_FILE: test-results-disk-cache-${{ matrix.name }}.xml
+      TSAN_OPTIONS: "suppressions=/workspace/config/tsan.suppressions,history_size=7,second_deadlock_stack=1,halt_on_error=1"
+      NO_ASLR: "true"
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run ${{ matrix.binary }} --use-disk-cache
+        run: scripts/ci/run_gtest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-disk-cache-${{ matrix.name }}
+          path: /workspace/build/test-results-disk-cache-${{ matrix.name }}.xml
+          if-no-files-found: ignore
+
+  # ===========================================================================
+  # minio — ImportExportTest / ForeignTableDmlTest against a minio service
+  # ===========================================================================
+  build-minio:
+    name: build (minio)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'minio' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=OFF
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=ON
+      MAKE_TARGETS: "mapd_java_components ImportExportTest ForeignTableDmlTest"
+      IMAGE_NAME: "pr-build/minio"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config scripts"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: minio-mvn-build-log
+
+  minio:
+    name: test (minio ${{ matrix.name }})
+    needs: [setup, build-minio]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'minio' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.build-minio.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    services:
+      # NOTE: bucket/object fixtures + the exact --minio-hostname value NEED
+      # VALIDATION on first run; the Jenkins job used an external kraken minio.
+      minio:
+        image: bitnami/minio:latest
+        env:
+          MINIO_ROOT_USER: minioadmin
+          MINIO_ROOT_PASSWORD: minioadmin
+    strategy:
+      # Cap concurrent legs so the matrix doesn't oversubscribe the shared
+      # self-hosted runner pool. 2 at a time.
+      max-parallel: 2
+      fail-fast: false
+      matrix:
+        include:
+          - name: import
+            binary: Tests/ImportExportTest
+            extra: "--gtest_filter=*Minio* --run-minio-tests --minio-hostname=minio"
+          - name: foreign
+            binary: Tests/ForeignTableDmlTest
+            extra: "--gtest_filter=*VirtualAddressing* --run-minio-tests --minio-hostname=minio"
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+      BINARY: ${{ matrix.binary }}
+      EXTRA_ARGS: ${{ matrix.extra }}
+      RESULTS_FILE: test-results-minio-${{ matrix.name }}.xml
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run ${{ matrix.binary }} minio tests
+        run: scripts/ci/run_gtest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-minio-${{ matrix.name }}
+          path: /workspace/build/test-results-minio-${{ matrix.name }}.xml
+          if-no-files-found: ignore
+
+  report:
+    name: report-status
+    needs:
+      - setup
+      - build-gpu-release
+      - arrow-ipc
+      - ctas
+      - read-only
+      - extended-geo
+      - warmup
+      - build-valgrind
+      - valgrind
+      - build-disk-cache-tsan
+      - disk-cache-tsan
+      - build-minio
+      - minio
+    if: always() && needs.setup.result == 'success'
     runs-on: linux-amd64-cpu16
     steps:
-      - name: placeholder
-        run: true
+      - name: Aggregate
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const results = ${{ toJSON(needs) }};
+            const ok = r => r === 'success' || r === 'skipped';
+            const jobs = Object.keys(results).filter(j => j !== 'setup');
+            const failed = jobs.filter(j => !ok(results[j].result));
+            if (failed.length) core.setFailed(`Did not pass: ${failed.join(', ')}`);
+            else core.info('All selected weekly jobs passed');

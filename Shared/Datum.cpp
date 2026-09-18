@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -38,6 +27,7 @@
 #include "StringTransform.h"
 #include "misc.h"
 #include "sqltypes.h"
+#include "timedate.h"
 
 std::string SQLTypeInfo::type_name[kSQLTYPE_LAST] = {"NULL",
                                                      "BOOLEAN",
@@ -94,13 +84,9 @@ int64_t convert_decimal_value_to_scale_internal(const int64_t decimal_value,
     return decimal_value < 0 ? -div : div;
   } else if (dscale < max_scale) {
     int64_t retval;
-#ifdef _WIN32
-    return decimal_value * pow10[dscale];
-#else
     if (!__builtin_mul_overflow(decimal_value, pow10[dscale], &retval)) {
       return retval;
     }
-#endif
   }
   if (decimal_value == 0) {
     return 0;

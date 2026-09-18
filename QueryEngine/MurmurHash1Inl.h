@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef QUERYENGINE_MURMURHASH1INL_H
 #define QUERYENGINE_MURMURHASH1INL_H
 

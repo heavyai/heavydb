@@ -1,0 +1,165 @@
+{
+  "sources": [
+    {
+      "filename": "projection.glsl",
+      "file_path": "./",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "toneOperators.glsl",
+      "file_path": "./",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "randomGenerators.glsl",
+      "file_path": "./",
+      "internal_path": "Sampling/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "sampleTransformations.glsl",
+      "file_path": "./",
+      "internal_path": "Sampling/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "reconstructionFilters.glsl",
+      "file_path": "./",
+      "internal_path": "Filtering/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "lighting.glsl",
+      "file_path": "./PBRShading/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "shadingCommon.glsl",
+      "file_path": "./PBRShading/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "shading.glsl",
+      "file_path": "./PBRShading/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "shadingBase.vert",
+      "file_path": "./PBRShading/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "shadingMain.vert",
+      "file_path": "./PBRShading/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "shadingMain.frag",
+      "file_path": "./PBRShading/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "ppllCommon.h",
+      "file_path": "./PPLL/",
+      "internal_path": "PPLL/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "ppllDebugVisualizer.comp",
+      "file_path": "./PPLL/",
+      "internal_path": "PPLL/",
+      "language": "glsl",
+      "class": "compute"
+    },
+    {
+      "filename": "ppllStats.comp",
+      "file_path": "./PPLL/",
+      "internal_path": "PPLL/",
+      "language": "glsl",
+      "class": "compute"
+    },
+    {
+      "filename": "ppllStatsTiled.comp",
+      "file_path": "./PPLL/",
+      "internal_path": "PPLL/",
+      "language": "glsl",
+      "class": "compute"
+    },
+    {
+      "filename": "ppllStatsTiledBatches_Stage1.comp",
+      "file_path": "./PPLL/",
+      "internal_path": "PPLL/",
+      "language": "glsl",
+      "class": "compute"
+    },
+    {
+      "filename": "ppllStatsTiledBatches_Stage2.comp",
+      "file_path": "./PPLL/",
+      "internal_path": "PPLL/",
+      "language": "glsl",
+      "class": "compute"
+    },
+    {
+      "filename": "ppllCountFragments.frag",
+      "file_path": ".//PPLL/",
+      "internal_path": "PPLL/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "rtIntersection.glsl",
+      "file_path": "./Raytracing/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "rtUtils.glsl",
+      "file_path": "./Raytracing/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "rtShadowsSimple.glsl",
+      "file_path": "./Raytracing/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "rtShadowsSimple.miss",
+      "file_path": "./Raytracing/",
+      "internal_path": "Shading/",
+      "language": "glsl",
+      "class": "ray_miss"
+    },
+    {
+      "filename": "colorConvertSubroutines.glsl",
+      "file_path": "./",
+      "internal_path": "Utils/",
+      "language": "glsl",
+      "class": "glsl"
+    }
+  ]
+}

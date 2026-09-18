@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <arrow/api.h>
@@ -909,12 +898,6 @@ class ImportGeoTableTest : public DBHandlerTestFixture {
     return copy_params;
   }
 
-  const TCreateParams getCreateParams() const {
-    TCreateParams create_params;
-    create_params.is_replicated = false;
-    return create_params;
-  }
-
   TColumnType getScalarColumnType(const std::string& name,
                                   const TDatumType::type type) const {
     TColumnType ct;
@@ -972,8 +955,7 @@ TEST_F(ImportGeoTableTest, ImportGeoTableAuto) {
                                             "import_geo_table_test",
                                             getGeoFileName(),
                                             getCopyParams(),
-                                            row_descriptor,
-                                            getCreateParams()));
+                                            row_descriptor));
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(10)}});
   sqlAndCompareResult("SELECT trip FROM import_geo_table_test WHERE rowid=0", {{0.0f}});
 }
@@ -986,14 +968,13 @@ TEST_F(ImportGeoTableTest, ImportGeoTableExplicit) {
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
                                 getPolyColumnType(Geospatial::kGeoColumnName)};
-  EXPECT_NO_THROW(handler->create_table(
-      session, "import_geo_table_test", row_descriptor, getCreateParams()));
+  EXPECT_NO_THROW(
+      handler->create_table(session, "import_geo_table_test", row_descriptor));
   EXPECT_NO_THROW(handler->import_geo_table(session,
                                             "import_geo_table_test",
                                             getGeoFileName(),
                                             getCopyParams(),
-                                            row_descriptor,
-                                            getCreateParams()));
+                                            row_descriptor));
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(10)}});
   sqlAndCompareResult("SELECT trip FROM import_geo_table_test WHERE rowid=0", {{0.0f}});
 }
@@ -1006,14 +987,13 @@ TEST_F(ImportGeoTableTest, ImportGeoTableOverride) {
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::INT),
                                 getPolyColumnType(Geospatial::kGeoColumnName)};
-  EXPECT_NO_THROW(handler->create_table(
-      session, "import_geo_table_test", row_descriptor, getCreateParams()));
+  EXPECT_NO_THROW(
+      handler->create_table(session, "import_geo_table_test", row_descriptor));
   EXPECT_NO_THROW(handler->import_geo_table(session,
                                             "import_geo_table_test",
                                             getGeoFileName(),
                                             getCopyParams(),
-                                            row_descriptor,
-                                            getCreateParams()));
+                                            row_descriptor));
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(10)}});
   sqlAndCompareResult("SELECT trip FROM import_geo_table_test WHERE rowid=0", {{i(0)}});
 }
@@ -1028,14 +1008,13 @@ TEST_F(ImportGeoTableTest, ImportGeoTableTypeMismatch1) {
   TRowDescriptor row_descriptor{
       getPolyColumnType("trip"),
       getScalarColumnType(Geospatial::kGeoColumnName, TDatumType::type::FLOAT)};
-  EXPECT_NO_THROW(handler->create_table(
-      session, "import_geo_table_test", row_descriptor, getCreateParams()));
+  EXPECT_NO_THROW(
+      handler->create_table(session, "import_geo_table_test", row_descriptor));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
                                          getCopyParams(),
-                                         row_descriptor,
-                                         getCreateParams()),
+                                         row_descriptor),
                TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
@@ -1050,14 +1029,13 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTypeMismatch2) {
   TRowDescriptor row_descriptor{
       getScalarColumnType(Geospatial::kGeoColumnName, TDatumType::type::FLOAT),
       getPolyColumnType("trip")};
-  EXPECT_NO_THROW(handler->create_table(
-      session, "import_geo_table_test", row_descriptor, getCreateParams()));
+  EXPECT_NO_THROW(
+      handler->create_table(session, "import_geo_table_test", row_descriptor));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
                                          getCopyParams(),
-                                         row_descriptor,
-                                         getCreateParams()),
+                                         row_descriptor),
                TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
@@ -1070,14 +1048,13 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailNoGeoColumns) {
   auto* handler = getDbHandlerAndSessionId().first;
   auto& session = getDbHandlerAndSessionId().second;
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT)};
-  EXPECT_NO_THROW(handler->create_table(
-      session, "import_geo_table_test", row_descriptor, getCreateParams()));
+  EXPECT_NO_THROW(
+      handler->create_table(session, "import_geo_table_test", row_descriptor));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
                                          getCopyParams(),
-                                         row_descriptor,
-                                         getCreateParams()),
+                                         row_descriptor),
                TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
@@ -1092,14 +1069,13 @@ TEST_F(ImportGeoTableTest, ImportGeoTableFailTooManyGeoColumns) {
   TRowDescriptor row_descriptor{getScalarColumnType("trip", TDatumType::type::FLOAT),
                                 getPolyColumnType("geo1"),
                                 getPolyColumnType("geo2")};
-  EXPECT_NO_THROW(handler->create_table(
-      session, "import_geo_table_test", row_descriptor, getCreateParams()));
+  EXPECT_NO_THROW(
+      handler->create_table(session, "import_geo_table_test", row_descriptor));
   EXPECT_THROW(handler->import_geo_table(session,
                                          "import_geo_table_test",
                                          getGeoFileName(),
                                          getCopyParams(),
-                                         row_descriptor,
-                                         getCreateParams()),
+                                         row_descriptor),
                TDBException);
   sqlAndCompareResult("SELECT count(*) FROM import_geo_table_test", {{i(0)}});
 }
@@ -1182,7 +1158,10 @@ class ThriftDetectServerPrivilegeTest : public DBHandlerTestFixture {
   }
 };
 
-TEST_F(ThriftDetectServerPrivilegeTest, S3_Public_without_credentials) {
+// TODO(IAM): re-enable once anonymous access (or a CI IAM user) on the
+// public S3 fixture is available. Currently the bucket no longer allows
+// unsigned reads and the CI key isn't granted GetObject on it.
+TEST_F(ThriftDetectServerPrivilegeTest, DISABLED_S3_Public_without_credentials) {
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   const auto result = detectTable(PUBLIC_S3_FILE);
   ASSERT_EQ(result, "i\nSMALLINT\n0\n\nCREATE TABLE your_table_name(i SMALLINT);\n");
@@ -1279,7 +1258,9 @@ class ThriftImportServerPrivilegeTest : public ThriftDetectServerPrivilegeTest {
   }
 };
 
-TEST_F(ThriftImportServerPrivilegeTest, S3_Public_without_credentials) {
+// TODO(IAM): re-enable once anonymous access (or a CI IAM user) on the
+// public S3 fixture is available.
+TEST_F(ThriftImportServerPrivilegeTest, DISABLED_S3_Public_without_credentials) {
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   EXPECT_NO_THROW(importTable(PUBLIC_S3_FILE, "import_test_table"));
   sqlAndCompareResult("SELECT * FROM import_test_table", {{i(0)}});
@@ -1468,7 +1449,7 @@ class ThriftFileGlobbingTest : public DBHandlerTestFixture,
     const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
     if (isGeoImport() || isRasterImport()) {
       db_handler->import_geo_table(
-          session_id, test_table_name_, file_path, getCopyParams(), {}, {});
+          session_id, test_table_name_, file_path, getCopyParams(), {});
     } else {
       CHECK(isParquetImport() || isDelimitedImport());
       db_handler->import_table(session_id, test_table_name_, file_path, getCopyParams());

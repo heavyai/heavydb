@@ -1,14 +1,91 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+#
+# Tests for dev-tools/dev.sh — manual dispatch only for now.
+# All jobs run on ubuntu-latest (Docker is available on these runners).
+#
+# Jobs:
+#   cli-tests   — syntax, help, error handling, blocked paths, image-name
+#                 derivation, and resolver logic (mock docker, no real builds)
+#   smoke-test  — end-to-end 'build image' run with a real docker build
 
 name: dev-tools tests
 
 on:
   workflow_dispatch:
+    inputs:
+      sha1:
+        description: "PR head SHA to report status on (leave empty for manual runs)"
+        default: ""
+      pr_number:
+        description: "PR number (informational)"
+        default: ""
+
+permissions:
+  contents: read
+  statuses: write
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  placeholder:
-    runs-on: linux-amd64-cpu16
+  cli-tests:
+    name: CLI validation
+    runs-on: ubuntu-latest
     steps:
-      - name: placeholder
-        run: true
+      - uses: actions/checkout@v7
+        with:
+          # Check out the PR head when dispatched with sha1 (e.g. via
+          # `/test dev-tools`); fall back to the dispatch ref for manual runs.
+          ref: ${{ inputs.sha1 || github.sha }}
+
+      - name: CLI tests (no-Docker paths)
+        run: bash dev-tools/scripts/test-cli.sh
+
+      - name: CLI tests (Docker resolver — zero-images mock)
+        run: bash dev-tools/scripts/test-cli.sh --mock-docker
+
+      - name: CLI tests (Docker resolver — extended scenario mock)
+        run: bash dev-tools/scripts/test-cli.sh --mock-docker-extended
+
+  smoke-test:
+    name: Docker smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check out the PR head when dispatched with sha1 (e.g. via
+          # `/test dev-tools`); fall back to the dispatch ref for manual runs.
+          ref: ${{ inputs.sha1 || github.sha }}
+
+      - name: End-to-end build image smoke test
+        run: bash dev-tools/scripts/test-cli.sh --docker-smoke
+
+  report:
+    name: report-status
+    needs: [cli-tests, smoke-test]
+    if: always() && inputs.sha1 != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        env:
+          INPUT_SHA1: ${{ inputs.sha1 }}
+          CLI_RESULT: ${{ needs.cli-tests.result }}
+          SMOKE_RESULT: ${{ needs.smoke-test.result }}
+        with:
+          script: |
+            const sha = process.env.INPUT_SHA1;
+            // 'skipped' counts as passing — a job can be skipped intentionally
+            // (e.g. via a future `if:` condition) without failing the overall check.
+            const ok = r => r === 'success' || r === 'skipped';
+            const state = ok(process.env.CLI_RESULT) && ok(process.env.SMOKE_RESULT)
+              ? 'success' : 'failure';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              state,
+              context: 'dev-tools tests',
+              description: state === 'success' ? 'All dev-tools tests passed' : 'dev-tools tests failed',
+            });

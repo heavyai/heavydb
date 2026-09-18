@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "InternalCatalogDataWrapper.h"
@@ -25,7 +14,6 @@
 #include "Shared/JsonUtils.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
-#include "Shared/distributed.h"
 
 namespace foreign_storage {
 InternalCatalogDataWrapper::InternalCatalogDataWrapper() : InternalSystemDataWrapper() {}
@@ -591,13 +579,7 @@ void InternalCatalogDataWrapper::initializeObjectsForTable(
     const std::string& table_name) {
   row_count_ = 0;
 
-  // Dashboads are handled separately since they are only on the aggregator in
-  // distributed.  All others are only on the first leaf.
   if (foreign_table_->tableName == Catalog_Namespace::DASHBOARDS_SYS_TABLE_NAME) {
-    if (dist::is_distributed() && !dist::is_aggregator()) {
-      // Only the aggregator can contain dashboards in distributed.
-      return;
-    }
     dashboards_by_database_ = get_all_dashboards();
     for (const auto& [db_id, dashboards] : dashboards_by_database_) {
       row_count_ += dashboards.size();
@@ -605,11 +587,6 @@ void InternalCatalogDataWrapper::initializeObjectsForTable(
     return;
   }
 
-  if (dist::is_distributed() && !dist::is_first_leaf()) {
-    // For every table except dashboards, only the first leaf returns information in
-    // distributed.
-    return;
-  }
   auto& sys_catalog = Catalog_Namespace::SysCatalog::instance();
   if (foreign_table_->tableName == Catalog_Namespace::USERS_SYS_TABLE_NAME) {
     users_ = sys_catalog.getAllUserMetadata();

@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #pragma once
 
 #include "ForeignDataWrapper.h"
@@ -39,8 +44,23 @@ class AbstractFileStorageDataWrapper : public ForeignDataWrapper {
   inline static const std::string THREADS_KEY = "THREADS";
   inline static const std::string LONLAT_KEY = "LONLAT";
 
+#if defined(HAVE_AWS_S3)
+  inline static const std::string S3_BUCKET_KEY = "S3_BUCKET";
+  inline static const std::string AWS_REGION_KEY = "AWS_REGION";
+  inline static const std::string S3_ACCESS_KEY = "S3_ACCESS_KEY";
+  inline static const std::string S3_SECRET_KEY = "S3_SECRET_KEY";
+  inline static const std::string S3_SESSION_TOKEN = "S3_SESSION_TOKEN";
+  inline static const std::string S3_ENDPOINT = "S3_ENDPOINT";
+  inline static const std::string S3_USE_VIRTUAL_ADDRESSING_KEY =
+      "S3_USE_VIRTUAL_ADDRESSING";
+
+  inline static const std::array<std::string, 2> supported_storage_types{
+      LOCAL_FILE_STORAGE_TYPE,
+      S3_STORAGE_TYPE};
+#else
   inline static const std::array<std::string, 1> supported_storage_types{
       LOCAL_FILE_STORAGE_TYPE};
+#endif  // defined(HAVE_AWS_S3)
 
  protected:
   /**
@@ -50,6 +70,12 @@ class AbstractFileStorageDataWrapper : public ForeignDataWrapper {
   static std::string getFullFilePath(const ForeignTable* foreign_table);
 
   static bool allowFileRollOff(const ForeignTable* foreign_table);
+#if defined(HAVE_AWS_S3)
+  /**
+  @brief Returns the S3 file key without the S3 bucket
+  */
+  static std::string getS3FileKey(const ForeignTable* foreign_table);
+#endif  // defined(HAVE_AWS_S3)
 
  private:
   static void validateFilePath(const ForeignTable* foreign_table);

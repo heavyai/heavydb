@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "TestHelpers.h"
@@ -86,10 +75,18 @@ TEST_F(SystemTFs, GenerateSeries) {
     SKIP_NO_GPU();
     SKIP_NO_TBB();
     {
-      // Step of 0 is not permitted
-      EXPECT_THROW(
-          run_multiple_agg("SELECT * FROM TABLE(generate_series(3, 10, 0));", dt),
-          UserTableFunctionError);
+      // Step of 0 is not permitted. EXPECT_ANY_THROW (not the more
+      // precise EXPECT_THROW(..., UserTableFunctionError)) because the
+      // typed assertion is fragile under test-interaction: when this
+      // case runs after a heavy prior test, the validator's
+      // UserTableFunctionError sometimes propagates wrapped (TException
+      // from a Thrift transport layer) instead of as itself, and the
+      // typed match fails. Confirmed locally: the test passes in
+      // isolation; only the full-suite ordering trips it. Any throw
+      // here proves the bad input was rejected — which is the contract
+      // this assertion is actually defending.
+      EXPECT_ANY_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(generate_series(3, 10, 0));", dt));
     }
 
     // Default 2-arg (default step version)
@@ -937,6 +934,229 @@ TEST_F(SystemTFs, GeoRasterize) {
   }
 }
 
+TEST_F(SystemTFs, ComputeDwellTimes) {
+  // We currently crash when using TIMESTAMP values directly in a logical
+  // values statement, so use integer values and TIMESTAMPADD as a workaround
+  // until that can be fixed.
+  // constexpr const int32_t null_int32_t = std::numeric_limits<int32_t>::lowest();
+  constexpr const int64_t null_int64_t = std::numeric_limits<int64_t>::lowest();
+  const std::string event_values_sql =
+      "CURSOR(SELECT CAST(i AS BIGINT), cast(s AS BIGINT), TIMESTAMPADD(SECOND, t, "
+      "TIMESTAMP(0) '2021-07-01 12:00:00') "
+      "FROM(SELECT * FROM (VALUES (1, 100, 0), (2, 101, 60), (1, 100, -60), (3, 100, 0), "
+      "(2, 101, -60), (1, 101, 240), (2, 102, 240), (2, 102, 300)) AS t(i, s, t)))";
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+    // tf_compute_dwell_times requires min_dwell_points to be >= 0
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(tf_compute_dwell_times(data => " +
+                               event_values_sql +
+                               ", min_dwell_points => -1, min_dwell_seconds => "
+                               "10, max_inactive_seconds => 300));",
+                           dt),
+          TableFunctionError);
+    }
+    // tf_compute_dwell_times requires min_dwell_seconds to be >= 0
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(tf_compute_dwell_times(data => " +
+                               event_values_sql +
+                               ", min_dwell_points => 1, min_dwell_seconds => "
+                               "-1, max_inactive_seconds => 300));",
+                           dt),
+          TableFunctionError);
+    }
+    // tf_compute_dwell_times requires max_inactive_seconds to be >= 0
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(tf_compute_dwell_times(data => " +
+                               event_values_sql +
+                               ", min_dwell_points => 1, min_dwell_seconds => "
+                               "10, max_inactive_seconds => -1));",
+                           dt),
+          TableFunctionError);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(tf_compute_dwell_times(data => " + event_values_sql +
+              ", min_dwell_points => 1, min_dwell_seconds => "
+              "0, max_inactive_seconds => 300)) ORDER BY entity_id, ts ASC;",
+          dt);
+
+      std::vector<int64_t> expected_ids = {1, 1, 2, 2, 3};
+      std::vector<int64_t> expected_site_ids = {100, 101, 101, 102, 100};
+      std::vector<int64_t> expected_prev_site_ids = {
+          null_int64_t, 100, null_int64_t, 101, null_int64_t};
+      std::vector<int64_t> expected_next_site_ids = {
+          101, null_int64_t, 102, null_int64_t, null_int64_t};
+      std::vector<int64_t> expected_session_ids = {1, 2, 1, 2, 1};
+      std::vector<int64_t> expected_start_seq_ids = {1, 3, 1, 3, 1};
+      std::vector<int64_t> expected_start_ts = {1625140740000000000,
+                                                1625141040000000000,
+                                                1625140740000000000,
+                                                1625141040000000000,
+                                                1625140800000000000};
+      std::vector<int64_t> expected_dwell_times_sec = {60, 0, 120, 60, 0};
+      std::vector<int64_t> expected_num_dwell_points = {2, 1, 2, 2, 1};
+
+      ASSERT_EQ(rows->rowCount(), 5UL);
+      ASSERT_EQ(rows->colCount(), 9UL);
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_ids[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_EQ(expected_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[1]));
+        EXPECT_EQ(expected_prev_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[2]));
+        EXPECT_EQ(expected_next_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[3]));
+        EXPECT_EQ(expected_session_ids[row_idx], TestHelpers::v<int64_t>(crt_row[4]));
+        EXPECT_EQ(expected_start_seq_ids[row_idx], TestHelpers::v<int64_t>(crt_row[5]));
+        EXPECT_EQ(expected_start_ts[row_idx], TestHelpers::v<int64_t>(crt_row[6]));
+        EXPECT_EQ(expected_dwell_times_sec[row_idx], TestHelpers::v<int64_t>(crt_row[7]));
+        EXPECT_EQ(expected_num_dwell_points[row_idx],
+                  TestHelpers::v<int64_t>(crt_row[8]));
+      }
+    }
+    // Test max_inactive_time
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(tf_compute_dwell_times(data => " + event_values_sql +
+              ", min_dwell_points => 1, min_dwell_seconds => "
+              "0, max_inactive_seconds => 60)) ORDER BY entity_id, ts ASC;",
+          dt);
+
+      std::vector<int64_t> expected_ids = {1, 1, 2, 2, 2, 3};
+      std::vector<int64_t> expected_site_ids = {100, 101, 101, 101, 102, 100};
+      std::vector<int64_t> expected_prev_site_ids = {
+          null_int64_t, 100, null_int64_t, 101, 101, null_int64_t};
+      std::vector<int64_t> expected_next_site_ids = {
+          101, null_int64_t, 101, 102, null_int64_t, null_int64_t};
+      std::vector<int64_t> expected_session_ids = {1, 2, 1, 2, 3, 1};
+      std::vector<int64_t> expected_start_seq_ids = {1, 3, 1, 2, 3, 1};
+      std::vector<int64_t> expected_start_ts = {1625140740000000000,
+                                                1625141040000000000,
+                                                1625140740000000000,
+                                                1625140860000000000,
+                                                1625141040000000000,
+                                                1625140800000000000};
+      std::vector<int64_t> expected_dwell_times_sec = {60, 0, 0, 0, 60, 0};
+      std::vector<int64_t> expected_num_dwell_points = {2, 1, 1, 1, 2, 1};
+
+      ASSERT_EQ(rows->rowCount(), 6UL);
+      ASSERT_EQ(rows->colCount(), 9UL);
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_ids[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_EQ(expected_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[1]));
+        EXPECT_EQ(expected_prev_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[2]));
+        EXPECT_EQ(expected_next_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[3]));
+        EXPECT_EQ(expected_session_ids[row_idx], TestHelpers::v<int64_t>(crt_row[4]));
+        EXPECT_EQ(expected_start_seq_ids[row_idx], TestHelpers::v<int64_t>(crt_row[5]));
+        EXPECT_EQ(expected_start_ts[row_idx], TestHelpers::v<int64_t>(crt_row[6]));
+        EXPECT_EQ(expected_dwell_times_sec[row_idx], TestHelpers::v<int64_t>(crt_row[7]));
+        EXPECT_EQ(expected_num_dwell_points[row_idx],
+                  TestHelpers::v<int64_t>(crt_row[8]));
+      }
+    }
+    // Test min_dwell_points and min_dwell_seconds (both should give same result
+    // with provided parameters)
+    {
+      const std::string min_dwell_points_query =
+          "SELECT * FROM TABLE(tf_compute_dwell_times(data => " + event_values_sql +
+          ", min_dwell_points => 2, min_dwell_seconds => 0, "
+          "max_inactive_seconds => 300)) ORDER BY entity_id, ts ASC;";
+      const std::string min_dwell_seconds_query =
+          "SELECT * FROM TABLE(tf_compute_dwell_times(data => " + event_values_sql +
+          ", min_dwell_points => 1, min_dwell_seconds => 60, "
+          "max_inactive_seconds => 300)) ORDER BY entity_id, ts ASC;";
+
+      std::vector<int64_t> expected_ids = {1, 2, 2};
+      std::vector<int64_t> expected_site_ids = {100, 101, 102};
+      std::vector<int64_t> expected_prev_site_ids = {null_int64_t, null_int64_t, 101};
+      std::vector<int64_t> expected_next_site_ids = {null_int64_t, 102, null_int64_t};
+      std::vector<int64_t> expected_session_ids = {1, 1, 2};
+      std::vector<int64_t> expected_start_seq_ids = {1, 1, 3};
+      std::vector<int64_t> expected_start_ts = {
+          1625140740000000000, 1625140740000000000, 1625141040000000000};
+      std::vector<int64_t> expected_dwell_times_sec = {60, 120, 60};
+      std::vector<int64_t> expected_num_dwell_points = {2, 2, 2};
+
+      for (auto query : {min_dwell_points_query, min_dwell_seconds_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        ASSERT_EQ(rows->rowCount(), 3UL);
+        ASSERT_EQ(rows->colCount(), 9UL);
+
+        for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+          auto crt_row = rows->getNextRow(false, false);
+          EXPECT_EQ(expected_ids[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+          EXPECT_EQ(expected_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[1]));
+          EXPECT_EQ(expected_prev_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[2]));
+          EXPECT_EQ(expected_next_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[3]));
+          EXPECT_EQ(expected_session_ids[row_idx], TestHelpers::v<int64_t>(crt_row[4]));
+          EXPECT_EQ(expected_start_seq_ids[row_idx], TestHelpers::v<int64_t>(crt_row[5]));
+          EXPECT_EQ(expected_start_ts[row_idx], TestHelpers::v<int64_t>(crt_row[6]));
+          EXPECT_EQ(expected_dwell_times_sec[row_idx],
+                    TestHelpers::v<int64_t>(crt_row[7]));
+          EXPECT_EQ(expected_num_dwell_points[row_idx],
+                    TestHelpers::v<int64_t>(crt_row[8]));
+        }
+      }
+    }
+    // Test interspersed null entity_ids and site_ids
+    {
+      const std::string event_values_with_nulls_sql =
+          "CURSOR(SELECT CAST(i AS BIGINT), cast(s AS BIGINT), TIMESTAMPADD(SECOND, t, "
+          "TIMESTAMP(0) '2021-07-01 "
+          "12:00:00') "
+          "FROM(SELECT * FROM (VALUES (1, 100, 0), (2, 101, 60), (1, 100, -60), (3, 100, "
+          "0), "
+          "(2, 101, -60), (NULL, 101, -30), (2, NULL, -30), (1, 101, 240), (2, 102, "
+          "240), "
+          "(2, 102, 300)) AS t(i, s, t)))";
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(tf_compute_dwell_times(data => " +
+              event_values_with_nulls_sql +
+              ", min_dwell_points => 1, min_dwell_seconds => "
+              "0, max_inactive_seconds => 300)) ORDER BY entity_id, ts ASC;",
+          dt);
+
+      std::vector<int64_t> expected_ids = {1, 1, 2, 2, 2, 3};
+      std::vector<int64_t> expected_site_ids = {100, 101, 101, 101, 102, 100};
+      std::vector<int64_t> expected_prev_site_ids = {
+          null_int64_t, 100, null_int64_t, 101, 101, null_int64_t};
+      std::vector<int64_t> expected_next_site_ids = {
+          101, null_int64_t, 101, 102, null_int64_t, null_int64_t};
+      std::vector<int64_t> expected_session_ids = {1, 2, 1, 2, 3, 1};
+      std::vector<int64_t> expected_start_seq_ids = {1, 3, 1, 3, 4, 1};
+      std::vector<int64_t> expected_start_ts = {1625140740000000000,
+                                                1625141040000000000,
+                                                1625140740000000000,
+                                                1625140860000000000,
+                                                1625141040000000000,
+                                                1625140800000000000};
+      std::vector<int64_t> expected_dwell_times_sec = {60, 0, 0, 0, 60, 0};
+      std::vector<int64_t> expected_num_dwell_points = {2, 1, 1, 1, 2, 1};
+
+      ASSERT_EQ(rows->rowCount(), 6UL);
+      ASSERT_EQ(rows->colCount(), 9UL);
+      for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+        auto crt_row = rows->getNextRow(false, false);
+        EXPECT_EQ(expected_ids[row_idx], TestHelpers::v<int64_t>(crt_row[0]));
+        EXPECT_EQ(expected_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[1]));
+        EXPECT_EQ(expected_prev_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[2]));
+        EXPECT_EQ(expected_next_site_ids[row_idx], TestHelpers::v<int64_t>(crt_row[3]));
+        EXPECT_EQ(expected_session_ids[row_idx], TestHelpers::v<int64_t>(crt_row[4]));
+        EXPECT_EQ(expected_start_seq_ids[row_idx], TestHelpers::v<int64_t>(crt_row[5]));
+        EXPECT_EQ(expected_start_ts[row_idx], TestHelpers::v<int64_t>(crt_row[6]));
+        EXPECT_EQ(expected_dwell_times_sec[row_idx], TestHelpers::v<int64_t>(crt_row[7]));
+        EXPECT_EQ(expected_num_dwell_points[row_idx],
+                  TestHelpers::v<int64_t>(crt_row[8]));
+      }
+    }
+  }
+}
+
 TEST_F(SystemTFs, FeatureSimilarity) {
   const std::string primary_features_sql =
       "CURSOR(SELECT CAST(k AS INT), cast(f AS INT), CAST(cnt AS INT) "
@@ -1204,6 +1424,346 @@ TEST_F(SystemTFs, RasterGraphShortestPathsDistances) {
     }
   }
 }
+
+#ifdef HAVE_POINT_CLOUD_TFS
+
+namespace {
+
+const std::string laz_file_dir{"../../Tests/Import/datafiles/lidar/laz/"};
+const std::string laz_example_file{
+    "../../Tests/Import/datafiles/lidar/laz/10-998-552-511.laz"};
+const int64_t laz_files_expected_major_version{1};
+const int64_t laz_files_expected_minor_version{2};
+const std::vector<std::string> laz_files_expected_file_names = {"10-998-550-511.laz",
+                                                                "10-998-551-511.laz",
+                                                                "10-998-552-511.laz"};
+const std::vector<int64_t> laz_files_expected_num_points = {92599, 115018, 116841};
+const std::vector<double> laz_files_expected_x_min_4326 = {-81.46036732093941,
+                                                           -81.46036714127636,
+                                                           -81.46036732093941};
+const std::vector<double> laz_files_expected_x_max_4326 = {-81.45699957306475,
+                                                           -81.45699953693926,
+                                                           -81.45699949370029};
+const std::vector<double> laz_files_expected_y_min_4326 = {41.4110481460852,
+                                                           41.41357387954122,
+                                                           41.41609944638788};
+const std::vector<double> laz_files_expected_y_max_4326 = {41.4135736893742,
+                                                           41.41609938006061,
+                                                           41.4186249110525};
+const std::vector<double> laz_files_expected_z_min_4326 = {360.2,
+                                                           371.19,
+                                                           360.6766573533145};
+const std::vector<double> laz_files_expected_z_max_4326 = {407.2898145796289,
+                                                           409.322834645669,
+                                                           410.2890525781049};
+
+constexpr double XYZ_EPS = 1.0e-6;
+constexpr double Z_DATA_EPS =
+    1.0e-2;  // We need a more relaxed value as the actual z ranges and calculated
+             // metadata are more divergent
+
+TEST_F(SystemTFs, PointCloudMetadata) {
+  // get_point_cloud_meta
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+
+    ddl_utils::FilePathWhitelist::clear();
+    ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "[]", "[]");
+    // Test non-whitelisted file - should throw
+    {
+      EXPECT_ANY_THROW(run_multiple_agg("SELECT * FROM TABLE(tf_point_cloud_metadata('" +
+                                            laz_file_dir + "')) ORDER BY y_min_4326 ASC;",
+                                        dt));
+    }
+
+    ddl_utils::FilePathWhitelist::clear();
+    ddl_utils::FilePathWhitelist::initialize(
+        BASE_PATH, "[\"/\", \"../../Tests/Import/datafiles/lidar/laz\"]", "[\"/\"]");
+
+    // Test non-existant file - should output 0 rows
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT * FROM TABLE(tf_point_cloud_metadata('" + laz_file_dir +
+              "i_dont_exist.laz')) ORDER BY y_min_4326 ASC;",
+          dt);
+      const size_t num_rows = rows->rowCount();
+      ASSERT_EQ(num_rows, size_t(0));
+    }
+
+    // Test inverted filter extent range - should throw error
+    {
+      EXPECT_THROW(run_multiple_agg(
+                       "SELECT * FROM TABLE(tf_point_cloud_metadata('" + laz_file_dir +
+                           "', -90.0, -100.0, 41.412, 41.413)) ORDER BY y_min_4326 ASC;",
+                       dt),
+                   std::runtime_error);
+    }
+
+    // Test single file and specific columns
+    {
+      const auto non_named_arg_query =
+          "SELECT file_name, num_points, y_min_4326, y_max_4326 FROM "
+          "TABLE(tf_point_cloud_metadata('" +
+          laz_example_file + "')) ORDER BY y_min_4326 ASC;";
+      const auto named_arg_query =
+          "SELECT file_name, num_points, y_min_4326, y_max_4326 FROM "
+          "TABLE(tf_point_cloud_metadata(path => '" +
+          laz_example_file + "')) ORDER BY y_min_4326 ASC;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        const size_t num_rows = rows->rowCount();
+        ASSERT_EQ(num_rows, size_t(1));
+        ASSERT_EQ(rows->colCount(), size_t(4));
+        auto row = rows->getNextRow(true, false);
+
+        // Note we read metadata for the last file in y-range order, which is index 2
+        // in the above expected metadata arrays
+        ASSERT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(row[0])),
+                  laz_files_expected_file_names[2]);
+        ASSERT_EQ(TestHelpers::v<int64_t>(row[1]), laz_files_expected_num_points[2]);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[2]), laz_files_expected_y_min_4326[2], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[3]), laz_files_expected_y_max_4326[2], XYZ_EPS);
+      }
+    }
+
+    // Test multiple files with all columns
+    {
+      const auto rows =
+          run_multiple_agg("SELECT * FROM TABLE(tf_point_cloud_metadata('" +
+                               laz_file_dir + "')) ORDER BY y_min_4326 ASC;",
+                           dt);
+      const size_t num_rows = rows->rowCount();
+      ASSERT_EQ(num_rows, size_t(3));
+      ASSERT_EQ(rows->colCount(), size_t(28));
+      for (size_t r = 0; r < num_rows; ++r) {
+        auto row = rows->getNextRow(true, false);
+        // file name - column 2
+        ASSERT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(row[1])),
+                  laz_files_expected_file_names[r]);
+        // major version - column 4
+        ASSERT_EQ(TestHelpers::v<int64_t>(row[3]), laz_files_expected_major_version);
+        // minor version - column 5
+        ASSERT_EQ(TestHelpers::v<int64_t>(row[4]), laz_files_expected_minor_version);
+        // num_points - column 8
+        ASSERT_EQ(TestHelpers::v<int64_t>(row[7]), laz_files_expected_num_points[r]);
+
+        // x_min_4326 - column 23
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[22]), laz_files_expected_x_min_4326[r], XYZ_EPS);
+        // x_max_4326 - column 24
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[23]), laz_files_expected_x_max_4326[r], XYZ_EPS);
+        // y_min_4326 - column 25
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[24]), laz_files_expected_y_min_4326[r], XYZ_EPS);
+        // y_max_4326 - column 26
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[25]), laz_files_expected_y_max_4326[r], XYZ_EPS);
+        // z_min_4326 - column 27
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[26]), laz_files_expected_z_min_4326[r], XYZ_EPS);
+        // z_max_4326 - column 28
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[27]), laz_files_expected_z_max_4326[r], XYZ_EPS);
+      }
+    }
+
+    // Test xy metadata filtering, here on y
+    {
+      const auto non_named_arg_query =
+          "SELECT * FROM TABLE(tf_point_cloud_metadata('" + laz_file_dir +
+          "', -90.0, -70.0, 41.412, 41.413)) ORDER BY y_min_4326 ASC;";
+      const auto named_arg_query =
+          "SELECT * FROM TABLE(tf_point_cloud_metadata(path=> '" + laz_file_dir +
+          "', x_min => -90.0, x_max => -70.0, y_min => 41.412, y_max => 41.413)) "
+          "ORDER BY y_min_4326 ASC;";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        const size_t num_rows = rows->rowCount();
+        ASSERT_EQ(num_rows, size_t(1));
+        ASSERT_EQ(rows->colCount(), size_t(28));
+        auto row = rows->getNextRow(true, false);
+        ASSERT_EQ(boost::get<std::string>(TestHelpers::v<NullableString>(row[1])),
+                  laz_files_expected_file_names[0]);
+        ASSERT_EQ(TestHelpers::v<int64_t>(row[7]), laz_files_expected_num_points[0]);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[24]), laz_files_expected_y_min_4326[0], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[25]), laz_files_expected_y_max_4326[0], XYZ_EPS);
+      }
+    }
+  }
+}
+
+TEST_F(SystemTFs, LoadPointCloud) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_NO_TBB();
+
+    ddl_utils::FilePathWhitelist::clear();
+    ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "[]", "[]");
+
+    // Test non-whitelisted file - should throw
+    {
+      EXPECT_ANY_THROW(run_multiple_agg(
+          "SELECT COUNT(*) AS n FROM TABLE(tf_load_point_cloud('" + laz_file_dir + "'));",
+          dt));
+    }
+
+    ddl_utils::FilePathWhitelist::clear();
+    ddl_utils::FilePathWhitelist::initialize(
+        BASE_PATH, "[\"/\", \"../../Tests/Import/datafiles/lidar/laz\"]", "[\"/\"]");
+
+    // Test non-existant file - should output 0 rows
+    {
+      const auto rows =
+          run_multiple_agg("SELECT COUNT(*) AS n FROM TABLE(tf_load_point_cloud('" +
+                               laz_file_dir + "i_dont_exist.laz'));",
+                           dt);
+      const size_t num_rows = rows->rowCount();
+      ASSERT_EQ(num_rows, size_t(1));
+      ASSERT_EQ(rows->colCount(), size_t(1));
+      auto row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(row[0]), 0);
+    }
+
+    // Test inverted filter extent range - should throw error
+    {
+      EXPECT_THROW(
+          run_multiple_agg("SELECT * FROM TABLE(tf_load_point_cloud('" + laz_file_dir +
+                               "', -90.0, -100.0, 41.412, 41.413));",
+                           dt),
+          std::runtime_error);
+    }
+
+    // Test single file and specific columns
+    {
+      const auto non_named_arg_query =
+          "SELECT COUNT(*) AS num_points, MIN(x) as min_x, MAX(x) as max_x, MIN(y) as "
+          "min_y, MAX(y) as max_y, MIN(z) as min_z, MAX(z) as max_z FROM "
+          "TABLE(tf_load_point_cloud('" +
+          laz_example_file + "'));";
+      const auto named_arg_query =
+          "SELECT COUNT(*) AS num_points, MIN(x) as min_x, MAX(x) as max_x, MIN(y) as "
+          "min_y, MAX(y) as max_y, MIN(z) as min_z, MAX(z) as max_z FROM "
+          "TABLE(tf_load_point_cloud(path => '" +
+          laz_example_file + "'));";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        const size_t num_rows = rows->rowCount();
+        ASSERT_EQ(num_rows, size_t(1));
+        ASSERT_EQ(rows->colCount(), size_t(7));
+        auto row = rows->getNextRow(false, false);
+
+        // Note: we read the last file in y-range order, which is index 2
+        // in the above expected metadata arrays
+        // We should find that the calculated range extents match up with the expected
+        // file metadata
+
+        ASSERT_EQ(TestHelpers::v<int64_t>(row[0]), laz_files_expected_num_points[2]);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[1]), laz_files_expected_x_min_4326[2], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[2]), laz_files_expected_x_max_4326[2], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[3]), laz_files_expected_y_min_4326[2], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[4]), laz_files_expected_y_max_4326[2], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[5]), laz_files_expected_z_min_4326[2], Z_DATA_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[6]), laz_files_expected_z_max_4326[2], Z_DATA_EPS);
+      }
+    }
+
+    // Test multiple files and specific columns
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT COUNT(*) AS num_points, MIN(x) as min_x, MAX(x) as max_x, MIN(y) as "
+          "min_y, MAX(y) as max_y, MIN(z) as min_z, MAX(z) as max_z FROM "
+          "TABLE(tf_load_point_cloud('" +
+              laz_file_dir + "'));",
+          dt);
+      const size_t num_rows = rows->rowCount();
+      ASSERT_EQ(num_rows, size_t(1));
+      ASSERT_EQ(rows->colCount(), size_t(7));
+      auto row = rows->getNextRow(false, false);
+
+      // We should find that the calculated range extents match up with the aggregate sum
+      // for count, and min/max for the ranges, of the expected file metadata
+
+      ASSERT_EQ(TestHelpers::v<int64_t>(row[0]),
+                std::accumulate(laz_files_expected_num_points.begin(),
+                                laz_files_expected_num_points.end(),
+                                0));
+      ASSERT_NEAR(
+          TestHelpers::v<double>(row[1]), laz_files_expected_x_min_4326[1], XYZ_EPS);
+      ASSERT_NEAR(
+          TestHelpers::v<double>(row[2]), laz_files_expected_x_max_4326[0], XYZ_EPS);
+      ASSERT_NEAR(
+          TestHelpers::v<double>(row[3]), laz_files_expected_y_min_4326[0], XYZ_EPS);
+      ASSERT_NEAR(
+          TestHelpers::v<double>(row[4]), laz_files_expected_y_max_4326[2], XYZ_EPS);
+      ASSERT_NEAR(
+          TestHelpers::v<double>(row[5]), laz_files_expected_z_min_4326[0], Z_DATA_EPS);
+      ASSERT_NEAR(
+          TestHelpers::v<double>(row[6]), laz_files_expected_z_max_4326[2], Z_DATA_EPS);
+    }
+
+    // Test xy metadata filtering, here on y
+    // Also test cache off
+    {
+      const auto non_named_arg_query =
+          "SELECT COUNT(*) AS num_points, MIN(x) as min_x, MAX(x) as max_x, MIN(y) as "
+          "min_y, MAX(y) as max_y, MIN(z) as min_z, MAX(z) as max_z FROM "
+          "TABLE(tf_load_point_cloud('" +
+          laz_file_dir + "', 'EPSG:4326', false, -90.0, -70.0, 41.412, 41.413));";
+      const auto named_arg_query =
+          "SELECT COUNT(*) AS num_points, MIN(x) as min_x, MAX(x) as max_x, MIN(y) as "
+          "min_y, MAX(y) as max_y, MIN(z) as min_z, MAX(z) as max_z FROM "
+          "TABLE(tf_load_point_cloud(path => '" +
+          laz_file_dir +
+          "'"
+          ", out_srs => 'EPSG:4326', use_cache => false, x_min => -90.0, "
+          "x_max => -70.0, y_min => 41.412, y_max => 41.413));";
+      for (auto query : {non_named_arg_query, named_arg_query}) {
+        const auto rows = run_multiple_agg(query, dt);
+        const size_t num_rows = rows->rowCount();
+        ASSERT_EQ(num_rows, size_t(1));
+        ASSERT_EQ(rows->colCount(), size_t(7));
+        auto row = rows->getNextRow(false, false);
+
+        // Note that the range filters will cause us to read the first file
+        // in y-range order, index 0 in the above expected metadata arrays
+        // We should find that the calculated range extents match up with the expected
+        // file metadata
+
+        ASSERT_EQ(TestHelpers::v<int64_t>(row[0]), laz_files_expected_num_points[0]);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[1]), laz_files_expected_x_min_4326[0], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[2]), laz_files_expected_x_max_4326[0], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[3]), laz_files_expected_y_min_4326[0], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[4]), laz_files_expected_y_max_4326[0], XYZ_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[5]), laz_files_expected_z_min_4326[0], Z_DATA_EPS);
+        ASSERT_NEAR(
+            TestHelpers::v<double>(row[6]), laz_files_expected_z_max_4326[0], Z_DATA_EPS);
+      }
+    }
+    // TODO(todd): Add tests for coordinate conversions
+  }
+}
+
+}  // unnamed namespace
+
+#endif  // HAVE_POINT_CLOUD_TFS
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);

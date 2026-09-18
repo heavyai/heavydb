@@ -1,0 +1,18 @@
+{
+  "sources": [
+    {
+      "filename": "tableFunctionTest.vert",
+      "file_path": ".",
+      "internal_path": "TableFunctions/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "tableFunctionTest.frag",
+      "file_path": ".",
+      "internal_path": "TableFunctions/",
+      "language": "glsl",
+      "class": "fragment"
+    }
+  ]
+}

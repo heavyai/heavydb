@@ -1,0 +1,402 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_mesh_shader : enable
+//</extensions>
+//<includes>
+#include "Marks/typeDefines.glsl"
+#include "Utils/colorConvertSubroutines.glsl"
+#include "Marks/coordConvertSubroutines.glsl"
+#include "Marks/slabAddressTable.glsl"
+#include "Marks/fastSymbolDefines.glsl"
+//</includes>
+
+// MESH SHADER
+
+#define IS_MESH_SHADER 1
+
+#define workgroupSize <workgroupSize>
+#define workgroupSizeBits <workgroupSizeBits>
+
+layout (local_size_x = workgroupSize, local_size_y = 1, local_size_z = 1) in;
+layout (triangles, max_vertices = workgroupSize * 4, max_primitives = workgroupSize * 2) out;
+
+uint g_output_index = 0u;
+
+// RenderProperty type info defines
+<RenderPropertyTypeInfos>
+
+// Vertex attribute inputs
+<VertexProperties>
+
+// Outputs
+
+// flat uint64_t fRowId
+// flat uint fShapeType
+// flat vec4 fSymbolScale
+// flat float fPointSize
+// flat vec4 fFillColor
+// flat vec4 fStrokeColor
+// flat float fStrokeWidth
+// flat float fApproxMaxCoverage
+// vec2 fUV
+// flat int accumIdx (accumulation render only)
+out <FragmentShaderInputs> v_out[];
+
+// Uniform RenderProperties
+layout(std430) uniform <UniformProperties>;
+
+// viewport data
+struct Viewport {
+  int x;
+  int y;
+  int width;
+  int height;
+};
+
+layout(std430, binding = 0) uniform SHARED_VIEWPORT_UBO {
+  Viewport viewport;
+};
+
+// Push constants
+layout(push_constant) uniform POINT_MESH_PUSH_CONSTANTS {
+  uint firstWorkUnit;
+} pushConstants;
+
+// Color conversion stubs
+vec4 transformfillColorToRGB(in vec4 c) { return c; }
+vec4 transformstrokeColorToRGB(in vec4 c) { return c; }
+vec4 unpackfillColor(in uint c) { return vec4(0); }
+vec4 unpackstrokeColor(in uint c) { return vec4(0); }
+
+// get* functions for properties
+<PropertyGetters>
+
+// project* functions for coord inputs
+inTx projectx(in inTx x) {
+  return x;
+}
+
+inTx2 projectx2(in inTx2 x) {
+  return x;
+}
+
+inTxc projectxc(in inTxc x) {
+  return x;
+}
+
+inTy projecty(in inTy y) {
+  return y;
+}
+
+inTy2 projecty2(in inTy2 y) {
+  return y;
+}
+
+inTyc projectyc(in inTyc y) {
+  return y;
+}
+
+// Set to 1 to handle accumulation rendering in a geometry shader
+// The injected scale will add the necessary interface block output
+// as "out int gAccumIdx"
+#define supportsGeoAccum 1
+
+#define numid <numid>
+#define useKey <useKey>
+
+#define computeX <computeX>
+#define computeY <computeY>
+#define computeWidth <computeWidth>
+#define computeHeight <computeHeight>
+
+#define doHeatmapEdgePad <doHeatmapEdgePad>
+
+layout(std430) uniform FAST_SYMBOL_MESH_UBO_TYPE {
+  float uPivotx;
+  float uPivoty;
+  mat3x2 uVPmatrix;
+  float uInvViewportWidth;
+  float uInvViewportHeight;
+#if useUangle == 1
+  float uSinAngle;
+  float uCosAngle;
+#endif // useUangle
+};
+
+layout(buffer_reference, scalar, buffer_reference_align = 8) buffer VERTEX_DATA {
+  VertexData vertex_data[];
+};
+
+struct WorkUnit {
+  uint32_t row_index;
+  uint32_t point_index_base_and_count;
+};
+
+layout(std430) buffer WORK_UNITS_SSBO {
+  WorkUnit items[];
+} work_units_buffer;
+
+void main() {
+  // work unit index
+  uint32_t work_unit_index = gl_WorkGroupID.x + pushConstants.firstWorkUnit;
+  if (work_unit_index >= work_units_buffer.items.length()) {
+    // this should never happen
+    return;
+  }
+
+  // look up work unit
+  uint32_t row_index = work_units_buffer.items[work_unit_index].row_index;
+  uint32_t point_index_base_and_count = work_units_buffer.items[work_unit_index].point_index_base_and_count;
+
+  // unpack point index base and count
+  uint32_t point_index_base = point_index_base_and_count >> workgroupSizeBits;
+  uint32_t point_count = point_index_base_and_count & (workgroupSize - 1);
+  if (point_count == 0) {
+    point_count = workgroupSize;
+  }
+
+  // size the outputs (primitives are triangles)
+  uint32_t vertex_count = point_count * 4;
+  uint32_t primitive_count = point_count * 2;
+  SetMeshOutputsEXT(vertex_count, primitive_count);
+
+  // output index
+  g_output_index = gl_LocalInvocationID.x;
+
+  // exit if past last point in this work unit
+  if (g_output_index >= point_count) {
+    return;
+  }
+
+  // four vertices/two triangles per primitive
+  uint32_t vert_index0 = g_output_index * 4;
+  uint32_t vert_index1 = vert_index0 + 1;
+  uint32_t vert_index2 = vert_index0 + 2;
+  uint32_t vert_index3 = vert_index0 + 3;
+  uint32_t prim_index = g_output_index * 2;
+  gl_PrimitiveTriangleIndicesEXT[prim_index    ] = uvec3(vert_index0, vert_index1, vert_index2);
+  gl_PrimitiveTriangleIndicesEXT[prim_index + 1] = uvec3(vert_index1, vert_index2, vert_index3);
+
+  // read vertex attributes
+  uint32_t vbo_index = row_index; // generated code expects this
+  <VertexAttributeFetches>
+
+  // check key
+#if useKey == 1
+  if (key == invalidKey) {
+    return;
+  }
+#endif
+
+  // point index
+  uint32_t point_index = point_index_base + g_output_index;
+
+  ///////////////////////////////////////////////////////////////
+
+  uint gShapeType = uint(getshape(shape));
+
+#if computeX == 0
+#if inTxEnum == UNSIGNED_INT64_ARB
+  float finalxPos = float(projectx(getx_ptr(x, propCompressionBits, PROP_COMPRESSION_BIT_X, point_index)));
+#else
+  float finalxPos = float(getx(projectx(x)));
+#endif
+#elif computeX == 1
+#if inTx2Enum == UNSIGNED_INT64_ARB
+  float finalxPos = float(projectx2(getx_ptr(x2, propCompressionBits, PROP_COMPRESSION_BIT_X2, point_index)));
+#else
+  float finalxPos = float(getx2(projectx2(x2)));
+#endif
+#else
+#if inTxcEnum == UNSIGNED_INT64_ARB
+  float finalxPos = float(projectxc(getx_ptr(xc, propCompressionBits, PROP_COMPRESSION_BIT_XC, point_index)));
+#else
+  float finalxPos = float(getxc(projectxc(xc)));
+#endif
+#endif  // computeX
+#if computeY == 0
+#if inTyEnum == UNSIGNED_INT64_ARB
+  float finalyPos = float(projecty(gety_ptr(y, propCompressionBits, PROP_COMPRESSION_BIT_Y, point_index)));
+#else
+  float finalyPos = float(gety(projecty(y)));
+#endif
+#elif computeY == 1
+#if inTy2Enum == UNSIGNED_INT64_ARB
+  float finalyPos = float(projecty2(gety_ptr(y2, propCompressionBits, PROP_COMPRESSION_BIT_Y2, point_index)));
+#else
+  float finalyPos = float(gety2(projecty2(y2)));
+#endif
+#else
+#if inTycEnum == UNSIGNED_INT64_ARB
+  float finalyPos = float(projectyc(gety_ptr(yc, propCompressionBits, PROP_COMPRESSION_BIT_YC, point_index)));
+#else
+  float finalyPos = float(getyc(projectyc(yc)));
+#endif
+#endif  // computeY
+
+#if computeWidth == 0
+  float size_x = float(getwidth(width));
+#else
+#if inTx2Enum == UNSIGNED_INT64_ARB
+  float size_x = float(projectx2(getx_ptr(x2, propCompressionBits, PROP_COMPRESSION_BIT_X2, point_index))) - finalxPos;
+#else
+  float size_x = float(getx2(projectx2(x2))) - finalxPos;
+#endif
+#endif  // computeWidth
+#if computeHeight == 0
+  float size_y = float(getheight(height));
+#else
+#if inTy2Enum == UNSIGNED_INT64_ARB
+  float size_y = float(projecty2(gety_ptr(y2, propCompressionBits, PROP_COMPRESSION_BIT_Y2, point_index))) - finalyPos;
+#else
+  float size_y = float(gety2(projecty2(y2))) - finalyPos;
+#endif
+#endif  // computeHeight
+
+  // Skip adding the pad and return if the point is too small to render
+  // The geometry shader will check the point size and bail
+  if (max(size_x, size_y) < 0.1) {
+    return;
+  }
+
+  ///////////////////////////////////////////////
+
+  vec2 point_size = vec2(size_x, size_y);
+
+  // Grow the point slightly in order to guarantee there are no subpixel gaps between the
+  // points when rendering binned heatmaps
+#if doHeatmapEdgePad == 1
+  point_size += 0.1;
+#endif // doHeatmapEdgePad
+
+  float max_size = max(point_size.x, point_size.y);
+
+  // Don't emit for small points
+  if (max_size < CULL_SIZE) {
+    return;
+  }
+
+  float gStrokeWidth = float(getstrokeWidth(strokeWidth));
+
+  float out_stroke_width = gStrokeWidth;
+
+  // determine the approximate maximum pixel coverage for the symbol. This is needed
+  // for sizes < 1.0
+  // TODO: incorporate stroke width?
+  float out_approx_max_coverage = min(1.0, point_size.x) * min(1.0, point_size.y);
+
+  // always round up otherwise we'll lose strokes that are < 0.5 pixels
+  // on shapes that abut the edge of the quad
+  float out_point_size = max_size + ceil(out_stroke_width);
+
+  ///////////////////////////////////////////////
+
+#if useUangle == 0
+  float gAngle = float(getangle(angle));
+  if (uint(getangleUnit(angleUnit)) == 1) {
+    gAngle = radians(gAngle);
+  }
+#endif // useUangle
+
+  vec4 gFillColor = transformfillColorToRGB(getfillColor(fillColor));
+  gFillColor.a *= float(getopacity(opacity)) * float(getfillOpacity(fillOpacity));
+
+  vec4 gStrokeColor = transformstrokeColorToRGB(getstrokeColor(strokeColor));
+  gStrokeColor.a *= float(getopacity(opacity)) * float(getstrokeOpacity(strokeOpacity));
+
+#if useUangle == 0
+  float sin_angle = sin(-gAngle);
+  float cos_angle = cos(-gAngle);
+  mat2 rot_tm = mat2(cos_angle * uInvViewportWidth, -sin_angle * uInvViewportWidth,
+                     sin_angle * uInvViewportHeight, cos_angle * uInvViewportHeight);
+#else // useUangle
+  mat2 rot_tm = mat2(uCosAngle * uInvViewportWidth, -uSinAngle * uInvViewportWidth,
+                     uSinAngle * uInvViewportHeight, uCosAngle * uInvViewportHeight);
+#endif
+
+  vec2 raw_pos = vec2(finalxPos, finalyPos);
+  vec2 pos = vec2((uVPmatrix[0][0] * raw_pos.x) + uVPmatrix[2][0],
+                  (uVPmatrix[1][1] * raw_pos.y) + uVPmatrix[2][1]);
+
+  // pivot for wedge is offset 30%
+  // The pad multiplier of 0.3333 was determined via empirical testing because my brain hurted
+  float pivot_y = gShapeType == WEDGE ? uPivoty + (0.3333 - (NUM_PAD_PIXELS * 0.3333 / out_point_size)) : uPivoty;
+  vec2 pivot = vec2((uPivotx * 2.0) * (point_size.x + NUM_PAD_PIXELS), (pivot_y * 2.0) * (point_size.y + NUM_PAD_PIXELS));
+
+  float point_size_padded = out_point_size + NUM_PAD_PIXELS;
+
+  vec4 symbol_scale;
+  if (gShapeType == CIRCLE) {
+    symbol_scale = vec4(point_size_padded / point_size.x, point_size_padded / point_size.y,
+                        point_size.x / point_size_padded, point_size.y / point_size_padded);
+  } else {
+    float d = 1.0 / point_size_padded;
+    symbol_scale = vec4(d * point_size.x, d * point_size.y, 0.0, 0.0);
+  }
+
+  ///////////////////////////////////////////////////////////////
+
+#if doAccumIndex == 1
+#define EMIT_ACCUM_INDEX(index) v_out[index].accumIdx = gAccumIdx;
+#else
+#define EMIT_ACCUM_INDEX(index)
+#endif
+
+#define EMIT_UNIFORM_OUTPUTS(index)                          \
+  EMIT_ACCUM_INDEX(index);                                   \
+  v_out[index].fShapeType = gShapeType;                      \
+  v_out[index].fSymbolScale = symbol_scale;                  \
+  v_out[index].fPointSize = out_point_size;                  \
+  v_out[index].fFillColor = gFillColor;                      \
+  v_out[index].fStrokeColor = gStrokeColor;                  \
+  v_out[index].fStrokeWidth = out_stroke_width;              \
+  v_out[index].fApproxMaxCoverage = out_approx_max_coverage;
+
+  // VERTEX 0
+  v_out[vert_index0].fUV = vec2(0.0, 0.0);
+  gl_MeshVerticesEXT[vert_index0].gl_Position = vec4((vec2(-point_size_padded, -point_size_padded) + pivot) * rot_tm + pos, 0.0, 1.0);
+  EMIT_UNIFORM_OUTPUTS(vert_index0);
+
+  // VERTEX 1
+  v_out[vert_index1].fUV = vec2(1.0, 0.0);
+  gl_MeshVerticesEXT[vert_index1].gl_Position = vec4((vec2(point_size_padded, -point_size_padded) + pivot) * rot_tm + pos, 0.0, 1.0);
+  EMIT_UNIFORM_OUTPUTS(vert_index1);
+
+  // VERTEX 2
+  v_out[vert_index2].fUV = vec2(0.0, 1.0);
+  gl_MeshVerticesEXT[vert_index2].gl_Position = vec4((vec2(-point_size_padded, point_size_padded) + pivot) * rot_tm + pos, 0.0, 1.0);
+  EMIT_UNIFORM_OUTPUTS(vert_index2);
+
+  // VERTEX 3
+  v_out[vert_index3].fUV = vec2(1.0, 1.0);
+  gl_MeshVerticesEXT[vert_index3].gl_Position = vec4((vec2(point_size_padded, point_size_padded) + pivot) * rot_tm + pos, 0.0, 1.0);
+  EMIT_UNIFORM_OUTPUTS(vert_index3);
+
+  ///////////////////////////////////////////////////////////////
+
+  // ids from queries go from 0 to numrows-1, but since we're storing
+  // the ids as unsigned ints, and there isn't a way to specify the
+  // clear value for secondary buffers, we need to account for that
+  // offset here
+  uint64_t fRowId = 0;
+#if numid >= 1
+  fRowId = uint64_t(id + 1);
+#endif
+#if numid >= 2
+  int total_bitshift = id_offsets[0];
+  fRowId = (uint64_t(id1 + 1) << total_bitshift) | fRowId;
+#endif
+#if numid >= 3
+  total_bitshift += id_offsets[1];
+  fRowId = (uint64_t(id2 + 1) << total_bitshift) | fRowId;
+#endif
+  v_out[vert_index0].fRowId = fRowId;
+  v_out[vert_index1].fRowId = fRowId;
+  v_out[vert_index2].fRowId = fRowId;
+  v_out[vert_index3].fRowId = fRowId;
+}

@@ -1,12 +1,17 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package com.mapd.common;
 
-import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
-import org.apache.http.conn.ssl.SSLSocketFactory;
-import org.apache.http.conn.ssl.X509HostnameVerifier;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.ssl.SSLContextBuilder;
-import org.apache.http.ssl.SSLContexts;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.ssl.DefaultHostnameVerifier;
+import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
+import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
 import org.apache.thrift.transport.THttpClient;
 import org.apache.thrift.transport.TSSLTransportFactory;
 import org.apache.thrift.transport.TServerSocket;
@@ -24,6 +29,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 
+import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
@@ -118,8 +124,8 @@ public class SockTransportProperties {
           String passwd,
           boolean validate_server_name) throws Exception {
     x509HostnameVerifier_ = (validate_server_name == true)
-            ? SSLConnectionSocketFactory.STRICT_HOSTNAME_VERIFIER
-            : SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER;
+            ? new DefaultHostnameVerifier()
+            : NoopHostnameVerifier.INSTANCE;
     transportType = tT;
 
     char[] store_password = "".toCharArray();
@@ -163,8 +169,8 @@ public class SockTransportProperties {
   private SockTransportProperties(
           TransportType transportType, boolean validate_server_name) throws Exception {
     x509HostnameVerifier_ = (validate_server_name == true)
-            ? SSLConnectionSocketFactory.STRICT_HOSTNAME_VERIFIER
-            : SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER;
+            ? new DefaultHostnameVerifier()
+            : NoopHostnameVerifier.INSTANCE;
     this.transportType = transportType;
     switch (transportType) {
       case encryptedClientDefaultTrustStore:
@@ -267,9 +273,13 @@ public class SockTransportProperties {
       sslConnectionSocketFactory =
               new SSLConnectionSocketFactory(sc, x509HostnameVerifier_);
 
+      PoolingHttpClientConnectionManager connectionManager =
+              PoolingHttpClientConnectionManagerBuilder.create()
+                      .setSSLSocketFactory(sslConnectionSocketFactory)
+                      .build();
       CloseableHttpClient closeableHttpClient =
               HttpClients.custom()
-                      .setSSLSocketFactory(sslConnectionSocketFactory)
+                      .setConnectionManager(connectionManager)
                       .build();
       transport =
               new THttpClient("https://" + server_host + ":" + port, closeableHttpClient);
@@ -338,6 +348,5 @@ public class SockTransportProperties {
   private KeyManager[] keyManagers;
   private String key_store_name = null;
   private char[] key_store_password = null;
-  X509HostnameVerifier x509HostnameVerifier_ =
-          SSLConnectionSocketFactory.BROWSER_COMPATIBLE_HOSTNAME_VERIFIER;
+  HostnameVerifier x509HostnameVerifier_ = new DefaultHostnameVerifier();
 }

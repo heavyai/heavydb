@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <Tests/TestHelpers.h>
@@ -46,17 +35,24 @@
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
 #include "QueryEngine/ResultSet.h"
+#include "Shared/Encryption.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/file_path_util.h"
 #include "Shared/import_helpers.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
+#include "Shared/timedate.h"
 
 #include "DBHandlerTestHelpers.h"
 #include "ThriftHandler/DBHandler.h"
 
 #include "ImportExport/ForeignDataImporter.h"
 #include "ImportExport/RasterImporter.h"
+
+#ifdef EE_FSI_ODBC
+#include "DataMgr/ForeignStorage/ODBC/odbc_utils.h"
+#include "OdbcFsiTestHelper.h"
+#endif  // def(EE_FSI_ODBC)
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -73,6 +69,10 @@ extern bool g_enable_s3_fsi;
 extern bool g_enable_legacy_delimited_import;
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_legacy_parquet_import;
+#endif
+extern bool g_enable_legacy_raster_import;
+#ifdef EE_FSI_ODBC
+extern bool g_enable_fsi_odbc_import;
 #endif
 extern bool g_enable_fsi_regex_import;
 
@@ -143,12 +143,6 @@ bool g_regenerate_export_test_reference_files = false;
 bool g_run_odbc{false};
 bool g_run_minio{false};
 std::string g_minio_hostname{"localhost"};
-
-#define SKIP_ALL_ON_AGGREGATOR()                         \
-  if (isDistributedMode()) {                             \
-    LOG(ERROR) << "Tests not valid in distributed mode"; \
-    return;                                              \
-  }
 
 std::string options_to_string(const std::map<std::string, std::string>& options,
                               bool seperate = true) {
@@ -421,7 +415,6 @@ class ImportTestDate : public ImportExportTestBase {
 };
 
 TEST_F(ImportTestDate, ImportMixedDates) {
-  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
   runMixedDatesTest();
 }
 
@@ -464,7 +457,6 @@ class ImportTestInt : public ImportExportTestBase {
 };
 
 TEST_F(ImportTestInt, ImportBadInt) {
-  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
   // this dataset tests that rows outside the allowed valus are rejected
   // no rows should be added
   ASSERT_NO_THROW(
@@ -485,7 +477,6 @@ TEST_F(ImportTestInt, ImportBadInt) {
 };
 
 TEST_F(ImportTestInt, ImportGoodInt) {
-  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
   // this dataset tests that rows inside the allowed values are accepted
   // all rows should be added
   ASSERT_NO_THROW(
@@ -608,7 +599,6 @@ class ImportTestLegacyDate : public ImportTestDate {
 };
 
 TEST_F(ImportTestLegacyDate, ImportMixedDates) {
-  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
   runMixedDatesTest();
 }
 
@@ -720,6 +710,10 @@ class FsiImportTest {
 #ifdef ENABLE_IMPORT_PARQUET
     std::swap(g_enable_legacy_parquet_import, stored_g_enable_legacy_parquet_import_);
 #endif
+    std::swap(g_enable_legacy_raster_import, stored_g_enable_legacy_raster_import_);
+#ifdef EE_FSI_ODBC
+    std::swap(g_enable_fsi_odbc_import, stored_g_enable_fsi_odbc_import_);
+#endif
     std::swap(g_enable_fsi_regex_import, stored_g_enable_fsi_regex_import_);
   }
 
@@ -727,6 +721,10 @@ class FsiImportTest {
     std::swap(g_enable_legacy_delimited_import, stored_g_enable_legacy_delimited_import_);
 #ifdef ENABLE_IMPORT_PARQUET
     std::swap(g_enable_legacy_parquet_import, stored_g_enable_legacy_parquet_import_);
+#endif
+    std::swap(g_enable_legacy_raster_import, stored_g_enable_legacy_raster_import_);
+#ifdef EE_FSI_ODBC
+    std::swap(g_enable_fsi_odbc_import, stored_g_enable_fsi_odbc_import_);
 #endif
     std::swap(g_enable_fsi_regex_import, stored_g_enable_fsi_regex_import_);
     std::swap(g_enable_s3_fsi, stored_g_enable_s3_fsi_);
@@ -738,6 +736,10 @@ class FsiImportTest {
   bool stored_g_enable_legacy_delimited_import_ = false;
 #ifdef ENABLE_IMPORT_PARQUET
   bool stored_g_enable_legacy_parquet_import_ = false;
+#endif
+  bool stored_g_enable_legacy_raster_import_ = false;
+#ifdef EE_FSI_ODBC
+  bool stored_g_enable_fsi_odbc_import_ = true;
 #endif
   bool stored_g_enable_fsi_regex_import_ = true;
 };
@@ -801,6 +803,75 @@ TEST_F(RegexParserImportConfigurationErrorHandling, NoLineRegex) {
                           "Regex parser options must contain a line regex.");
 }
 
+#ifdef EE_FSI_ODBC
+
+class OdbcImportConfigurationErrorHandling : public ImportConfigurationErrorHandling {
+  void SetUp() override {
+    ImportConfigurationErrorHandling::SetUp();
+    if (!g_run_odbc) {
+      GTEST_SKIP();
+    }
+  }
+};
+
+TEST_F(OdbcImportConfigurationErrorHandling, NoDsnOrConfigurationString) {
+  queryAndAssertException(
+      "COPY test_table from 'SELECT * FROM import_test;' WITH "
+      "(source_type='odbc', sql_order_by='t');",
+      "ODBC options must contain either a data source name or a connection string.");
+}
+
+TEST_F(OdbcImportConfigurationErrorHandling, OnlyDsnOrConfigurationString) {
+  queryAndAssertException(
+      "COPY test_table from 'SELECT * FROM import_test;' WITH (source_type='odbc',"
+      "connection_string='database;',data_source_name='database', "
+      "sql_order_by='t');",
+      "ODBC options must contain only one of data source name or connection string.");
+}
+
+TEST_F(OdbcImportConfigurationErrorHandling, PasswordRequiresUsername) {
+  queryAndAssertException(
+      "COPY test_table from 'SELECT * FROM import_test;' WITH "
+      "(source_type='odbc',data_source_name='database',password='passwd', "
+      "sql_order_by='t');",
+      "ODBC option password requires a matching username option.");
+}
+
+TEST_F(OdbcImportConfigurationErrorHandling, OnlyUsernameOrCredentialString) {
+  queryAndAssertException(
+      "COPY test_table from 'SELECT * FROM import_test;' WITH "
+      "(source_type='odbc',data_source_name='database',username='user',"
+      "credential_string='passwd', sql_order_by='t');",
+      "ODBC options must contain only one of username/password or credential string.");
+}
+
+TEST_F(OdbcImportConfigurationErrorHandling, UsernameRequiresDsn) {
+  queryAndAssertException(
+      "COPY test_table from 'SELECT * FROM import_test;' WITH "
+      "(source_type='odbc',username='user',connection_string='"
+      "database', sql_order_by='t');",
+      "The ODBC credential option \"username\" is incompatible with the ODBC connection "
+      "option \"connection_string\".");
+}
+
+TEST_F(OdbcImportConfigurationErrorHandling, CredentialStringRequiresConnectionString) {
+  queryAndAssertException(
+      "COPY test_table from 'SELECT * FROM import_test;' WITH "
+      "(source_type='odbc',credential_string='passwd',data_source_name='database'"
+      ", sql_order_by='t');",
+      "The ODBC credential option \"credential_string\" is incompatible with the ODBC "
+      "connection option \"data_source_name\".");
+}
+
+TEST_F(OdbcImportConfigurationErrorHandling, OrderBy) {
+  queryAndAssertException(
+      "COPY test_table from 'SELECT * FROM import_test;' WITH "
+      "(source_type='odbc', data_source_name='database');",
+      "Option \"SQL ORDER BY\" must be specified when copying from an ODBC source.");
+}
+
+#endif
+
 using CodePath = std::string;
 using ErrorColumnType = std::string;
 using ImportType = std::string;
@@ -812,18 +883,8 @@ namespace {
 
 void validate_table_epoch(const int32_t expected_epoch,
                           const int32_t table_id,
-                          const Catalog_Namespace::Catalog* catalog,
-                          const bool is_distributed_mode) {
-  if (!is_distributed_mode) {
-    ASSERT_EQ(expected_epoch, catalog->getTableEpoch(catalog->getDatabaseId(), table_id));
-  } else {
-    auto epochs = catalog->getTableEpochs(catalog->getDatabaseId(), table_id);
-    for (const auto& epoch : epochs) {
-      if (epoch.leaf_index >= 0) {
-        ASSERT_EQ(expected_epoch, epoch.table_epoch);
-      }
-    }
-  }
+                          const Catalog_Namespace::Catalog* catalog) {
+  ASSERT_EQ(expected_epoch, catalog->getTableEpoch(catalog->getDatabaseId(), table_id));
 }
 
 void validate_import_status(
@@ -836,7 +897,6 @@ void validate_import_status(
     const int32_t expected_epoch,
     const int32_t table_id,
     const Catalog_Namespace::Catalog* catalog,
-    const bool is_distributed_mode,
     const std::optional<std::string>& error_message = std::nullopt) {
   // Verify the string result set returend by COPY FROM
   std::string expected_copy_from_result =
@@ -882,7 +942,7 @@ void validate_import_status(
   ASSERT_EQ(failed_status, import_status.load_failed)
       << " incorrect load_failed flag in import status";
 
-  validate_table_epoch(expected_epoch, table_id, catalog, is_distributed_mode);
+  validate_table_epoch(expected_epoch, table_id, catalog);
 }
 
 std::string get_copy_from_result_str(const TQueryResult& copy_from_query_result) {
@@ -931,8 +991,7 @@ class ParquetImportErrorHandling : public ImportExportTestBase, public FsiImport
                            failed_status,
                            expected_epoch,
                            getTableId(table_name),
-                           &getCatalog(),
-                           isDistributedMode());
+                           &getCatalog());
   }
 
   const std::string fsi_file_base_dir = "../../Tests/FsiDataFiles/";
@@ -1142,11 +1201,17 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     ImportExportTestBase::SetUp();
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
     if (g_run_odbc && is_odbc(param_.import_type)) {
+#ifdef EE_FSI_ODBC
+      ASSERT_NO_THROW(createODBCSchema(param_.import_type));
+#endif  // EE_FSI_ODBC
     }
   }
 
   void TearDown() override {
     if (g_run_odbc && is_odbc(param_.import_type)) {
+#ifdef EE_FSI_ODBC
+      ASSERT_NO_THROW(dropODBCSchema(param_.import_type));
+#endif  // EE_FSI_ODBC
     }
     ASSERT_NO_THROW(sql("DROP TABLE IF EXISTS import_test_new;"));
     ImportExportTestBase::TearDown();
@@ -1228,7 +1293,6 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
                            expected_epoch,
                            getTableId(table_name),
                            &getCatalog(),
-                           isDistributedMode(),
                            error_message);
   }
 
@@ -1278,7 +1342,15 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     auto copy_from_source = "'" + file_path + "'";
 
     if (is_odbc(import_type)) {
-      UNREACHABLE();
+      auto column_pairs =
+          DBHandlerTestFixture::schema_string_to_column_pairs(odbc_schema);
+      for (auto& [name, type] : column_pairs) {
+        if (is_quoted_identifier(name)) {
+          name = quoted_identifier(import_type, strip_quoted_identifier(name));
+        }
+      }
+      createODBCSourceTable("import_test", column_pairs, file_path, import_type);
+      copy_from_source = odbc_select;
     }
 
     // strip quotations from `copy_from_source` which will be the `import_id` used by
@@ -1411,6 +1483,15 @@ class ImportAndSelectTestBase : public ImportExportTestBase, public FsiImportTes
     if (import_type == "parquet") {
       options.emplace_back("source_type='parquet_file'");
     }
+    if (is_odbc(import_type)) {
+#ifdef EE_FSI_ODBC
+      options.emplace_back("source_type='odbc'");
+      options.emplace_back("data_source_name='" + import_type + "'");
+      auto [username, password] = getODBCCredentials(import_type);
+      options.emplace_back("username='" + username + "'");
+      options.emplace_back("password='" + password + "'");
+#endif  // EE_FSI_ODBC
+    }
     if (data_source_type == "s3_public" || data_source_type == "s3_private") {
       options.emplace_back("s3_region='us-west-1'");
     }
@@ -1526,8 +1607,13 @@ TEST_P(ImportAndSelectTest, GeoTypes) {
   if (!does_wrapper_support_geo_type(param_.import_type)) {
     GTEST_SKIP() << param_.import_type << " does not support geometry types";
   }
-
-  std::string sql_select_stmt = "";
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT index, ST_AsText(p) as p, ST_AsText(mp) as mp, ST_AsText(l) as l, ST_AsText(mlinestring) as mlinestring, ST_AsText(poly) as poly, ST_AsText(multipoly) as multipoly FROM "s +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT, mp MULTIPOINT, l LINESTRING, mlinestring MULTILINESTRING, "
       "poly POLYGON, "
@@ -1646,8 +1732,42 @@ TEST_P(ImportAndSelectTest, FixedLengthArrayTypes) {
   validateImportStatus(3, 0, false, "import_test_new", 1);
 }
 
+TEST_P(ImportAndSelectTest, QuotedIdentifier) {
+  if (!is_odbc(param_.import_type)) {
+    GTEST_SKIP() << " quoted identifier test supported for ODBC data sources only.";
+  }
+
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT " + quoted_identifier(param_.import_type, "iD") + " FROM " +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
+  auto query =
+      createTableCopyFromAndSelect("\"iD\" BIGINT",
+                                   "1",
+                                   "SELECT * FROM import_test_new ORDER BY \"iD\";",
+                                   {},
+                                   8,
+                                   false,
+                                   sql_select_stmt,
+                                   quoted_identifier(param_.import_type, "iD"));
+
+  auto expected_values = std::vector<std::vector<NullableTargetValue>>{{1L}};
+
+  validateImportStatus(1, 0, false, "import_test_new", 1);
+  assertResultSetEqual(expected_values, query);
+}
+
 TEST_P(ImportAndSelectTest, ScalarTypes) {
-  std::string sql_select_stmt = "";
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM " +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
   std::string schema =
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
       "DECIMAL(10,5), tm " +
@@ -1684,19 +1804,27 @@ TEST_P(ImportAndSelectTest, ScalarTypes) {
 }
 
 TEST_P(ImportAndSelectTest, Sharded) {
-  std::string sql_select_stmt = "";
-  auto query = createTableCopyFromAndSelect(
-      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
-      "txt_2 TEXT ENCODING NONE, shard key(txt)",
-      "scalar_types",
-      "SELECT * FROM import_test_new ORDER BY s;",
-      get_line_regex(12),
-      14,
-      false,
-      sql_select_stmt,
-      "s",
-      "SHARD_COUNT=2");
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM "s +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE, shard key(txt)";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "scalar_types",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s",
+                                            "SHARD_COUNT=2");
 
   // clang-format off
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{
@@ -1754,7 +1882,13 @@ TEST_P(ImportAndSelectTest, InvalidGeoTypesRecord) {
   if (!does_wrapper_support_geo_type(param_.import_type)) {
     GTEST_SKIP() << param_.import_type << " does not support geometry types";
   }
-  std::string sql_select_stmt = "";
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT index, ST_AsText(p) as p, ST_AsText(mp) as mp, l, mlinestring, ST_AsText(poly) as poly, ST_AsText(multipoly) as multipoly FROM "s +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT, mp MULTIPOINT, l LINESTRING, mlinestring MULTILINESTRING, "
       "poly POLYGON, "
@@ -1803,7 +1937,12 @@ TEST_P(ImportAndSelectTest, GeoValidateGeometryPolygon) {
     GTEST_SKIP() << "sqlite does not support geometry types";
   }
   std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT index, p FROM "s +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
       "";
+#endif
   createTableCopyFromAndSelect("index INT, p POLYGON",
                                "invalid_polygon",
                                "SELECT * FROM import_test_new;",
@@ -1824,7 +1963,12 @@ TEST_P(ImportAndSelectTest, GeoValidateGeometryMultiPolygon) {
     GTEST_SKIP() << "sqlite does not support geometry types";
   }
   std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT index, mp FROM "s +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
       "";
+#endif
   createTableCopyFromAndSelect("index INT, mp MULTIPOLYGON",
                                "invalid_multipolygon",
                                "SELECT * FROM import_test_new;",
@@ -1849,7 +1993,13 @@ TEST_P(ImportAndSelectTest, NotNullGeoTypeColumns) {
   if (!does_wrapper_support_geo_type(param_.import_type)) {
     GTEST_SKIP() << param_.import_type << " does not support geometry types";
   }
-  std::string sql_select_stmt = "";
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT index, ST_AsText(p) as p, ST_AsText(mp) as mp, l, mlinestring, ST_AsText(poly) as poly, ST_AsText(multipoly) as multipoly FROM "s +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
   auto query = createTableCopyFromAndSelect(
       "index int, p POINT NOT NULL, mp MULTIPOINT NOT NULL, l LINESTRING NOT NULL, "
       "mlinestring MULTILINESTRING "
@@ -2025,7 +2175,13 @@ TEST_P(ImportAndSelectTest, NotNullFixedLengthArrayTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, InvalidScalarTypesRecord) {
-  std::string sql_select_stmt = "";
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM " +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
   std::string schema =
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
       "DECIMAL(10,5), tm " +
@@ -2064,7 +2220,13 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
   if (param_.data_source_type != "local") {
     GTEST_SKIP();
   }
-  std::string sql_select_stmt = "";
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM " +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
   std::string schema =
       "b BOOLEAN NOT NULL, t TINYINT NOT NULL, s SMALLINT NOT NULL, i INTEGER NOT NULL, "
       "bi BIGINT NOT NULL, f FLOAT NOT NULL, dc "
@@ -2104,7 +2266,13 @@ TEST_P(ImportAndSelectTest, NotNullScalarTypeColumns) {
 }
 
 TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
-  std::string sql_select_stmt = "";
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM " +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
   std::string schema =
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
       "DECIMAL(10,5), tm " +
@@ -2138,22 +2306,30 @@ TEST_P(ImportAndSelectTest, ShardedWithInvalidRecord) {
 }
 
 TEST_P(ImportAndSelectTest, MaxRejectReached) {
-  std::string sql_select_stmt = "";
-  auto query = createTableCopyFromAndSelect(
-      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
-      "dc DECIMAL(10,5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
-      "txt_2 TEXT ENCODING NONE",
-      "invalid_records/scalar_types",
-      "SELECT * FROM import_test_new ORDER BY s;",
-      get_line_regex(12),
-      14,
-      false,
-      sql_select_stmt,
-      "s",
-      {},
-      false,
-      /*max_reject=*/0,
-      {{"INTEGER", "BIGINT"}});
+  std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM " +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
+      "";
+#endif
+  std::string schema =
+      "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
+      "DECIMAL(10,5), tm " +
+      std::string(param_.import_type == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, txt_2 TEXT ENCODING NONE";
+  auto query = createTableCopyFromAndSelect(schema,
+                                            "invalid_records/scalar_types",
+                                            "SELECT * FROM import_test_new ORDER BY s;",
+                                            get_line_regex(12),
+                                            14,
+                                            false,
+                                            sql_select_stmt,
+                                            "s",
+                                            {},
+                                            false,
+                                            /*max_reject=*/0,
+                                            {{"INTEGER", "BIGINT"}});
 
   auto expected_values = std::vector<std::vector<NullableTargetValue>>{};
 
@@ -2235,6 +2411,8 @@ TEST_P(ImportAndSelectTest, LongerNoneEncodedString) {
 }
 
 namespace {
+// Omit s3_public from the generated sanity matrix. The public bucket
+// currently returns AccessDenied before import behavior is exercised.
 auto print_import_and_select_test_param = [](const auto& param_info) {
   std::string file_type, data_source_type;
   int32_t fragment_size;
@@ -2246,11 +2424,26 @@ auto print_import_and_select_test_param = [](const auto& param_info) {
          std::to_string(fragment_size) + "_numElementsPerChunk_" +
          std::to_string(num_elements_per_chunk);
 };
-}
+}  // namespace
 
 INSTANTIATE_TEST_SUITE_P(FileAndDataSourceTypes,
                          ImportAndSelectTest,
-                         ::testing::Combine(::testing::Values("csv"),
+                         ::testing::Combine(::testing::Values("csv",
+                                                              "regex_parser"
+#ifdef ENABLE_IMPORT_PARQUET
+                                                              ,
+                                                              "parquet"
+#endif
+#ifdef EE_FSI_ODBC
+                                                              ,
+                                                              "postgres",
+                                                              "sqlite",
+                                                              "redshift",
+                                                              "snowflake",
+                                                              "bigquery",
+                                                              "hive"
+#endif
+                                                              ),
                                             ::testing::Values("local"
 #ifdef HAVE_AWS_S3
                                                               ,
@@ -2357,7 +2550,12 @@ INSTANTIATE_TEST_SUITE_P(LocalFiles,
 
 TEST_P(FileTypeOnlyImportAndSelectTest, DropColumnsThenReadd) {
   std::string sql_select_stmt =
+#ifdef EE_FSI_ODBC
+      "'SELECT b, t, s, i, bi, f, dc, tm, tp, d, txt, txt_2 FROM " +
+      DBHandlerTestFixture::getOdbcTableName("import_test", param_.import_type) + ";'";
+#else
       "";
+#endif
   std::string schema =
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
       "DECIMAL(10,5), tm " +
@@ -2429,6 +2627,15 @@ INSTANTIATE_TEST_SUITE_P(DataSourceTypes,
 #ifdef ENABLE_IMPORT_PARQUET
                                            ,
                                            "parquet"
+#endif
+#ifdef EE_FSI_ODBC
+                                           ,
+                                           "postgres",
+                                           "sqlite",
+                                           "redshift",
+                                           "snowflake",
+                                           "bigquery",
+                                           "hive"
 #endif
                                            ),
                          [](const auto& info) { return info.param; });
@@ -3143,6 +3350,7 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
       "Parquet file: ../../Tests/Import/datafiles/unique_rowgroups.parquet.");
 }
 #ifdef HAVE_AWS_S3
+// s3 parquet test cases
 TEST_F(ImportTest, S3_Regex_path_filter_parquet_match) {
   executeLambdaAndAssertException(
       [&]() {
@@ -3155,8 +3363,8 @@ TEST_F(ImportTest, S3_Regex_path_filter_parquet_match) {
                                    "c000.snappy.parquet$"}}));
       },
       "Conversion from Parquet type \"INT96\" to HeavyDB type \"TIMESTAMP(0)\" is not "
-      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime,"
-      " HeavyDB column: pickup_datetime, Parquet file: "
+      "allowed. Please use an appropriate column type. Parquet column: pickup_datetime, "
+      "HeavyDB column: pickup_datetime, Parquet file: "
       "heavyai-import-test/Trips/Parquet/"
       "part-00000-027865e6-e4d9-40b9-97ff-83c5c5531154-c000.snappy.parquet.");
 }
@@ -3934,7 +4142,6 @@ class ImportTestGDAL : public ImportTestGeo {
 };
 
 TEST_F(ImportTestGDAL, Geojson_Point_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_point/geospatial_point.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -3943,7 +4150,6 @@ TEST_F(ImportTestGDAL, Geojson_Point_Import) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_Poly_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_poly.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -3952,7 +4158,6 @@ TEST_F(ImportTestGDAL, Geojson_Poly_Import) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -3961,7 +4166,6 @@ TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Mixed_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   // this file contains 5 MULTIPOLYGON and 5 POLYGON
   // so is a test of automatic data promotion
   const auto file_path =
@@ -3972,7 +4176,6 @@ TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Mixed_Import) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Explode_MPoly_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, true);
@@ -3981,7 +4184,6 @@ TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Explode_MPoly_Import) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Explode_Mixed_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mixed.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, true);
@@ -3990,7 +4192,6 @@ TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Explode_Mixed_Import) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import_Empties) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_empties.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -4000,7 +4201,6 @@ TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import_Empties) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import_Degenerate) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_degenerate.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -4010,7 +4210,6 @@ TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Import_Degenerate) {
 }
 
 TEST_F(ImportTestGDAL, Shapefile_Point_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
   checkGeoGdalPointImport();
@@ -4018,7 +4217,6 @@ TEST_F(ImportTestGDAL, Shapefile_Point_Import) {
 }
 
 TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
   checkGeoGdalPolyOrMpolyImport(false, false);  // poly, not exploded
@@ -4026,7 +4224,6 @@ TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import) {
 }
 
 TEST_F(ImportTestGDAL, Shapefile_Point_Import_Compressed) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
   importTestGeofileImporter(file_path.string(), "geospatial", true, false);
   checkGeoGdalPointImport("POINT (0.999999940861017 0.999999982770532)");
@@ -4034,7 +4231,6 @@ TEST_F(ImportTestGDAL, Shapefile_Point_Import_Compressed) {
 }
 
 TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import_Compressed) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
   importTestGeofileImporter(file_path.string(), "geospatial", true, false);
   checkGeoGdalMpolyImport(
@@ -4043,7 +4239,6 @@ TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import_Compressed) {
 }
 
 TEST_F(ImportTestGDAL, Shapefile_Point_Import_3857) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_point/geospatial_point_3857.shp");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -4052,7 +4247,6 @@ TEST_F(ImportTestGDAL, Shapefile_Point_Import_3857) {
 }
 
 TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import_3857) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_3857.shp");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -4061,7 +4255,6 @@ TEST_F(ImportTestGDAL, Shapefile_MultiPolygon_Import_3857) {
 }
 
 TEST_F(ImportTestGDAL, Shapefile_Invalid_CRS) {
-  SKIP_ALL_ON_AGGREGATOR();
   // this file has a CRS (WKT text in the .prj file) which will cause GDAL's
   // OGRSpatialReference::Validate() function to return an error. As of SIO-1713
   // this function is no longer called, so this file should import without error.
@@ -4071,7 +4264,6 @@ TEST_F(ImportTestGDAL, Shapefile_Invalid_CRS) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Append) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -4082,7 +4274,6 @@ TEST_F(ImportTestGDAL, Geojson_MultiPolygon_Append) {
 }
 
 TEST_F(ImportTestGDAL, Geodatabase_Simple) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geodatabase/S_USA.Experimental_Area_Locations.gdb.zip");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -4090,7 +4281,6 @@ TEST_F(ImportTestGDAL, Geodatabase_Simple) {
 }
 
 TEST_F(ImportTestGDAL, KML_Simple) {
-  SKIP_ALL_ON_AGGREGATOR();
   if (!Geospatial::GDAL::supportsDriver("libkml")) {
     LOG(ERROR) << "Test requires LibKML support in GDAL";
   } else {
@@ -4101,7 +4291,6 @@ TEST_F(ImportTestGDAL, KML_Simple) {
 }
 
 TEST_F(ImportTestGDAL, FlatGeobuf_Point_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.fgb");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
   checkGeoGdalPointImport();
@@ -4109,7 +4298,6 @@ TEST_F(ImportTestGDAL, FlatGeobuf_Point_Import) {
 }
 
 TEST_F(ImportTestGDAL, FlatGeobuf_MultiPolygon_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.fgb");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
   checkGeoGdalPolyOrMpolyImport(false, false);  // poly, not exploded
@@ -4117,7 +4305,6 @@ TEST_F(ImportTestGDAL, FlatGeobuf_MultiPolygon_Import) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_Point_Import_Glob) {
-  SKIP_ALL_ON_AGGREGATOR();
   auto const file_path =
       boost::filesystem::path("geospatial_point/geospatial_point_*.geojson");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false, false);
@@ -4129,7 +4316,6 @@ TEST_F(ImportTestGDAL, Geojson_Point_Import_Glob) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_Point_Import_Regex) {
-  SKIP_ALL_ON_AGGREGATOR();
   auto const file_path = boost::filesystem::path("geospatial_point/*");
   auto const regex_path_filter = ".*\\/geospatial_point_[02].*\\.geojson";
   importTestGeofileImporter(
@@ -4142,7 +4328,6 @@ TEST_F(ImportTestGDAL, Geojson_Point_Import_Regex) {
 }
 
 TEST_F(ImportTestGDAL, Geojson_Point_Import_Sort) {
-  SKIP_ALL_ON_AGGREGATOR();
   auto const file_path =
       boost::filesystem::path("geospatial_point/geospatial_point_*.geojson");
   auto const file_sort_order_by = "regex";
@@ -4169,7 +4354,6 @@ TEST_F(ImportTestGDAL, Geojson_Point_Import_Sort) {
 }
 
 TEST_F(ImportTestGDAL, GeoJSON_MultiPoint_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   // second feature in this file is non-MULTI, hence this also tests auto data promotion
   const auto file_path = boost::filesystem::path("multipoint/multipoint.geojson.gz");
   importTestGeofileImporter(file_path.string(), "geospatial", false, false);
@@ -4179,7 +4363,6 @@ TEST_F(ImportTestGDAL, GeoJSON_MultiPoint_Import) {
 }
 
 TEST_F(ImportTestGDAL, GeoJSON_MultiLineString_Import) {
-  SKIP_ALL_ON_AGGREGATOR();
   // second feature in this file is non-MULTI, hence this also tests auto data promotion
   const auto file_path =
       boost::filesystem::path("multilinestring/multilinestring.geojson.gz");
@@ -4323,39 +4506,43 @@ TEST_F(ImportTest, S3_Regex_path_filter_no_match) {
       "No files matched the regex file path");
 }
 
-TEST_F(ImportTest, S3_GCS_One_gz_file) {
+// TODO(IAM): the next 8 tests all import from buckets/files not granted
+// to the current CI IAM user (omnisci-importtest-data and specific files
+// under omnisci-fsi-test-public). Re-enable when a dedicated CI IAM
+// user/role with read on these test buckets is provisioned.
+TEST_F(ImportTest, DISABLED_S3_GCS_One_gz_file) {
   EXPECT_TRUE(importTestCommon(
       std::string(
-          "COPY trips FROM 's3://omnisci-importtest-data/trip-data/trip_data_9.gz' "
+          "COPY trips FROM 's3://heavyai-importtest-data/trip-data/trip_data_9.gz' "
           "WITH (header='true', s3_endpoint='storage.googleapis.com', "
           "s3_region='us-west-1');"),
       100,
       1.0));
 }
 
-TEST_F(ImportTestGeo, S3_GCS_One_geo_file) {
+TEST_F(ImportTestGeo, DISABLED_S3_GCS_One_geo_file) {
   EXPECT_TRUE(importTestCommonGeo(
       "COPY geopatial FROM "
-      "'s3://omnisci-importtest-data/geo-data/"
+      "'s3://heavyai-importtest-data/geo-data/"
       "S_USA.Experimental_Area_Locations.gdb.zip' "
       "WITH (source_type='geo_file', s3_endpoint='storage.googleapis.com', "
       "s3_region='us-west-1');"));
 }
 
-TEST_F(ImportTest, NonS3_Endpoint_csv) {
+TEST_F(ImportTest, DISABLED_NonS3_Endpoint_csv) {
   EXPECT_TRUE(importTestCommon(
       std::string(
-          "COPY example_2 FROM 's3://omnisci-importtest-data/FsiDataFiles/example_2.csv' "
+          "COPY example_2 FROM 's3://heavyai-importtest-data/FsiDataFiles/example_2.csv' "
           "WITH (header='true', s3_endpoint='storage.googleapis.com', "
           "s3_region='us-west-1');"),
       0,
       2.2250738585072014e-308));
 }
 
-TEST_F(ImportTest, NonS3_Endpoint_regex_parsed) {
+TEST_F(ImportTest, DISABLED_NonS3_Endpoint_regex_parsed) {
   EXPECT_TRUE(importTestCommon(
       std::string(
-          "COPY example_2 FROM 's3://omnisci-importtest-data/FsiDataFiles/example_2.csv' "
+          "COPY example_2 FROM 's3://heavyai-importtest-data/FsiDataFiles/example_2.csv' "
           "WITH (header='true', s3_endpoint='storage.googleapis.com', "
           "source_type='regex_parsed_file', "
           "line_regex='" +
@@ -4364,10 +4551,10 @@ TEST_F(ImportTest, NonS3_Endpoint_regex_parsed) {
       2.2250738585072014e-308));
 }
 
-TEST_F(ImportTest, NonS3_Endpoint_parquet) {
+TEST_F(ImportTest, DISABLED_NonS3_Endpoint_parquet) {
   EXPECT_TRUE(importTestCommon(
       std::string("COPY example_2 FROM "
-                  "'s3://omnisci-importtest-data/FsiDataFiles/example_2.parquet' "
+                  "'s3://heavyai-importtest-data/FsiDataFiles/example_2.parquet' "
                   "WITH (header='true', s3_endpoint='storage.googleapis.com', "
                   "source_type='PARQUET_FILE', "
                   "s3_region='us-west-1');"),
@@ -4375,7 +4562,7 @@ TEST_F(ImportTest, NonS3_Endpoint_parquet) {
       2.2250738585072014e-308));
 }
 
-TEST_F(ImportTest, S3_Endpoint_csv) {
+TEST_F(ImportTest, DISABLED_S3_Endpoint_csv) {
   EXPECT_TRUE(importTestCommon(
       std::string(
           "COPY example_2 FROM 's3://omnisci-fsi-test-public/FsiDataFiles/example_2.csv' "
@@ -4385,7 +4572,7 @@ TEST_F(ImportTest, S3_Endpoint_csv) {
       2.2250738585072014e-308));
 }
 
-TEST_F(ImportTest, S3_Endpoint_regex_parsed) {
+TEST_F(ImportTest, DISABLED_S3_Endpoint_regex_parsed) {
   EXPECT_TRUE(importTestCommon(
       std::string(
           "COPY example_2 FROM 's3://omnisci-fsi-test-public/FsiDataFiles/example_2.csv' "
@@ -4397,7 +4584,7 @@ TEST_F(ImportTest, S3_Endpoint_regex_parsed) {
       2.2250738585072014e-308));
 }
 
-TEST_F(ImportTest, S3_Endpoint_parquet) {
+TEST_F(ImportTest, DISABLED_S3_Endpoint_parquet) {
   EXPECT_TRUE(importTestCommon(
       std::string("COPY example_2 FROM "
                   "'s3://omnisci-fsi-test-public/FsiDataFiles/example_2.parquet' "
@@ -4574,7 +4761,10 @@ class ImportServerPrivilegeTest : public ImportExportTestBase {
   }
 };
 
-TEST_F(ImportServerPrivilegeTest, S3_Public_without_credentials) {
+// TODO(IAM): re-enable once anonymous access on omnisci-fsi-test-public
+// is restored (the bucket previously allowed unsigned reads but now
+// returns AccessDenied to --no-sign-request callers).
+TEST_F(ImportServerPrivilegeTest, DISABLED_S3_Public_without_credentials) {
   set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
   EXPECT_NO_THROW(importPublicBucket());
 }
@@ -4683,9 +4873,8 @@ class SortedImportTest
     if (file_type_ == "csv") {
       options.emplace("parquet", "false");
     } else {
-      // FIXME(20220214) Parquet import is broken
-      // CHECK(file_type_ == "parquet");
-      // options.emplace("parquet", "true");
+      CHECK(file_type_ == "parquet");
+      options.emplace("parquet", "true");
     }
 #endif
     options.emplace("HEADER", "true");
@@ -4697,35 +4886,29 @@ class SortedImportTest
   }
 };
 
-INSTANTIATE_TEST_SUITE_P(
-    SortedImportTest,
-    SortedImportTest,
-    testing::Combine(
-        testing::Values("local"),
-        testing::Values(
-            "csv"
-            // FIXME(20220214) Parquet import is broken
-            //#ifdef ENABLE_IMPORT_PARQUET
-            //                                                          ,
-            //                                                          "parquet"
-            //#endif
-            )));
+INSTANTIATE_TEST_SUITE_P(SortedImportTest,
+                         SortedImportTest,
+                         testing::Combine(testing::Values("local"),
+                                          testing::Values("csv"
+#ifdef ENABLE_IMPORT_PARQUET
+                                                          ,
+                                                          "parquet"
+#endif
+                                                          )));
 
 #ifdef HAVE_AWS_S3
-INSTANTIATE_TEST_SUITE_P(
-    S3SortedImportTest,
-    SortedImportTest,
-    testing::Combine(
-        testing::Values("s3"),
-        testing::Values(
-            "csv"
-
-            // FIXME(20220214) Parquet+S3 import is broken
-            //#ifdef ENABLE_IMPORT_PARQUET
-            //                                                          ,
-            //                                                          "parquet"
-            //#endif
-            )));
+// TODO(IAM): re-enable once the CI IAM user has read on the
+// omnisci-fsi-test-public/FsiDataFiles/sorted_dir/{csv,parquet}/
+// prefixes. The "local" instantiation above continues to run.
+INSTANTIATE_TEST_SUITE_P(DISABLED_S3SortedImportTest,
+                         SortedImportTest,
+                         testing::Combine(testing::Values("s3"),
+                                          testing::Values("csv"
+#ifdef ENABLE_IMPORT_PARQUET
+                                                          ,
+                                                          "parquet"
+#endif
+                                                          )));
 #endif  // HAVE_AWS_S3
 
 TEST_P(SortedImportTest, SortedOnPathname) {
@@ -5040,22 +5223,6 @@ class ExportTest : public ImportTestGDAL {
     }
   }
 
-  void doCompareWithOGRInfo(const std::string& file,
-                            const std::string& layer_name,
-                            const bool ignore_trailing_comma_diff) {
-    if (!g_regenerate_export_test_reference_files) {
-      auto actual_exported_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
-                                  getDbHandlerAndSessionId().second + "/" + file;
-      auto actual_reference_file = "../../Tests/Export/QueryExport/datafiles/" + file;
-      auto exported_lines = readFileWithOGRInfo(actual_exported_file, layer_name);
-      auto reference_lines = readFileWithOGRInfo(actual_reference_file, layer_name);
-      // sort lines to account for query output order non-determinism
-      std::sort(exported_lines.begin(), exported_lines.end());
-      std::sort(reference_lines.begin(), reference_lines.end());
-      compareLines(exported_lines, reference_lines, ignore_trailing_comma_diff);
-    }
-  }
-
   void removeExportedFile(const std::string& file) {
     auto exported_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
                          getDbHandlerAndSessionId().second + "/" + file;
@@ -5123,7 +5290,6 @@ class ExportTest : public ImportTestGDAL {
   constexpr static bool INVALID_SRID = true;
   constexpr static bool DEFAULT_SRID = false;
   constexpr static bool COMPARE_IGNORING_COMMA_DIFF = true;
-  constexpr static bool COMPARE_EXPLICIT = false;
 
   constexpr static std::array<const char*, 4> GEO_TYPES = {"point",
                                                            "linestring",
@@ -5193,20 +5359,6 @@ class ExportTest : public ImportTestGDAL {
     return lines;
   }
 
-  std::vector<std::string> readFileWithOGRInfo(const std::string& file,
-                                               const std::string& layer_name) {
-    std::string temp_file = BASE_PATH "/" + shared::kDefaultExportDirName + "/" +
-                            std::to_string(getpid()) + ".tmp";
-    std::vector<std::string> args = {file, layer_name};
-    boost::process::system(boost::process::search_path("ogrinfo"),
-                           args,
-                           boost::process::std_out > temp_file);
-    auto lines = readTextFile(
-        temp_file, Compression::kNone, {"DBF_DATE_LAST_UPDATE", "INFO: Open of"});
-    boost::filesystem::remove(temp_file);
-    return lines;
-  }
-
   void compareLines(const std::vector<std::string>& exported_lines,
                     const std::vector<std::string>& reference_lines,
                     const bool ignore_trailing_comma_diff) {
@@ -5251,7 +5403,6 @@ class ExportTest : public ImportTestGDAL {
   }
 
 TEST_F(ExportTest, Default) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
@@ -5264,7 +5415,6 @@ TEST_F(ExportTest, Default) {
 }
 
 TEST_F(ExportTest, InvalidFileType) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
@@ -5273,7 +5423,6 @@ TEST_F(ExportTest, InvalidFileType) {
 }
 
 TEST_F(ExportTest, InvalidCompressionType) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
@@ -5282,7 +5431,6 @@ TEST_F(ExportTest, InvalidCompressionType) {
 }
 
 TEST_F(ExportTest, CSV) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
@@ -5295,7 +5443,6 @@ TEST_F(ExportTest, CSV) {
 }
 
 TEST_F(ExportTest, CSV_Overwrite) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_csv_" + geo_type + ".csv";
@@ -5307,7 +5454,6 @@ TEST_F(ExportTest, CSV_Overwrite) {
 }
 
 TEST_F(ExportTest, CSV_InvalidName) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_csv_" + geo_type + ".jpg";
@@ -5316,7 +5462,6 @@ TEST_F(ExportTest, CSV_InvalidName) {
 }
 
 TEST_F(ExportTest, DISABLED_CSV_Zip) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string req_file = "query_export_test_csv_" + geo_type + ".csv";
@@ -5331,7 +5476,6 @@ TEST_F(ExportTest, DISABLED_CSV_Zip) {
 }
 
 TEST_F(ExportTest, CSV_GZip) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string req_file = "query_export_test_csv_" + geo_type + ".csv";
@@ -5346,12 +5490,10 @@ TEST_F(ExportTest, CSV_GZip) {
 }
 
 TEST_F(ExportTest, CSV_Nulls) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(doTestNulls("query_export_test_csv_nulls.csv", "CSV", "*"));
 }
 
 TEST_F(ExportTest, GeoJSON) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
@@ -5365,7 +5507,6 @@ TEST_F(ExportTest, GeoJSON) {
 }
 
 TEST_F(ExportTest, GeoJSON_Overwrite) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
@@ -5379,7 +5520,6 @@ TEST_F(ExportTest, GeoJSON_Overwrite) {
 }
 
 TEST_F(ExportTest, GeoJSON_InvalidName) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_geojson_" + geo_type + ".jpg";
@@ -5388,7 +5528,6 @@ TEST_F(ExportTest, GeoJSON_InvalidName) {
 }
 
 TEST_F(ExportTest, GeoJSON_Invalid_SRID) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojson_" + geo_type + ".geojson";
@@ -5399,7 +5538,6 @@ TEST_F(ExportTest, GeoJSON_Invalid_SRID) {
 }
 
 TEST_F(ExportTest, GeoJSON_GZip) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string req_file = "query_export_test_geojson_" + geo_type + ".geojson";
@@ -5414,7 +5552,6 @@ TEST_F(ExportTest, GeoJSON_GZip) {
 }
 
 TEST_F(ExportTest, DISABLED_GeoJSON_Zip) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string req_file = "query_export_test_geojson_" + geo_type + ".geojson";
@@ -5429,7 +5566,6 @@ TEST_F(ExportTest, DISABLED_GeoJSON_Zip) {
 }
 
 TEST_F(ExportTest, GeoJSON_Nulls) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
       doTestNulls("query_export_test_geojson_nulls_point.geojson", "GeoJSON", "a"));
   ASSERT_NO_THROW(
@@ -5441,7 +5577,6 @@ TEST_F(ExportTest, GeoJSON_Nulls) {
 }
 
 TEST_F(ExportTest, GeoJSONL_GeoJSON) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
@@ -5455,7 +5590,6 @@ TEST_F(ExportTest, GeoJSONL_GeoJSON) {
 }
 
 TEST_F(ExportTest, GeoJSONL_Json) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".json";
@@ -5469,7 +5603,6 @@ TEST_F(ExportTest, GeoJSONL_Json) {
 }
 
 TEST_F(ExportTest, GeoJSONL_Overwrite) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
@@ -5483,7 +5616,6 @@ TEST_F(ExportTest, GeoJSONL_Overwrite) {
 }
 
 TEST_F(ExportTest, GeoJSONL_InvalidName) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".jpg";
@@ -5492,7 +5624,6 @@ TEST_F(ExportTest, GeoJSONL_InvalidName) {
 }
 
 TEST_F(ExportTest, GeoJSONL_Invalid_SRID) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
@@ -5503,7 +5634,6 @@ TEST_F(ExportTest, GeoJSONL_Invalid_SRID) {
 }
 
 TEST_F(ExportTest, GeoJSONL_GZip) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string req_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
@@ -5518,7 +5648,6 @@ TEST_F(ExportTest, GeoJSONL_GZip) {
 }
 
 TEST_F(ExportTest, DISABLED_GeoJSONL_Zip) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string req_file = "query_export_test_geojsonl_" + geo_type + ".geojson";
@@ -5533,7 +5662,6 @@ TEST_F(ExportTest, DISABLED_GeoJSONL_Zip) {
 }
 
 TEST_F(ExportTest, GeoJSONL_Nulls) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
       doTestNulls("query_export_test_geojsonl_nulls_point.geojson", "GeoJSONL", "a"));
   ASSERT_NO_THROW(doTestNulls(
@@ -5545,7 +5673,6 @@ TEST_F(ExportTest, GeoJSONL_Nulls) {
 }
 
 TEST_F(ExportTest, Shapefile) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
@@ -5554,8 +5681,6 @@ TEST_F(ExportTest, Shapefile) {
     std::string dbf_file = "query_export_test_shapefile_" + geo_type + ".dbf";
     ASSERT_NO_THROW(
         doExport(shp_file, "Shapefile", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
-    std::string layer_name = "query_export_test_shapefile_" + geo_type;
-    ASSERT_NO_THROW(doCompareWithOGRInfo(shp_file, layer_name, COMPARE_EXPLICIT));
     doImportAgainAndCompare(shp_file, "Shapefile", geo_type, NO_ARRAYS);
     removeExportedFile(shp_file);
     removeExportedFile(shx_file);
@@ -5566,15 +5691,12 @@ TEST_F(ExportTest, Shapefile) {
 }
 
 TEST_F(ExportTest, Shapefile_Zip) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
     std::string shp_zip_file = "query_export_test_shapefile_" + geo_type + ".shp.zip";
     ASSERT_NO_THROW(
         doExport(shp_file, "Shapefile", "Zip", geo_type, NO_ARRAYS, DEFAULT_SRID));
-    std::string layer_name = "query_export_test_shapefile_" + geo_type;
-    ASSERT_NO_THROW(doCompareWithOGRInfo(shp_zip_file, layer_name, COMPARE_EXPLICIT));
     doImportAgainAndCompare(shp_zip_file, "Shapefile", geo_type, NO_ARRAYS);
     removeExportedFile(shp_zip_file);
   };
@@ -5582,7 +5704,6 @@ TEST_F(ExportTest, Shapefile_Zip) {
 }
 
 TEST_F(ExportTest, Shapefile_Overwrite) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
@@ -5602,7 +5723,6 @@ TEST_F(ExportTest, Shapefile_Overwrite) {
 }
 
 TEST_F(ExportTest, Shapefile_InvalidName) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
   std::string shp_file = "query_export_test_shapefile_" + geo_type + ".jpg";
@@ -5611,7 +5731,6 @@ TEST_F(ExportTest, Shapefile_InvalidName) {
 }
 
 TEST_F(ExportTest, Shapefile_Invalid_SRID) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
@@ -5622,7 +5741,6 @@ TEST_F(ExportTest, Shapefile_Invalid_SRID) {
 }
 
 TEST_F(ExportTest, Shapefile_RejectArrayColumns) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
   std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
@@ -5631,7 +5749,6 @@ TEST_F(ExportTest, Shapefile_RejectArrayColumns) {
 }
 
 TEST_F(ExportTest, Shapefile_GZip_Unimplemented) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string shp_file = "query_export_test_shapefile_" + geo_type + ".shp";
@@ -5643,14 +5760,11 @@ TEST_F(ExportTest, Shapefile_GZip_Unimplemented) {
 }
 
 TEST_F(ExportTest, FlatGeobuf) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_fgb_" + geo_type + ".fgb";
     ASSERT_NO_THROW(
         doExport(exp_file, "FlatGeobuf", "", geo_type, NO_ARRAYS, DEFAULT_SRID));
-    std::string layer_name = "query_export_test_fgb_" + geo_type;
-    ASSERT_NO_THROW(doCompareWithOGRInfo(exp_file, layer_name, COMPARE_EXPLICIT));
     doImportAgainAndCompare(exp_file, "FlatGeobuf", geo_type, NO_ARRAYS);
     removeExportedFile(exp_file);
   };
@@ -5658,7 +5772,6 @@ TEST_F(ExportTest, FlatGeobuf) {
 }
 
 TEST_F(ExportTest, FlatGeobuf_Overwrite) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_fgb_" + geo_type + ".fgb";
@@ -5672,7 +5785,6 @@ TEST_F(ExportTest, FlatGeobuf_Overwrite) {
 }
 
 TEST_F(ExportTest, FlatGeobuf_InvalidName) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   std::string geo_type = "point";
   std::string exp_file = "query_export_test_fgb_" + geo_type + ".jpg";
@@ -5681,7 +5793,6 @@ TEST_F(ExportTest, FlatGeobuf_InvalidName) {
 }
 
 TEST_F(ExportTest, FlatGeobuf_Invalid_SRID) {
-  SKIP_ALL_ON_AGGREGATOR();
   doCreateAndImport();
   auto run_test = [&](const std::string& geo_type) {
     std::string exp_file = "query_export_test_geojsonl_" + geo_type + ".fgb";
@@ -5692,28 +5803,24 @@ TEST_F(ExportTest, FlatGeobuf_Invalid_SRID) {
 }
 
 TEST_F(ExportTest, Array_Null_Handling_Default) {
-  SKIP_ALL_ON_AGGREGATOR();
   EXPECT_THROW(doTestArrayNullHandling(
                    "query_export_test_array_null_handling_default.geojson", ""),
                TDBException);
 }
 
 TEST_F(ExportTest, Array_Null_Handling_Raw) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
       doTestArrayNullHandling("query_export_test_array_null_handling_raw.geojson",
                               ", array_null_handling='raw'"));
 }
 
 TEST_F(ExportTest, Array_Null_Handling_Zero) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
       doTestArrayNullHandling("query_export_test_array_null_handling_zero.geojson",
                               ", array_null_handling='zero'"));
 }
 
 TEST_F(ExportTest, Array_Null_Handling_NullField) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
       doTestArrayNullHandling("query_export_test_array_null_handling_nullfield.geojson",
                               ", array_null_handling='nullfield'"));
@@ -5853,6 +5960,87 @@ INSTANTIATE_TEST_SUITE_P(TemporalColumnExportTest,
                            return param_info.param ? "IsoTimestampFormat"
                                                    : "NonIsoTimestampFormat";
                          });
+
+//
+// Raster Tests
+//
+
+class BasicRasterImporterTest : public DBHandlerTestFixture,
+                                public ::testing::WithParamInterface<bool> {
+ public:
+  static void TearDownTestSuite() {
+    DBHandlerTestFixture::TearDownTestSuite();
+    g_enable_legacy_raster_import = false;
+  }
+
+ protected:
+  void SetUp() override {
+    g_enable_legacy_raster_import = GetParam();
+    DBHandlerTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS import_test_table;");
+  }
+
+  void TearDown() override {
+    sql("DROP TABLE IF EXISTS import_test_table;");
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(BasicRasterImporterTest,
+                         BasicRasterImporterTest,
+                         ::testing::Values(true, false),
+                         [](const auto& param_info) {
+                           return std::to_string(param_info.param);
+                         });
+
+TEST_P(BasicRasterImporterTest, HDF5Image) {
+  auto hdf5_filename =
+      boost::filesystem::canonical(
+          "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
+          .string();
+  sql("CREATE table import_test_table (raster_x smallint, raster_y smallint, band_1_1 "
+      "float);");
+  sql("COPY import_test_table FROM '" + hdf5_filename +
+      "' WITH (source_type='raster_file', raster_import_bands='band_1_1', threads=1);");
+
+  sqlAndCompareResult("SELECT COUNT(*) FROM import_test_table;", {{64800L}});
+}
+
+TEST_P(BasicRasterImporterTest, HDF5ImageDefaultThreads) {
+  auto hdf5_filename =
+      boost::filesystem::canonical(
+          "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
+          .string();
+  sql("CREATE table import_test_table (raster_x smallint, raster_y smallint, band_1_1 "
+      "float);");
+  sql("COPY import_test_table FROM '" + hdf5_filename +
+      "' WITH (source_type='raster_file', raster_import_bands='band_1_1');");
+
+  sqlAndCompareResult("SELECT COUNT(*) FROM import_test_table;", {{64800L}});
+}
+
+TEST_P(BasicRasterImporterTest, HDF5ImageMultiThreaded) {
+  if (!GetParam()) {
+    GTEST_SKIP() << "FSI Raster import is currently single-threaded";
+  }
+  auto hdf5_filename =
+      boost::filesystem::canonical(
+          "../../Tests/Import/datafiles/raster/Q2012034.L3m_DAY_SCI_V5.0_SSS_1deg.hdf5")
+          .string();
+  // NOTE: A partial exception is checked for below due to the exception
+  // arising from DBHandler, which is not typical in most cases of COPY FROM,
+  // however, raster import is unique.
+  sql("CREATE table import_test_table (raster_x smallint, raster_y smallint, band_1_1 "
+      "float);");
+  queryAndAssertPartialException(
+      "COPY import_test_table FROM '" + hdf5_filename +
+          "' WITH (source_type='raster_file', raster_import_bands='band_1_1', "
+          "threads=32);",
+      "GDAL driver HDF5Image "
+      "requires use of HDF5 library which is incompatible with multithreading.");
+}
+
+#define DEBUG_RASTER_TESTS 0
 
 static constexpr const char* kPNG = "beach.png";
 static constexpr const char* kGeoTIFF = "USGS_1m_x30y441_OH_Columbus_2019_small.tif";
@@ -6070,7 +6258,6 @@ class RasterImporterTest : public DBHandlerTestFixture {
 };
 
 TEST_F(RasterImporterTest, PNGDetectTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runDetectTest(
       kPNG,
       "",
@@ -6081,12 +6268,10 @@ TEST_F(RasterImporterTest, PNGDetectTest) {
 }
 
 TEST_F(RasterImporterTest, GeoTIFFDetectTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runDetectTest(kGeoTIFF, "", "", {{"band_1_1", kFLOAT}}, 200, 200));
 }
 
 TEST_F(RasterImporterTest, GRIB2DetectTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
       runDetectTest(kGRIB,
                     "Maximum___Composite_radar_reflectivity__dB_,Echo_Top__m_",
@@ -6098,25 +6283,21 @@ TEST_F(RasterImporterTest, GRIB2DetectTest) {
 }
 
 TEST_F(RasterImporterTest, DISABLED_ZARRDetectTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runDetectTest(
       kZARRArchive, "", "1799x1", {{"projection_x_coordinate", kDOUBLE}}, 1799, 1));
   deletePropertiesFile();
 }
 
 TEST_F(RasterImporterTest, DISABLED_ZARRDetectFailTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   EXPECT_THROW(runDetectTest(kZARRArchive, "", "", {}, 0, 0), std::runtime_error);
   deletePropertiesFile();
 }
 
 TEST_F(RasterImporterTest, PNGProjectionTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runProjectionTest(kPNG, TY::kNone, TR::kNone, 100, 100, 100.0, 100.0));
 }
 
 TEST_F(RasterImporterTest, GeoTIFFProjectionTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runProjectionTest(kGeoTIFF,
                                     TY::kDouble,
                                     TR::kWorld,
@@ -6127,29 +6308,24 @@ TEST_F(RasterImporterTest, GeoTIFFProjectionTest) {
 }
 
 TEST_F(RasterImporterTest, S1BProjectionTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runProjectionTest(
       kS1B, TY::kDouble, TR::kWorld, 100, 100, 45.009807508249182, 62.641101973988086));
 }
 
 TEST_F(RasterImporterTest, PNGValueTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runValueTest(kPNG, "band_1_1", 100, 100, kSMALLINT, 124));
 }
 
 TEST_F(RasterImporterTest, GeoTIFFValueTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(runValueTest(kGeoTIFF, "band_1_1", 50, 50, kFLOAT, 287.12179565429688));
 }
 
 TEST_F(RasterImporterTest, GRIB2ValueTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   ASSERT_NO_THROW(
       runValueTest(kGRIB, "Temperature__C_", 10, 10, kDOUBLE, 32.112359619140648));
 }
 
 TEST_F(RasterImporterTest, NonGeoEnumsTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   // for non-geo rasters, we reject:
   //   float/double/point/world - no geospatial coordinate system to transform to
   ASSERT_NO_THROW(runEnumsTest(kPNG, TY::kNone, TR::kNone));
@@ -6186,7 +6362,6 @@ TEST_F(RasterImporterTest, NonGeoEnumsTest) {
 }
 
 TEST_F(RasterImporterTest, GeoEnumsTest) {
-  SKIP_ALL_ON_AGGREGATOR();
   // for geo rasters, we reject:
   //   point/none and /file - point cannot [yet] store non-world coords
   //   [small]int/auto and /world- auto would be world, which ints cannot store
@@ -6230,10 +6405,12 @@ class RasterImportTest : public DBHandlerTestFixture,
  public:
   static void TearDownTestSuite() {
     DBHandlerTestFixture::TearDownTestSuite();
+    g_enable_legacy_raster_import = false;
   }
 
  protected:
   void SetUp() override {
+    g_enable_legacy_raster_import = GetParam();
     DBHandlerTestFixture::SetUp();
     sql("drop table if exists raster;");
   }
@@ -6511,6 +6688,347 @@ TEST_P(RasterImportTest, ImportPNGTwiceSameSize) {
                       {{319L, 224L, 243L}});
 }
 
+class RasterImportFsiOnlyTest : public RasterImportTest {};
+
+// This test has different behaviour between legacy and fsi import, so it needs custom
+// testing.  Specifically, the legacy import throws an exception, whereas the fsi import
+// logs an error and does not import any rows, but does not throw.  This is to keep raster
+// import consistent with the rest of fsi-import.
+TEST_P(RasterImportFsiOnlyTest, ImportGeoTIFFTruncatedThrowException) {
+  importTestCommon(kGeoTIFFTruncated,
+                   "raster_lon double, raster_lat double, band_1_1 float",
+                   ", max_reject=1000",
+                   "SELECT count(*) > 10000 FROM raster;",
+                   {{0L}});
+
+  // Check to make sure we did not import any rows.
+  sqlAndCompareResult("SELECT count(*) from raster", {{0L}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, BoundingBoxClip) {
+  // file is 200x200 with tiling 200x10, so clip by latitude to have an effect
+  // clips 9 out of 20 tiles, leaving 22K points out of 40K
+  ASSERT_NO_THROW(importTestCommon(
+      kGeoTIFF,
+      "raster_lon DOUBLE, raster_lat DOUBLE, band_1 FLOAT",
+      ", raster_point_transform='world', bounding_box_clip='-84,39.8178,-83,40'",
+      "SELECT count(*) FROM raster",
+      {{i(22000)}}));
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportGeoTIFFTruncatedTest) {
+  ASSERT_NO_THROW(importTestCommon(kGeoTIFFTruncated,
+                                   "raster_lon double, raster_lat double, band_1_1 float",
+                                   ", max_reject=1000000",
+                                   "SELECT count(*) > 10000 FROM raster;",
+                                   {{1L}}));
+  sqlAndCompareResult("select count(*) from raster", {{12000L}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportPackedColorTest) {
+  ASSERT_NO_THROW(importTestCommon(
+      kPNG,
+      "raster_x SMALLINT, raster_y SMALLINT, packed_color INT",
+      ", raster_import_bands='packed_color=band_1_1/band_1_2/band_1_3/sRGB'",
+      "SELECT max(raster_x), max(raster_y), min(packed_color), "
+      "max(packed_color) FROM raster;",
+      {{319L, 224L, -2140321537L, 2143986943L}}));
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportPackedColorMultipleFailTest) {
+  executeLambdaAndAssertPartialException(
+      [&]() {
+        (importTestCommon(
+            kPNG,
+            "raster_x SMALLINT, raster_y SMALLINT, packed_color1 INT, packed_color2 INT",
+            ", "
+            "raster_import_bands='packed_color1=band_1_1/band_1_2/band_1_3/"
+            "sRGB,packed_color2=band_1_1/band_1_2/band_1_3/sRGB'",
+            "SELECT max(raster_x), max(raster_y), min(packed_color1), "
+            "max(packed_color1) FROM raster;",
+            {{319L, 224L, -2140321537L, 2143986943L}}));
+      },
+      "found multiple packed-color expressions");
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportPackedColorBandDoesNotExistFailTest) {
+  executeLambdaAndAssertPartialException(
+      [&]() {
+        (importTestCommon(
+            kPNG,
+            "raster_x SMALLINT, raster_y SMALLINT, packed_color INT",
+            ", raster_import_bands='packed_color=band_1_1/band_1_2/band_1_4/sRGB'",
+            "SELECT max(raster_x), max(raster_y), min(packed_color), "
+            "max(packed_color) FROM raster;",
+            {{319L, 224L, -2140321537L, 2143986943L}}));
+      },
+      "was not found in the input raster file");
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportSpecifiedBandsReorder1Test) {
+  // bands in file order, columns not
+  importTestCommon(
+      kGRIB,
+      "raster_lon double, raster_lat double, t double, p double, r double",
+      ", "
+      "raster_import_bands='p=Pressure__Pa_,r=Frozen_Rain__kg__m_2__,t=Temperature__C_'",
+      "SELECT max(p), max(r), max(t) FROM raster;",
+      {{86880.0, 0.0, 33.674859619140648}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportSpecifiedBandsReorder2Test) {
+  // neither columns nor bands in file order
+  importTestCommon(
+      kGRIB,
+      "raster_lon double, raster_lat double, t double, p double, r double",
+      ", "
+      "raster_import_bands='r=Frozen_Rain__kg__m_2__,t=Temperature__C_,p=Pressure__Pa_'",
+      "SELECT max(p), max(r), max(t) FROM raster;",
+      {{86880.0, 0.0, 33.674859619140648}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, FragmentSizeAuto) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       "",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+  auto& cat = getCatalog();
+  auto table = cat.getMetadataForTable("raster", false);
+  ASSERT_NE(table, nullptr);
+  // 72000 pixels into fragments of 72000 makes 1 fragment.
+  // however, on ARM, GDAL defaults to a block size of width x 1 for PNG files
+  // just tolerate the behavior until we can discuss a better solution
+#if __aarch64__
+  ASSERT_EQ(table->fragmenter->getNumFragments(), 225U);
+#else
+  ASSERT_EQ(table->fragmenter->getNumFragments(), 1U);
+#endif
+}
+
+// Importing multiple files of different block size, but all block sizes are larger than
+// default so we should be fine.
+TEST_P(RasterImportFsiOnlyTest, FragmentSizeAutoBlockSizeMismatch) {
+  importTestCommon(kSimpleSizesDir,
+                   "raster_x DOUBLE, raster_y DOUBLE, band_1_1 INT",
+                   "",
+                   "SELECT count(*) FROM raster;",
+                   {{8192L}});
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 20U);
+  EXPECT_EQ(fragments_with_num_rows.count(16 * 16), 16U);
+  EXPECT_EQ(fragments_with_num_rows.count(32 * 32), 4U);
+}
+
+// Importing a single file who's block size is larger than the maxFragRows set on the
+// table, however, since the table has no data we are allowed to change it.
+TEST_P(RasterImportFsiOnlyTest, FragmentTooSmall) {
+  auto const file_name = get_raster_dir() + "SimpleSizes/simple_16x16.tif";
+  sql("CREATE table raster (raster_x DOUBLE, raster_y DOUBLE, band_1_1 INT) WITH "
+      "(fragment_size=100)");
+  sql("COPY raster FROM '" + file_name + "' WITH (source_type='raster_file')");
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 16U);
+  EXPECT_EQ(fragments_with_num_rows.count(16 * 16), 16U);
+}
+
+// Importing multiple files into a table where the fragment size has been set to small.
+// The first import will reset the size, but is still to small for the second, so we fail.
+TEST_P(RasterImportFsiOnlyTest, FragmentTooSmallSecondImport) {
+  auto const file_name = get_raster_dir() + "SimpleSizes/simple_16x16.tif";
+  sql("CREATE table raster (raster_x DOUBLE, raster_y DOUBLE, band_1_1 INT) WITH "
+      "(fragment_size=100)");
+  sql("COPY raster FROM '" + file_name + "' WITH (source_type='raster_file')");
+
+  auto const big_file_name = get_raster_dir() + "SimpleSizes/simple_32x32.tif";
+
+  queryAndAssertPartialException(
+      "COPY raster FROM '" + big_file_name + "' WITH (source_type='raster_file')",
+      "Cannot import raster data.  New raster data tile size is too big for the table's "
+      "existing fragmentation.  Select a smaller tile size or import into a new table.  "
+      "Table 'raster' has maximum fragment size '256' raster file has tile size '1024'");
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 16U);
+  EXPECT_EQ(fragments_with_num_rows.count(16 * 16), 16U);
+}
+
+// Importing multiple files into a table where the fragment size has been set to small.
+// The first import will reset the size which is large enough for the second, so we are
+// ok.
+TEST_P(RasterImportFsiOnlyTest, FragmentTooSmallSecondImportBigFirst) {
+  auto const file_name = get_raster_dir() + "SimpleSizes/simple_32x32.tif";
+  sql("CREATE table raster (raster_x DOUBLE, raster_y DOUBLE, band_1_1 INT) WITH "
+      "(fragment_size=100)");
+  sql("COPY raster FROM '" + file_name + "' WITH (source_type='raster_file')");
+
+  auto const small_file_name = get_raster_dir() + "SimpleSizes/simple_16x16.tif";
+
+  sql("COPY raster FROM '" + small_file_name + "' WITH (source_type='raster_file')");
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 20U);
+  EXPECT_EQ(fragments_with_num_rows.count(16 * 16), 16U);
+  EXPECT_EQ(fragments_with_num_rows.count(32 * 32), 4U);
+}
+
+TEST_P(RasterImportFsiOnlyTest, ImportPNGTwiceDifferentSize) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       "",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+  sqlAndCompareResult("select count(*) from raster", {{72000L}});
+
+  auto const abs_file_name = get_raster_dir() + kPNG;
+  sql("COPY raster FROM '" + abs_file_name +
+      "' WITH (source_type='raster_file', raster_tile_width=100, "
+      "raster_tile_height=100)");
+  sqlAndCompareResult("select count(*) from raster", {{144000L}});
+  sqlAndCompareResult("SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                      {{319L, 224L, 243L}});
+}
+
+TEST_P(RasterImportFsiOnlyTest, FragmentsAlignToTiles) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       ", raster_tile_width=100, raster_tile_height=100",
+                       "SELECT max(band_1_1) FROM raster;",
+                       {{243L}}));
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 12U);
+  // File is 320x225 pixels, so we should have 6 100x100 fragments, 2 20x100 fragments, 3
+  // 100x25 fragments, and 1 20x25 fragment.  We don't have a guarantee for the order of
+  // the fragments.
+  EXPECT_EQ(fragments_with_num_rows.count(100 * 100), 6U);
+  EXPECT_EQ(fragments_with_num_rows.count(20 * 100), 2U);
+  EXPECT_EQ(fragments_with_num_rows.count(100 * 25), 3U);
+  EXPECT_EQ(fragments_with_num_rows.count(20 * 25), 1U);
+}
+
+TEST_P(RasterImportFsiOnlyTest, FragmentsAlignToTilesMultiImport) {
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       ", raster_tile_width=100, raster_tile_height=100",
+                       "SELECT max(band_1_1) FROM raster;",
+                       {{243L}}));
+
+  auto const abs_file_name = get_raster_dir() + kPNG;
+  sql("COPY raster FROM '" + abs_file_name +
+      "' WITH (source_type='raster_file', raster_tile_width=100, "
+      "raster_tile_height=100)");
+
+  auto fragments_with_num_rows = getFragsWithNumRowsForTable();
+  EXPECT_EQ(fragments_with_num_rows.size(), 24U);
+  // Fragments should the same layout for both imports.
+  EXPECT_EQ(fragments_with_num_rows.count(100 * 100), 12U);
+  EXPECT_EQ(fragments_with_num_rows.count(20 * 100), 4U);
+  EXPECT_EQ(fragments_with_num_rows.count(100 * 25), 6U);
+  EXPECT_EQ(fragments_with_num_rows.count(20 * 25), 2U);
+}
+
+// We need to test that the fragmenter properly appends new fragment neighbour metadata
+// when data is imported through multiple import steps.
+TEST_P(RasterImportFsiOnlyTest, NeighbourMetadataMultiImport) {
+  auto& cat = getCatalog();
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       ", raster_tile_width=320, raster_tile_height=225",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+  auto td = cat.getMetadataForTable("raster", false);
+  {
+    // Raster metadata will be the same for all columns in a table, so just take the first
+    // column.
+    auto meta_vec =
+        dynamic_cast<Fragmenter_Namespace::RasterFragmenter*>(td->fragmenter.get())
+            ->computeRasterMeshRenderingMetadata();
+    std::vector<Fragmenter_Namespace::RasterMeshRenderingMetadata> expected{
+        {320, 225, 0, {-1, -1, -1, -1}}};
+    EXPECT_EQ(meta_vec, expected);
+  }
+
+  auto const abs_file_name = get_raster_dir() + kPNG;
+  sql("COPY raster FROM '" + abs_file_name +
+      "' WITH (source_type='raster_file', raster_tile_width=200, "
+      "raster_tile_height=200)");
+
+  auto meta_vec =
+      dynamic_cast<Fragmenter_Namespace::RasterFragmenter*>(td->fragmenter.get())
+          ->computeRasterMeshRenderingMetadata();
+
+  std::vector<Fragmenter_Namespace::RasterMeshRenderingMetadata> expected{
+      {320, 225, 0, {-1, -1, -1, -1}},  // first file.
+      {200, 200, 1, {-1, 2, -1, 3}},
+      {120, 200, 2, {1, -1, -1, 4}},
+      {200, 25, 3, {-1, 4, 1, -1}},
+      {120, 25, 4, {3, -1, 2, -1}}};
+  EXPECT_EQ(meta_vec, expected);
+}
+
+TEST_P(RasterImportFsiOnlyTest, NeighbourMetadataMultiImportWithRestart) {
+  auto& cat = getCatalog();
+  ASSERT_NO_THROW(
+      importTestCommon(kPNG,
+                       "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+                       "band_1_2 SMALLINT, band_1_3 SMALLINT",
+                       ", raster_tile_width=320, raster_tile_height=225",
+                       "SELECT max(raster_x), max(raster_y), max(band_1_1) FROM raster;",
+                       {{319L, 224L, 243L}}));
+  auto td = cat.getMetadataForTable("raster", false);
+  {
+    // Raster metadata will be the same for all columns in a table, so just take the first
+    // column.
+    auto meta_vec =
+        dynamic_cast<Fragmenter_Namespace::RasterFragmenter*>(td->fragmenter.get())
+            ->computeRasterMeshRenderingMetadata();
+    std::vector<Fragmenter_Namespace::RasterMeshRenderingMetadata> expected{
+        {320, 225, 0, {-1, -1, -1, -1}}};
+    EXPECT_EQ(meta_vec, expected);
+  }
+
+  cat.removeFragmenterForTable(td->tableId);
+
+  auto const abs_file_name = get_raster_dir() + kPNG;
+  sql("COPY raster FROM '" + abs_file_name +
+      "' WITH (source_type='raster_file', raster_tile_width=200, "
+      "raster_tile_height=200)");
+
+  cat.removeFragmenterForTable(td->tableId);
+  cat.getMetadataForTable("raster", true);
+
+  auto meta_vec =
+      dynamic_cast<Fragmenter_Namespace::RasterFragmenter*>(td->fragmenter.get())
+          ->computeRasterMeshRenderingMetadata();
+
+  std::vector<Fragmenter_Namespace::RasterMeshRenderingMetadata> expected{
+      {320, 225, 0, {-1, -1, -1, -1}},  // first file.
+      {200, 200, 1, {-1, 2, -1, 3}},
+      {120, 200, 2, {1, -1, -1, 4}},
+      {200, 25, 3, {-1, 4, 1, -1}},
+      {120, 25, 4, {3, -1, 2, -1}}};
+  EXPECT_EQ(meta_vec, expected);
+}
+
+INSTANTIATE_TEST_SUITE_P(RasterImportTest,
+                         RasterImportFsiOnlyTest,
+                         ::testing::Values(false),
+                         [](const auto& param_info) {
+                           return (param_info.param ? "Legacy" : "FSI");
+                         });
+
 class RasterImportLegacyOnlyTest : public RasterImportTest {};
 
 TEST_P(RasterImportLegacyOnlyTest, ImportGeoTIFFTruncatedImportNone) {
@@ -6539,7 +7057,11 @@ TEST_P(RasterImportLegacyOnlyTest, BoundingBoxClip) {
       "Bounding Box Clip option not supported by Legacy Raster Importer");
 }
 
-TEST_P(RasterImportLegacyOnlyTest, ImportGeoTIFFTruncatedTest) {
+// TODO(IAM): re-enable once the CI IAM user has read on the truncated
+// raster fixtures in omnisci-fsi-test-public; the BoundingBoxClip and
+// other LegacyOnly tests above use different fixtures and continue to
+// pass.
+TEST_P(RasterImportLegacyOnlyTest, DISABLED_ImportGeoTIFFTruncatedTest) {
   ASSERT_NO_THROW(importTestCommon(kGeoTIFFTruncated,
                                    "raster_lon double, raster_lat double, band_1_1 float",
                                    ", max_reject=1000000",
@@ -6659,8 +7181,7 @@ TEST_P(S3PublicImportAndSelectTest, OneInvalidSchema) {
                                      /*line_start_regex=*/"^[^,]*,");
       },
       getExpectedExceptionForDatawarpper());
-  validate_table_epoch(
-      0, getTableId("import_test_new"), &getCatalog(), isDistributedMode());
+  validate_table_epoch(0, getTableId("import_test_new"), &getCatalog());
   sqlAndCompareResult("SELECT count(*) FROM import_test_new;", {{0L}});
 }
 
@@ -6678,8 +7199,49 @@ INSTANTIATE_TEST_SUITE_P(FileTypeS3PublicImportAndSelectTest,
                                             ::testing::Values(1000000)),
                          print_import_and_select_test_param);
 
+// Raster test mirroring the test above
 
-#endif
+class RasterImportS3Test : public RasterImportTest {
+ protected:
+  int32_t getTableId(const std::string& table_name) {
+    auto opt_tid = getCatalog().getTableId(table_name);
+    CHECK(opt_tid.has_value());
+    return opt_tid.value();
+  }
+};
+
+// TODO(IAM): re-enable once the CI IAM user has read on the
+// omnisci-fsi-test-public/FsiDataFiles/raster/one_invalid_schema/
+// prefix.
+TEST_P(RasterImportS3Test, DISABLED_OneInvalidSchema) {
+  std::string schema =
+      "raster_x SMALLINT, raster_y SMALLINT, band_1_1 SMALLINT, "
+      "band_1_2 SMALLINT, band_1_3 SMALLINT";
+
+  sql("CREATE table raster (" + schema + ")");
+
+  const std::string s3_file_name =
+      "s3://omnisci-fsi-test-public/FsiDataFiles/raster/one_invalid_schema/";
+
+  executeLambdaAndAssertException(
+      [&] {
+        sql("COPY raster FROM '" + s3_file_name +
+            "' WITH (source_type='raster_file', s3_region='us-west-1')");
+      },
+      "Raster Importer: Cannot do World Transform with SMALLINT/INT Point type");
+
+  validate_table_epoch(0, getTableId("raster"), &getCatalog());
+  sqlAndCompareResult("SELECT count(*) FROM raster;", {{0L}});
+}
+
+INSTANTIATE_TEST_SUITE_P(RasterImportTest,
+                         RasterImportS3Test,
+                         ::testing::Values(false),
+                         [](const auto& param_info) {
+                           return (param_info.param ? "Legacy" : "FSI");
+                         });
+
+#endif  // HAVE_AWS_S3
 
 //
 // Metadata Column Tests
@@ -7072,7 +7634,11 @@ int main(int argc, char** argv) {
 
   logger::init(log_options);
 
+  PkiEncryptor::setKeyStorePath("../../Tests/Encryption/ValidCert/");
+
   import_export::ForeignDataImporter::setDefaultImportPath(BASE_PATH);
+
+  g_enable_legacy_raster_import = true;
 
 #ifdef HAVE_AWS_S3
   heavydb_aws_sdk::init_sdk();

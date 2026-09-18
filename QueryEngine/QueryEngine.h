@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #pragma once
 
 #include <vector>
@@ -5,7 +10,7 @@
 #include "CudaMgr/CudaMgr.h"
 #include "QueryEngine/CodeCacheAccessor.h"
 #include "QueryEngine/NvidiaKernel.h"
-#include "Shared/LruCache.h"
+#include "ThirdParty/LruCache/LruCache.h"
 
 inline bool g_query_engine_cuda_streams{false};
 inline size_t g_code_cache_max_num_items{1000};

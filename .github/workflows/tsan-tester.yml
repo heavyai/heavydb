@@ -3,12 +3,19 @@
 
 name: TSAN Tester
 
+# Placeholder workflow — does not build or run TSAN tests. Use workflow_dispatch
+# to verify the workflow file is wired up without consuming runner resources.
+
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  placeholder:
+  noop:
+    name: noop
     runs-on: linux-amd64-cpu16
     steps:
-      - name: placeholder
-        run: true
+      - name: No-op
+        run: echo "tsan-tester placeholder — nothing to do"

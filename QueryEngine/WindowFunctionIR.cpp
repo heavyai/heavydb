@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "CodeGenerator.h"
@@ -633,10 +622,6 @@ llvm::Value* Executor::codegenFrameBoundExpr(const Analyzer::WindowFunction* win
     auto bound_expr_lvs = code_generator.codegen(bound_expr, true, co);
     bound_expr_lv = bound_expr_lvs.front();
     if (order_col_ti.is_date() && window_func->hasRangeModeFraming()) {
-      if (g_cluster) {
-        throw std::runtime_error(
-            "Range mode with date type ordering column is not supported yet.");
-      }
       bound_expr_lv = encode_date_col_val(bound_expr_lv);
     }
     if (frame_bound->getBoundExpr()->get_type_info().get_size() != 8) {
@@ -1158,10 +1143,16 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
           ? cgen_state_->inlineFpNull(window_func_ti)
           : cgen_state_->castToTypeIn(cgen_state_->inlineIntNull(window_func_ti), 64);
   if (window_func_context->elementCount() == 0) {
-    // we do not need to generate a code for an empty input table
-    return window_func->getKind() == SqlWindowFunctionKind::AVG
-               ? cgen_state_->inlineFpNull(SQLTypeInfo(SQLTypes::kDOUBLE))
-               : window_func_null_val;
+    // We do not need to generate code for an empty input table, but COUNT still
+    // follows SQL aggregate semantics and returns 0 instead of the null sentinel.
+    if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+      return cgen_state_->inlineFpNull(SQLTypeInfo(SQLTypes::kDOUBLE));
+    }
+    if (window_func->getKind() == SqlWindowFunctionKind::COUNT ||
+        window_func->getKind() == SqlWindowFunctionKind::COUNT_IF) {
+      return cgen_state_->llInt(int64_t(0));
+    }
+    return window_func_null_val;
   }
   const auto& args = window_func->getArgs();
   CodeGenerator code_generator(this);
@@ -1590,8 +1581,17 @@ llvm::Value* Executor::codegenAggregateWindowState(CodeGenerator* code_generator
     }
   }
   if (window_func->getKind() == SqlWindowFunctionKind::COUNT) {
-    return cgen_state_->ir_builder_.CreateLoad(
+    auto count_lv = cgen_state_->ir_builder_.CreateLoad(
         aggregate_state->getType()->getPointerElementType(), aggregate_state);
+    if (window_func_ti.is_fp()) {
+      // Calcite 1.41 can route COUNT through an adjusted window type on this
+      // path; the COUNT result consumed by the executor remains an int64.
+      return count_lv->getType()->isFloatingPointTy()
+                 ? cgen_state_->ir_builder_.CreateFPToSI(
+                       count_lv, get_int_type(64, cgen_state_->context_))
+                 : cgen_state_->castToTypeIn(count_lv, 64);
+    }
+    return count_lv;
   }
   switch (window_func_ti.get_type()) {
     case kFLOAT: {

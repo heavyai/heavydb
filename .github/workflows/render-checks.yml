@@ -3,12 +3,312 @@
 
 name: Render Checks
 
+# Ported from Jenkins render-pr-required-checks, which triggered mapd2-multi-pr
+# (multi) and mapd2-multi-render-pr (multi-render); core-render-tests-pipeline
+# is excluded (external be-render-test-scripts repo). Built on the same
+# container/build->image->test framework as pr-required-checks.yml. These
+# overlap with pr-required-checks' multi/multi-render jobs; this is the
+# standalone render required-check entry point.
+#
+# Triggering: workflow_dispatch only (the Jenkins job had no schedule).
+
 on:
   workflow_dispatch:
+    inputs:
+      sha1:
+        description: "SHA or branch to test"
+        default: ""
+      jobs:
+        description: "Subset of jobs to run"
+        type: choice
+        default: all
+        options:
+          - all
+          - multi
+          - multi-render
+
+permissions:
+  contents: read
+  packages: write
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  placeholder:
+  setup:
+    name: setup
+    runs-on: linux-amd64-cpu16
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      jobs_filter: ${{ steps.resolve.outputs.jobs_filter }}
+    steps:
+      - id: resolve
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const input = ((context.payload.inputs || {}).sha1 || '').trim();
+            let sha = context.sha;
+            if (input) {
+              const { data } = await github.rest.repos.getCommit({ owner, repo, ref: input });
+              sha = data.sha;
+            }
+            core.setOutput('sha', sha);
+            core.setOutput('jobs_filter', ((context.payload.inputs || {}).jobs || 'all'));
+
+  # ===========================================================================
+  # multi — release+CUDA gcc sanity (matrix) + clang/static-debug build checks
+  # ===========================================================================
+  build-multi-cuda-gcc:
+    name: build (multi gcc cuda-static partition ${{ matrix.partition }})
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      # Cap concurrent partitions so the matrix doesn't oversubscribe the shared
+      # self-hosted runner pool (unscheduled legs get cancelled). 2 at a time.
+      max-parallel: 2
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=ON
+        -DHEAVYAI_PARTITION=${{ matrix.partition }}
+      MAKE_TARGETS: "mapd_java_components heavydb sanity_tests_build_only"
+      IMAGE_NAME: "pr-build/multi-cuda-gcc"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: multi-cuda-gcc-partition-${{ matrix.partition }}-mvn-build-log
+
+  test-multi-cuda-gcc:
+    name: test (multi gcc cuda-static sanity partition ${{ matrix.partition }})
+    needs: [setup, build-multi-cuda-gcc]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi' }}
+    timeout-minutes: 720
+    runs-on:
+      group: nv-gpu-amd64-t4-1gpu
+    container:
+      image: ghcr.io/${{ github.repository }}/pr-build/multi-cuda-gcc:${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      # Cap concurrent partitions so the matrix doesn't oversubscribe the shared
+      # self-hosted runner pool (unscheduled legs get cancelled). 2 at a time.
+      max-parallel: 2
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      HOME: /root
+      LABEL_REGEX: "_sanity_"
+      CTEST_TIMEOUT_SECS: "7200"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+      - name: Run sanity tests
+        run: scripts/ci/run_ctest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-multi-cuda-gcc-partition-${{ matrix.partition }}
+          path: /workspace/build/*.xml
+          if-no-files-found: ignore
+
+  build-multi-cuda-clang:
+    name: build (multi clang cuda-static)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      CC: clang
+      CXX: clang++
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=OFF
+      MAKE_TARGETS: "mapd_java_components heavydb"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          pack: 'false'
+          mvn-log-name: multi-cuda-clang-mvn-build-log
+
+  build-multi-static-debug:
+    name: build (multi gcc static debug)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=OFF
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=debug
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=OFF
+      MAKE_TARGETS: "mapd_java_components heavydb"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          pack: 'false'
+          mvn-log-name: multi-static-debug-mvn-build-log
+
+  # ===========================================================================
+  # multi-render — release+CUDA+rendering, render_sanity_tests
+  # ===========================================================================
+  build-multi-render:
+    name: build (multi-render)
+    needs: setup
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-render' }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.pack.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=ON
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_RENDER_TESTS=ON
+        -DENABLE_TESTS=OFF
+        -DENABLE_ONLY_ONE_ARCH=ON
+        -DUSE_ALTERNATE_LINKER=mold
+      MAKE_TARGETS: "mapd_java_components render_sanity_tests_build_only"
+      IMAGE_NAME: "pr-build/multi-render"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: "ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
+      INCLUDE_PATHS: "build Tests config scripts"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: pack
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: multi-render-mvn-build-log
+
+  test-multi-render:
+    name: test (multi-render)
+    needs: [setup, build-multi-render]
+    if: ${{ needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-render' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-multi-render.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --gpus all --env NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      LABEL_REGEX: "render_sanity"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-west-1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+      - name: Run render sanity tests
+        run: scripts/ci/run_ctest.sh
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-multi-render
+          path: /workspace/build/*.xml
+          if-no-files-found: ignore
+
+  report:
+    name: report-status
+    needs:
+      - setup
+      - build-multi-cuda-gcc
+      - test-multi-cuda-gcc
+      - build-multi-cuda-clang
+      - build-multi-static-debug
+      - build-multi-render
+      - test-multi-render
+    if: always() && needs.setup.result == 'success'
     runs-on: linux-amd64-cpu16
     steps:
-      - name: placeholder
-        run: true
+      - name: Aggregate
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const results = ${{ toJSON(needs) }};
+            const ok = r => r === 'success' || r === 'skipped';
+            const jobs = Object.keys(results).filter(j => j !== 'setup');
+            const failed = jobs.filter(j => !ok(results[j].result));
+            if (failed.length) core.setFailed(`Did not pass: ${failed.join(', ')}`);
+            else core.info('All selected render checks passed');

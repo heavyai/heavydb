@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # Doxyfile 1.8.14
 
 # This file describes the settings to be used by the documentation system
@@ -32,7 +35,7 @@ DOXYFILE_ENCODING      = UTF-8
 # title of most generated pages and in a few other places.
 # The default value is: My Project.
 
-PROJECT_NAME           = "OmniSciDB"
+PROJECT_NAME           = "OmniSciDB Internal"
 
 # The PROJECT_NUMBER tag can be used to enter a project or revision number. This
 # could be handy for archiving the generated documentation or if some version
@@ -521,8 +524,7 @@ INTERNAL_DOCS          = NO
 # If the CASE_SENSE_NAMES tag is set to NO then doxygen will only generate file
 # names in lower-case letters. If set to YES, upper-case letters are also
 # allowed. This is useful if you have classes or files whose names only differ
-# in case and if your file system supports case sensitive file names. Windows
-# and Mac users are advised to set this option to NO.
+# in case and if your file system supports case sensitive file names.
 # The default value is: system dependent.
 
 CASE_SENSE_NAMES       = NO
@@ -876,12 +878,12 @@ RECURSIVE              = YES
 # run.
 
 EXCLUDE                = ../blog
-EXCLUDE               += ../Catalog/ee/Utils
+EXCLUDE               += ../Catalog/SystemDashboards
 EXCLUDE               += ../docker
 EXCLUDE               += ../docs
 EXCLUDE               += ../Experimental
 EXCLUDE               += ../issue_template.md
-EXCLUDE               += ../README.md
+EXCLUDE               += ../README-internal.md
 EXCLUDE               += ../ThirdParty
 EXCLUDE               += ../Tests
 EXCLUDE               += ../ODBC

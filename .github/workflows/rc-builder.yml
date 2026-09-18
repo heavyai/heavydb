@@ -2,13 +2,385 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: Product Builder
+run-name: ${{ inputs.description != '' && format('Product Builder — {0}', inputs.description) || 'Product Builder' }}
+
+# Builds the full HeavyDB product from source — including the HeavyIQ, Immerse
+# frontend, and web server components, which are cloned and compiled from their
+# own repos via `dev-tools/dev.sh build all` rather than downloaded as prebuilt
+# release assets. This keeps every product asset off any public GitHub Release:
+# the finished product is pushed only to private/independent targets (Docker Hub
+# heavyai/scantest and the heavyai-binary-scan-testing repo) and NOTHING is
+# retained as a GitHub Actions artifact or attached to a GitHub Release.
 
 on:
   workflow_dispatch:
+    inputs:
+      sha1_heavydb_internal:
+        description: 'heavydb-internal branch or SHA to build'
+        type: string
+        default: 'master'
+      heavyiq_ref:
+        description: 'HeavyIQ ref to build (blank = repo default branch)'
+        type: string
+        default: ''
+      immerse_ref:
+        description: 'Immerse ref to build (blank = repo default branch)'
+        type: string
+        default: ''
+      webserver_ref:
+        description: 'WebServer ref to build (blank = repo default branch)'
+        type: string
+        default: ''
+      pyheavydb_source:
+        description: 'How to obtain the pyheavydb version declared by HeavyIQ'
+        type: choice
+        options:
+          - project
+          - pypi
+          - testpypi
+          - build-local-wheel
+        default: project
+      pyheavydb_ref:
+        description: 'pyheavydb ref for build-local-wheel only (blank = repo default branch)'
+        type: string
+        default: ''
+      images:
+        description: 'GHCR build image(s), semicolon (;) separated'
+        type: string
+        default: 'ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb-internal/core-build-rockylinux8-static-cuda12.9.2-x86_64:latest;ghcr.io/heavyai/heavydb-internal/core-build-ubuntu22.04-static-cuda12.9.2-aarch64:latest;ghcr.io/heavyai/heavydb-internal/core-build-rockylinux8-static-cuda12.9.2-aarch64:latest'
+      recipes:
+        description: 'Build recipes, semicolon (;) separated (compiler,render|norender,cuda|cpu,static|shared)'
+        type: string
+        default: 'gcc,render,cuda,static'
+      build_type:
+        description: 'CMake build type'
+        type: choice
+        options:
+          - Release
+          - Debug
+          - RelWithDebInfo
+        default: 'Release'
+      run_tests:
+        description: 'Test suite to run after the build (uses a GPU runner when not none)'
+        type: choice
+        options:
+          - none
+          - sanity
+          - all
+        default: none
+      base_product_image_name:
+        description: 'Runtime base image for the Ubuntu product Docker build; leave blank to auto-detect'
+        type: string
+        default: 'nvcr.io/nvidia/cuda:12.9.2-runtime-ubuntu22.04'
+      rocky_product_image_name:
+        description: 'Runtime base image for the Rocky product Docker build; leave blank to auto-detect'
+        type: string
+        default: 'nvcr.io/nvidia/cuda:12.9.2-runtime-rockylinux8'
+      description:
+        description: 'Build description label'
+        type: string
+        default: ''
+      # push_to_dockerhub and push_to_binary_scan_testing send the finished
+      # product to private/independent targets. They are NOT gated on repo
+      # visibility: their exposure is controlled entirely by Docker Hub's and
+      # the heavyai-binary-scan-testing repo's own access settings, which this
+      # workflow cannot see or change. There is deliberately no create_release
+      # / upload-artifact path — this workflow never publishes a product asset
+      # on an open-source repo.
+      push_to_binary_scan_testing:
+        description: 'Push the product binary tarball to heavyai/heavyai-binary-scan-testing'
+        type: boolean
+        default: false
+      push_to_dockerhub:
+        description: 'Push the product docker image to heavyai/scantest on Docker Hub'
+        type: boolean
+        default: false
+      sign_tarball:
+        description: 'Sign the product tarball using GitHub OIDC keyless signing (cosign/Sigstore) and bundle it with a certificate and verification guide into a zip for scan-repo upload (push_to_binary_scan_testing must also be enabled)'
+        type: boolean
+        default: false
 
 jobs:
-  placeholder:
-    runs-on: linux-amd64-cpu16
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
     steps:
-      - name: placeholder
-        run: true
+      - name: Build matrix
+        id: build-matrix
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys
+
+          images_raw = os.environ.get("IMAGES", "")
+          recipes_raw = os.environ.get("RECIPES", "")
+          run_tests = os.environ.get("RUN_TESTS", "none")
+
+          images = [i.strip() for i in images_raw.replace("\n", ";").split(";") if i.strip()]
+          recipes = [r.strip() for r in recipes_raw.replace("\n", ";").split(";") if r.strip()]
+
+          if not images:
+              print("ERROR: no images provided", file=sys.stderr)
+              sys.exit(1)
+          if not recipes:
+              print("ERROR: no recipes provided", file=sys.stderr)
+              sys.exit(1)
+
+          entries = []
+          for image in images:
+              for recipe in recipes:
+                  parts = [p.strip() for p in recipe.split(",")]
+                  if len(parts) != 4:
+                      print(f"ERROR: recipe '{recipe}' must have 4 comma-separated fields", file=sys.stderr)
+                      sys.exit(1)
+                  compiler, render, cuda_cpu, lib_type = parts
+                  cuda = "on" if cuda_cpu == "cuda" else "off"
+                  image_name = image.split(":")[0].lower()
+                  # Running the test suite needs a GPU for CUDA execute tests;
+                  # a plain build can use a CPU runner.
+                  if "aarch64" in image_name or "arm64" in image_name:
+                      arch = "aarch64"
+                      runner = "linux-arm64-gpu-l4-latest-1" if run_tests != "none" else "linux-arm64-cpu16"
+                  else:
+                      arch = "x86_64"
+                      runner = "linux-amd64-gpu-t4-latest-1" if run_tests != "none" else "linux-amd64-cpu32"
+                  if "rocky" in image_name or "centos" in image_name or "rhel" in image_name:
+                      os_family = "rocky"
+                      distro = "rockylinux8"
+                  elif "ubuntu" in image_name:
+                      os_family = "ubuntu"
+                      distro = "ubuntu22.04"
+                  else:
+                      print(f"ERROR: unrecognized image '{image}'", file=sys.stderr)
+                      sys.exit(1)
+                  entries.append({
+                      "image": image,
+                      "recipe": recipe.replace(",", "-"),
+                      "compiler": compiler,
+                      "render": render,
+                      "cuda": cuda,
+                      "lib_type": lib_type,
+                      "runner": runner,
+                      "os_family": os_family,
+                      "distro": distro,
+                      "arch": arch,
+                  })
+
+          matrix = {"include": entries}
+          output = json.dumps(matrix)
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"matrix={output}\n")
+          print(f"Matrix: {output}")
+          PYEOF
+        env:
+          IMAGES: ${{ inputs.images }}
+          RECIPES: ${{ inputs.recipes }}
+          RUN_TESTS: ${{ inputs.run_tests }}
+
+  build:
+    name: "build (${{ matrix.os_family }}-${{ matrix.arch }}, ${{ matrix.recipe }})"
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    # Runs on the plain host runner (NOT inside a container:) because
+    # `dev-tools/dev.sh build all` drives Docker itself — it launches the deps
+    # container to build each component and heavydb, then builds the product
+    # image on the host. The deps image is pulled explicitly below.
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: read
+      id-token: write  # required for cosign OIDC keyless signing
+    env:
+      WORKDIR: ${{ github.workspace }}/heavydb-internal
+      # Cloning the component repos (heavyiq/immerse/webserver) uses a token so
+      # it works whether a given repo is still private or already public.
+      COMPONENT_DOWNLOAD_TOKEN: ${{ secrets.COMPONENT_DOWNLOAD_TOKEN }}
+      # Consumed inside the Immerse build container for its private npm packages,
+      # which are git+ssh deps on heavyai/* repos (heavyai-charting, heavyai-d3,
+      # heavyai-draw, gauge-chart, skewt-chart, useWhisper). It only needs repo
+      # contents:read on those, so we reuse COMPONENT_DOWNLOAD_TOKEN (already used
+      # to clone the heavyai component repos). Swap to a dedicated secret if that
+      # token's scope doesn't cover those repos.
+      PRIVATE_PACKAGES_TOKEN: ${{ secrets.COMPONENT_DOWNLOAD_TOKEN }}
+      MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
+      RAYGUN_AUTH_TOKEN: ${{ secrets.RAYGUN_AUTH_TOKEN }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+    steps:
+      - name: Install tools
+        # The host runner already provides the Docker daemon+CLI (it hosts the
+        # container: jobs used elsewhere) and typically git/jq. Install only the
+        # CLIs that are actually missing; do NOT install a docker package, which
+        # could restart the host daemon. Privileged writes use sudo since this
+        # runs as the (non-root) runner user on the host.
+        run: |
+          missing=()
+          for t in gh git git-lfs jq; do
+            command -v "$t" >/dev/null 2>&1 || missing+=("$t")
+          done
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "All required tools present: gh git git-lfs jq"
+            exit 0
+          fi
+          echo "Installing missing tools: ${missing[*]}"
+          if command -v apt-get &>/dev/null; then
+            if printf '%s\n' "${missing[@]}" | grep -qx gh; then
+              sudo mkdir -p /usr/share/keyrings
+              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            fi
+            sudo apt-get update -q
+            sudo apt-get install -y -q "${missing[@]}"
+          else
+            if printf '%s\n' "${missing[@]}" | grep -qx gh; then
+              sudo dnf install -y 'dnf-command(config-manager)'
+              sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+            fi
+            sudo dnf install -y "${missing[@]}"
+          fi
+
+      - name: Ensure Docker socket is accessible
+        # dev-tools/dev.sh (and its build-* scripts) invoke `docker` as the
+        # runner user without sudo. Grant access to the host daemon's socket so
+        # those calls work without modifying the shared dev-tools scripts.
+        run: sudo chmod 666 /var/run/docker.sock || true
+
+      - name: Checkout heavydb-internal
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.sha1_heavydb_internal }}
+          path: heavydb-internal
+
+      - name: Configure git for component clones
+        # build-component.sh clones the component repos via git@github.com: SSH
+        # URLs. Rewrite those to authenticated HTTPS so CI can clone them without
+        # an SSH key, working for both private and public component repos.
+        run: |
+          # --add so both rewrites coexist; a plain (non --add) second config
+          # would replace the first, dropping the scp-style rewrite that
+          # build-component.sh actually uses (git@github.com:owner/repo.git).
+          git config --global --add url."https://x-access-token:${COMPONENT_DOWNLOAD_TOKEN}@github.com/".insteadOf "git@github.com:"
+          git config --global --add url."https://x-access-token:${COMPONENT_DOWNLOAD_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
+
+      - name: Log in to GHCR and pull deps image
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker pull "${{ matrix.image }}"
+
+      - name: Build product from source (build all)
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          product_base_flag=""
+          if [ "${{ matrix.os_family }}" = "rocky" ] && [ -n "${{ inputs.rocky_product_image_name }}" ]; then
+            product_base_flag="--product-base-image=${{ inputs.rocky_product_image_name }}"
+          elif [ "${{ matrix.os_family }}" != "rocky" ] && [ -n "${{ inputs.base_product_image_name }}" ]; then
+            product_base_flag="--product-base-image=${{ inputs.base_product_image_name }}"
+          fi
+
+          dev-tools/dev.sh build all \
+            --heavyiq-ref="${{ inputs.heavyiq_ref }}" \
+            --immerse-ref="${{ inputs.immerse_ref }}" \
+            --webserver-ref="${{ inputs.webserver_ref }}" \
+            --pyheavydb-source="${{ inputs.pyheavydb_source }}" \
+            --pyheavydb-ref="${{ inputs.pyheavydb_ref }}" \
+            --deps-image="${{ matrix.image }}" \
+            --distro="${{ matrix.distro }}" \
+            --compiler="${{ matrix.compiler }}" \
+            --build-type="${{ inputs.build_type }}" \
+            --run-tests="${{ inputs.run_tests }}" \
+            $([ "${{ matrix.render }}" = "norender" ] && echo "--norendering") \
+            $([ "${{ matrix.cuda }}" = "on" ] && echo "--cuda" || echo "--cpu") \
+            $([ "${{ matrix.lib_type }}" = "static" ] && echo "--static" || echo "--shared") \
+            --docker $product_base_flag
+
+      - name: Locate build outputs
+        id: artifacts
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          # The final cpack product package sits at the top of the output dir
+          # (build/<distro>/heavyai-*.tar.gz). -maxdepth 2 keeps us to that
+          # level, excluding both the components/ sub-artifacts and cpack's
+          # _CPack_Packages/ staging copies, which sort ahead of it.
+          binary=$(find build -maxdepth 2 -type f -name 'heavyai-*.tar.gz' ! -name '*-docker.tar.gz' | sort | head -1)
+          # The product image just built.
+          # Prefer the versioned tag (not :latest) so the Docker Hub retag keeps
+          # version-YYYYMMDD-<sha> rather than a bare "latest" suffix.
+          image=$(docker images --format '{{.Repository}}:{{.Tag}}' \
+            | grep '^heavyai-' | grep -v ':latest$' | head -1 || true)
+          echo "binary_tar=$WORKDIR/$binary" >> "$GITHUB_OUTPUT"
+          echo "product_image=$image" >> "$GITHUB_OUTPUT"
+          echo "Binary: $binary"
+          echo "Product image: $image"
+
+      - name: Push docker image to Docker Hub
+        if: ${{ inputs.push_to_dockerhub && steps.artifacts.outputs.product_image != '' }}
+        run: |
+          PRODUCT_IMAGE="${{ steps.artifacts.outputs.product_image }}"
+          # heavyai-<distro>-<arch>-<render>-<hostarch>:<version> -> <distro>-<arch>-<render>-<hostarch>-<version>
+          TAG=$(echo "$PRODUCT_IMAGE" | sed -e 's#^heavyai-##' -e 's#:#-#')
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "heavyai" --password-stdin
+          docker tag "$PRODUCT_IMAGE" "heavyai/scantest:$TAG"
+          docker push "heavyai/scantest:$TAG"
+          docker logout
+          docker rmi "heavyai/scantest:$TAG" 2>/dev/null || true
+
+      - name: Install cosign
+        if: ${{ inputs.sign_tarball }}
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign and package tarball
+        id: sign
+        if: ${{ inputs.sign_tarball && steps.artifacts.outputs.binary_tar != '' }}
+        env:
+          BINARY: ${{ steps.artifacts.outputs.binary_tar }}
+        working-directory: ${{ env.WORKDIR }}
+        run: bash scripts/ci/sign-bundle.sh
+
+      - name: Push binary to heavyai-binary-scan-testing
+        if: ${{ inputs.push_to_binary_scan_testing && steps.artifacts.outputs.binary_tar != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.COMPONENT_DOWNLOAD_TOKEN }}
+        run: |
+          BINARY="${{ steps.artifacts.outputs.binary_tar }}"
+          # Use the signed bundle (zip) when available; otherwise push the bare tarball.
+          SIGNED="${{ steps.sign.outputs.signed_bundle }}"
+          ARTIFACT="${SIGNED:-$BINARY}"
+          if [ ! -f "$ARTIFACT" ]; then
+            echo "::warning::No product artifact found to push; skipping."
+            exit 0
+          fi
+          GIT_LFS_SKIP_SMUDGE=1 git clone https://x-access-token:${GH_TOKEN}@github.com/heavyai/heavyai-binary-scan-testing.git scan-repo
+          cd scan-repo
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config http.postBuffer 524288000
+          DATE=$(date -u +%Y-%m-%d)
+          dest="runs/${DATE}/${{ github.run_id }}"
+          mkdir -p "$dest"
+          cp "$ARTIFACT" "$dest/$(basename "$ARTIFACT")"
+          MSG="Product build ${{ github.run_id }} — ${{ matrix.os_family }}-${{ matrix.arch }} ${{ matrix.recipe }}"
+          if [ -n "${{ inputs.description }}" ]; then
+            MSG="$MSG (${{ inputs.description }})"
+          fi
+          git add "$dest/"
+          git commit -m "$MSG"
+          # Push LFS objects first (retry on transient failures).
+          for attempt in 1 2 3; do
+            git lfs push --all origin && break
+            echo "LFS push attempt $attempt failed, retrying..."
+            sleep 15
+          done
+          # Push ref with rebase-retry to handle concurrent pushes from sibling build jobs.
+          for attempt in 1 2 3 4 5; do
+            GIT_LFS_SKIP_PUSH=1 git push && break
+            echo "Ref push attempt $attempt failed (concurrent push), rebasing..."
+            git pull --rebase
+            sleep $((attempt * 10))
+          done
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf "${{ github.workspace }}/heavyiq" "${{ github.workspace }}/immerse" "${{ github.workspace }}/webserver" || true
+          rm -rf "${{ env.WORKDIR }}/build" || true

@@ -1,3 +1,8 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 if(ENABLE_AWS_S3)
   include_directories(${LibAwsS3_INCLUDE_DIRS})
   list(APPEND IMPORT_EXPORT_LIBRARIES "${LibAwsS3_LIBRARIES}")
@@ -27,7 +32,7 @@ add_library(ImportExport ${IMPORT_SOURCES} ${EXPORT_SOURCES} ${S3Archive})
 
 find_package(XercesC REQUIRED)
 
-target_link_libraries(ImportExport mapd_thrift Logger Shared Catalog DataMgr Geospatial StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS} ${XercesC_LIBRARIES} ${LibArchive_LIBRARIES} ${IMPORT_EXPORT_LIBRARIES} ${Arrow_LIBRARIES})
+target_link_libraries(ImportExport mapd_thrift Logger Shared Catalog DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS} ${XercesC_LIBRARIES} ${LibArchive_LIBRARIES} ${IMPORT_EXPORT_LIBRARIES} ${Arrow_LIBRARIES})
 
 add_library(RowToColumn RowToColumnLoader.cpp RowToColumnLoader.h DelimitedParserUtils.cpp DelimitedParserUtils.h)
 target_link_libraries(RowToColumn ThriftClient)

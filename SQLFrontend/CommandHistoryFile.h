@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef COMMANDHISTORYFILE_H
@@ -21,14 +10,9 @@
 #include <string>
 #include <utility>
 
-#include <sys/types.h>
-#ifdef _WIN32
-using uid_t = int;
-#include <shlobj_core.h>
-#else
 #include <pwd.h>
+#include <sys/types.h>
 #include <unistd.h>
-#endif
 
 inline constexpr char const* const getDefaultHistoryFilename() {
   return ".heavysql_history";
@@ -36,66 +20,27 @@ inline constexpr char const* const getDefaultHistoryFilename() {
 
 class DefaultEnvResolver {
  public:
-  uid_t getuid() const {
-#ifdef _WIN32
-    // The windows SHGetFolder functions do not use
-    // a uid. in the wat getpsuid does and the
-    // 'folly' library approach for getuid which
-    // I've copied is to simply returns a 1.
-    return 1;
-#else
-    return ::getuid();
-#endif
-  }
+  uid_t getuid() const { return ::getuid(); }
 
-#ifndef _WIN32
-  auto const* getpwuid(uid_t uid) const {
-    return ::getpwuid(uid);
-  }
-#endif
+  auto const* getpwuid(uid_t uid) const { return ::getpwuid(uid); }
 
   const char* getpwdir(uid_t uid) const {
-#ifdef _WIN32
-    if (uid != getuid()) {
-      return nullptr;
-    }
-#ifdef _UNICODE
-    wchar_t home_dir_w[MAX_PATH];
-    if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, 0, home_dir_w))) {
-      wcstombs(home_dir_, home_dir_w, MAX_PATH);
-      return home_dir_;
-    }
-#else
-    if (SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, 0, home_dir))) {
-      return home_dir_;
-    }
-#endif
-#else
     auto* p = getpwuid(uid);
     if (p) {
       return p->pw_dir;
     }
-#endif
     return nullptr;
   }
 
-#if defined(__APPLE__) || defined(_WIN32)
-  auto const* getenv(char const* env_var_name) const {
-    return ::getenv(env_var_name);
-  }
-#else
   auto const* getenv(char const* env_var_name) const {
     return ::secure_getenv(env_var_name);
   }
-#endif
-
- private:
-#ifdef _WIN32
-  mutable char home_dir_[MAX_PATH];
-#endif
 };
 
 std::string getHomeDirectory() {
+  if (auto const* home = ::secure_getenv("HOME")) {
+    return home;
+  }
   DefaultEnvResolver r;
   return r.getpwdir(r.getuid());
 }

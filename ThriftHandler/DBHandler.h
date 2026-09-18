@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -22,12 +11,11 @@
 
 #pragma once
 
-#include "LeafAggregator.h"
-
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
 
+#include <boost/regex.hpp>
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/SessionsStore.h"
@@ -50,11 +38,9 @@
 #include "QueryEngine/TableGenerations.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SystemParameters.h"
-#include "Shared/clean_boost_regex.hpp"
 #include "Shared/heavyai_shared_mutex.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
-#include "StringDictionary/StringDictionaryClient.h"
 #include "ThriftHandler/ConnectionInfo.h"
 #include "ThriftHandler/QueryState.h"
 #include "ThriftHandler/RenderHandler.h"
@@ -93,9 +79,6 @@
 #include "gen-cpp/extension_functions_types.h"
 
 using namespace std::string_literals;
-
-class HeavyDBAggHandler;
-class HeavyDBLeafHandler;
 
 // Multiple concurrent requests for the same session can occur.  For that reason, each
 // request briefly takes a lock to make a copy of the appropriate SessionInfo object. Then
@@ -164,9 +147,7 @@ struct DiskCacheConfig;
 
 class DBHandler : public HeavyIf {
  public:
-  DBHandler(const std::vector<LeafHostInfo>& db_leaves,
-            const std::vector<LeafHostInfo>& string_leaves,
-            const std::string& base_data_path,
+  DBHandler(const std::string& base_data_path,
             const bool allow_multifrag,
             const bool jit_debug,
             const bool intel_jit_profile,
@@ -201,6 +182,7 @@ class DBHandler : public HeavyIf {
             const File_Namespace::DiskCacheConfig& disk_cache_config,
             const bool is_new_db);
   void initialize(const bool is_new_db);
+
   ~DBHandler() override;
 
   static inline size_t max_bytes_for_thrift() {
@@ -212,9 +194,6 @@ class DBHandler : public HeavyIf {
   //         Please keep in same order for easy check and cut and paste
   // Important ****
 
-  void krb5_connect(TKrb5Session& session,
-                    const std::string& token,
-                    const std::string& dbname) override;
   // connection, admin
   void connect(TSessionId& session,
                const std::string& username,
@@ -275,24 +254,11 @@ class DBHandler : public HeavyIf {
                   const std::string& memory_level) override;
   void clear_cpu_memory(const TSessionId& session) override;
   void clear_gpu_memory(const TSessionId& session) override;
-  void clearRenderMemory(const TSessionId& session);  // it's not declared on thrifth
-                                                      // and on persisten leaf client
+  void clearRenderMemory(const TSessionId& session);
 
-  void pause_executor_queue(
-      const TSessionId& session);  // Not implemented for persistent leaf client
-  void resume_executor_queue(
-      const TSessionId& session);  // Not implemented for persistent leaf client
+  void pause_executor_queue(const TSessionId& session);
+  void resume_executor_queue(const TSessionId& session);
 
-  void set_cur_session(const TSessionId& parent_session,
-                       const TSessionId& leaf_session,
-                       const std::string& start_time_str,
-                       const std::string& label,
-                       bool for_running_query_kernel) override;
-  void invalidate_cur_session(const TSessionId& parent_session,
-                              const TSessionId& leaf_session,
-                              const std::string& start_time_str,
-                              const std::string& label,
-                              bool for_running_query_kernel) override;
   void set_table_epoch(const TSessionId& session,
                        const int db_id,
                        const int table_id,
@@ -314,8 +280,6 @@ class DBHandler : public HeavyIf {
                         const std::vector<TTableEpochInfo>& table_epochs) override;
 
   void get_session_info(TSessionInfo& _return, const TSessionId& session) override;
-
-  void set_leaf_info(const TSessionId& session, const TLeafInfo& info) override;
 
   void sql_execute(ExecutionResult& _return,
                    const TSessionId& session,
@@ -465,8 +429,7 @@ class DBHandler : public HeavyIf {
                            const TCopyParams& copy_params) override;
   void create_table(const TSessionId& session,
                     const std::string& table_name,
-                    const TRowDescriptor& row_desc,
-                    const TCreateParams& create_params) override;
+                    const TRowDescriptor& row_desc) override;
   void import_table(const TSessionId& session,
                     const std::string& table_name,
                     const std::string& file_name,
@@ -475,8 +438,7 @@ class DBHandler : public HeavyIf {
                         const std::string& table_name,
                         const std::string& file_name,
                         const TCopyParams& copy_params,
-                        const TRowDescriptor& row_desc,
-                        const TCreateParams& create_params) override;
+                        const TRowDescriptor& row_desc) override;
   void import_table_status(TImportStatus& _return,
                            const TSessionId& session,
                            const std::string& import_id) override;
@@ -492,43 +454,6 @@ class DBHandler : public HeavyIf {
                               const TSessionId& session,
                               const std::string& file_name,
                               const TCopyParams& copy_params) override;
-  // distributed
-  int64_t query_get_outer_fragment_count(const TSessionId& session,
-                                         const std::string& select_query) override;
-
-  void check_table_consistency(TTableMeta& _return,
-                               const TSessionId& session,
-                               const int32_t table_id) override;
-  void start_query(TPendingQuery& _return,
-                   const TSessionId& leaf_session,
-                   const TSessionId& parent_session,
-                   const std::string& serialized_rel_alg_dag,
-                   const std::string& start_time_str,
-                   const bool just_explain,
-                   const std::vector<int64_t>& outer_fragment_indices) override;
-  void execute_query_step(TStepResult& _return,
-                          const TPendingQuery& pending_query,
-                          const TSubqueryId subquery_id,
-                          const std::string& start_time_str) override;
-  void broadcast_serialized_rows(const TSerializedRows& serialized_rows,
-                                 const TRowDescriptor& row_desc,
-                                 const TQueryId query_id,
-                                 const TSubqueryId subquery_id,
-                                 const bool is_final_subquery_result) override;
-
-  void start_render_query(TPendingRenderQuery& _return,
-                          const TSessionId& session,
-                          const int64_t widget_id,
-                          const int16_t node_idx,
-                          const std::string& vega_json) override;
-  void execute_next_render_step(TRenderStepResult& _return,
-                                const TPendingRenderQuery& pending_render,
-                                const TRenderAggDataMap& merged_data) override;
-
-  void insert_data(const TSessionId& session, const TInsertData& insert_data) override;
-  void insert_chunks(const TSessionId& session,
-                     const TInsertChunks& insert_chunks) override;
-  void checkpoint(const TSessionId& session, const int32_t table_id) override;
   // DB Object Privileges
   void get_roles(std::vector<std::string>& _return, const TSessionId& session) override;
   bool has_role(const TSessionId& sessionId,
@@ -555,14 +480,6 @@ class DBHandler : public HeavyIf {
   std::vector<std::string> get_valid_groups(const TSessionId& session,
                                             int32_t dashboard_id,
                                             std::vector<std::string> groups);
-  // licensing
-  void set_license_key(TLicenseInfo& _return,
-                       const TSessionId& session,
-                       const std::string& key,
-                       const std::string& nonce) override;
-  void get_license_claims(TLicenseInfo& _return,
-                          const TSessionId& session,
-                          const std::string& nonce) override;
   // user-defined functions
   /*
     Returns a mapping of device (CPU, GPU) parameters (name, LLVM IR
@@ -632,16 +549,11 @@ class DBHandler : public HeavyIf {
                         const std::string& username,
                         const std::string& dbname);
 
-  bool isAggregator() const;
-
   bool checkInMemorySystemTableQuery(
       const std::unordered_set<shared::TableKey>& tables_selected_from) const;
 
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
 
-  LeafAggregator leaf_aggregator_;
-  std::vector<LeafHostInfo> db_leaves_;
-  std::vector<LeafHostInfo> string_leaves_;
   const std::string base_data_path_;
   boost::filesystem::path import_path_;
   ExecutorDeviceType executor_device_type_;
@@ -660,8 +572,6 @@ class DBHandler : public HeavyIf {
   SystemParameters& system_parameters_;
   std::shared_ptr<QueryEngine> query_engine_;
   std::unique_ptr<RenderHandler> render_handler_;
-  std::unique_ptr<HeavyDBAggHandler> agg_handler_;
-  std::unique_ptr<HeavyDBLeafHandler> leaf_handler_;
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
   std::unique_ptr<QueryDispatchQueue> dispatch_queue_;
@@ -685,9 +595,10 @@ class DBHandler : public HeavyIf {
   void resizeDispatchQueue(size_t queue_size);
 
  protected:
-  // Returns empty std::shared_ptr if session.empty().
+  // Returns empty std::shared_ptr if allow_empty_session_id && session.empty().
   std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_ptr(
-      const TSessionId& session_id);
+      const TSessionId& session_id,
+      bool allow_empty_session_id = false);
 
   ConnectionInfo getConnectionInfo() const;
 
@@ -778,10 +689,6 @@ class DBHandler : public HeavyIf {
   bool user_can_access_table(const Catalog_Namespace::SessionInfo&,
                              const TableDescriptor* td,
                              const AccessPrivileges acess_priv);
-
-  void execute_distributed_copy_statement(
-      Parser::CopyTableStmt*,
-      const Catalog_Namespace::SessionInfo& session_info);
 
   TPlanResult processCalciteRequest(
       QueryStateProxy,
@@ -973,6 +880,9 @@ class DBHandler : public HeavyIf {
   const int idle_session_duration_;  // max duration of idle session
   const int max_session_duration_;   // max duration of session
 
+#ifdef HAVE_RENDERING
+  std::unique_ptr<gfx::GfxContext> gfx_context_;
+#endif
   const bool enable_rendering_;
   const bool renderer_prefer_igpu_;
   const unsigned renderer_vulkan_timeout_;
@@ -1002,7 +912,6 @@ class DBHandler : public HeavyIf {
     std::string table;
     std::string file_name;
     import_export::CopyParams copy_params;
-    std::string partitions;
   };
 
   struct DeferredCopyFromSessions {
@@ -1040,8 +949,6 @@ class DBHandler : public HeavyIf {
                                  std::string query_file_path);
 
   friend class RenderHandler::Impl;
-  friend class HeavyDBAggHandler;
-  friend class HeavyDBLeafHandler;
 
   std::map<const std::string, const PermissionFuncPtr> permissionFuncMap_ = {
       {"database"s, has_database_permission},
@@ -1083,23 +990,20 @@ class DBHandler : public HeavyIf {
                     const std::pair<std::string, std::string>& session_parameter,
                     int64_t& execution_time_ms);
 
-  TRole::type getServerRole() const;
-
   heavyai::shared_mutex custom_expressions_mutex_;
 
   void importGeoTableGlobFilterSort(const TSessionId& session,
                                     const std::string& table_name,
                                     const std::string& file_name,
                                     const import_export::CopyParams& copy_params,
-                                    const TRowDescriptor& row_desc,
-                                    const TCreateParams& create_params);
+                                    const TRowDescriptor& row_desc);
 
   void importGeoTableSingle(const TSessionId& session,
                             const std::string& table_name,
                             const std::string& file_name,
                             const import_export::CopyParams& copy_params,
-                            const TRowDescriptor& row_desc,
-                            const TCreateParams& create_params);
+                            const TRowDescriptor& row_desc);
 
   void resetSessionsStore();
+  void update_dynamic_restrictions();
 };

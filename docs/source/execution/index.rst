@@ -8,6 +8,7 @@ Query Execution
 
     overview
     optimizer
+    hash_joins
     scheduler
     codegen
     kernels

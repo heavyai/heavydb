@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "RelAlgDag.h"
@@ -35,7 +24,6 @@
 #include <string>
 #include <unordered_set>
 
-extern bool g_cluster;
 extern bool g_enable_union;
 
 namespace {
@@ -609,6 +597,22 @@ RelJoin::RelJoin(RelJoin const& rhs)
     , hints_(std::make_unique<Hints>()) {
   RexDeepCopyVisitor copier;
   condition_ = copier.visit(rhs.condition_.get());
+  if (rhs.hint_applied_) {
+    for (auto const& kv : *rhs.hints_) {
+      addHint(kv.second);
+    }
+  }
+}
+
+// RelSort now carries Calcite 1.41 top-sort hints, so deepCopy needs an
+// explicit copy constructor to duplicate the unique_ptr-owned hint map.
+RelSort::RelSort(RelSort const& rhs)
+    : RelAlgNode(rhs)
+    , collation_(rhs.collation_)
+    , limit_(rhs.limit_)
+    , offset_(rhs.offset_)
+    , hint_applied_(false)
+    , hints_(std::make_unique<Hints>()) {
   if (rhs.hint_applied_) {
     for (auto const& kv : *rhs.hints_) {
       addHint(kv.second);
@@ -1695,12 +1699,13 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
 
 void handle_query_hint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                        RelAlgDag& rel_alg_dag) noexcept {
-  // query hint is delivered by the above three nodes
-  // when a query block has top-sort node, a hint is registered to
-  // one of the node which locates at the nearest from the sort node
+  // Query hints can be delivered by hint-aware relational nodes.
+  // When Calcite attaches a hint to a top-sort node, register it on the
+  // sort input because that child work unit owns resultset caching.
   RegisteredQueryHint global_query_hint;
   for (auto node : nodes) {
     Hints* hint_delivered = nullptr;
+    auto hint_registration_node = node;
     const auto agg_node = std::dynamic_pointer_cast<RelAggregate>(node);
     if (agg_node) {
       if (agg_node->hasDeliveredHint()) {
@@ -1713,6 +1718,20 @@ void handle_query_hint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
         hint_delivered = project_node->getDeliveredHints();
       }
     }
+    const auto sort_node = std::dynamic_pointer_cast<RelSort>(node);
+    if (sort_node) {
+      if (sort_node->hasDeliveredHint()) {
+        hint_delivered = sort_node->getDeliveredHints();
+        const auto sort_input = sort_node->getInput(0);
+        const auto sort_input_node =
+            std::find_if(nodes.begin(), nodes.end(), [sort_input](const auto& candidate) {
+              return candidate.get() == sort_input;
+            });
+        if (sort_input_node != nodes.end()) {
+          hint_registration_node = *sort_input_node;
+        }
+      }
+    }
     const auto compound_node = std::dynamic_pointer_cast<RelCompound>(node);
     if (compound_node) {
       if (compound_node->hasDeliveredHint()) {
@@ -1720,7 +1739,8 @@ void handle_query_hint(const std::vector<std::shared_ptr<RelAlgNode>>& nodes,
       }
     }
     if (hint_delivered && !hint_delivered->empty()) {
-      rel_alg_dag.registerQueryHints(node, hint_delivered, global_query_hint);
+      rel_alg_dag.registerQueryHints(
+          hint_registration_node, hint_delivered, global_query_hint);
     }
   }
   // the current rel_alg_dag may contain global query hints from the subquery
@@ -2848,8 +2868,8 @@ std::pair<bool, bool> need_pushdown_generic_expr(
 };  // namespace
 /**
  * Inserts a simple project before any project containing a window function node. Forces
- * all window function inputs into a single contiguous buffer for centralized processing
- * (e.g. in distributed mode). This is also needed when a window function node is
+ * all window function inputs into a single contiguous buffer for centralized processing.
+ * This is also needed when a window function node is
  * preceded by a filter node, both for correctness (otherwise a window operator will be
  * coalesced with its preceding filter node and be computer over unfiltered results, and
  * for performance, as currently filter nodes that are not coalesced into projects keep
@@ -3357,6 +3377,11 @@ class RelAlgDispatcher {
         limit >= 0 ? std::make_optional<size_t>(limit) : std::nullopt,
         offset,
         inputs.front());
+    if (sort_ra.HasMember("hints")) {
+      // Calcite 1.41 emits top-sort hints in RA JSON. Retain them so
+      // handle_query_hint can register the hint on the sort input work unit.
+      getRelAlgHints(sort_ra, ret);
+    }
     return ret;
   }
 
@@ -3651,6 +3676,14 @@ class RelAlgDispatcher {
       }
     }
 
+    const auto sort_node = std::dynamic_pointer_cast<RelSort>(node);
+    if (sort_node) {
+      for (std::string& hint : hint_list) {
+        auto parsed_hint = parseHintString(hint);
+        sort_node->addHint(parsed_hint);
+      }
+    }
+
     const auto compound_node = std::dynamic_pointer_cast<RelCompound>(node);
     if (compound_node) {
       for (std::string& hint : hint_list) {
@@ -3768,9 +3801,7 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
   auto& query_hints = getQueryHints(rel_alg_dag);
   separate_window_function_expressions(nodes, query_hints);
   add_window_function_pre_project(
-      nodes,
-      g_cluster /* always_add_project_if_first_project_is_window_expr */,
-      query_hints);
+      nodes, false /* always_add_project_if_first_project_is_window_expr */, query_hints);
   bool skip_redundant_project_elimination = false;
   add_project_before_heavy_string_op(
       nodes, query_hints, skip_redundant_project_elimination);

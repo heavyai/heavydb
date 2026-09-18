@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -37,18 +26,33 @@ extern bool g_enable_system_tables;
 namespace {
 std::string get_file_server_options() {
   return
-      // Supported options are returned in a sorted order
+// Supported options are returned in a sorted order
+#if defined(HAVE_AWS_S3)
+      "AWS_REGION, "
+#endif  // defined(HAVE_AWS_S3)
       "BASE_PATH, "
+#if defined(HAVE_AWS_S3)
+      "S3_BUCKET, "
+      "S3_ENDPOINT, "
+#endif  // defined(HAVE_AWS_S3)
+      "S3_USE_VIRTUAL_ADDRESSING, "
       "STORAGE_TYPE.";
 }
 
 std::string get_file_storage_types() {
   return "LOCAL_FILE"
+#if defined(HAVE_AWS_S3)
+         ", AWS_S3"
+#endif  // defined(HAVE_AWS_S3)
          ".";
 }
 
 std::string get_data_wrapper_types() {
   return "PARQUET_FILE, DELIMITED_FILE, REGEX_PARSED_FILE"
+#ifdef EE_FSI_ODBC
+         ", ODBC"
+#endif  // EE_FSI_ODBC
+         ", RASTER_FILE"
          ".";
 }
 }  // namespace
@@ -93,6 +97,69 @@ class CreateForeignServerTest : public DBHandlerTestFixture {
                   .find(foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY)
                   ->second);
   }
+
+  void assertExpectedForeignServer(char const* data_wrapper_type,
+                                   std::string server_name) {
+    auto& catalog = getCatalog();
+    auto foreign_server = catalog.getForeignServerFromStorage(server_name);
+    ASSERT_GT(foreign_server->id, 0);
+    ASSERT_EQ(server_name, foreign_server->name);
+    ASSERT_EQ(data_wrapper_type, foreign_server->data_wrapper_type);
+  }
+
+  void assertExpectedForeignServerOption(std::string server_name,
+                                         std::string option_name,
+                                         std::string option_value) {
+    auto& catalog = getCatalog();
+    auto foreign_server = catalog.getForeignServerFromStorage(server_name);
+    ASSERT_TRUE(foreign_server->options.find(option_name) !=
+                foreign_server->options.end());
+    ASSERT_EQ(option_value, foreign_server->options.find(option_name)->second);
+  }
+
+#if defined(HAVE_AWS_S3)
+  void assertExpectedS3ForeignServer() {
+    auto& catalog = getCatalog();
+    auto foreign_server = catalog.getForeignServerFromStorage("test_server");
+
+    ASSERT_GT(foreign_server->id, 0);
+    ASSERT_EQ("test_server", foreign_server->name);
+    ASSERT_EQ(foreign_storage::DataWrapperType::CSV, foreign_server->data_wrapper_type);
+    ASSERT_EQ(shared::kRootUserId, foreign_server->user_id);
+
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY) !=
+                foreign_server->options.end());
+    ASSERT_EQ(foreign_storage::AbstractFileStorageDataWrapper::S3_STORAGE_TYPE,
+              foreign_server->options
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::STORAGE_TYPE_KEY)
+                  ->second);
+
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::S3_BUCKET_KEY) !=
+                foreign_server->options.end());
+    ASSERT_EQ("test_bucket",
+              foreign_server->options
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::S3_BUCKET_KEY)
+                  ->second);
+
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::AWS_REGION_KEY) !=
+                foreign_server->options.end());
+    ASSERT_EQ("us-east-1",
+              foreign_server->options
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::AWS_REGION_KEY)
+                  ->second);
+
+    ASSERT_TRUE(foreign_server->options.find(
+                    foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY) !=
+                foreign_server->options.end());
+    ASSERT_EQ("TestFiles",
+              foreign_server->options
+                  .find(foreign_storage::AbstractFileStorageDataWrapper::BASE_PATH_KEY)
+                  ->second);
+  }
+#endif  // defined(HAVE_AWS_S3)
 };
 
 TEST_F(CreateForeignServerTest, AllValidParameters) {
@@ -183,6 +250,102 @@ TEST_F(CreateForeignServerTest, MissingWithClause) {
   std::string query{"CREATE SERVER test_server FOREIGN DATA WRAPPER parquet_file;"};
   queryAndAssertException(query, "Foreign server options must contain \"STORAGE_TYPE\".");
 }
+
+#if defined(HAVE_AWS_S3)
+TEST_F(CreateForeignServerTest, S3StorageTypeWithS3FsiEnabled) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
+      "WITH (storage_type = 'AWS_S3', s3_bucket = 'test_bucket', "
+      "aws_region = 'us-east-1', base_path = 'TestFiles');");
+  assertExpectedS3ForeignServer();
+}
+
+TEST_F(CreateForeignServerTest, S3StorageTypeWithS3FsiEnabled_NoBucket) {
+  EXPECT_THROW(sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+                   "WITH (storage_type = 'AWS_S3', aws_region = 'us-east-1', base_path = "
+                   "'TestFiles');"),
+               TDBException);
+}
+
+TEST_F(CreateForeignServerTest, S3StorageTypeWithS3FsiEnabled_NoRegion) {
+  EXPECT_THROW(sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+                   "WITH (storage_type = 'AWS_S3', s3_bucket = 'test_bucket', "
+                   "base_path = 'TestFiles');"),
+               TDBException);
+}
+
+TEST_F(CreateForeignServerTest, S3StorageTypeWithS3FsiDisabled) {
+  g_enable_s3_fsi = false;
+  std::string query{
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER "
+      "delimited_file WITH (storage_type = 'AWS_S3', s3_bucket = 'test_bucket', "
+      "aws_region = 'us-east-1');"};
+  queryAndAssertException(query,
+                          "Foreign server storage type value of \"AWS_S3\" is "
+                          "not allowed because FSI S3 support is currently disabled.");
+}
+#endif  // defined(HAVE_AWS_S3)
+
+#ifdef EE_FSI_ODBC
+TEST_F(CreateForeignServerTest, OdbcDSNParameter) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  assertExpectedForeignServer(foreign_storage::DataWrapperType::ODBC, "test_server");
+  assertExpectedForeignServerOption("test_server", "DATA_SOURCE_NAME", "dsn_name");
+}
+TEST_F(CreateForeignServerTest, OdbcConnectionString) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (CONNECTION_STRING = 'connection_string');");
+  assertExpectedForeignServer(foreign_storage::DataWrapperType::ODBC, "test_server");
+  assertExpectedForeignServerOption(
+      "test_server", "CONNECTION_STRING", "connection_string");
+}
+
+TEST_F(CreateForeignServerTest, OdbcNoOption) {
+  std::string query{"CREATE SERVER test_server FOREIGN DATA WRAPPER odbc;"};
+  queryAndAssertException(query,
+                          "Foreign server options must contain a value for either "
+                          "\"DATA_SOURCE_NAME\" or \"CONNECTION_STRING\".");
+}
+
+TEST_F(CreateForeignServerTest, OdbcWrapperWithFileOption) {
+  std::string query{
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (base_path = 'test_path');"};
+  queryAndAssertException(
+      query,
+      "Invalid foreign server option \"BASE_PATH\". "
+      "Option must be one of the following: CONNECTION_STRING, DATA_SOURCE_NAME.");
+}
+
+TEST_F(CreateForeignServerTest, OdbcConnectionStringAndDSN) {
+  std::string query{
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name', CONNECTION_STRING = 'connection_string');"};
+  queryAndAssertException(query,
+                          "Foreign server options must contain only one of "
+                          "\"DATA_SOURCE_NAME\" or \"CONNECTION_STRING\".");
+}
+
+TEST_F(CreateForeignServerTest, FileWrapperWithOdbcOption) {
+  std::string query{
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
+      "WITH (storage_type = 'LOCAL_FILE', DATA_SOURCE_NAME = 'dsn_name');"};
+  queryAndAssertException(query,
+                          "Invalid foreign server option \"DATA_SOURCE_NAME\". Option "
+                          "must be one of the following: " +
+                              get_file_server_options());
+}
+
+TEST_F(CreateForeignServerTest, FileWrapperWithOdbcStorageType) {
+  std::string query{
+      "CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file "
+      "WITH (storage_type = 'ODBC', base_path = 'test_path');"};
+  queryAndAssertException(query,
+                          "Invalid \"STORAGE_TYPE\" option value. Value must "
+                          "be one of the following: " +
+                              get_file_storage_types());
+}
+#endif
 
 TEST_F(CreateForeignServerTest, CreateOrReplaceServer) {
   std::string query{
@@ -708,7 +871,7 @@ class ShowForeignServerTest : public DBHandlerTestFixture {
     assertServerLocalRegexParserFound(result);
   }
 
-  static constexpr size_t LOCAL_DATA_WRAPPERS_COUNT{3};
+  static constexpr size_t LOCAL_DATA_WRAPPERS_COUNT{4};
 };
 
 TEST_F(ShowForeignServerTest, SHOWALL_DEFAULT) {
@@ -1203,7 +1366,6 @@ TEST_F(AlterForeignServerTest, InvalidStorageType) {
       "Invalid \"STORAGE_TYPE\" option value. Value must be one of the "
       "following: " +
       get_file_storage_types()};
-
   queryAndAssertException(query, error_message);
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
@@ -1220,6 +1382,59 @@ TEST_F(AlterForeignServerTest, InvalidDataWrapper) {
   assertExpectedForeignServer(
       createExpectedForeignServer("test_server", "delimited_file", DEFAULT_OPTIONS));
 }
+
+#ifdef EE_FSI_ODBC
+TEST_F(AlterForeignServerTest, OdbcAlterDSN) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  sql("ALTER SERVER test_server SET (DATA_SOURCE_NAME = 'dsn_name_2');");
+  assertExpectedForeignServer(createExpectedForeignServer(
+      "test_server", "odbc", {{"DATA_SOURCE_NAME", "dsn_name_2"}}));
+}
+
+TEST_F(AlterForeignServerTest, OdbcAlterConnectionString) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (CONNECTION_STRING = 'string1');");
+  sql("ALTER SERVER test_server SET (CONNECTION_STRING = 'string2');");
+  assertExpectedForeignServer(createExpectedForeignServer(
+      "test_server", "odbc", {{"CONNECTION_STRING", "string2"}}));
+}
+
+TEST_F(AlterForeignServerTest, OdbcWrapperAddOption) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  queryAndAssertException("ALTER SERVER test_server SET (CONNECTION_STRING = 'string1');",
+                          "Foreign server options must contain only one of "
+                          "\"DATA_SOURCE_NAME\" or \"CONNECTION_STRING\".");
+}
+
+TEST_F(AlterForeignServerTest, OdbcWrapperWithFileOption) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  queryAndAssertException(
+      "ALTER SERVER test_server SET (base_path = 'test_path');",
+      "Invalid foreign server option \"BASE_PATH\". "
+      "Option must be one of the following: CONNECTION_STRING, DATA_SOURCE_NAME.");
+}
+
+TEST_F(AlterForeignServerTest, FileWrapperWithOdbcOption) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER parquet_file "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = 'test_path');");
+  queryAndAssertException("ALTER SERVER test_server SET (DATA_SOURCE_NAME = 'dsn_name');",
+                          "Invalid foreign server option \"DATA_SOURCE_NAME\". Option "
+                          "must be one of the following: " +
+                              get_file_server_options());
+}
+
+TEST_F(AlterForeignServerTest, FileWrapperWithOdbcStorageType) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER parquet_file "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = 'test_path');");
+  queryAndAssertException("ALTER SERVER test_server SET (storage_type = 'ODBC');",
+                          "Invalid \"STORAGE_TYPE\" option value. Value must "
+                          "be one of the following: " +
+                              get_file_storage_types());
+}
+#endif
 
 int main(int argc, char** argv) {
   g_enable_fsi = true;

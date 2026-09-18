@@ -1,0 +1,71 @@
+{
+  "usermeta":
+    {
+      "shortName": "ShaderCompilerTest-FastSymbolTest_angle",
+      "shaderArtifacts": ["builder", "spirv"]
+    },
+  "width": 1278,
+  "height": 1296,
+  "data": [
+    {
+      "name": "contributions",
+      "sql": "SELECT conv_4326_900913_x(lon) as x, conv_4326_900913_y(lat) as y, recipient_party as dim0, amount as val, rowid FROM contributions WHERE conv_4326_900913_x(lon) between -13150614.275513332 and -8556686.426153343 and conv_4326_900913_y(lat) between 2511525.2344935155 and 7170156.2929968005 LIMIT 2000000"
+    }
+  ],
+  "scales": [
+    {
+      "name": "x",
+      "type": "linear",
+      "domain": [-13150614.275513332,-8556686.426153343],
+      "range": "width"
+    },
+    {
+      "name": "y",
+      "type": "linear",
+      "domain": [2511525.2344935155,7170156.2929968005],
+      "range": "height"
+    },
+    {
+      "name": "color",
+      "type": "linear",
+      "domain": [0,2000],
+      "range": ["deepskyblue","gold"]
+    },
+    {
+      "name": "symbol",
+      "type": "ordinal",
+      "domain": ["D","R","I"],
+      "range": ["arrow","cross","diamond"]
+    },
+    {
+      "name": "symbol_size",
+      "type": "ordinal",
+      "domain": ["D","R","I"],
+      "range": [20,15,10],
+      "clamp": true
+    },
+    {
+      "name": "symbol_angle",
+      "type": "linear",
+      "domain": [0,2000],
+      "range": [0,360]
+    }
+  ],
+  "marks": [
+    {
+      "type": "symbol",
+      "from": {"data": "contributions"},
+      "properties": {
+        "width": {"scale": "symbol_size","field": "dim0"},
+        "height": {"scale": "symbol_size","field": "dim0"},
+        "xc": {"scale": "x","field": "x"},
+        "yc": {"scale": "y","field": "y"},
+        "angle": {"scale": "symbol_angle","field": "val"},
+        "fillColor": {"scale": "color","field": "val"},
+        "strokeColor": "rgb(0, 0, 0)",
+        "strokeWidth": 1,
+        "shape": {"scale": "symbol","field": "dim0"}
+      }
+    }
+  ]
+}

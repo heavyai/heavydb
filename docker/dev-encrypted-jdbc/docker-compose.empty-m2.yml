@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Optional compose override: ephemeral Maven cache in a named volume (no host ~/.m2).
+# Applied by encrypted-jdbc/run.sh with --empty-m2.
+#
+# Compose replaces the entire volumes list for a service when merging, so this file
+# repeats the base verify-jdbc mounts and swaps the Maven bind mount for a named volume.
+# ca-info-init is extended to chown the Maven volume for USER_SPEC.
+
+volumes:
+  encrypted_jdbc_m2_repository:
+
+services:
+  ca-info-init:
+    volumes:
+      - encrypted_jdbc_ca_info:/heavydb-ca-info
+      - encrypted_jdbc_m2_repository:/m2/repository
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "chown -R \"$$USER_SPEC\" /heavydb-ca-info /m2/repository",
+      ]
+
+  verify-jdbc:
+    volumes:
+      - type: bind
+        source: ${HEAVYDB_SOURCE}
+        target: /heavydb-internal
+      - type: bind
+        source: ${HEAVYDB_BUILD}
+        target: /heavydb-build
+      - encrypted_jdbc_ca_info:/heavydb-ca-info
+      - encrypted_jdbc_m2_repository:/m2/repository

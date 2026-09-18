@@ -1,17 +1,6 @@
-﻿/*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "Fragmenter/InsertOrderFragmenter.h"
@@ -34,6 +23,7 @@
 #include "Logger/Logger.h"
 #include "Utils/DdlUtils.h"
 
+#include "Shared/DebugTestHook.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/scope.h"
 #include "Shared/thread_count.h"
@@ -1026,9 +1016,9 @@ void InsertOrderFragmenter::insertChunksIntoFragment(
 }
 
 namespace {
-void validate_license_claim_num_rows_for_temp_tables(const int32_t db_id,
-                                                     const int32_t table_id,
-                                                     const size_t num_rows_to_insert) {
+void validate_max_num_rows_for_temp_tables(const int32_t db_id,
+                                           const int32_t table_id,
+                                           const size_t num_rows_to_insert) {
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
   auto max_num_rows = sys_cat.getDataMgr().getMaxNumRows();
   if (!max_num_rows.has_value()) {
@@ -1057,7 +1047,7 @@ void InsertOrderFragmenter::insertChunksImpl(const InsertChunks& insert_chunks) 
     return;
   }
 
-  validate_license_claim_num_rows_for_temp_tables(
+  validate_max_num_rows_for_temp_tables(
       insert_chunks.db_id, insert_chunks.table_id, num_rows_left);
 
   FragmentInfo* current_fragment{nullptr};
@@ -1151,7 +1141,7 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insert_data) {
     return;
   }
 
-  validate_license_claim_num_rows_for_temp_tables(
+  validate_max_num_rows_for_temp_tables(
       insert_data.databaseId, insert_data.tableId, numRowsLeft);
 
   FragmentInfo* currentFragment{nullptr};
@@ -1303,11 +1293,25 @@ FragmentInfo* InsertOrderFragmenter::createNewFragment(
                             newFragmentInfo->deviceIds[static_cast<int>(memoryLevel)],
                             pageSize_);
     chunk.initEncoder();
+    // Readers assume every visible fragment has metadata for every physical column.
+    // Seed the empty chunk metadata before publishing the fragment below.
+    newFragmentInfo->setChunkMetadata(
+        colMapIt->first,
+        std::make_shared<ChunkMetadata>(chunk.getBuffer()->getEncoder()->getMetadata()));
   }
+  newFragmentInfo->shadowChunkMetadataMap =
+      newFragmentInfo->getChunkMetadataMapPhysicalCopy();
 
-  heavyai::lock_guard<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
-  fragmentInfoVec_.push_back(std::move(newFragmentInfo));
-  return fragmentInfoVec_.back().get();
+  FragmentInfo* fragment;
+  {
+    heavyai::lock_guard<heavyai::shared_mutex> writeLock(fragmentInfoMutex_);
+    fragmentInfoVec_.push_back(std::move(newFragmentInfo));
+    fragment = fragmentInfoVec_.back().get();
+  }
+  HEAVYDB_DEBUG_TEST_HOOK(
+      "Fragmenter_Namespace::InsertOrderFragmenter::createNewFragment::published",
+      fragment);
+  return fragment;
 }
 
 size_t InsertOrderFragmenter::getNumFragments() {

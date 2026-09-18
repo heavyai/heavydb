@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -237,11 +226,8 @@ class ResultSetStorage {
   int8_t* buff_;
   const bool buff_is_provided_;
   std::vector<int64_t> target_init_vals_;
-  // Provisional field used for multi-node until we improve the count distinct
-  // and flatten the main group by buffer and the distinct buffers in a single,
-  // contiguous buffer which we'll be able to serialize as a no-op. Used to
-  // re-route the pointers in the result set received over the wire to this
-  // machine address-space. Not efficient at all, just a placeholder!
+  // Provisional field used until count distinct buffers are flattened into the main
+  // group by buffer as a single contiguous buffer.
   std::unordered_map<int64_t, int64_t> count_distinct_sets_mapping_;
 
   // ptr to host varlen buffer and gpu address computation info

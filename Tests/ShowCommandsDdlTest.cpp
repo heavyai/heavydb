@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -31,6 +20,7 @@
 #include "Shared/File.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/misc.h"
+#include "Shared/timedate.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
@@ -1146,6 +1136,324 @@ TEST_F(ShowRolesTest, Security) {
   }
 }
 
+class PolicyTest : public DBHandlerTestFixture {
+ protected:
+  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+
+  void TearDown() override {
+    switchToAdmin();
+    DBHandlerTestFixture::TearDown();
+  }
+
+  static void SetUpTestSuite() {
+    TearDownTestSuite();
+
+    createDBHandler();
+    createTestUser("u1", "p1");
+    createTestUser("u2", "p2");
+    createTestUser("u3", "p3");
+    createTestUser("u4", "p4");
+
+    sql("CREATE ROLE r1;");
+    sql("CREATE ROLE r2;");
+    sql("CREATE ROLE r3;");
+
+    sql("GRANT r1 TO u1;");
+    sql("GRANT r2 TO u2;");
+    sql("GRANT r3 TO r1;");
+    sql("GRANT r3 TO r2;");
+
+    sql("CREATE TABLE t1 (data BIGINT, owner TEXT ENCODING DICT(32));");
+    sql("INSERT INTO t1 VALUES (1, 'user1');");
+    sql("INSERT INTO t1 VALUES (2, 'user1');");
+    sql("INSERT INTO t1 VALUES (3, 'user2');");
+    sql("INSERT INTO t1 VALUES (4, 'user2');");
+    sql("INSERT INTO t1 VALUES (5, 'user1');");
+    sql("INSERT INTO t1 VALUES (6, 'user2');");
+
+    sql("CREATE TABLE t2 (data INTEGER, make TEXT ENCODING DICT(32), state TEXT ENCODING "
+        "DICT(32));");
+    sql("INSERT INTO t2 VALUES (111, 'Audi', 'AZ');");
+    sql("INSERT INTO t2 VALUES (122, 'Audi', 'AZ');");
+    sql("INSERT INTO t2 VALUES (133, 'Audi', 'AZ');");
+    sql("INSERT INTO t2 VALUES (144, 'Audi', 'CA');");
+    sql("INSERT INTO t2 VALUES (155, 'Audi', 'CA');");
+    sql("INSERT INTO t2 VALUES (166, 'Audi', 'CA');");
+    sql("INSERT INTO t2 VALUES (211, 'Ford', 'IL');");
+    sql("INSERT INTO t2 VALUES (222, 'Ford', 'IL');");
+    sql("INSERT INTO t2 VALUES (233, 'Ford', 'IL');");
+    sql("INSERT INTO t2 VALUES (244, 'Ford', 'NV');");
+    sql("INSERT INTO t2 VALUES (255, 'Ford', 'NV');");
+    sql("INSERT INTO t2 VALUES (266, 'Ford', 'NV');");
+    sql("INSERT INTO t2 VALUES (311, 'Tesla', 'TX');");
+    sql("INSERT INTO t2 VALUES (322, 'Tesla', 'TX');");
+    sql("INSERT INTO t2 VALUES (333, 'Tesla', 'TX');");
+    sql("INSERT INTO t2 VALUES (344, 'Tesla', 'WY');");
+    sql("INSERT INTO t2 VALUES (355, 'Tesla', 'WY');");
+    sql("INSERT INTO t2 VALUES (366, 'Tesla', 'WY');");
+
+    sql("CREATE POLICY ON COLUMN t1.owner TO u1 VALUES ('user1');");
+    sql("CREATE POLICY ON COLUMN t1.owner TO u2 VALUES ('user2');");
+    sql("CREATE POLICY ON COLUMN t1.data TO u4 VALUES (1, 100000000000);");
+
+    sql("CREATE POLICY ON COLUMN t2.data TO u3 VALUES (111, 222, 333);");
+
+    sql("CREATE POLICY ON COLUMN t2.make TO r1 VALUES ('Audi');");
+    sql("CREATE POLICY ON COLUMN t2.state TO r1 VALUES ('AZ');");
+    sql("CREATE POLICY ON COLUMN t2.make TO r2 VALUES ('Tesla');");
+    sql("CREATE POLICY ON COLUMN t2.state TO r2 VALUES ('CA');");
+    sql("CREATE POLICY ON COLUMN t2.state TO r3 VALUES ('NV');");
+  }
+
+  static void TearDownTestSuite() {
+    sql("DROP TABLE IF EXISTS t1;");
+    sql("DROP TABLE IF EXISTS t2;");
+
+    sql("DROP ROLE IF EXISTS r1;");
+    sql("DROP ROLE IF EXISTS r2;");
+    sql("DROP ROLE IF EXISTS r3;");
+
+    dropTestUser("u1");
+    dropTestUser("u2");
+    dropTestUser("u3");
+    dropTestUser("u4");
+  }
+
+  static void createTestUser(const std::string& user_name,
+                             const std::string& pass,
+                             const bool is_super_user = false) {
+    sql("CREATE USER " + user_name + " (password = '" + pass + "', is_super = '" +
+        (is_super_user ? "true" : "false") + "');");
+    sql("GRANT ALL ON DATABASE " + shared::kDefaultDbName + " TO " + user_name + ";");
+  }
+
+  static void dropTestUser(const std::string& user_name) {
+    switchToAdmin();
+    sql("DROP USER IF EXISTS " + user_name + ";");
+  }
+
+  void assertExpectedResult(const std::vector<std::string> headers,
+                            const std::vector<std::vector<std::string>> rows,
+                            const TQueryResult& result) {
+    const auto& row_set = result.row_set;
+    const auto& row_descriptor = result.row_set.row_desc;
+
+    ASSERT_TRUE(row_set.is_columnar);
+    ASSERT_EQ(headers.size(), row_descriptor.size());
+    ASSERT_FALSE(row_set.columns.empty());
+
+    for (size_t i = 0; i < headers.size(); i++) {
+      ASSERT_EQ(row_descriptor[i].col_name, headers[i]);
+      if (row_descriptor[i].col_type.type == TDatumType::type::STR ||
+          row_descriptor[i].col_type.type == TDatumType::type::INT ||
+          row_descriptor[i].col_type.type == TDatumType::type::BIGINT) {
+        continue;
+      } else {
+        CHECK(false) << "unexpected col_type";
+      }
+    }
+
+    ASSERT_EQ(headers.size(), row_set.columns.size());
+    size_t i = 0;
+    for (const auto& column : row_set.columns) {
+      if (row_descriptor[i].col_type.type == TDatumType::type::STR) {
+        ASSERT_EQ(rows.size(), column.data.str_col.size());
+      } else if (row_descriptor[i].col_type.type == TDatumType::type::INT ||
+                 row_descriptor[i].col_type.type == TDatumType::type::BIGINT) {
+        ASSERT_EQ(rows.size(), column.data.int_col.size());
+      } else {
+        CHECK(false) << "unexpected col_type";
+      }
+      ++i;
+    }
+
+    for (size_t row = 0; row < rows.size(); row++) {
+      for (size_t column = 0; column < rows[row].size(); column++) {
+        if (row_descriptor[column].col_type.type == TDatumType::type::STR) {
+          ASSERT_EQ(rows[row][column], row_set.columns[column].data.str_col[row]);
+        } else if (row_descriptor[column].col_type.type == TDatumType::type::INT ||
+                   row_descriptor[column].col_type.type == TDatumType::type::BIGINT) {
+          ASSERT_EQ(std::stoll(rows[row][column]),
+                    row_set.columns[column].data.int_col[row]);
+        } else {
+          CHECK(false) << "unexpected col_type";
+        }
+        ASSERT_FALSE(row_set.columns[column].nulls[row]);
+      }
+    }
+  }
+};
+
+TEST_F(PolicyTest, Show) {
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW POLICIES r1;"));
+    assertExpectedResult(
+        {"COLUMN", "VALUES"}, {{"t2.make", "'Audi'"}, {"t2.state", "'AZ'"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE POLICIES r1;"));
+    assertExpectedResult(
+        {"COLUMN", "VALUES"}, {{"t2.make", "'Audi'"}, {"t2.state", "'AZ','NV'"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW POLICIES r2;"));
+    assertExpectedResult(
+        {"COLUMN", "VALUES"}, {{"t2.make", "'Tesla'"}, {"t2.state", "'CA'"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE POLICIES r2;"));
+    assertExpectedResult({"COLUMN", "VALUES"},
+                         {{"t2.make", "'Tesla'"}, {"t2.state", "'CA','NV'"}},
+                         result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW POLICIES r3;"));
+    assertExpectedResult({"COLUMN", "VALUES"}, {{"t2.state", "'NV'"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE POLICIES r3;"));
+    assertExpectedResult({"COLUMN", "VALUES"}, {{"t2.state", "'NV'"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW POLICIES u1;"));
+    assertExpectedResult({"COLUMN", "VALUES"}, {{"t1.owner", "'user1'"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE POLICIES u1;"));
+    assertExpectedResult(
+        {"COLUMN", "VALUES"},
+        {{"t1.owner", "'user1'"}, {"t2.make", "'Audi'"}, {"t2.state", "'AZ','NV'"}},
+        result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW POLICIES u2;"));
+    assertExpectedResult({"COLUMN", "VALUES"}, {{"t1.owner", "'user2'"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE POLICIES u2;"));
+    assertExpectedResult(
+        {"COLUMN", "VALUES"},
+        {{"t1.owner", "'user2'"}, {"t2.make", "'Tesla'"}, {"t2.state", "'CA','NV'"}},
+        result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW POLICIES u3;"));
+    assertExpectedResult({"COLUMN", "VALUES"}, {{"t2.data", "111,222,333"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SHOW EFFECTIVE POLICIES u3;"));
+    assertExpectedResult({"COLUMN", "VALUES"}, {{"t2.data", "111,222,333"}}, result);
+  }
+}
+
+TEST_F(PolicyTest, Select) {
+  login("u1", "p1");
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SELECT * FROM t1 ORDER BY data;"));
+    assertExpectedResult(
+        {"data", "owner"}, {{"1", "user1"}, {"2", "user1"}, {"5", "user1"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SELECT * FROM t2 ORDER BY data;"));
+    assertExpectedResult({"data", "make", "state"},
+                         {{"111", "Audi", "AZ"},
+                          {"122", "Audi", "AZ"},
+                          {"133", "Audi", "AZ"},
+                          {"144", "Audi", "CA"},
+                          {"155", "Audi", "CA"},
+                          {"166", "Audi", "CA"},
+                          {"244", "Ford", "NV"},
+                          {"255", "Ford", "NV"},
+                          {"266", "Ford", "NV"}},
+                         result);
+  }
+
+  login("u2", "p2");
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SELECT * FROM t1 ORDER BY data;"));
+    assertExpectedResult(
+        {"data", "owner"}, {{"3", "user2"}, {"4", "user2"}, {"6", "user2"}}, result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SELECT * FROM t2 ORDER BY data;"));
+    assertExpectedResult({"data", "make", "state"},
+                         {{"144", "Audi", "CA"},
+                          {"155", "Audi", "CA"},
+                          {"166", "Audi", "CA"},
+                          {"244", "Ford", "NV"},
+                          {"255", "Ford", "NV"},
+                          {"266", "Ford", "NV"},
+                          {"311", "Tesla", "TX"},
+                          {"322", "Tesla", "TX"},
+                          {"333", "Tesla", "TX"},
+                          {"344", "Tesla", "WY"},
+                          {"355", "Tesla", "WY"},
+                          {"366", "Tesla", "WY"}},
+                         result);
+  }
+
+  login("u3", "p3");
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SELECT * FROM t1 ORDER BY data;"));
+    assertExpectedResult({"data", "owner"},
+                         {{"1", "user1"},
+                          {"2", "user1"},
+                          {"3", "user2"},
+                          {"4", "user2"},
+                          {"5", "user1"},
+                          {"6", "user2"}},
+                         result);
+  }
+
+  {
+    TQueryResult result;
+    EXPECT_NO_THROW(sql(result, "SELECT * FROM t2 ORDER BY data;"));
+    assertExpectedResult(
+        {"data", "make", "state"},
+        {{"111", "Audi", "AZ"}, {"222", "Ford", "IL"}, {"333", "Tesla", "TX"}},
+        result);
+  }
+}
+
+TEST_F(PolicyTest, SelectWithPolicyOnLargeIntegerColumnValue) {
+  login("u4", "p4");
+
+  sqlAndCompareResult("SELECT * FROM t1 ORDER BY data;", {{i(1), "user1"}});
+}
+
 class ShowDatabasesTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override { DBHandlerTestFixture::SetUp(); }
@@ -1382,11 +1690,10 @@ TEST_F(ShowCreateTableTest, TableCommentControlCharacters) {
   sql("CREATE TABLE showcreatetabletest (id INT, txt TEXT);");
   sql("COMMENT ON TABLE showcreatetabletest IS 'test column comment\nwith "
       "c\fontrol\rcharacters\nthat may be\b used';");
-  sqlAndCompareResult(
-      "SHOW CREATE TABLE showcreatetabletest;",
-      {{"CREATE TABLE showcreatetabletest /* u&'test column comment\\000awith "
-        "c\\000control\\000dcharacters\\000athat may be\\0008 used' */ (\n  id "
-        "INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
+  sqlAndCompareResult("SHOW CREATE TABLE showcreatetabletest;",
+                      {{"CREATE TABLE showcreatetabletest /* test column comment\nwith "
+                        "c\fontrol\rcharacters\nthat may be\b used */ (\n  id "
+                        "INTEGER,\n  txt TEXT ENCODING DICT(32));"}});
 }
 
 TEST_F(ShowCreateTableTest, TableCommentWithCommentGuards) {
@@ -1408,7 +1715,6 @@ TEST_F(ShowCreateTableTest, Identity) {
     "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (MAX_ROWS=123);",
     "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (VACUUM='IMMEDIATE');",
     "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (PARTITIONS='SHARDED');",
-    "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (PARTITIONS='REPLICATED');",
     "CREATE TABLE showcreatetabletest (\n  i INTEGER,\n  SHARD KEY (i))\nWITH (SHARD_COUNT=4);",
     "CREATE TABLE showcreatetabletest (\n  i INTEGER)\nWITH (SORT_COLUMN='i');",
     "CREATE TABLE showcreatetabletest (\n  i1 INTEGER,\n  i2 INTEGER)\nWITH (MAX_ROWS=123, VACUUM='IMMEDIATE');",
@@ -2145,6 +2451,21 @@ TEST_F(SystemTablesShowCreateTableTest, RequestLogs) {
         "BIGINT);"}});
 }
 
+TEST_F(SystemTablesShowCreateTableTest, WebServerLogs) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE web_server_logs;",
+      {{"CREATE TABLE web_server_logs (\n  log_timestamp TIMESTAMP(0),\n  severity TEXT "
+        "ENCODING DICT(32),\n  message TEXT ENCODING DICT(32));"}});
+}
+
+TEST_F(SystemTablesShowCreateTableTest, WebServerAccessLogs) {
+  sqlAndCompareResult(
+      "SHOW CREATE TABLE web_server_access_logs;",
+      {{"CREATE TABLE web_server_access_logs (\n  ip_address TEXT ENCODING DICT(32),\n  "
+        "log_timestamp TIMESTAMP(0),\n  http_method TEXT ENCODING DICT(32),\n  endpoint "
+        "TEXT ENCODING DICT(32),\n  http_status SMALLINT,\n  response_size BIGINT);"}});
+}
+
 class ShowCreateServerTest : public DBHandlerTestFixture {
  public:
   void SetUp() override {
@@ -2169,6 +2490,12 @@ class ShowCreateServerTest : public DBHandlerTestFixture {
 TEST_F(ShowCreateServerTest, Identity) {
   // clang-format off
   std::vector<std::string> creates = {
+#if defined(HAVE_AWS_S3)
+    "CREATE SERVER show_create_test_server FOREIGN DATA WRAPPER DELIMITED_FILE\nWITH (AWS_REGION='us-east-1', BASE_PATH='TestFiles', S3_BUCKET='test_bucket', STORAGE_TYPE='AWS_S3');",
+#endif
+#ifdef EE_FSI_ODBC
+    "CREATE SERVER show_create_test_server FOREIGN DATA WRAPPER ODBC\nWITH (CONNECTION_STRING='connection_string');",
+#endif
     "CREATE SERVER show_create_test_server FOREIGN DATA WRAPPER DELIMITED_FILE\nWITH (STORAGE_TYPE='LOCAL_FILE');",
     "CREATE SERVER show_create_test_server FOREIGN DATA WRAPPER DELIMITED_FILE\nWITH (BASE_PATH='/test_path/', STORAGE_TYPE='LOCAL_FILE');"
   };
@@ -2277,20 +2604,10 @@ class ShowDiskCacheUsageTest : public DBHandlerTestFixture {
 TEST_F(ShowDiskCacheUsageTest, SingleTable) {
   sqlCreateBasicForeignTable(foreign_table1);
 
-  if (isDistributedMode()) {
-    sqlAndCompareResult(
-        "SHOW DISK CACHE USAGE;",
-        {{i(0), foreign_table1, empty_mgr_size}, {i(1), foreign_table1, empty_mgr_size}});
-  } else {
-    sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
-  }
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableInUse) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
-  }
-
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT * FROM " + foreign_table1 + ";");
@@ -2299,10 +2616,6 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableInUse) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleTables) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
-  }
-
   sqlCreateBasicForeignTable(foreign_table1);
   sqlCreateBasicForeignTable(foreign_table2);
   sqlCreateBasicForeignTable(foreign_table3);
@@ -2327,10 +2640,6 @@ TEST_F(ShowDiskCacheUsageTest, NoTablesFiltered) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleTablesFiltered) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
-  }
-
   sqlCreateBasicForeignTable(foreign_table1);
   sqlCreateBasicForeignTable(foreign_table2);
   sqlCreateBasicForeignTable(foreign_table3);
@@ -2359,20 +2668,10 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableEvicted) {
   sql("SELECT * FROM " + foreign_table1 + ";");
   sql("REFRESH FOREIGN TABLES " + foreign_table1 + " WITH (evict=true);");
 
-  if (isDistributedMode()) {
-    sqlAndCompareResult(
-        "SHOW DISK CACHE USAGE;",
-        {{i(0), foreign_table1, empty_mgr_size}, {i(1), foreign_table1, empty_mgr_size}});
-  } else {
-    sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
-  }
+  sqlAndCompareResult("SHOW DISK CACHE USAGE;", {{foreign_table1, empty_mgr_size}});
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
-  }
-
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT * FROM " + foreign_table1 + ";");
@@ -2383,10 +2682,6 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableRefreshed) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
-  }
-
   sqlCreateBasicForeignTable(foreign_table1);
 
   sql("SELECT COUNT(*) FROM " + foreign_table1 + ";");
@@ -2398,10 +2693,6 @@ TEST_F(ShowDiskCacheUsageTest, SingleTableMetadataOnly) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
-  }
-
   sqlCreateBasicForeignTable(foreign_table1);
   sql("CREATE TABLE " + table1 + " (s TEXT);");
 
@@ -2414,10 +2705,6 @@ TEST_F(ShowDiskCacheUsageTest, ForeignAndNormalTable) {
 }
 
 TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
-  }
-
   sql("CREATE FOREIGN TABLE " + foreign_table1 +
       " (t TEXT, i INTEGER[]) SERVER default_local_parquet WITH "
       "(file_path = '" +
@@ -2431,12 +2718,7 @@ TEST_F(ShowDiskCacheUsageTest, MultipleChunks) {
 
 class ShowDiskCacheUsageForNormalTableTest : public ShowDiskCacheUsageTest {
  public:
-  void SetUp() override {
-    if (isDistributedMode()) {
-      GTEST_SKIP() << "Cannot predict disk cache usage in distributed environment.";
-    }
-    ShowDiskCacheUsageTest::SetUp();
-  }
+  void SetUp() override { ShowDiskCacheUsageTest::SetUp(); }
 
   static void SetUpTestSuite() {
     ShowDiskCacheUsageTest::SetUpTestSuite();
@@ -2566,9 +2848,7 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
                                      "total_data_file_size",
                                      "total_data_page_count",
                                      "total_free_data_page_count"};
-    if (isDistributedMode()) {
-      headers.insert(headers.begin(), "leaf_index");
-    }
+
     for (size_t i = 0; i < headers.size(); i++) {
       EXPECT_EQ(headers[i], result.row_set.row_desc[i].col_name);
     }
@@ -2584,21 +2864,6 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
     assertExpectedHeaders(result);
 
     // clang-format off
-    if (isDistributedMode()) {
-      assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(max_rollback_epochs), i(epoch), i(epoch),
-                             i(epoch_floor), i(epoch_floor), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - used_metadata_pages),
-                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(PAGES_PER_DATA_FILE),
-                             i(PAGES_PER_DATA_FILE - used_data_pages)},
-                            {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(max_rollback_epochs), i(epoch), i(epoch),
-                             i(epoch_floor), i(epoch_floor), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - used_metadata_pages),
-                             i(1), i(DEFAULT_DATA_FILE_SIZE), i(PAGES_PER_DATA_FILE),
-                             i(PAGES_PER_DATA_FILE - used_data_pages)}},
-                           result);
-    } else {
       assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(max_rollback_epochs), i(epoch), i(epoch),
                              i(epoch_floor), i(epoch_floor), i(1), i(DEFAULT_METADATA_FILE_SIZE),
@@ -2606,7 +2871,6 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
                              i(1), i(DEFAULT_DATA_FILE_SIZE), i(PAGES_PER_DATA_FILE),
                              i(PAGES_PER_DATA_FILE - used_data_pages)}},
                            result);
-    }
     // clang-format on
   }
 
@@ -2619,35 +2883,6 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
     }
 
     // clang-format off
-    if (isDistributedMode()) {
-      assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                             i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                             i(0)},
-                            {i(0), i(2), "test_table_2", i(5), True, i(1), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
-                             i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 4), i(1),
-                             i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 4)},
-                            {i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
-                             i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 2), i(1),
-                             i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 2)},
-                            {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                             i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                             i(0)},
-                            {i(1), i(2), "test_table_2", i(5), True, i(1), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
-                             i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0)},
-                            {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
-                             i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
-                             i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 2), i(1),
-                             i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 2)}},
-                           result);
-    } else {
       assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(1), i(DEFAULT_METADATA_FILE_SIZE),
@@ -2664,7 +2899,6 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
                              i(PAGES_PER_METADATA_FILE), i(PAGES_PER_METADATA_FILE - 2), i(1),
                              i(data_file_size), i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 2)}},
                            result);
-    }
     // clang-format on
   }
 
@@ -2673,32 +2907,6 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
   void assertTablesWithContentAndSamePageSizeResult(const TQueryResult result) {
     int64_t data_file_size{DEFAULT_METADATA_PAGE_SIZE * PAGES_PER_DATA_FILE};
     // clang-format off
-    if (isDistributedMode()) {
-      assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                             i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                             i(0)},
-                            {i(0), i(2), "test_table_2", i(5), True, i(1), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
-                             i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
-                             i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 8)},
-                            {i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
-                             i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
-                             i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 4)},
-                            {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                             i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                             i(0)},
-                            {i(1), i(2), "test_table_2", i(5), True, i(1), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
-                             i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0)},
-                            {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                             i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
-                             i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
-                             i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 4)}},
-                           result);
-    } else {
       assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                              i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(1), i(1),
                              i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
@@ -2712,7 +2920,6 @@ class ShowTableDetailsTest : public DBHandlerTestFixture,
                              i(0), i(0), i(0), i(0), i(0), i(0), i(1), i(data_file_size),
                              i(PAGES_PER_DATA_FILE), i(PAGES_PER_DATA_FILE - 4)}},
                            result);
-    }
     // clang-format on
   }
 
@@ -2739,40 +2946,13 @@ TEST_F(ShowTableDetailsTest, EmptyTables) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
       "(shard_count = 2, max_rows = 10);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED', "
-      "fragment_size "
-      "= 5);");
+  sql("create table test_table_3 (c1 int) with (fragment_size = 5);");
 
   TQueryResult result;
   sql(result, "show table details;");
   assertExpectedHeaders(result);
 
   // clang-format off
-  if (isDistributedMode()) {
-    assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(0), i(2), "test_table_2", i(5), True, i(1), i(10),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(5), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0), i(0), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0)},
-                          {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(1), i(2), "test_table_2", i(5), True, i(1), i(10),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(5), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0), i(0), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0)}},
-                         result);
-  } else {
     assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                            i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
                            i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
@@ -2785,7 +2965,6 @@ TEST_F(ShowTableDetailsTest, EmptyTables) {
                            i(5), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0), i(0), i(0), i(0),
                            i(0), i(0), i(0), i(0), i(0), i(0), i(0)}},
                          result);
-  }
   // clang-format on
 }
 
@@ -2797,42 +2976,25 @@ TEST_F(ShowTableDetailsTest, NotCaseSensitive) {
   assertExpectedHeaders(result);
 
   // clang-format off
-  if (isDistributedMode()) {
-    assertResultSetEqual({{i(0), i(1), "TEST_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(1), i(1), "TEST_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)}},
-                         result);
-  }
-  else {
+  
     assertResultSetEqual({{i(1), "TEST_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                            i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
                            i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
                            i(0)}},
                          result);
-  }
   // clang-format on
 }
 
 TEST_P(ShowTableDetailsTest, TablesWithContent) {
   sql("create table test_table_1 (c1 int, c2 text) " + getWithPageSize() + ";");
-
-  // Inserts for non-sharded tables are non-deterministic in distributed mode
-  if (!isDistributedMode()) {
-    sql("insert into test_table_1 values (10, 'abc');");
-  }
+  sql("insert into test_table_1 values (10, 'abc');");
 
   sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
       "(shard_count = 2" +
       getPageSizeOption() + ");");
   sql("insert into test_table_2 values (20, 'efgh', 1.23);");
 
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED'" +
-      getPageSizeOption() + ");");
+  sql("create table test_table_3 (c1 int)" + getWithPageSize() + ";");
   sql("insert into test_table_3 values (50);");
 
   TQueryResult result;
@@ -2860,11 +3022,7 @@ INSTANTIATE_TEST_SUITE_P(
     });
 
 TEST_F(ShowTableDetailsTest, MaxRollbackEpochsUpdates) {
-  // For distributed mode, a replicated table is used in this test case
-  // in order to simplify table storage assertions (since all tables
-  // will have the same content)
-  sql("create table test_table_1 (c1 int, c2 int) with (max_rollback_epochs = 15, "
-      "partitions = 'REPLICATED');");
+  sql("create table test_table_1 (c1 int, c2 int) with (max_rollback_epochs = 15);");
   sql("insert into test_table_1 values (1, 2);");
   sql("insert into test_table_1 values (10, 20);");
   for (int i = 0; i < 2; i++) {
@@ -2880,32 +3038,13 @@ TEST_F(ShowTableDetailsTest, CommandWithTableNames) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
       "(shard_count = 2);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("create table test_table_3 (c1 int);");
 
   TQueryResult result;
   sql(result, "show table details test_table_1, test_table_3;");
   assertExpectedHeaders(result);
 
   // clang-format off
-  if (isDistributedMode()) {
-    assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)}},
-                         result);
-  } else {
     assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                            i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
                            i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
@@ -2915,7 +3054,6 @@ TEST_F(ShowTableDetailsTest, CommandWithTableNames) {
                            i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
                            i(0)}},
                          result);
-  }
   // clang-format on
 }
 
@@ -2923,7 +3061,7 @@ TEST_F(ShowTableDetailsTest, UserSpecificTables) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
       "(shard_count = 2);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("create table test_table_3 (c1 int);");
   sql("GRANT SELECT ON TABLE test_table_3 TO test_user;");
 
   loginTestUser();
@@ -2933,23 +3071,11 @@ TEST_F(ShowTableDetailsTest, UserSpecificTables) {
   assertExpectedHeaders(result);
 
   // clang-format off
-  if (isDistributedMode()) {
-    assertResultSetEqual({{i(0), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(1), i(4), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)}},
-                         result);
-  } else {
     assertResultSetEqual({{i(5), "test_table_3", i(3), False, i(0), i(DEFAULT_MAX_ROWS),
                            i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
                            i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
                            i(0)}},
                          result);
-  }
   // clang-format on
 }
 
@@ -2957,7 +3083,7 @@ TEST_F(ShowTableDetailsTest, InaccessibleTable) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
       "(shard_count = 2);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("create table test_table_3 (c1 int);");
 
   loginTestUser();
   queryAndAssertException("show table details test_table_1;",
@@ -2969,7 +3095,7 @@ TEST_F(ShowTableDetailsTest, NonExistentTable) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create table test_table_2 (c1 int, c2 text, c3 double, shard key(c1)) with "
       "(shard_count = 2);");
-  sql("create table test_table_3 (c1 int) with (partitions = 'REPLICATED');");
+  sql("create table test_table_3 (c1 int);");
 
   queryAndAssertException("show table details test_table_4;",
                           "Unable to show table details for table: "
@@ -2979,39 +3105,23 @@ TEST_F(ShowTableDetailsTest, NonExistentTable) {
 TEST_F(ShowTableDetailsTest, UnsupportedTableTypes) {
   sql("create table test_table_1 (c1 int, c2 text);");
   sql("create temporary table test_temp_table (c1 int, c2 text);");
-  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" + test_source_path +
-      "/0.csv';");
   sql("create view test_view as select * from test_table_1;");
 
-  if (!isDistributedMode()) {
-    sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER "
-        "default_local_delimited "
-        "WITH (file_path = '" +
-        test_source_path + "/0.csv');");
-  }
+  sql("CREATE FOREIGN TABLE test_foreign_table(i INTEGER) SERVER "
+      "default_local_delimited "
+      "WITH (file_path = '" +
+      test_source_path + "/0.csv');");
 
   TQueryResult result;
   sql(result, "show table details;");
   assertExpectedHeaders(result);
 
   // clang-format off
-  if (isDistributedMode()) {
-    assertResultSetEqual({{i(0), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)},
-                          {i(1), i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
-                           i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
-                           i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
-                           i(0)}},
-                         result);
-  } else {
     assertResultSetEqual({{i(1), "test_table_1", i(4), False, i(0), i(DEFAULT_MAX_ROWS),
                            i(DEFAULT_FRAGMENT_ROWS), i(DEFAULT_MAX_ROLLBACK_EPOCHS), i(0), i(0),
                            i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0), i(0),
                            i(0)}},
                          result);
-  }
   // clang-format on
 }
 
@@ -3032,15 +3142,6 @@ TEST_F(ShowTableDetailsTest, TemporaryTableSpecified) {
   queryAndAssertException("show table details test_temp_table;",
                           "SHOW TABLE DETAILS is not supported for temporary "
                           "tables. Table name: test_temp_table.");
-}
-
-TEST_F(ShowTableDetailsTest, ArrowFsiTableSpecified) {
-  sql("create dataframe test_arrow_table (c1 int) from 'CSV:" + test_source_path +
-      "/0.csv';");
-
-  queryAndAssertException("show table details test_arrow_table;",
-                          "SHOW TABLE DETAILS is not supported for temporary "
-                          "tables. Table name: test_arrow_table.");
 }
 
 TEST_F(ShowTableDetailsTest, ViewSpecified) {
@@ -3207,6 +3308,110 @@ TEST_F(ShowQueriesTest, NonAdminUser) {
   }
 }
 
+class ShowSupportedDataSourcesTest : public DBHandlerTestFixture {
+ protected:
+  void TearDown() override {
+    g_enable_fsi = true;
+    DBHandlerTestFixture::TearDown();
+  }
+};
+
+TEST_F(ShowSupportedDataSourcesTest, FsiEnabled) {
+  if (!g_run_odbc) {
+    GTEST_SKIP() << "ODBC tests are disabled";
+  }
+  g_enable_fsi = true;
+  // clang-format off
+  sqlAndCompareResult("SHOW SUPPORTED DATA SOURCES;", {
+    {"FILE", "DELIMITED_FILE", ""},
+    {"FILE", "PARQUET_FILE", ""},
+    {"FILE", "GEO_FILE", "GeoJSON"},
+    {"FILE", "GEO_FILE", "KML"},
+    {"FILE", "GEO_FILE", "FlatGeobuf"},
+    {"FILE", "GEO_FILE", "Shapefile"},
+    {"FILE", "GEO_FILE", "GDB"},
+    {"FILE", "RASTER_FILE", "GeoTIFF"},
+    {"FILE", "RASTER_FILE", "GRIB"},
+    {"FILE", "RASTER_FILE", "ZARR"}
+#if defined(EE_FSI_ODBC)
+    ,
+    {"RDMS", "ODBC", "ApacheHive"},
+    {"RDMS", "ODBC", "BigQuery"},
+    {"RDMS", "ODBC", "PostgreSQL"},
+    {"RDMS", "ODBC", "Redshift"},
+    {"RDMS", "ODBC", "SQLite"},
+    {"RDMS", "ODBC", "SnowFlake"}
+#endif
+  });
+  // clang-format on
+}
+
+TEST_F(ShowSupportedDataSourcesTest, FsiDisabled) {
+  g_enable_fsi = false;
+  // clang-format off
+  sqlAndCompareResult("SHOW SUPPORTED DATA SOURCES;", {
+    {"FILE", "DELIMITED_FILE", ""},
+    {"FILE", "PARQUET_FILE", ""},
+    {"FILE", "GEO_FILE", "GeoJSON"},
+    {"FILE", "GEO_FILE", "KML"},
+    {"FILE", "GEO_FILE", "FlatGeobuf"},
+    {"FILE", "GEO_FILE", "Shapefile"},
+    {"FILE", "GEO_FILE", "GDB"},
+    {"FILE", "RASTER_FILE", "GeoTIFF"},
+    {"FILE", "RASTER_FILE", "GRIB"},
+    {"FILE", "RASTER_FILE", "ZARR"}
+  });
+  // clang-format on
+}
+
+TEST_F(ShowSupportedDataSourcesTest, MissingOdbcDriversConfig) {
+  if (boost::filesystem::exists("/etc/odbcinst.ini")) {
+    GTEST_SKIP() << "Test only applies when ODBC drivers are not installed/configured";
+  }
+  // clang-format off
+  sqlAndCompareResult("SHOW SUPPORTED DATA SOURCES;", {
+    {"FILE", "DELIMITED_FILE", ""},
+    {"FILE", "PARQUET_FILE", ""},
+    {"FILE", "GEO_FILE", "GeoJSON"},
+    {"FILE", "GEO_FILE", "KML"},
+    {"FILE", "GEO_FILE", "FlatGeobuf"},
+    {"FILE", "GEO_FILE", "Shapefile"},
+    {"FILE", "GEO_FILE", "GDB"},
+    {"FILE", "RASTER_FILE", "GeoTIFF"},
+    {"FILE", "RASTER_FILE", "GRIB"},
+    {"FILE", "RASTER_FILE", "ZARR"}
+  });
+  // clang-format on
+}
+
+TEST_F(ShowSupportedDataSourcesTest, CustomOdbcInst) {
+  if (!g_run_odbc) {
+    GTEST_SKIP() << "ODBC tests are disabled";
+  }
+  if (!g_custom_odbc_inst) {
+    GTEST_SKIP() << "This test requires a custom odbcinst.ini file";
+  }
+  g_enable_fsi = true;
+  // clang-format off
+  sqlAndCompareResult("SHOW SUPPORTED DATA SOURCES;", {
+    {"FILE", "DELIMITED_FILE", ""},
+    {"FILE", "PARQUET_FILE", ""},
+    {"FILE", "GEO_FILE", "GeoJSON"},
+    {"FILE", "GEO_FILE", "KML"},
+    {"FILE", "GEO_FILE", "FlatGeobuf"},
+    {"FILE", "GEO_FILE", "Shapefile"},
+    {"FILE", "GEO_FILE", "GDB"},
+    {"FILE", "RASTER_FILE", "GeoTIFF"},
+    {"FILE", "RASTER_FILE", "GRIB"},
+    {"FILE", "RASTER_FILE", "ZARR"}
+#if defined(EE_FSI_ODBC)
+    ,
+    {"RDMS", "ODBC", "SQLite"},
+#endif
+  });
+  // clang-format on
+}
+
 #ifdef HAVE_SYSTEM_TFS
 #ifdef HAVE_ONEDAL
 class ShowModelsDdlTest : public DBHandlerTestFixture {
@@ -3288,11 +3493,6 @@ class ShowModelsDdlTest : public DBHandlerTestFixture {
 };
 
 TEST_F(ShowModelsDdlTest, CreateModel) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTable();
   createLinearRegTestModel();
   TQueryResult result;
@@ -3302,11 +3502,6 @@ TEST_F(ShowModelsDdlTest, CreateModel) {
 }
 
 TEST_F(ShowModelsDdlTest, CreateTwoModelsDropOne) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTable();
   createLinearRegTestModel();
   createRandomForestTestModel();
@@ -3328,11 +3523,6 @@ TEST_F(ShowModelsDdlTest, CreateTwoModelsDropOne) {
 }
 
 TEST_F(ShowModelsDdlTest, TestUserSeesNoModels) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   login("test_user", "test_pass");
   TQueryResult result;
   std::vector<std::string> expected_result{};
@@ -3341,11 +3531,6 @@ TEST_F(ShowModelsDdlTest, TestUserSeesNoModels) {
 }
 
 TEST_F(ShowModelsDdlTest, CreateModelDropModel) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTable();
   createLinearRegTestModel();
   sql("DROP MODEL IF EXISTS lin_reg_test_model;");
@@ -3774,11 +3959,6 @@ TEST_F(ShowModelFeatureDetailsDdlTest, MissingModel) {
 }
 
 TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModel) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModel();
   TQueryResult result;
@@ -3788,11 +3968,6 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModel) {
 }
 
 TEST_F(ShowModelFeatureDetailsDdlTest, CreateRandomForestRegModel) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createRandomForestTestModel();
   TQueryResult result;
@@ -3802,11 +3977,6 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreateRandomForestRegModel) {
 }
 
 TEST_F(ShowModelFeatureDetailsDdlTest, CreateDecisionTreeModel) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createDecisionTreeTestModel();
   TQueryResult result;
@@ -3816,11 +3986,6 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreateDecisionTreeModel) {
 }
 
 TEST_F(ShowModelFeatureDetailsDdlTest, CreateGBTModel) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createGbtTestModel();
   TQueryResult result;
@@ -3830,11 +3995,6 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreateGBTModel) {
 }
 
 TEST_F(ShowModelFeatureDetailsDdlTest, CreatePCAModel) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createPcaTestModel();
   TQueryResult result;
@@ -3843,11 +4003,6 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreatePCAModel) {
 }
 
 TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModelCatFeatureFirst) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModelCatNumericFeatures(true);
   TQueryResult result;
@@ -3857,11 +4012,6 @@ TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModelCatFeatureFirst) {
 }
 
 TEST_F(ShowModelFeatureDetailsDdlTest, CreateLinearRegModelNumericFeatureFirst) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModelCatNumericFeatures(false);
   TQueryResult result;
@@ -3984,11 +4134,6 @@ class EvaluateModelDdlTest : public DBHandlerTestFixture {
 };
 
 TEST_F(EvaluateModelDdlTest, TestModelR2) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModel();
   TQueryResult result;
@@ -3999,11 +4144,6 @@ TEST_F(EvaluateModelDdlTest, TestModelR2) {
 }
 
 TEST_F(EvaluateModelDdlTest, TestModelR2CatFeatureFirst) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModelCatNumericFeaturesWithEvalFraction(
       true /* cat_predictor_first */);
@@ -4015,11 +4155,6 @@ TEST_F(EvaluateModelDdlTest, TestModelR2CatFeatureFirst) {
 }
 
 TEST_F(EvaluateModelDdlTest, TestModelR2NumericFeatureFirst) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModelCatNumericFeaturesWithEvalFraction(
       false /* cat_predictor_first */);
@@ -4031,11 +4166,6 @@ TEST_F(EvaluateModelDdlTest, TestModelR2NumericFeatureFirst) {
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelNoEvalSet) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModel();
   TQueryResult result;
@@ -4043,11 +4173,6 @@ TEST_F(EvaluateModelDdlTest, EvalModelNoEvalSet) {
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelPCA) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createPCATestModelWithDataSplitEvalFraction();
   TQueryResult result;
@@ -4057,11 +4182,6 @@ TEST_F(EvaluateModelDdlTest, EvalModelPCA) {
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelEvalFraction) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModelWithEvalFraction();
   TQueryResult result;
@@ -4070,11 +4190,6 @@ TEST_F(EvaluateModelDdlTest, EvalModelEvalFraction) {
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelEvalFractionCatFeatureFirst) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModelCatNumericFeaturesWithEvalFraction(
       true /* cat_predictor_first */);
@@ -4084,11 +4199,6 @@ TEST_F(EvaluateModelDdlTest, EvalModelEvalFractionCatFeatureFirst) {
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelEvalFractionNumericFeatureFirst) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createLinearRegTestModelCatNumericFeaturesWithEvalFraction(
       false /* cat_predictor_first */);
@@ -4098,11 +4208,6 @@ TEST_F(EvaluateModelDdlTest, EvalModelEvalFractionNumericFeatureFirst) {
 }
 
 TEST_F(EvaluateModelDdlTest, EvalModelDataSplitEvalFraction) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "ML Models not supported in distributed mode.";
-  }
   createTestTables();
   createRandomForestRegTestModelWithDataSplitEvalFraction();
   TQueryResult result;
@@ -4172,7 +4277,6 @@ class SystemTablesTest : public DBHandlerTestFixture {
   // Drops a user while skipping the normal checks (like if the user owns a db).  Used to
   // create db states that are no longer valid used for legacy testsing.
   static void dropUserUnchecked(const std::string& user_name) {
-    CHECK(!isDistributedMode()) << "Can't manipulate syscat directly in distributed mode";
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
     Catalog_Namespace::UserMetadata user;
     CHECK(sys_cat.getMetadataForUser(user_name, user));
@@ -4506,10 +4610,6 @@ TEST_F(SystemTablesTest, UsersSystemTableDeletedDatabase) {
 }
 
 TEST_F(SystemTablesTest, TablesSystemTable) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Test does not play well with tables left behind by ExecuteTest.";
-  }
-
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
 
@@ -4592,9 +4692,6 @@ TEST_F(SystemTablesTest, TablesSystemTable) {
 }
 
 TEST_F(SystemTablesTest, TablesSystemTableComments) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Test does not play well with sharded tables.";
-  }
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
 
@@ -4843,9 +4940,9 @@ TEST_F(SystemTablesTest, ColumnsSystemTable) {
   login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
   sql("ALTER TABLE test_table_1 RENAME TO test_table_2;");
   sql("ALTER TABLE test_table_2 RENAME COLUMN sa TO sa_new;");
-  if (!isDistributedMode()) {
-    sql("ALTER TABLE test_table_2 ALTER COLUMN s TYPE BIGINT[1] NOT NULL DEFAULT {-1};");
-  }
+
+  sql("ALTER TABLE test_table_2 ALTER COLUMN s TYPE BIGINT[1] NOT NULL DEFAULT {-1};");
+
   create_table_sql = "CREATE TABLE test_table_2 (\n  i INTEGER);";
   std::string create_temp_table_sql{
       "CREATE TEMPORARY TABLE test_temp_table (\n  t TEXT ENCODING DICT(32));"};
@@ -4863,29 +4960,15 @@ TEST_F(SystemTablesTest, ColumnsSystemTable) {
 
   loginInformationSchema();
 
-  std::vector<std::vector<NullableTargetValue>> expected_result;
   // clang-format off
-  if ( !isDistributedMode() ) {
-      expected_result = {
-          {3L, "test_db_1", foreign_table_id, "test_foreign_table", 1L, "i", "INTEGER", "NONE", 4L, True,  Null, Null},
-          {3L, "test_db_1", table_1_id, "test_table_2", 1L, "i", "INTEGER", "NONE", 4L, True,  "-1", Null},
-          {3L, "test_db_1", table_1_id, "test_table_2", 2L, "s", "BIGINT[1]", "NONE", 8L, False,  "ARRAY[-1]", Null},
-          {3L, "test_db_1", table_1_id, "test_table_2", 3L, "sa_new", "TEXT[]", "DICT(32)", Null, True,  Null, Null},
-          {3L, "test_db_1", table_1_id, "test_table_2", 4L, "mp", "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null,
-           False,  Null, Null},
-          {3L, "test_db_1", temp_table_id, "test_temp_table", 1L, "t", "TEXT", "DICT(32)", 4L, True, Null, Null},
-      };
-  } else {
-      expected_result = {
-          {3L, "test_db_1", foreign_table_id, "test_foreign_table", 1L, "i", "INTEGER", "NONE", 4L, True,  Null, Null},
-          {3L, "test_db_1", table_1_id, "test_table_2", 1L, "i", "INTEGER", "NONE", 4L, True,  "-1", Null},
-          {3L, "test_db_1", table_1_id, "test_table_2", 2L, "s", "TEXT", "DICT(16)", 2L, True,  Null, Null},
-          {3L, "test_db_1", table_1_id, "test_table_2", 3L, "sa_new", "TEXT[]", "DICT(32)", Null, True,  Null, Null},
-          {3L, "test_db_1", table_1_id, "test_table_2", 4L, "mp", "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null,
-           False,  Null, Null},
-          {3L, "test_db_1", temp_table_id, "test_temp_table", 1L, "t", "TEXT", "DICT(32)", 4L, True, Null, Null},
-      };
-  }
+  std::vector<std::vector<NullableTargetValue>> expected_result{
+      {3L, "test_db_1", foreign_table_id, "test_foreign_table", 1L, "i", "INTEGER", "NONE", 4L, True,  Null, Null},
+      {3L, "test_db_1", table_1_id, "test_table_2", 1L, "i", "INTEGER", "NONE", 4L, True,  "-1", Null},
+      {3L, "test_db_1", table_1_id, "test_table_2", 2L, "s", "BIGINT[1]", "NONE", 8L, False,  "ARRAY[-1]", Null},
+      {3L, "test_db_1", table_1_id, "test_table_2", 3L, "sa_new", "TEXT[]", "DICT(32)", Null, True,  Null, Null},
+      {3L, "test_db_1", table_1_id, "test_table_2", 4L, "mp", "GEOMETRY(MULTIPOLYGON, 4326)", "COMPRESSED(32)", Null, False,  Null, Null},
+      {3L, "test_db_1", temp_table_id, "test_temp_table", 1L, "t", "TEXT", "DICT(32)", 4L, True, Null, Null},
+  };
   // clang-format on
 
   sqlAndCompareResult("SELECT * FROM columns WHERE database_id <> " +
@@ -5258,10 +5341,6 @@ TEST_F(SystemTablesTest, ColumnsSystemTableAddDropColumns) {
 }
 
 TEST_F(SystemTablesTest, ColumnsSystemTableComments) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Test does not play well with sharded tables.";
-  }
-
   switchToAdmin();
   sql("CREATE DATABASE test_db_1;");
 
@@ -5508,9 +5587,6 @@ TEST_F(SystemTablesTest, DatabasesSystemTable) {
 }
 
 TEST_F(SystemTablesTest, DatabasesSystemTableDeletedOwner) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "SysCat can not be directly manipulated in distributed mode";
-  }
   switchToAdmin();
   const std::string user_name{"test_user_3"};
   createUser(user_name);
@@ -5564,10 +5640,6 @@ TEST_F(SystemTablesTest, PermissionsSystemTable) {
 }
 
 TEST_F(SystemTablesTest, PermissionsSystemTableDeletedOwner) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "SysCat can not be directly manipulated in distributed mode";
-  }
-
   // clang-format off
   sqlAndCompareResult("SELECT * FROM permissions ORDER BY role_name;",
                       {{"test_user_1", True, i(2), shared::kInfoSchemaDbName,
@@ -5646,25 +5718,13 @@ TEST_F(SystemTablesTest, RolesSystemTable) {
 }
 
 TEST_F(SystemTablesTest, MemorySummarySystemTableCpu) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Pinned buffers make these results unpredictable in distributed";
-  }
-
   initTestTableAndClearMemory();
 
   loginInformationSchema();
   // clang-format off
-  if (isDistributedMode()) {
-    sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
-                      {{"Leaf 0", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
-                        i(0), i(0), i(0)},
-                       {"Leaf 1", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
-                        i(0), i(0), i(0)}});
-  } else {
     sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
                       {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
                         i(0), i(0), i(0)}});
-  }
   // clang-format on
   switchToAdmin();
   sql("ALTER SYSTEM CLEAR CPU MEMORY;");
@@ -5672,35 +5732,16 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableCpu) {
 
   loginInformationSchema();
   // clang-format off
-  if (isDistributedMode()) {
-    // Since we can't actually check what the query allocated, we have to assume one slab.
-    int64_t slab_pages = getCpuBufferMgr()->getMaxSlabSize() / getCpuBufferMgr()->getPageSize();
-    // Since we don't actually know which node had query data, we can just omit the "node"
-    // column and sort the results by free_page_count.
-    sqlAndCompareResult(
-        "SELECT device_id, device_type, max_page_count, page_size, allocated_page_count, "
-        "used_page_count, free_page_count FROM memory_summary WHERE device_type = 'CPU' "
-        "ORDER BY free_page_count",
-        {{i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(), i(0), i(0), i(0)},
-         {i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(), slab_pages , i(1), slab_pages - 1}});
-  } else {
     sqlAndCompareResult("SELECT * FROM memory_summary WHERE device_type = 'CPU';",
                         {{"Server", i(0), "CPU", getMaxCpuPageCount(), getCpuPageSize(),
                           getAllocatedCpuPageCount(), i(1), getAllocatedCpuPageCount() - 1}});
 
-  }
   // clang-format on
 }
 
 TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
-  }
-  if (isDistributedMode()) {
-    // We currenntly have no way of predicting or measuring which gpu on which node will
-    // be used for the query in distributed mode; therefore we can't accurately predict
-    // what the results should be.  Despite this, the testcase is valid.
-    GTEST_SKIP() << "Test results cannot be accurately predicted in distributed mode";
   }
 
   initTestTableAndClearMemory();
@@ -5720,10 +5761,6 @@ TEST_F(SystemTablesTest, MemorySummarySystemTableGpu) {
 }
 
 TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Pinned buffers make these results unpredictable in distributed";
-  }
-
   initTestTableAndClearMemory();
 
   auto db_id = getDbId(shared::kDefaultDbName);
@@ -5739,17 +5776,6 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
   loginInformationSchema();
 
   // clang-format off
-  if (isDistributedMode()) {
-    int64_t slab_pages = getCpuBufferMgr()->getMaxSlabSize() / getCpuBufferMgr()->getPageSize();
-    sqlAndCompareResult(
-        "SELECT database_id, table_id, column_id, chunk_key, device_id, device_type, "
-        "memory_status, page_count, page_size, slab_id, start_page "
-        "FROM memory_details WHERE device_type = 'CPU' ORDER BY page_count;",
-        {{db_id, table_id, i(1), array({db_id, table_id, i(1), i(0)}),
-          i(0), "CPU", "USED", i(1), getCpuPageSize(), i(0), i(0)},
-         {Null, Null, Null, Null,
-          i(0), "CPU", "FREE", slab_pages - 1, getCpuPageSize(), i(0), i(1)}});
-  } else {
     int64_t last_touched_epoch = (g_use_cpu_mem_pool_for_output_buffers ? 1 : 0);
     sqlAndCompareResult("SELECT * FROM memory_details WHERE device_type = 'CPU' ORDER BY page_count;",
                         {{"Server", db_id, shared::kDefaultDbName, table_id, "test_table_1",
@@ -5758,7 +5784,6 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableCpu) {
                           {"Server", Null, Null, Null, Null, Null, Null, Null,
                           i(0), "CPU", "FREE", getAllocatedCpuPageCount() - 1,
                           getCpuPageSize(), i(0), i(1), last_touched_epoch}});
-  }
   // clang-format on
 }
 
@@ -5766,12 +5791,7 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
   if (!setExecuteMode(TExecuteMode::GPU)) {
     GTEST_SKIP() << "GPU is not enabled.";
   }
-  if (isDistributedMode()) {
-    // We currenntly have no way of predicting or measuring which gpu on which node will
-    // be used for the query in distributed mode; therefore we can't accurately predict
-    // what the results should be.  Despite this, the testcase is valid.
-    GTEST_SKIP() << "Test results cannot be accurately predicted in distributed mode";
-  }
+
   initTestTableAndClearMemory();
   ScopeGuard reset = [orig = g_max_num_gpu_per_query]() {
     g_max_num_gpu_per_query = orig;
@@ -5798,11 +5818,6 @@ TEST_F(SystemTablesTest, MemoryDetailsSystemTableGpu) {
 }
 
 TEST_F(SystemTablesTest, SystemTablesJoin) {
-  if (isDistributedMode()) {
-    // Right now distributed joins must be performed on replicated tables, or tables that
-    // are sharded on the join key.  System tables fit into neither case at this time.
-    GTEST_SKIP() << "Join not supported on distributed system tables.";
-  }
   // clang-format off
   sqlAndCompareResult("SELECT databases.database_name, permissions.* "
                       "FROM permissions, databases "
@@ -5820,11 +5835,6 @@ TEST_F(SystemTablesTest, SystemTablesJoin) {
 #ifdef HAVE_SYSTEM_TFS
 #ifdef HAVE_ONEDAL
 TEST_F(SystemTablesTest, CreateOrReplaceModel) {
-  if (isDistributedMode()) {
-    // We currenntly cannot create models in distributed mode as table functions
-    // are not yet supported for distributed, so skip this test for distributed
-    GTEST_SKIP() << "CREATE MODEL not supported in distributed mode.";
-  }
   const std::string model_type = "LINEAR_REG";
   const std::string model_name = "LINEAR_REG_MODEL";
 #ifdef HAVE_ONEDAL
@@ -6162,23 +6172,10 @@ TEST_F(StorageDetailsSystemTableTest, ShardedTable) {
   shard_2_result.total_free_data_page_count = 0;
   shard_2_result.total_dictionary_data_file_size = 0;
 
-  if (isDistributedMode()) {
-    ExpectedResult expected_result;
-    // Distributed shards don't know they are shards.
-    shard_2_result.shard_id = 0;
-    expected_result.emplace_back(shard_2_result.asTargetValuesSkipNode());
-    expected_result.emplace_back(shard_1_result.asTargetValuesSkipNode());
-    loginInformationSchema();
-    SystemTablesTest::sqlAndCompareResult(getDistributedSelect(), expected_result);
-  } else {
-    sqlAndCompareResult({shard_1_result, shard_2_result});
-  }
+  sqlAndCompareResult({shard_1_result, shard_2_result});
 }
 
 TEST_F(StorageDetailsSystemTableTest, MultipleFragments) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "The distribution of fragments between leaves is non-deterministic";
-  }
   sql("CREATE TABLE test_table (c1 INTEGER) WITH (fragment_size = 1);");
   const size_t row_count{5};
   for (size_t i = 0; i < row_count; i++) {
@@ -6217,9 +6214,6 @@ TEST_F(StorageDetailsSystemTableTest, NonLocalTables) {
 }
 
 TEST_F(StorageDetailsSystemTableTest, SharedDictionary) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "The distribution of fragments between leaves is non-deterministic";
-  }
   std::string table_1{"test_table_1"}, table_2{"test_table_2"};
   sql("CREATE TABLE " + table_1 + " (i INTEGER, t TEXT);");
   sql("INSERT INTO " + table_1 + " VALUES (1, 'abc');");
@@ -6288,23 +6282,7 @@ TEST_P(StorageDetailsSystemTableTest, DifferentPageSizes) {
     result.total_free_metadata_page_count -= 2;
     result.total_free_data_page_count -= 2;
   }
-  if (isDistributedMode()) {
-    // If we are in distributed mode, then only one leaf will have data and the other will
-    // be empty.  The order does not matter as the node column is not included in the
-    // query.
-    result.node = "";
-    // clang-format off
-    StorageDetailsResult leaf1_storage{
-        "", db_id, db_name, table_id, table_name, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    // clang-format on
-    ExpectedResult expected_result;
-    expected_result.emplace_back(leaf1_storage.asTargetValuesSkipNode());
-    expected_result.emplace_back(result.asTargetValuesSkipNode());
-    loginInformationSchema();
-    SystemTablesTest::sqlAndCompareResult(getDistributedSelect(), expected_result);
-  } else {
-    sqlAndCompareResult({result});
-  }
+  sqlAndCompareResult({result});
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -6316,6 +6294,22 @@ INSTANTIATE_TEST_SUITE_P(
     [](const auto& param_info) {
       return "Page_Size_" + std::to_string(param_info.param);
     });
+
+class SystemDashboardsTest : public DBHandlerTestFixture {
+ protected:
+  void assertDashboardExists(const std::string& dashboard_name) {
+    const auto& catalog = getCatalog();
+    auto dashboard = catalog.getMetadataForDashboard(std::to_string(shared::kRootUserId),
+                                                     dashboard_name);
+    ASSERT_NE(dashboard, nullptr) << "Could not find dashboard: " << dashboard_name;
+  }
+};
+
+TEST_F(SystemDashboardsTest, SystemDashboardsAreCreated) {
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "information_schema");
+  assertDashboardExists("User Roles and Permissions");
+  assertDashboardExists("System Resources");
+}
 
 class LogsSystemTableTest : public SystemTablesTest,
                             public testing::WithParamInterface<std::string> {
@@ -6342,9 +6336,6 @@ class LogsSystemTableTest : public SystemTablesTest,
   void SetUp() override {
     default_max_files_count_ = g_logs_system_tables_max_files_count;
     table_name_ = GetParam();
-    if (isDistributedMode() && table_name_ == "server_logs") {
-      GTEST_SKIP() << "Leaf log content is non-deterministic";
-    }
     loginInformationSchema();
     sql("REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');");
     deleteFilesInLogDir();
@@ -6650,8 +6641,122 @@ TEST_P(LogsSystemTableTest, BadLogNoFiles) {
 
 INSTANTIATE_TEST_SUITE_P(AllLogsSystemTables,
                          LogsSystemTableTest,
-                         testing::Values("request_logs", "server_logs"),
+                         testing::Values("request_logs",
+                                         "server_logs",
+                                         "web_server_logs",
+                                         "web_server_access_logs"),
                          [](const auto& param_info) { return param_info.param; });
+
+class DashboardsSystemTableTest : public SystemTablesTest {
+ protected:
+  void SetUp() override {
+    SystemTablesTest::SetUp();
+    switchToAdmin();
+    sql("CREATE DATABASE test_db_1;");
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  }
+
+  void queryAndAssertDefaultTestDashboard(
+      int64_t owner_user_id = shared::kRootUserId,
+      const std::vector<ScalarTargetValue>& source_tables = {"test_table"}) {
+    auto last_updated = getLastUpdatedTime("test_dashboard_1");
+
+    loginInformationSchema();
+    // Skip the shared::kDefaultDbName database, since it can contain dashboards
+    // created by other test suites.
+    // clang-format off
+    sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
+                        std::to_string(getDbId(shared::kDefaultDbName)) +
+                        " ORDER BY dashboard_name;",
+                        {{i(3), "test_db_1", i(1), "test_dashboard_1",
+                          owner_user_id, getUserName(owner_user_id),
+                          last_updated, array(source_tables)}});
+    // clang-format on
+  }
+
+  std::string getUserName(int32_t user_id) {
+    std::string user_name;
+    auto& system_catalog = Catalog_Namespace::SysCatalog::instance();
+    Catalog_Namespace::UserMetadata user;
+    if (system_catalog.getMetadataForUserById(user_id, user)) {
+      user_name = user.userName;
+    } else {
+      user_name = "<DELETED>";
+    }
+    return user_name;
+  }
+};
+
+TEST_F(DashboardsSystemTableTest, NewsDashboardsCreated) {
+  createDashboard("test_dashboard_1");
+  queryAndAssertDefaultTestDashboard();
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, "test_db_1");
+  createDashboard("test_dashboard_2");
+  updateDashboardName("test_dashboard_1", "test_dashboard_3");
+  auto last_updated_2 = getLastUpdatedTime("test_dashboard_2");
+  auto last_updated_3 = getLastUpdatedTime("test_dashboard_3");
+
+  loginInformationSchema();
+  // clang-format off
+  sqlAndCompareResult("SELECT * FROM dashboards WHERE database_id <> " +
+                      std::to_string(getDbId(shared::kDefaultDbName)) +
+                      " ORDER BY dashboard_name;",
+                      {{i(3), "test_db_1", i(2), "test_dashboard_2",
+                        getUserId(shared::kRootUsername), shared::kRootUsername,
+                        last_updated_2, array({"test_table"})},
+                       {i(3), "test_db_1", i(1), "test_dashboard_3",
+                        getUserId(shared::kRootUsername), shared::kRootUsername,
+                        last_updated_3, array({"test_table"})}});
+  // clang-format on
+}
+
+TEST_F(DashboardsSystemTableTest, JoinWithAnotherSystemTable) {
+  createDashboard("test_dashboard_1");
+  auto last_updated_1 = getLastUpdatedTime("test_dashboard_1");
+
+  loginInformationSchema();
+  // Skip the shared::kDefaultDbName database, since it can contain dashboards
+  // created by other test suites.
+  sqlAndCompareResult("SELECT count(*) FROM dashboards, users WHERE database_id <> " +
+                          std::to_string(getDbId(shared::kDefaultDbName)) + ";",
+                      {{i(3)}});
+}
+
+TEST_F(DashboardsSystemTableTest, DeletedOwner) {
+  const std::string db_name{"test_db_1"};
+  const std::string user_name{"test_user_3"};
+  createUser(user_name);
+  sql("GRANT ALL ON DATABASE " + db_name + " TO " + user_name + ";");
+
+  login(user_name, "test_pass", db_name);
+  createDashboard("test_dashboard_1");
+  auto deleted_user_id = getUserId(user_name);
+  dropUser(user_name);
+
+  login(shared::kRootUsername, shared::kDefaultRootPasswd, db_name);
+  queryAndAssertDefaultTestDashboard(deleted_user_id);
+}
+
+TEST_F(DashboardsSystemTableTest, MalformedMetadataJson) {
+  createDashboard("test_dashboard_1", "malformed_json}");
+  queryAndAssertDefaultTestDashboard(shared::kRootUserId, {});
+}
+
+TEST_F(DashboardsSystemTableTest, EmptyMetadataJsonString) {
+  createDashboard("test_dashboard_1", "");
+  queryAndAssertDefaultTestDashboard(shared::kRootUserId, {});
+}
+
+TEST_F(DashboardsSystemTableTest, EmptyMetadataJsonObject) {
+  createDashboard("test_dashboard_1", "{}");
+  queryAndAssertDefaultTestDashboard(shared::kRootUserId, {});
+}
+
+TEST_F(DashboardsSystemTableTest, WrongValueTypeInMetadataJsonObject) {
+  createDashboard("test_dashboard_1", "{\"table\": 1}");
+  queryAndAssertDefaultTestDashboard(shared::kRootUserId, {});
+}
 
 class GetTableDetailsTest : public DBHandlerTestFixture {
  protected:
@@ -6767,7 +6872,7 @@ class GetTableDetailsTest : public DBHandlerTestFixture {
   }
 
   std::string convertToString(int64_t epoch) {
-    return shared::convert_temporal_to_iso_format({kTIMESTAMP}, epoch);
+    return shared::convert_temporal_to_iso_format(epoch, kTIMESTAMP, 0);
   }
 };
 
@@ -7011,6 +7116,12 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+
+  // After the logs_system_tables are disabled, reinitialize the DBHandler so that the
+  // initialization doesn't cause lock-inversion issues with other tests.
+  g_enable_logs_system_tables = false;
+  DBHandlerTestFixture::createDBHandler();
+  DBHandlerTestFixture::destroyDBHandler();
   g_enable_fsi = false;
   g_enable_system_tables = false;
   return err;

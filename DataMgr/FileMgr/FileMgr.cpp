@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -490,8 +479,7 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
       for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end();
            ++headerIt) {
         if (headerIt->chunkKey != lastChunkKey) {
-          FileMgr* c_fm_ =
-              dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(lastChunkKey));
+          FileMgr* c_fm_ = gfm_->getFileMgr(lastChunkKey);
           CHECK(c_fm_);
           auto srcBuf = createBufferFromHeaders(lastChunkKey, startIt, headerIt);
           auto destBuf = c_fm_->createBuffer(lastChunkKey, srcBuf->pageSize());
@@ -520,8 +508,7 @@ void FileMgr::init(const std::string& dataPathToConvertFrom,
       }
 
       // now need to insert last Chunk
-      FileMgr* c_fm_ =
-          dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(lastChunkKey));
+      FileMgr* c_fm_ = gfm_->getFileMgr(lastChunkKey);
       auto srcBuf = createBufferFromHeaders(lastChunkKey, startIt, headerVec.end());
       auto destBuf = c_fm_->createBuffer(lastChunkKey, srcBuf->pageSize());
       destBuf->syncEncoder(srcBuf);
@@ -661,11 +648,7 @@ void FileMgr::writeAndSyncEpochToDisk() {
   writeFile(epochFile_, 0, Epoch::byte_size(), epoch_.storage_ptr());
   int32_t status = fflush(epochFile_);
   CHECK(status == 0) << "Could not flush epoch file to disk";
-#ifdef __APPLE__
-  status = fcntl(fileno(epochFile_), 51);
-#else
   status = heavyai::fsync(fileno(epochFile_));
-#endif
   CHECK(status == 0) << "Could not sync epoch file to disk";
   epochIsCheckpointed_ = true;
 }
@@ -1102,11 +1085,7 @@ void FileMgr::writeAndSyncVersionToDisk(const std::string& versionFileName,
   if (status != 0) {
     LOG(FATAL) << "Could not flush version file " << versionFilePath << " to disk";
   }
-#ifdef __APPLE__
-  status = fcntl(fileno(epochFile_), 51);
-#else
   status = heavyai::fsync(fileno(versionFile));
-#endif
   if (status != 0) {
     LOG(FATAL) << "Could not sync version file " << versionFilePath << " to disk";
   }

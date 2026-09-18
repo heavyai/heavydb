@@ -1,7 +1,12 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef REGEX_SUPPORT_H
 #define REGEX_SUPPORT_H
 
-#include "Shared/clean_boost_regex.hpp"
+#include <boost/regex.hpp>
 
 template <typename COMMAND_LIST_TYPE,
           typename CONTEXT_TYPE,

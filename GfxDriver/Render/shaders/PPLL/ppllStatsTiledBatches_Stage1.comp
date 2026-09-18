@@ -1,0 +1,66 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_KHR_shader_subgroup_vote: enable
+#extension GL_KHR_shader_subgroup_arithmetic: enable
+//</extensions>
+
+//<includes>
+#include "PPLL/ppllCommon.h"
+//</includes>
+
+#define numTiles <numTiles>
+#define maxNumBatches <maxNumBatches>
+
+layout (local_size_x = <workgroupSize>, local_size_y = 1, local_size_z = 1) in;
+
+layout(r32ui) uniform restrict readonly uimage2D batch_fragment_count_image;
+layout(r32ui) uniform uimage2D total_fragment_count_image;
+
+layout(std430) buffer PPLL_BATCH_STAT_COUNTERS_SSBO {
+  PPLLFragmentStats batch_stats[maxNumBatches][numTiles];
+};
+
+layout(std430, binding = 0) uniform IMAGE_TILES_UBO {
+  Tile tiles[numTiles];
+};
+
+layout(push_constant) uniform PPLL_STAT_PUSH_CONSTANTS {
+  uint32_t tileIndex;
+  uint32_t batchIndex;
+} pushConstants;
+
+void main() {
+  uint32_t tile_index = pushConstants.tileIndex;
+  uint32_t batch_index = pushConstants.batchIndex;
+
+  if (gl_GlobalInvocationID.x >= tiles[tile_index].w) {
+    return;
+  }
+
+  ivec2 framebuffer_coord = ivec2(gl_GlobalInvocationID.x + tiles[tile_index].x,
+                                  gl_GlobalInvocationID.y + tiles[tile_index].y);
+
+  uint32_t fragment_count = imageLoad(batch_fragment_count_image, framebuffer_coord).r;
+  
+  // Add to total fragment count image
+  imageAtomicAdd(total_fragment_count_image, framebuffer_coord, fragment_count);
+
+  uint32_t deep_pixel_fragment_count = fragment_count > 1 ? fragment_count : 0;
+
+  bool have_fragments = fragment_count > 0;
+
+  if (subgroupAny(have_fragments)) {
+    uint32_t subgroup_sum = subgroupAdd(fragment_count);
+    uint32_t subgroup_deep_pixel_sum = subgroupAdd(deep_pixel_fragment_count);
+    uint32_t subgroup_max = subgroupMax(fragment_count);
+    if (subgroupElect()) {
+      atomicAdd(batch_stats[batch_index][tile_index].total_fragment_count, subgroup_sum);
+      atomicAdd(batch_stats[batch_index][tile_index].deep_pixel_fragment_count, subgroup_deep_pixel_sum);
+      atomicMax(batch_stats[batch_index][tile_index].max_per_pixel_fragment_count, subgroup_max);
+    }
+  }
+}

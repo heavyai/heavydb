@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "ForeignStorageMgr.h"
@@ -22,22 +11,9 @@
 #include "ForeignDataWrapperFactory.h"
 #include "ForeignStorageException.h"
 #include "ForeignTableSchema.h"
-#include "Shared/distributed.h"
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
-
-namespace {
-void filter_metadata_by_leaf(ChunkMetadataVector& meta_vec, const ChunkKey& key_prefix) {
-  if (!foreign_storage::is_shardable_key(key_prefix)) {
-    return;
-  }
-  for (auto it = meta_vec.begin(); it != meta_vec.end();) {
-    it = foreign_storage::fragment_maps_to_leaf(it->first) ? std::next(it)
-                                                           : meta_vec.erase(it);
-  }
-}
-}  // namespace
 
 namespace foreign_storage {
 ForeignStorageMgr::ForeignStorageMgr() : AbstractBufferMgr(0), data_wrapper_map_({}) {}
@@ -63,11 +39,19 @@ void ForeignStorageMgr::checkIfS3NeedsToBeEnabled(const ChunkKey& chunk_key) {
   }
   bool is_s3_storage_type =
       (storage_type_entry->second == AbstractFileStorageDataWrapper::S3_STORAGE_TYPE);
+#if defined(HAVE_AWS_S3)
+  if (is_s3_storage_type && !g_enable_s3_fsi) {
+    throw ForeignStorageException{
+        "Query cannot be executed for S3 backed foreign table because FSI S3 support is "
+        "currently disabled."};
+  }
+#else
   if (is_s3_storage_type) {
     throw ForeignStorageException{
         "Query cannot be executed for S3 backed foreign table because AWS S3 support is "
         "currently disabled."};
   }
+#endif  // defined(HAVE_AWS_S3)
 }
 
 ChunkSizeValidator::ChunkSizeValidator(const ChunkKey& chunk_key) {
@@ -218,17 +202,11 @@ void ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
   }
   CHECK(has_table_prefix(key_prefix));
 
-  if (!is_table_enabled_on_node(key_prefix)) {
-    // If the table is not enabled for this node then the request should do nothing.
-    return;
-  }
-
   checkIfS3NeedsToBeEnabled(key_prefix);
   createDataWrapperIfNotExists(key_prefix);
 
   try {
     getDataWrapper(key_prefix)->populateChunkMetadata(chunk_metadata);
-    filter_metadata_by_leaf(chunk_metadata, key_prefix);
   } catch (...) {
     eraseDataWrapper(key_prefix);
     throw;
@@ -583,8 +561,6 @@ ForeignStorageMgr::getPrefetchSets(
       UNREACHABLE() << "Unknown parallelism level.";
     }
 
-    CHECK(!key_does_not_shard_to_leaf(optional_chunk_key));
-
     if (!contains_fragment_key(required_chunk_keys, optional_chunk_key)) {
       // Do not insert an optional key if it is already a required key.
       if (optional_chunk_key[CHUNK_KEY_FRAGMENT_IDX] ==
@@ -674,19 +650,4 @@ void ForeignStorageMgr::evictChunkFromCache(const ChunkKey& chunk_key) {
   }
 }
 
-// Determine if a wrapper is enabled on the current distributed node.
-bool is_table_enabled_on_node(const ChunkKey& chunk_key) {
-  CHECK(has_table_prefix(chunk_key));
-
-  // Replicated tables, system tables, and non-distributed tables are on all nodes by
-  // default.  Leaf nodes are on, but will filter their results later by their node index.
-  if (!dist::is_distributed() || dist::is_leaf_node() ||
-      is_replicated_table_chunk_key(chunk_key) || is_system_table_chunk_key(chunk_key)) {
-    return true;
-  }
-
-  // If we aren't a leaf node then we are the aggregator, and the aggregator should not
-  // have sharded data.
-  return false;
-}
 }  // namespace foreign_storage

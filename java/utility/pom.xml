@@ -16,7 +16,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
-    <thrift.version>0.17.0</thrift.version>
+    <thrift.version>0.24.0</thrift.version>
   </properties>
   <dependencies>
     <dependency>
@@ -43,6 +43,16 @@
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
       <version>${thrift.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>jakarta.annotation</groupId>
+          <artifactId>jakarta.annotation-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>jakarta.servlet</groupId>
+          <artifactId>jakarta.servlet-api</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
@@ -58,7 +68,7 @@
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
-      <version>42.2.20</version>
+      <version>42.7.10</version>
       <scope>provided</scope>
     </dependency>
     <dependency>
@@ -89,12 +99,12 @@
     <dependency>
       <groupId>org.xerial</groupId>
       <artifactId>sqlite-jdbc</artifactId>
-      <version>3.44.1.0</version>
+      <version>3.53.2.0</version>
     </dependency>
     <dependency>
       <groupId>com.unboundid</groupId>
       <artifactId>unboundid-ldapsdk</artifactId>
-      <version>4.0.6</version>
+      <version>7.0.5</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

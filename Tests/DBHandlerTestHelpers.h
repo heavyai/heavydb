@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -21,10 +10,17 @@
 #endif
 
 #include "Catalog/Catalog.h"
+#ifdef EE_FSI_ODBC
+#include "DataMgr/ForeignStorage/ODBC/OdbcDataWrapper.h"
+#include "DataMgr/ForeignStorage/ODBC/odbc_utils.h"
+#endif  // EE_FSI_ODBC
+#include <boost/regex.hpp>
 #include "QueryRunner/TestProcessSignalHandler.h"
-#include "Shared/clean_boost_regex.hpp"
 #include "TestHelpers.h"
 #include "ThriftHandler/DBHandler.h"
+// TODO: remove OdbcFsiTestHelper.h dependency once all ODBC related functionality has
+// been moved out of here and into OdbcFsiTestHelper
+#include "OdbcFsiTestHelper.h"
 
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
@@ -42,56 +38,16 @@ using NullableTargetValue = boost::variant<TargetValue, void*>;
 using ExpectedResult = std::vector<std::vector<NullableTargetValue>>;
 namespace po = boost::program_options;
 
-extern size_t g_leaf_count;
-extern bool g_cluster;
 extern bool g_enable_system_tables;
 extern bool g_read_only;
 
 namespace {
-using ColumnPair = std::pair<std::string, std::string>;
-
-inline bool is_odbc(const std::string& data_wrapper_type) {
-  const std::vector<std::string> odbc_wrappers{
-    "sqlite", "postgres", "redshift", "snowflake", "bigquery", "hive"};
-  return std::find(odbc_wrappers.begin(), odbc_wrappers.end(), data_wrapper_type) !=
-    odbc_wrappers.end();
-}
-
-inline bool does_wrapper_support_geo_type(const std::string& wrapper_type) {
-  if (wrapper_type == "sqlite" || wrapper_type == "hive") {
-    return false;
-  }
-  return true;
-}
 
 std::vector<std::string> split_on_regex(const std::string& in, const std::string& regex) {
   std::vector<std::string> tokens;
   boost::split_regex(tokens, in, boost::regex{regex});
   return tokens;
 }
-
-boost::regex make_regex(const std::string& pattern) {
-  std::string whitespace_wrapper = "\\s*" + pattern + "\\s*";
-  return boost::regex(whitespace_wrapper, boost::regex::icase);
-}
-
-const std::map<std::string, std::map<boost::regex, std::string>>
-    k_rdms_column_type_substitutes = {
-        {"sqlite",
-         {{make_regex("TEXT.*"), "text"},
-          {make_regex("DECIMAL\\s*\\(\\d+,\\s*\\d+\\)\\s*(\\[\\d*\\])?"), "double"},
-          {make_regex("FLOAT"), "double"}}},
-        {"postgres",
-         {{make_regex("TEXT.*"), "text"},
-          {make_regex("FLOAT"), "real"},
-          {make_regex("DOUBLE"), "double precision"},
-          {make_regex("TINYINT"), "smallint"},
-          {make_regex("TIME\\b"), "time(0)"},
-          {make_regex("TIMESTAMP"), "timestamp(0)"},
-          {make_regex("TIMESTAMP\\s*\\(6\\)"), "timestamp"},
-          {make_regex("(MULTI)?POINT"), "geometry"},
-          {make_regex("(MULTI)?LINESTRING"), "geometry"},
-          {make_regex("(MULTI)?POLYGON"), "geometry"}}}};
 
 const std::map<std::string, std::map<boost::regex, std::string>>
     k_rdms_column_type_prepend = {
@@ -320,9 +276,6 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
                                         char** argv,
                                         po::options_description& desc) {
     // Default options.  Addional options can be passed in as parameter.
-    desc.add_options()("cluster",
-                       po::value<std::string>(&cluster_config_file_path_),
-                       "Path to data leaves list JSON file.");
     desc.add_options()("use-disk-cache", "Enable disk cache for all tables.");
     po::variables_map vm;
     po::store(
@@ -336,12 +289,6 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
     return initTestArgs(argc, argv, desc);
   }
 
-  static void initTestArgs(const std::vector<LeafHostInfo>& string_servers,
-                           const std::vector<LeafHostInfo>& leaf_servers) {
-    string_leaves_ = string_servers;
-    db_leaves_ = leaf_servers;
-  }
-
   static bool isFileBased(const std::string& data_wrapper_type) {
     static const std::vector<std::string> file_based_wrappers{
         "regex_parser", "csv", "parquet"};
@@ -352,9 +299,30 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
 
   static std::string getOdbcTableName(const std::string& table_name,
                                       const std::string& data_wrapper_type) {
+#ifdef EE_FSI_ODBC
+    if (data_wrapper_type == "postgres" || data_wrapper_type == "redshift" ||
+        data_wrapper_type == "hive") {
+      auto schema_name = getOdbcSchemaName(data_wrapper_type);
+      return schema_name + "." + table_name;
+    }
+    if (data_wrapper_type == "snowflake") {
+      auto schema_name = getOdbcSchemaName(data_wrapper_type);
+      std::string database_name = "odbc_fsi_test";
+      return database_name + "." + schema_name + "." + table_name;
+    }
+    if (data_wrapper_type == "bigquery") {
+      auto schema_name = getOdbcSchemaName(data_wrapper_type);
+      auto project_name = std::string(std::getenv("bigquery_project"));
+      CHECK(project_name.size());
+      return project_name + "." + schema_name + "." + table_name;
+    }
+    return table_name;
+#else
     CHECK(false);
     return "";
+#endif
   }
+
   // TODO(Misiu): Move all the visitor stuff to TestHelpers.h.  No need for it to be tied
   // to DBHandler.
   static void assertResultSetEqual(
@@ -396,17 +364,7 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
       boost::algorithm::to_lower(expected_err);
     }
 
-    if (isDistributedMode()) {
-      // In distributed mode, exception messages may be wrapped within
-      // another thrift exception. In this case, do a substring check.
-      if (actual_err.find(expected_err) == std::string::npos) {
-        std::cerr << "recieved message: " << e.error_msg << "\n";
-        std::cerr << "expected message: " << error_message << "\n";
-      }
-      ASSERT_TRUE(actual_err.find(expected_err) != std::string::npos);
-    } else {
-      ASSERT_EQ(expected_err, actual_err);
-    }
+    ASSERT_EQ(expected_err, actual_err);
   }
 
   static void assertExceptionMessage(const std::runtime_error& e,
@@ -472,9 +430,7 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
           File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),
           disk_cache_level_};
 
-      db_handler_ = std::make_unique<DBHandler>(db_leaves_,
-                                                string_leaves_,
-                                                BASE_PATH,
+      db_handler_ = std::make_unique<DBHandler>(BASE_PATH,
                                                 allow_multifrag,
                                                 jit_debug,
                                                 intel_jit_profile,
@@ -604,9 +560,6 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
     login(default_user_, "HyperInteractive", default_db_name_, session_id_);
     admin_session_id_ = session_id_;
   }
-  static bool isDistributedMode() {
-    return system_parameters_.aggregator;
-  }
   static SystemParameters getSystemParameters() {
     return system_parameters_;
   }
@@ -630,12 +583,7 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
                     const std::string& pass,
                     const std::string& db,
                     TSessionId& result_id) {
-    if (isDistributedMode()) {
-      // Need to do full login here for distributed tests
-      db_handler_->connect(result_id, user, pass, db);
-    } else {
-      db_handler_->internal_connect(result_id, user, db);
-    }
+    db_handler_->internal_connect(result_id, user, db);
   }
 
   static void setSessionId(const std::string& session_id) {
@@ -681,14 +629,169 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
     return result;
   }
 
+#ifdef EE_FSI_ODBC
+  static std::pair<std::string, std::string> getODBCCredentials(
+      const std::string& data_wrapper_type) {
+    CHECK(data_wrapper_type.size());
+    static const std::map<std::string, std::pair<std::string, std::string>>
+        odbc_credentials_environment{{"redshift",
+                                      { "redshift_username",
+                                        "redshift_password" }},
+                                     {"snowflake",
+                                      { "snowflake_username",
+                                        "snowflake_password" }},
+                                     {"postgres",
+                                      { "postgres_username",
+                                        "postgres_password" }},
+                                     { "bigquery",
+                                       { "bigquery_username",
+                                         "bigquery_password" } }};
+
+    if (auto it = odbc_credentials_environment.find(data_wrapper_type);
+        it != odbc_credentials_environment.end()) {
+      auto [username_environment, password_environment] = it->second;
+      auto username_ptr = std::getenv(username_environment.c_str());
+      auto password_ptr = std::getenv(password_environment.c_str());
+      if (!username_ptr || !password_ptr) {
+        return {"", ""};
+      }
+      return {std::string(username_ptr), std::string(password_ptr)};
+    }
+    return {"admin", "HyperInteractive"};
+  }
+
+  static auto getODBCCredentialString(const std::string& data_wrapper_type) {
+    auto [username, password] = getODBCCredentials(data_wrapper_type);
+    std::string credential_string = "Username=" + username + ";Password=" + password;
+    return credential_string;
+  }
+
+  static auto createODBCConnection(const std::string& data_wrapper_type) {
+    auto [username, password] = getODBCCredentials(data_wrapper_type);
+    foreign_storage::UserMapping user_mapping{};
+    user_mapping.setOptions({{foreign_storage::OdbcDataWrapper::ODBC_USERNAME, username},
+                             { foreign_storage::OdbcDataWrapper::ODBC_PASSWORD,
+                               password }});
+    return foreign_storage::OdbcConnection::create({data_wrapper_type, std::nullopt},
+                                                   &user_mapping);
+  }
+
+  static std::string getOdbcSchemaName(const std::string& data_wrapper_type) {
+    CHECK(data_wrapper_type != "sqlite");
+    auto [schema_name, _] = getODBCCredentials(data_wrapper_type);
+    if (std::getenv("uuid")) {
+      schema_name += "_" + std::string(std::getenv("uuid"));
+    }
+    boost::regex dot_or_hyphen("(\\.|-)");
+    schema_name = boost::regex_replace(schema_name, dot_or_hyphen, "_");
+    if (schema_name.empty()) {
+      return "odbc_fsi_test";
+    }
+    return schema_name;
+  }
+
+  static void dropODBCSchema(const std::string& data_wrapper_type) {
+    if (data_wrapper_type == "sqlite") {
+      return;
+    }
+    auto odbc_connection = createODBCConnection(data_wrapper_type);
+    auto schema_name = getOdbcSchemaName(data_wrapper_type);
+    try {
+      odbc_connection->runSqlAllowSuccessWithInfo("DROP SCHEMA IF EXISTS " + schema_name +
+                                                  " CASCADE;");
+    } catch (foreign_storage::ForeignStorageException& fes) {
+      std::string msg = fes.what();
+      boost::regex e_msg("(drop cascades to |schema (\"" + schema_name +
+                             "\"|'odbc_fsi_test." + schema_name + "') does not exist)",
+                         boost::regex::icase);
+      if (!boost::regex_search(msg, e_msg)) {
+        throw fes;
+      }
+    }
+  }
+
+  static void createODBCSchema(const std::string& data_wrapper_type) {
+    if (data_wrapper_type == "sqlite") {
+      return;
+    }
+    dropODBCSchema(data_wrapper_type);
+    auto odbc_connection = createODBCConnection(data_wrapper_type);
+    auto schema_name = getOdbcSchemaName(data_wrapper_type);
+    odbc_connection->runSqlAllowSuccessWithInfo("CREATE SCHEMA " + schema_name + ";");
+  }
+#endif
+
   static void createODBCSourceTable(const std::string& table_name,
                                     const std::vector<ColumnPair>& column_pairs,
                                     const std::string& src_file,
-                                    const std::string& data_wrapper_type,
-                                    const bool is_odbc_geo = false) {}
+                                    const std::string& data_wrapper_type) {
+#ifdef EE_FSI_ODBC
+    // Import a csv file into an odbc table.
+    auto odbc_connection = createODBCConnection(data_wrapper_type);
+    auto schema_name_table_name = getOdbcTableName(table_name, data_wrapper_type);
+    try {
+      odbc_connection->runSqlAllowSuccessWithInfo("drop table if exists " +
+                                                  schema_name_table_name + ";");
+    } catch (foreign_storage::ForeignStorageException& fes) {
+      std::string msg = fes.what();
+      boost::regex e_msg("table \"("s + schema_name_table_name + "|" + table_name +
+                             ")\" does not exist"s,
+                         boost::regex::icase);
+      if (!boost::regex_search(msg, e_msg)) {
+        throw fes;
+      }
+    }
 
-  static const std::vector<LeafHostInfo>& getDbLeaves() {
-    return db_leaves_;
+    auto rdms_specific_column_pairs =
+        get_column_pairs_for_rdms(column_pairs, data_wrapper_type);
+    auto rdms_specific_schema = column_pairs_to_schema_string(rdms_specific_column_pairs);
+    odbc_connection->runSqlAllowSuccessWithInfo("create table " + schema_name_table_name +
+                                                " (" + rdms_specific_schema + ");");
+
+    // Check for the availability of the table created in the remote database before
+    // proceeding
+    std::string last_exception_message;
+    size_t num_tries = 200;
+    while (num_tries > 0) {
+      num_tries--;
+      try {
+        odbc_connection->runSql("SELECT * FROM " + schema_name_table_name + ";");
+      } catch (foreign_storage::ForeignStorageException& fes) {
+        last_exception_message = fes.what();
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        continue;
+      }
+      break;
+    }
+    if (!num_tries) {
+      ASSERT_TRUE(false) << "Timed out while attempting to poll for the foreign table \""
+                         << schema_name_table_name
+                         << "\", the last exception message was: "
+                         << last_exception_message;
+    }
+
+    if (data_wrapper_type == "postgres") {
+      odbc_connection->runSqlAllowSuccessWithInfo("SET datestyle TO \"SQL, MDY\";");
+    }
+    std::ifstream csv_file(src_file);
+    std::stringstream insert_records;
+    uint32_t line_num = 0;
+    for (std::string line; std::getline(csv_file, line);) {
+      if (line_num++ == 0) {
+        // skip header
+        continue;
+      }
+      apply_mods_to_insert_record(line, rdms_specific_column_pairs, data_wrapper_type);
+      insert_records << (line_num > 2 ? ", (" : "(") << line << ")";
+    }
+
+    auto insert_records_str = insert_records.str();
+    if (!insert_records_str.empty()) {
+      odbc_connection->runSqlAllowSuccessWithInfo("insert into " +
+                                                  schema_name_table_name + " values " +
+                                                  insert_records_str + ";");
+    }
+#endif
   }
 
   static void assertPartialExceptionMessage(const TDBException& e,
@@ -870,8 +973,6 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
   static std::unique_ptr<DBHandler> db_handler_;
   static TSessionId session_id_;
   static TSessionId admin_session_id_;
-  static std::vector<LeafHostInfo> db_leaves_;
-  static std::vector<LeafHostInfo> string_leaves_;
   static AuthMetadata auth_metadata_;
   static std::string udf_filename_;
   static std::string udf_compiler_path_;
@@ -896,8 +997,6 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
   }
 
   static std::string default_db_name_;
-
-  static std::string cluster_config_file_path_;
   static File_Namespace::DiskCacheLevel disk_cache_level_;
   static SystemParameters system_parameters_;
 };
@@ -920,8 +1019,6 @@ class DBHandlerTestEnvironment : public ::testing::Environment {
 TSessionId DBHandlerTestFixture::session_id_{};
 TSessionId DBHandlerTestFixture::admin_session_id_{};
 std::unique_ptr<DBHandler> DBHandlerTestFixture::db_handler_ = nullptr;
-std::vector<LeafHostInfo> DBHandlerTestFixture::db_leaves_{};
-std::vector<LeafHostInfo> DBHandlerTestFixture::string_leaves_{};
 AuthMetadata DBHandlerTestFixture::auth_metadata_{};
 std::string DBHandlerTestFixture::udf_filename_{};
 std::string DBHandlerTestFixture::udf_compiler_path_{};
@@ -930,7 +1027,6 @@ std::string DBHandlerTestFixture::default_pass_{"HyperInteractive"};
 std::string DBHandlerTestFixture::default_db_name_{};
 SystemParameters DBHandlerTestFixture::system_parameters_{};
 std::vector<std::string> DBHandlerTestFixture::udf_compiler_options_{};
-std::string DBHandlerTestFixture::cluster_config_file_path_{};
 #ifdef ENABLE_GEOS
 std::string DBHandlerTestFixture::libgeos_so_filename_{};
 #endif

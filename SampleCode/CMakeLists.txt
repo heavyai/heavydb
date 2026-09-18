@@ -1,12 +1,13 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 cmake_minimum_required(VERSION 3.25)
 set(RUNTIME_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
 find_package(Boost COMPONENTS system program_options regex REQUIRED QUIET)
-if(MSVC)
-  find_package(Thrift CONFIG REQUIRED)
-else()
-  find_package(Thrift REQUIRED)
-endif()
+find_package(Thrift REQUIRED)
 include_directories(${Thrift_INCLUDE_DIRS})
 if("${Thrift_VERSION}" VERSION_LESS "0.13.0")
   add_definitions("-DHAVE_THRIFT_PLATFORMTHREADFACTORY")

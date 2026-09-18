@@ -1,0 +1,123 @@
+dn: dc=mapd,dc=com
+objectclass: top
+objectclass: domain
+objectclass: extensibleObject
+dc: mapd
+
+# Organizational Units
+dn: ou=groups,dc=mapd,dc=com
+objectclass: top
+objectclass: organizationalUnit
+ou: groups
+
+dn: ou=people,dc=mapd,dc=com
+objectclass: top
+objectclass: organizationalUnit
+ou: people
+
+# Create People
+dn: uid=mapd,ou=people,dc=mapd,dc=com
+objectclass: top
+objectclass: person
+objectclass: organizationalPerson
+objectclass: inetOrgPerson
+cn: Mapd Mapd
+sn: Mapd
+uid: mapd
+userPassword: HyperInteractive
+
+# Create People
+dn: uid=dba,ou=people,dc=mapd,dc=com
+objectclass: top
+objectclass: person
+objectclass: organizationalPerson
+objectclass: inetOrgPerson
+cn: dba Mapd
+sn: Mapd
+uid: dba
+userPassword: dba_password
+
+# Create People
+dn: uid=jason,ou=people,dc=mapd,dc=com
+objectclass: top
+objectclass: person
+objectclass: organizationalPerson
+objectclass: inetOrgPerson
+cn: Jason Mapd
+sn: Mapd
+uid: jason
+userPassword: jason_password
+
+dn: uid=bob,ou=people,dc=mapd,dc=com
+objectclass: top
+objectclass: person
+objectclass: organizationalPerson
+objectclass: inetOrgPerson
+cn: Bob Mapd
+sn: Mapd
+uid: bob
+userPassword: bob_password
+
+dn: uid=bill,ou=people,dc=mapd,dc=com
+objectclass: top
+objectclass: person
+objectclass: organizationalPerson
+objectclass: inetOrgPerson
+cn: Bill Mapd
+sn: Mapd
+uid: bill
+userPassword: bill_password
+
+# Create Groups
+dn: cn=mapd_superuser,ou=groups,dc=mapd,dc=com
+objectclass: top
+objectclass: groupOfUniqueNames
+cn: mapd_superuser
+ou: groups
+uniqueMember: uid=mapd,ou=people,dc=mapd,dc=com
+uniqueMember: uid=dba,ou=people,dc=mapd,dc=com
+
+dn: cn=mapd_sales_role,ou=groups,dc=mapd,dc=com
+objectclass: top
+objectclass: groupOfUniqueNames
+cn: mapd_sales_role
+ou: groups
+uniqueMember: uid=jason,ou=people,dc=mapd,dc=com
+uniqueMember: uid=bob,ou=people,dc=mapd,dc=com
+
+dn: cn=mapd_marketing_role,ou=groups,dc=mapd,dc=com
+objectclass: top
+objectclass: groupOfUniqueNames
+cn: mapd_marketing_role
+ou: groups
+uniqueMember: uid=jason,ou=people,dc=mapd,dc=com
+uniqueMember: uid=bill,ou=people,dc=mapd,dc=com
+
+dn: cn=mapd_guest_role,ou=groups,dc=mapd,dc=com
+objectclass: top
+objectclass: groupOfUniqueNames
+cn: mapd_guest_role
+ou: groups
+
+dn: cn=mapd_unmapped_role,ou=groups,dc=mapd,dc=com
+objectclass: top
+objectclass: groupOfUniqueNames
+cn: mapd_unmapped_role
+ou: groups
+uniqueMember: uid=mapd,ou=people,dc=mapd,dc=com
+uniqueMember: uid=dba,ou=people,dc=mapd,dc=com
+uniqueMember: uid=jason,ou=people,dc=mapd,dc=com
+uniqueMember: uid=bill,ou=people,dc=mapd,dc=com
+uniqueMember: uid=bob,ou=people,dc=mapd,dc=com
+
+dn: cn=mapd_db_access_role,ou=groups,dc=mapd,dc=com
+objectclass: top
+objectclass: groupOfUniqueNames
+cn: mapd_db_access_role
+ou: groups
+uniqueMember: uid=mapd,ou=people,dc=mapd,dc=com
+uniqueMember: uid=dba,ou=people,dc=mapd,dc=com
+uniqueMember: uid=jason,ou=people,dc=mapd,dc=com
+uniqueMember: uid=bill,ou=people,dc=mapd,dc=com
+uniqueMember: uid=bob,ou=people,dc=mapd,dc=com
+

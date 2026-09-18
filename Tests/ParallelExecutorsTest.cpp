@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "DBHandlerTestHelpers.h"
@@ -19,6 +8,7 @@
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/Execute.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Shared/DebugTestHook.h"
 #include "TestHelpers.h"
 #include "gen-cpp/heavy_types.h"
 
@@ -175,8 +165,6 @@ class BaseTestFixture : public DBHandlerTestFixture,
       sql(gen(100, 10, 2, 1, 1.0001, 1.1, "'true'", "'hello'", "{100, 200}"));
     }
     for (size_t i = 0; i < 5; i++) {
-      // Note - Windows template processing can't proccess an embedded
-      // ternary operator.
       std::string row_alternate = (i % 2 == 0) ? "{NULL, 200}" : "{100, NULL}";
       sql(gen(500, 50, "NULL", 5, 5.0001, 5.1, "'false'", "'world'", row_alternate));
     }
@@ -460,6 +448,39 @@ TEST_P(UpdateDeleteTestEnv, Update_OneTable) {
     }
   }
 }
+
+#if HEAVYDB_DEBUG_TEST_HOOKS_ENABLED
+TEST_P(UpdateDeleteTestEnv, NewFragmentMetadataPublication) {
+  const auto device_type = std::get<DT>(param_);
+  if (device_type != TExecuteMode::type::CPU) {
+    GTEST_SKIP() << "The fragment publication race is independent of GPU execution.";
+  }
+
+  auto& catalog = getCatalog();
+  const auto table_descriptor =
+      catalog.getMetadataForTable("test_parallel_0", /*populateFragmenter=*/true);
+  ASSERT_NE(table_descriptor, nullptr);
+  ASSERT_NE(table_descriptor->fragmenter, nullptr);
+
+  const auto fragmenter = table_descriptor->fragmenter;
+  const auto* delete_column = catalog.getDeletedColumn(table_descriptor);
+  ASSERT_NE(delete_column, nullptr);
+  const auto delete_column_id = delete_column->columnId;
+
+  bool hook_called{false};
+  heavyai::test::ScopedDebugTestHook<Fragmenter_Namespace::FragmentInfo> publication_hook{
+      "Fragmenter_Namespace::InsertOrderFragmenter::createNewFragment::published",
+      [&](auto* fragment) {
+        hook_called = true;
+        EXPECT_NE(fragment, nullptr);
+        EXPECT_FALSE(fragmenter->hasDeletedRows(delete_column_id));
+      }};
+
+  sql("INSERT INTO test_parallel_0 "
+      "VALUES(1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);");
+  EXPECT_TRUE(hook_called);
+}
+#endif
 
 TEST_P(UpdateDeleteTestEnv, Update_OneTableVarlen) {
   const size_t iterations = 5;

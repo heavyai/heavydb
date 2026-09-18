@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package com.mapd.parser.extension.ddl;
 
 import org.apache.calcite.rel.type.RelDataTypeField;
@@ -73,7 +78,7 @@ public class SqlInsertValues extends SqlDdl {
     }
 
     List<Object> rows = jsonBuilder.list();
-    for (SqlNode row_node : ((SqlBasicCall) values).getOperands()) {
+    for (SqlNode row_node : ((SqlBasicCall) values).getOperandList()) {
       rows.add(toJson(row_node, jsonBuilder));
     }
     jsonBuilder.put(map, "values", rows);
@@ -118,7 +123,7 @@ public class SqlInsertValues extends SqlDdl {
 
   private Object rowToJson(SqlBasicCall row, JsonBuilder jsonBuilder) {
     List<Object> values = jsonBuilder.list();
-    for (SqlNode operand : row.getOperands()) {
+    for (SqlNode operand : row.getOperandList()) {
       values.add(toJson(operand, jsonBuilder));
     }
     return values;
@@ -127,7 +132,7 @@ public class SqlInsertValues extends SqlDdl {
   private Object arrayToJson(SqlBasicCall array, JsonBuilder jsonBuilder) {
     final Map<String, @Nullable Object> map = jsonBuilder.map();
     List<Object> elements = jsonBuilder.list();
-    for (SqlNode operand : array.getOperands()) {
+    for (SqlNode operand : array.getOperandList()) {
       elements.add(toJson(operand, jsonBuilder));
     }
     map.put("array", elements);

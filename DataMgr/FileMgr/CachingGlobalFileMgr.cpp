@@ -1,32 +1,18 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "CachingGlobalFileMgr.h"
 
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
-
 namespace File_Namespace {
 CachingGlobalFileMgr::CachingGlobalFileMgr(
     int32_t device_id,
-    std::shared_ptr<ForeignStorageInterface> fsi,
     const std::string& base_path,
     size_t num_reader_threads,
     foreign_storage::ForeignStorageCache* disk_cache,
     size_t default_page_size)
-    : GlobalFileMgr(device_id, fsi, base_path, num_reader_threads, default_page_size)
+    : GlobalFileMgr(device_id, base_path, num_reader_threads, default_page_size)
     , disk_cache_(disk_cache) {
   CHECK(disk_cache_);
 }
@@ -201,11 +187,6 @@ void CachingGlobalFileMgr::removeTableRelatedDS(const int db_id, const int table
 
 bool CachingGlobalFileMgr::isChunkPrefixCacheable(const ChunkKey& chunk_prefix) const {
   CHECK(has_table_prefix(chunk_prefix));
-  // If this is an Arrow FSI table then we can't cache it.
-  if (fsi_->lookupBufferManager(chunk_prefix[CHUNK_KEY_DB_IDX],
-                                chunk_prefix[CHUNK_KEY_TABLE_IDX])) {
-    return false;
-  }
   return true;
 }
 }  // namespace File_Namespace

@@ -1,18 +1,8 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
+
 package ai.heavy.jdbc;
 
 import com.mapd.common.SockTransportProperties;
@@ -27,8 +17,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
-import java.security.*;
-import java.security.cert.X509Certificate;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -47,57 +35,10 @@ import java.sql.Struct;
 import java.util.*;
 import java.util.concurrent.Executor;
 
-import javax.crypto.Cipher;
-
 import ai.heavy.thrift.server.Heavy;
 import ai.heavy.thrift.server.TDBException;
 import ai.heavy.thrift.server.TDatumType;
 import ai.heavy.thrift.server.TServerStatus;
-import sun.security.provider.X509Factory;
-
-class KeyLoader {
-  static class S_struct {
-    public String cert;
-    public Key key;
-  }
-
-  public static String getX509(X509Certificate cert) throws Exception {
-    String encoded = Base64.getMimeEncoder().encodeToString(cert.getEncoded());
-    // Note mimeEncoder inserts \r\n in the text - the server is okay with that.
-    encoded = X509Factory.BEGIN_CERT + "\n" + encoded + "\n" + X509Factory.END_CERT;
-    return encoded;
-  }
-
-  public static S_struct getDetails_pkcs12(String filename, String password)
-          throws Exception {
-    S_struct s_struct = new S_struct();
-    try {
-      KeyStore keystore = KeyStore.getInstance("PKCS12");
-      java.io.FileInputStream fis = new java.io.FileInputStream(filename);
-      keystore.load(fis, password.toCharArray());
-      String alias = null;
-      Enumeration<String> eE = keystore.aliases();
-      int count = 0;
-      while (eE.hasMoreElements()) {
-        alias = eE.nextElement();
-        count++;
-      }
-      if (count != 1) {
-        throw new SQLException("pkcs12 file [" + filename
-                + "] contains an incorrect number [" + count
-                + "] of certificate(s); only a single certificate is allowed");
-      }
-
-      X509Certificate cert = (X509Certificate) keystore.getCertificate(alias);
-      s_struct.cert = getX509(cert);
-      s_struct.key = keystore.getKey(alias, password.toCharArray());
-    } catch (Exception eX) {
-      HeavyAIConnection.logger.error(eX.getMessage());
-      throw eX;
-    }
-    return s_struct;
-  }
-}
 
 class Options {
   // The Options class supplies the keys for the
@@ -108,10 +49,6 @@ class Options {
   static String protocol = "protocol";
   static String server_trust_store = "server_trust_store";
   static String server_trust_store_pwd = "server_trust_store_pwd";
-  static String pkiauth = "pkiauth";
-  static String sslcert = "sslcert";
-  static String sslkey = "sslkey";
-  static String sslkey_password = "sslkey_password";
   static String max_rows = "max_rows";
   static String user = "user";
   static String password = "password";
@@ -128,10 +65,6 @@ class Options {
           protocol,
           server_trust_store,
           server_trust_store_pwd,
-          pkiauth,
-          sslcert,
-          sslkey,
-          sslkey_password,
           max_rows};
 }
 
@@ -426,38 +359,15 @@ public class HeavyAIConnection implements java.sql.Connection, Cloneable {
     return protocol;
   }
 
-  private void setSession(Object pki_auth) throws java.lang.Exception {
-    KeyLoader.S_struct s_struct = null;
-    // If pki aut then stuff public cert into password.
-    if (pki_auth != null && pki_auth.toString().equalsIgnoreCase("true")) {
-      s_struct = KeyLoader.getDetails_pkcs12(this.cP.getProperty(Options.sslcert),
-              this.cP.getProperty(Options.sslkey_password));
-      this.cP.setProperty(Options.password, s_struct.cert);
-    }
-
-    // Get the seesion for all connectioms
-    session = client.connect((String) this.cP.getProperty(Options.user),
-            (String) this.cP.getProperty(Options.password),
-            (String) this.cP.getProperty(Options.db_name));
-
-    // if pki auth the session will be encoded.
-    if (pki_auth != null && pki_auth.toString().equalsIgnoreCase("true")) {
-      Cipher cipher = Cipher.getInstance(s_struct.key.getAlgorithm());
-      cipher.init(Cipher.DECRYPT_MODE, s_struct.key);
-      // session is encrypted and encoded in b64
-      byte[] decodedBytes = Base64.getDecoder().decode(session);
-      byte[] decoded_bytes = cipher.doFinal(decodedBytes);
-      session = new String(decoded_bytes, "UTF-8");
-    }
-  }
-
   public HeavyAIConnection(String url, Properties base_properties) throws SQLException {
     this.url = url;
     this.cP = new Connection_properties(url, base_properties);
     try {
       TProtocol protocol = manageConnection();
       client = new Heavy.Client(protocol);
-      setSession(this.cP.getProperty(Options.pkiauth));
+      session = client.connect((String) this.cP.getProperty(Options.user),
+              (String) this.cP.getProperty(Options.password),
+              (String) this.cP.getProperty(Options.db_name));
       catalog = (String) this.cP.getProperty(Options.db_name);
     } catch (TTransportException ex) {
       throw new SQLException("Thrift transport connection failed - "

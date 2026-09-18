@@ -1,0 +1,47 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#extension GL_EXT_mesh_shader : enable
+
+#include "DriverTests/testUtils.glsl"
+
+#define NUM_GLOBAL_WORKGROUPS <numGlobalWorkgroups>
+#define NUM_LOCAL_WORKGROUPS <numLocalWorkgroups>
+#define NUM_POINTS <numPoints>
+
+layout (local_size_x = NUM_LOCAL_WORKGROUPS, local_size_y = 1, local_size_z = 1) in;
+layout (points, max_vertices = NUM_LOCAL_WORKGROUPS, max_primitives = NUM_LOCAL_WORKGROUPS) out;
+
+layout (location = 0) out PerVertexData {
+  vec4 color;
+} v_out[];
+
+layout(std430) uniform MESH_SHADER_UBO_TYPE {
+  vec2 imageSize;
+};
+
+void main()
+{
+  uint local_workgroup_id = gl_LocalInvocationID.x;
+  uint workgroup_id = gl_WorkGroupID.x;
+
+  float x_scale = 2.0 / float(NUM_LOCAL_WORKGROUPS);
+  float y_scale = 1.0 / float(NUM_GLOBAL_WORKGROUPS);
+  float y_offset = float(workgroup_id) * (y_scale * 2.0) - (1.0 - y_scale);
+
+  // size output
+  SetMeshOutputsEXT(NUM_LOCAL_WORKGROUPS, NUM_LOCAL_WORKGROUPS);
+
+  float x_offset = float(local_workgroup_id) * x_scale - (1.0 - x_scale);
+
+  float hue = float(workgroup_id) / float(NUM_GLOBAL_WORKGROUPS) * 360;
+  float light = float(local_workgroup_id) / float(NUM_LOCAL_WORKGROUPS) * 0.75 + 0.1;
+  vec4 c = transformHSLtoRGB(vec4(hue, 1.0, light, 1.0));
+
+  gl_MeshVerticesEXT[local_workgroup_id].gl_Position = vec4(x_offset, y_offset, 0.0, 1.0);
+  gl_MeshVerticesEXT[local_workgroup_id].gl_PointSize = 8.0;
+  gl_PrimitivePointIndicesEXT[local_workgroup_id] = local_workgroup_id;
+  v_out[local_workgroup_id].color = c;
+}

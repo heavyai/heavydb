@@ -41,9 +41,10 @@ The following schematic illustrates the process for requesting inputs for a quer
 
 For a **physical table**, input data is loaded from the storage layer (see :doc:`../data_model/physical_layout` and :doc:`../data_model/columnar_layout`) via the buffer manager hierarchy (see :doc:`../data_model/memory_layout`). If the data is already present on GPU, the request terminates with the `GPU Buffer Mgr`. If not, the request passes on to the parent manager until it reaches storage. 
 
-For **intermediate results**, input data is loaded directly from a per-query temporary tables map and transferred to the GPU directly via the `Data Mgr`.
+For **intermediate results**, input data is loaded directly from a per-query
+temporary tables map and transferred to the GPU directly via the `Data Mgr`.
 
-.. TODO: Add information about temporary tables implementation once it is available for public access.
+For temporary-table behavior and restrictions, see :doc:`../catalog/index`.
 
 Output Data
 ===========

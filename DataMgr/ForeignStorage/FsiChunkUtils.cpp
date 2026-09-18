@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "FsiChunkUtils.h"
@@ -113,28 +102,7 @@ bool is_system_table_chunk_key(const ChunkKey& chunk_key) {
   return get_foreign_table_for_key(chunk_key).is_system_table;
 }
 
-bool is_replicated_table_chunk_key(const ChunkKey& chunk_key) {
-  return table_is_replicated(&get_foreign_table_for_key(chunk_key));
-}
-
 bool is_append_table_chunk_key(const ChunkKey& chunk_key) {
   return get_foreign_table_for_key(chunk_key).isAppendMode();
-}
-
-bool is_shardable_key(const ChunkKey& key) {
-  return (dist::is_distributed() && !dist::is_aggregator() &&
-          !is_replicated_table_chunk_key(key) && !is_system_table_chunk_key(key));
-}
-
-// If we want to change the way we shard foreign tables we can do it in this function.
-bool fragment_maps_to_leaf(const ChunkKey& key) {
-  CHECK(dist::is_distributed());
-  CHECK(g_distributed_num_leaves > 0);
-  CHECK(!dist::is_aggregator());
-  return (get_fragment(key) % g_distributed_num_leaves == g_distributed_leaf_idx);
-}
-
-bool key_does_not_shard_to_leaf(const ChunkKey& key) {
-  return (is_shardable_key(key) && !fragment_maps_to_leaf(key));
 }
 }  // namespace foreign_storage

@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package com.mapd.calcite.parser;
@@ -22,29 +11,26 @@ import static org.apache.calcite.util.Static.RESOURCE;
 
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Multimap;
 import com.mapd.parser.extension.ddl.SqlFirstLastValueInFrame;
 import com.mapd.parser.extension.ddl.SqlLeadLag;
 import com.mapd.parser.extension.ddl.SqlNthValueInFrame;
 import com.mapd.parser.server.ExtensionFunction;
 import com.mapd.parser.server.ExtensionFunction.ExtArgumentType;
 
-import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.rel.metadata.RelColumnMapping;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeFactory.FieldInfoBuilder;
-import org.apache.calcite.rel.type.RelDataTypeFamily;
 import org.apache.calcite.runtime.Resources;
 import org.apache.calcite.runtime.Resources.BaseMessage;
 import org.apache.calcite.runtime.Resources.ExInst;
 import org.apache.calcite.schema.FunctionParameter;
 import org.apache.calcite.sql.SqlAggFunction;
-import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlDynamicParam;
 import org.apache.calcite.sql.SqlFunction;
+import org.apache.calcite.sql.HeavyDBDefaultArgInjector;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlIntervalQualifier;
@@ -67,7 +53,6 @@ import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.ReturnTypes;
 import org.apache.calcite.sql.type.SameOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlOperandCountRanges;
-import org.apache.calcite.sql.type.SqlOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlReturnTypeInference;
 import org.apache.calcite.sql.type.SqlTypeFamily;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -75,7 +60,6 @@ import org.apache.calcite.sql.type.SqlTypeTransforms;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
-import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
 import org.apache.calcite.sql.validate.SqlNameMatcher;
 import org.apache.calcite.sql.validate.SqlValidator;
 import org.apache.calcite.sql.validate.SqlValidatorException;
@@ -86,16 +70,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
   @Override
@@ -127,6 +108,10 @@ class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
   }
 }
 
+/**
+ * HeavyDB's SQL operator table. Registers the standard SQL operator table plus
+ * HeavyDB's own built-in and extension functions/operators.
+ */
 public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   public static final SqlArrayValueConstructorAllowingEmpty ARRAY_VALUE_CONSTRUCTOR =
           new SqlArrayValueConstructorAllowingEmpty();
@@ -134,36 +119,6 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
 
   static {
     try {
-      // some nasty bit to remove the std APPROX_COUNT_DISTINCT function definition
-      {
-        Field f = ReflectiveSqlOperatorTable.class.getDeclaredField(
-                "caseSensitiveOperators");
-        f.setAccessible(true);
-        Multimap operators = (Multimap) f.get(SqlStdOperatorTable.instance());
-        for (Iterator i = operators.entries().iterator(); i.hasNext();) {
-          Map.Entry entry = (Map.Entry) i.next();
-          if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT
-                  || entry.getValue() == SqlStdOperatorTable.AVG
-                  || entry.getValue() == SqlStdOperatorTable.ARRAY_VALUE_CONSTRUCTOR) {
-            i.remove();
-          }
-        }
-      }
-
-      {
-        Field f = ReflectiveSqlOperatorTable.class.getDeclaredField(
-                "caseInsensitiveOperators");
-        f.setAccessible(true);
-        Multimap operators = (Multimap) f.get(SqlStdOperatorTable.instance());
-        for (Iterator i = operators.entries().iterator(); i.hasNext();) {
-          Map.Entry entry = (Map.Entry) i.next();
-          if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT
-                  || entry.getValue() == SqlStdOperatorTable.AVG
-                  || entry.getValue() == SqlStdOperatorTable.ARRAY_VALUE_CONSTRUCTOR) {
-            i.remove();
-          }
-        }
-      }
 
       SqlStdOperatorTable.instance().register(ARRAY_VALUE_CONSTRUCTOR);
 
@@ -178,11 +133,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
   final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(HeavyDBSqlOperatorTable.class);
 
-  /**
-   * Mock operator table for testing purposes. Contains the standard SQL operator
-   * table, plus a list of operators.
-   */
   // ~ Instance fields --------------------------------------------------------
+  /** The list operator table this instance chains onto {@code parentTable}. */
   private final ListSqlOperatorTable listOpTab;
 
   // ~ Constructors -----------------------------------------------------------
@@ -1129,7 +1081,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
-  public static class LeftRightTrim extends SqlFunction {
+  public static class LeftRightTrim extends SqlFunction implements HeavyDBDefaultArgInjector {
     public LeftRightTrim(final String name, final SqlKind kind) {
       super(name,
               kind,
@@ -1169,8 +1121,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       return super.createCall(functionQualifier, pos, operands);
     }
 
-    @Override
-    public boolean requiresCreate(List<SqlNode> operands) {
+    @Override  //Interface HeavyAIUDOperator
+    public boolean requiresSpecialCreate(List<SqlNode> operands) {
       // if there is only 1 Operand, the code will be creating 'defaults'
       return (operands.size() == 1);
     }
@@ -1186,7 +1138,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       super("RTRIM", SqlKind.RTRIM);
     }
   }
-  public static class LeftRightPad extends SqlFunction {
+  public static class LeftRightPad extends SqlFunction implements HeavyDBDefaultArgInjector {
     public LeftRightPad(final String name) {
       super(name,
               SqlKind.OTHER_FUNCTION,
@@ -1243,8 +1195,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       }
     }
 
-    @Override
-    public boolean requiresCreate(List<SqlNode> operands) {
+    @Override  //Interface HeavyAIUDOperator
+    public boolean requiresSpecialCreate(List<SqlNode> operands) {
       // if there are only 2 Operands, the code will be creating 'defaults'
       return (operands.size() == 2);
     }
@@ -1286,7 +1238,7 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
-  public static class Replace extends SqlFunction {
+  public static class Replace extends SqlFunction implements HeavyDBDefaultArgInjector {
     public Replace() {
       super("REPLACE",
               SqlKind.OTHER_FUNCTION,
@@ -1329,8 +1281,8 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       return super.createCall(functionQualifier, pos, operands);
     }
 
-    @Override
-    public boolean requiresCreate(List<SqlNode> operands) {
+    @Override  //Interface HeavyAIUDOperator
+    public boolean requiresSpecialCreate(List<SqlNode> operands) {
       // if there are only 2 Operands, the code will be creating 'defaults'
       return (operands.size() == 2);
     }
@@ -3695,6 +3647,11 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               new ExtTableFunctionTypeChecker(HeavyDBSqlOperatorTable.this),
               SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+      // Give the per-operator type checker a back-reference to this function so
+      // it can answer SqlOperandMetadata.paramNames()/paramTypes() (required by
+      // Calcite 1.41 routine resolution). Set post-super since 'this' is
+      // unavailable inside the super() call above.
+      ((ExtTableFunctionTypeChecker) getOperandTypeChecker()).setTableFunction(this);
       arg_types = sig.getArgs();
       outs = sig.getOuts();
       out_names = sig.getOutNames();
@@ -3981,34 +3938,84 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
       return getDefaultValues().size();
     }
 
-    /* Rewrites a call to the table function containing DEFAULT arguments, replacing the
-     * DEFAULT actual parameter literals by the default value for that parameter specified
-     * in the table function's signature.
+    /* Permutes a table-function call into formal-parameter order, inserting a
+     * DEFAULT marker (SqlKind.DEFAULT) for every named-argument call's omitted
+     * parameter. Returns a new call that reuses the original operand SqlNode
+     * instances (so in-place coercion of e.g. a shared cursor SqlSelect still
+     * persists, matching Calcite's own SqlCallBinding.permutedCall() semantics).
      *
-     * e.g. signature: my_udtf(Column<int> col, int scalar | default=10)
+     * A purely positional call is returned UNCHANGED -- positional callers must
+     * supply every argument or use explicit DEFAULT markers; omitting a trailing
+     * argument positionally leaves the call short so it fails to bind, as it must.
+     * Only named-argument syntax may omit optional arguments.
      *
-     * call 'select * from table(my_udtf(cursor(select int_col from table), DEFAULT))' ->
-     *      'select * from table(my_udtf(cursor(select int_col from table), 10))'
-     *
-     * for calls with named arguments, the explicit DEFAULTs can be omitted:
-     * call 'select * from table(my_udtf(inp0 => cursor(select int_col from table)))' ->
-     *      'select * from table(my_udtf(cursor(select int_col from table), 10))
+     * As of Calcite 1.41, SqlCallBinding.permutedCall() only pads omitted
+     * arguments with DEFAULT markers when the operand metadata reports
+     * isFixedParameters()==true. Our ExtTableFunctionTypeChecker reports false
+     * (so Calcite's SQL:2003 routine resolution does not run canCastFrom() on
+     * CURSOR-typed params), so it neither pads nor correctly positions a middle
+     * omission (e.g. supplying init_type but not num_iterations). The whole
+     * validation/coercion path (HeavyDBTypeCoercion) and sql-to-rel conversion
+     * expect a DEFAULT-padded, correctly-positioned permutation, so we build it
+     * here, indexing by getParamNames() (the cursor-field-stripped names, which
+     * match both the named-argument syntax and the keys of getDefaultValues()).
      */
-    public SqlCall rewriteCallWithDefaultArguments(SqlCall permutedCall) {
-      for (Ord<SqlNode> operand : Ord.zip(permutedCall.getOperandList())) {
-        if (operand.e.getClass() == SqlBasicCall.class) {
-          SqlBasicCall operandAsCall = (SqlBasicCall) operand.e;
-          if (operandAsCall.getOperator().getName() == "DEFAULT") {
-            ExtTableFunction tf = (ExtTableFunction) permutedCall.getOperator();
-            String paramName = tf.getExtendedParamNames().get(operand.i);
-            Comparable<?> defaultVal = tf.getDefaultValues().get(paramName);
-            SqlLiteral newOperand = createLiteralForDefaultValue(
-                    defaultVal, operand.e.getParserPosition());
-            permutedCall.setOperand(operand.i, newOperand);
+    public SqlCall permuteOperandsWithDefaultMarkers(SqlCall call) {
+      final List<SqlNode> operands = call.getOperandList();
+      final boolean named = operands.stream().anyMatch(
+              op -> op != null && op.getKind() == SqlKind.ARGUMENT_ASSIGNMENT);
+      if (!named) {
+        return call;
+      }
+
+      final List<String> paramNames = getParamNames();
+      final int numArgs = getArgTypes().size();
+      final SqlNode[] permuted = new SqlNode[numArgs];
+      // ARGUMENT_ASSIGNMENT operand: operand(0) is the value, operand(1) the id.
+      for (SqlNode op : operands) {
+        final SqlCall assignment = (SqlCall) op;
+        final SqlIdentifier id = assignment.operand(1);
+        final String argName = id.getSimple();
+        for (int i = 0; i < numArgs; i++) {
+          if (paramNames.get(i).equalsIgnoreCase(argName)) {
+            permuted[i] = assignment.operand(0);
+            break;
           }
         }
       }
-      return permutedCall;
+      for (int i = 0; i < numArgs; i++) {
+        if (permuted[i] == null) {
+          permuted[i] = SqlStdOperatorTable.DEFAULT.createCall(call.getParserPosition());
+        }
+      }
+      return createCall(call.getParserPosition(), permuted);
+    }
+
+    /* Permutes the call (see permuteOperandsWithDefaultMarkers) and then replaces
+     * every DEFAULT marker with the corresponding signature default-value literal,
+     * yielding the fully-positional call used for sql-to-rel conversion.
+     *
+     * signature: my_udtf(Column<int> col, int scalar | default=10)
+     *   'table(my_udtf(inp0 => cursor(select int_col from table)))'  ->
+     *   'table(my_udtf(cursor(select int_col from table), 10))'
+     *   'table(my_udtf(cursor(select int_col from table), DEFAULT))' ->
+     *   'table(my_udtf(cursor(select int_col from table), 10))'
+     */
+    public SqlCall rewriteCallWithDefaultArguments(SqlCall call) {
+      final SqlCall permutedCall = permuteOperandsWithDefaultMarkers(call);
+      final List<String> paramNames = getParamNames();
+      final List<SqlNode> operands = permutedCall.getOperandList();
+      final List<SqlNode> result = new java.util.ArrayList<SqlNode>();
+      for (int i = 0; i < operands.size(); i++) {
+        final SqlNode op = operands.get(i);
+        if (op != null && op.getKind() == SqlKind.DEFAULT) {
+          final Comparable<?> defaultVal = getDefaultValues().get(paramNames.get(i));
+          result.add(createLiteralForDefaultValue(defaultVal, call.getParserPosition()));
+        } else {
+          result.add(op);
+        }
+      }
+      return createCall(call.getParserPosition(), result.toArray(new SqlNode[0]));
     }
 
     SqlLiteral createLiteralForDefaultValue(Comparable<?> value, SqlParserPos pos) {

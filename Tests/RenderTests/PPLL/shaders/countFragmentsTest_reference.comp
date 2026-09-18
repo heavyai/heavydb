@@ -1,0 +1,33 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+layout (local_size_x = <workgroupSize>, local_size_y = 1, local_size_z = 1) in;
+
+layout(r32ui) uniform restrict readonly uimage2D fragment_count_image;
+
+layout(std430) buffer PPLL_TEST_COUNTERS_SSBO {
+  uint64_t total_fragment_count;
+  uint32_t num_nonzero_count;
+  uint32_t min_fragment_count;
+  uint32_t max_fragment_count;
+} stats;
+
+layout(std430) uniform FRAGMENT_STATS_UBO_TYPE {
+  uvec2 image_size;
+};
+
+void main() {
+  if (gl_GlobalInvocationID.x >= image_size.x) {
+    return;
+  }
+
+  uint32_t num_fragments = imageLoad(fragment_count_image, ivec2(gl_GlobalInvocationID.xy)).r;
+  if (num_fragments > 0) {
+    atomicAdd(stats.total_fragment_count, num_fragments);
+    atomicAdd(stats.num_nonzero_count, 1);
+    atomicMin(stats.min_fragment_count, num_fragments);
+    atomicMax(stats.max_fragment_count, num_fragments);
+  }
+}

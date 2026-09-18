@@ -1,0 +1,70 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#define USE_SUBGROUPS <useSubgroups>
+
+#if USE_SUBGROUPS == 1
+#extension GL_KHR_shader_subgroup_vote: enable
+#extension GL_KHR_shader_subgroup_arithmetic: enable
+#extension GL_KHR_shader_subgroup_ballot: enable
+#endif
+
+layout (local_size_x = <workgroupSize>, local_size_y = 1, local_size_z = 1) in;
+
+layout(r32ui) uniform restrict readonly uimage2DArray inTxArrayPixelCounter;
+
+layout(std430) buffer EXTENTS_SSBO {
+  uint64_t totalNonZeroCount;
+  uint64_t totalSqrDiff;
+  uint32_t minCount;
+  uint32_t maxCount;
+  uint32_t numNonZeroCount;
+} extents;
+
+layout(std430) uniform FRAGMENT_STATS_UBO_TYPE {
+  uint32_t imageWidth;
+};
+
+void main() {
+  if (gl_GlobalInvocationID.x >= imageWidth) {
+    return;
+  }
+
+  uint32_t value = imageLoad(inTxArrayPixelCounter, ivec3(gl_GlobalInvocationID.xy, 0)).r;
+
+  #if USE_SUBGROUPS == 1
+
+  bool have_fragments = value > 0;
+  uint32_t local_min_value = have_fragments ? value : 0xFFFFFFFF;
+
+  if (subgroupAny(have_fragments)) {
+    uint32_t subgroup_sum = subgroupAdd(value);
+    uint32_t subgroup_min = subgroupMin(local_min_value);
+    uint32_t subgroup_max = subgroupMax(value);
+    // Get bitmask for invocations that have fragments and count the bits to get the
+    // number of pixels with at least 1 fragment
+    uvec4 ballot = subgroupBallot(have_fragments);
+    uint32_t subgroup_nonzero_count = subgroupBallotBitCount(ballot);
+
+    // A single invocation in the subgroup will do the atomic operation
+    if (subgroupElect()) {
+      atomicAdd(extents.totalNonZeroCount, uint64_t(subgroup_sum));
+      atomicAdd(extents.numNonZeroCount, subgroup_nonzero_count);
+      atomicMin(extents.minCount, subgroup_min);
+      atomicMax(extents.maxCount, subgroup_max);
+    }
+  }
+
+  #else // USE_SUBGROUPS
+
+  if (value > 0) {
+    atomicAdd(extents.totalNonZeroCount, uint64_t(value));
+    atomicAdd(extents.numNonZeroCount, 1);
+    atomicMin(extents.minCount, value);
+    atomicMax(extents.maxCount, value);
+  }
+
+  #endif // USE_SUBGROUPS
+}

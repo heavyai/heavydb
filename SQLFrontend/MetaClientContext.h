@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef METACLIENTCONTEXT_H
 #define METACLIENTCONTEXT_H
 
@@ -51,8 +56,6 @@ struct MetaClientContext {
   std::vector<std::string> role_names;
   std::vector<TDBObject> db_objects;
   TDBObjectType::type object_type;
-  std::string license_key;
-  TLicenseInfo license_info;
   std::vector<TCompletionHint> completion_hints;
   std::vector<TDashboard> dash_names;
   TSessionInfo session_info;

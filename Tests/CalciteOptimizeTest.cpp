@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "TestHelpers.h"
@@ -21,6 +10,10 @@
 #include <csignal>
 #include <thread>
 #include <tuple>
+
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 
 #include "../Catalog/Catalog.h"
 #include "../Catalog/DBObject.h"
@@ -43,6 +36,45 @@ inline void run_ddl_statement(const std::string& query) {
 const std::string TEST_USER{"test_user"};
 const std::string TEST_PASS{"test_pass"};
 const std::string TEST_DB{"test_db"};
+
+void canonicalize_literals(rapidjson::Value& node) {
+  if (node.IsObject()) {
+    auto literal_it = node.FindMember("literal");
+    if (literal_it != node.MemberEnd() && literal_it->value.IsString()) {
+      // Calcite 1.41 adds explicit type metadata to literal JSON. These access
+      // policy tests compare plan shape, so normalize that metadata away.
+      node.RemoveMember("target_type");
+      node.RemoveMember("scale");
+      node.RemoveMember("precision");
+      node.RemoveMember("type_scale");
+      node.RemoveMember("type_precision");
+    }
+    for (auto itr = node.MemberBegin(); itr != node.MemberEnd(); ++itr) {
+      canonicalize_literals(itr->value);
+    }
+  } else if (node.IsArray()) {
+    for (auto& elem : node.GetArray()) {
+      canonicalize_literals(elem);
+    }
+  }
+}
+
+std::string normalize_plan_result(const std::string& plan) {
+  rapidjson::Document doc;
+  doc.Parse(plan.c_str());
+  if (doc.HasParseError()) {
+    return plan;
+  }
+  canonicalize_literals(doc);
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  doc.Accept(writer);
+  return buffer.GetString();
+}
+
+void expect_equivalent_plan(const std::string& lhs, const std::string& rhs) {
+  EXPECT_EQ(normalize_plan_result(lhs), normalize_plan_result(rhs));
+}
 
 }  // namespace
 
@@ -97,7 +129,7 @@ TEST_F(ViewObject, BasicTest) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(false, false, {}, false);
+      g_calcite->getCalciteOptimizationOption(false, false, {});
 
   auto qs1 = QR::create_query_state(session, "select i1 from table1");
   TPlanResult tresult =
@@ -157,7 +189,7 @@ TEST_F(ViewObject, Joins) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(true, false, {}, false);
+      g_calcite->getCalciteOptimizationOption(true, false, {});
 
   {
     auto qs1 = QR::create_query_state(
@@ -182,22 +214,139 @@ TEST_F(ViewObject, Joins) {
   }
 }
 
+TEST_F(ViewObject, RestrictLegacy) {
+  auto session = QR::get()->getSession();
+  CHECK(session);
+
+  auto calciteQueryParsingOption =
+      g_calcite->getCalciteQueryParsingOption(true, false, false);
+  auto calciteOptimizationOption =
+      g_calcite->getCalciteOptimizationOption(true, false, {});
+
+  {
+    Catalog_Namespace::Catalog const& cat = *session->get_catalog_ptr();
+
+    auto qs1 = QR::create_query_state(
+        session,
+        R"(SELECT segment_name FROM attribute_table where segment_name = 'ab' or segment_name = 'ac')");
+    TPlanResult tresult =
+        query_parsing::process_and_check_access_privileges(g_calcite.get(),
+                                                           qs1->createQueryStateProxy(),
+                                                           qs1->getQueryStr(),
+                                                           calciteQueryParsingOption,
+                                                           calciteOptimizationOption);
+
+    Catalog_Namespace::SysCatalog::instance().createLegacyPolicyInMemory(
+        cat, "segment_name", TEST_USER, {"'ab'", "'ac'"});
+
+    auto qs2 =
+        QR::create_query_state(session, "SELECT segment_name FROM attribute_table");
+    TPlanResult resResult =
+        query_parsing::process_and_check_access_privileges(g_calcite.get(),
+                                                           qs2->createQueryStateProxy(),
+                                                           qs2->getQueryStr(),
+                                                           calciteQueryParsingOption,
+                                                           calciteOptimizationOption);
+
+    Catalog_Namespace::SysCatalog::instance().dropLegacyPolicyInMemory(cat, TEST_USER);
+
+    expect_equivalent_plan(tresult.plan_result, resResult.plan_result);
+
+    auto qs3 = QR::create_query_state(session, R"(select i1 from table1 where i1 = 1)");
+    TPlanResult riResult =
+        query_parsing::process_and_check_access_privileges(g_calcite.get(),
+                                                           qs3->createQueryStateProxy(),
+                                                           qs3->getQueryStr(),
+                                                           calciteQueryParsingOption,
+                                                           calciteOptimizationOption);
+
+    Catalog_Namespace::SysCatalog::instance().createLegacyPolicyInMemory(
+        cat, "i1", TEST_USER, {"1"});
+
+    auto qs4 = QR::create_query_state(session, "select i1 from table1");
+    TPlanResult rrResult =
+        query_parsing::process_and_check_access_privileges(g_calcite.get(),
+                                                           qs4->createQueryStateProxy(),
+                                                           qs4->getQueryStr(),
+                                                           calciteQueryParsingOption,
+                                                           calciteOptimizationOption);
+
+    Catalog_Namespace::SysCatalog::instance().dropLegacyPolicyInMemory(cat, TEST_USER);
+
+    expect_equivalent_plan(riResult.plan_result, rrResult.plan_result);
+  }
+}
+
+TEST_F(ViewObject, Restrict) {
+  auto session = QR::get()->getSession();
+  CHECK(session);
+
+  auto calciteQueryParsingOption =
+      g_calcite->getCalciteQueryParsingOption(true, false, false);
+  auto calciteOptimizationOption =
+      g_calcite->getCalciteOptimizationOption(true, false, {});
+
+  {
+    Catalog_Namespace::Catalog const& cat = *session->get_catalog_ptr();
+
+    auto qs1 = QR::create_query_state(
+        session,
+        R"(SELECT segment_name FROM attribute_table where segment_name = 'ab' or segment_name = 'ac')");
+    TPlanResult tresult =
+        query_parsing::process_and_check_access_privileges(g_calcite.get(),
+                                                           qs1->createQueryStateProxy(),
+                                                           qs1->getQueryStr(),
+                                                           calciteQueryParsingOption,
+                                                           calciteOptimizationOption);
+
+    Catalog_Namespace::SysCatalog::instance().createPolicy(
+        cat, {"attribute_table", "segment_name"}, TEST_USER, {"'ab'", "'ac'"});
+
+    auto qs2 =
+        QR::create_query_state(session, "SELECT segment_name FROM attribute_table");
+    TPlanResult resResult =
+        query_parsing::process_and_check_access_privileges(g_calcite.get(),
+                                                           qs2->createQueryStateProxy(),
+                                                           qs2->getQueryStr(),
+                                                           calciteQueryParsingOption,
+                                                           calciteOptimizationOption);
+
+    Catalog_Namespace::SysCatalog::instance().dropPolicy(
+        cat, {"attribute_table", "segment_name"}, TEST_USER);
+
+    expect_equivalent_plan(tresult.plan_result, resResult.plan_result);
+
+    auto qs3 = QR::create_query_state(session, R"(select i1 from table1 where i1 = 1)");
+    TPlanResult riResult =
+        query_parsing::process_and_check_access_privileges(g_calcite.get(),
+                                                           qs3->createQueryStateProxy(),
+                                                           qs3->getQueryStr(),
+                                                           calciteQueryParsingOption,
+                                                           calciteOptimizationOption);
+
+    Catalog_Namespace::SysCatalog::instance().createPolicy(
+        cat, {"table1", "i1"}, TEST_USER, {"1"});
+
+    auto qs4 = QR::create_query_state(session, "select i1 from table1");
+    TPlanResult rrResult =
+        query_parsing::process_and_check_access_privileges(g_calcite.get(),
+                                                           qs4->createQueryStateProxy(),
+                                                           qs4->getQueryStr(),
+                                                           calciteQueryParsingOption,
+                                                           calciteOptimizationOption);
+
+    Catalog_Namespace::SysCatalog::instance().dropPolicy(
+        cat, {"table1", "i1"}, TEST_USER);
+
+    expect_equivalent_plan(riResult.plan_result, rrResult.plan_result);
+  }
+}
+
 int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  QR::init(BASE_PATH,
-           TEST_USER,
-           TEST_PASS,
-           TEST_DB,
-           {},
-           {},
-           {},
-           true,
-           0,
-           256 << 20,
-           true,
-           true);
+  QR::init(BASE_PATH, TEST_USER, TEST_PASS, TEST_DB, "", true, 0, 256 << 20, true, true);
   g_calcite = QR::get()->getCatalog()->getCalciteMgr();
 
   int err{0};

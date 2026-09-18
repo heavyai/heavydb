@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../ImportExport/Importer.h"
@@ -30,10 +19,6 @@
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
-#endif
-
-#ifdef _WIN32
-#define timegm _mkgmtime
 #endif
 
 using namespace std;
@@ -237,12 +222,7 @@ class SQLiteComparator {
                 struct tm tm_struct {
                   0
                 };
-#ifdef _WIN32
-                auto ret_code = gmtime_s(&tm_struct, &nsec);
-                CHECK(ret_code == 0) << "Error code returned " << ret_code;
-#else
                 gmtime_r(&nsec, &tm_struct);
-#endif
                 if (is_arrow && omnisci_type == kDATE) {
                   ASSERT_EQ(*omnisci_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
                       << errmsg;

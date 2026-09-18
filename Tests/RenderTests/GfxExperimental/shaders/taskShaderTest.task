@@ -1,0 +1,26 @@
+#extension GL_EXT_mesh_shader : enable
+
+#define NUM_QUADS <numQuads>
+
+layout (local_size_x = NUM_QUADS, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430) uniform TASK_SHADER_UBO_TYPE {
+  uvec2 imageSize;
+};
+
+struct TaskData
+{
+  uvec2 pixel_coord;
+  uint num_quads;
+};
+taskPayloadSharedEXT TaskData td;
+
+void main() {
+  uint workgroup_id = gl_WorkGroupID.x;
+
+  uint task_count = imageSize.x / NUM_QUADS;
+  td.pixel_coord = uvec2(0, workgroup_id);
+  td.num_quads = NUM_QUADS;
+
+  EmitMeshTasksEXT(task_count, 1, 1);
+}

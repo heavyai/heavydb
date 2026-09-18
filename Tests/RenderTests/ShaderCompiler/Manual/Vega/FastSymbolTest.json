@@ -1,0 +1,64 @@
+{
+  "usermeta":
+    {
+      "shortName": "ShaderCompilerTest-FastSymbolTest",
+      "shaderArtifacts": ["builder", "spirv"]
+    },
+  "width": $width,
+  "height": $height,
+  "data": [
+    {
+      "name": "contributions",
+      "sql": "SELECT conv_4326_900913_x(lon) as x, conv_4326_900913_y(lat) as y, recipient_party as dim0, amount as val, rowid FROM contributions WHERE conv_4326_900913_x(lon) between $minXBounds and $maxXBounds and conv_4326_900913_y(lat) between $minYBounds and $maxYBounds LIMIT 2000000"
+    }
+  ],
+  "scales": [
+    {
+      "name": "x",
+      "type": "linear",
+      "domain": [ $minXBounds, $maxXBounds ],
+      "range": "width"
+    },
+    {
+      "name": "y",
+      "type": "linear",
+      "domain": [ $minYBounds, $maxYBounds ],
+      "range": "height"
+    },
+    {
+      "name": "color",
+      "type": "linear",
+      "domain": [ 0, 2000 ],
+      "range": ["deepskyblue", "gold" ]
+    },
+    {
+      "name": "symbol",
+      "type": "ordinal",
+      "domain": [ "D", "R", "I" ],
+      "range": [ "circle", "cross", "diamond" ]
+    },
+    {
+      "name": "symbol_size",
+      "type": "ordinal",
+      "domain": [ "D", "R", "I" ],
+      "range": [ 12, 9, 6 ],
+      "clamp": true
+    }
+  ],
+  "marks": [
+    {
+      "type": "symbol",
+      "from": { "data": "contributions" },
+      "properties": {
+        "width": { "scale": "symbol_size", "field": "dim0" },
+        "height": { "scale": "symbol_size", "field": "dim0" },
+        "x": { "scale": "x", "field": "x" },
+        "y": { "scale": "y", "field": "y" },
+        "fillColor": { "scale": "color", "field": "val" },
+        "strokeColor": "rgb(0, 0, 0)",
+        "strokeWidth": 1,
+        "shape": { "scale": "symbol", "field": "dim0" }
+      }
+    }
+  ]
+}

@@ -23,7 +23,7 @@
         "encodingType": "DICT",
         "encodingSize": 32,
         "precision": -1,
-        "scale": -1,
+        "scale": -2147483648,
         "sqltype": "TEXT"
       }
     ]

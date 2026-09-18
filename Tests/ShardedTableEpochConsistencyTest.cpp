@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <gtest/gtest.h>
@@ -105,24 +94,19 @@ class EpochConsistencyTest : public DBHandlerTestFixture {
     // clang-format on
   }
 
-  // Sets table epochs across shards and leaves as indicated by the flattened epoch
-  // vector. For instance, in order to set the epochs for a table with 3 shards on
-  // a distributed setup with 2 leaves, the epochs vector will contain epochs for
-  // corresponding shards/leaves in the form: { shard_1_leaf_1, shard_2_leaf_1,
-  // shard_3_leaf_1, shard_1_leaf_2, shard_2_leaf_2, shard_3_leaf_2 }
+  // Sets table epochs for each physical shard.
   void setTableEpochs(const std::vector<int32_t>& table_epochs,
                       const std::string& db_name = {}) {
     auto [db_handler, session_id] = getDbHandlerAndSessionId();
     const auto& catalog = getCatalog();
     auto logical_table = catalog.getMetadataForTable("test_table", false);
     auto physical_tables = catalog.getPhysicalTablesDescriptors(logical_table);
+    ASSERT_EQ(table_epochs.size(), physical_tables.size());
     std::vector<TTableEpochInfo> table_epoch_info_vector;
-    for (size_t i = 0; i < table_epochs.size(); i++) {
+    for (size_t i = 0; i < physical_tables.size(); i++) {
       TTableEpochInfo table_epoch_info;
-      auto table_index = i % physical_tables.size();
-      table_epoch_info.table_id = physical_tables[table_index]->tableId;
+      table_epoch_info.table_id = physical_tables[i]->tableId;
       table_epoch_info.table_epoch = table_epochs[i];
-      table_epoch_info.leaf_index = i / physical_tables.size();
       table_epoch_info_vector.emplace_back(table_epoch_info);
     }
     if (db_name.empty()) {
@@ -210,23 +194,26 @@ class EpochRollbackTest : public EpochConsistencyTest,
 
   bool isCheckpointError() { return GetParam(); }
 
-  void setUpReplicatedTestTableWithInconsistentEpochs() {
-    sql("create table test_table(a int, b tinyint, c text encoding none) "
-        "with (partitions = 'REPLICATED');");
+  void setUpNonShardedTestTableWithInconsistentEpoch(const std::string& db_name = {}) {
+    sql("create table test_table(a int, b tinyint, c text encoding none);");
     sql("copy test_table from '" + getGoodFilePath() + "';");
-
     assertTableEpochs({1});
     assertInitialImportResultSet();
 
     // Inconsistent epochs have to be set manually, since all write queries now level
     // epochs
-    setTableEpochs({2});
+    setTableEpochs({2}, db_name);
     assertTableEpochs({2});
     assertInitialImportResultSet();
   }
 
   void assertInitialTableState() {
     assertTableEpochs({1, 2});
+    assertInitialImportResultSet();
+  }
+
+  void assertInitialNonShardedTableState() {
+    assertTableEpochs({2});
     assertInitialImportResultSet();
   }
 
@@ -246,8 +233,6 @@ class EpochRollbackTest : public EpochConsistencyTest,
       EXPECT_ANY_THROW(sql("insert into test_table values (1, 10000, 'test_10000');"));
     }
   }
-
-  void sendReplicatedTableFailedInsertQuery() { sendFailedInsertQuery(); }
 
   void sendFailedUpdateQuery() {
     if (isCheckpointError()) {
@@ -321,13 +306,12 @@ class EpochRollbackTest : public EpochConsistencyTest,
   std::vector<const TableDescriptor*> getPhysicalTestTables() {
     const auto& catalog = getCatalog();
     auto logical_table = catalog.getMetadataForTable("test_table", false);
-    if (logical_table->partitions != "REPLICATED") {
-      CHECK_GT(logical_table->nShards, 0);
-    }
 
     auto physical_tables = catalog.getPhysicalTablesDescriptors(logical_table);
-    if (logical_table->partitions != "REPLICATED") {
+    if (logical_table->nShards > 0) {
       CHECK_EQ(physical_tables.size(), static_cast<size_t>(logical_table->nShards));
+    } else {
+      CHECK_EQ(physical_tables.size(), size_t{1});
     }
     return physical_tables;
   }
@@ -341,7 +325,6 @@ class EpochRollbackTest : public EpochConsistencyTest,
   }
 
   CheckpointFailureMock* checkpoint_failure_mock_;
-  CheckpointFailureMock* checkpoint_failure_no_to_mock_;
 };
 
 TEST_P(EpochRollbackTest, Import) {
@@ -389,13 +372,12 @@ TEST_P(EpochRollbackTest, Insert) {
   // clang-format on
 }
 
-TEST_P(EpochRollbackTest, InsertOnReplicatedTable) {
-  setUpReplicatedTestTableWithInconsistentEpochs();
+TEST_P(EpochRollbackTest, InsertOnNonShardedTable) {
+  setUpNonShardedTestTableWithInconsistentEpoch();
   loginTestUser();
 
-  sendReplicatedTableFailedInsertQuery();
-  assertTableEpochs({2});
-  assertInitialImportResultSet();
+  sendFailedInsertQuery();
+  assertInitialNonShardedTableState();
 
   // Ensure that a subsequent insert query still works as expected
   sql("insert into test_table values (1, 110, 'test_110');");
@@ -412,13 +394,6 @@ TEST_P(EpochRollbackTest, InsertOnReplicatedTable) {
 }
 
 TEST_P(EpochRollbackTest, Update) {
-  // The checkpoint error case exercises the same path as the query error case in
-  // distributed mode. Specifically, both come back as exceptions when
-  // `execute_query_step` is called on leaf nodes.
-  if (isDistributedMode() && isCheckpointError()) {
-    GTEST_SKIP();
-  }
-
   setUpTestTableWithInconsistentEpochs();
   loginTestUser();
 
@@ -439,15 +414,7 @@ TEST_P(EpochRollbackTest, Update) {
   // clang-format on
 }
 
-// Updates execute different code paths when variable length columns are updated
 TEST_P(EpochRollbackTest, VarlenUpdate) {
-  // The checkpoint error case exercises the same path as the query error case in
-  // distributed mode. Specifically, both come back as exceptions when
-  // `execute_query_step` is called on leaf nodes.
-  if (isDistributedMode() && isCheckpointError()) {
-    GTEST_SKIP();
-  }
-
   setUpTestTableWithInconsistentEpochs();
   loginTestUser();
 
@@ -469,13 +436,6 @@ TEST_P(EpochRollbackTest, VarlenUpdate) {
 }
 
 TEST_P(EpochRollbackTest, Delete) {
-  // The checkpoint error case exercises the same path as the query error case in
-  // distributed mode. Specifically, both come back as exceptions when
-  // `execute_query_step` is called on leaf nodes.
-  if (isDistributedMode() && isCheckpointError()) {
-    GTEST_SKIP();
-  }
-
   setUpTestTableWithInconsistentEpochs();
   loginTestUser();
 
@@ -694,13 +654,10 @@ class SetTableEpochsTest : public EpochConsistencyTest {
     auto tables = catalog.getPhysicalTablesDescriptors(td, false);
     std::vector<TTableEpochInfo> table_epoch_info_vector;
     for (auto table : tables) {
-      for (size_t i = 0; i < 2; i++) {
-        TTableEpochInfo table_epoch_info;
-        table_epoch_info.table_epoch = 1;
-        table_epoch_info.table_id = table->tableId;
-        table_epoch_info.leaf_index = i;
-        table_epoch_info_vector.emplace_back(table_epoch_info);
-      }
+      TTableEpochInfo table_epoch_info;
+      table_epoch_info.table_epoch = 1;
+      table_epoch_info.table_id = table->tableId;
+      table_epoch_info_vector.emplace_back(table_epoch_info);
     }
     return {catalog.getDatabaseId(), table_epoch_info_vector};
   }
@@ -968,69 +925,31 @@ class EpochValidationTest : public EpochConsistencyTest {
     sql("DROP TABLE IF EXISTS test_temp_table;");
     sql("DROP TABLE IF EXISTS test_arrow_table;");
     sql("DROP VIEW IF EXISTS test_view;");
-    if (!isDistributedMode()) {
-      sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    }
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
   }
 
-  std::string getValidateStatement() {
-    if (isDistributedMode()) {
-      return "VALIDATE CLUSTER;";
-    } else {
-      return "VALIDATE;";
-    }
-  }
+  std::string getValidateStatement() { return "VALIDATE;"; }
 
-  std::string getWrongValidateStatement() {
-    if (isDistributedMode()) {
-      return "VALIDATE;";
-    } else {
-      return "VALIDATE CLUSTER;";
-    }
-  }
+  std::string getWrongValidateStatement() { return "VALIDATE CLUSTER;"; }
 
-  std::string getSuccessfulValidationResult() {
-    if (isDistributedMode()) {
-      return "Cluster OK";
-    } else {
-      return "Instance OK";
-    }
-  }
+  std::string getSuccessfulValidationResult() { return "Instance OK"; }
 
   std::string getInconsistentEpochsValidationResult() {
-    if (isDistributedMode()) {
-      return "\nEpoch values for table \"test_table\" are inconsistent:"
-             "\nNode      Table Id  Epoch     "
-             "\n========= ========= ========= "
-             "\nLeaf 0    2         1         "
-             "\nLeaf 1    2         2         "
-             "\n";
-    } else {
-      return "\nEpoch values for table \"test_table\" are inconsistent:"
-             "\nTable Id  Epoch     "
-             "\n========= ========= "
-             "\n2         1         "
-             "\n3         2         "
-             "\n";
-    }
+    return "\nEpoch values for table \"test_table\" are inconsistent:"
+           "\nTable Id  Epoch     "
+           "\n========= =========\n"
+           "\n2         1         "
+           "\n3         2         "
+           "\n";
   }
 
   std::string getNegativeInconsistentEpochsValidationResult() {
-    if (isDistributedMode()) {
-      return "\nEpoch values for table \"test_table\" are inconsistent:"
-             "\nNode      Table Id  Epoch     "
-             "\n========= ========= ========= "
-             "\nLeaf 0    2         -1        "
-             "\nLeaf 1    2         -2        "
-             "\n";
-    } else {
-      return "\nEpoch values for table \"test_table\" are inconsistent:"
-             "\nTable Id  Epoch     "
-             "\n========= ========= "
-             "\n2         -1        "
-             "\n3         -2        "
-             "\n";
-    }
+    return "\nEpoch values for table \"test_table\" are inconsistent:"
+           "\nTable Id  Epoch     "
+           "\n========= =========\n"
+           "\n2         -1        "
+           "\n3         -2        "
+           "\n";
   }
 };
 
@@ -1075,14 +994,10 @@ TEST_F(EpochValidationTest, WrongValidationType) {
 TEST_F(EpochValidationTest, DifferentTableTypes) {
   sql("create table test_table(a int, b text, shard key(a)) with (shard_count = 2);");
   sql("create temporary table test_temp_table (a int, b text);");
-  sql("create dataframe test_arrow_table (a int) from 'CSV:" +
-      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "';");
   sql("create view test_view as select * from test_table;");
-  if (!isDistributedMode()) {
-    sql("create foreign table test_foreign_table(a int) server default_local_delimited "
-        "with (file_path = '" +
-        boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
-  }
+  sql("create foreign table test_foreign_table(a int) server default_local_delimited "
+      "with (file_path = '" +
+      boost::filesystem::canonical("../../Tests/FsiDataFiles/0.csv").string() + "');");
   sqlAndCompareResult(getValidateStatement(), {{getSuccessfulValidationResult()}});
 }
 
@@ -1148,11 +1063,6 @@ int main(int argc, char** argv) {
   // these two are here to allow passing correctly google testing parameters
   desc.add_options()("gtest_list_tests", "list all test");
   desc.add_options()("gtest_filter", "filters tests, use --help for details");
-
-  desc.add_options()(
-      "cluster",
-      po::value<std::string>(&DBHandlerTestFixture::cluster_config_file_path_),
-      "Path to data leaves list JSON file.");
 
   logger::LogOptions log_options(argv[0]);
   log_options.severity_ = logger::Severity::FATAL;

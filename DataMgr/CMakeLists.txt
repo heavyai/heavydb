@@ -1,6 +1,9 @@
-if(NOT MSVC)
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-result")
-endif()
 
 set(datamgr_source_files
     AbstractBuffer.cpp
@@ -18,12 +21,9 @@ set(datamgr_source_files
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
     ForeignStorage/AbstractTextFileDataWrapper.cpp
-    ForeignStorage/ArrowForeignStorage.cpp
     ForeignStorage/CacheEvictionAlgorithms/LRUEvictionAlgorithm.cpp
     ForeignStorage/CsvDataWrapper.cpp
     ForeignStorage/CachingForeignStorageMgr.cpp
-    ForeignStorage/DummyForeignStorage.cpp
-    ForeignStorage/ForeignStorageInterface.cpp
     ForeignStorage/ForeignStorageBuffer.cpp
     ForeignStorage/PassThroughBuffer.cpp
     ForeignStorage/ForeignStorageMgr.cpp
@@ -61,22 +61,20 @@ if(NOT ENABLE_SYSTEM_TFS)
   # ForeignStorage/InternalMLModelMetadataDataWrapper.cpp uses class MLModelMetadata
   # but is only otherwise compiled in QueryEngine/CMakeLists.txt when ENABLE_SYSTEM_TFS.
   list(APPEND datamgr_source_files
-       ${CMAKE_SOURCE_DIR}/QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModelMetadata.cpp)
+       ${CMAKE_SOURCE_DIR}/QueryEngine/TableFunctions/SystemFunctions/ML/MLModelMetadata.cpp)
 endif()
 
 if(ENABLE_AWS_S3)
   list(APPEND datamgr_source_files ForeignStorage/S3FilePathUtil.cpp)
 endif()
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  if(ENABLE_AWS_S3)
-    list(APPEND datamgr_source_files ForeignStorage/ee/FileReaderS3.cpp)
-    list(APPEND datamgr_source_files ForeignStorage/ee/S3Utils.cpp)
-    list(APPEND datamgr_source_files ForeignStorage/ee/S3SelectClient.cpp)
-    list(APPEND datamgr_source_files ForeignStorage/ee/S3SelectDataWrapper.cpp)
-  endif()
-  list(APPEND datamgr_source_files ForeignStorage/ee/RasterDataWrapper.cpp)
+if(ENABLE_AWS_S3)
+  list(APPEND datamgr_source_files ForeignStorage/FileReaderS3.cpp)
+  list(APPEND datamgr_source_files ForeignStorage/S3Utils.cpp)
+  list(APPEND datamgr_source_files ForeignStorage/S3SelectClient.cpp)
+  list(APPEND datamgr_source_files ForeignStorage/S3SelectDataWrapper.cpp)
 endif()
+list(APPEND datamgr_source_files ForeignStorage/RasterDataWrapper.cpp)
 
 if(ENABLE_IMPORT_PARQUET)
   list(APPEND datamgr_source_files ForeignStorage/ParquetDataWrapper.cpp)
@@ -85,6 +83,18 @@ if(ENABLE_IMPORT_PARQUET)
   list(APPEND datamgr_source_files ForeignStorage/TypedParquetStorageBuffer.cpp)
   list(APPEND datamgr_source_files ForeignStorage/TypedParquetDetectBuffer.cpp)
   list(APPEND datamgr_source_files ForeignStorage/ParquetImporter.cpp)
+endif()
+
+if(ENABLE_FSI_ODBC)
+  message(STATUS "Enabled FSI ODBC")
+  include_directories(${CMAKE_SOURCE_DIR}/DataMgr/ForeignStorage)
+  find_package(iODBC REQUIRED)
+  include_directories(${iODBC_INCLUDE_DIR})
+  list(APPEND datamgr_source_files 
+    ForeignStorage/ODBC/OdbcDataWrapper.cpp
+    ForeignStorage/ODBC/OdbcDataWrapper.h
+    ForeignStorage/ODBC/odbc_utils.cpp
+    ForeignStorage/ODBC/odbc_utils.h)
 endif()
 
 # On Linux, Arrow internally links symbols for its dependency libraries (such as the C++ AWS SDK)
@@ -111,8 +121,7 @@ add_dependencies(DataMgr Calcite)
 
 target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS})
 # Generator expressions such as "$<$<BOOL:${ENABLE_FOLLY}>:${XXX_LIBRARIES}>"
-# cannot be used in target_link_libraries. On Windows, ${XXX_LIBRARIES} includes the substring
-# ";optimized;" resulting in an attempt to link to optimized.lib which does not exist.
+# cannot be used in target_link_libraries.
 # See https://cmake.org/cmake/help/latest/command/target_link_libraries.html for details,
 # specifically the section containing "These keywords are interpreted immediately by this command
 # and therefore have no special meaning when produced by a generator expression."

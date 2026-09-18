@@ -1,24 +1,12 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include <filesystem>
 #include <algorithm>
 #include <iostream>
 #include <optional>
@@ -27,12 +15,9 @@
 
 using namespace std::string_literals;
 
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
-
+#include <filesystem>
 #include "CommandLineOptions.h"
 #include "ImportExport/ForeignDataImporter.h"
-#include "LeafHostInfo.h"
 #include "MapDRelease.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/GroupByAndAggregate.h"
@@ -40,18 +25,11 @@ using namespace std::string_literals;
 #include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "Shared/Compressor.h"
+#include "Shared/Encryption.h"
 #include "Shared/MathUtils.h"
 #include "Shared/SysDefinitions.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Utils/DdlUtils.h"
-
-#ifdef _WIN32
-#include <io.h>
-#include <process.h>
-#endif
-
-const std::string CommandLineOptions::nodeIds_token = {"node_id"};
-const std::string CommandLineOptions::cluster_command_line_arg{"cluster_topology"};
 
 bool g_enable_thrift_logs{false};
 
@@ -105,10 +83,6 @@ namespace Geospatial {
 extern std::string g_importer_additional_proj_data_path;
 }
 
-unsigned connect_timeout{20000};
-unsigned recv_timeout{300000};
-unsigned send_timeout{300000};
-bool with_keepalive{false};
 bool g_enable_http_binary_server{true};
 
 void CommandLineOptions::init_logging() {
@@ -139,6 +113,11 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(g_bigint_count)
                          ->implicit_value(true),
                      "Use 64-bit count.");
+  desc.add_options()("llm-transform-max-num-unique-value",
+                     po::value<int64_t>(&g_llm_transform_max_num_unique_value)
+                         ->default_value(g_llm_transform_max_num_unique_value),
+                     "The maximum number of unique values of the input expression of the "
+                     "LLM_TRANSFORM operator.");
 
   desc.add_options()(
       "enable-executor-resource-mgr",
@@ -274,12 +253,10 @@ void CommandLineOptions::fillOptions() {
                      po::value<size_t>(&system_parameters.calcite_max_mem)
                          ->default_value(system_parameters.calcite_max_mem),
                      "Max memory available to calcite JVM.");
-  if (!dist_v5_) {
-    desc.add_options()("calcite-port",
-                       po::value<int>(&system_parameters.calcite_port)
-                           ->default_value(system_parameters.calcite_port),
-                       "Calcite port number.");
-  }
+  desc.add_options()("calcite-port",
+                     po::value<int>(&system_parameters.calcite_port)
+                         ->default_value(system_parameters.calcite_port),
+                     "Calcite port number.");
   desc.add_options()("config",
                      po::value<std::string>(&system_parameters.config_file),
                      "Path to server configuration file.");
@@ -306,13 +283,11 @@ void CommandLineOptions::fillOptions() {
                          ->default_value(false)
                          ->implicit_value(true));
 
-  if (!dist_v5_) {
-    desc.add_options()(
-        "data",
-        po::value<std::string>(&base_path)->required()->default_value("storage"),
-        "Directory path to HeavyDB data storage (catalogs, raw data, log files, etc).");
-    positional_options.add("data", 1);
-  }
+  desc.add_options()(
+      "data",
+      po::value<std::string>(&base_path)->required()->default_value("storage"),
+      "Directory path to HeavyDB data storage (catalogs, raw data, log files, etc).");
+  positional_options.add("data", 1);
   desc.add_options()("db-query-list",
                      po::value<std::string>(&db_query_file),
                      "Path to file containing HeavyDB warmup queries.");
@@ -452,19 +427,26 @@ void CommandLineOptions::fillOptions() {
                          ->implicit_value(0.5),
                      "A frequency of checking the request of running query "
                      "interrupt from user (0.0 (less frequent) ~ (more frequent) 1.0).");
+  desc.add_options()("multi-instance",
+                     po::value<bool>(&g_multi_instance)
+                         ->default_value(g_multi_instance)
+                         ->implicit_value(true),
+                     "Enable multiple servers running in the same --data directory.");
+  desc.add_options()("lockfile-lock-extension-milliseconds",
+                     po::value<size_t>(&g_lockfile_lock_extension_milliseconds)
+                         ->default_value(g_lockfile_lock_extension_milliseconds),
+                     "Length of time that --multi-instance will extend a read lock. "
+                     "(Zero to disable extending.)");
   desc.add_options()("use-estimator-result-cache",
                      po::value<bool>(&use_estimator_result_cache)
                          ->default_value(use_estimator_result_cache)
                          ->implicit_value(true),
                      "Use estimator result cache.");
-  if (!dist_v5_) {
-    desc.add_options()(
-        "enable-string-dict-hash-cache",
-        po::value<bool>(&g_cache_string_hash)
-            ->default_value(g_cache_string_hash)
-            ->implicit_value(true),
-        "Cache string hash values in the string dictionary server during import.");
-  }
+  desc.add_options()("enable-string-dict-hash-cache",
+                     po::value<bool>(&g_cache_string_hash)
+                         ->default_value(g_cache_string_hash)
+                         ->implicit_value(true),
+                     "Cache string hash values in string dictionaries during import.");
   desc.add_options()("enable-thrift-logs",
                      po::value<bool>(&g_enable_thrift_logs)
                          ->default_value(g_enable_thrift_logs)
@@ -557,14 +539,12 @@ void CommandLineOptions::fillOptions() {
       "Note that this may result in higher memory utilization and more latency for "
       "queries with APPROX_COUNT_DISTINCT function calls.");
 
-  if (!dist_v5_) {
-    desc.add_options()("http-port",
-                       po::value<int>(&http_port)->default_value(http_port),
-                       "HTTP port number.");
-    desc.add_options()("http-binary-port",
-                       po::value<int>(&http_binary_port)->default_value(http_binary_port),
-                       "HTTP binary port number.");
-  }
+  desc.add_options()("http-port",
+                     po::value<int>(&http_port)->default_value(http_port),
+                     "HTTP port number.");
+  desc.add_options()("http-binary-port",
+                     po::value<int>(&http_binary_port)->default_value(http_binary_port),
+                     "HTTP binary port number.");
   desc.add_options()(
       "idle-session-duration",
       po::value<int>(&idle_session_duration)->default_value(idle_session_duration),
@@ -584,6 +564,16 @@ void CommandLineOptions::fillOptions() {
                      po::value<int>(&system_parameters.num_sessions)
                          ->default_value(system_parameters.num_sessions),
                      "Maximum number of active session.");
+  desc.add_options()(
+      "max-num-users",
+      po::value<int>(&system_parameters.max_num_users)
+          ->default_value(system_parameters.max_num_users),
+      "Maximum number of database users that can be created (-1 = unlimited).");
+  desc.add_options()(
+      "max-total-rows",
+      po::value<int64_t>(&system_parameters.max_total_rows)
+          ->default_value(system_parameters.max_total_rows),
+      "Maximum total number of rows across all user tables (-1 = unlimited).");
   desc.add_options()("null-div-by-zero",
                      po::value<bool>(&g_null_div_by_zero)
                          ->default_value(g_null_div_by_zero)
@@ -607,12 +597,10 @@ void CommandLineOptions::fillOptions() {
                      po::value<double>(&g_bbox_intersect_target_entries_per_bin)
                          ->default_value(g_bbox_intersect_target_entries_per_bin),
                      "The target number of entries per bin for bounding box intersect");
-  if (!dist_v5_) {
-    desc.add_options()("port,p",
-                       po::value<int>(&system_parameters.omnisci_server_port)
-                           ->default_value(system_parameters.omnisci_server_port),
-                       "TCP Port number.");
-  }
+  desc.add_options()("port,p",
+                     po::value<int>(&system_parameters.omnisci_server_port)
+                         ->default_value(system_parameters.omnisci_server_port),
+                     "TCP Port number.");
   desc.add_options()("num-gpus",
                      po::value<int>(&system_parameters.num_gpus)
                          ->default_value(system_parameters.num_gpus),
@@ -708,6 +696,18 @@ void CommandLineOptions::fillOptions() {
                          ->implicit_value(true),
                      "Use legacy importer for parquet sources.");
 #endif
+  desc.add_options()("enable-legacy-raster-import",
+                     po::value<bool>(&g_enable_legacy_raster_import)
+                         ->default_value(g_enable_legacy_raster_import)
+                         ->implicit_value(true),
+                     "Use legacy importer for raster sources (on by default).");
+#ifdef EE_FSI_ODBC
+  desc.add_options()("enable-fsi-odbc-import",
+                     po::value<bool>(&g_enable_fsi_odbc_import)
+                         ->default_value(g_enable_fsi_odbc_import)
+                         ->implicit_value(true),
+                     "Use FSI importer for ODBC sources.");
+#endif
   desc.add_options()("enable-fsi-regex-import",
                      po::value<bool>(&g_enable_fsi_regex_import)
                          ->default_value(g_enable_fsi_regex_import)
@@ -734,6 +734,30 @@ void CommandLineOptions::fillOptions() {
                      po::value<size_t>(&(disk_cache_config.size_limit)),
                      "Specify a maximum size for the disk cache in bytes.");
 
+#ifdef HAVE_AWS_S3
+
+  desc.add_options()("encryption-key-store",
+                     po::value<std::string>(&encryption_key_store_path),
+                     "Path to directory where encryption related keys will reside.");
+  desc.add_options()(
+      "allow-s3-server-privileges",
+      po::value<bool>(&g_allow_s3_server_privileges)
+          ->default_value(g_allow_s3_server_privileges)
+          ->implicit_value(true),
+      "Allow S3 server privileges, if IAM user credentials are not provided. Credentials "
+      "may be specified with "
+      "environment variables (such as AWS_ACCESS_KEY_ID,  AWS_SECRET_ACCESS_KEY, etc), "
+      "an AWS credentials file, or when running on an EC2 instance, with an IAM role "
+      "that is attached to the instance.");
+  desc.add_options()("allow-s3-imds-check",
+                     po::value<bool>(&g_allow_s3_imds_check)
+                         ->default_value(g_allow_s3_imds_check)
+                         ->implicit_value(true),
+                     "S3 IMDS checking is disabled by default, unless either "
+                     "allow-s3-server-privileges or allow-s3-imds-check"
+                     "are set. This option allows it to be re-enabled independently of "
+                     "server privilege.");
+#endif  // defined(HAVE_AWS_S3)
   desc.add_options()(
       "enable-interoperability",
       po::value<bool>(&g_enable_interop)
@@ -752,11 +776,96 @@ void CommandLineOptions::fillOptions() {
           ->default_value(system_parameters.calcite_timeout),
       "Calcite server timeout (milliseconds). Increase this on systems with frequent "
       "schema changes or when running large numbers of parallel queries.");
+
   desc.add_options()("calcite-service-keepalive",
                      po::value<size_t>(&system_parameters.calcite_keepalive)
                          ->default_value(system_parameters.calcite_keepalive)
                          ->implicit_value(true),
                      "Enable keepalive on Calcite connections.");
+#ifdef HAVE_RENDERING
+  desc.add_options()("rendering",
+                     po::value<bool>(&enable_rendering)
+                         ->default_value(enable_rendering)
+                         ->implicit_value(true),
+                     "Enable backend rendering.");
+  desc.add_options()(
+      "render-mem-bytes",
+      po::value<size_t>(&render_mem_bytes)->default_value(render_mem_bytes),
+      "Size of memory reserved for rendering, in bytes.");
+  desc.add_options()("max-concurrent-render-sessions",
+                     po::value<size_t>(&max_concurrent_render_sessions)
+                         ->default_value(max_concurrent_render_sessions),
+                     "Max number of concurrent render sessions (SessionId:WidgetId)");
+  desc.add_options()("enable-auto-clear-render-mem",
+                     po::value<bool>(&enable_auto_clear_render_mem)
+                         ->default_value(enable_auto_clear_render_mem)
+                         ->implicit_value(true),
+                     "Enable auto clearing of render memory on OutOfGpuMemory errors.");
+  desc.add_options()(
+      "render-oom-retry-threshold",
+      po::value<int>(&render_oom_retry_threshold)
+          ->default_value(render_oom_retry_threshold),
+      "If enable-auto-clear-render-mem is true, a retry of the render command can be "
+      "performed after an OutOfGpuMemoryError exception. A retry will only occur if the "
+      "first run took less than the threshold set here (in milliseconds). A value of 0 "
+      "will disable retries on render OOM.");
+#endif  // HAVE_RENDERING
+  desc.add_options()(
+      "ldap-uri",
+      po::value<std::string>(&authMetadata.uri)->default_value(std::string("")),
+      "ldap server uri. Enterprise only.");
+  desc.add_options()(
+      "ldap-dn",
+      po::value<std::string>(&authMetadata.distinguishedName)
+          ->default_value(std::string("uid=%s,cn=users,cn=accounts,dc=mapd,dc=com")),
+      "ldap DN Distinguished Name. Enterprise only.");
+  desc.add_options()(
+      "ldap-role-query-url",
+      po::value<std::string>(&authMetadata.ldapQueryUrl)->default_value(std::string("")),
+      "ldap query role URL. Enterprise only.");
+  desc.add_options()(
+      "ldap-role-query-regex",
+      po::value<std::string>(&authMetadata.ldapRoleRegex)->default_value(std::string("")),
+      "RegEx to use to extract role from role query result. Enterprise only.");
+  desc.add_options()("ldap-superuser-role",
+                     po::value<std::string>(&authMetadata.ldapSuperUserRole)
+                         ->default_value(std::string("")),
+                     "The role name to identify a superuser. Enterprise only.");
+#ifdef HAVE_SAML
+  desc.add_options()("saml-metadata-file",
+                     po::value<std::string>(&authMetadata.samlIdpMetadataFile)
+                         ->default_value(std::string("")),
+                     "Path to Identity provider metadata file. Enterprise only.");
+  desc.add_options()("saml-sp-target-url",
+                     po::value<std::string>(&authMetadata.samlSpTargetUrl)
+                         ->default_value(std::string("")),
+                     "URL of the service provider for which SAML assertions should be "
+                     "generated. Enterprise only.");
+  desc.add_options()("saml-sync-roles",
+                     po::value<bool>(&authMetadata.samlSyncRoles)->default_value(false),
+                     "Enable mapping of SAML groups to HeavyDB roles. Enterprise only.");
+  desc.add_options()(
+      "saml-signed-response",
+      po::value<bool>(&authMetadata.samlSignedResponse)->default_value(true),
+      "Are SAML responses signed by IdP? Enterprise only.");
+  desc.add_options()(
+      "saml-signed-assertion",
+      po::value<bool>(&authMetadata.samlSignedAssertion)->default_value(true),
+      "Are SAML assertions signed by IdP? Enterprise only.");
+#endif  // HAVE_SAML
+  desc.add_options()(
+      "allow-local-auth-fallback",
+      po::value<bool>(&authMetadata.allowLocalAuthFallback)
+          ->default_value(false)
+          ->implicit_value(true),
+      "Enables fallback to internally-stored login credentials if SAML logins and/or "
+      "LDAP logins are enabled, but those fail.");
+  desc.add_options()("master-address",
+                     po::value<std::string>(&system_parameters.master_address),
+                     "Network address of the master node when running read-only HA");
+  desc.add_options()("master-port",
+                     po::value<int>(&system_parameters.master_port),
+                     "Port number master node is listening on when running read-only HA");
   desc.add_options()(
       "stringdict-parallelizm",
       po::value<bool>(&g_enable_stringdict_parallel)
@@ -857,6 +966,35 @@ void CommandLineOptions::fillDeveloperOptions() {
   po::options_description& desc = developer_desc_;
 
   desc.add_options()("dev-options", "Print internal developer options.");
+#ifdef HAVE_RENDERING
+  desc.add_options()(
+      "render-compositor-use-last-gpu",
+      po::value<bool>(&render_compositor_use_last_gpu)
+          ->default_value(render_compositor_use_last_gpu)
+          ->implicit_value(true),
+      "Enables/disables using the highest deviceID for render compositing. This can "
+      "reduce memory pressure on device 0.");
+  desc.add_options()(
+      "renderer-prefer-igpu",
+      po::value<bool>(&renderer_prefer_igpu)->default_value(false)->implicit_value(true),
+      "Renderer use Intel integrated gpu, if available");
+  desc.add_options()("renderer-vulkan-timeout",
+                     po::value<unsigned>(&renderer_vulkan_timeout_ms)
+                         ->default_value(renderer_vulkan_timeout_ms)
+                         ->implicit_value(renderer_vulkan_timeout_ms),
+                     "Vulkan command timeout, in milliseconds");
+  desc.add_options()(
+      "renderer-use-parallel-executors",
+      po::value<bool>(&renderer_use_parallel_executors)
+          ->default_value(renderer_use_parallel_executors)
+          ->implicit_value(renderer_use_parallel_executors),
+      "Use non-blocking / parallel executors when executing render queries");
+  desc.add_options()("renderer-enable-slab-allocation",
+                     po::value<bool>(&renderer_enable_slab_allocation)
+                         ->default_value(renderer_enable_slab_allocation)
+                         ->implicit_value(renderer_enable_slab_allocation),
+                     "Allocate large renderer buffers from slabs (default on)");
+#endif  //  HAVE_RENDERING
   desc.add_options()(
       "enable-calcite-view-optimize",
       po::value<bool>(&system_parameters.enable_calcite_view_optimize)
@@ -1005,6 +1143,13 @@ void CommandLineOptions::fillDeveloperOptions() {
                          ->implicit_value(true),
                      "Enable dev (test or alpha) table functions. Also "
                      "requires --enable-table-functions to be turned on");
+
+  desc.add_options()("enable-rf-prop-table-functions",
+                     po::value<bool>(&g_enable_rf_prop_table_functions)
+                         ->default_value(g_enable_rf_prop_table_functions)
+                         ->implicit_value(true),
+                     "Enable RF Propagation table functions. Also "
+                     "requires --enable-table-functions to be turned on.");
 
   desc.add_options()("enable-geo-ops-on-uncompressed-coords",
                      po::value<bool>(&g_enable_geo_ops_on_uncompressed_coords)
@@ -1163,11 +1308,6 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->default_value(std::string("")),
       "SSL public CA certificates to validate TLS connection(as a client).");
 
-  desc.add_options()(
-      "ssl-trust-ca-server",
-      po::value<std::string>(&authMetadata.ca_file_name)->default_value(std::string("")),
-      "SSL public CA certificates to validate TLS connection(as a server).");
-
   desc.add_options()("ssl-keystore",
                      po::value<std::string>(&system_parameters.ssl_keystore)
                          ->default_value(std::string("")),
@@ -1197,7 +1337,7 @@ void CommandLineOptions::fillDeveloperOptions() {
   desc.add_options()("libgeos-so-filename",
                      po::value<std::string>(&libgeos_so_filename),
                      "Specify libgeos shared object filename to be used for "
-                     "geos-backed geo opertations.");
+                     "libgeos-backed geo operations.");
 #endif
   desc.add_options()("enable-gpu-dynamic-smem",
                      po::value<bool>(&g_enable_gpu_dynamic_smem)
@@ -1323,6 +1463,25 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->default_value(g_allow_memory_status_log),
       "Allow CPU (and GPU if necessary) memory status before/after the query execution.");
 
+  desc.add_options()("allow-system-dashboard-update",
+                     po::value<bool>(&g_allow_system_dashboard_update)
+                         ->default_value(g_allow_system_dashboard_update)
+                         ->implicit_value(true),
+                     "Allow updates to system dashboards. For internal use only.");
+  desc.add_options()(
+      "iq-url",
+      po::value<std::string>(&g_heavyiq_url)->default_value("http://localhost:6275"),
+      "The heavyiq endpoint url to call LLM_TRANSFORM function.");
+  desc.add_options()(
+      "max-concurrent-llm-transform-call",
+      po::value<size_t>(&g_max_concurrent_llm_transform_call)->default_value(16),
+      "The maximum number of concurrent threads calling LLM_TRANSFORM function.");
+  desc.add_options()(
+      "llm-transform-call-timeout-ms",
+      po::value<int32_t>(&g_llm_transform_call_timeout_ms)->default_value(60000),
+      "The maximum time in milliseconds that LLM_TRANSFORM function is marked as timed "
+      "out.");
+
   desc.add_options()(
       "allow-query-step-cpu-retry",
       po::value<bool>(&g_allow_query_step_cpu_retry)
@@ -1426,8 +1585,6 @@ void CommandLineOptions::validate() {
                              "'");
   }
 
-// TODO: support lock on Windows
-#ifndef _WIN32
   {
     // If we aren't sharing the data directory, take and hold a write lock on
     // heavydb_pid.lck to prevent other processes from trying to share our dir.
@@ -1496,7 +1653,6 @@ void CommandLineOptions::validate() {
 
     // Intentionally leak the file descriptor. Lock will be held until process exit.
   }
-#endif  // _WIN32
 
   boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
   if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
@@ -1515,15 +1671,9 @@ void CommandLineOptions::validate() {
       }
     }
   }
-  if (license_path.length() == 0) {
-    license_path = base_path + "/" + shared::kDefaultLicenseFileName;
-  }
-
   // add all parameters to be displayed on startup
   LOG(INFO) << "HeavyDB started with data directory at '" << base_path << "'";
-  if (vm.count("license-path")) {
-    LOG(INFO) << "License key path set to '" << license_path << "'";
-  }
+
   g_read_only = read_only;
   LOG(INFO) << " Server read-only mode is " << read_only << " (--read-only)";
   if (g_multi_instance) {
@@ -1571,6 +1721,9 @@ void CommandLineOptions::validate() {
 #ifdef ENABLE_IMPORT_PARQUET
   LOG(INFO) << "Legacy parquet import is set to " << g_enable_legacy_parquet_import;
 #endif
+#ifdef EE_FSI_ODBC
+  LOG(INFO) << "FSI ODBC import is set to " << g_enable_fsi_odbc_import;
+#endif
   LOG(INFO) << "FSI regex parsed import is set to " << g_enable_fsi_regex_import;
 
   LOG(INFO) << "Allowed import paths is set to " << allowed_import_paths;
@@ -1592,6 +1745,9 @@ void CommandLineOptions::validate() {
   if (!g_enable_legacy_delimited_import ||
 #ifdef ENABLE_IMPORT_PARQUET
       !g_enable_legacy_parquet_import ||
+#endif
+#ifdef EE_FSI_ODBC
+      g_enable_fsi_odbc_import ||
 #endif
       g_enable_fsi_regex_import) {
     g_enable_fsi =
@@ -1730,6 +1886,47 @@ void CommandLineOptions::validate() {
                  "false. Please enable table functions to use ML functionality.";
   }
 
+#if defined(HAVE_AWS_S3)
+  if (g_enable_fsi) {
+    g_enable_s3_fsi = true;
+    const std::string default_key_store_path =
+        base_path + "/" + shared::kDefaultKeyStoreDirName;
+    if (encryption_key_store_path.empty()) {
+      encryption_key_store_path = default_key_store_path;
+    } else if (encryption_key_store_path != default_key_store_path &&
+               boost::filesystem::exists(default_key_store_path)) {
+      throw std::runtime_error{
+          "A new encryption key store and the default key store cannot exist at the same "
+          "time. Please move keys in the default key store to the new location and "
+          "delete the default key store."};
+    }
+
+    bool create_key_store_symlink{false};
+    if (!boost::filesystem::exists(encryption_key_store_path)) {
+      boost::filesystem::create_directory(encryption_key_store_path);
+      boost::filesystem::permissions(encryption_key_store_path,
+                                     boost::filesystem::perms::group_all |
+                                         boost::filesystem::perms::others_all |
+                                         boost::filesystem::perms::remove_perms);
+      // Create a symlink with the legacy key store directory and file name, if a new key
+      // store is created and the default path is used.
+      if (encryption_key_store_path == default_key_store_path) {
+        create_key_store_symlink = true;
+      }
+    }
+    PkiEncryptor::setKeyStorePath(encryption_key_store_path);
+    PkiEncryptor::generateEncryptionCertificateIfNotExists();
+    ddl_utils::FilePathBlacklist::addToBlacklist(encryption_key_store_path);
+    if (create_key_store_symlink) {
+      auto path = boost::filesystem::canonical(base_path);
+      path /= "omnisci_key_store";
+      boost::filesystem::create_symlink(shared::kDefaultKeyStoreDirName, path);
+      path /= "omnisci.pem";
+      boost::filesystem::create_symlink(shared::kDefaultKeyFileName, path);
+    }
+  }
+#endif  // defined(HAVE_AWS_S3)
+
   if (disk_cache_level == "foreign_tables") {
     if (g_enable_fsi) {
       disk_cache_config.enabled_level = File_Namespace::DiskCacheLevel::fsi;
@@ -1768,14 +1965,14 @@ void CommandLineOptions::validate() {
   ddl_utils::FilePathBlacklist::addToBlacklist("/etc/shadow");
 
   // If passed in, blacklist all security config files
-  addOptionalFileToBlacklist(license_path);
   addOptionalFileToBlacklist(system_parameters.ssl_cert_file);
-  addOptionalFileToBlacklist(authMetadata.ca_file_name);
   addOptionalFileToBlacklist(system_parameters.ssl_trust_store);
   addOptionalFileToBlacklist(system_parameters.ssl_keystore);
   addOptionalFileToBlacklist(system_parameters.ssl_key_file);
   addOptionalFileToBlacklist(system_parameters.ssl_trust_ca_file);
-  addOptionalFileToBlacklist(cluster_file);
+#ifdef HAVE_SAML
+  addOptionalFileToBlacklist(authMetadata.samlIdpMetadataFile);
+#endif
 
   if (g_vacuum_min_selectivity < 0) {
     throw std::runtime_error{"vacuum-min-selectivity cannot be less than 0."};
@@ -2019,9 +2216,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     if (!trim_and_check_file_exists(system_parameters.ssl_cert_file, "ssl cert file")) {
       return 1;
     }
-    if (!trim_and_check_file_exists(authMetadata.ca_file_name, "ca file name")) {
-      return 1;
-    }
     if (!trim_and_check_file_exists(system_parameters.ssl_trust_store,
                                     "ssl trust store")) {
       return 1;
@@ -2035,7 +2229,14 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     if (!trim_and_check_file_exists(system_parameters.ssl_trust_ca_file, "ssl ca file")) {
       return 1;
     }
-
+    if (vm.count("iq-url")) {
+      g_heavyiq_url = vm["iq-url"].as<std::string>();
+      // remove unnecessary characters after parsing `iq-url`
+      g_heavyiq_url.erase(std::remove_if(g_heavyiq_url.begin(),
+                                         g_heavyiq_url.end(),
+                                         [](char c) { return c == '\\' || c == '\"'; }),
+                          g_heavyiq_url.end());
+    }
     g_enable_watchdog = enable_watchdog;
     g_watchdog_max_projected_rows_per_device = watchdog_max_projected_rows_per_device;
     g_preflight_count_query_threshold = preflight_count_query_threshold;
@@ -2122,34 +2323,6 @@ boost::optional<int> CommandLineOptions::parse_command_line(
 
   if (vm.count("udf-compiler-options")) {
     std::for_each(udf_compiler_options.begin(), udf_compiler_options.end(), trim_string);
-  }
-
-  boost::algorithm::trim_if(system_parameters.ha_brokers, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(system_parameters.ha_group_id, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(system_parameters.ha_shared_data, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(system_parameters.ha_unique_server_id,
-                            boost::is_any_of("\"'"));
-
-  if (!system_parameters.ha_group_id.empty()) {
-    LOG(INFO) << " HA group id " << system_parameters.ha_group_id;
-    if (system_parameters.ha_unique_server_id.empty()) {
-      LOG(ERROR) << "Starting server in HA mode --ha-unique-server-id must be set ";
-      return 5;
-    } else {
-      LOG(INFO) << " HA unique server id " << system_parameters.ha_unique_server_id;
-    }
-    if (system_parameters.ha_brokers.empty()) {
-      LOG(ERROR) << "Starting server in HA mode --ha-brokers must be set ";
-      return 6;
-    } else {
-      LOG(INFO) << " HA brokers " << system_parameters.ha_brokers;
-    }
-    if (system_parameters.ha_shared_data.empty()) {
-      LOG(ERROR) << "Starting server in HA mode --ha-shared-data must be set ";
-      return 7;
-    } else {
-      LOG(INFO) << " HA shared data is " << system_parameters.ha_shared_data;
-    }
   }
 
   boost::algorithm::trim_if(system_parameters.master_address, boost::is_any_of("\"'"));
@@ -2336,6 +2509,10 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   boost::algorithm::trim_if(authMetadata.ldapQueryUrl, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapRoleRegex, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapSuperUserRole, boost::is_any_of("\"'"));
+#ifdef HAVE_SAML
+  boost::algorithm::trim_if(authMetadata.samlIdpMetadataFile, boost::is_any_of("\"'"));
+  boost::algorithm::trim_if(authMetadata.samlSpTargetUrl, boost::is_any_of("\"'"));
+#endif
 
   boost::algorithm::trim_if(Geospatial::g_importer_additional_proj_data_path,
                             boost::is_any_of("\"'"));

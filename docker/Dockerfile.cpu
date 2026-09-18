@@ -1,31 +1,65 @@
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+ARG BASE_IMAGE=nvcr.io/nvidia/cuda:12.9.2-runtime-ubuntu22.04
+
 # Copy and extract HEAVY.AI tarball. In own stage so that the temporary tarball
 # isn't included in a layer.
-FROM ubuntu:22.04 AS extract
+FROM ${BASE_IMAGE} AS extract
 
+# Name of the product tarball in the build context. Defaults to the legacy
+# x86_64 name; callers building other arches pass --build-arg TARBALL=<name>.
+ARG TARBALL=heavyai-latest-Linux-x86_64-cpu.tar.gz
 WORKDIR /opt/heavyai/
-COPY heavyai-latest-Linux-x86_64-cpu.tar.gz /opt/heavyai/
-RUN tar xvf heavyai-latest-Linux-x86_64-cpu.tar.gz --strip-components=1 && \
-    rm -rf heavyai-latest-Linux-x86_64-cpu.tar.gz
+COPY ${TARBALL} /opt/heavyai/
+RUN tar xvf ${TARBALL} --strip-components=1 && \
+    rm -rf ${TARBALL}
 
+ARG BASE_IMAGE
 # Build final stage
-FROM ubuntu:22.04
-LABEL maintainer "HEAVY.AI Support <support@heavy.ai>"
+FROM ${BASE_IMAGE}
+#LABEL maintainer="TBD"
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        bsdmainutils \
-        wget \
-        curl \
-        gpg-agent \
-        default-jre-headless \
-        software-properties-common \
-        zip && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get install -y --no-install-recommends \
-        python3.10 \
-        python3.10-venv \
-        libpython3.10 && \
-    apt-get remove --purge -y && \
-    rm -rf /var/lib/apt/lists/*
+RUN if command -v apt-get >/dev/null; then \
+        export DEBIAN_FRONTEND=noninteractive && \
+        apt-get update && \
+        apt-get upgrade -y && \
+        apt-get install -y --no-install-recommends \
+            bsdmainutils \
+            wget \
+            curl \
+            gpg-agent \
+            default-jre-headless \
+            software-properties-common \
+            zip && \
+        add-apt-repository ppa:deadsnakes/ppa && \
+        apt-get install -y --no-install-recommends \
+            python3.10 \
+            python3.10-venv \
+            libpython3.10 && \
+        apt-get remove --purge -y && \
+        rm -rf /var/lib/apt/lists/*; \
+    elif command -v dnf >/dev/null || command -v yum >/dev/null; then \
+        pkg_cmd="$(command -v dnf || command -v yum)" && \
+        "$pkg_cmd" install -y epel-release && \
+        "$pkg_cmd" --refresh upgrade -y --nobest && \
+        "$pkg_cmd" install -y \
+            curl \
+            java-21-openjdk-headless \
+            procps-ng \
+            python3.11 \
+            python3.11-pip \
+            tar \
+            util-linux \
+            wget \
+            zip && \
+        ln -sf /usr/bin/python3.11 /usr/local/bin/python3 && \
+        "$pkg_cmd" clean all && \
+        rm -rf /var/cache/dnf /var/cache/yum; \
+    else \
+        echo "Unsupported base image: expected apt-get, dnf, or yum" >&2; \
+        exit 1; \
+    fi
 
 COPY --from=extract /opt/heavyai /opt/heavyai
 
@@ -33,4 +67,4 @@ WORKDIR /opt/heavyai
 
 EXPOSE 6274 6273
 
-CMD /opt/heavyai/startheavy --non-interactive --data /var/lib/heavyai/storage --config /var/lib/heavyai/heavy.conf --libgeos-path /var/lib/heavyai/libgeos
+CMD ["/opt/heavyai/startheavy", "--non-interactive", "--data", "/var/lib/heavyai/storage", "--config", "/var/lib/heavyai/heavy.conf", "--libgeos-path", "/var/lib/heavyai/libgeos"]

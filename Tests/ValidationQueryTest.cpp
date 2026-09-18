@@ -1,17 +1,6 @@
 /*
- * Copyright 2024 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "DBHandlerTestHelpers.h"
@@ -53,6 +42,13 @@ class ValidateQueryTest : public BaseTestFixture {
   }
 };
 
+// Under TSAN every test in this file runs for more than two hours, blowing
+// past the 7200s per-test ctest cap (and previously the 1200s default). The
+// validator is single-threaded sqlValidate plumbing — instrumenting it under
+// TSAN doesn't catch defects worth the wall-clock cost. Skip the whole suite
+// under TSAN; non-TSAN configs (multi-cuda-gcc, columnar, sharding) still
+// cover it.
+#ifndef HAVE_TSAN
 TEST_F(ValidateQueryTest, WidthBucketExprScalarSubquery) {
   setExecuteMode(TExecuteMode::CPU);
   auto [db_handler, session_id] = getDbHandlerAndSessionId();
@@ -254,6 +250,7 @@ TEST_F(ValidateQueryTest, QueryStepSkipping) {
   sql(q);
   db_handler->sql_validate(validation_result, session_id, q);
 }
+#endif  // !HAVE_TSAN
 
 int main(int argc, char* argv[]) {
   g_is_test_env = true;

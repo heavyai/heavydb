@@ -13,6 +13,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * This file is a modified derivative of Apache Calcite's org.apache.calcite.rel.rules.FilterTableFunctionTransposeRule.
+ *
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 package com.mapd.calcite.rel.rules;
 
@@ -22,6 +27,8 @@ import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.plan.RelRule;
 import org.apache.calcite.plan.hep.HepRelVertex;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.Filter;
+import org.apache.calcite.rel.core.TableFunctionScan;
 import org.apache.calcite.rel.logical.LogicalFilter;
 import org.apache.calcite.rel.logical.LogicalTableFunctionScan;
 import org.apache.calcite.rel.metadata.RelColumnMapping;
@@ -33,6 +40,8 @@ import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.tools.RelBuilder;
 import org.apache.calcite.tools.RelBuilderFactory;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.immutables.value.Value.Enclosing;
+import org.immutables.value.Value.Immutable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -49,6 +58,7 @@ import java.util.Set;
  *
  * @see CoreRules#FILTER_TABLE_FUNCTION_TRANSPOSE
  */
+@Enclosing
 public class FilterTableFunctionMultiInputTransposeRule
         extends RelRule<FilterTableFunctionMultiInputTransposeRule.Config>
         implements TransformationRule {
@@ -318,18 +328,22 @@ public class FilterTableFunctionMultiInputTransposeRule
   }
 
   /** Rule configuration. */
+  @Immutable
   public interface Config extends RelRule.Config {
-    Config DEFAULT =
-            EMPTY.withOperandSupplier(b0
-                         -> b0.operand(LogicalFilter.class)
-                                    .oneInput(b1
-                                            -> b1.operand(LogicalTableFunctionScan.class)
-                                                       .anyInputs()))
-                    .as(Config.class);
+    Config DEFAULT = ImmutableFilterTableFunctionMultiInputTransposeRule.Config.builder().build()
+            .withOperandFor(Filter.class, TableFunctionScan.class);
 
     @Override
     default FilterTableFunctionMultiInputTransposeRule toRule() {
       return new FilterTableFunctionMultiInputTransposeRule(this);
+    }
+
+    default Config withOperandFor(Class<? extends Filter> filterClass,
+                                  Class<? extends TableFunctionScan> tableFunctionScanClass) {
+      return withOperandSupplier(b0 ->
+              b0.operand(filterClass).oneInput(b1 ->
+                      b1.operand(tableFunctionScanClass).anyInputs()))
+              .as(Config.class);
     }
   }
 }

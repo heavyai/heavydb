@@ -1,3 +1,8 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 if(CPACK_GENERATOR MATCHES "DEB" OR CPACK_GENERATOR MATCHES "RPM")
   set(CPACK_PACKAGING_INSTALL_PREFIX "/opt/heavyai")
 else()

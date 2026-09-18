@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "ForeignDataImporter.h"
@@ -31,11 +20,16 @@
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
-#include "UserMapping.h"
+
+#include "DataMgr/ForeignStorage/RasterDataWrapper.h"
+#include "Fragmenter/RasterFragmenter.h"
 
 extern bool g_enable_legacy_delimited_import;
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_legacy_parquet_import;
+#endif
+#ifdef EE_FSI_ODBC
+extern bool g_enable_fsi_odbc_import;
 #endif
 extern bool g_enable_fsi_regex_import;
 
@@ -115,6 +109,12 @@ std::string get_import_id(const import_export::CopyParams& copy_params,
 }
 
 void validate_copy_params(const import_export::CopyParams& copy_params) {
+#ifdef EE_FSI_ODBC
+  if (copy_params.source_type == import_export::SourceType::kOdbc) {
+    foreign_storage::validate_odbc_options(copy_params);
+  }
+#endif
+
   if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
     foreign_storage::validate_regex_parser_options(copy_params);
   }
@@ -720,6 +720,55 @@ ImportStatus ForeignDataImporter::importGeneralNoFinalize(
       return {};
     }
 
+    if (auto rdw =
+            dynamic_cast<foreign_storage::RasterDataWrapper*>(data_wrapper.get())) {
+      if (table_->fragType != Fragmenter_Namespace::FragmenterType::RASTER) {
+        if (table_->fragmenter) {
+          if (table_->fragmenter->getNumRows() > 0) {
+            throw std::runtime_error{
+                "Cannot import raster data into table already populated with "
+                "non-raster data.  Table '" +
+                table_->tableName + "'"};
+          }
+        }
+        LOG(WARNING) << "Resetting fragment type for table: " << table_->tableName;
+        catalog.setFragmenterTypeForTable(Fragmenter_Namespace::FragmenterType::RASTER,
+                                          table_->tableId);
+      } else {  // Raster Fragmenter
+        if (table_->fragmenter && table_->fragmenter->getNumRows() > 0) {
+          if (auto frag = dynamic_cast<Fragmenter_Namespace::RasterFragmenter*>(
+                  table_->fragmenter.get())) {
+            auto starting_file_id = frag->getLastFragmentFileId() + 1;
+            // The data wrapper is unaware of any previous imports to the table,
+            // so if there were any, augment the metadata created by the datawrapper to
+            // increment the file ids so they do not overlap with existing files.  Note
+            // that the metadata here are referenced by pointer, so changing these values
+            // will also change the values cached within the data wrapper.
+            for (auto& [key, meta_ptr] : metadata_vector) {
+              meta_ptr->rasterTile.local_coords.file_id += starting_file_id;
+            }
+          }
+        }
+      }
+
+      if (table_->maxFragRows < rdw->getMaxFragRowsForImport()) {
+        if (table_->fragmenter) {
+          if (table_->fragmenter->getNumRows() > 0) {
+            throw std::runtime_error{
+                "Cannot import raster data.  New raster data tile size is too big for "
+                "the table's existing fragmentation.  Select a smaller tile size or "
+                "import into a new table."
+                "  Table '" +
+                table_->tableName + "' has maximum fragment size '" +
+                std::to_string(table_->maxFragRows) + "' raster file has tile size '" +
+                std::to_string(rdw->getMaxFragRowsForImport()) + "'"};
+          }
+        }
+        LOG(WARNING) << "Resetting fragment size for table: " << table_->tableName;
+        catalog.setFragmentSizeForTable(rdw->getMaxFragRowsForImport(), table_->tableId);
+      }
+    }
+
     max_fragment_id = 0;
     for (const auto& [key, _] : metadata_vector) {
       max_fragment_id = std::max(max_fragment_id, key[CHUNK_KEY_FRAGMENT_IDX]);
@@ -768,13 +817,14 @@ ImportStatus ForeignDataImporter::importGeneralS3(
 #if ENABLE_IMPORT_PARQUET
         copy_params_.source_type == SourceType::kParquetFile ||
 #endif
+        copy_params_.source_type == SourceType::kRasterFile ||
         copy_params_.source_type == SourceType::kRegexParsedFile)) {
     throw std::runtime_error("Attempting to load S3 resource '" + copy_from_source_ +
                              "' for unsupported 'source_type' (must be 'DELIMITED_FILE'"
 #if ENABLE_IMPORT_PARQUET
                              ", 'PARQUET_FILE'"
 #endif
-                             " or 'REGEX_PARSED_FILE'");
+                             ", 'RASTER_FILE' or 'REGEX_PARSED_FILE'");
   }
 
   const shared::FilePathOptions options{copy_params_.regex_path_filter,

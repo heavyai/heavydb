@@ -1,4 +1,6 @@
 #!/usr/bin/env ruby
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 # Generate C++ statements for inclusion into gtests.
 # Usage: ruby generate_extract_tests.rb

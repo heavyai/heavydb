@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "CachingForeignStorageMgr.h"
@@ -26,7 +15,6 @@
 #ifdef ENABLE_IMPORT_PARQUET
 #include "ParquetDataWrapper.h"
 #endif
-#include "Shared/distributed.h"
 #include "Shared/misc.h"
 
 namespace foreign_storage {
@@ -150,13 +138,6 @@ void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
   if (disk_cache_->hasCachedMetadataForKeyPrefix(key_prefix)) {
     disk_cache_->getCachedMetadataVecForKeyPrefix(chunk_metadata, key_prefix);
 
-    // Assert all metadata in cache is mapped to this leaf node in distributed.
-    if (is_shardable_key(key_prefix)) {
-      for (auto& [key, meta] : chunk_metadata) {
-        CHECK(fragment_maps_to_leaf(key)) << show_chunk(key);
-      }
-    }
-
     try {
       // If the data in cache was restored from disk then it is possible that the wrapper
       // does not exist yet.  In this case the wrapper will be restored from disk if
@@ -172,14 +153,6 @@ void CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
       chunk_metadata.clear();
       clearTable({db_id, table_id});
     }
-  } else if (dist::is_distributed() &&
-             disk_cache_->hasStoredDataWrapperMetadata(key_prefix[CHUNK_KEY_DB_IDX],
-                                                       key_prefix[CHUNK_KEY_TABLE_IDX])) {
-    // In distributed mode, it is possible to have all the chunk metadata filtered out for
-    // this node, after previously getting the chunk metadata from the wrapper and caching
-    // the wrapper metadata. In this case, return immediately and avoid doing a redundant
-    // metadata scan.
-    return;
   }
 
   // If we have no cached data then either the data was evicted, was never populated, or
@@ -205,16 +178,13 @@ void CachingForeignStorageMgr::getChunkMetadataVecFromDataWrapper(
     throw;
   }
   // If the table was disabled then we will have no wrapper to serialize.
-  if (is_table_enabled_on_node(chunk_key_prefix)) {
-    try {
-      auto doc = getDataWrapper(chunk_key_prefix)->getSerializedDataWrapper();
-      disk_cache_->storeDataWrapper(doc, db_id, tb_id);
-      // If the wrapper populated buffers we want that action to be checkpointed.
-      disk_cache_->checkpoint(db_id, tb_id);
-    } catch (const IncompleteWrapperException& e) {
-      LOG(WARNING)
-          << "Wrapper file not loaded because serialized wrapper was incomplete.";
-    }
+  try {
+    auto doc = getDataWrapper(chunk_key_prefix)->getSerializedDataWrapper();
+    disk_cache_->storeDataWrapper(doc, db_id, tb_id);
+    // If the wrapper populated buffers we want that action to be checkpointed.
+    disk_cache_->checkpoint(db_id, tb_id);
+  } catch (const IncompleteWrapperException& e) {
+    LOG(WARNING) << "Wrapper file not loaded because serialized wrapper was incomplete.";
   }
 }
 
@@ -240,13 +210,6 @@ void CachingForeignStorageMgr::refreshTableInCache(const ChunkKey& table_key) {
   // Preserve the list of which chunks were cached per table to refresh after clear.
   std::vector<ChunkKey> old_chunk_keys =
       disk_cache_->getCachedChunksForKeyPrefix(table_key);
-
-  // Assert all data in cache is mapped to this leaf node in distributed.
-  if (is_shardable_key(table_key)) {
-    for (auto& key : old_chunk_keys) {
-      CHECK(fragment_maps_to_leaf(key)) << show_chunk(key);
-    }
-  }
 
   auto append_mode = is_append_table_chunk_key(table_key);
 

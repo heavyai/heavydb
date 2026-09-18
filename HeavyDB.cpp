@@ -1,21 +1,11 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
+#include <blosc.h>
 #include "ThriftHandler/DBHandler.h"
+#include "ThriftHandler/HAHandler.h"
 #ifdef HAVE_THRIFT_MESSAGE_LIMIT
 #include "Shared/ThriftConfig.h"
 #endif
@@ -26,6 +16,7 @@
 #include <thrift/concurrency/PlatformThreadFactory.h>
 #endif
 
+#include <thrift/TOutput.h>
 #include <thrift/concurrency/ThreadManager.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/server/TThreadedServer.h>
@@ -38,6 +29,7 @@
 
 #include "Geospatial/GDAL.h"
 #include "Logger/Logger.h"
+#include "Shared/Compressor.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/heavyai_shared_mutex.h"
@@ -70,10 +62,6 @@
 #endif
 #include "Catalog/AlterColumnRecovery.h"
 #include "MigrationMgr/MigrationMgr.h"
-#include "Shared/Compressor.h"
-#include "Shared/SystemParameters.h"
-#include "Shared/file_delete.h"
-#include "Shared/scope.h"
 #include "ThriftHandler/ForeignTableRefreshScheduler.h"
 
 using namespace ::apache::thrift;
@@ -81,8 +69,6 @@ using namespace ::apache::thrift::concurrency;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::server;
 using namespace ::apache::thrift::transport;
-
-extern bool g_enable_thrift_logs;
 
 // Set g_running to false to trigger normal server shutdown.
 std::atomic<bool> g_running{true};
@@ -104,9 +90,6 @@ std::shared_ptr<DBHandler> g_warmup_handler;
 std::shared_ptr<DBHandler> g_db_handler;
 
 void register_signal_handler(int signum, void (*handler)(int)) {
-#ifdef _WIN32
-  signal(signum, handler);
-#else
   struct sigaction act;
   memset(&act, 0, sizeof(act));
   if (handler != SIG_DFL && handler != SIG_IGN) {
@@ -115,7 +98,6 @@ void register_signal_handler(int signum, void (*handler)(int)) {
   }
   act.sa_handler = handler;
   sigaction(signum, &act, NULL);
-#endif
 }
 
 // Signal handler to set a global flag telling the server to exit.
@@ -143,11 +125,7 @@ void heavydb_signal_handler(int signum) {
   // because on some systems, some signals will execute their default
   // action immediately when and if the signal handler returns.
   // We would like to do some emergency cleanup before core dump.
-  if (signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE
-#ifndef _WIN32
-      || signum == SIGQUIT
-#endif
-  ) {
+  if (signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE || signum == SIGQUIT) {
     // Wait briefly to give heartbeat() a chance to flush the logs and
     // do any other emergency shutdown tasks.
     std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -157,35 +135,25 @@ void heavydb_signal_handler(int signum) {
     // Signals are currently blocked so this new signal will be queued
     // until this signal handler returns.
     register_signal_handler(signum, SIG_DFL);
-#ifdef _WIN32
-    raise(signum);
-#else
     kill(getpid(), signum);
-#endif
     std::this_thread::sleep_for(std::chrono::seconds(5));
 
-#ifndef __APPLE__
     // as a last resort, abort
     // primary used in Docker environments, where we can end up with PID 1 and fail to
     // catch unix signals
     quick_exit(signum);
-#endif
   }
 }
 
 void register_signal_handlers() {
   register_signal_handler(SIGINT, heavydb_signal_handler);
-#ifndef _WIN32
   register_signal_handler(SIGQUIT, heavydb_signal_handler);
   register_signal_handler(SIGHUP, heavydb_signal_handler);
-#endif
   register_signal_handler(SIGTERM, heavydb_signal_handler);
   register_signal_handler(SIGSEGV, heavydb_signal_handler);
   register_signal_handler(SIGABRT, heavydb_signal_handler);
-#ifndef _WIN32
   // Thrift secure socket can cause problems with SIGPIPE
   register_signal_handler(SIGPIPE, SIG_IGN);
-#endif
 }
 }  // anonymous namespace
 
@@ -218,11 +186,6 @@ void run_warmup_queries(std::shared_ptr<DBHandler> handler,
                         std::string query_file_path) {
   // run warmup queries to load cache if requested
   if (query_file_path.empty()) {
-    return;
-  }
-  if (handler->isAggregator()) {
-    LOG(INFO) << "Skipping warmup query execution on the aggregator, queries should be "
-                 "run directly on the leaf nodes.";
     return;
   }
 
@@ -319,7 +282,6 @@ void thrift_stop() {
 }
 
 void heartbeat() {
-#ifndef _WIN32
   // Block all signals for this heartbeat thread, only.
   sigset_t set;
   sigfillset(&set);
@@ -327,7 +289,6 @@ void heartbeat() {
   if (result != 0) {
     throw std::runtime_error("heartbeat() thread startup failed");
   }
-#endif
 
   // Sleep until heavydb_signal_handler or anything clears the g_running flag.
   VLOG(1) << "heartbeat thread starting";
@@ -344,11 +305,7 @@ void heartbeat() {
   }
 
   // If dumping core, try to do some quick stuff.
-  if (signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE
-#ifndef _WIN32
-      || signum == SIGQUIT
-#endif
-  ) {
+  if (signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE || signum == SIGQUIT) {
     // Need to shut down calcite.
     if (auto db_handler = g_db_handler; db_handler) {
       db_handler->emergency_shutdown();
@@ -458,7 +415,7 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
   server_threads.insert(std::make_unique<std::thread>(heartbeat));
 
   if (!g_enable_thrift_logs) {
-    apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
+    apache::thrift::TOutput::instance().setOutputFunction([](const char* msg) {});
   }
 
   // Thrift event handler for database server setup.
@@ -466,9 +423,7 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
     if (prog_config_opts.system_parameters.master_address.empty()) {
       // Handler for a single database server. (DBHandler)
       g_db_handler =
-          std::make_shared<DBHandler>(prog_config_opts.db_leaves,
-                                      prog_config_opts.string_leaves,
-                                      prog_config_opts.base_path,
+          std::make_shared<DBHandler>(prog_config_opts.base_path,
                                       prog_config_opts.allow_multifrag,
                                       prog_config_opts.jit_debug,
                                       prog_config_opts.intel_jit_profile,
@@ -502,13 +457,51 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
 #endif
                                       prog_config_opts.disk_cache_config,
                                       false);
-    } else {  // running ha server
-      LOG(FATAL)
-          << "No High Availability module available, please contact OmniSci support";
+    } else {
+      // Handler for a high-availability (HA) database server in a cluster. (HAHandler)
+      g_db_handler =
+          std::make_shared<HAHandler>(prog_config_opts.base_path,
+                                      prog_config_opts.allow_multifrag,
+                                      prog_config_opts.jit_debug,
+                                      prog_config_opts.intel_jit_profile,
+                                      prog_config_opts.read_only,
+                                      prog_config_opts.allow_loop_joins,
+                                      prog_config_opts.enable_rendering,
+                                      prog_config_opts.renderer_prefer_igpu,
+                                      prog_config_opts.renderer_vulkan_timeout_ms,
+                                      prog_config_opts.renderer_use_parallel_executors,
+                                      prog_config_opts.enable_auto_clear_render_mem,
+                                      prog_config_opts.render_oom_retry_threshold,
+                                      prog_config_opts.render_mem_bytes,
+                                      prog_config_opts.max_concurrent_render_sessions,
+                                      prog_config_opts.reserved_gpu_mem,
+                                      prog_config_opts.render_compositor_use_last_gpu,
+                                      prog_config_opts.renderer_enable_slab_allocation,
+                                      prog_config_opts.num_reader_threads,
+                                      prog_config_opts.authMetadata,
+                                      prog_config_opts.system_parameters,
+                                      prog_config_opts.enable_legacy_syntax,
+                                      prog_config_opts.idle_session_duration,
+                                      prog_config_opts.max_session_duration,
+                                      prog_config_opts.udf_file_name,
+                                      prog_config_opts.udf_compiler_path,
+                                      prog_config_opts.udf_compiler_options,
+#ifdef ENABLE_GEOS
+                                      prog_config_opts.libgeos_so_filename,
+#endif
+#ifdef HAVE_TORCH_TFS
+                                      prog_config_opts.torch_lib_path,
+#endif
+                                      prog_config_opts.disk_cache_config,
+                                      false);
     }
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }
+
+  // This migration will potentially run optimize queries, so it needs to be late enough
+  // in startup to allow that to happen.
+  Catalog_Namespace::SysCatalog::instance().checkDateInDaysMigration();
 
   // do the drop render group columns migration here too
   // @TODO make a single entry point in MigrationMgr that will do these two and futures
@@ -535,11 +528,7 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
         prog_config_opts.system_parameters.ssl_cert_file.c_str());
     sslSocketFactory->loadPrivateKey(
         prog_config_opts.system_parameters.ssl_key_file.c_str());
-    if (prog_config_opts.system_parameters.ssl_transport_client_auth) {
-      sslSocketFactory->authenticate(true);
-    } else {
-      sslSocketFactory->authenticate(false);
-    }
+    sslSocketFactory->authenticate(false);
     sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     tcp_socket = std::make_shared<TSSLServerSocket>(
         prog_config_opts.system_parameters.omnisci_server_port, sslSocketFactory);
@@ -651,22 +640,17 @@ void log_startup_info() {
 }
 
 int main(int argc, char** argv) {
-  bool has_clust_topo = false;
-
-  CommandLineOptions prog_config_opts(argv[0], has_clust_topo);
+  CommandLineOptions prog_config_opts(argv[0]);
 
   try {
-    if (auto return_code =
-            prog_config_opts.parse_command_line(argc, argv, !has_clust_topo)) {
+    if (auto return_code = prog_config_opts.parse_command_line(argc, argv, true)) {
       return *return_code;
     }
 
-    if (!has_clust_topo) {
-      prog_config_opts.validate_base_path();
-      prog_config_opts.validate();
-      log_startup_info();
-      return (startHeavyDBServer(prog_config_opts));
-    }
+    prog_config_opts.validate_base_path();
+    prog_config_opts.validate();
+    log_startup_info();
+    return (startHeavyDBServer(prog_config_opts));
   } catch (std::runtime_error& e) {
     std::cerr << "Server Error: " << e.what() << std::endl;
     return 1;

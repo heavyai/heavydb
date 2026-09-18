@@ -1,14 +1,16 @@
-/* override table width restrictions */
-@media screen and (min-width: 767px) {
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-   .wy-table-responsive table td {
-      /* !important prevents the common CSS stylesheets from overriding
-         this as on RTD they are loaded after this stylesheet */
+/* Allow wide tables to wrap instead of clipping (PyData / nvidia theme). */
+@media screen and (min-width: 767px) {
+   .bd-content table.docutils td,
+   .bd-content table.docutils th {
       white-space: normal !important;
    }
 
-   .wy-table-responsive {
-      overflow: visible !important;
+   .bd-content .table-responsive {
+      overflow-x: visible !important;
    }
 }
-

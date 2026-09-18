@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -20,7 +9,6 @@
 
 #include "DataMgr/Chunk/Chunk.h"
 #include "DataMgr/ChunkMetadata.h"
-#include "Shared/distributed.h"
 
 namespace foreign_storage {
 void init_chunk_for_column(
@@ -89,13 +77,5 @@ const foreign_storage::ForeignTable& get_foreign_table_for_key(const ChunkKey& k
 
 bool is_system_table_chunk_key(const ChunkKey& chunk_key);
 
-bool is_replicated_table_chunk_key(const ChunkKey& chunk_key);
-
 bool is_append_table_chunk_key(const ChunkKey& chunk_key);
-
-bool is_shardable_key(const ChunkKey& key);
-
-bool fragment_maps_to_leaf(const ChunkKey& key);
-
-bool key_does_not_shard_to_leaf(const ChunkKey& key);
 }  // namespace foreign_storage

@@ -1,0 +1,146 @@
+# SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Dev Kafka import test: unencrypted HeavyDB + single-node Kafka broker (KRaft).
+# See SampleData/100_flights.csv for the test dataset.
+#
+# Invoked via dev-tools/integration-tests/kafka-import/run.sh:
+#   dev-tools/integration-tests/kafka-import/run.sh --build-dir build
+#
+# Test scripts live under dev-tools/integration-tests/kafka-import/ (bind-mounted via HEAVYDB_SOURCE).
+# No host port mappings: all traffic stays on the compose network.
+# HeavyDB storage defaults to /tmp/heavydb-data inside the container (ephemeral; removed with the container).
+# /heavydb-data is used only with --host-storage (bind mount); see host-storage compose override.
+# Optional host bind mount: docker-compose.host-storage.yml via run.sh --host-storage.
+#
+# Container user: run.sh exports USER_SPEC=$(id -u):$(id -g) so bind-mounted repo, build,
+# and storage paths are read/written as the invoking user (avoids root-owned files on the host).
+# All services use USER_SPEC except the kafka broker — see comment on that service below.
+#
+# Flow:
+#   heavydb + kafka start in parallel (both have healthchecks).
+#   heavydb-setup creates the flights table (depends on heavydb healthy).
+#   kafka-setup creates the topic and produces CSV rows (depends on kafka healthy).
+#   verify-kafka-import runs KafkaImporter and confirms 100 rows land in HeavyDB
+#     (depends on both setup services completing successfully).
+
+services:
+  heavydb:
+    image: ${HEAVYDB_IMAGE}
+    user: "${USER_SPEC}"
+    container_name: ${HEAVYDB_CONTAINER_NAME}
+    working_dir: /heavydb-internal
+    entrypoint: ["/heavydb-internal/dev-tools/integration-tests/kafka-import/heavydb-entrypoint.sh"]
+    environment:
+      HEAVYDB_DATA: /tmp/heavydb-data
+    volumes:
+      - type: bind
+        source: ${HEAVYDB_SOURCE}
+        target: /heavydb-internal
+      - type: bind
+        source: ${HEAVYDB_BUILD}
+        target: /heavydb-build
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    shm_size: 2gb
+    cap_add:
+      - SYS_PTRACE
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "echo 'SELECT 1;' | /heavydb-build/bin/heavysql -s localhost --port 6274 -u admin -p HyperInteractive -n -q heavyai",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+
+  kafka:
+    # No USER_SPEC: the apache/kafka image runs as its built-in appuser and writes under
+    # /opt/kafka (e.g. config, logs). Running as an arbitrary host UID/GID breaks startup
+    # because those paths are not writable. One-shot kafka-setup uses USER_SPEC instead
+    # (it only reads repo-mounted scripts and talks to the broker over the network).
+    image: ${KAFKA_IMAGE:-apache/kafka:3.7.2}
+    container_name: ${KAFKA_CONTAINER_NAME}
+    hostname: kafka
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list",
+        ]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  heavydb-setup:
+    image: ${HEAVYDB_IMAGE}
+    user: "${USER_SPEC}"
+    container_name: ${HEAVYDB_SETUP_CONTAINER_NAME}
+    working_dir: /heavydb-internal
+    entrypoint: ["/heavydb-internal/dev-tools/integration-tests/kafka-import/heavydb-setup.sh"]
+    depends_on:
+      heavydb:
+        condition: service_healthy
+    restart: "no"
+    volumes:
+      - type: bind
+        source: ${HEAVYDB_SOURCE}
+        target: /heavydb-internal
+      - type: bind
+        source: ${HEAVYDB_BUILD}
+        target: /heavydb-build
+
+  kafka-setup:
+    image: ${KAFKA_IMAGE:-apache/kafka:3.7.2}
+    user: "${USER_SPEC}"
+    container_name: ${KAFKA_SETUP_CONTAINER_NAME}
+    entrypoint: ["/heavydb-internal/dev-tools/integration-tests/kafka-import/kafka-setup.sh"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      BOOTSTRAP_SERVER: kafka:9092
+      KAFKA_TOPIC: flights
+    volumes:
+      - type: bind
+        source: ${HEAVYDB_SOURCE}
+        target: /heavydb-internal
+
+  verify-kafka-import:
+    image: ${HEAVYDB_IMAGE}
+    user: "${USER_SPEC}"
+    container_name: ${HEAVYDB_VERIFY_CONTAINER_NAME}
+    working_dir: /heavydb-internal
+    entrypoint: ["/heavydb-internal/dev-tools/integration-tests/kafka-import/verify-kafka-import.sh"]
+    depends_on:
+      heavydb-setup:
+        condition: service_completed_successfully
+      kafka-setup:
+        condition: service_completed_successfully
+    restart: "no"
+    volumes:
+      - type: bind
+        source: ${HEAVYDB_SOURCE}
+        target: /heavydb-internal
+      - type: bind
+        source: ${HEAVYDB_BUILD}
+        target: /heavydb-build

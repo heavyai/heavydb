@@ -1,3 +1,8 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT
@@ -17,12 +22,8 @@ add_library(calciteserver_thrift
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-get_target_property(StringDictionary_BINARY_DIR StringDictionary BINARY_DIR)
-include_directories(${StringDictionary_BINARY_DIR}
-${StringDictionary_BINARY_DIR}/gen-cpp)
-
 target_link_libraries(calciteserver_thrift ${Thrift_LIBRARIES})
 
 add_library(Calcite Calcite.cpp Calcite.h)
 
-target_link_libraries(Calcite Catalog calciteserver_thrift ${JAVA_JVM_LIBRARY})
+target_link_libraries(Calcite Catalog calciteserver_thrift ThriftClient ${JAVA_JVM_LIBRARY})

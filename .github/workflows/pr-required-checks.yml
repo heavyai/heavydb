@@ -3,12 +3,904 @@
 
 name: PR Required Checks
 
+run-name: >-
+  ${{ inputs.pr_number != '' && format('PR Required Checks | #{0} | {1}', inputs.pr_number, inputs.pr_title) || 'PR Required Checks' }}
+
+# Dispatched manually (Actions UI) or by pr-test-command.yml on a `/test`
+# PR comment. The `/test` trigger deliberately lives in that separate thin
+# workflow so this heavy 12-job workflow never instantiates a run for
+# unrelated PR comments — GitHub can't filter issue_comment by body at the
+# trigger level, so a comment trigger here would spawn a (skipped) run per
+# comment.
 on:
   workflow_dispatch:
+    inputs:
+      sha1:
+        description: 'SHA or branch to test'
+        default: ''
+      jobs:
+        description: 'Subset of jobs to run'
+        type: choice
+        default: all
+        options:
+          - all
+          - columnar      # build-debug-static + test-columnar + test-sharding
+          - tsan          # build-tsan + test-tsan (matrix)
+          - multi-cuda    # build-multi-cuda-{gcc,clang} + test-multi-cuda-gcc
+          - multi-render  # build-multi-render + test-multi-render
+          - multi-static-debug  # build-multi-static-debug (build-only)
+          - deps-build    # build-deps (build-only heavydb on all 4 deps variants)
+      deps_tag:
+        description: 'PR-scoped deps image tag to build against (set by /deps-test). Empty = use pinned :latest.'
+        type: string
+        default: ''
+      pr_number:
+        description: 'PR number (set by /test or /deps-test dispatcher).'
+        type: string
+        default: ''
+      pr_title:
+        description: 'PR title (set by /test or /deps-test dispatcher).'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  statuses: write
+  # Build jobs push pr-build/* images to GHCR; test jobs pull them.
+  packages: write
+
+# Deps image flavor this workflow builds/tests against. This is the ONE place
+# to bump the CUDA / Ubuntu / lib_type used by every job here: the `setup` job
+# turns these into the `latest_image` ref (normal jobs) and the deps-build
+# matrix. Keep them in sync with deps-image-builder.yml's input defaults, which
+# are what `/deps-test` actually builds.
+env:
+  DEPS_CUDA_VERSION: "12.9.2"
+  DEPS_UBUNTU_VERSION: "22.04"
+  DEPS_LIB_TYPE: "static"
+
+# Inside a container: job, GitHub Actions defaults the shell to sh, not bash.
+# Our deps image is Ubuntu and has bash; override so `source` etc. work.
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  placeholder:
+
+  # ---------------------------------------------------------------------------
+  # 0. setup — resolve the target SHA and post a pending status.
+  #
+  # Runs on workflow_dispatch (manual, or dispatched by pr-test-command.yml on
+  # a `/test` comment). The skip output is retained (always 'false') so the
+  # downstream jobs' `if:` conditions don't need to change; it exists only as a
+  # defensive no-op switch.
+  # ---------------------------------------------------------------------------
+  setup:
+    name: setup
+    runs-on: linux-amd64-cpu16
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+      skip: ${{ steps.resolve.outputs.skip }}
+      jobs_filter: ${{ steps.resolve.outputs.jobs_filter }}
+      deps_tag: ${{ steps.resolve.outputs.deps_tag }}
+      # Pinned base image for the normal jobs, and the 4-variant matrix for
+      # deps-build mode — both derived from the workflow-level env block.
+      latest_image: ${{ steps.resolve.outputs.latest_image }}
+      deps_build_matrix: ${{ steps.resolve.outputs.deps_build_matrix }}
+    steps:
+      - name: Resolve target SHA
+        id: resolve
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+
+            // Resolve the optional sha1 input (sha or branch); otherwise use
+            // the ref the workflow was dispatched on. pr-test-command.yml
+            // passes the PR head SHA here.
+            const input = ((context.payload.inputs || {}).sha1 || '').trim();
+            let sha = context.sha;
+            if (input) {
+              const { data } = await github.rest.repos.getCommit({
+                owner, repo, ref: input });
+              sha = data.sha;
+            }
+            const jobs_filter = ((context.payload.inputs || {}).jobs || 'all');
+            // PR-scoped deps image tag for deps-build mode (set by /deps-test);
+            // empty otherwise so the normal jobs use the pinned :latest.
+            const deps_tag = ((context.payload.inputs || {}).deps_tag || '').trim();
+
+            // Build the deps image refs from the workflow-level env block so the
+            // CUDA / Ubuntu / lib_type live in exactly one place (see env: above).
+            const registry = `ghcr.io/${owner}/${repo}`;
+            const cuda = process.env.DEPS_CUDA_VERSION;
+            const uver = process.env.DEPS_UBUNTU_VERSION;
+            const lib  = process.env.DEPS_LIB_TYPE;
+            // Pinned base image every normal build/test job runs in.
+            const latest_image =
+              `${registry}/core-build-ubuntu${uver}-${lib}-cuda${cuda}-x86_64:latest`;
+            // 4-variant matrix for deps-build mode: build heavydb against each
+            // freshly-built deps image (keyed to the PR-scoped deps_tag).
+            const deps_variants = [
+              { osdir: `ubuntu${uver}`, arch: 'x86_64',  runner: 'linux-amd64-cpu32' },
+              { osdir: `ubuntu${uver}`, arch: 'aarch64', runner: 'linux-arm64-cpu16' },
+              { osdir: 'rockylinux8',   arch: 'x86_64',  runner: 'linux-amd64-cpu32' },
+              { osdir: 'rockylinux8',   arch: 'aarch64', runner: 'linux-arm64-cpu16' },
+            ];
+            const deps_build_matrix = JSON.stringify({
+              include: deps_variants.map(v => ({
+                label: `${v.osdir} ${v.arch}`,
+                slug: `${v.osdir}-${v.arch}`,
+                runner: v.runner,
+                image: `${registry}/core-build-${v.osdir}-${lib}-cuda${cuda}-${v.arch}:${deps_tag}`,
+              })),
+            });
+
+            core.setOutput('sha', sha);
+            core.setOutput('jobs_filter', jobs_filter);
+            core.setOutput('deps_tag', deps_tag);
+            core.setOutput('latest_image', latest_image);
+            core.setOutput('deps_build_matrix', deps_build_matrix);
+            core.setOutput('skip', 'false');
+
+            // Post a pending status so the PR shows the required check running.
+            const targetUrl =
+              '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}';
+            await github.rest.repos.createCommitStatus({
+              owner, repo, sha, state: 'pending',
+              context: 'pr-required-checks',
+              description: 'PR required checks running…',
+              target_url: targetUrl });
+
+  # ---------------------------------------------------------------------------
+  # build-debug-static — debug + static cmake config.
+  # Builds on a CPU runner and packs the build outputs into a GHCR image.
+  # Drives test-columnar and test-sharding.
+  # ---------------------------------------------------------------------------
+  build-debug-static:
+    name: build (debug-static)
+    needs: setup
+    if: ${{ needs.setup.outputs.skip != 'true' && (needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'columnar') }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.setup.outputs.latest_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read       # needed by actions/checkout (declaring `permissions`
+      packages: write      # at job level otherwise drops contents access)
+    outputs:
+      image: ${{ steps.build.outputs.image }}
+    env:
+      CMAKE_FLAGS: "-DPREFER_STATIC_LIBS=ON -DCMAKE_BUILD_TYPE=debug"
+      MAKE_TARGETS: "mapd_java_components ExecuteTest"
+      IMAGE_NAME: "pr-build/debug-static"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: ${{ needs.setup.outputs.latest_image }}
+      INCLUDE_PATHS: "build Tests scripts"
+      STRIP: debug
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: build
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: debug-static-mvn-build-log
+
+  # ---------------------------------------------------------------------------
+  # test-columnar — runs ExecuteTest with --enable-columnar-output=true
+  # against the image produced by build-debug-static.
+  # ---------------------------------------------------------------------------
+  test-columnar:
+    name: test (columnar)
+    needs: [setup, build-debug-static]
+    if: ${{ needs.setup.outputs.skip != 'true' }}
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ${{ needs.build-debug-static.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # heavydb S3 test fixtures live in us-west-1 (see Tests/aws/s3client.conf
+      # committed default). Without this, the SDK signs requests for us-east-1
+      # and gets SignatureDoesNotMatch from any us-west-1 bucket.
+      AWS_REGION: us-west-1
+      BINARY: Tests/ExecuteTest
+      EXTRA_ARGS: --enable-columnar-output=true
+      RESULTS_FILE: test-results-columnar.xml
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+
+      - name: Test
+        run: scripts/ci/run_gtest.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-columnar
+          path: /workspace/build/test-results-columnar.xml
+
+  # ---------------------------------------------------------------------------
+  # test-sharding — runs ExecuteTest with --with-sharding against the same
+  # image as test-columnar.
+  # ---------------------------------------------------------------------------
+  test-sharding:
+    name: test (sharding)
+    needs: [setup, build-debug-static]
+    if: ${{ needs.setup.outputs.skip != 'true' }}
+    runs-on: linux-amd64-gpu-t4-latest-2
+    container:
+      image: ${{ needs.build-debug-static.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # heavydb S3 test fixtures live in us-west-1 (see Tests/aws/s3client.conf
+      # committed default). Without this, the SDK signs requests for us-east-1
+      # and gets SignatureDoesNotMatch from any us-west-1 bucket.
+      AWS_REGION: us-west-1
+      BINARY: Tests/ExecuteTest
+      EXTRA_ARGS: --with-sharding
+      RESULTS_FILE: test-results-sharding.xml
+      # Sharded ExecuteTest creates enough physical table files to exceed the
+      # default 1024 soft descriptor limit before late fixtures run.
+      OPEN_FILES_LIMIT: 4096
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+
+      - name: Test
+        run: scripts/ci/run_gtest.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-sharding
+          path: /workspace/build/test-results-sharding.xml
+
+  # ---------------------------------------------------------------------------
+  # build-tsan — TSAN + RelWithDebInfo cmake config, run as a per-partition
+  # matrix.
+  #
+  # NOTE: we deliberately do NOT build with HEAVYAI_PARTITION=0 (a single
+  # shared build that produces all ~85 sanity-test binaries). TSAN +
+  # static linking yields binaries of ~1-2 GB each; building all 85 in a
+  # single tree fills the cpu32 runner's disk during link (we tried, got
+  # "ld: final link failed: No space left on device" at 659/665). Per-
+  # partition builds limit each tree to ~22 binaries which fits
+  # comfortably, at the cost of recompiling the shared libraries and
+  # Java/Calcite components four times. A future change could share work
+  # across partitions via ccache — handled separately.
+  # ---------------------------------------------------------------------------
+  build-tsan:
+    name: build (tsan partition ${{ matrix.partition }})
+    needs: setup
+    if: ${{ needs.setup.outputs.skip != 'true' && (needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'tsan') }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.setup.outputs.latest_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    env:
+      # Use Ninja + a link JOB_POOL so we never run more than 4 TSAN-
+      # instrumented links in parallel. Each link consumes several GB; even
+      # at one partition's ~22 binaries this previously OOM'd with -j32.
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_TSAN=ON
+        -DENABLE_CUDA=OFF
+        -DCMAKE_BUILD_TYPE=RELWITHDEBINFO
+        -DPREFER_STATIC_LIBS=ON
+        -DHEAVYAI_PARTITION=${{ matrix.partition }}
+        -DHAVE_STD_REGEX=ON
+        -DCMAKE_JOB_POOLS=link=4
+        -DCMAKE_JOB_POOL_LINK=link
+      MAKE_TARGETS: "mapd_java_components sanity_tests_build_only"
+      IMAGE_NAME: "pr-build/tsan"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}"
+      BASE_IMAGE: ${{ needs.setup.outputs.latest_image }}
+      # Include the source tree wholesale (Tests/ for fixtures, config/ for
+      # tsan.suppressions, QueryEngine/ because UdfTest compiles
+      # udf_sample.cpp at runtime and that source #includes
+      # ../../QueryEngine/heavydbTypes.h) plus the build outputs.
+      # pack_image.sh prunes build intermediates automatically.
+      INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
+      # strip --strip-debug drops DWARF info (5x size reduction per binary)
+      # but keeps the symbol table, so TSAN race reports still show
+      # function names. The DWARF is extracted to DEBUG_ARTIFACTS_DIR
+      # first via `objcopy --only-keep-debug` so it can be uploaded as a
+      # separate artifact; engineers debugging a race can pair that with
+      # the stripped binary in the image (via addr2line) to recover full
+      # source-line stack traces. Image stays small, full forensics
+      # remain available out-of-band.
+      STRIP: debug
+      DEBUG_ARTIFACTS_DIR: ${{ github.workspace }}/tsan-debug-symbols
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: tsan-partition-${{ matrix.partition }}-mvn-build-log
+
+      - name: Upload debug symbols
+        # The .debug files let an engineer pair the stripped binaries in
+        # the image with full DWARF info (e.g. via addr2line) to resolve
+        # TSAN race report PCs to source file:line numbers. Always upload
+        # so it's available retroactively even if tests pass.
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: tsan-debug-symbols-partition-${{ matrix.partition }}
+          path: ${{ github.workspace }}/tsan-debug-symbols
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # test-tsan — runs each partition's sanity tests against the image
+  # produced by the matching build-tsan partition.
+  #
+  # Image name is computed from the matrix value rather than pulled through
+  # needs.build-tsan.outputs.image: GHA matrix outputs don't propagate per-
+  # element, so referencing them at the right granularity isn't possible.
+  # The image tag template (run_id-attempt-pN) is deterministic between the
+  # two matrix jobs, so test-tsan-N can address build-tsan-N's image
+  # directly.
+  # ---------------------------------------------------------------------------
+  test-tsan:
+    name: test (tsan partition ${{ matrix.label }})
+    needs: [setup, build-tsan]
+    if: ${{ needs.setup.outputs.skip != 'true' }}
+    # TSAN-instrumented test binaries run 5-15x slower than uninstrumented.
+    # Match the multi-cuda-gcc 12h cap so a slow partition doesn't get
+    # killed by the GHA 360-min default.
+    timeout-minutes: 720
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ghcr.io/${{ github.repository }}/pr-build/tsan:${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      # gcc's libtsan rejects randomized address space ("FATAL:
+      # ThreadSanitizer: unexpected memory mapping"). run_ctest.sh +
+      # init_heavy.sh wrap their binaries with `setarch -R`
+      # (personality(ADDR_NO_RANDOMIZE)). Docker's default seccomp
+      # profile blocks that personality value, so the syscall returns
+      # EPERM and setarch fails. Disable seccomp for this job — it
+      # only runs first-party heavydb test binaries on NVIDIA-managed
+      # runners.
+      options: --security-opt seccomp=unconfined
+    strategy:
+      matrix:
+        include:
+          - partition: 1
+            label: "1"
+            tests_regex: ""
+            artifact_suffix: "1"
+          - partition: 2
+            label: "2 shard 1/4"
+            tests_regex: "^ExecuteTestTsanShard1$"
+            artifact_suffix: "2-shard-1"
+          - partition: 2
+            label: "2 shard 2/4"
+            tests_regex: "^ExecuteTestTsanShard2$"
+            artifact_suffix: "2-shard-2"
+          - partition: 2
+            label: "2 shard 3/4"
+            tests_regex: "^ExecuteTestTsanShard3$"
+            artifact_suffix: "2-shard-3"
+          - partition: 2
+            label: "2 shard 4/4"
+            tests_regex: "^(ExecuteTestTsanShard4|ValidationQueryTest)$"
+            artifact_suffix: "2-shard-4"
+          - partition: 3
+            label: "3"
+            tests_regex: ""
+            artifact_suffix: "3"
+          - partition: 4
+            label: "4"
+            tests_regex: ""
+            artifact_suffix: "4"
+      fail-fast: false
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      # See test-multi-cuda-gcc for why HOME is pinned to /root.
+      HOME: /root
+      # Per-partition build only contains this partition's binaries, so the
+      # _sanity_ label selects exactly the right set. Partition 2 is further
+      # split with TESTS_REGEX because ExecuteTest exceeds the per-test TSAN
+      # timeout as one CTest entry.
+      LABEL_REGEX: "_sanity_"
+      TESTS_REGEX: ${{ matrix.tests_regex }}
+      # TSAN instrumentation slows test binaries 5-15x. The run_ctest.sh
+      # default of 1200s (20 min) is too tight — ValidationQueryTest and
+      # others routinely run longer under TSAN. Match the multi-cuda-gcc
+      # 7200s / 2h cap; the 720-min job timeout still bounds total runtime.
+      CTEST_TIMEOUT_SECS: "7200"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # heavydb S3 test fixtures live in us-west-1 (see Tests/aws/s3client.conf
+      # committed default). Without this, the SDK signs requests for us-east-1
+      # and gets SignatureDoesNotMatch from any us-west-1 bucket.
+      AWS_REGION: us-west-1
+      TSAN_OPTIONS: "suppressions=/workspace/config/tsan.suppressions,history_size=7,second_deadlock_stack=1,halt_on_error=0"
+      # gcc's libtsan trips on ASLR ("FATAL: ThreadSanitizer: unexpected
+      # memory mapping"). run_ctest.sh checks NO_ASLR and wraps ctest in
+      # `setarch -R` so the ADDR_NO_RANDOMIZE personality propagates to
+      # test binaries via personality() — works in unprivileged
+      # containers (no /proc write needed).
+      NO_ASLR: "true"
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+
+      - name: Restore debug symbols
+        # The image ships stripped binaries (to fit pack disk budget);
+        # the matching .debug files were uploaded by build-tsan as a
+        # sibling artifact and contain the DWARF data. Download them
+        # alongside the binaries so TSAN's symbolizer can resolve race
+        # report PCs to source file:line (the binaries already carry a
+        # gnu-debuglink reference, so this is fully automatic from
+        # llvm-symbolizer's side).
+        uses: actions/download-artifact@v8
+        with:
+          name: tsan-debug-symbols-partition-${{ matrix.partition }}
+          path: /workspace
+
+      - name: Init heavy
+        # ExecuteTest aborts at startup with
+        #   QueryRunner.cpp: Check failed: boost::filesystem::exists(system_db_file)
+        # without an initialised catalog. init_heavy.sh sees NO_ASLR=true
+        # and wraps `bin/initheavy` with `setarch -R` so the
+        # TSAN-instrumented initheavy doesn't trip on ASLR.
+        run: scripts/ci/init_heavy.sh
+
+      - name: Run TSAN sanity tests
+        run: scripts/ci/run_ctest.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-tsan-partition-${{ matrix.artifact_suffix }}
+          path: /workspace/build/*.xml
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # build-multi-render — release + CUDA + rendering build. Produces the 7
+  # render_sanity_tests binaries; image consumed by test-multi-render. No
+  # partitioning (only 7 binaries — fits comfortably).
+  # ---------------------------------------------------------------------------
+  build-multi-render:
+    name: build (multi-render)
+    needs: setup
+    if: ${{ needs.setup.outputs.skip != 'true' && (needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-render') }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.setup.outputs.latest_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image: ${{ steps.pack.outputs.image }}
+    env:
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=ON
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_RENDER_TESTS=ON
+        -DENABLE_TESTS=OFF
+        -DENABLE_ONLY_ONE_ARCH=ON
+        -DUSE_ALTERNATE_LINKER=mold
+      MAKE_TARGETS: "mapd_java_components render_sanity_tests_build_only"
+      IMAGE_NAME: "pr-build/multi-render"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}"
+      BASE_IMAGE: ${{ needs.setup.outputs.latest_image }}
+      INCLUDE_PATHS: "build Tests config scripts"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - id: pack
+        uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: multi-render-mvn-build-log
+
+  # ---------------------------------------------------------------------------
+  # test-multi-render — runs render_sanity_tests on a GPU runner against
+  # the image produced by build-multi-render. Render tests need a real
+  # GPU + Vulkan stack.
+  # ---------------------------------------------------------------------------
+  test-multi-render:
+    name: test (multi-render)
+    needs: [setup, build-multi-render]
+    if: ${{ needs.setup.outputs.skip != 'true' }}
+    # linux-amd64-gpu-t4-latest-2 is a Linux-only multi-GPU T4 subset where
+    # libGLX_nvidia.so is available (Vulkan/OpenGL ICDs are present) and
+    # multiple GPUs allow sharded render tests to exercise cross-device paths.
+    runs-on: linux-amd64-gpu-t4-latest-2
+    container:
+      image: ${{ needs.build-multi-render.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      # Render tests use Vulkan via GfxDriver. The deps image already
+      # carries NVIDIA_VISIBLE_DEVICES=all from its CUDA base, but on this
+      # runner the env-only injection path doesn't mount Vulkan ICDs even
+      # with "graphics" capability requested. Pass --gpus all to force the
+      # newer toolkit code path that injects /etc/vulkan/icd.d/nvidia_icd.json
+      # and libnvidia-glcore alongside libcuda.
+      options: --gpus all --env NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      LABEL_REGEX: "render_sanity"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # heavydb S3 test fixtures live in us-west-1 (see Tests/aws/s3client.conf
+      # committed default). Without this, the SDK signs requests for us-east-1
+      # and gets SignatureDoesNotMatch from any us-west-1 bucket.
+      AWS_REGION: us-west-1
+    steps:
+      - name: Checkout
+        # Render test binaries hardcode CMAKE_SOURCE_DIR-based absolute
+        # paths to shader files (e.g.
+        # `${BUILD_$GITHUB_WORKSPACE}/Tests/RenderTests/ShaderCompiler/
+        # shaders/ShaderManifest.json`). At test time we need those paths
+        # populated at `$GITHUB_WORKSPACE`. Do a fresh checkout there so
+        # the source tree lives at the expected absolute path.
+        # (Other test jobs use relative paths and don't need this.)
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+
+      # No Init heavy: render_sanity_tests in Tests/RenderTests/CMakeLists.txt
+      # don't depend on init_test_dir (unlike the main sanity_tests). The
+      # binaries self-initialize whatever DB state they need; the original
+      # ninja-driven multi-render workflow ran ctest without initheavy too.
+
+      - name: Run render sanity tests
+        run: scripts/ci/run_ctest.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-multi-render
+          path: /workspace/build/*.xml
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # build-multi-cuda-gcc — release + CUDA build with gcc, per partition.
+  # Pivoted from a single shared build to a 4-way partition matrix for the
+  # same reason as TSAN: shipping all 85 sanity_tests binaries in one
+  # docker context overflows the cpu32 runner's disk (30 GB context +
+  # base layer extract + new layer write doesn't fit). Per-partition
+  # images each hold ~22 binaries.
+  # ---------------------------------------------------------------------------
+  build-multi-cuda-gcc:
+    name: build (multi gcc cuda-static partition ${{ matrix.partition }})
+    needs: setup
+    if: ${{ needs.setup.outputs.skip != 'true' && (needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-cuda') }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.setup.outputs.latest_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=ON
+        -DHEAVYAI_PARTITION=${{ matrix.partition }}
+      MAKE_TARGETS: "mapd_java_components heavydb sanity_tests_build_only"
+      IMAGE_NAME: "pr-build/multi-cuda-gcc"
+      IMAGE_TAG: "${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}"
+      BASE_IMAGE: ${{ needs.setup.outputs.latest_image }}
+      # QueryEngine/ included so UdfTest can compile udf_sample.cpp at
+      # runtime — its source #includes ../../QueryEngine/heavydbTypes.h.
+      INCLUDE_PATHS: "build Tests config QueryEngine Shared Geospatial Logger scripts"
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          mvn-log-name: multi-cuda-gcc-partition-${{ matrix.partition }}-mvn-build-log
+
+  # ---------------------------------------------------------------------------
+  # test-multi-cuda-gcc — runs each partition's sanity_tests on a GPU
+  # runner against the matching build-multi-cuda-gcc partition image.
+  # ---------------------------------------------------------------------------
+  test-multi-cuda-gcc:
+    name: test (multi gcc cuda-static sanity_tests partition ${{ matrix.partition }})
+    needs: [setup, build-multi-cuda-gcc]
+    if: ${{ needs.setup.outputs.skip != 'true' }}
+    # Full sanity_tests in release+CUDA mode takes hours per partition;
+    # the GHA default 360 min isn't enough. 12h gives comfortable headroom.
+    timeout-minutes: 720
+    runs-on: linux-amd64-gpu-t4-latest-1
+    container:
+      image: ghcr.io/${{ github.repository }}/pr-build/multi-cuda-gcc:${{ github.run_id }}-${{ github.run_attempt }}-p${{ matrix.partition }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    strategy:
+      matrix:
+        partition: [1, 2, 3, 4]
+      fail-fast: false
+    defaults:
+      run:
+        shell: bash
+        working-directory: /workspace
+    env:
+      BUILD_DIR: /workspace/build
+      # GHA sets HOME=/github/home on the container, but the root user's
+      # passwd entry is /root. OmniSQLUtilitiesTest.CommandHistoryFile.*
+      # asserts getpwuid(getuid())->pw_dir == $HOME — pin HOME to /root
+      # so the two helpers agree.
+      HOME: /root
+      # Per-partition build, so _sanity_ label selects this partition's
+      # tests.
+      LABEL_REGEX: "_sanity_"
+      # ExecuteTest aggregates ~hundreds of gtest cases and runs ~1-2h in
+      # release+CUDA mode. Set ctest per-test timeout to 2h so it has
+      # comfortable headroom; the 12h job-level timeout still bounds the
+      # total cumulative runtime.
+      CTEST_TIMEOUT_SECS: "7200"
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      # heavydb S3 test fixtures live in us-west-1 (see Tests/aws/s3client.conf
+      # committed default). Without this, the SDK signs requests for us-east-1
+      # and gets SignatureDoesNotMatch from any us-west-1 bucket.
+      AWS_REGION: us-west-1
+    steps:
+      - name: Configure AWS credentials
+        run: scripts/ci/write_aws_conf.sh
+
+      - name: Init heavy
+        run: scripts/ci/init_heavy.sh
+
+      - name: Run sanity tests
+        run: scripts/ci/run_ctest.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-multi-cuda-gcc-partition-${{ matrix.partition }}
+          path: /workspace/build/*.xml
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # build-multi-cuda-clang — release + CUDA build with clang. Build-only
+  # verification (no run_sanity_tests in the legacy matrix); succeeds if
+  # heavydb compiles cleanly. No image push since nothing consumes it.
+  # ---------------------------------------------------------------------------
+  build-multi-cuda-clang:
+    name: build (multi clang cuda-static)
+    needs: setup
+    if: ${{ needs.setup.outputs.skip != 'true' && (needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-cuda') }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.setup.outputs.latest_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      CC: clang
+      CXX: clang++
+      CMAKE_FLAGS: >-
+        -GNinja
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=OFF
+      MAKE_TARGETS: "mapd_java_components heavydb"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          pack: 'false'
+          mvn-log-name: multi-cuda-clang-mvn-build-log
+
+  # ---------------------------------------------------------------------------
+  # build-multi-static-debug — debug + no-CUDA + gcc static build. Pure
+  # build-only verification: confirms the codebase compiles cleanly under
+  # the debug+CPU-only flavor. No test consumer, so no image is pushed.
+  # ---------------------------------------------------------------------------
+  build-multi-static-debug:
+    name: build (multi gcc static debug)
+    needs: setup
+    if: ${{ needs.setup.outputs.skip != 'true' && (needs.setup.outputs.jobs_filter == 'all' || needs.setup.outputs.jobs_filter == 'multi-static-debug') }}
+    runs-on: linux-amd64-cpu32
+    container:
+      image: ${{ needs.setup.outputs.latest_image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=OFF
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=debug
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=OFF
+      MAKE_TARGETS: "mapd_java_components heavydb"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          pack: 'false'
+          mvn-log-name: multi-static-debug-mvn-build-log
+
+  # ---------------------------------------------------------------------------
+  # build-deps — deps-build mode (dispatched by `/deps-test`). Build-only
+  # verification that the heavydb product compiles against a freshly-built deps
+  # image, across all 4 variants (ubuntu/rocky × x86_64/aarch64). Modeled on
+  # build-multi-static-debug: gcc, no tests, no packing/GHCR push. The base
+  # image for each variant is the PR-scoped deps image identified by
+  # setup.deps_tag; when jobs_filter != 'deps-build' this whole matrix is
+  # skipped and the normal :latest jobs run instead.
+  # ---------------------------------------------------------------------------
+  build-deps:
+    name: build-deps (${{ matrix.label }})
+    needs: setup
+    if: ${{ needs.setup.outputs.skip != 'true' && needs.setup.outputs.jobs_filter == 'deps-build' }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      # 4 variants (ubuntu/rocky × x86_64/aarch64), each with its runner and the
+      # PR-scoped deps image ref — all computed by setup from the env block.
+      matrix: ${{ fromJSON(needs.setup.outputs.deps_build_matrix) }}
+    container:
+      image: ${{ matrix.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    env:
+      CMAKE_FLAGS: >-
+        -DENABLE_CUDA=ON
+        -DENABLE_RENDERING=OFF
+        -DCMAKE_BUILD_TYPE=release
+        -DPREFER_STATIC_LIBS=ON
+        -DENABLE_TESTS=OFF
+      MAKE_TARGETS: "mapd_java_components heavydb"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.setup.outputs.sha }}
+      - uses: ./.github/actions/heavydb-build-and-pack
+        with:
+          pack: 'false'
+          mvn-log-name: deps-build-${{ matrix.slug }}-mvn-build-log
+
+  # ---------------------------------------------------------------------------
+  # report — aggregate every job's result and report the single
+  # `pr-required-checks` status on the target commit. Branch protection on
+  # master requires this one context, regardless of how the individual jobs
+  # (and their matrix expansions) change over time. Posting via the API (rather
+  # than relying on this job's own check run) means the status lands on the PR
+  # head SHA whether the run was started by `/test` or by manual dispatch.
+  # ---------------------------------------------------------------------------
+  report:
+    name: report-status
+    needs:
+      - setup
+      - build-debug-static
+      - test-columnar
+      - test-sharding
+      - build-tsan
+      - test-tsan
+      - build-multi-render
+      - test-multi-render
+      - build-multi-cuda-gcc
+      - test-multi-cuda-gcc
+      - build-multi-cuda-clang
+      - build-multi-static-debug
+      - build-deps
+    if: always() && needs.setup.result == 'success' && needs.setup.outputs.skip != 'true'
     runs-on: linux-amd64-cpu16
     steps:
-      - name: placeholder
-        run: true
+      - name: Report aggregate status
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = '${{ needs.setup.outputs.sha }}';
+            const results = ${{ toJSON(needs) }};
+            // Skipped jobs (because of jobs_filter) count as success — only
+            // explicit failures or cancellations mark the overall check failed.
+            const ok = r => r === 'success' || r === 'skipped';
+            const jobs = Object.keys(results).filter(j => j !== 'setup');
+            const failed = jobs.filter(j => !ok(results[j].result));
+            const state = failed.length === 0 ? 'success' : 'failure';
+            const description = failed.length === 0
+              ? 'All required checks passed'
+              : `Did not pass: ${failed.join(', ')}`;
+            const targetUrl =
+              '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}';
+            await github.rest.repos.createCommitStatus({
+              owner, repo, sha, state, context: 'pr-required-checks',
+              description: description.slice(0, 140),
+              target_url: targetUrl });
+            // When running in deps-build mode (triggered by /deps-test via
+            // deps-image-builder.yml) also satisfy the deps-image-builder check,
+            // which was pended separately from pr-required-checks.
+            if ('${{ inputs.jobs }}' === 'deps-build') {
+              await github.rest.repos.createCommitStatus({
+                owner, repo, sha, state, context: 'deps-image-builder',
+                description: description.slice(0, 140),
+                target_url: targetUrl });
+            }
+            if (state !== 'success') core.setFailed(description);

@@ -1,0 +1,83 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_ray_tracing : enable
+//</extensions>
+
+//<includes>
+#include "Shading/projection.glsl"
+#include "RaytracingTest/AABB_payload.glsl"
+//</includes>
+
+layout(binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(rgba8, binding = 1) uniform image2D outputImage;
+
+layout(location = 0) rayPayloadEXT RayPayload rayPayload;
+
+// Maximum recursion depth for reflection
+const int kMaxReflectionDepth = 4;
+
+const int kNumAASamples = 8;
+vec2 weyl(int i) {
+  return fract(vec2(i*ivec2(12664745, 9560333))/exp2(24.0)); // integer mul to avoid round-off
+}
+
+void main() {
+  vec3 pixel_color = vec3(0);
+  for (int aa_sample = 0; aa_sample < kNumAASamples; aa_sample++) {
+    // Generate initial ray direction (primary ray)
+    vec4 origin = viewInverse * vec4(0, 0, 0, 1);
+    const vec2 aa_offset = weyl(aa_sample);
+    const vec2 pixel_center = vec2(gl_LaunchIDEXT.xy) + aa_offset;
+    const vec2 uv = pixel_center / vec2(gl_LaunchSizeEXT.xy);
+    vec2 d = uv * 2.0 - 1.0;
+    vec4 target = projInverse * vec4(d.x, d.y, 1, 1) ;
+    vec4 direction = viewInverse * vec4(normalize(target.xyz), 0);
+
+    // color accumulation
+    vec3 aa_sample_color = vec3(0);
+
+    // Initalize reflectivity to white. This simplifies compositing logic below
+    rayPayload.reflectivity = vec3(1);
+    for (int i = 0; i < kMaxReflectionDepth; i++) {
+      rayPayload.color = vec3(0);
+
+      // Capture the current `reflectivity`
+      // The payload value will be overwritten by either the hit or miss shader but we
+      // need the current value to composite the ray color with the emitting material color
+      vec3 reflectivity = rayPayload.reflectivity;
+
+      // Trace the ray
+      traceRayEXT(topLevelAS,
+                  gl_RayFlagsOpaqueEXT,
+                  0xff,    // culling mask (no culling),
+                  0,       // sbt record offset
+                  0,       // sbt record stride
+                  0,       // sbt miss shader index
+                  origin.xyz,
+                  0.001,     // t min
+                  direction.xyz,
+                  10000.0, // t max
+                  0);      // payload location binding
+
+      // Accumulate ray color, masking with the captured pre-trace reflectivity
+      aa_sample_color += (rayPayload.color * reflectivity);
+
+      // Check for hit surface reflectivity
+      if (dot(rayPayload.reflectivity, rayPayload.reflectivity) > 0.01) {
+        // Compute a new ray (reflection), which will be traced if the loop continues
+        origin.xyz = rayPayload.position;
+        direction.xyz = reflect(direction.xyz, rayPayload.normal);
+      } else {
+        // no-reflectivity, exit the loop
+        i = kMaxReflectionDepth;
+      }
+    }
+    pixel_color += aa_sample_color;
+  }
+
+  imageStore(outputImage, ivec2(gl_LaunchIDEXT.xy), vec4(pixel_color / float(kNumAASamples), 1.0));
+}

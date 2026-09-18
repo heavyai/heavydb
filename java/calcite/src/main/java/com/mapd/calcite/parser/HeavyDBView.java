@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package com.mapd.calcite.parser;
@@ -41,23 +30,17 @@ import ai.heavy.thrift.server.TTableDetails;
 public class HeavyDBView extends HeavyDBTable implements TranslatableTable {
   final static Logger HEAVYDBLOGGER = LoggerFactory.getLogger(HeavyDBView.class);
   private final String viewSql;
-  private SqlIdentifierCapturer accessObjects;
-  private RelRoot viewRelRoot;
+  private volatile SqlIdentifierCapturer accessObjects;
+  private volatile RelRoot viewRelRoot;
+  private volatile boolean initialized = false;
+  private final Object initLock = new Object();
 
   public HeavyDBView(String view_sql, TTableDetails ri, HeavyDBParser mp) {
     super(ri);
     this.viewSql = view_sql;
-    try {
-      HeavyDBParserOptions parserOptions = new HeavyDBParserOptions();
-      viewRelRoot = mp.queryToRelNode(viewSql, parserOptions);
-      accessObjects = mp.captureIdentifiers(viewSql, parserOptions.isLegacySyntax());
-    } catch (SqlParseException e) {
-      HEAVYDBLOGGER.error("error parsing view SQL: " + view_sql, e);
-    } catch (ValidationException ex) {
-      HEAVYDBLOGGER.error("error validating view SQL: " + view_sql, ex);
-    } catch (RelConversionException ex) {
-      HEAVYDBLOGGER.error("error doing Rel Conversion view SQL: " + view_sql, ex);
-    }
+    // Calcite 1.41 asks for view row types while the parser context is already
+    // established. Defer planning until that point instead of recursively
+    // planning the view from catalog-object construction.
   }
 
   public String toString() {
@@ -66,6 +49,7 @@ public class HeavyDBView extends HeavyDBTable implements TranslatableTable {
   }
 
   public SqlIdentifierCapturer getAccessedObjects() {
+    ensureInitialized();
     return accessObjects;
   }
 
@@ -80,11 +64,46 @@ public class HeavyDBView extends HeavyDBTable implements TranslatableTable {
 
   @Override
   public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
+    ensureInitialized();
     return viewRelRoot.rel;
   }
 
   @Override
   public RelDataType getRowType(RelDataTypeFactory rdtf) {
+    ensureInitialized();
     return viewRelRoot.validatedRowType;
+  }
+
+  private void ensureInitialized() {
+    if (initialized) {
+      return;
+    }
+
+    synchronized (initLock) {
+      if (initialized) {
+        return;
+      }
+
+      HeavyDBParser parser = CURRENT_PARSER.get();
+      if (parser == null) {
+        throw new IllegalStateException(
+                "HeavyDBView initialization requires a parser context.");
+      }
+
+      try {
+        HeavyDBParserOptions parserOptions = new HeavyDBParserOptions();
+        viewRelRoot = parser.queryToRelNode(viewSql, parserOptions);
+        accessObjects =
+                parser.captureIdentifiers(viewSql, parserOptions.isLegacySyntax());
+      } catch (SqlParseException e) {
+        HEAVYDBLOGGER.error("error parsing view SQL: " + viewSql, e);
+      } catch (ValidationException ex) {
+        HEAVYDBLOGGER.error("error validating view SQL: " + viewSql, ex);
+      } catch (RelConversionException ex) {
+        HEAVYDBLOGGER.error("error doing Rel Conversion view SQL: " + viewSql, ex);
+      } finally {
+        initialized = true;
+      }
+    }
   }
 }

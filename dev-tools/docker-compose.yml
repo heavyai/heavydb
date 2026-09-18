@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+services:
+  heavyai:
+    # Also tagged as :latest by `dev.sh build heavydb --docker` (convenient for local use)
+    image: heavyai-ubuntu22.04-cuda-render-x86_64:latest
+    container_name: heavyai
+    restart: unless-stopped
+
+    # -------------------------------------------------------------------
+    # NVIDIA GPU access (requires nvidia-container-toolkit on the host)
+    # -------------------------------------------------------------------
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu, compute, utility, render]
+
+    # -------------------------------------------------------------------
+    # Ports
+    #   6273 – Heavy Immerse (web UI)
+    #   6274 – HeavyDB binary / Thrift
+    #   6275 – HeavyDB internal
+    #   6276 – HeavyDB internal
+    #   6277 – HeavyDB internal
+    #   6278 – HeavyDB HTTP
+    #   6279 – Calcite (SQL parser)
+    # -------------------------------------------------------------------
+    ports:
+      - "6273:6273"   # Heavy Immerse UI  → http://localhost:6273
+      - "6274:6274"   # HeavyDB binary
+      - "6275:6275"
+      - "6276:6276"
+      - "6277:6277"
+      - "6278:6278"   # HeavyDB HTTP
+      - "6279:6279"   # Calcite
+
+    # -------------------------------------------------------------------
+    # Volumes
+    #   /var/lib/heavyai – persistent data, config, and logs
+    # -------------------------------------------------------------------
+    volumes:
+      - /var/lib/heavyai:/var/lib/heavyai
+
+    # -------------------------------------------------------------------
+    # Environment
+    #   NVIDIA_VISIBLE_DEVICES – expose all GPUs (or set to "0,1" etc.)
+    #   NVIDIA_DRIVER_CAPABILITIES – required for CUDA + render workloads
+    # -------------------------------------------------------------------
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics,render
+
+    # -------------------------------------------------------------------
+    # Shared memory – recommended for GPU/IPC workloads
+    # -------------------------------------------------------------------
+    ipc: host
+    shm_size: "2gb"
+
+    # -------------------------------------------------------------------
+    # ulimits – raise open-file and memory-lock limits for performance
+    # -------------------------------------------------------------------
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+      memlock:
+        soft: -1
+        hard: -1

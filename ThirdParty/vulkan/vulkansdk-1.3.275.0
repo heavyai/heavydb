@@ -1,0 +1,826 @@
+#!/bin/sh
+
+# This script was copied from the LunarG Vulkan SDK 1.3.275 bundle
+#
+# See ThirdParty/licenses/vulkan-sdk.txt for license attribution
+#
+# The build_loader() and build_validation_layers() functions were
+# modified to remove all WSI support (not needed for off-screen
+# rendering, thus removing the need for X11/XCB/Wayland dev packages)
+
+# Copyright (c) 2015-2024 LunarG, Inc.
+set -eu
+
+usage() {
+    echo "Script to build repositories that are useful for Vulkan development"
+    echo ""
+    echo "Usage: $0 [OPTIONS...] [REPOS...]"
+    echo "OPTIONS:"
+    echo "    --help|-h|help"
+    echo "        prints this usage and exits"
+    echo "    --clean|-c"
+    echo "        deletes all the build directories and exits"
+    echo "    --debug|-d"
+    echo "        build binaries as debuggable (will replace existing binaries)"
+    echo "    --numjobs <number>|-j <number>"
+    echo "        specify the number of jobs to use for building, defaults to using 1 job"
+    echo "    --maxjobs"
+    echo "        uses nproc to use maximum jobs as possible for building"
+    echo "    --skip-installing-deps|--disable-installing-deps|--skip-deps"
+    echo "        skips attempting to install package dependencies to build SDK"
+    echo "    --skip-building"
+    echo "        skips building the repository but will still clone it into the source directory"
+    echo "REPOS:"
+    echo "    Any or no repositories can be specified for building. If none are specified, then everything is built"
+    echo ""
+    echo "    Repositories that can be specified:"
+    echo "        [glslang] [vulkan-headers] [vulkan-loader|loader]"
+    echo "        [vulkan-validationlayers|layers] [vulkan-tools|tools] [vulkantools|lunarg-tools]"
+    echo "        [shaderc] [spirv-headers] [spirv-tools|spirvtools] [spirv-cross|spirvcross]"
+    echo "        [gfxreconstruct] [spirv-reflect] [vulkan-extensionlayer] [vulkan-profiles]"
+    echo "        [DirectXShaderCompiler|dxc] [volk] [VulkanMemoryAllocator|vma] [VulkanCapsViewer|vcv]"
+    echo "        [Vulkan-Utilities-Library|vul]"
+    echo ""
+    echo "        [all]"
+    echo "            this will build all the repositories, same as specifying no repositories"
+    echo "EXAMPLES:"
+    echo "    './vulkansdk --maxjobs' this will build everything and use as many jobs as possible"
+    echo "    './vulkansdk -j 4 vulkan-validationlayers' this will build vulkan-validationlayers using 4 jobs"
+    echo "    './vulkansdk --debug vulkan-loader' this will build a debuggable loader"
+    echo "    './vulkansdk --clean' deletes all the build directories and exits"
+    echo "    './vulkansdk glslang vulkan-tools' builds glslang and vulkan-tools"
+    echo ""
+    exit
+}
+
+clone_pull_repo() {
+    REPO_DIR=$1
+    REPO_URL=$2
+    REPO_REF=$3
+    if [ -d ${REPO_DIR} ]; then
+        git -C "${REPO_DIR}" checkout "${REPO_REF}"
+        git -C "${REPO_DIR}" pull origin "${REPO_REF}"
+    else
+        git -C "${SOURCEDIR}" clone --recurse-submodules "${REPO_URL}" "${REPO_DIR}"
+        git -C "${REPO_DIR}" checkout "${REPO_REF}"
+    fi
+    [ -f "${REPO_DIR}/.gitmodules" ] && git -C "${REPO_DIR}" submodule update || true
+}
+
+build_spirv_headers() {
+    echo "~~~Building SPIRV-Headers~~~"
+    clone_pull_repo "${SPIRV_HEADERS_DIR}" "https://github.com/KhronosGroup/SPIRV-Headers.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${SPIRV_HEADERS_DIR}" \
+          -B "${SPIRV_HEADERS_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="Release"
+    cmake --install "${SPIRV_HEADERS_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_spirv_tools() {
+    echo "~~~Building SPIRV-Tools~~~"
+    clone_pull_repo "${SPIRV_TOOLS_DIR}" "https://github.com/KhronosGroup/SPIRV-Tools.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${SPIRV_TOOLS_DIR}" \
+          -B "${SPIRV_TOOLS_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="Release" \
+          -DSPIRV-Headers_SOURCE_DIR="$ARCHDIR" \
+          -DSPIRV_SKIP_TESTS="ON"
+    cmake --build "${SPIRV_TOOLS_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${SPIRV_TOOLS_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_glslang() {
+    echo "~~~Building glslang~~~"
+    clone_pull_repo "${GLSL_DIR}" "https://github.com/KhronosGroup/glslang.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${GLSL_DIR}" \
+          -B "${GLSL_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELEASE_TYPE" \
+          -DBUILD_TESTING="OFF" \
+          -DALLOW_EXTERNAL_SPIRV_TOOLS="ON" \
+          -Dspirv-tools_SOURCE_DIR="${SPIRV_TOOLS_DIR}"
+    cmake --build "${GLSL_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${GLSL_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+    ln -sfrv "$BINDIR/glslang" "$BINDIR/glslangValidator"
+}
+
+build_headers() {
+    echo "~~~Building Vulkan-Headers~~~"
+    clone_pull_repo "${VH_DIR}" "https://github.com/KhronosGroup/Vulkan-Headers.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${VH_DIR}" \
+          -B "${VH_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELEASE_TYPE"
+    cmake --install "${VH_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_loader() {
+    echo "~~~Building Vulkan-Loader~~~"
+    clone_pull_repo "${VL_DIR}" "https://github.com/KhronosGroup/Vulkan-Loader.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${VL_DIR}" \
+          -B "${VL_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELDEBINFO_TYPE" \
+          -DVULKAN_HEADERS_INSTALL_DIR="$ARCHDIR" \
+          -DSYSCONFDIR="/etc" \
+          -DBUILD_WSI_XCB_SUPPORT=OFF \
+          -DBUILD_WSI_XLIB_SUPPORT=OFF \
+          -DBUILD_WSI_WAYLAND_SUPPORT=OFF
+    cmake --build "${VL_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${VL_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_robin_hood_hashing() {
+    echo "~~~Building Robin-Hood-Hashing~~~"
+    clone_pull_repo "${RH_DIR}" "https://github.com/martinus/robin-hood-hashing.git" "3.11.5"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${RH_DIR}" \
+          -B "${RH_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="Release" \
+          -DRH_STANDALONE_PROJECT="OFF"
+    cmake --build "${RH_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${RH_DIR}/${BUILD_DIR}" --prefix "${RH_DIR}/${BUILD_DIR}/install/"
+}
+
+build_vulkan_utility_libraries() {
+    echo "~~~Building Vulkan-Utility-Libraries~~~"
+    clone_pull_repo "${VUL_DIR}" "https://github.com/KhronosGroup/Vulkan-Utility-Libraries.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${VUL_DIR}" \
+          -B "${VUL_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELEASE_TYPE" \
+          -DVULKAN_HEADERS_INSTALL_DIR="$ARCHDIR"
+    cmake --build "${VUL_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${VUL_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_validation_layers() {
+    echo "~~~Building Vulkan-ValidationLayers~~~"
+    clone_pull_repo "${VV_DIR}" "https://github.com/KhronosGroup/Vulkan-ValidationLayers.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${VV_DIR}" \
+          -B "${VV_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELDEBINFO_TYPE" \
+          -DVULKAN_HEADERS_INSTALL_DIR="$ARCHDIR" \
+          -DGLSLANG_INSTALL_DIR="$ARCHDIR" \
+          -DSPIRV_HEADERS_INSTALL_DIR="$ARCHDIR" \
+          -DSPIRV_TOOLS_INSTALL_DIR="$ARCHDIR" \
+          -DBUILD_TESTS="OFF" \
+          -DANNOTATED_SPEC_LINK="\"https://vulkan.lunarg.com/doc/view/_MAGIC_VERSION_ID_.0/linux/_MAGIC_ANNOTATED_SPEC_TYPE_/vkspec.html\"" \
+          -DUSE_ROBIN_HOOD_HASHING="ON" \
+          -DROBIN_HOOD_HASHING_INSTALL_DIR="${RH_DIR}/${BUILD_DIR}/install/" \
+          -DBUILD_WSI_XCB_SUPPORT=OFF \
+          -DBUILD_WSI_XLIB_SUPPORT=OFF \
+          -DBUILD_WSI_WAYLAND_SUPPORT=OFF
+    cmake --build "${VV_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${VV_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_extension_layer() {
+    echo "~~~Building Vulkan-ExtensionLayer~~~"
+    clone_pull_repo "${EXT_LAYER_DIR}" "https://github.com/KhronosGroup/Vulkan-ExtensionLayer.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${EXT_LAYER_DIR}" \
+          -B "${EXT_LAYER_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELDEBINFO_TYPE" \
+          -DVULKAN_HEADERS_INSTALL_DIR="$ARCHDIR" \
+          -DSPIRV_HEADERS_INSTALL_DIR="$ARCHDIR" \
+          -DSPIRV_TOOLS_INSTALL_DIR="$ARCHDIR" \
+          -DBUILD_TESTS="OFF"
+    cmake --build "${EXT_LAYER_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${EXT_LAYER_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_tools() {
+    echo "~~~Building Vulkan-Tools~~~"
+    clone_pull_repo "${VT_DIR}" "https://github.com/KhronosGroup/Vulkan-Tools.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${VT_DIR}" \
+          -B "${VT_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELDEBINFO_TYPE" \
+          -DVULKAN_LOADER_INSTALL_DIR="$ARCHDIR" \
+          -DVULKAN_HEADERS_INSTALL_DIR="$ARCHDIR" \
+          -DVOLK_INSTALL_DIR="$ARCHDIR"
+    cmake --build "${VT_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${VT_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_lunarg_tools() {
+    echo "~~~Building LunarG VulkanTools~~~"
+    clone_pull_repo "${LGVT_DIR}" "https://github.com/LunarG/VulkanTools.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${LGVT_DIR}" \
+          -B "${LGVT_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELDEBINFO_TYPE" \
+          -DVULKAN_HEADERS_INSTALL_DIR="$ARCHDIR" \
+          -DVULKAN_LOADER_INSTALL_DIR="$ARCHDIR" \
+          -DVULKAN_UTILITY_LIBRARIES_INSTALL_DIR="$ARCHDIR" \
+          -DJSONCPP_INSTALL_DIR="${JSONCPP_DIR}/${BUILD_DIR}/install/" \
+          -DVALIJSON_INSTALL_DIR="${VALIJSON_DIR}/${BUILD_DIR}/install/" \
+          -DBUILD_TESTS="OFF"
+    cmake --build "${LGVT_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${LGVT_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_shaderc() {
+    echo "~~~Building shaderc~~~"
+    clone_pull_repo "${SHADERC_DIR}" "https://github.com/google/shaderc.git" "93b465f4f2eb5ef92004231b3c099944cd5cbf5b"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cd "${SHADERC_DIR}" && python update_shaderc_sources.py && cd "${SDKDIR}"
+    cmake -S "${SHADERC_DIR}/src/" \
+          -B "${SHADERC_DIR}/src/${BUILD_DIR}" \
+          -G"Unix Makefiles" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELEASE_TYPE" \
+          -DSHADERC_SKIP_INSTALL="ON" \
+          -DSHADERC_ENABLE_INSTALL="ON" \
+          -DSHADERC_SKIP_TESTS="ON" \
+          -DSKIP_SPIRV_TOOLS_INSTALL="ON" \
+          -DSKIP_GLSLANG_INSTALL="ON" \
+          -DSKIP_GOOGLETEST_INSTALL="ON" \
+          -DSHADERC_SKIP_EXAMPLES="ON" \
+          -DSHADERC_SKIP_COPYRIGHT_CHECK="ON"
+    cmake --build "${SHADERC_DIR}/src/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${SHADERC_DIR}/src/${BUILD_DIR}" --prefix "$ARCH"
+    install -vm644 "${SHADERC_DIR}/src/${BUILD_DIR}/libshaderc_util/libshaderc_util.a" "$LIBDIR"
+}
+
+build_spirv_cross() {
+    echo "~~~Building SPIRV-Cross~~~"
+    clone_pull_repo "${SPIRV_CROSS_DIR}" "https://github.com/KhronosGroup/SPIRV-Cross.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${SPIRV_CROSS_DIR}" \
+          -B "${SPIRV_CROSS_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELEASE_TYPE" \
+          -DSPIRV_CROSS_ENABLE_TESTS="OFF" \
+          -DSPIRV_CROSS_SHARED="ON" \
+          -DSPIRV_CROSS_FORCE_PIC="ON"
+    cmake --build "${SPIRV_CROSS_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${SPIRV_CROSS_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_gfxreconstruct() {
+    echo "~~~Building GFXreconstruct~~~"
+    clone_pull_repo "${GFXRECONSTRUCT_DIR}" "https://github.com/LunarG/gfxreconstruct.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${GFXRECONSTRUCT_DIR}" \
+          -B "${GFXRECONSTRUCT_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELDEBINFO_TYPE" \
+          -DD3D12_SUPPORT="OFF"
+    cmake --build "${GFXRECONSTRUCT_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${GFXRECONSTRUCT_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_dxc() {
+    echo "~~~Building DXC~~~"
+    clone_pull_repo "${DXC_DIR}" "https://github.com/microsoft/DirectXShaderCompiler.git" "7d2f9c74d53dcbb9de4e148b68c99e5986875be6"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${DXC_DIR}" \
+          -B "${DXC_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELEASE_TYPE" \
+          -GNinja \
+          -DLLVM_BUILD_TOOLS="OFF" \
+          -C"${DXC_DIR}"/cmake/caches/PredefinedParams.cmake
+    cmake --build "${DXC_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${DXC_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+    install -vd "${INCLUDEDIR}/dxc/"
+    install -v "${DXC_DIR}/include/dxc/dxcapi.h" "${INCLUDEDIR}/dxc/"
+    install -v "${DXC_DIR}/include/dxc/WinAdapter.h" "${INCLUDEDIR}/dxc/"
+}
+
+build_spirv_reflect() {
+    echo "~~~Building SPIRV-Reflect~~~"
+    clone_pull_repo "${SPIRV_REFLECT_DIR}" "https://github.com/KhronosGroup/SPIRV-Reflect.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${SPIRV_REFLECT_DIR}" \
+          -B "${SPIRV_REFLECT_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELEASE_TYPE" \
+          -DSPIRV_REFLECT_BUILD_TESTS="OFF"
+    cmake --build "${SPIRV_REFLECT_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${SPIRV_REFLECT_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+    install -vd "${INCLUDEDIR}/SPIRV-Reflect/"
+    install -v "${SPIRV_REFLECT_DIR}/spirv_reflect.c" "${INCLUDEDIR}/SPIRV-Reflect/"
+    install -v "${SPIRV_REFLECT_DIR}/spirv_reflect.h" "${INCLUDEDIR}/SPIRV-Reflect/"
+    install -vd "${INCLUDEDIR}/SPIRV-Reflect/include/spirv/unified1/"
+    install -v "${SPIRV_REFLECT_DIR}/include/spirv/unified1/spirv.h" "${INCLUDEDIR}/SPIRV-Reflect/include/spirv/unified1/"
+}
+
+build_vulkan_profiles() {
+    echo "~~~Building Vulkan-Profiles~~~"
+    clone_pull_repo "${VULKAN_PROFILES_DIR}" "https://github.com/KhronosGroup/Vulkan-Profiles.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${VULKAN_PROFILES_DIR}" \
+          -B "${VULKAN_PROFILES_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELEASE_TYPE" \
+          -DCMAKE_INSTALL_DATADIR="$SHAREDIR" \
+          -DVULKAN_HEADERS_INSTALL_DIR="" \
+          -DVULKAN_UTILITY_LIBRARIES_INSTALL_DIR="$ARCHDIR" \
+          -DVULKAN_LOADER_INSTALL_DIR="$ARCHDIR" \
+          -DVULKAN_VALIDATIONLAYERS_INSTALL_DIR="$ARCHDIR" \
+          -DJSONCPP_INSTALL_DIR="${JSONCPP_DIR}/${BUILD_DIR}/install/" \
+          -DVALIJSON_INSTALL_DIR="${VALIJSON_DIR}/${BUILD_DIR}/install/" \
+          -DPROFILES_BUILD_TESTS="OFF"
+    cmake --build "${VULKAN_PROFILES_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${VULKAN_PROFILES_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_volk() {
+    echo "~~~Building volk~~~"
+    clone_pull_repo "${VOLK_DIR}" "https://github.com/zeux/volk.git" "vulkan-sdk-1.3.275"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${VOLK_DIR}" \
+          -B "${VOLK_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="$BUILD_RELEASE_TYPE" \
+          -DVOLK_INSTALL="ON" \
+          -DVULKAN_HEADERS_INSTALL_DIR="$ARCHDIR"
+    cmake --build "${VOLK_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${VOLK_DIR}/${BUILD_DIR}" --prefix "$ARCH"
+}
+
+build_vma() {
+    echo "~~~Building VulkanMemoryAllocator~~~"
+    clone_pull_repo "${VMA_DIR}" "https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git" "5e43c795daf43dd09398d8307212e85025215052"
+    [ ${DO_BUILD} -eq 0 ] && return
+    install -vd "${INCLUDEDIR}/vma/"
+    install -v "${VMA_DIR}/include/vk_mem_alloc.h" "${INCLUDEDIR}/vma/"
+}
+
+build_VulkanCapsViewer() {
+    echo "~~~Building VulkanCapsViewer~~~"
+    clone_pull_repo "${VCV_DIR}" "https://github.com/SaschaWillems/VulkanCapsViewer.git" "3.32"
+    [ ${DO_BUILD} -eq 0 ] && return
+    [ -d "${VCV_DIR}/${BUILD_DIR}" ] || mkdir "${VCV_DIR}/${BUILD_DIR}"
+    cd "${VCV_DIR}/${BUILD_DIR}"
+    if [ -x "$(command -v qmake-qt5)" ]; then #fedora
+        qmake-qt5 "${VCV_DIR}"
+    else
+        qmake "${VCV_DIR}"
+    fi
+    LIBRARY_PATH="${LIBDIR}" make -C "${VCV_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    install -v "${VCV_DIR}/${BUILD_DIR}/vulkanCapsViewer" "${BINDIR}"
+    cd "${SDKDIR}"
+}
+
+build_jsoncpp() {
+    echo "~~~Building jsoncpp~~~"
+    clone_pull_repo "${JSONCPP_DIR}" "https://github.com/open-source-parsers/jsoncpp.git" "1.9.5"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${JSONCPP_DIR}" \
+          -B "${JSONCPP_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="Release" \
+          -DCMAKE_INSTALL_PREFIX="${JSONCPP_DIR}/${BUILD_DIR}/install/" \
+          -DCMAKE_POSITION_INDEPENDENT_CODE="ON" \
+          -DJSONCPP_WITH_TESTS="OFF" \
+          -DJSONCPP_WITH_POST_BUILD_UNITTEST="OFF" \
+          -DJSONCPP_WITH_WARNING_AS_ERROR="OFF" \
+          -DJSONCPP_WITH_PKGCONFIG_SUPPORT="OFF" \
+          -DBUILD_SHARED_LIBS="OFF" \
+          -DBUILD_STATIC_LIBS="ON" \
+          -DBUILD_OBJECT_LIBS="OFF"
+    cmake --build "${JSONCPP_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${JSONCPP_DIR}/${BUILD_DIR}/" --prefix "${JSONCPP_DIR}/${BUILD_DIR}/install/"
+}
+
+build_valijson() {
+    echo "~~~Building valijson~~~"
+    clone_pull_repo "${VALIJSON_DIR}" "https://github.com/tristanpenman/valijson.git" "v1.0.1"
+    [ ${DO_BUILD} -eq 0 ] && return
+    cmake -S "${VALIJSON_DIR}" \
+          -B "${VALIJSON_DIR}/${BUILD_DIR}" \
+          -DCMAKE_BUILD_TYPE="Release"
+    cmake --build "${VALIJSON_DIR}/${BUILD_DIR}" -j $NUMJOBS
+    cmake --install "${VALIJSON_DIR}/${BUILD_DIR}/" --prefix "${VALIJSON_DIR}/${BUILD_DIR}/install/"
+}
+
+clean_builds() {
+    [ -d "${SPIRV_HEADERS_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${SPIRV_HEADERS_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${SPIRV_TOOLS_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${SPIRV_TOOLS_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${GLSL_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${GLSL_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VH_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VH_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VL_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VL_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${RH_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${RH_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VV_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VV_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VT_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VT_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${LGVT_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${LGVT_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${SHADERC_DIR:?}/src/${BUILD_DIR:?}" ] && rm -r "${SHADERC_DIR}/src/${BUILD_DIR}" 2>/dev/null
+    [ -d "${SPIRV_CROSS_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${SPIRV_CROSS_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${GFXRECONSTRUCT_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${GFXRECONSTRUCT_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${DXC_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${DXC_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${SPIRV_REFLECT_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${SPIRV_REFLECT_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${EXT_LAYER_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${EXT_LAYER_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VULKAN_PROFILES_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VULKAN_PROFILES_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VOLK_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VOLK_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VMA_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VMA_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VCV_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VCV_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${JSONCPP_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${JSONCPP_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VALIJSON_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VALIJSON_DIR}/${BUILD_DIR}" 2>/dev/null
+    [ -d "${VUL_DIR:?}/${BUILD_DIR:?}" ] && rm -r "${VUL_DIR}/${BUILD_DIR}" 2>/dev/null
+    echo "All Build Directories Removed"
+    exit
+}
+
+clean_nonsdk_files() {
+    if [ $BUILD_VUL -eq 1 ]; then
+        rm -r "${INCLUDEDIR}/vulkan/layer/"
+        rm "${INCLUDEDIR}/vulkan/utility/vk_dispatch_table.h" \
+           "${INCLUDEDIR}/vulkan/utility/vk_struct_helper.hpp"
+    fi
+    if [ $BUILD_SPIRV_HEADERS -eq 1 ]; then
+        rm -r "${INCLUDEDIR}/spirv/1.0/" \
+           "${INCLUDEDIR}/spirv/1.1/" \
+           "${INCLUDEDIR}/spirv/1.2/"
+        rm "${INCLUDEDIR}/spirv/unified1/"AMD*.h \
+           "${INCLUDEDIR}/spirv/unified1/DebugInfo.h" \
+           "${INCLUDEDIR}/spirv/unified1/"NonSemantic*.h \
+           "${INCLUDEDIR}/spirv/unified1/"OpenCL*.h \
+           "${INCLUDEDIR}/spirv/unified1/"extinst*.json \
+           "${INCLUDEDIR}/spirv/unified1/spirv.core.grammar.json"
+    fi
+    if [ $BUILD_SPIRV_TOOLS -eq 1 ]; then
+        rm "${INCLUDEDIR}/spirv-tools/instrument.hpp"
+        rm "${BINDIR}/spirv-objdump"
+    fi
+    if [ $BUILD_GLSLANG -eq 1 ]; then
+        rm "${INCLUDEDIR}/glslang/build_info.h" \
+           "${INCLUDEDIR}/glslang/SPIRV/disassemble.h"
+    fi
+    if [ $BUILD_SPIRV_CROSS -eq 1 ]; then
+        rm "${INCLUDEDIR}/spirv_cross/spirv_cpp.hpp" \
+           "${INCLUDEDIR}/spirv_cross/spirv_cross_util.hpp"
+    fi
+    if [ $BUILD_DXC -eq 1 ]; then
+        rm -r "${INCLUDEDIR}/clang/" \
+           "${INCLUDEDIR}/clang-c/" \
+           "${INCLUDEDIR}/llvm/" \
+           "${INCLUDEDIR}/llvm-c/"
+    fi
+    if [ $BUILD_EXTENSION_LAYERS -eq 1 ]; then
+        rm "${LIBDIR}/libVkLayer_khronos_timeline_semaphore.so" \
+           "${ARCHDIR}/share/vulkan/explicit_layer.d/VkLayer_khronos_timeline_semaphore.json"
+    fi
+}
+
+install_deps() {
+    echo "~~~Attempting to install dependencies~~~"
+    ID=$(grep '^ID=' /etc/os-release | cut -d= -f2)
+    if [ "$ID" = "ubuntu" ]; then
+        VERSION=$(grep '^VERSION_ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+        if [ "$VERSION" = "20.04" ]; then
+            QT5_PACKAGE="qt5-default"
+        else
+            QT5_PACKAGE="qtbase5-dev"
+        fi
+        sudo apt-get update
+        sudo apt-get install libglm-dev cmake libxcb-dri3-0 libxcb-present0 libpciaccess0 \
+             libpng-dev libxcb-keysyms1-dev libxcb-dri3-dev libx11-dev g++ gcc \
+             libwayland-dev libxrandr-dev libxcb-randr0-dev libxcb-ewmh-dev \
+             git python-is-python3 bison libx11-xcb-dev liblz4-dev libzstd-dev python3-distutils \
+             ocaml-core ninja-build pkg-config libxml2-dev wayland-protocols python3-jsonschema $QT5_PACKAGE
+    elif [ "$ID" = "fedora" ]; then
+        sudo dnf update
+        sudo dnf install @development-tools which glm-devel cmake libpng-devel wayland-devel \
+             libpciaccess-devel libX11-devel libXpresent libxcb xcb-util libxcb-devel libXrandr-devel \
+             xcb-util-keysyms-devel xcb-util-wm-devel python python3 git lz4-devel libzstd-devel python3-distutils-extra qt \
+             gcc-g++ wayland-protocols-devel ninja-build python3-jsonschema qt5-qtbase-devel python-unversioned-command \
+	     python3-setuptools
+    elif [ "$ID" = "arch" ]; then
+        sudo pacman -Sy
+        sudo pacman -S --needed base-devel glm cmake libpng wayland libpciaccess libx11 libxpresent \
+             libxcb xcb-util libxrandr xcb-util-keysyms xcb-util-wm python git lz4 zstd python-distlib qt5-base \
+             wayland-protocols ninja python-jsonschema
+    else
+        echo "Skipping installing dependencies - your OS is not tested for this script to install dependencies"
+    fi
+}
+
+SDKDIR="$( dirname "$( readlink -f "${BASH_SOURCE:-$0}" )" )"
+if [ -z "${SDKDIR}" ] || [ ! -n "${SDKDIR}" ] || [ ! -d "${SDKDIR}" ]; then
+    echo "The SDK directory is invalid"
+    exit 1
+fi
+cd "${SDKDIR}"
+
+ARCH="$(uname -m)"
+ARCHDIR="${SDKDIR}/${ARCH}"
+[ -d "${ARCHDIR}" ] || mkdir "${ARCHDIR}"
+BINDIR="${ARCHDIR}"/bin
+[ -d "${BINDIR}" ] || mkdir "${BINDIR}"
+SHAREDIR="${ARCHDIR}"/share
+[ -d "${SHAREDIR}" ] || mkdir "${SHAREDIR}"
+LIBDIR="${ARCHDIR}"/lib
+[ -d "${LIBDIR}" ] || mkdir "${LIBDIR}"
+INCLUDEDIR="${ARCHDIR}"/include
+[ -d "${INCLUDEDIR}" ] || mkdir -p "${INCLUDEDIR}/vulkan/"
+SOURCEDIR="${SDKDIR}"/source
+[ -d "${SOURCEDIR}" ] || mkdir "${SOURCEDIR}"
+
+SPIRV_HEADERS_DIR="${SOURCEDIR}"/SPIRV-Headers
+SPIRV_TOOLS_DIR="${SOURCEDIR}"/SPIRV-Tools
+GLSL_DIR="${SOURCEDIR}"/glslang
+VH_DIR="${SOURCEDIR}"/Vulkan-Headers
+VL_DIR="${SOURCEDIR}"/Vulkan-Loader
+RH_DIR="${SOURCEDIR}"/robin-hood-hashing
+VV_DIR="${SOURCEDIR}"/Vulkan-ValidationLayers
+VT_DIR="${SOURCEDIR}"/Vulkan-Tools
+LGVT_DIR="${SOURCEDIR}"/VulkanTools
+SHADERC_DIR="${SOURCEDIR}"/shaderc
+SPIRV_CROSS_DIR="${SOURCEDIR}"/SPIRV-Cross
+GFXRECONSTRUCT_DIR="${SOURCEDIR}"/gfxreconstruct
+DXC_DIR="${SOURCEDIR}"/DirectXShaderCompiler
+SPIRV_REFLECT_DIR="${SOURCEDIR}"/SPIRV-Reflect
+EXT_LAYER_DIR="${SOURCEDIR}"/Vulkan-ExtensionLayer
+VULKAN_PROFILES_DIR="${SOURCEDIR}"/Vulkan-Profiles
+VOLK_DIR="${SOURCEDIR}"/volk
+VMA_DIR="${SOURCEDIR}"/VulkanMemoryAllocator
+VCV_DIR="${SOURCEDIR}"/VulkanCapsViewer
+JSONCPP_DIR="${SOURCEDIR}"/jsoncpp
+VALIJSON_DIR="${SOURCEDIR}"/valijson
+VUL_DIR="${SOURCEDIR}"/Vulkan-Utility-Libraries
+
+NUMJOBS="1"
+INSTALL_DEPS=1
+DO_BUILD=1
+CLEAN_NONSDK_FILES=1
+
+BUILD_DIR="build"
+BUILD_RELDEBINFO_TYPE="RelWithDebInfo"
+BUILD_RELEASE_TYPE="Release"
+BUILD_DEBUG_TYPE="Debug"
+
+BUILD_HEADERS=0
+BUILD_LOADER=0
+BUILD_ROBIN_HOOD_HASHING=0
+BUILD_VALIDATION_LAYERS=0
+BUILD_EXTENSION_LAYERS=0
+BUILD_TOOLS=0
+BUILD_LUNARG_TOOLS=0
+BUILD_SHADERC=0
+BUILD_SPIRV_HEADERS=0
+BUILD_SPIRV_TOOLS=0
+BUILD_GLSLANG=0
+BUILD_SPIRV_CROSS=0
+BUILD_GFXRECONSTRUCT=0
+BUILD_DXC=0
+BUILD_SPIRV_REFLECT=0
+BUILD_VULKAN_PROFILES=0
+BUILD_VOLK=0
+BUILD_VMA=0
+BUILD_VCV=0
+BUILD_JSONCPP=0
+BUILD_VALIJSON=0
+BUILD_VUL=0
+
+build_all() {
+    BUILD_HEADERS=1
+    BUILD_LOADER=1
+    BUILD_ROBIN_HOOD_HASHING=1
+    BUILD_VALIDATION_LAYERS=1
+    BUILD_EXTENSION_LAYERS=1
+    BUILD_TOOLS=1
+    BUILD_JSONCPP=1
+    BUILD_LUNARG_TOOLS=1
+    BUILD_SHADERC=1
+    BUILD_SPIRV_HEADERS=1
+    BUILD_SPIRV_TOOLS=1
+    BUILD_GLSLANG=1
+    BUILD_SPIRV_CROSS=1
+    BUILD_GFXRECONSTRUCT=1
+    BUILD_DXC=1
+    BUILD_SPIRV_REFLECT=1
+    BUILD_VULKAN_PROFILES=1
+    BUILD_VOLK=1
+    BUILD_VMA=1
+    BUILD_VCV=1
+    BUILD_VALIJSON=1
+    BUILD_VUL=1
+}
+
+BUILD_EVERYTHING=1
+while test $# -gt 0; do
+    case "$1" in
+        help|--help|-h)
+            usage
+            ;;
+        all)
+            build_all
+            ;;
+        --clean|-c|clean)
+            clean_builds
+            ;;
+        --numjobs|-j)
+            shift 1
+            NUMJOBS="${1}"
+            ;;
+        --skip-building)
+            DO_BUILD=0
+            ;;
+        --maxjobs)
+            if [ -z ${MAKEFLAGS+xyz} ]; then
+                if [ -x "$(command -v nproc)" ]; then
+                    NUMJOBS="$(expr $(nproc) - 1)"
+                fi
+            fi
+            ;;
+        --skip-installing-deps|--disable-installing-deps|--skip-deps)
+            INSTALL_DEPS=0
+            ;;
+        --debug|-d|debug)
+            BUILD_RELDEBINFO_TYPE="Debug"
+            BUILD_RELEASE_TYPE="Debug"
+            BUILD_DEBUG_TYPE="Debug"
+            ;;
+        [Vv]ulkan-[Hh]eaders|headers)
+            BUILD_EVERYTHING=0
+            BUILD_HEADERS=1
+            ;;
+        [Vv]ulkan-[Ll]oader|loader)
+            BUILD_EVERYTHING=0
+            BUILD_HEADERS=1
+            BUILD_LOADER=1
+            ;;
+        [Vv]ulkan-[Vv]alidation[Ll]ayers|layers)
+            BUILD_EVERYTHING=0
+            BUILD_SPIRV_HEADERS=1
+            BUILD_SPIRV_TOOLS=1
+            BUILD_GLSLANG=1
+            BUILD_VUL=1
+            BUILD_HEADERS=1
+            BUILD_SPIRV_HEADERS=1
+            BUILD_SPIRV_TOOLS=1
+            BUILD_ROBIN_HOOD_HASHING=1
+            BUILD_VALIDATION_LAYERS=1
+            ;;
+        [Vv]ulkan-[Ee]xtension[Ll]ayer)
+            BUILD_EVERYTHING=0
+            BUILD_HEADERS=1
+            BUILD_EXTENSION_LAYERS=1
+            ;;
+        [Vv]ulkan-[Tt]ools|[Kk]hronos-[Tt]ools|tools)
+            BUILD_EVERYTHING=0
+            BUILD_HEADERS=1
+            BUILD_LOADER=1
+            BUILD_VOLK=1
+            BUILD_TOOLS=1
+            ;;
+        [Vv]ulkan[Tt]ools|lunarg-tools)
+            BUILD_EVERYTHING=0
+            BUILD_JSONCPP=1
+            BUILD_VALIJSON=1
+            BUILD_SPIRV_HEADERS=1
+            BUILD_SPIRV_TOOLS=1
+            BUILD_VUL=1
+            BUILD_GLSLANG=1
+            BUILD_HEADERS=1
+            BUILD_LOADER=1
+            BUILD_ROBIN_HOOD_HASHING=1
+            BUILD_VALIDATION_LAYERS=1
+            BUILD_LUNARG_TOOLS=1
+            ;;
+        shaderc)
+            BUILD_EVERYTHING=0
+            BUILD_SHADERC=1
+            ;;
+        [Ss]pirv-[Hh]eaders)
+            BUILD_EVERYTHING=0
+            BUILD_SPIRV_HEADERS=1
+            ;;
+        SPIRV-Tools|spirv-tools|spirvtools|[Ss]pirv-[Tt]ools)
+            BUILD_EVERYTHING=0
+            BUILD_SPIRV_HEADERS=1
+            BUILD_SPIRV_TOOLS=1
+            ;;
+        glslang)
+            BUILD_EVERYTHING=0
+            BUILD_SPIRV_HEADERS=1
+            BUILD_SPIRV_TOOLS=1
+            BUILD_GLSLANG=1
+            ;;
+        SPIRV-Cross|spirv-cross|spirvcross)
+            BUILD_EVERYTHING=0
+            BUILD_SPIRV_CROSS=1
+            ;;
+        gfxreconstruct|gfxrecon)
+            BUILD_EVERYTHING=0
+            BUILD_GFXRECONSTRUCT=1
+            ;;
+        DirectXShaderCompiler|DXC|dxc)
+            BUILD_EVERYTHING=0
+            BUILD_DXC=1
+            ;;
+        SPIRV-Reflect|spirv-reflect|spirvreflect)
+            BUILD_EVERYTHING=0
+            BUILD_SPIRV_REFLECT=1
+            ;;
+        Vulkan-Profiles|vulkan-profiles|vulkanprofiles)
+            BUILD_EVERYTHING=0
+            BUILD_JSONCPP=1
+            BUILD_VALIJSON=1
+            BUILD_SPIRV_HEADERS=1
+            BUILD_SPIRV_TOOLS=1
+            BUILD_VUL=1
+            BUILD_HEADERS=1
+            BUILD_LOADER=1
+            BUILD_ROBIN_HOOD_HASHING=1
+            BUILD_VALIDATION_LAYERS=1
+            BUILD_VULKAN_PROFILES=1
+            ;;
+        Volk|volk)
+            BUILD_EVERYTHING=0
+            BUILD_VOLK=1
+            ;;
+        VMA|vma|VulkanMemoryAllocator)
+            BUILD_EVERYTHING=0
+            BUILD_VMA=1
+            ;;
+        VCV|vcv|Hardwarecaps|VulkanCapsViewer)
+            BUILD_EVERYTHING=0
+            BUILD_LOADER=1
+            BUILD_VCV=1
+            ;;
+        Vulkan-Utilities-Library|vulkan-utilities-library|vul|VUL)
+            BUILD_EVERYTHING=0
+            BUILD_HEADERS=1
+            BUILD_VUL=1
+            ;;
+        *)
+            echo "error: unknown option" && usage
+            ;;
+    esac
+    shift
+done
+
+if [ $INSTALL_DEPS -eq 1 ]; then
+    install_deps
+fi
+if [ $BUILD_EVERYTHING -eq 1 ]; then
+    build_all
+fi
+if [ $BUILD_SPIRV_HEADERS -eq 1 ]; then
+    build_spirv_headers
+fi
+if [ $BUILD_SPIRV_TOOLS -eq 1 ]; then
+    build_spirv_tools
+fi
+if [ $BUILD_GLSLANG -eq 1 ]; then
+    build_glslang
+fi
+if [ $BUILD_HEADERS -eq 1 ]; then
+    build_headers
+fi
+if [ $BUILD_VUL -eq 1 ]; then
+    build_vulkan_utility_libraries
+fi
+if [ $BUILD_LOADER -eq 1 ]; then
+    build_loader
+fi
+if [ $BUILD_ROBIN_HOOD_HASHING -eq 1 ]; then
+    build_robin_hood_hashing
+fi
+if [ $BUILD_VALIDATION_LAYERS -eq 1 ]; then
+    build_validation_layers
+fi
+if [ $BUILD_EXTENSION_LAYERS -eq 1 ]; then
+    build_extension_layer
+fi
+if [ $BUILD_VOLK -eq 1 ]; then
+    build_volk
+fi
+if [ $BUILD_TOOLS -eq 1 ]; then
+    build_tools
+fi
+if [ $BUILD_JSONCPP -eq 1 ]; then
+    build_jsoncpp
+fi
+if [ $BUILD_VALIJSON -eq 1 ]; then
+    build_valijson
+fi
+if [ $BUILD_LUNARG_TOOLS -eq 1 ]; then
+    build_lunarg_tools
+fi
+if [ $BUILD_SHADERC -eq 1 ]; then
+    build_shaderc
+fi
+if [ $BUILD_SPIRV_CROSS -eq 1 ]; then
+    build_spirv_cross
+fi
+if [ $BUILD_GFXRECONSTRUCT -eq 1 ]; then
+    build_gfxreconstruct
+fi
+if [ $BUILD_DXC -eq 1 ]; then
+    build_dxc
+fi
+if [ $BUILD_SPIRV_REFLECT -eq 1 ]; then
+    build_spirv_reflect
+fi
+if [ $BUILD_VULKAN_PROFILES -eq 1 ]; then
+    build_vulkan_profiles
+fi
+if [ $BUILD_VMA -eq 1 ]; then
+    build_vma
+fi
+if [ $BUILD_VCV -eq 1 ]; then
+    build_VulkanCapsViewer
+fi
+if [ $CLEAN_NONSDK_FILES -eq 1 ]; then
+    clean_nonsdk_files
+fi

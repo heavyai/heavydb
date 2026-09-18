@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -53,12 +42,11 @@
 #include "Catalog/TableMetadata.h"
 #include "Catalog/Types.h"
 #include "DataMgr/DataMgr.h"
-#include "OSDependent/heavyai_locks.h"
 #include "QueryEngine/CompilationOptions.h"
+#include "RWLocks.h"
+#include "Shared/heavyai_locks.h"
 #include "Shared/heavyai_shared_mutex.h"
 #include "SqliteConnector/SqliteConnector.h"
-
-#include "LeafHostInfo.h"
 
 enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
 
@@ -89,16 +77,10 @@ struct FileMgrParams;
 }
 namespace Catalog_Namespace {
 struct TableEpochInfo {
-  int32_t table_id, table_epoch, leaf_index{-1};
+  int32_t table_id, table_epoch;
 
   TableEpochInfo(const int32_t table_id_param, const int32_t table_epoch_param)
       : table_id(table_id_param), table_epoch(table_epoch_param) {}
-  TableEpochInfo(const int32_t table_id_param,
-                 const int32_t table_epoch_param,
-                 const size_t leaf_index_param)
-      : table_id(table_id_param)
-      , table_epoch(table_epoch_param)
-      , leaf_index(leaf_index_param) {}
 };
 
 struct TableNotFoundException : public std::runtime_error {
@@ -129,12 +111,6 @@ static constexpr const char* WS_SERVER_LOGS_SYS_TABLE_NAME{"web_server_logs"};
 static constexpr const char* WS_SERVER_ACCESS_LOGS_SYS_TABLE_NAME{
     "web_server_access_logs"};
 
-static const std::array<std::string, 4> kAggregatorOnlySystemTables{
-    DASHBOARDS_SYS_TABLE_NAME,
-    REQUEST_LOGS_SYS_TABLE_NAME,
-    WS_SERVER_LOGS_SYS_TABLE_NAME,
-    WS_SERVER_ACCESS_LOGS_SYS_TABLE_NAME};
-
 /**
  * @type Catalog
  * @brief class for a per-database catalog.  also includes metadata for the
@@ -143,6 +119,10 @@ static const std::array<std::string, 4> kAggregatorOnlySystemTables{
 
 class Catalog final {
  public:
+  friend class read_lock<Catalog>;
+  friend class write_lock<Catalog>;
+  friend class sqlite_lock<Catalog>;
+
   /**
    * @brief Constructor - takes basePath to already extant
    * data directory for writing
@@ -154,15 +134,10 @@ class Catalog final {
   Catalog(const std::string& basePath,
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-          const std::vector<LeafHostInfo>& string_dict_hosts,
           std::shared_ptr<Calcite> calcite,
-          bool is_new_db);
-
-  /**
-   * @brief Constructor builds a hollow catalog
-   * used during constructor of other catalogs
-   */
-  Catalog();
+          bool is_new_db,
+          const std::map<int32_t, std::string>& user_id_name_map,
+          const UserMetadata& root_user);
 
   /**
    * @brief Destructor - deletes all
@@ -276,8 +251,6 @@ class Catalog final {
   const std::string& getCatalogBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
-
-  const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
 
   const ColumnDescriptor* getShardColumnMetadataForTable(const TableDescriptor* td) const;
 
@@ -483,6 +456,76 @@ class Catalog final {
       const int32_t foreign_server_id);
 
   /**
+   * Gets the DDL statement used to create a user mapping schema.
+   *
+   * @param if_not_exists - flag that indicates whether or not to include
+   * the "IF NOT EXISTS" phrase in the DDL statement
+   * @return string containing DDL statement
+   */
+  static const std::string getUserMappingSchema(bool if_not_exists = false);
+
+  /**
+   * Creates a new user mapping.
+   *
+   * @param user_mapping - unique pointer to struct containing user mapping details
+   * @param if_not_exists - flag indicating whether or not an attempt to create a new
+   * user mapping should occur if a user mapping with the same user id and foreign server
+   * id already exists. An exception is thrown if this flag is set to "false" and an
+   * attempt is made to create a pre-existing user mapping
+   */
+  void createUserMapping(std::unique_ptr<foreign_storage::UserMapping> user_mapping,
+                         bool if_not_exists);
+
+  /**
+   * Gets a pointer to a struct containing user mapping details.
+   *
+   * @param user_id - id of mapped user
+   * @param foreign_server_id - id of mapped foreign server
+   * @return pointer to a struct containing user mapping details. nullptr is returned if
+   * no user mapping exists for the given user id and foreign server id and no public
+   * user mapping exists for the given foreign server id
+   */
+  const foreign_storage::UserMapping* getUserMapping(
+      const int32_t user_id,
+      const int32_t foreign_server_id) const;
+
+  /**
+   * Gets a pointer to a struct containing user mapping details fetched from storage.
+   * This is mainly used for testing when asserting that expected catalog data is
+   * persisted.
+   *
+   * @param user_id - id of mapped user
+   * @param foreign_server_id - id of mapped foreign server
+   * @return pointer to a struct containing user mapping details. nullptr is returned if
+   * no user mapping exists for the given user id and foreign server id and no public
+   * user mapping exists for the given foreign server id
+   */
+  const std::unique_ptr<const foreign_storage::UserMapping> getUserMappingFromStorage(
+      const int32_t user_id,
+      const int32_t foreign_server_id);
+
+  /**
+   * Drops/deletes a user mapping.
+   *
+   * @param user_id - id of mapped user
+   * @param foreign_server_id - id of mapped foreign server
+   * @param if_exists - flag indicating whether or not an attempt to drop a user mapping
+   * should occur if a user mapping with the same user id and foreign server id does not
+   * exist. An exception is thrown if this flag is set to "false" and an attempt is
+   * made to drop a nonexistent user mapping
+   */
+  void dropUserMapping(const int32_t user_id,
+                       const int32_t foreign_server_id,
+                       const bool if_exists);
+
+  /**
+   * Drops/deletes all user mappings for the given user id.
+   *
+   * @param user_id - id of mapped user
+   */
+  void dropAllUserMappingsForUser(const int32_t user_id);
+
+  /**
    * Performs a query on all foreign servers accessible to user with optional filter,
    * and returns pointers toresulting server objects
    *
@@ -542,8 +585,6 @@ class Catalog final {
   void setForeignTableOptions(const std::string& table_name,
                               foreign_storage::OptionsMap& options_map,
                               bool clear_existing_options = true);
-
-  void updateLeaf(const LeafHostInfo& string_dict_host);
 
   // For testing purposes only
   void setUncappedTableEpoch(const std::string& table_name);
@@ -650,7 +691,11 @@ class Catalog final {
                       const std::string& new_owner);
 
   bool isInfoSchemaDb() const;
+
+  void checkDateInDaysColumnMigration();
   bool checkDropRenderGroupColumnsMigration();
+
+  heavyai::DistributedSharedMutex& getDistributedMutex() const;
 
   // The following "FromStorage" functions are intended for testing purposes only
   // NOTE: `getColumnFromStorage` obtains all properites of the column from
@@ -674,7 +719,6 @@ class Catalog final {
 
  protected:
   void CheckAndExecuteMigrations();
-  void CheckAndExecuteMigrationsPostBuildMaps();
   void updateDictionaryNames();
   void updateTableDescriptorSchema();
   void updateColumnDescriptorSchema();
@@ -694,9 +738,8 @@ class Catalog final {
   void updateFsiSchemas();
   void renameLegacyDataWrappers();
   void recordOwnershipOfObjectsInObjectPermissions();
-  void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
-  void buildMaps();
+  void buildMaps(const std::map<int32_t, std::string>& user_id_to_name_map);
   void addTableToMap(const TableDescriptor* td,
                      const std::list<ColumnDescriptor>& columns,
                      const std::list<DictDescriptor>& dicts);
@@ -758,6 +801,7 @@ class Catalog final {
   LinkDescriptorMapById linkDescriptorMapById_;
   ForeignServerMap foreignServerMap_;
   ForeignServerMapById foreignServerMapById_;
+  UserMappingMap userMappingMap_;
   CustomExpressionMapById custom_expr_map_by_id_;
   TableDictColumnsMap dict_columns_by_table_id_;
 
@@ -765,7 +809,6 @@ class Catalog final {
   const DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
 
-  const std::vector<LeafHostInfo> string_dict_hosts_;
   std::shared_ptr<Calcite> calciteMgr_;
 
   LogicalToPhysicalTableMapById logicalToPhysicalTableMapById_;
@@ -823,6 +866,8 @@ class Catalog final {
                               const std::vector<std::string>& target_paths,
                               const std::string& name_prefix) const;
   void buildForeignServerMapUnlocked();
+  void buildUserMappingMapUnlocked();
+  void dropAllUserMappingsForServer(const int32_t foreign_server_id);
 
   void setForeignServerProperty(const std::string& server_name,
                                 const std::string& property,
@@ -857,7 +902,6 @@ class Catalog final {
   foreign_storage::ForeignTable* getForeignTableUnlocked(
       const std::string& tableName) const;
 
-  const Catalog* getObjForLock();
   void removeChunks(const int table_id) const;
 
   void buildCustomExpressionsMapUnlocked();
@@ -872,7 +916,7 @@ class Catalog final {
       const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
       int32_t new_owner_id);
 
-  void conditionallyInitializeSystemObjects();
+  void conditionallyInitializeSystemObjects(const UserMetadata& root_user);
   void initializeSystemServers();
   void initializeSystemTables();
   void initializeUsersSystemTable();
@@ -893,6 +937,7 @@ class Catalog final {
   void initializeWebServerLogsSystemTables();
   void initializeWebServerAccessLogsSystemTables();
 
+  void initializeSystemDashboards(const UserMetadata& root_user);
   void createSystemTableServer(const std::string& server_name,
                                const std::string& data_wrapper_type,
                                const foreign_storage::OptionsMap& options = {});
@@ -947,14 +992,13 @@ class Catalog final {
                                                                ML_METADATA_SERVER_NAME,
                                                                LOGS_SERVER_NAME};
 
+  mutable SharedMutexWrapper mutex_desc_;         // General mutex for cat.
+  mutable SharedMutexWrapper sqlite_mutex_desc_;  // sqlite mutex.
+
  public:
-  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dcatalogMutex_;
-  mutable std::unique_ptr<heavyai::DistributedSharedMutex> dsqliteMutex_;
-  mutable std::mutex sqliteMutex_;
-  mutable heavyai::shared_mutex sharedMutex_;
-  mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
-  mutable std::atomic<std::thread::id> thread_holding_write_lock;
-  // assuming that you never call into a catalog from another catalog via the same thread
+  // This value is used by read_lock when acquiring mutex_desc_ to record which thread
+  // holds a lock.  It should idealy be moved into the SharedMutexWrapper class, but it
+  // needs to be static to the SysCatalog, so some refactor would be needed.
   static thread_local bool thread_holds_read_lock;
   bool initialized_ = false;
 };

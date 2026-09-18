@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -31,8 +20,24 @@ using std::endl;
 using std::runtime_error;
 using std::string;
 
+namespace {
+
+constexpr int kMinSqliteVersionNumber = 3053000;  // 3.53.0
+
+void ensure_sqlite_version() {
+  static const bool ok = [] {
+    CHECK_GE(sqlite3_libversion_number(), kMinSqliteVersionNumber)
+        << "Catalog requires SQLite >= 3.53.0, got " << sqlite3_libversion();
+    return true;
+  }();
+  (void)ok;
+}
+
+}  // namespace
+
 SqliteConnector::SqliteConnector(const string& dbName, const string& dir)
     : dbName_(dbName) {
+  ensure_sqlite_version();
   string connectString(dir);
   if (connectString.size() > 0 && connectString[connectString.size() - 1] != '/') {
     connectString.push_back('/');
@@ -44,7 +49,9 @@ SqliteConnector::SqliteConnector(const string& dbName, const string& dir)
   }
 }
 
-SqliteConnector::SqliteConnector(sqlite3* db) : db_(db) {}
+SqliteConnector::SqliteConnector(sqlite3* db) : db_(db) {
+  ensure_sqlite_version();
+}
 
 SqliteConnector::~SqliteConnector() {
   if (!dbName_.empty()) {

@@ -1,23 +1,11 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "DataMgr/ChunkMetadata.h"
-#include "LeafHostInfo.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/ExecutorDeviceType.h"
 #include "QueryEngine/TargetValue.h"
@@ -423,29 +411,6 @@ struct ValuesGenerator {
   const std::string table_name_;
 };
 
-LeafHostInfo to_leaf_host_info(std::string& server_info, NodeRole role) {
-  size_t pos = server_info.find(':');
-  if (pos == std::string::npos) {
-    throw std::runtime_error("Invalid host:port -> " + server_info);
-  }
-
-  auto host = server_info.substr(0, pos);
-  auto port = server_info.substr(pos + 1);
-
-  return LeafHostInfo(host, std::stoi(port), role);
-}
-
-std::vector<LeafHostInfo> to_leaf_host_info(std::vector<std::string>& server_infos,
-                                            NodeRole role) {
-  std::vector<LeafHostInfo> host_infos;
-
-  for (auto& server_info : server_infos) {
-    host_infos.push_back(to_leaf_host_info(server_info, role));
-  }
-
-  return host_infos;
-}
-
 void init_logger_stderr_only(int argc, char const* const* argv) {
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
@@ -484,8 +449,7 @@ std::string build_create_table_statement(
     const std::vector<SharedDictionaryInfo>& shared_dict_info,
     const size_t fragment_size,
     const bool use_temporary_tables,
-    const bool delete_support = true,
-    const bool replicated = false) {
+    const bool delete_support = true) {
   const std::string shard_key_def{
       shard_info.shard_col.empty() ? "" : ", SHARD KEY (" + shard_info.shard_col + ")"};
 
@@ -510,15 +474,12 @@ std::string build_create_table_statement(
     with_statement_assembly << ", vacuum='immediate'";
   }
 
-  const std::string replicated_def{
-      (!replicated || !shard_info.shard_col.empty()) ? "" : ", PARTITIONS='REPLICATED' "};
-
   const std::string create_def{use_temporary_tables ? "CREATE TEMPORARY TABLE "
                                                     : "CREATE TABLE "};
 
   return create_def + table_name + "(" + columns_definition + shard_key_def +
          boost::algorithm::join(shared_dict_def, "") + ") WITH (" +
-         with_statement_assembly.str() + replicated_def + ");";
+         with_statement_assembly.str() + ");";
 }
 
 }  // namespace TestHelpers

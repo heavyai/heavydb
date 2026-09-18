@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "QueryEngine/JoinHashTable/HashJoin.h"
@@ -764,22 +753,6 @@ std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance
     }
   }
   return std::make_pair(error_msg, hash_table);
-}
-
-void HashJoin::checkHashJoinReplicationConstraint(const shared::TableKey& table_key,
-                                                  const size_t shard_count,
-                                                  const Executor* executor) {
-  if (!g_cluster) {
-    return;
-  }
-  if (table_key.table_id >= 0) {
-    CHECK(executor);
-    const auto inner_td = Catalog_Namespace::get_metadata_for_table(table_key);
-    CHECK(inner_td);
-    if (!shard_count && !table_is_replicated(inner_td)) {
-      throw TableMustBeReplicated(inner_td->tableName);
-    }
-  }
 }
 
 template <typename T>

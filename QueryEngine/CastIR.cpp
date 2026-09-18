@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "CodeGenerator.h"
@@ -295,11 +284,6 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   }
   // dictionary encode non-constant
   if (operand_ti.get_compression() != kENCODING_DICT && !operand_is_const) {
-    if (g_cluster) {
-      throw std::runtime_error(
-          "Cast from none-encoded string to dictionary-encoded not supported for "
-          "distributed queries");
-    }
     CHECK_EQ(kENCODING_NONE, operand_ti.get_compression());
     CHECK_EQ(kENCODING_DICT, ti.get_compression());
     CHECK(operand_lv->getType()->isStructTy());  // StringView
@@ -315,11 +299,6 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
   }
   CHECK(operand_lv->getType()->isIntegerTy(32));
   if (ti.get_compression() == kENCODING_NONE) {
-    if (g_cluster) {
-      throw std::runtime_error(
-          "Cast from dictionary-encoded string to none-encoded not "
-          "currently supported for distributed queries.");
-    }
     // Removed watchdog check here in exchange for row cardinality based check in
     // RelAlgExecutor
     CHECK_EQ(kENCODING_DICT, operand_ti.get_compression());
@@ -353,11 +332,6 @@ llvm::Value* CodeGenerator::codegenCastNonStringToString(llvm::Value* operand_lv
   CHECK(!operand_ti.is_string());
   if (ti.get_compression() == kENCODING_NONE) {
     throw std::runtime_error("Cast to none-encoded strings currently unsupported.");
-  }
-  if (g_cluster) {
-    throw std::runtime_error(
-        "Cast to dictionary-encoded string type not supported for "
-        "distributed queries");
   }
   if (co.device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();

@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
@@ -229,8 +218,7 @@ RaExecutionSequence::RaExecutionSequence(const RelAlgNode* sink,
       // noop
     }
     if (g_enable_data_recycler && g_use_query_resultset_cache &&
-        g_allow_query_step_skipping && !has_step_for_union_ && !g_cluster &&
-        !just_validation_) {
+        g_allow_query_step_skipping && !has_step_for_union_ && !just_validation_) {
       extractQueryStepSkippingInfo();
       skipQuerySteps();
     }
@@ -448,8 +436,7 @@ bool RaExecutionSequence::executionFinished() const {
   } else {
     const auto next_step_id = nextStepId(true);
     if (!next_step_id || (*next_step_id == totalDescriptorsCount())) {
-      // One step remains (the current vertex), or all remaining steps can be executed
-      // without another broadcast (i.e. on the aggregator)
+      // One step remains (the current vertex), or all remaining steps can run locally.
       return true;
     }
   }
@@ -511,16 +498,14 @@ size_t RaExecutionSequence::stepsToNextBroadcast() const {
         }
       }
       if (crt_vertex < ordering_.size() - 1) {
-        // Force the parent node of the RelLeftDeepInnerJoin to run on the aggregator.
-        // Note that crt_vertex has already been incremented once above for the join node
-        // -- increment it again to account for the parent node of the join
+        // Account for the parent node of the RelLeftDeepInnerJoin.
         ++steps_to_next_broadcast;
         ++crt_vertex;
         continue;
       } else {
         CHECK_EQ(crt_vertex, ordering_.size() - 1);
         // If the join node parent is the last node in the tree, run all remaining steps
-        // on the aggregator
+        // locally.
         return ++steps_to_next_broadcast;
       }
     }
@@ -532,8 +517,7 @@ size_t RaExecutionSequence::stepsToNextBroadcast() const {
       return steps_to_next_broadcast;
     }
     if (dynamic_cast<const RelModify*>(node)) {
-      // Modify runs on the leaf automatically, run the same node as a noop on the
-      // aggregator
+      // Modify nodes require an extra execution step in the sequence.
       ++steps_to_next_broadcast;
       continue;
     }

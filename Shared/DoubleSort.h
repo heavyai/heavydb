@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 // Used for creating iterators that can be used to sort two vectors.
@@ -156,10 +145,8 @@ struct Iterator {
   bool operator!=(Iterator const& b) const { return this_.v0_.ptr_ != b.this_.v0_.ptr_; }
   DEVICE
   bool operator<(Iterator const& b) const { return this_.v0_.ptr_ < b.this_.v0_.ptr_; }
-  // Required by MacOS /usr/local/opt/llvm/include/c++/v1/algorithm:4036
   DEVICE
   bool operator>(Iterator const& b) const { return this_.v0_.ptr_ > b.this_.v0_.ptr_; }
-  // Required by MacOS /usr/local/opt/llvm/include/c++/v1/algorithm:4000
   DEVICE
   bool operator>=(Iterator const& b) const { return this_.v0_.ptr_ >= b.this_.v0_.ptr_; }
 };

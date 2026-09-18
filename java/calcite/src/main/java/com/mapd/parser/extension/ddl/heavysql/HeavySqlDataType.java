@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package com.mapd.parser.extension.ddl.heavysql;
 
 import static java.util.Objects.requireNonNull;
@@ -38,8 +43,8 @@ public class HeavySqlDataType extends HeavySqlJson {
     if (type.getTypeNameSpec() instanceof SqlBasicTypeNameSpec) {
       SqlBasicTypeNameSpec typeNameSpec = (SqlBasicTypeNameSpec) type.getTypeNameSpec();
       this.precision =
-              typeNameSpec.getPrecision() == -1 ? null : typeNameSpec.getPrecision();
-      this.scale = typeNameSpec.getScale() == -1 ? null : typeNameSpec.getScale();
+              typeNameSpec.getPrecision() < 0 ? null : typeNameSpec.getPrecision();
+      this.scale = typeNameSpec.getScale() < 0 ? null : typeNameSpec.getScale();
     }
     if (array != null) {
       this.array = new HeavySqlArray(this.type, array.getSize());

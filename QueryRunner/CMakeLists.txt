@@ -1,13 +1,14 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 set(query_runner_source_files
     QueryRunner.cpp
     TestProcessSignalHandler.cpp
 )
 
 set(QR_LIBRARIES mapd_thrift Catalog QueryState Parser QueryEngine ImportExport Shared)
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  list(APPEND query_runner_source_files ee/DistributedQueryRunner.cpp)
-  list(APPEND QR_LIBRARIES Distributed)
-endif()
 
 if (ENABLE_RUNTIME_LIBS)
   list(APPEND QR_LIBRARIES RuntimeLibManager)

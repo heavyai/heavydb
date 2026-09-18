@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
@@ -26,6 +15,8 @@
 extern bool g_enable_table_functions;
 extern bool g_enable_ml_functions;
 extern bool g_enable_dev_table_functions;
+
+extern bool g_enable_rf_prop_table_functions;
 
 namespace table_functions {
 
@@ -360,45 +351,55 @@ bool is_table_function_whitelisted(std::string_view const function_name) {
   // must be added to the whitelisted_table_functions list below.
   // These lists must be in alphabetical order (enforced at compile-time)
   constexpr std::string_view whitelisted_table_functions[]{
-       "dbscan",
-       "decision_tree_reg_fit",
-       "gbt_reg_fit",
-       "generate_random_strings",
-       "generate_series",
-       "get_decision_trees",
-       "kmeans",
-       "linear_reg_coefs",
-       "linear_reg_fit",
-       "ml_reg_predict",
-       "pca_fit",
-       "r2_score",
-       "random_forest_reg_fit",
-       "random_forest_reg_var_importance",
-       "supported_ml_frameworks",
-       "tf_compute_dwell_times",
-       "tf_cross_section_1d",
-       "tf_cross_section_2d",
-       "tf_feature_self_similarity",
-       "tf_feature_similarity",
-       "tf_geo_multi_rasterize",
-       "tf_geo_rasterize",
-       "tf_geo_rasterize_slope",
-       "tf_gfxdriver_test",
-       "tf_graph_shortest_path",
-       "tf_graph_shortest_paths_distances",
-       "tf_load_point_cloud",
-       "tf_mandelbrot",
-       "tf_mandelbrot_cuda",
-       "tf_mandelbrot_cuda_float",
-       "tf_mandelbrot_float",
-       "tf_point_cloud_metadata",
-       "tf_raster_contour_lines",
-       "tf_raster_contour_polygons",
-       "tf_raster_graph_shortest_slope_weighted_path"
-    };
-    constexpr auto whitelisted_table_functions_len =
-       sizeof(whitelisted_table_functions) / sizeof(*whitelisted_table_functions);
-
+      "dbscan",
+      "decision_tree_reg_fit",
+      "gbt_reg_fit",
+      "generate_random_strings",
+      "generate_series",
+      "get_decision_trees",
+      "kmeans",
+      "linear_reg_coefs",
+      "linear_reg_fit",
+      "ml_reg_predict",
+      "pca_fit",
+      "r2_score",
+      "random_forest_reg_fit",
+      "random_forest_reg_var_importance",
+      "supported_ml_frameworks",
+      "tf_compute_dwell_times",
+      "tf_cross_section_1d",
+      "tf_cross_section_2d",
+#ifdef HAVE_OMNIVERSE_CONNECTOR
+      "tf_export_ov_buildings_polygons",
+      "tf_export_ov_buildings_texture",
+      "tf_export_ov_grid_mesh",
+      "tf_export_ov_terrain_texture",
+#endif
+      "tf_feature_self_similarity",
+      "tf_feature_similarity",
+      "tf_geo_multi_rasterize",
+      "tf_geo_rasterize",
+      "tf_geo_rasterize_slope",
+      "tf_gfxdriver_test",
+      "tf_graph_shortest_path",
+      "tf_graph_shortest_paths_distances",
+      "tf_load_point_cloud",
+      "tf_mandelbrot",
+      "tf_mandelbrot_cuda",
+      "tf_mandelbrot_cuda_float",
+      "tf_mandelbrot_float",
+#ifdef HAVE_OMNIVERSE_CONNECTOR
+      "tf_merge_building_polygons",
+#endif
+      "tf_point_cloud_metadata",
+      "tf_raster_contour_lines",
+      "tf_raster_contour_polygons",
+      "tf_raster_graph_shortest_slope_weighted_path",
+      "tf_rf_prop",
+      "tf_rf_prop_max_signal",
+      "tf_transmitter_coalesce"};
+  constexpr auto whitelisted_table_functions_len =
+      sizeof(whitelisted_table_functions) / sizeof(*whitelisted_table_functions);
 
   // Must be sorted.
   constexpr std::string_view ml_table_functions[]{"dbscan",
@@ -435,6 +436,13 @@ bool is_table_function_whitelisted(std::string_view const function_name) {
                              function_name);
 }
 
+bool is_table_function_disallowed(const std::string& function_name) {
+  if (!g_enable_rf_prop_table_functions &&
+      function_name.find("tf_rf_prop") != std::string::npos) {
+    return true;
+  }
+  return false;
+}
 
 }  // namespace
 
@@ -466,6 +474,9 @@ void TableFunctionsFactory::add(
   const auto tf_name = tf.getName(true /* drop_suffix */, true /* lower */);
   if (!g_enable_dev_table_functions && !is_runtime &&
       !is_table_function_whitelisted(tf_name)) {
+    return;
+  }
+  if (is_table_function_disallowed(tf_name)) {
     return;
   }
   auto sig = tf.getSignature(/* include_name */ true, /* include_output */ false);

@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /*
@@ -52,24 +41,10 @@
 #include <string>
 #include <thread>
 
+// define this in sub-projects to disable Boost Stack Trace
+// e.g. in new ODBC Driver
+#ifndef LOGGER_DISABLE_STACK_TRACE
 #include "../Shared/StackTrace.h"
-
-#ifdef ERROR
-// A common way for this to occur is with a #include <windows.h> which globally defines a
-// number of macros, such as ERROR, that interferes with other headers. This may be
-// resolved by locating the new #include that directly or indirectly includes windows.h
-// (or something else that #defines ERROR) and placing a
-// #include "Shared/cleanup_global_namespace.h" after it.
-//
-// Q: Why not just #include "Shared/cleanup_global_namespace.h" here?
-//
-// A: Two reasons:
-//    * ERROR is not the only macro that windows.h defines, e.g. GetObject which
-//      interferes with rapidjson.
-//    * By not cleaning up the global macros at the source requires potential cleaning
-//      on a much larger scale: all places that call LOG(ERROR). (Due to header guards,
-//      #include "Logger.h" may not be included where it needs to in order to clean up.)
-#error "ERROR must not be globally defined during preprocessing."
 #endif
 
 namespace boost {
@@ -288,11 +263,17 @@ inline bool fast_logging_check(Severity severity) {
 
 #define VLOGGING(n) logger::fast_logging_check(logger::DEBUG##n)
 
+#ifndef LOGGER_DISABLE_STACK_TRACE
 #define CHECK(condition)                         \
   if (BOOST_UNLIKELY(!(condition)))              \
   LOG(FATAL) << "Check failed: " #condition "\n" \
              << "Stack trace:\n"                 \
              << getCurrentStackTrace(1, nullptr, false)
+#else
+#define CHECK(condition)            \
+  if (BOOST_UNLIKELY(!(condition))) \
+  LOG(FATAL) << "Check failed: " #condition
+#endif
 
 #define CHECK_OP(OP, x, y)                                      \
   if (std::string* fatal_msg = logger::Check##OP(x, y, #x, #y)) \
@@ -313,7 +294,9 @@ BOOST_NOINLINE std::string* check_failed(X const& x,
                                          char const* op_str) {
   std::stringstream ss;
   ss << "Check failed: " << xstr << op_str << ystr << " (" << x << op_str << y << ")\n";
+#ifndef LOGGER_DISABLE_STACK_TRACE
   ss << "Stack trace:\n" << getCurrentStackTrace(1, nullptr, false);
+#endif
   return new std::string(ss.str());  // Deleted by CHECK_OP macro.
 }
 
@@ -335,8 +318,12 @@ HEAVYDB_CHECKOP_FUNCTION(GT, >)
 HEAVYDB_CHECKOP_FUNCTION(GE, >=)
 #undef HEAVYDB_CHECKOP_FUNCTION
 
+#ifndef LOGGER_DISABLE_STACK_TRACE
 #define UNREACHABLE() \
   LOG(FATAL) << "UNREACHABLE\n Stack trace:\n" << getCurrentStackTrace(1, nullptr, false)
+#else
+#define UNREACHABLE() LOG(FATAL) << "UNREACHABLE"
+#endif
 
 #else  // __CUDACC__
 

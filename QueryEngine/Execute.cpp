@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "QueryEngine/Execute.h"
@@ -38,7 +27,6 @@
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
-#include "OSDependent/heavyai_path.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/AggregateUtils.h"
 #include "QueryEngine/AggregatedColRange.h"
@@ -67,6 +55,7 @@
 #include "QueryEngine/Visitors/TransientStringLiteralsVisitor.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/TypedDataAccessors.h"
+#include "Shared/heavyai_path.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
@@ -255,11 +244,6 @@ void populate_string_dictionary(int32_t table_id, int32_t col_id, int32_t db_id)
       }
       for (const auto& frag : fragmenter->getFragmentsForQuery().fragments) {
         ChunkKey chunk_key = {db_id, table_id, col_id, frag.fragmentId};
-        // If the key is sharded across leaves, only populate fragments that are sharded
-        // to this leaf.
-        if (key_does_not_shard_to_leaf(chunk_key)) {
-          continue;
-        }
 
         const ChunkMetadataMap& metadata_map = frag.getChunkMetadataMap();
         CHECK(metadata_map.find(col_id) != metadata_map.end());
@@ -2740,31 +2724,6 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     CHECK(agg_info.is_agg);
     target_infos.push_back(agg_info);
-    if (g_cluster) {
-      const auto executor = query_mem_desc.getExecutor();
-      CHECK(executor);
-      auto row_set_mem_owner = executor->getRowSetMemoryOwner();
-      CHECK(row_set_mem_owner);
-      const auto& count_distinct_desc =
-          query_mem_desc.getCountDistinctDescriptor(target_idx);
-      if (count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap) {
-        CHECK(row_set_mem_owner);
-        // TODO: can we detect thread idx here?
-        constexpr size_t thread_idx{0};
-        const auto bitmap_size = count_distinct_desc.bitmapPaddedSizeBytes();
-        auto count_distinct_buffer =
-            row_set_mem_owner->slowAllocateCountDistinctBuffer(bitmap_size, thread_idx);
-        entry.push_back(reinterpret_cast<int64_t>(count_distinct_buffer));
-        continue;
-      }
-      if (count_distinct_desc.impl_type_ == CountDistinctImplType::UnorderedSet) {
-        auto count_distinct_set = new CountDistinctSet();
-        CHECK(row_set_mem_owner);
-        row_set_mem_owner->addCountDistinctSet(count_distinct_set);
-        entry.push_back(reinterpret_cast<int64_t>(count_distinct_set));
-        continue;
-      }
-    }
     const bool float_argument_input = takes_float_argument(agg_info);
     if (shared::is_any<kCOUNT, kCOUNT_IF, kAPPROX_COUNT_DISTINCT>(agg_info.agg_kind)) {
       entry.push_back(0);

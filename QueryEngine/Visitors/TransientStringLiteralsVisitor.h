@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -37,15 +26,8 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
   }
 
   // visitUOper is for handling casts between dictionary encoded text
-  // columns that do not share string dictionaries. For these
-  // we need to run the translation again on the aggregator
-  // so that we know how to interpret the transient literals added
-  // by the leaves via string-to-string casts
-
-  // Todo(todd): It is inefficient to do the same translation on
-  // the aggregator and each of the leaves, explore storing these
-  // translations/literals on the remote dictionary server instead
-  // so the translation happens once and only once
+  // columns that do not share string dictionaries. Re-run translation so transient
+  // literals added by string-to-string casts are interpreted correctly.
 
   void* visitUOper(const Analyzer::UOper* uoper) const override {
     const auto& uoper_ti = uoper->get_type_info();

@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 declare -A descs
 declare -A vars
@@ -44,9 +46,6 @@ done
 vars["HEAVYAI_STORAGE"]=${HEAVYAI_STORAGE:="${vars['HEAVYAI_BASE']}/storage"}
 sudo mkdir -p "${vars['HEAVYAI_STORAGE']}"
 sudo mkdir -p "${vars['HEAVYAI_BASE']}"
-if [ -f heavy-sds.conf.in ]; then
-  sudo mkdir -p "${vars['HEAVYAI_BASE']}/sds"
-fi
 
 if [ ! -d "${vars['HEAVYAI_STORAGE']}/catalogs" ]; then
   sudo ${vars["HEAVYAI_PATH"]}/bin/initheavy ${vars['HEAVYAI_STORAGE']}
@@ -54,16 +53,12 @@ fi
 
 sudo chown -R ${vars['HEAVYAI_USER']}:${vars['HEAVYAI_GROUP']} "${vars['HEAVYAI_STORAGE']}"
 sudo chown -R ${vars['HEAVYAI_USER']}:${vars['HEAVYAI_GROUP']} "${vars['HEAVYAI_BASE']}"
-MACHINE_ARCH=$(uname -m)
-for i in "/etc/xdg" "/etc" "/usr/local/share" "/usr/share"; do
-  if [ -f "$i/vulkan/icd.d/nvidia_icd.json" ]; then
-    icd_path="$i/vulkan/icd.d/nvidia_icd.json"
-    break
-  elif [ -f $i/vulkan/icd.d/nvidia_icd.$MACHINE_ARCH.json ]; then
-    icd_path=$i/vulkan/icd.d/nvidia_icd.$MACHINE_ARCH.json
-    break
-  fi
-done
+# shellcheck source=nvidia-graphics-env.sh
+source "${vars[HEAVYAI_PATH]}/scripts/nvidia-graphics-env.sh"
+icd_path=
+egl_vendor_path=
+find_nvidia_vk_icd_path && icd_path="$NVIDIA_VK_ICD_PATH"
+find_nvidia_egl_vendor_path && egl_vendor_path="$NVIDIA_EGL_VENDOR_PATH"
 
 if [[ -z "$icd_path" ]]; then
   YELLOW='\033[1;33m'
@@ -74,13 +69,17 @@ if [[ -z "$icd_path" ]]; then
   See: ${LBLUE}https://docs.omnisci.com/troubleshooting/vulkan-graphics-api-beta#bare-metal-installs${NORMAL} for some installation and troubleshooting tips."
 fi
 
-for f in heavydb heavydb@ heavydb_sd_server heavydb_sd_server@ heavy_web_server heavy_web_server@ heavyiq ; do
+for f in heavydb heavydb@ heavy_web_server heavy_web_server@ heavyiq ; do
   if [ -f $f.service.in ]; then
     if [[ "$f.service.in" == *"web_server"* ]]; then
       unset vulkan_envinment
     else
       if [[ -n $icd_path ]]; then
         vulkan_environment="\nEnvironment=\"VK_ICD_FILENAMES=$icd_path\""
+        if [[ -n $egl_vendor_path ]]; then
+          vulkan_environment="${vulkan_environment}\nEnvironment=\"__EGL_VENDOR_LIBRARY_FILENAMES=$egl_vendor_path\""
+          vulkan_environment="${vulkan_environment}\nEnvironment=\"__GLX_VENDOR_LIBRARY_NAME=nvidia\""
+        fi
       fi
     fi
 
@@ -101,16 +100,6 @@ sed -e "s#@HEAVYAI_PATH@#${vars['HEAVYAI_PATH']}#g" \
     -e "s#@HEAVYAI_USER@#${vars['HEAVYAI_USER']}#g" \
     -e "s#@HEAVYAI_GROUP@#${vars['HEAVYAI_GROUP']}#g" \
     heavy.conf.in > $HEAVYAI_TMP/heavy.conf
-if [ -f heavy-sds.conf.in ]; then
-  sed -e "s#@HEAVYAI_PATH@#${vars['HEAVYAI_PATH']}#g" \
-      -e "s#@HEAVYAI_BASE@#${vars['HEAVYAI_BASE']}#g" \
-      -e "s#@HEAVYAI_STORAGE@#${vars['HEAVYAI_STORAGE']}#g" \
-      -e "s#@HEAVYAI_USER@#${vars['HEAVYAI_USER']}#g" \
-      -e "s#@HEAVYAI_GROUP@#${vars['HEAVYAI_GROUP']}#g" \
-      heavy-sds.conf.in > $HEAVYAI_TMP/heavy-sds.conf
-  sudo cp $HEAVYAI_TMP/heavy-sds.conf ${vars['HEAVYAI_BASE']}
-  sudo chown ${vars['HEAVYAI_USER']}:${vars['HEAVYAI_GROUP']} "${vars['HEAVYAI_BASE']}/heavy-sds.conf"
-fi
 sudo cp $HEAVYAI_TMP/heavy.conf ${vars['HEAVYAI_BASE']}
 sudo chown ${vars['HEAVYAI_USER']}:${vars['HEAVYAI_GROUP']} "${vars['HEAVYAI_BASE']}/heavy.conf"
 

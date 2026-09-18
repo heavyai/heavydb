@@ -33,6 +33,18 @@ The major components in the above diagram and their respective reference pages a
       - :doc:`../execution/kernels`
     * - Database Files, Metadata Files, Dictionary Files
       - :doc:`../data_model/physical_layout`
+    * - Foreign Storage (FSI)
+      - :doc:`../foreign_storage/index`
+    * - Table Functions
+      - :doc:`../table_functions/index`
+    * - Machine Learning Models
+      - :doc:`../ml_models/index`
+    * - Row-Level Security
+      - :doc:`../security/row_level_security`
+    * - Memory / Runtime
+      - :doc:`../runtime/index`
+    * - Server Configuration
+      - :doc:`../configuration/index`
 
 Data Model
 ===========
@@ -52,8 +64,8 @@ of how a query is executed inside HeavyDB.
 At a high-level, all SQL queries made to the server pass through the
 Thrift_ `sql_execute` endpoint. The query string is passed to Apache Calcite_ 
 for parsing and cost-based optimization, yielding an optimized relational 
-algebra tree. This relational algebra tree is then passed through HEAVY.AI-specific 
-optimization passes and translated into an HEAVY.AI-specific abstract syntax tree (AST). 
+algebra tree. This relational algebra tree is then passed through HeavyDB-specific
+optimization passes and translated into a HeavyDB-specific abstract syntax tree (AST).
 The AST provides all the information necessary to generate native machine code for 
 query execution on the target device. Execution then occurs in parallel on the target 
 device, with device results being aggregated and reduced into a final `ResultSet`

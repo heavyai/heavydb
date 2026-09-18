@@ -1,0 +1,61 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//
+// Compute Shader to determine the total number of workgroups
+// required to process a given set of geo rows, each with
+// variable-length data (points, rings etc.)
+//
+
+#extension GL_EXT_buffer_reference2 : require
+
+#define USE_SUBGROUPS <useSubgroups>
+
+#if USE_SUBGROUPS == 1
+#extension GL_KHR_shader_subgroup_vote: enable
+#extension GL_KHR_shader_subgroup_arithmetic: enable
+#endif
+
+#define WORKGROUP_SIZE <workgroupSize>
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430) buffer WORKGROUP_COUNT_SSBO {
+  uint32_t count;
+} workgroup_count_buffer;
+
+layout(std430) uniform COUNT_UBO {
+  uint64_t base_address;
+  uint32_t num_rows;
+  uint32_t num_columns;
+  uint32_t column_index;
+  uint32_t value_byte_size;
+};
+
+layout(buffer_reference, scalar, buffer_reference_align = 8) buffer QOB_DATA {
+  uint64_t items[];
+};
+
+void main() {
+  uint32_t row_index = gl_GlobalInvocationID.x;
+  if (row_index >= num_rows) {
+    return;
+  }
+
+  uint32_t item_index = (row_index * num_columns) + column_index;
+
+  uint64_t value_bytes = QOB_DATA(base_address).items[item_index];
+  uint32_t value_count = uint32_t(value_bytes / value_byte_size);
+  uint32_t workgroup_count = (value_count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+
+  #if USE_SUBGROUPS == 1
+    uint32_t workgroup_subgroup_count = subgroupAdd(workgroup_count);
+    if (subgroupElect()) {
+      atomicAdd(workgroup_count_buffer.count, workgroup_subgroup_count);
+    }
+  #else // USE_SUBGROUPS
+    atomicAdd(workgroup_count_buffer.count, workgroup_count);
+  #endif // USE_SUBGROUPS
+}

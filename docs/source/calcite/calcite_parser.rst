@@ -1,6 +1,6 @@
 .. HeavyDB Query Execution
 
-.. calcite_parser:
+.. _calcite_parser:
 
 ==============
 Calcite Parser
@@ -20,7 +20,7 @@ Let's take a simple query:
 
 .. code-block:: sql 
 
-  SELECT A.x, COUNT(*) FROM test JOIN B ON A.x = B.x WHERE A.y > 41 GROUP BY A.x; 
+  SELECT a.x, COUNT(*) FROM a JOIN b ON a.x = b.x WHERE a.y > 41 GROUP BY a.x;
   
 and analyze the relational algebra generated for it.
 
@@ -33,10 +33,11 @@ The `Scan` nodes have no inputs and output all the rows and the columns in table
 
 The physical implementation of the nodes is up to the system using Calcite as a frontend. Nothing in the `Join` node mandates a certain implementation of the join operation (equijoin in HeavyDB). Indeed, using a condition which can't be implemented as a hash join, like `A.x < B.x`, would only be reflected by the condition in the `Filter` node.
 
+.. _calcite_heavydb_comms:
+
 ********************************************
 Communication between Calcite and HeavyDB
 ********************************************
-.. calcite_heavydb_comms:
 
 Calcite requires information about the current table schema in order to build the RA tree. Specifically, the table names, column names, and column types for each table must all be shared with Calcite. Once the query string has been parsed, Calcite dynamically queries the HeavyDB server for table and column metadata for each table and each column involved in the query. To make this query, Calcite requires an authenticated session. A special Calcite-only session is established at server startup for Calcite to make reverse requests back to the server. This session can read all table metadata, but cannot make modifications. 
 

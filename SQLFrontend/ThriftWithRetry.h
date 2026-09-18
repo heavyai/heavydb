@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef THRIFTWITHRETRY_H
 #define THRIFTWITHRETRY_H
 
@@ -133,13 +138,6 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
       case kGET_ROLES_FOR_USER:
         context.client.get_all_roles_for_user(
             context.role_names, context.session, context.privs_user_name);
-        break;
-      case kSET_LICENSE_KEY:
-        context.client.set_license_key(
-            context.license_info, context.session, context.license_key, "");
-        break;
-      case kGET_LICENSE_CLAIMS:
-        context.client.get_license_claims(context.license_info, context.session, "");
         break;
       case kGET_COMPLETION_HINTS:
         context.client.get_completion_hints(

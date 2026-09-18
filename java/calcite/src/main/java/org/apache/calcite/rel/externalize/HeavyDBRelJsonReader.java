@@ -13,6 +13,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * This file is a modified derivative of Apache Calcite's org.apache.calcite.rel.externalize.RelJsonReader.
+ *
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.apache.calcite.rel.externalize;
 
@@ -45,6 +50,7 @@ import org.apache.calcite.util.Util;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.math.BigDecimal;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -187,6 +193,11 @@ public class HeavyDBRelJsonReader {
 
       public float getFloat(String tag) {
         return ((Number) jsonRel.get(tag)).floatValue();
+      }
+
+      @Override
+      public BigDecimal getBigDecimal(String s) {
+        throw new RuntimeException("getBigDecimal method not implemented");
       }
 
       public boolean getBoolean(String tag, boolean default_) {

@@ -3,12 +3,170 @@
 
 name: PR /test Command
 
+# ---------------------------------------------------------------------------
+# Thin dispatcher for `/test [subcommand]` PR comments.
+#
+# GitHub Actions instantiates a run for EVERY comment matching `on:
+# issue_comment`, and there is no way to filter by comment body at the
+# trigger level — the gating has to happen inside a job. To keep the heavy
+# PR Required Checks workflow's run list clean (it used to show a 13-job
+# run, all skipped, for every unrelated PR comment), the comment trigger
+# lives here instead, in a workflow that is a single lightweight job.
+#
+# From a write-access user on a PR:
+#   `/test [filter]`   → dispatch pr-required-checks.yml (normal :latest jobs).
+#   `/test deps`       → dispatch deps-image-builder.yml to build all 4 deps
+#                        variants from the PR head, which then chains into
+#                        pr-required-checks.yml in deps-build mode against the
+#                        freshly-built images (see those workflows).
+#   `/test dev-tools`  → dispatch dev-tools-tests.yml against the PR head.
+#
+# For anything else (non-PR comment, non-matching comment, unauthorized user)
+# the job no-ops in a few seconds — no build/test jobs are attached here.
+# ---------------------------------------------------------------------------
+
 on:
-  workflow_dispatch:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  # Dispatch workflow runs via the Actions API.
+  actions: write
+  # Post commit statuses on the PR head SHA.
+  statuses: write
+  # Add the 🚀 reaction to the comment and post the "need write access" reply.
+  pull-requests: write
+  issues: write
 
 jobs:
-  placeholder:
+  dispatch:
+    name: dispatch
+    # Cheap substring pre-filter so the runner only spins up for plausible
+    # `/test` comments; the precise checks (PR-only, anchored regex,
+    # write-access) happen inside the job.
+    if: ${{ github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/test') }}
     runs-on: linux-amd64-cpu16
     steps:
-      - name: placeholder
-        run: true
+      - name: Validate and dispatch
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue = context.payload.issue;
+            const comment = context.payload.comment;
+            const body = comment.body.trim();
+            const defaultBranch = context.payload.repository.default_branch;
+
+            const testMatch = body.match(/^\/test(?:\s+(\S+))?\s*$/);
+            if (!testMatch) {
+              core.info('Comment is not a `/test [subcommand]` command; ignoring.');
+              return;
+            }
+            const subcommand = testMatch[1] || '';
+            const command = subcommand ? `/test ${subcommand}` : '/test';
+
+            // Restrict to users with write (or admin) access.
+            const { data: perm } =
+              await github.rest.repos.getCollaboratorPermissionLevel({
+                owner, repo, username: comment.user.login });
+            if (!['admin', 'write'].includes(perm.permission)) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: `@${comment.user.login} you need write access to run \`${command}\`.` });
+              return;
+            }
+
+            // Resolve the PR head SHA to test.
+            const { data: pr } = await github.rest.pulls.get({
+              owner, repo, pull_number: issue.number });
+            const sha = pr.head.sha;
+            const prNumber = String(issue.number);
+            const prTitle = pr.title.length > 80
+              ? `${pr.title.slice(0, 77)}...`
+              : pr.title;
+
+            // Acknowledge the command.
+            await github.rest.reactions.createForIssueComment({
+              owner, repo, comment_id: comment.id, content: 'rocket' });
+
+            // Validate the subcommand before dispatching anything.
+            const knownSubcommands = ['', 'deps', 'dev-tools'];
+            if (!knownSubcommands.includes(subcommand)) {
+              core.info(`Unknown /test subcommand '${subcommand}'; ignoring.`);
+              return;
+            }
+
+            // Dispatched workflows must be started against a ref that carries
+            // the workflow file, so use the repo default branch.
+
+            // /test deps: build all 4 deps variants from the PR head, then
+            // (via deps-image-builder's chain-pr-checks job) run PR Required
+            // Checks in deps-build mode against them. Use a PR-scoped tag so
+            // the images are traceable and never clobber :latest.
+            if (subcommand === 'deps') {
+              const depsTag = `pr-${issue.number}-${sha.slice(0, 12)}`;
+              // CUDA / Ubuntu / lib_type are omitted on purpose so they inherit
+              // deps-image-builder.yml's input defaults (the single source for
+              // the deps flavor). Only the deps-test-specific knobs are set here.
+              await github.rest.actions.createWorkflowDispatch({
+                owner, repo,
+                workflow_id: 'deps-image-builder.yml',
+                ref: defaultBranch,
+                inputs: {
+                  scripts_ref: sha,
+                  distro: 'all',
+                  arch: 'both',
+                  image_tag: depsTag,
+                  tag_latest: 'false',
+                  trigger_pr_checks: 'true',
+                  pr_head_sha: sha,
+                  pr_number: prNumber,
+                  pr_title: prTitle,
+                } });
+              // Post pending statuses for both deps-image-builder (the dedicated
+              // deps check) and pr-required-checks (which /test deps also satisfies
+              // by chaining into it with the freshly-built images).
+              const targetUrl =
+                `${context.serverUrl}/${owner}/${repo}/actions/workflows/deps-image-builder.yml`;
+              for (const ctx of ['deps-image-builder', 'pr-required-checks']) {
+                await github.rest.repos.createCommitStatus({
+                  owner, repo, sha, state: 'pending',
+                  context: ctx,
+                  description: 'Building deps images, then PR checks…',
+                  target_url: targetUrl });
+              }
+              core.info(`Dispatched deps-image-builder for ${sha} (tag=${depsTag}).`);
+              return;
+            }
+
+            // /test dev-tools: run the dev-tools test suite against the PR head.
+            if (subcommand === 'dev-tools') {
+              await github.rest.actions.createWorkflowDispatch({
+                owner, repo,
+                workflow_id: 'dev-tools-tests.yml',
+                ref: defaultBranch,
+                inputs: { sha1: sha, pr_number: prNumber } });
+              await github.rest.repos.createCommitStatus({
+                owner, repo, sha, state: 'pending',
+                context: 'dev-tools tests',
+                description: 'dev-tools tests running…',
+                target_url: `${context.serverUrl}/${owner}/${repo}/actions/workflows/dev-tools-tests.yml` });
+              core.info(`Dispatched dev-tools-tests for ${sha}.`);
+              return;
+            }
+
+            // Default: run PR Required Checks against the pinned :latest deps
+            // image. sha1 carries the PR head SHA to check out.
+            const jobs_filter = subcommand || 'all';
+            await github.rest.actions.createWorkflowDispatch({
+              owner, repo,
+              workflow_id: 'pr-required-checks.yml',
+              ref: defaultBranch,
+              inputs: {
+                sha1: sha,
+                jobs: jobs_filter,
+                pr_number: prNumber,
+                pr_title: prTitle,
+              } });
+            core.info(`Dispatched pr-required-checks for ${sha} (jobs=${jobs_filter}).`);

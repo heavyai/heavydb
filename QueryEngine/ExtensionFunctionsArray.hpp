@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <cassert>
 
 #if defined(__clang__)
@@ -55,19 +60,6 @@ DEVICE ALWAYS_INLINE Array<T> array_second_half_impl(const Array<T>& in_arr) {
 
 }  // namespace
 
-#endif
-
-#ifdef _WIN32
-// MSVC doesn't allow extern "C" function using template type
-// without explicit instantiation
-template struct Array<bool>;
-template struct Array<int8_t>;
-template struct Array<int16_t>;
-template struct Array<int32_t>;
-template struct Array<int64_t>;
-template struct Array<float>;
-template struct Array<double>;
-template struct Array<TextEncodingDict>;
 #endif
 
 EXTENSION_NOINLINE Array<int64_t> array_append(const Array<int64_t>& in_arr,
@@ -297,10 +289,6 @@ EXTENSION_NOINLINE Array<double> array_second_half__f64(const Array<double>& in_
   return Array<double>(0, true);
 #endif
 }
-
-#ifdef _WIN32
-template struct Array<TextEncodingDict>;
-#endif
 
 #ifndef __CUDACC__
 EXTENSION_NOINLINE

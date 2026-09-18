@@ -82,3 +82,17 @@
    fun:__libc_start_main@@GLIBC_2.34
    fun:(below main)
 }
+{
+   # glibc DNS resolver caches /etc/resolv.conf for the process lifetime and
+   # intentionally never frees it (__resolv_conf_load via res_init). Reported
+   # as a 131-byte definite leak but it is a well-known glibc false positive,
+   # not a heavydb leak. Triggered the first time the server resolves a name.
+   glibc_resolv_conf_load
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:__libc_alloc_buffer_allocate
+   ...
+   fun:__resolv_conf_load
+   ...
+}

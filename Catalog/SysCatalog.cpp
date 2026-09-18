@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -20,7 +9,6 @@
  *
  */
 
-#include "SysCatalog.h"
 #include <algorithm>
 #include <cassert>
 #include <exception>
@@ -30,24 +18,24 @@
 #include <random>
 #include <sstream>
 #include <string_view>
-#include "Catalog.h"
-
-#include "Catalog/AuthMetadata.h"
-#include "QueryEngine/ExternalCacheInvalidators.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptor/map.hpp>
 #include <boost/version.hpp>
 
+#include "Catalog.h"
+#include "Catalog/AuthMetadata.h"
 #include "MapDRelease.h"
 #include "Parser/ParserNode.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
 #include "RWLocks.h"
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
+#include "SysCatalog.h"
 #include "include/bcrypt.h"
 
 using std::list;
@@ -149,6 +137,7 @@ thread_local bool SysCatalog::thread_holds_read_lock = false;
 std::mutex SysCatalog::instance_mutex_;
 std::unique_ptr<SysCatalog> SysCatalog::instance_;
 
+using cat_write_lock = write_lock<Catalog>;
 using sys_read_lock = read_lock<SysCatalog>;
 using sys_write_lock = write_lock<SysCatalog>;
 using sys_sqlite_lock = sqlite_lock<SysCatalog>;
@@ -193,31 +182,33 @@ void SysCatalog::init(const std::string& basePath,
                       const AuthMetadata& authMetadata,
                       std::shared_ptr<Calcite> calcite,
                       bool is_new_db,
-                      bool aggregator,
-                      const std::vector<LeafHostInfo>& string_dict_hosts,
                       std::optional<int32_t> max_num_users) {
   basePath_ = !g_multi_instance ? copy_catalog_if_read_only(basePath).string() : basePath;
   sqliteConnector_.reset(new SqliteConnector(
       shared::kSystemCatalogName, basePath_ + "/" + shared::kCatalogDirectoryName + "/"));
-  dcatalogMutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+  // Distributed mutexes can only be initialized once we have the base path.
+  mutex_desc_.dist_mutex = std::make_unique<heavyai::DistributedSharedMutex>(
       std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
           shared::kCatalogDirectoryName / (shared::kSystemCatalogName + ".lockfile"),
       [this](size_t) {
         heavyai::unique_lock<heavyai::DistributedSharedMutex> dsqlite_lock(
-            *dsqliteMutex_);
+            *sqlite_mutex_desc_.dist_mutex);
         buildMapsUnlocked();
       });
-  dsqliteMutex_ = std::make_unique<heavyai::DistributedSharedMutex>(
+  sqlite_mutex_desc_.dist_mutex = std::make_unique<heavyai::DistributedSharedMutex>(
       std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
       shared::kCatalogDirectoryName / (shared::kSystemCatalogName + ".sqlite.lockfile"));
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   dataMgr_ = dataMgr;
   authMetadata_ = &authMetadata;
-  pki_server_.reset(new PkiServer(*authMetadata_));
+#ifdef HAVE_LDAP
+  ldap_server_.reset(new LdapServer(*authMetadata_));
+#endif
+#ifdef HAVE_SAML
+  saml_server_.reset(new SamlServer(*authMetadata_));
+#endif /* HAVE_SAML */
   calciteMgr_ = calcite;
-  string_dict_hosts_ = string_dict_hosts;
-  aggregator_ = aggregator;
   migrations::MigrationMgr::takeMigrationLock(basePath_);
   if (is_new_db) {
     initDB();
@@ -234,6 +225,19 @@ void SysCatalog::init(const std::string& basePath,
     }
   }
   buildMaps(is_new_db);
+  if (!is_new_db && g_enable_system_tables) {
+    // info shcmea db is only initialized when the server is run (not initdb AKA
+    // is_new_db) because we don't have the runtime context (we don't know what server
+    // flags are going to be enabled).
+    if (DBMetadata db_metadata;
+        getMetadataForDB(shared::kInfoSchemaDbName, db_metadata)) {
+      // Initializing the info schema db can lead to the DataMgr erasing data while
+      // calling back into the SysCatalog and cause lock-order inversions.  If we
+      // initialize that catalog here then we can avoid any concurrency issues.
+      getCatalog(db_metadata, is_new_db);
+    }
+  }
+
   setMaxNumUsers(max_num_users);
   is_initialized_ = true;
 }
@@ -272,11 +276,9 @@ void SysCatalog::buildMapsUnlocked(bool is_new_db) {
   buildUserRoleMapUnlocked();
   buildObjectDescriptorMapUnlocked();
   if (!is_new_db) {
-    // We don't want to create the information schema db during database initialization
-    // because we don't have the appropriate context to intialize the tables.  For
-    // instance if the server is intended to run in distributed mode, initializing the
-    // table as part of initdb will be missing information such as the location of the
-    // string dictionary server.
+    // Defer information_schema creation until server startup (not initdb): system table
+    // setup depends on runtime flags such as g_enable_system_tables, g_enable_fsi, and
+    // g_enable_logs_system_tables that are not known during initdb.
     initializeInformationSchemaDb();
   }
 
@@ -297,12 +299,9 @@ void SysCatalog::buildMapsUnlocked(bool is_new_db) {
 
 SysCatalog::SysCatalog()
     : CommonFileOperations{basePath_}
-    , aggregator_{false}
-    , sqliteMutex_{}
-    , sharedMutex_{}
-    , thread_holding_sqlite_lock{std::thread::id()}
-    , thread_holding_write_lock{std::thread::id()}
-    , dummyCatalog_{std::make_shared<Catalog>()} {}
+    , mutex_desc_{}
+    , sqlite_mutex_desc_{}
+    , cat_init_mutex_desc_{} {}
 
 SysCatalog::~SysCatalog() {
   // TODO(sy): Need to lock here to wait for other threads to complete before pulling out
@@ -349,6 +348,13 @@ void SysCatalog::initDB() {
         "objectOwnerId integer, "
         "subObjectId integer, "
         "UNIQUE(roleName, objectPermissionsType, dbId, objectId, subObjectId))");
+    sqliteConnector_->query(
+        "CREATE TABLE policies ("
+        "role_name text, "
+        "db_id integer references mapd_databases, "
+        "table_id integer, "
+        "column_id integer, "
+        "value text)");
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -362,6 +368,7 @@ void SysCatalog::initDB() {
 void SysCatalog::checkAndExecuteMigrations() {
   migratePrivileged_old();
   createRoles();
+  createPolicies();
   fixRolesMigration();
   migratePrivileges();
   migrateColumnLevelSecurity();
@@ -374,6 +381,7 @@ void SysCatalog::checkAndExecuteMigrations() {
   updateSupportUserDeactivation();
   addAdminUserRole();
   checkDuplicateCaseInsensitiveDbNames();
+  rejectLegacyReplicatedPartitions();
 }
 
 void SysCatalog::updateUserSchema() {
@@ -463,6 +471,24 @@ void SysCatalog::createRoles() {
     sqliteConnector_->query(
         "CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, "
         "userName))");
+  } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::createPolicies() {
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query(
+        "CREATE TABLE IF NOT EXISTS policies ("
+        "role_name text, "
+        "db_id integer references mapd_databases, "
+        "table_id integer, "
+        "column_id integer, "
+        "value text)");
   } catch (const std::exception&) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -1014,6 +1040,67 @@ void SysCatalog::checkDuplicateCaseInsensitiveDbNames() const {
   recordExecutedMigration(duplicate_check_migration);
 }
 
+// mapd_tables.partitions lives in each database's catalog sqlite file, not in the
+// system catalog. Per-database Catalog objects are not opened yet at startup, so
+// ATTACH each catalog file to scan for legacy REPLICATED values from SysCatalog.
+void SysCatalog::rejectLegacyReplicatedPartitions() const {
+  if (hasExecutedMigration(shared::kRejectLegacyReplicatedPartitionsMigrationName)) {
+    return;
+  }
+  sys_sqlite_lock sqlite_lock(this);
+  sqliteConnector_->query("SELECT dbid, name FROM mapd_databases");
+  const auto num_dbs = sqliteConnector_->getNumRows();
+  std::vector<std::string> db_names;
+  db_names.reserve(num_dbs);
+  for (size_t db_row = 0; db_row < num_dbs; ++db_row) {
+    db_names.push_back(sqliteConnector_->getData<string>(db_row, 1));
+  }
+  std::stringstream error_message;
+  for (const auto& db_name : db_names) {
+    if (db_name.empty()) {
+      continue;
+    }
+    const std::string db_path =
+        basePath_ + "/" + shared::kCatalogDirectoryName + "/" + db_name;
+    if (!std::filesystem::is_regular_file(db_path)) {
+      continue;
+    }
+    static const std::string attach_name{"legacy_partitions_check_cat"};
+    sqliteConnector_->query("ATTACH DATABASE `" + db_path + "` AS " + attach_name);
+    try {
+      sqliteConnector_->query("SELECT name FROM " + attach_name +
+                              ".sqlite_master WHERE type='table' AND name='mapd_tables'");
+      if (sqliteConnector_->getNumRows() == 0) {
+        sqliteConnector_->query("DETACH DATABASE " + attach_name);
+        continue;
+      }
+      sqliteConnector_->query("SELECT name FROM " + attach_name +
+                              ".mapd_tables WHERE UPPER(partitions) = 'REPLICATED'");
+      const auto num_tables = sqliteConnector_->getNumRows();
+      for (size_t table_row = 0; table_row < num_tables; ++table_row) {
+        if (error_message.str().empty()) {
+          error_message << "Legacy PARTITIONS='REPLICATED' is no longer supported.";
+        }
+        error_message << " Found in database '" << db_name << "': table '"
+                      << sqliteConnector_->getData<string>(table_row, 0) << "'.";
+      }
+      sqliteConnector_->query("DETACH DATABASE " + attach_name);
+    } catch (const std::exception&) {
+      try {
+        sqliteConnector_->query("DETACH DATABASE " + attach_name);
+      } catch (const std::exception&) {
+        // nothing to do here
+      }
+      throw;
+    }
+  }
+  if (!error_message.str().empty()) {
+    error_message << " Remove or recreate these tables before starting HeavyDB.";
+    throw std::runtime_error{error_message.str()};
+  }
+  recordExecutedMigration(shared::kRejectLegacyReplicatedPartitionsMigrationName);
+}
+
 std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
                                            std::string& username,
                                            const std::string& password,
@@ -1039,11 +1126,56 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
   return getCatalog(db_meta, false);
 }
 
-// loginImpl() with no EE code and no SAML code
+// loginImpl() with EE code and SAML code enabled
 void SysCatalog::loginImpl(std::string& username,
                            const std::string& password,
                            UserMetadata& user_meta) {
-  if (!checkPasswordForUser(password, username, user_meta)) {
+  if (username == shared::kRootUsername) {
+    if (!checkPasswordForUser(password, username, user_meta)) {
+      throw std::runtime_error("Authentication failure");
+    }
+    return;
+  }
+#ifdef HAVE_SAML
+  if (saml_server_->inUse()) {
+    try {
+      Restrictions restrictions;
+      saml_server_->login(username, password, restrictions);
+      if (!getMetadataForUser(username, user_meta)) {
+        std::string loggable = g_log_user_id ? std::string("") : '[' + username + "] ";
+        throw std::runtime_error("SAML metadata for name " + loggable + "not found");
+      }
+      auto* grantee = getGrantee(username);
+      if (!grantee) {
+        std::string loggable = g_log_user_id ? std::string("") : '[' + username + "] ";
+        throw std::runtime_error("user role " + loggable + "not found");
+      }
+      grantee->setRestrictions(restrictions);
+      return;
+    } catch (const std::exception& e) {
+      LOG(WARNING) << "SAML login failed: " << e.what();
+    }
+  }
+#endif
+#ifdef HAVE_LDAP
+  if (ldap_server_->inUse()) {
+    try {
+      ldap_server_->login(username, password);
+      getMetadataForUser(username, user_meta);
+      return;
+    } catch (const std::exception& e) {
+      LOG(WARNING) << "LDAP login failed: " << e.what();
+    }
+  }
+#endif
+
+  // check password
+  if (allowLocalLogin()) {
+    if (!checkPasswordForUserImpl(password, username, user_meta)) {
+      LOG(WARNING) << "Local login failed: Invalid credentials";
+      throw std::runtime_error("Authentication failure");
+    }
+  } else {
     throw std::runtime_error("Authentication failure");
   }
 }
@@ -1070,23 +1202,15 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
   return cat;
 }
 
-void SysCatalog::check_for_session_encryption(const std::string& pki_cert,
-                                              std::string& session) {
-  if (!pki_server_->inUse()) {
-    return;
-  }
-  pki_server_->encrypt_session(pki_cert, session);
-}
-
 namespace {
-void validate_license_claim_num_users(const int32_t num_users,
-                                      const std::optional<int32_t>& max_num_users,
-                                      const std::string& name) {
+void validate_max_num_users(const int32_t num_users,
+                            const std::optional<int32_t>& max_num_users,
+                            const std::string& name) {
   if (auto new_num_users = num_users + 1; new_num_users > max_num_users.value()) {
     std::stringstream ss;
     ss << "Can not create user '" << name << "'"
        << ", operation would result in " << new_num_users << ""
-       << " users when the system license allows " << max_num_users.value() << ".";
+       << " users when the configured limit is " << max_num_users.value() << ".";
     throw std::runtime_error(ss.str());
   }
 }
@@ -1099,7 +1223,7 @@ UserMetadata SysCatalog::createUser(const string& name,
   sys_sqlite_lock sqlite_lock(this);
 
   if (max_num_users_.has_value()) {
-    validate_license_claim_num_users(getNumUsers(), max_num_users_, name);
+    validate_max_num_users(getNumUsers(), max_num_users_, name);
   }
 
   if (!alts.passwd) {
@@ -1209,6 +1333,11 @@ void SysCatalog::dropUserUnchecked(const std::string& name, const UserMetadata& 
   }
 
   // Normal user.
+  if (g_enable_fsi) {
+    for (const auto& catalog : getCatalogsForAllDbs()) {
+      catalog->dropAllUserMappingsForUser(user.userId);
+    }
+  }
 
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
@@ -1655,6 +1784,9 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     if (g_enable_fsi) {
       dbConn->query(Catalog::getForeignServerSchema());
       dbConn->query(Catalog::getForeignTableSchema());
+      if (g_enable_fsi) {
+        dbConn->query(Catalog::getUserMappingSchema());
+      }
     }
     dbConn->query(Catalog::getCustomExpressionsSchema());
   } catch (const std::exception&) {
@@ -1739,7 +1871,10 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
         revokeAllOnDatabase_unsafe(
             grantee.second->getName(), db.dbId, grantee.second.get());
       }
+      grantee.second->removeDatabaseRestrictions(cat->getDatabaseId());
     }
+    sqliteConnector_->query_with_text_param("DELETE FROM policies WHERE db_id = ?",
+                                            std::to_string(db.dbId));
     sqliteConnector_->query_with_text_param("DELETE FROM mapd_databases WHERE dbid = ?",
                                             std::to_string(db.dbId));
     cat->eraseDbMetadata();
@@ -1751,11 +1886,311 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-// checkPasswordForUser() with no EE code
+void SysCatalog::createLegacyPolicyInMemory(const Catalog_Namespace::Catalog& cat,
+                                            const std::string& column_name,
+                                            const std::string& grantee_name,
+                                            std::vector<std::string> values_list) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  UserMetadata user_meta;
+  bool got_user_meta{false};
+  if ((got_user_meta = getMetadataForUser(grantee_name, user_meta))) {
+    if (user_meta.isSuper) {
+      throw std::runtime_error("can't CREATE POLICY for a superuser");
+    }
+  }
+  auto* rl = getGrantee(grantee_name);
+  if (!rl) {
+    std::string loggable;
+    if (got_user_meta) {
+      loggable = g_log_user_id ? std::string("") : '[' + grantee_name + "] ";
+    } else {
+      loggable = '[' + grantee_name + "] ";
+    }
+    throw std::runtime_error("user name or role name " + loggable + "not found");
+  }
+
+  rl->setLegacyRestrictionColumnName(column_name);
+  for (const auto& v : values_list) {
+    rl->addRestrictionValue(Restriction().getKey(), v);
+  }
+}
+
+void SysCatalog::dropLegacyPolicyInMemory(const Catalog_Namespace::Catalog& cat,
+                                          const std::string& grantee_name) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  UserMetadata user_meta;
+  bool got_user_meta{false};
+  if ((got_user_meta = getMetadataForUser(grantee_name, user_meta))) {
+    if (user_meta.isSuper) {
+      throw std::runtime_error("can't DROP POLICY for a superuser");
+    }
+  }
+  auto* rl = getGrantee(grantee_name);
+  if (!rl) {
+    std::string loggable;
+    if (got_user_meta) {
+      loggable = g_log_user_id ? std::string("") : '[' + grantee_name + "] ";
+    } else {
+      loggable = '[' + grantee_name + "] ";
+    }
+    throw std::runtime_error("user name or role name " + loggable + "not found");
+  }
+
+  rl->removeRestrictions(Restriction().getKey());
+}
+
+void SysCatalog::createPolicy(const Catalog_Namespace::Catalog& cat,
+                              const std::vector<std::string> column_name_components,
+                              const std::string& grantee_name,
+                              std::vector<std::string> values_list) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  const std::vector<std::string>& names = column_name_components;
+  if (names.size() != 2) {
+    throw std::runtime_error("table.column name is required");
+  }
+  TableDescriptor const* td = cat.getMetadataForTable(names[0], false);
+  if (!td) {
+    throw std::runtime_error("invalid table name: " + names[0]);
+  }
+  ColumnDescriptor const* cd = cat.getMetadataForColumn(td->tableId, names[1]);
+  if (!cd) {
+    throw std::runtime_error("invalid column name: " + names[1]);
+  }
+  CHECK_EQ(td->tableId, cd->tableId)
+      << "table ID mismatch: " << td->tableId << "," << cd->tableId;
+
+  UserMetadata user_meta;
+  bool got_user_meta{false};
+  if ((got_user_meta = getMetadataForUser(grantee_name, user_meta))) {
+    if (user_meta.isSuper) {
+      throw std::runtime_error("can't CREATE POLICY for a superuser");
+    }
+  }
+  auto* rl = getGrantee(grantee_name);
+  if (!rl) {
+    std::string loggable;
+    if (got_user_meta) {
+      loggable = g_log_user_id ? std::string("") : '[' + grantee_name + "] ";
+    } else {
+      loggable = '[' + grantee_name + "] ";
+    }
+    throw std::runtime_error("user name or role name " + loggable + "not found");
+  }
+
+  auto key{std::make_tuple(cat.getDatabaseId(), td->tableId, cd->columnId)};
+  if (Restrictions rs = rl->getRestrictions(); rs.find(key) != rs.end()) {
+    std::string loggable;
+    if (got_user_meta) {
+      loggable = g_log_user_id ? std::string("") : '[' + grantee_name + "] ";
+    } else {
+      loggable = '[' + grantee_name + "] ";
+    }
+    throw std::runtime_error("policy already exists for " + loggable + "[" + names[0] +
+                             "." + names[1] + "]");
+  }
+
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    for (const auto& v : values_list) {
+      std::vector<std::string> sqlv;
+      sqlv.push_back(grantee_name);                         // role_name
+      sqlv.push_back(std::to_string(cat.getDatabaseId()));  // db_id
+      sqlv.push_back(std::to_string(td->tableId));          // table_id
+      sqlv.push_back(std::to_string(cd->columnId));         // column_id
+      sqlv.push_back(v);                                    // value
+      sqliteConnector_->query_with_text_params(
+          "INSERT INTO policies (role_name, db_id, table_id, column_id, value) VALUES "
+          "(?, ?, ?, ?, ?)",
+          sqlv);
+    }
+  } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+  for (const auto& v : values_list) {
+    rl->addRestrictionValue(key, v);
+  }
+}
+
+void SysCatalog::dropPolicy(const Catalog_Namespace::Catalog& cat,
+                            const std::vector<std::string> column_name_components,
+                            const std::string& grantee_name) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  const std::vector<std::string>& names = column_name_components;
+  if (names.size() != 2) {
+    throw std::runtime_error("table.column name is required");
+  }
+  TableDescriptor const* td = cat.getMetadataForTable(names[0], false);
+  if (!td) {
+    throw std::runtime_error("invalid table name: " + names[0]);
+  }
+  ColumnDescriptor const* cd = cat.getMetadataForColumn(td->tableId, names[1]);
+  if (!cd) {
+    throw std::runtime_error("invalid column name: " + names[1]);
+  }
+  CHECK_EQ(td->tableId, cd->tableId)
+      << "table ID mismatch: " << td->tableId << "," << cd->tableId;
+
+  UserMetadata user_meta;
+  bool got_user_meta{false};
+  if ((got_user_meta = getMetadataForUser(grantee_name, user_meta))) {
+    if (user_meta.isSuper) {
+      throw std::runtime_error("can't DROP POLICY for a superuser");
+    }
+  }
+  auto* rl = getGrantee(grantee_name);
+  if (!rl) {
+    std::string loggable;
+    if (got_user_meta) {
+      loggable = g_log_user_id ? std::string("") : '[' + grantee_name + "] ";
+    } else {
+      loggable = '[' + grantee_name + "] ";
+    }
+    throw std::runtime_error("user name or role name " + loggable + "not found");
+  }
+
+  auto key{std::make_tuple(cat.getDatabaseId(), td->tableId, cd->columnId)};
+  if (Restrictions rs = rl->getRestrictions(); rs.find(key) == rs.end()) {
+    std::string loggable;
+    if (got_user_meta) {
+      loggable = g_log_user_id ? std::string("") : '[' + grantee_name + "] ";
+    } else {
+      loggable = '[' + grantee_name + "] ";
+    }
+    throw std::runtime_error("policy not found for " + loggable + "[" + names[0] + "." +
+                             names[1] + "]");
+  }
+
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    std::vector<std::string> sqlv;
+    sqlv.push_back(grantee_name);                         // role_name
+    sqlv.push_back(std::to_string(cat.getDatabaseId()));  // db_id
+    sqlv.push_back(std::to_string(td->tableId));          // table_id
+    sqlv.push_back(std::to_string(cd->columnId));         // column_id
+    sqliteConnector_->query_with_text_params(
+        "DELETE FROM policies WHERE role_name = ? AND db_id = ? AND table_id = ? AND "
+        "column_id = ?",
+        sqlv);
+  } catch (const std::exception&) {
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+  rl->removeRestrictions(key);
+}
+
+void SysCatalog::dropPoliciesForTable(const Catalog_Namespace::Catalog& cat,
+                                      const std::string& table_name) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  TableDescriptor const* td = cat.getMetadataForTable(table_name, false);
+  CHECK(td) << "invalid table name: " << table_name;
+  std::vector<std::string> sqlv;
+  sqlv.push_back(std::to_string(cat.getDatabaseId()));  // db_id
+  sqlv.push_back(std::to_string(td->tableId));          // table_id
+  sqliteConnector_->query_with_text_params(
+      "DELETE FROM policies WHERE db_id = ? AND table_id = ?", sqlv);
+  for (const auto& grantee : granteeMap_) {
+    grantee.second->removeTableRestrictions(cat.getDatabaseId(), td->tableId);
+  }
+}
+
+void SysCatalog::dropPoliciesForColumn(const Catalog_Namespace::Catalog& cat,
+                                       const std::string& table_name,
+                                       const std::string& column_name) {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  TableDescriptor const* td = cat.getMetadataForTable(table_name, false);
+  CHECK(td) << "invalid table name: " << table_name;
+  ColumnDescriptor const* cd = cat.getMetadataForColumn(td->tableId, column_name);
+  CHECK(cd) << "invalid column name: " << column_name;
+  CHECK_EQ(td->tableId, cd->tableId)
+      << "table ID mismatch: " << td->tableId << "," << cd->tableId;
+  std::vector<std::string> sqlv;
+  sqlv.push_back(std::to_string(cat.getDatabaseId()));  // db_id
+  sqlv.push_back(std::to_string(td->tableId));          // table_id
+  sqlv.push_back(std::to_string(cd->columnId));         // column_id
+  sqliteConnector_->query_with_text_params(
+      "DELETE FROM policies WHERE db_id = ? AND table_id = ? AND column_id = ?", sqlv);
+  for (auto const& grantee : granteeMap_) {
+    grantee.second->removeRestrictions(
+        std::make_tuple(cat.getDatabaseId(), td->tableId, cd->columnId));
+  }
+}
+
+bool SysCatalog::allowLocalLogin() const {
+  bool remote_auth_in_use = false;
+#ifdef HAVE_SAML
+  remote_auth_in_use = remote_auth_in_use || saml_server_->inUse();
+#endif  // HAVE_SAML
+#ifdef HAVE_LDAP
+  remote_auth_in_use = remote_auth_in_use || ldap_server_->inUse();
+#endif  // HAVE_LDAP
+  return (remote_auth_in_use && authMetadata_->allowLocalAuthFallback) ||
+         !remote_auth_in_use;
+}
+
+// checkPasswordForUser() with EE code enabled
 bool SysCatalog::checkPasswordForUser(const std::string& passwd,
                                       std::string& name,
                                       UserMetadata& user) {
-  return checkPasswordForUserImpl(passwd, name, user);
+#ifdef HAVE_SAML
+  if (saml_server_->inUse()) {
+    try {
+      std::vector<std::string> saml_roles;
+      Restrictions restrictions;
+      std::optional<std::string>
+          default_db;  // unused here, but see also SamlServer::login()
+      if (saml_server_->authenticate_user(
+              name, passwd, saml_roles, restrictions, default_db) &&
+          getMetadataForUser(name, user)) {
+        auto* grantee = getGrantee(name);
+        if (!grantee) {
+          throw std::runtime_error("user role not found");
+        }
+        grantee->setRestrictions(restrictions);
+        return true;
+      } else {
+        LOG(WARNING) << "SAML login failed: Invalid credentials";
+      }
+    } catch (const std::exception& e) {
+      LOG(WARNING) << "SAML login failed: " << e.what();
+    }
+  }
+#endif  // HAVE_SAML
+#ifdef HAVE_LDAP
+  if (ldap_server_->inUse()) {
+    try {
+      std::vector<std::string> ldap_roles;
+      if (ldap_server_->authenticate_user(name, passwd, ldap_roles) &&
+          getMetadataForUser(name, user)) {
+        return true;
+      } else {
+        LOG(WARNING) << "LDAP login failed: Invalid credentials";
+      }
+    } catch (const std::exception& e) {
+      LOG(WARNING) << "LDAP login failed: " << e.what();
+    }
+  }
+#endif
+
+  if (allowLocalLogin()) {
+    if (!checkPasswordForUserImpl(passwd, name, user)) {
+      LOG(WARNING) << "Local login failed: Invalid credentials";
+      return false;
+    } else {
+      return true;
+    }
+  }
+  throw std::runtime_error("Authentication failure");
 }
 
 bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
@@ -1901,11 +2336,13 @@ auto get_users(SysCatalog& syscat,
 list<UserMetadata> SysCatalog::getAllUserMetadata(const int64_t dbId) {
   // this call is to return users that have some form of permissions to objects in the db
   // sadly mapd_object_permissions table is also misused to manage user roles.
+  sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   return get_users(*this, sqliteConnector_, dbId);
 }
 
 list<UserMetadata> SysCatalog::getAllUserMetadata() {
+  sys_read_lock read_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   return get_users(*this, sqliteConnector_);
 }
@@ -2586,6 +3023,8 @@ void SysCatalog::dropRole_unsafe(const std::string& roleName, const bool is_temp
                                             roleName);
     sqliteConnector_->query_with_text_param(
         "DELETE FROM mapd_object_permissions WHERE roleName = ?", roleName);
+    sqliteConnector_->query_with_text_param("DELETE FROM policies WHERE role_name = ?",
+                                            roleName);
   }
 }
 
@@ -2961,6 +3400,28 @@ std::vector<std::string> SysCatalog::getRoles(const std::string& user_name,
   return grantee->getRoles(/*only_direct=*/!effective);
 }
 
+Restrictions SysCatalog::getRestrictions(const std::string& grantee_name,
+                                         bool effective) {
+  sys_read_lock read_lock(this);
+  UserMetadata user_meta;
+  bool got_user_meta{getMetadataForUser(grantee_name, user_meta)};
+  if (got_user_meta && user_meta.isSuper) {
+    return {};
+  }
+  auto* grantee = getGrantee(grantee_name);
+  if (!grantee) {
+    std::string loggable;
+    if (got_user_meta) {
+      loggable = g_log_user_id ? std::string("") : '[' + grantee_name + "] ";
+    } else {
+      loggable = '[' + grantee_name + "] ";
+    }
+    throw std::runtime_error("user name or role name " + loggable + "not found");
+  }
+  return grantee->getRestrictions(/*only_direct=*/!effective);
+  // TODO(sy): optimize: cache the effective restrictions?
+}
+
 std::vector<std::string> SysCatalog::getRoles(const std::string& userName,
                                               const int32_t dbId) {
   sys_sqlite_lock sqlite_lock(this);
@@ -3069,6 +3530,21 @@ void SysCatalog::buildRoleMapUnlocked() {
       granteeMap_[to_upper(roleName)] = std::move(g);
     }
     rl->grantPrivileges(dbObject);
+  }
+
+  sqliteConnector_->query(
+      "SELECT role_name, db_id, table_id, column_id, value FROM policies");
+  for (size_t r = 0; r < sqliteConnector_->getNumRows(); ++r) {
+    std::string role_name = sqliteConnector_->getData<std::string>(r, 0);
+    int did = sqliteConnector_->getData<int>(r, 1);
+    int tid = sqliteConnector_->getData<int>(r, 2);
+    int cid = sqliteConnector_->getData<int>(r, 3);
+    std::string value = sqliteConnector_->getData<std::string>(r, 4);
+
+    auto* rl = getGrantee(role_name);
+    CHECK(rl) << "role_name from the policies table not found in mapd_object_permissions";
+    auto key{std::make_tuple(did, tid, cid)};
+    rl->addRestrictionValue(key, value);
   }
 }
 
@@ -3354,25 +3830,29 @@ SysCatalog::getGranteesOfSharedDashboards(const std::vector<std::string>& dashbo
 }
 
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const std::string& dbName) {
-  dbid_to_cat_map::const_accessor cata;
-  if (cat_map_.find(cata, to_upper(dbName))) {
-    return cata->second;
-  } else {
-    Catalog_Namespace::DBMetadata db_meta;
-    if (getMetadataForDB(dbName, db_meta)) {
-      return getCatalog(db_meta, false);
-    } else {
-      return nullptr;
+  auto upper_name = to_upper(dbName);
+  {
+    sys_read_lock read_lock(this);
+    if (auto it = cat_map_.find(upper_name); it != cat_map_.end()) {
+      return it->second;
     }
+  }
+
+  // This section creates a new entry and the child functions will acquire separate locks
+  // to do so.
+  Catalog_Namespace::DBMetadata db_meta;
+  if (getMetadataForDB(upper_name, db_meta)) {
+    return getCatalog(db_meta, false);
+  } else {
+    return nullptr;
   }
 }
 
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
-  dbid_to_cat_map::const_accessor cata;
-  for (dbid_to_cat_map::iterator cat_it = cat_map_.begin(); cat_it != cat_map_.end();
-       ++cat_it) {
-    if (cat_it->second->getDatabaseId() == db_id) {
-      return cat_it->second;
+  sys_read_lock read_lock(this);
+  for (auto& [key, cat] : cat_map_) {
+    if (cat->getDatabaseId() == db_id) {
+      return cat;
     }
   }
   return nullptr;
@@ -3381,30 +3861,52 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is_new_db) {
   const auto key = to_upper(curDB.dbName);
   {
-    dbid_to_cat_map::const_accessor cata;
-    if (cat_map_.find(cata, key)) {
-      return cata->second;
+    sys_read_lock read_lock(this);
+    if (auto it = cat_map_.find(key); it != cat_map_.end()) {
+      return it->second;
     }
   }
 
-  // Catalog doesnt exist
-  // has to be made outside of lock as migration uses cat
-  auto cat = std::make_shared<Catalog>(
-      basePath_, curDB, dataMgr_, string_dict_hosts_, calciteMgr_, is_new_db);
+  // No cat found and we have the init lock, so we know no other thread is initializing
+  // a catalog.  Initialize a new catalog and add it to the map.
+  std::shared_ptr<Catalog> cat;
+  // There are some syscat values (root_user & user_name_by_user_id) that are needed for
+  // catalog initialization.  We would rather acquire them here and pass them in so that
+  // the Catalog does not need to reach back and lock the SysCatalog.
+  auto users = getAllUserMetadata();
+  std::map<int32_t, std::string> user_name_by_user_id;
+  for (const auto& user : users) {
+    user_name_by_user_id[user.userId] = user.userName;
+  }
+  UserMetadata root_user;
+  CHECK(getMetadataForUserById(shared::kRootUserId, root_user));
 
-  dbid_to_cat_map::accessor cata;
-
-  if (cat_map_.find(cata, key)) {
-    return cata->second;
+  {
+    // Hold a lock here to prevent concurrent initialization of catalogs.
+    // Note: cat_init_lock is not (and does not need to be) a distributed mutex.  See
+    // RWLocks.cpp for details.
+    cat_init_lock cat_lock(this);
+    cat = std::make_shared<Catalog>(basePath_,
+                                    curDB,
+                                    dataMgr_,
+                                    calciteMgr_,
+                                    is_new_db,
+                                    user_name_by_user_id,
+                                    root_user);
   }
 
-  cat_map_.insert(cata, key);
-  cata->second = cat;
-
+  // Check again for the catalog, as another thread may have added it while we were
+  // waiting for the initialization lock.
+  sys_write_lock write_lock(this);
+  if (auto it = cat_map_.find(key); it != cat_map_.end()) {
+    return it->second;
+  }
+  cat_map_.emplace(key, cat);
   return cat;
 }
 
 void SysCatalog::removeCatalog(const std::string& dbName) {
+  sys_write_lock write_lock(this);
   cat_map_.erase(to_upper(dbName));
 }
 
@@ -3528,6 +4030,19 @@ void SysCatalog::rebuildObjectMapsUnlocked() {
   buildObjectDescriptorMapUnlocked();
 }
 
+void SysCatalog::checkDateInDaysMigration() const {
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+  static const std::string date_in_days_migration{"date_in_days_column"};
+  if (!hasExecutedMigration(date_in_days_migration)) {
+    auto cats = Catalog_Namespace::SysCatalog::instance().getCatalogsForAllDbs();
+    for (auto& cat : cats) {
+      cat->checkDateInDaysColumnMigration();
+    }
+    recordExecutedMigration(date_in_days_migration);
+  }
+}
+
 void SysCatalog::checkDropRenderGroupColumnsMigration() const {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
@@ -3556,6 +4071,25 @@ void SysCatalog::checkDropRenderGroupColumnsMigration() const {
                     "migration record is manually reset.";
     }
   }
+}
+
+heavyai::DistributedSharedMutex& SysCatalog::getDistributedMutex() const {
+  CHECK(mutex_desc_.dist_mutex);
+  return *mutex_desc_.dist_mutex;
+}
+
+SysCatalog& SysCatalog::instance() {
+  std::unique_lock lk(instance_mutex_);
+  if (!instance_) {
+    instance_.reset(new SysCatalog());
+  }
+  return *instance_;
+}
+
+void SysCatalog::destroy() {
+  std::unique_lock lk(instance_mutex_);
+  instance_.reset();
+  migrations::MigrationMgr::destroy();
 }
 
 const TableDescriptor* get_metadata_for_table(const ::shared::TableKey& table_key,
@@ -3598,10 +4132,11 @@ void SysCatalog::setMaxNumUsers(const std::optional<int32_t>& max_num_users_opt)
     std::stringstream ss;
     ss << "Cannot set max number of users.  New limit on number of users requested "
        << max_num_users << " when system already has " << num_users
-       << ".  Please temporarily use a license that allows for more users and drop to "
-          "current license limits.";
+       << ".  Please raise the configured limit or drop existing users to fit the "
+          "current limit.";
     throw std::runtime_error(ss.str());
   }
   max_num_users_ = max_num_users;
 }
+
 }  // namespace Catalog_Namespace

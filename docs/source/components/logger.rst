@@ -4,7 +4,7 @@ Logger
 
 ``#include "Logger/Logger.h"``
 
-The HEAVY.AI Logger is based on `Boost.Log`_ with a design goal of being largely, though not completely, backward
+The HeavyDB logger is based on `Boost.Log`_ with a design goal of being largely, though not completely, backward
 compatible with `glog`_ in usage, but with additional control over the logging format and other features.
 
 .. _Boost.Log: https://www.boost.org/libs/log/doc/html/index.html
@@ -47,7 +47,7 @@ Program Options
                                           WARNING ERROR FATAL
     --log-severity-clog arg (=ERROR)      Log to console severity level: INFO
                                           WARNING ERROR FATAL
-    --log-channels arg                    Log channel debug info: IR PTX ASM
+    --log-channels arg                    Log channel debug info: IR PTX ASM EXECUTOR
     --log-auto-flush arg (=1)              Flush logging buffer to file after each
                                           message.
     --log-max-files arg (=100)             Maximum number of log files to keep.
@@ -165,7 +165,7 @@ The general format of a log entry is::
 
 Example::
 
-    2019-09-18T16:25:25.659248 I 26481 5 DBHandler.cpp:181 HEAVY.AI Server 4.9.0dev-20190918-bd97353685
+    2026-07-23T16:25:25.659248 I 26481 5 DBHandler.cpp:244 HeavyDB Server 10.0.0dev
 
 Field descriptions:
 
@@ -188,11 +188,13 @@ Channel
 Channels are similar to severities, but exist outside of the severity hierarchy, have no ordering of their own,
 and can only be activated by explicitly including them in the ``--log-channels`` program option.
 
-Currently there are 3 channels: ``IR`` ``PTX`` ``ASM``
+There are four channels: ``IR``, ``PTX``, ``ASM``, and ``EXECUTOR``.
 
-which log intermediate representation, and parallel thread execution code, respectively. Scripts may be
-used for other purposes that parse and analyze these logs, therefore using channels outside of the severity
-hierarchy is convenient so that the output is not interleaved with unrelated ``INFO`` or ``DEBUG`` log lines.
+The first three capture generated LLVM IR, GPU PTX, and CPU assembly.
+``EXECUTOR`` captures executor-level diagnostics intended for separate
+analysis. Scripts may parse these logs, so channels remain outside the
+severity hierarchy and are not interleaved with unrelated ``INFO`` or
+``DEBUG`` entries.
 
 For example, ``LOG(IR) << "Foo = " << foo.getIr();`` will be activated if any only if ``IR`` is included
 in the ``--log-channels`` program option, which can accept multiple comma-delimited channel names. If activated,
@@ -234,14 +236,12 @@ a standard format::
 Since this contains timing information, it is logged at the end of query execution.  If the ``DEBUG1`` severity is
 active, then a corresponding ``stdlog_begin`` line is also logged at the start of the query, with the same format.
 
-Example usage is given in the `QueryState`_ documentation.
-
-.. _QueryState: query_state.html
+Example usage is given in the :doc:`QueryState <query_state>` documentation.
 
 Example entries::
 
- 2019-09-20T17:15:28.215590 1 13080 DBHandler.cpp:846 stdlog_begin sql_execute 2 0 omnisci testuser 528-dyM2 {"query_str"} {"SELECT * FROM omnisci_counties LIMIT 1;"}
- 2019-09-20T17:15:28.924512 I 13080 DBHandler.cpp:846 stdlog sql_execute 2 709 omnisci testuser 528-dyM2 {"query_str","execution_time_ms","total_time_ms"} {"SELECT * FROM omnisci_counties LIMIT 1;","708","709"}
+ 2026-07-23T17:15:28.215590 1 13080 DBHandler.cpp:1276 stdlog_begin sql_execute 2 0 heavyai testuser 528-dyM2 {"query_str"} {"SELECT * FROM heavyai_us_states LIMIT 1;"}
+ 2026-07-23T17:15:28.924512 I 13080 DBHandler.cpp:1276 stdlog sql_execute 2 709 heavyai testuser 528-dyM2 {"query_str","execution_time_ms","total_time_ms"} {"SELECT * FROM heavyai_us_states LIMIT 1;","708","709"}
 
 The first 4 fields are same as in the above `Format`_ section.  Additional field descriptions:
 
@@ -320,7 +320,7 @@ thread. The ``parent_thread_id`` must get its value from ``logger::thread_id()``
 This will not start a timer, but will record the child-parent relationship so that subsequent ``DEBUG_TIMER``
 calls are stored in the correct node of the parent tree. An example of a resulting report::
 
-    2020-01-30T16:58:19.926148 I 33266 DBHandler.cpp:956 DEBUG_TIMER thread_id(4)
+    2026-07-23T16:58:19.926148 I 33266 DBHandler.cpp:1279 DEBUG_TIMER thread_id(4)
     591ms total duration for sql_execute
       511ms start(41ms) executeRelAlgQuery RelAlgExecutor.cpp:71
         6ms start(41ms) executeWorkUnit RelAlgExecutor.cpp:1858

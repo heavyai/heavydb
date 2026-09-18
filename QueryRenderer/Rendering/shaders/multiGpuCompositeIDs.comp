@@ -1,0 +1,57 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#define doMultiSample <doMultiSample>
+#define numSamples <numSamples>
+#define workgroupSize <workgroupSize>
+
+uniform usampler2D srcIDA;
+uniform usampler2D srcIDB;
+uniform usampler2D srcResultCacheId;
+
+#if doMultiSample
+layout (r32ui) uniform uimage2DMS outputIDA;
+layout (r32ui) uniform uimage2DMS outputIDB;
+layout (r32ui) uniform uimage2DMS outputResultCacheId;
+#else
+layout (r32ui) uniform uimage2D outputIDA;
+layout (r32ui) uniform uimage2D outputIDB;
+layout (r32ui) uniform uimage2D outputResultCacheId;
+#endif
+
+layout(std430) uniform MULTI_GPU_COMPOSITE_UBO_TYPE {
+  uint32_t imageWidth;
+  uint32_t imageHeight;
+};
+
+layout (local_size_x = workgroupSize, local_size_y = workgroupSize, local_size_z = 1) in;
+
+void main() {
+  ivec2 P = ivec2(gl_GlobalInvocationID.xy);
+  if (P.x >= imageWidth || P.y >= imageHeight) {
+    return;
+  }
+
+  uint32_t id_a = texelFetch(srcIDA, P, 0).r;
+  uint32_t id_b = texelFetch(srcIDB, P, 0).r;
+
+  if (id_a > 0 || id_b > 0) {
+    uint32_t result_cache_id = texelFetch(srcResultCacheId, P, 0).r;
+#if doMultiSample
+    // Since this shader is only used when compositing accumulation
+    // all samples get the same ID since the source raster pass is not
+    // multisampled
+    for (int s = 0; s < numSamples; s++) {
+      imageStore(outputIDA, P, s, uvec4(id_a));
+      imageStore(outputIDB, P, s, uvec4(id_b));
+      imageStore(outputResultCacheId, P, s, uvec4(result_cache_id));
+    }
+#else
+    imageStore(outputIDA, P, uvec4(id_a));
+    imageStore(outputIDB, P, uvec4(id_b));
+    imageStore(outputResultCacheId, P, uvec4(result_cache_id));
+#endif
+  }
+}

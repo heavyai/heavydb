@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -367,6 +356,32 @@ TEST_F(SessionsStoreTest, ConcurrentSessionLifeCycle) {
   }
 }
 
+class SessionLimitTest : public DBHandlerTestFixture {
+ public:
+  void SetUp() override { DBHandlerTestFixture::setupSignalHandler(); }
+
+  void TearDown() override {
+    switchToAdmin();
+    sql("DROP USER IF EXISTS user1");
+    DBHandlerTestFixture::destroyDBHandler();
+  }
+};
+
+TEST_F(SessionLimitTest, SessionLimitConfiguredAtStartup) {
+  // Configure the session limit via SystemParameters before bringing up the handler so
+  // that update_dynamic_restrictions() picks it up.
+  const auto original_num_sessions = system_parameters_.num_sessions;
+  system_parameters_.num_sessions = 1;
+  DBHandlerTestFixture::createDBHandler();
+  sql("DROP USER IF EXISTS user1");
+
+  sql("CREATE USER user1 (password='pwd', is_super='true')");
+  executeLambdaAndAssertException([&] { login("user1", "pwd", default_db_name_); },
+                                  "Too many active sessions");
+
+  system_parameters_.num_sessions = original_num_sessions;
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
@@ -377,7 +392,7 @@ int main(int argc, char** argv) {
       std::make_shared<Data_Namespace::DataMgr>(data_path, sys_parms, nullptr, false, 0);
   auto calcite = std::make_shared<Calcite>(
       -1, CALCITEPORT, std::string(BASE_PATH), 1024, 5000, true, "");
-  sys_cat.init(BASE_PATH, dummy, {}, calcite, false, false, {}, {});
+  sys_cat.init(BASE_PATH, dummy, {}, calcite, false, {});
   try {
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {

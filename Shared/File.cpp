@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -32,8 +21,9 @@
 #include <stdexcept>
 #include <string>
 
+#include "Shared/heavyai_fs.h"
+
 #include "Logger/Logger.h"
-#include "OSDependent/heavyai_fs.h"
 
 #include <boost/filesystem.hpp>
 
@@ -260,23 +250,6 @@ void renameForDelete(const std::string directoryName) {
                                              std::to_string(ms.count()) + "_DELETE_ME");
     boost::filesystem::rename(directoryPath, newDirectoryPath, ec);
 
-#ifdef _WIN32
-    // On Windows we sometimes fail to rename a directory with System: 5 error
-    // code (access denied). An attempt to stop in debugger and look for opened
-    // handles for some of directory content shows no opened handles and actually
-    // allows renaming to execute successfully. It's not clear why, but a short
-    // pause allows to rename directory successfully. Until reasons are known,
-    // use this retry loop as a workaround.
-    int tries = 10;
-    while (ec.value() != boost::system::errc::success && tries) {
-      LOG(ERROR) << "Failed to rename directory " << directoryPath << " error was " << ec
-                 << " (" << tries << " attempts left)";
-      std::this_thread::sleep_for(std::chrono::milliseconds(100 / tries));
-      tries--;
-      boost::filesystem::rename(directoryPath, newDirectoryPath, ec);
-    }
-#endif
-
     if (ec.value() == boost::system::errc::success) {
       std::thread th([newDirectoryPath]() {
         boost::system::error_code ec;
@@ -301,8 +274,7 @@ void renameForDelete(const std::string directoryName) {
 
 }  // namespace File_Namespace
 
-// Still temporary location but avoids the link errors in the new distributed branch.
-// See the comment file_delete.h
+// file_delete() implementation lives here; see Shared/file_delete.h.
 
 #include <atomic>
 #include <boost/algorithm/string/predicate.hpp>

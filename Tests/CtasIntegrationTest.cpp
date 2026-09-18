@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <gtest/gtest.h>
@@ -331,15 +320,9 @@ class DateTimeColumnDescriptor : public TestColumnDescriptor {
   std::string getValueAsString(int row) {
     char buf[128];
     time_t t = offset + (scale * row);
-#ifdef _WIN32
-    // On Windows gmtime is thread safe.
-    auto* tm_struct = gmtime(&t);
-    strftime(buf, 128, format.c_str(), tm_struct);
-#else
     std::tm tm_struct;
     gmtime_r(&t, &tm_struct);
     strftime(buf, 128, format.c_str(), &tm_struct);
-#endif
     return std::string(buf);
   }
 };
@@ -730,10 +713,6 @@ TEST_P(Ctas, CreateTableFromSelectFragments) {
   ctasTestBody(columnDescriptors, ") WITH (FRAGMENT_SIZE=3)");
 }
 
-TEST_P(Ctas, CreateTableFromSelectReplicated) {
-  ctasTestBody(columnDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
-}
-
 TEST_P(Ctas, CreateTableFromSelectSharded) {
   ctasTestBody(
       columnDescriptors,
@@ -801,10 +780,6 @@ TEST(Export, ExportFromSelect) {
 
 TEST(Export, ExportFromSelectFragments) {
   exportTestBody(") WITH (FRAGMENT_SIZE=3)");
-}
-
-TEST(Export, ExportFromSelectReplicated) {
-  exportTestBody(") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
 }
 
 TEST(Export, ExportFromSelectSharded) {
@@ -911,20 +886,11 @@ TEST_P(Itas, InsertIntoFragmentsTableFromSelectFragments) {
   itasTestBody(columnDescriptors, ") WITH (FRAGMENT_SIZE=3)", ") WITH (FRAGMENT_SIZE=3)");
 }
 
-TEST_P(Itas, InsertIntoTableFromSelectReplicated) {
-  itasTestBody(
-      columnDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')", ")");
-}
-
 TEST_P(Itas, InsertIntoTableFromSelectSharded) {
   itasTestBody(
       columnDescriptors,
       ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')",
       ")");
-}
-
-TEST_P(Itas, InsertIntoReplicatedTableFromSelect) {
-  itasTestBody(columnDescriptors, ")", ") WITH (partitions='REPLICATED')");
 }
 
 TEST_P(Itas, InsertIntoShardedTableFromSelect) {
@@ -933,28 +899,10 @@ TEST_P(Itas, InsertIntoShardedTableFromSelect) {
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
 }
 
-TEST_P(Itas, InsertIntoReplicatedTableFromSelectReplicated) {
-  itasTestBody(columnDescriptors,
-               ") WITH (partitions='REPLICATED')",
-               ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas, InsertIntoReplicatedTableFromSelectSharded) {
-  itasTestBody(columnDescriptors,
-               ") WITH (partitions='REPLICATED')",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
 TEST_P(Itas, InsertIntoShardedTableFromSelectSharded) {
   itasTestBody(columnDescriptors,
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
-TEST_P(Itas, InsertIntoShardedTableFromSelectReplicated) {
-  itasTestBody(columnDescriptors,
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
-               ") WITH (partitions='REPLICATED')");
 }
 
 const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =

@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <algorithm>
@@ -34,11 +23,11 @@ struct ShardDataOwner {
 template <typename SRC>
 std::vector<std::vector<size_t>> compute_row_indices_of_shards(
     size_t shard_count,
-    size_t leaf_count,
+    size_t insert_target_count,
     size_t row_count,
     SRC* src,
     bool duplicated_key_value) {
-  const auto n_shard_tables = shard_count * leaf_count;
+  const auto n_shard_tables = shard_count * insert_target_count;
   std::vector<std::vector<size_t>> row_indices_of_shards(n_shard_tables);
   if (!duplicated_key_value) {
     for (size_t row = 0; row < row_count; row++) {
@@ -123,7 +112,7 @@ size_t size_of_raw_column(const Catalog_Namespace::Catalog& cat,
 
 std::vector<std::vector<size_t>> compute_row_indices_of_shards(
     const Catalog_Namespace::Catalog& cat,
-    size_t leaf_count,
+    size_t insert_target_count,
     const InsertChunks& insert_chunks) {
   const auto* td = cat.getMetadataForTable(insert_chunks.table_id);
   const auto* shard_cd = cat.getShardColumnMetadataForTable(td);
@@ -146,25 +135,25 @@ std::vector<std::vector<size_t>> compute_row_indices_of_shards(
   switch (size_of_raw_column(cat, shard_cd, false)) {
     case 1:
       return compute_row_indices_of_shards(shard_count,
-                                           leaf_count,
+                                           insert_target_count,
                                            row_count,
                                            reinterpret_cast<uint8_t*>(memory_ptr),
                                            false);
     case 2:
       return compute_row_indices_of_shards(shard_count,
-                                           leaf_count,
+                                           insert_target_count,
                                            row_count,
                                            reinterpret_cast<uint16_t*>(memory_ptr),
                                            false);
     case 4:
       return compute_row_indices_of_shards(shard_count,
-                                           leaf_count,
+                                           insert_target_count,
                                            row_count,
                                            reinterpret_cast<uint32_t*>(memory_ptr),
                                            false);
     case 8:
       return compute_row_indices_of_shards(shard_count,
-                                           leaf_count,
+                                           insert_target_count,
                                            row_count,
                                            reinterpret_cast<uint64_t*>(memory_ptr),
                                            false);
@@ -176,7 +165,7 @@ std::vector<std::vector<size_t>> compute_row_indices_of_shards(
 
 std::vector<std::vector<size_t>> computeRowIndicesOfShards(
     const Catalog_Namespace::Catalog& cat,
-    size_t leafCount,
+    size_t insert_target_count,
     InsertData& insert_data) {
   const auto* td = cat.getMetadataForTable(insert_data.tableId);
   const auto* shard_cd = cat.getShardColumnMetadataForTable(td);
@@ -194,28 +183,28 @@ std::vector<std::vector<size_t>> computeRowIndicesOfShards(
     case 1:
       return compute_row_indices_of_shards(
           shardCount,
-          leafCount,
+          insert_target_count,
           rowCount,
           reinterpret_cast<uint8_t*>(shardDataBlock.numbersPtr),
           is_default);
     case 2:
       return compute_row_indices_of_shards(
           shardCount,
-          leafCount,
+          insert_target_count,
           rowCount,
           reinterpret_cast<uint16_t*>(shardDataBlock.numbersPtr),
           is_default);
     case 4:
       return compute_row_indices_of_shards(
           shardCount,
-          leafCount,
+          insert_target_count,
           rowCount,
           reinterpret_cast<uint32_t*>(shardDataBlock.numbersPtr),
           is_default);
     case 8:
       return compute_row_indices_of_shards(
           shardCount,
-          leafCount,
+          insert_target_count,
           rowCount,
           reinterpret_cast<uint64_t*>(shardDataBlock.numbersPtr),
           is_default);
@@ -410,14 +399,14 @@ InsertData copyDataOfShard(const Catalog_Namespace::Catalog& cat,
   return shardData;
 }
 
-size_t InsertDataLoader::moveToNextLeaf() {
-  std::unique_lock current_leaf_index_lock(current_leaf_index_mutex_);
-  size_t starting_leaf_index = current_leaf_index_;
-  current_leaf_index_++;
-  if (current_leaf_index_ >= leaf_count_) {
-    current_leaf_index_ = 0;
+size_t InsertDataLoader::moveToNextShard() {
+  std::unique_lock current_shard_index_lock(current_shard_index_mutex_);
+  size_t starting_shard_index = current_shard_index_;
+  current_shard_index_++;
+  if (current_shard_index_ >= shard_count_) {
+    current_shard_index_ = 0;
   }
-  return starting_leaf_index;
+  return starting_shard_index;
 }
 
 void InsertDataLoader::insertChunks(const Catalog_Namespace::SessionInfo& session_info,
@@ -427,25 +416,24 @@ void InsertDataLoader::insertChunks(const Catalog_Namespace::SessionInfo& sessio
 
   CHECK(td);
   if (td->nShards == 0) {
-    connector_.insertChunksToLeaf(session_info, moveToNextLeaf(), insert_chunks);
+    connector_.insertChunksToLeaf(session_info, moveToNextShard(), insert_chunks);
   } else {
     // we have a sharded target table, start spreading to physical tables
     auto row_indices_of_shards =
-        compute_row_indices_of_shards(cat, connector_.leafCount(), insert_chunks);
+        compute_row_indices_of_shards(cat, connector_.shardCount(), insert_chunks);
 
     auto insert_shard_data =
         [this, &session_info, &insert_chunks, &cat, &td, &row_indices_of_shards](
             size_t shardId) {
           const auto shard_tables = cat.getPhysicalTablesDescriptors(td);
           auto stard_table_idx = shardId % td->nShards;
-          auto shard_leaf_idx = shardId / td->nShards;
+          auto shard_idx = shardId / td->nShards;
 
           const auto& row_indices_of_shard = row_indices_of_shards[shardId];
 
           auto [buffers, shard_insert_chunks] = copy_data_of_shard(
               cat, insert_chunks, stard_table_idx, row_indices_of_shard);
-          connector_.insertChunksToLeaf(
-              session_info, shard_leaf_idx, shard_insert_chunks);
+          connector_.insertChunksToLeaf(session_info, shard_idx, shard_insert_chunks);
         };
 
     std::vector<std::future<void>> worker_threads;
@@ -471,18 +459,18 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
 
   CHECK(td);
   if (td->nShards == 0) {
-    connector_.insertDataToLeaf(session_info, moveToNextLeaf(), insert_data);
+    connector_.insertDataToLeaf(session_info, moveToNextShard(), insert_data);
   } else {
     // we have a sharded target table, start spreading to physical tables
     auto rowIndicesOfShards =
-        computeRowIndicesOfShards(cat, connector_.leafCount(), insert_data);
+        computeRowIndicesOfShards(cat, connector_.shardCount(), insert_data);
 
     auto insertShardData =
         [this, &session_info, &insert_data, &cat, &td, &rowIndicesOfShards](
             size_t shardId) {
           const auto shard_tables = cat.getPhysicalTablesDescriptors(td);
           auto stardTableIdx = shardId % td->nShards;
-          auto shardLeafIdx = shardId / td->nShards;
+          auto shard_idx = shardId / td->nShards;
 
           const auto& rowIndicesOfShard = rowIndicesOfShards[shardId];
           ShardDataOwner shardDataOwner;
@@ -490,7 +478,7 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
           InsertData shardData = copyDataOfShard(
               cat, shardDataOwner, insert_data, stardTableIdx, rowIndicesOfShard);
           CHECK(shardData.numRows > 0);
-          connector_.insertDataToLeaf(session_info, shardLeafIdx, shardData);
+          connector_.insertDataToLeaf(session_info, shard_idx, shardData);
         };
 
     std::vector<std::future<void>> worker_threads;
@@ -511,18 +499,18 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
 
 void LocalInsertConnector::insertChunksToLeaf(
     const Catalog_Namespace::SessionInfo& session,
-    const size_t leaf_idx,
+    const size_t shard_idx,
     const Fragmenter_Namespace::InsertChunks& insert_chunks) {
-  CHECK(leaf_idx == 0);
+  CHECK(shard_idx == 0);
   auto& catalog = session.getCatalog();
   auto created_td = catalog.getMetadataForTable(insert_chunks.table_id);
   created_td->fragmenter->insertChunksNoCheckpoint(insert_chunks);
 }
 
 void LocalInsertConnector::insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
-                                            const size_t leaf_idx,
+                                            const size_t shard_idx,
                                             InsertData& insert_data) {
-  CHECK(leaf_idx == 0);
+  CHECK(shard_idx == 0);
   auto& catalog = session.getCatalog();
   auto created_td = catalog.getMetadataForTable(insert_data.tableId);
   created_td->fragmenter->insertDataNoCheckpoint(insert_data);
