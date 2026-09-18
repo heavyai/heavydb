@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name: PR Required Checks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  placeholder:
+    runs-on: linux-amd64-cpu16
+    steps:
+      - name: placeholder
+        run: true
