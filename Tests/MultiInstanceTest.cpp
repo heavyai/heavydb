@@ -4,6 +4,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <boost/process.hpp>
@@ -103,7 +104,8 @@ int32_t get_free_port(const std::set<int32_t>& banned_ports = {}) {
     // getsockname will populate serv_addr with socket bind() assigned to sock.
     CHECK_GE(getsockname(sock, reinterpret_cast<struct sockaddr*>(&serv_addr), &serv_len),
              0);
-    port = serv_addr.sin_port;
+    port = ntohs(serv_addr.sin_port);
+    close(sock);
   }
   return port;
 }
@@ -145,9 +147,7 @@ void create_file(const std::string& path, const ExpectedResultSet& values) {
         fs << ",";
       }
     }
-    if (std::next(row_it) != values.end()) {
-      fs << "\n";
-    }
+    fs << "\n";
   }
   fs.close();
 }
@@ -442,11 +442,12 @@ struct Connection {
 class CloudEnvironment : public ::testing::Environment {
  public:
   constexpr static char localhost[] = "localhost";
-  constexpr static char base_path[] = "./tmp";
+  constexpr static char base_path[] = "tmp";
   constexpr static size_t num_servers = 2;  // TODO(Misiu): Parameterize.
 
   void SetUp() override {
-    ASSERT_TRUE(std::filesystem::exists(base_path));
+    const auto test_base_path = getTestBasePath();
+    initializeTestStorage(test_base_path);
     g_enable_fsi = false;  // Temporarily unsupported.
 
     std::vector<ServerPorts> ports;
@@ -454,14 +455,12 @@ class CloudEnvironment : public ::testing::Environment {
       std::string server_name = "server_" + std::to_string(i);
       std::string log_file_name = server_name + ".log";
       std::string disk_cache_name = server_name + "_cache";
-      std::filesystem::remove(binary_path.parent_path().string() + "/" + base_path +
-                              "/log/" + log_file_name);
-      std::filesystem::remove(binary_path.parent_path().string() + "/" + base_path + "/" +
-                              disk_cache_name);
+      std::filesystem::remove(test_base_path / "log" / log_file_name);
+      std::filesystem::remove_all(test_base_path / disk_cache_name);
       ports.emplace_back(ServerPorts());
       // Start servers on separate processes.
-      child_processes_.emplace_back(
-          startServerCommand(ports[i], base_path, log_file_name, disk_cache_name));
+      child_processes_.emplace_back(startServerCommand(
+          ports[i], test_base_path.string(), log_file_name, disk_cache_name));
     }
 
     std::cout << "waiting for servers to start...\n";
@@ -477,14 +476,39 @@ class CloudEnvironment : public ::testing::Environment {
   }
 
   void TearDown() override {
-    // Shutdown created servers.
-    for (auto it = child_processes_.begin(); it != child_processes_.end();) {
-      auto pid = it->id();
-      int32_t exit_status;
-      kill(pid, SIGTERM);
-      waitpid(pid, &exit_status, 0);
-      it = child_processes_.erase(it);
+    for (auto& child : child_processes_) {
+      if (child.running()) {
+        signalProcessTree(child.id(), SIGTERM);
+      }
     }
+
+    const auto deadline = std::chrono::steady_clock::now() + 60s;
+    while (std::chrono::steady_clock::now() < deadline) {
+      bool all_exited = true;
+      for (auto& child : child_processes_) {
+        all_exited = all_exited && !child.running();
+      }
+      if (all_exited) {
+        break;
+      }
+      std::this_thread::sleep_for(100ms);
+    }
+
+    bool any_running = false;
+    for (auto& child : child_processes_) {
+      any_running = any_running || child.running();
+    }
+    if (any_running) {
+      for (auto& child : child_processes_) {
+        if (child.running()) {
+          signalProcessTree(child.id(), SIGKILL);
+        }
+      }
+    }
+    for (auto& child : child_processes_) {
+      child.wait();
+    }
+    child_processes_.clear();
   }
 
   std::string startServerCommand(const ServerPorts& ports,
@@ -501,6 +525,28 @@ class CloudEnvironment : public ::testing::Environment {
        << " " << base_path;
     std::cout << "starting server: " << ss.str() << "\n";
     return ss.str();
+  }
+
+  std::filesystem::path getTestBasePath() const {
+    return binary_path.parent_path() / base_path;
+  }
+
+  void initializeTestStorage(const std::filesystem::path& test_base_path) const {
+    std::filesystem::remove_all(test_base_path);
+    ASSERT_TRUE(std::filesystem::create_directories(test_base_path));
+
+    const auto initheavy_path = binary_path.parent_path() / "../bin/initheavy";
+    bp::child initheavy(initheavy_path.string(), "-f", test_base_path.string());
+    initheavy.wait();
+    ASSERT_EQ(initheavy.exit_code(), 0);
+  }
+
+  void signalProcessTree(const pid_t pid, const int signal) const {
+    const auto signal_children_cmd = "pkill -" + std::to_string(signal) + " -P " +
+                                     std::to_string(pid) + " >/dev/null 2>&1 || true";
+    const auto pkill_status = std::system(signal_children_cmd.c_str());
+    (void)pkill_status;
+    kill(pid, signal);
   }
 
   std::vector<size_t> getServerIndexes() const {
