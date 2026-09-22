@@ -56,7 +56,7 @@ class Calcite {
   Calcite(const SystemParameters& db_parameters,
           const std::string& data_dir,
           const std::string& udf_filename = "");
-  Calcite() {}
+  Calcite() = default;
   // sql_string may differ from what is in query_state due to legacy_syntax option.
   TPlanResult process(query_state::QueryStateProxy,
                       std::string sql_string,
@@ -112,11 +112,16 @@ class Calcite {
   std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> getClient(
       int port);
 
+#ifndef _MSC_VER
+  bool owned_calcite_server_exited();
+  void stop_owned_calcite_server();
+#endif
+
   int ping(int retry_num = 0, int max_retry = 50);
 
   std::shared_ptr<ThriftClientConnection> connMgr_;
-  bool server_available_;
-  size_t service_timeout_;
+  bool server_available_{false};
+  size_t service_timeout_{0};
   bool service_keepalive_ = true;
   int remote_calcite_port_ = -1;
   std::string ssl_trust_store_;
@@ -127,4 +132,7 @@ class Calcite {
   std::string ssl_ca_file_;
   std::string db_config_file_;
   std::once_flag shutdown_once_flag_;
+#ifndef _MSC_VER
+  int calcite_server_pid_ = -1;
+#endif
 };

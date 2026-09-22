@@ -612,6 +612,10 @@ int startHeavyDBServer(CommandLineOptions& prog_config_opts,
         start_server, g_thrift_http_binary_server, prog_config_opts.http_binary_port));
   }
 
+  if (g_db_handler) {
+    g_db_handler->startBackgroundGpuTransferWarmup();
+  }
+
   // Run warm up queries if any exist.
   run_warmup_queries(
       g_db_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
