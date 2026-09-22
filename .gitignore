@@ -76,6 +76,10 @@ data/
 
 # Python
 *.egg-info/
+__pycache__/
+
+# RuntimeInterruptTest generated import fixture
+/Tests/Import/datafiles/interrupt_table_gdal.geojson
 
 # clangd
 .cache/
