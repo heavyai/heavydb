@@ -59,7 +59,6 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
   //  because such filter conditions could affect join tables and
   //  they can make join cols to be null rejected
 
-  public static Set<String> visitedJoinMemo = new HashSet<>();
   final static Logger HEAVYDBLOGGER =
           LoggerFactory.getLogger(OuterJoinOptViaNullRejectionRule.class);
 
@@ -67,23 +66,15 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
     super(operand(RelNode.class, operand(Join.class, null, any())),
             relBuilderFactory,
             "OuterJoinOptViaNullRejectionRule");
-    clearMemo();
-  }
-
-  void clearMemo() {
-    visitedJoinMemo.clear();
   }
 
   @Override
   public void onMatch(RelOptRuleCall call) {
     RelNode parentNode = call.rel(0);
-    LogicalJoin join = (LogicalJoin) call.rel(1);
-    String condString = join.getCondition().toString();
-    if (visitedJoinMemo.contains(condString)) {
+    if (!(call.rel(1) instanceof LogicalJoin)) {
       return;
-    } else {
-      visitedJoinMemo.add(condString);
     }
+    LogicalJoin join = call.rel(1);
     if (!(join.getCondition() instanceof RexCall)) {
       return; // an inner join
     }
@@ -91,8 +82,8 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
             || join.getJoinType() == JoinRelType.ANTI) {
       return; // non target
     }
-    RelNode joinLeftChild = ((HepRelVertex) join.getLeft()).getCurrentRel();
-    RelNode joinRightChild = ((HepRelVertex) join.getRight()).getCurrentRel();
+    RelNode joinLeftChild = unwrap(join.getLeft());
+    RelNode joinRightChild = unwrap(join.getRight());
     if (joinLeftChild instanceof LogicalProject) {
       return; // disable this opt when LHS has subquery (i.e., filter push-down)
     }
@@ -110,7 +101,8 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
     Set<Integer> originalRightJoinCols = new HashSet<>();
     Map<Integer, String> originalLeftJoinColToColNameMap = new HashMap<>();
     Map<Integer, String> originalRightJoinColToColNameMap = new HashMap<>();
-    List<RexCall> capturedFilterPredFromJoin = new ArrayList<>();
+    boolean leftSideNullRejected = false;
+    boolean rightSideNullRejected = false;
     if (joinCond.getKind() == SqlKind.EQUALS) {
       addJoinCols(joinCond,
               join,
@@ -127,13 +119,6 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
       for (RexNode n : joinCond.getOperands()) {
         if (n instanceof RexCall) {
           RexCall op = (RexCall) n;
-          if (op.getOperands().size() > 2
-                  && op.getOperands().get(1) instanceof RexLiteral) {
-            // try to capture literal comparison of join column located in the cur join
-            // node
-            capturedFilterPredFromJoin.add(op);
-            continue;
-          }
           addJoinCols(op,
                   join,
                   leftJoinCols,
@@ -153,18 +138,18 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
     }
 
     // find filter node(s)
-    RelNode root = call.getPlanner().getRoot();
     List<LogicalFilter> collectedFilterNodes = new ArrayList<>();
-    RelNode curNode = root;
-    final RelBuilder relBuilder = call.builder();
-    // collect filter nodes
-    collectFilterCondition(curNode, collectedFilterNodes);
-    if (collectedFilterNodes.isEmpty()) {
-      // we have a last chance to take a look at this join condition itself
-      // i.e., the filter preds lay with the join conditions in the same join node
-      // but for now we disable the optimization to avoid unexpected plan issue
+    // RexInputRef ordinals are only comparable with this join when the filter is
+    // directly above it. Looking through projects or parent joins without an explicit
+    // mapping can attribute a predicate to the wrong null-generating side.
+    if (!(parentNode instanceof LogicalFilter) ||
+            unwrap(((LogicalFilter) parentNode).getInput()) != join) {
+      // Only filters above an outer join can reject null-extended rows. Predicates
+      // inside the join condition constrain matching rows, but unmatched outer rows
+      // still survive and must not drive strength reduction.
       return;
     }
+    collectedFilterNodes.add((LogicalFilter) parentNode);
 
     // check whether join column has filter predicate(s)
     // and collect join column info used in target join nodes to be translated
@@ -195,6 +180,12 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
                   // so it may become a source of plan issue, so we disable this opt
                   return;
                 }
+                int rejectedSide = getNullRejectedSide(c, join);
+                if (rejectedSide < 0) {
+                  leftSideNullRejected = true;
+                } else if (rejectedSide > 0) {
+                  rightSideNullRejected = true;
+                }
                 addNullRejectedJoinCols(c,
                         filter,
                         nullRejectedLeftJoinCols,
@@ -217,6 +208,12 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
                 // so it may become a source of plan issue, so we disable this opt
                 return;
               }
+              int rejectedSide = getNullRejectedSide(curExpr, join);
+              if (rejectedSide < 0) {
+                leftSideNullRejected = true;
+              } else if (rejectedSide > 0) {
+                rightSideNullRejected = true;
+              }
               addNullRejectedJoinCols(curExpr,
                       filter,
                       nullRejectedLeftJoinCols,
@@ -235,41 +232,16 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
       return;
     }
 
-    if (!capturedFilterPredFromJoin.isEmpty()) {
-      for (RexCall c : capturedFilterPredFromJoin) {
-        if (c.getOperands().get(0) instanceof RexInputRef) {
-          RexInputRef col = (RexInputRef) c.getOperands().get(0);
-          int colId = col.getIndex();
-          String colName = join.getRowType().getFieldNames().get(colId);
-          Boolean l = false;
-          Boolean r = false;
-          if (originalLeftJoinColToColNameMap.containsKey(colId)
-                  && originalLeftJoinColToColNameMap.get(colId).equals(colName)) {
-            l = true;
-          }
-          if (originalRightJoinColToColNameMap.containsKey(colId)
-                  && originalRightJoinColToColNameMap.get(colId).equals(colName)) {
-            r = true;
-          }
-          if (l && !r) {
-            nullRejectedLeftJoinCols.add(colId);
-          } else if (r && !l) {
-            nullRejectedRightJoinCols.add(colId);
-          } else if (r && l) {
-            return;
-          }
-        }
-      }
-    }
-
     Boolean leftNullRejected = false;
     Boolean rightNullRejected = false;
-    if (!nullRejectedLeftJoinCols.isEmpty()
-            && leftJoinCols.equals(nullRejectedLeftJoinCols)) {
+    if (leftSideNullRejected
+            || (!nullRejectedLeftJoinCols.isEmpty()
+                    && leftJoinCols.equals(nullRejectedLeftJoinCols))) {
       leftNullRejected = true;
     }
-    if (!nullRejectedRightJoinCols.isEmpty()
-            && rightJoinCols.equals(nullRejectedRightJoinCols)) {
+    if (rightSideNullRejected
+            || (!nullRejectedRightJoinCols.isEmpty()
+                    && rightJoinCols.equals(nullRejectedRightJoinCols))) {
       rightNullRejected = true;
     }
 
@@ -311,9 +283,12 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
       }
     }
     if (needTransform) {
-      relBuilder.push(newJoinNode);
-      parentNode.replaceInput(0, newJoinNode);
-      call.transformTo(parentNode);
+      final LogicalFilter parentFilter = (LogicalFilter) parentNode;
+      final RelBuilder relBuilder = call.builder();
+      relBuilder.push(newJoinNode).convert(join.getRowType(), false);
+      call.transformTo(parentFilter.copy(parentFilter.getTraitSet(),
+              relBuilder.build(),
+              parentFilter.getCondition()));
     }
     return;
   }
@@ -397,20 +372,25 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
     }
   }
 
-  void collectFilterCondition(RelNode curNode, List<LogicalFilter> collectedFilterNodes) {
-    if (curNode instanceof HepRelVertex) {
-      curNode = ((HepRelVertex) curNode).getCurrentRel();
+  RelNode unwrap(RelNode rel) {
+    if (rel instanceof HepRelVertex) {
+      return unwrap(((HepRelVertex) rel).getCurrentRel());
     }
-    if (curNode instanceof LogicalFilter) {
-      collectedFilterNodes.add((LogicalFilter) curNode);
+    return rel;
+  }
+
+  int getNullRejectedSide(RexCall call, LogicalJoin joinOp) {
+    if (!isCandidateFilterPred(call)
+            || !(call.getOperands().get(0) instanceof RexInputRef)) {
+      return 0;
     }
-    if (curNode.getInputs().size() == 0) {
-      // end of the query plan, move out
-      return;
+    int colId = ((RexInputRef) call.getOperands().get(0)).getIndex();
+    int leftFieldCount = joinOp.getLeft().getRowType().getFieldCount();
+    int totalFieldCount = joinOp.getRowType().getFieldCount();
+    if (colId < 0 || colId >= totalFieldCount) {
+      return 0;
     }
-    for (int i = 0; i < curNode.getInputs().size(); i++) {
-      collectFilterCondition(curNode.getInput(i), collectedFilterNodes);
-    }
+    return colId < leftFieldCount ? -1 : 1;
   }
 
   void collectProjectNode(RelNode curNode, List<LogicalProject> collectedProject) {
@@ -451,9 +431,19 @@ public class OuterJoinOptViaNullRejectionRule extends QueryOptimizationRules {
   }
 
   boolean isComparisonOp(RexCall c) {
-    SqlKind opKind = c.getKind();
-    return (SqlKind.BINARY_COMPARISON.contains(opKind)
-            || SqlKind.BINARY_EQUALITY.contains(opKind));
+    switch (c.getKind()) {
+      case EQUALS:
+      case NOT_EQUALS:
+      case LESS_THAN:
+      case GREATER_THAN:
+      case LESS_THAN_OR_EQUAL:
+      case GREATER_THAN_OR_EQUAL:
+        return true;
+      default:
+        // IS [NOT] DISTINCT FROM is null-safe and therefore cannot prove that
+        // NULL-extended outer-join rows are rejected.
+        return false;
+    }
   }
 
   boolean isNotNullFilter(RexCall c) {
