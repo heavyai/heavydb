@@ -98,6 +98,7 @@
 #include <csignal>
 #include <fstream>
 #include <future>
+#include <limits>
 #include <map>
 #include <memory>
 #include <random>
@@ -2440,6 +2441,44 @@ void DBHandler::get_table_details_for_database(TTableDetails& _return,
 }
 
 namespace {
+int64_t saturated_num_rows(const size_t num_rows) {
+  const auto max_num_rows = static_cast<size_t>(std::numeric_limits<int64_t>::max());
+  return static_cast<int64_t>(std::min(num_rows, max_num_rows));
+}
+
+int64_t get_table_num_rows(const Catalog& cat, const TableDescriptor* td) {
+  if (td->isView) {
+    return -1;
+  }
+  auto get_fragmenter_num_rows = [&cat](const TableDescriptor* table_desc) -> int64_t {
+    const auto populated_td = cat.getMetadataForTable(table_desc->tableId, true);
+    if (!populated_td || !populated_td->fragmenter) {
+      return -1;
+    }
+    return saturated_num_rows(populated_td->fragmenter->getNumRows());
+  };
+  if (td->nShards > 0) {
+    size_t num_rows{0};
+    const auto max_num_rows = static_cast<size_t>(std::numeric_limits<int64_t>::max());
+    for (const auto physical_td : cat.getPhysicalTablesDescriptors(td)) {
+      if (!physical_td) {
+        return -1;
+      }
+      const auto physical_num_rows = get_fragmenter_num_rows(physical_td);
+      if (physical_num_rows < 0) {
+        return -1;
+      }
+      const auto physical_rows = static_cast<size_t>(physical_num_rows);
+      if (physical_rows > max_num_rows - num_rows) {
+        return std::numeric_limits<int64_t>::max();
+      }
+      num_rows += physical_rows;
+    }
+    return saturated_num_rows(num_rows);
+  }
+  return get_fragmenter_num_rows(td);
+}
+
 TTableRefreshInfo get_refresh_info(const TableDescriptor* td) {
   CHECK(td->isForeignTable());
   auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
@@ -2582,6 +2621,12 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
     _return.fragment_size = td->maxFragRows;
     _return.page_size = td->fragPageSize;
     _return.max_rows = td->maxRows;
+    if (system_parameters_.enable_experimental_query_rewrites) {
+      const auto num_rows = get_table_num_rows(*cat, td);
+      if (num_rows >= 0) {
+        _return.__set_num_rows(num_rows);
+      }
+    }
     _return.view_sql =
         (have_privileges_on_view_sources ? td->viewSQL
                                          : "[Not enough privileges to see the view SQL]");
@@ -6984,7 +7029,9 @@ TPlanResult DBHandler::processCalciteRequest(
   auto optimization_option = calcite_->getCalciteOptimizationOption(
       system_parameters.enable_calcite_view_optimize,
       g_enable_watchdog,
-      filter_push_down_info);
+      filter_push_down_info,
+      system_parameters.enable_experimental_query_rewrites,
+      system_parameters.trust_unenforced_table_constraints);
 
   TPlanResult result = query_parsing::process_and_check_access_privileges(
       calcite_.get(),

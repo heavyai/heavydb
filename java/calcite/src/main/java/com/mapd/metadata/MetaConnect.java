@@ -210,14 +210,14 @@ public class MetaConnect {
 
     if (td.getView_sql() == null || td.getView_sql().isEmpty()) {
       HEAVYDBLOGGER.debug("Processing a table");
-      Table rTable = new HeavyDBTable(td);
+      Table rTable = new HeavyDBTable(td, default_db, tableName);
       DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
       HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
               + " details " + rTable + " Not in buffer");
       return rTable;
     } else {
       HEAVYDBLOGGER.debug("Processing a view");
-      Table rTable = new HeavyDBView(getViewSql(tableName), td, parser);
+      Table rTable = new HeavyDBView(getViewSql(tableName), td, parser, default_db, tableName);
       DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
       HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get view " + tableName
               + " details " + rTable + " Not in buffer");
@@ -509,7 +509,28 @@ public class MetaConnect {
       td.setView_sqlIsSet(true);
       td.setView_sql(getViewSqlViaSql(id));
     }
+    String keyMetainfo = getKeyMetainfo(id);
+    if (keyMetainfo != null) {
+      td.setKey_metainfo(keyMetainfo);
+    }
     return td;
+  }
+
+  private String getKeyMetainfo(int tableId) {
+    try (Statement stmt = catConn.createStatement();
+            ResultSet rs = stmt.executeQuery(String.format(
+                    "SELECT key_metainfo FROM mapd_tables where tableid = %d;",
+                    tableId))) {
+      if (rs.next()) {
+        return rs.getString("key_metainfo");
+      }
+    } catch (Exception e) {
+      String err = "Error trying to read key metadata from mapd_tables; DB: "
+              + default_db + " data dir " + dataDir + ", error was " + e.getMessage();
+      HEAVYDBLOGGER.error(err);
+      throw new RuntimeException(err);
+    }
+    return null;
   }
 
   private TTableDetails get_table_detail_JSON(String tableName)
@@ -916,6 +937,7 @@ public class MetaConnect {
   }
 
   public void updateMetaData(String schema, String table) {
+    HeavyDBTable.invalidateMetadata(schema, table);
     // Check if table is specified, if not we are dropping an entire DB so need to
     // remove all tables for that DB
     if (table.equals("")) {
