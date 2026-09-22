@@ -3779,6 +3779,9 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
   sink_projected_boolean_expr_to_join(nodes);
   eliminate_identical_copy(nodes);
   fold_filters(nodes);
+  if (g_enable_experimental_query_rewrites) {
+    eliminate_lossless_fk_joins(nodes);
+  }
   std::vector<const RelAlgNode*> filtered_left_deep_joins;
   std::vector<const RelAlgNode*> left_deep_joins;
   for (const auto& node : nodes) {
