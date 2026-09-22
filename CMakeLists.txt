@@ -960,6 +960,7 @@ if(ENABLE_RENDERING)
   list(APPEND MAPD_LIBRARIES ${MAPD_RENDERING_LIBRARIES})
 endif()
 
+set(MAPD_INTERNAL_LIBRARIES ${MAPD_LIBRARIES})
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 if(ENABLE_PDAL)
@@ -1076,12 +1077,55 @@ add_custom_target(get_git_hash ALL
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
+# mold performs a single pass over static archives. HeavyDB's core libraries have
+# circular dependencies, so group them for repeated scanning when linking a static
+# build with mold (the linker forced for GCC builds on aarch64).
+set(HEAVYDB_CORE_LINK_LIBRARIES mapd_thrift thrift_handler)
+set(HEAVYDB_MAPD_LINK_LIBRARIES ${MAPD_LIBRARIES})
+if(PREFER_STATIC_LIBS AND "${USE_ALTERNATE_LINKER}" STREQUAL "mold")
+  list(APPEND HEAVYDB_CORE_LINK_LIBRARIES ${MAPD_INTERNAL_LIBRARIES})
+  foreach(HEAVYDB_TRANSITIVE_TARGET IN ITEMS
+      token_completion_hints
+      UdfCompiler
+      StringDictionary
+      Utils
+      UtilsStandalone
+      QueryParsing
+      ThriftClient
+      calciteserver_thrift
+      LdapServer
+      SamlServer
+      CudaMgr
+      RowToColumn
+      RuntimeLibManager
+      ExecuteRenderInterface
+      QueryRenderer
+      GfxInterop
+      GfxDriver
+      GfxImGui
+      rg3_bcrypt
+      muparserx)
+    if(TARGET ${HEAVYDB_TRANSITIVE_TARGET})
+      list(APPEND HEAVYDB_CORE_LINK_LIBRARIES ${HEAVYDB_TRANSITIVE_TARGET})
+    endif()
+  endforeach()
+  list(REMOVE_DUPLICATES HEAVYDB_CORE_LINK_LIBRARIES)
+  list(JOIN HEAVYDB_CORE_LINK_LIBRARIES "," HEAVYDB_CORE_LINK_GROUP)
+  set(HEAVYDB_CORE_LINK_LIBRARIES
+      "$<LINK_GROUP:RESCAN,${HEAVYDB_CORE_LINK_GROUP}>")
+  list(REMOVE_ITEM HEAVYDB_MAPD_LINK_LIBRARIES ${MAPD_INTERNAL_LIBRARIES})
+endif()
+
 # note if aws isn't enabled Aws_CURL_SUPPORT is empty
-target_link_libraries(heavydb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+target_link_libraries(heavydb
+    ${HEAVYDB_CORE_LINK_LIBRARIES} ${HEAVYDB_MAPD_LINK_LIBRARIES}
+    ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
     ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT})
 
-target_link_libraries(initheavy mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+target_link_libraries(initheavy
+    ${HEAVYDB_CORE_LINK_LIBRARIES} ${HEAVYDB_MAPD_LINK_LIBRARIES}
+    ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
     ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT})
 
