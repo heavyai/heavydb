@@ -14,6 +14,7 @@
 
 #include "Calcite/Calcite.h"
 #include "Catalog/ForeignTable.h"
+#include "Catalog/TableConstraints.h"
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/FileMgr/FileBuffer.h"
@@ -256,6 +257,282 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
     }
   }
 };
+
+TEST_F(CreateAndDropTableDdlTest, InlineTableConstraintsMatchAlterTableMetadata) {
+  sql("DROP TABLE IF EXISTS test_child_inline;");
+  sql("DROP TABLE IF EXISTS test_child_alter;");
+  sql("DROP TABLE IF EXISTS test_parent;");
+
+  sql("CREATE TABLE test_parent ("
+      "id INTEGER, "
+      "code INTEGER, "
+      "CONSTRAINT test_parent_pk PRIMARY KEY (id), "
+      "CONSTRAINT test_parent_code_unique UNIQUE (code));");
+  sql("CREATE TABLE test_child_inline ("
+      "id INTEGER, "
+      "parent_code INTEGER, "
+      "CONSTRAINT test_child_fk FOREIGN KEY (parent_code) "
+      "REFERENCES test_parent (code));");
+  sql("CREATE TABLE test_child_alter (id INTEGER, parent_code INTEGER);");
+  sql("ALTER TABLE test_child_alter ADD CONSTRAINT test_child_fk "
+      "FOREIGN KEY (parent_code) REFERENCES test_parent (code);");
+
+  const auto& catalog = getCatalog();
+  const auto inline_td = catalog.getMetadataForTable("test_child_inline", false);
+  const auto alter_td = catalog.getMetadataForTable("test_child_alter", false);
+  ASSERT_NE(nullptr, inline_td);
+  ASSERT_NE(nullptr, alter_td);
+
+  const auto inline_constraints = catalog.getTableConstraints(inline_td);
+  const auto alter_constraints = catalog.getTableConstraints(alter_td);
+  ASSERT_EQ(size_t(1), inline_constraints.size());
+  ASSERT_EQ(size_t(1), alter_constraints.size());
+
+  const auto& inline_fk = inline_constraints.front();
+  const auto& alter_fk = alter_constraints.front();
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::ForeignKey, inline_fk.type);
+  EXPECT_EQ(alter_fk.type, inline_fk.type);
+  EXPECT_EQ(alter_fk.name, inline_fk.name);
+  EXPECT_EQ(alter_fk.column_names, inline_fk.column_names);
+  EXPECT_EQ(alter_fk.enforced, inline_fk.enforced);
+  ASSERT_TRUE(inline_fk.foreign_key_reference);
+  ASSERT_TRUE(alter_fk.foreign_key_reference);
+  EXPECT_EQ(alter_fk.foreign_key_reference->table_name,
+            inline_fk.foreign_key_reference->table_name);
+  EXPECT_EQ(alter_fk.foreign_key_reference->column_names,
+            inline_fk.foreign_key_reference->column_names);
+  EXPECT_EQ(alter_fk.foreign_key_reference->column_ordinals,
+            inline_fk.foreign_key_reference->column_ordinals);
+  EXPECT_FALSE(inline_fk.foreign_key_reference->column_ordinals.empty());
+}
+
+TEST_F(CreateAndDropTableDdlTest, InlineForeignKeyRejectsNonUniqueReference) {
+  sql("DROP TABLE IF EXISTS test_child_bad_fk;");
+  sql("DROP TABLE IF EXISTS test_parent_without_key;");
+  sql("CREATE TABLE test_parent_without_key (id INTEGER, code INTEGER);");
+
+  EXPECT_ANY_THROW(
+      sql("CREATE TABLE test_child_bad_fk ("
+          "id INTEGER, "
+          "parent_code INTEGER, "
+          "CONSTRAINT test_child_bad_fk_ref FOREIGN KEY (parent_code) "
+          "REFERENCES test_parent_without_key (code));"));
+  EXPECT_EQ(nullptr, getCatalog().getMetadataForTable("test_child_bad_fk", false));
+}
+
+TEST_F(CreateAndDropTableDdlTest, ForeignKeyRejectsMismatchedColumnTypes) {
+  sql("DROP TABLE IF EXISTS test_mismatched_fk_child_alter;");
+  sql("DROP TABLE IF EXISTS test_mismatched_fk_child_inline;");
+  sql("DROP TABLE IF EXISTS test_mismatched_fk_parent;");
+  sql("CREATE TABLE test_mismatched_fk_parent ("
+      "id INTEGER NOT NULL, "
+      "CONSTRAINT test_mismatched_fk_parent_pk PRIMARY KEY (id));");
+
+  EXPECT_ANY_THROW(
+      sql("CREATE TABLE test_mismatched_fk_child_inline ("
+          "parent_id BIGINT, "
+          "CONSTRAINT test_mismatched_fk_child_inline_fk FOREIGN KEY (parent_id) "
+          "REFERENCES test_mismatched_fk_parent (id));"));
+  EXPECT_EQ(nullptr,
+            getCatalog().getMetadataForTable("test_mismatched_fk_child_inline", false));
+
+  sql("CREATE TABLE test_mismatched_fk_child_alter (parent_id BIGINT);");
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE test_mismatched_fk_child_alter ADD CONSTRAINT "
+          "test_mismatched_fk_child_alter_fk FOREIGN KEY (parent_id) "
+          "REFERENCES test_mismatched_fk_parent (id);"));
+
+  sql("DROP TABLE test_mismatched_fk_child_alter;");
+  sql("DROP TABLE test_mismatched_fk_parent;");
+}
+
+TEST_F(CreateAndDropTableDdlTest, InlineCompositeForeignKeyStoresReferenceOrdinals) {
+  sql("DROP TABLE IF EXISTS test_composite_child;");
+  sql("DROP TABLE IF EXISTS test_composite_parent;");
+
+  sql("CREATE TABLE test_composite_parent ("
+      "tenant_id INTEGER, "
+      "code INTEGER, "
+      "label TEXT ENCODING DICT(32), "
+      "CONSTRAINT test_composite_parent_unique UNIQUE (tenant_id, code));");
+  sql("CREATE TABLE test_composite_child ("
+      "child_id INTEGER, "
+      "tenant_id INTEGER, "
+      "parent_code INTEGER, "
+      "CONSTRAINT test_composite_child_fk FOREIGN KEY (tenant_id, parent_code) "
+      "REFERENCES test_composite_parent (tenant_id, code));");
+
+  const auto& catalog = getCatalog();
+  const auto child_td = catalog.getMetadataForTable("test_composite_child", false);
+  ASSERT_NE(nullptr, child_td);
+  const auto child_constraints = catalog.getTableConstraints(child_td);
+  ASSERT_EQ(size_t(1), child_constraints.size()) << child_td->keyMetainfo;
+
+  const auto& fk = child_constraints.front();
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::ForeignKey, fk.type);
+  EXPECT_EQ((std::vector<std::string>{"tenant_id", "parent_code"}), fk.column_names);
+  ASSERT_TRUE(fk.foreign_key_reference);
+  EXPECT_EQ("test_composite_parent", fk.foreign_key_reference->table_name);
+  EXPECT_EQ((std::vector<std::string>{"tenant_id", "code"}),
+            fk.foreign_key_reference->column_names);
+  EXPECT_EQ((std::vector<int32_t>{0, 1}), fk.foreign_key_reference->column_ordinals);
+}
+
+TEST_F(CreateAndDropTableDdlTest, InlineSelfReferentialForeignKeyUsesInlineKey) {
+  sql("DROP TABLE IF EXISTS test_self_referencing;");
+
+  sql("CREATE TABLE test_self_referencing ("
+      "id INTEGER, "
+      "parent_id INTEGER, "
+      "CONSTRAINT test_self_referencing_pk PRIMARY KEY (id), "
+      "CONSTRAINT test_self_referencing_fk FOREIGN KEY (parent_id) "
+      "REFERENCES test_self_referencing (id));");
+
+  const auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("test_self_referencing", false);
+  ASSERT_NE(nullptr, td);
+  const auto constraints = catalog.getTableConstraints(td);
+  ASSERT_EQ(size_t(2), constraints.size()) << td->keyMetainfo;
+
+  bool saw_pk = false;
+  bool saw_fk = false;
+  for (const auto& constraint : constraints) {
+    if (constraint.type == Catalog_Namespace::TableConstraintType::PrimaryKey) {
+      saw_pk = true;
+      EXPECT_EQ(std::vector<std::string>{"id"}, constraint.column_names);
+      EXPECT_FALSE(constraint.foreign_key_reference);
+    } else if (constraint.type == Catalog_Namespace::TableConstraintType::ForeignKey) {
+      saw_fk = true;
+      EXPECT_EQ(std::vector<std::string>{"parent_id"}, constraint.column_names);
+      ASSERT_TRUE(constraint.foreign_key_reference);
+      EXPECT_EQ("test_self_referencing", constraint.foreign_key_reference->table_name);
+      EXPECT_EQ(std::vector<std::string>{"id"},
+                constraint.foreign_key_reference->column_names);
+      EXPECT_EQ(std::vector<int32_t>{0},
+                constraint.foreign_key_reference->column_ordinals);
+    }
+  }
+  EXPECT_TRUE(saw_pk);
+  EXPECT_TRUE(saw_fk);
+}
+
+TEST_F(CreateAndDropTableDdlTest, ConstraintDependenciesRejectDestructiveDdl) {
+  sql("DROP TABLE IF EXISTS test_constraint_dependency_child;");
+  sql("DROP TABLE IF EXISTS test_constraint_dependency_parent;");
+
+  sql("CREATE TABLE test_constraint_dependency_parent ("
+      "prefix INTEGER, id INTEGER NOT NULL, payload INTEGER, "
+      "CONSTRAINT test_constraint_dependency_parent_pk PRIMARY KEY (id));");
+  sql("CREATE TABLE test_constraint_dependency_child ("
+      "id INTEGER, parent_id INTEGER NOT NULL, payload INTEGER, "
+      "CONSTRAINT test_constraint_dependency_child_fk FOREIGN KEY (parent_id) "
+      "REFERENCES test_constraint_dependency_parent (id));");
+
+  EXPECT_ANY_THROW(sql("DROP TABLE test_constraint_dependency_parent;"));
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE test_constraint_dependency_parent "
+          "RENAME TO test_constraint_dependency_parent_renamed;"));
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE test_constraint_dependency_parent "
+          "RENAME COLUMN id TO renamed_id;"));
+  EXPECT_ANY_THROW(sql("ALTER TABLE test_constraint_dependency_parent DROP COLUMN id;"));
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE test_constraint_dependency_child "
+          "RENAME COLUMN parent_id TO renamed_parent_id;"));
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE test_constraint_dependency_child DROP COLUMN parent_id;"));
+  // Calcite stores referenced-column ordinals in key metadata. Dropping a preceding
+  // column would silently retarget that ordinal, so reject the operation until the
+  // catalog can update every dependent constraint atomically.
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE test_constraint_dependency_parent DROP COLUMN prefix;"));
+
+  // Columns outside every key remain ordinary schema fields.
+  EXPECT_NO_THROW(
+      sql("ALTER TABLE test_constraint_dependency_parent "
+          "RENAME COLUMN payload TO renamed_payload;"));
+  EXPECT_NO_THROW(
+      sql("ALTER TABLE test_constraint_dependency_parent "
+          "RENAME COLUMN renamed_payload TO payload;"));
+  EXPECT_NO_THROW(
+      sql("ALTER TABLE test_constraint_dependency_parent DROP COLUMN payload;"));
+
+  sql("DROP TABLE test_constraint_dependency_child;");
+  sql("DROP TABLE test_constraint_dependency_parent;");
+}
+
+TEST_F(CreateAndDropTableDdlTest, SelfReferentialConstraintAllowsTableDrop) {
+  sql("DROP TABLE IF EXISTS test_self_constraint_drop;");
+  sql("CREATE TABLE test_self_constraint_drop ("
+      "id INTEGER NOT NULL, parent_id INTEGER, "
+      "CONSTRAINT test_self_constraint_drop_pk PRIMARY KEY (id), "
+      "CONSTRAINT test_self_constraint_drop_fk FOREIGN KEY (parent_id) "
+      "REFERENCES test_self_constraint_drop (id));");
+  EXPECT_NO_THROW(sql("DROP TABLE test_self_constraint_drop;"));
+}
+
+TEST_F(CreateAndDropTableDdlTest, DropConstraintReleasesDependencies) {
+  sql("DROP TABLE IF EXISTS test_drop_constraint_child;");
+  sql("DROP TABLE IF EXISTS test_drop_constraint_parent;");
+  sql("CREATE TABLE test_drop_constraint_parent ("
+      "id INTEGER NOT NULL, PRIMARY KEY (id));");
+  sql("CREATE TABLE test_drop_constraint_child ("
+      "parent_id INTEGER NOT NULL, FOREIGN KEY (parent_id) "
+      "REFERENCES test_drop_constraint_parent (id));");
+
+  auto& catalog = getCatalog();
+  const auto parent_td =
+      catalog.getMetadataForTable("test_drop_constraint_parent", false);
+  const auto child_td = catalog.getMetadataForTable("test_drop_constraint_child", false);
+  ASSERT_NE(parent_td, nullptr);
+  ASSERT_NE(child_td, nullptr);
+  const auto parent_constraints = catalog.getTableConstraints(parent_td);
+  const auto child_constraints = catalog.getTableConstraints(child_td);
+  ASSERT_EQ(parent_constraints.size(), size_t(1));
+  ASSERT_EQ(child_constraints.size(), size_t(1));
+  ASSERT_TRUE(parent_constraints.front().name);
+  ASSERT_TRUE(child_constraints.front().name);
+  EXPECT_FALSE(parent_constraints.front().name->empty());
+  EXPECT_FALSE(child_constraints.front().name->empty());
+
+  EXPECT_ANY_THROW(sql("ALTER TABLE test_drop_constraint_parent DROP CONSTRAINT " +
+                       *parent_constraints.front().name + ";"));
+  EXPECT_NO_THROW(sql("ALTER TABLE test_drop_constraint_child DROP CONSTRAINT " +
+                      *child_constraints.front().name + ";"));
+  EXPECT_NO_THROW(sql("ALTER TABLE test_drop_constraint_parent DROP CONSTRAINT " +
+                      *parent_constraints.front().name + ";"));
+  EXPECT_TRUE(catalog.getTableConstraints(parent_td).empty());
+  EXPECT_TRUE(catalog.getTableConstraints(child_td).empty());
+
+  EXPECT_NO_THROW(
+      sql("ALTER TABLE test_drop_constraint_parent "
+          "RENAME COLUMN id TO renamed_id;"));
+  sql("DROP TABLE test_drop_constraint_child;");
+  sql("DROP TABLE test_drop_constraint_parent;");
+}
+
+TEST_F(CreateAndDropTableDdlTest, InlineConstraintRejectsDuplicateColumnReference) {
+  sql("DROP TABLE IF EXISTS test_duplicate_constraint_columns;");
+
+  EXPECT_ANY_THROW(
+      sql("CREATE TABLE test_duplicate_constraint_columns ("
+          "id INTEGER, "
+          "CONSTRAINT test_duplicate_constraint_columns_unique UNIQUE (id, id));"));
+  EXPECT_EQ(nullptr,
+            getCatalog().getMetadataForTable("test_duplicate_constraint_columns", false));
+}
+
+TEST_F(CreateAndDropTableDdlTest, InlineDuplicateConstraintsAreRejected) {
+  sql("DROP TABLE IF EXISTS test_duplicate_constraints;");
+
+  EXPECT_ANY_THROW(
+      sql("CREATE TABLE test_duplicate_constraints ("
+          "id INTEGER, "
+          "CONSTRAINT test_duplicate_constraints_pk1 PRIMARY KEY (id), "
+          "CONSTRAINT test_duplicate_constraints_pk2 PRIMARY KEY (id));"));
+  EXPECT_EQ(nullptr,
+            getCatalog().getMetadataForTable("test_duplicate_constraints", false));
+}
 
 TEST_P(CreateTableTest, BooleanAndNumberTypes) {
   std::string query =

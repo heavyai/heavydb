@@ -15,7 +15,9 @@
 #include <cstdint>
 #include <cstring>
 #include <list>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include <boost/algorithm/string/predicate.hpp>
 #ifdef HAVE_BOOST_1_86
@@ -845,20 +847,33 @@ class TableConstraintDef : public TableElement {
  */
 class UniqueDef : public TableConstraintDef {
  public:
-  UniqueDef(bool p, std::list<std::string*>* cl) : is_primarykey_(p) {
+  UniqueDef(bool p, std::list<std::string*>* cl, std::string* name = nullptr)
+      : is_primarykey_(p), constraint_name_(name) {
     CHECK(cl);
     for (const auto s : *cl) {
       column_list_.emplace_back(s);
     }
     delete cl;
   }
+  UniqueDef(bool p,
+            std::vector<std::string> columns,
+            std::optional<std::string> name = std::nullopt)
+      : is_primarykey_(p)
+      , constraint_name_(name ? std::make_unique<std::string>(std::move(*name))
+                              : nullptr) {
+    for (auto& column : columns) {
+      column_list_.emplace_back(std::make_unique<std::string>(std::move(column)));
+    }
+  }
   bool get_is_primarykey() const { return is_primarykey_; }
+  const std::string* get_constraint_name() const { return constraint_name_.get(); }
   const std::list<std::unique_ptr<std::string>>& get_column_list() const {
     return column_list_;
   }
 
  private:
   bool is_primarykey_;
+  std::unique_ptr<std::string> constraint_name_;
   std::list<std::unique_ptr<std::string>> column_list_;
 };
 
@@ -868,8 +883,11 @@ class UniqueDef : public TableConstraintDef {
  */
 class ForeignKeyDef : public TableConstraintDef {
  public:
-  ForeignKeyDef(std::list<std::string*>* cl, std::string* t, std::list<std::string*>* fcl)
-      : foreign_table_(t) {
+  ForeignKeyDef(std::list<std::string*>* cl,
+                std::string* t,
+                std::list<std::string*>* fcl,
+                std::string* name = nullptr)
+      : constraint_name_(name), foreign_table_(t) {
     CHECK(cl);
     for (const auto s : *cl) {
       column_list_.emplace_back(s);
@@ -882,15 +900,30 @@ class ForeignKeyDef : public TableConstraintDef {
     }
     delete fcl;
   }
+  ForeignKeyDef(std::vector<std::string> columns,
+                std::string foreign_table,
+                std::vector<std::string> foreign_columns,
+                std::optional<std::string> name = std::nullopt)
+      : constraint_name_(name ? std::make_unique<std::string>(std::move(*name)) : nullptr)
+      , foreign_table_(std::make_unique<std::string>(std::move(foreign_table))) {
+    for (auto& column : columns) {
+      column_list_.emplace_back(std::make_unique<std::string>(std::move(column)));
+    }
+    for (auto& column : foreign_columns) {
+      foreign_column_list_.emplace_back(std::make_unique<std::string>(std::move(column)));
+    }
+  }
   const std::list<std::unique_ptr<std::string>>& get_column_list() const {
     return column_list_;
   }
+  const std::string* get_constraint_name() const { return constraint_name_.get(); }
   const std::string* get_foreign_table() const { return foreign_table_.get(); }
   const std::list<std::unique_ptr<std::string>>& get_foreign_column_list() const {
     return foreign_column_list_;
   }
 
  private:
+  std::unique_ptr<std::string> constraint_name_;
   std::list<std::unique_ptr<std::string>> column_list_;
   std::unique_ptr<std::string> foreign_table_;
   std::list<std::unique_ptr<std::string>> foreign_column_list_;
@@ -1008,6 +1041,11 @@ class CreateTableStmt : public CreateTableBaseStmt {
 
   void execute(const Catalog_Namespace::SessionInfo& session,
                bool read_only_mode) override;
+  void executeDryRun(const Catalog_Namespace::SessionInfo& session,
+                     TableDescriptor& td,
+                     std::list<ColumnDescriptor>& columns,
+                     std::vector<SharedDictionaryDef>& shared_dict_defs,
+                     std::vector<Catalog_Namespace::TableConstraint>& table_constraints);
   void executeDryRun(const Catalog_Namespace::SessionInfo& session,
                      TableDescriptor& td,
                      std::list<ColumnDescriptor>& columns,
