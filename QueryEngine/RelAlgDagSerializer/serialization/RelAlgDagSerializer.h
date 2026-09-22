@@ -11,8 +11,12 @@
 #include <boost/serialization/shared_ptr.hpp>
 #include <boost/serialization/unique_ptr.hpp>
 #include <boost/serialization/unordered_map.hpp>
+#include <boost/serialization/utility.hpp>
 #include <boost/serialization/variant.hpp>
 #include <boost/serialization/vector.hpp>
+
+#include <algorithm>
+#include <unordered_set>
 
 #include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/RelAlgDagSerializer/serialization/ExecutionResultSerializer.h"
@@ -96,6 +100,75 @@ inline constexpr bool all_serializable_rel_alg_classes_v =
  * access and provide a serialization specialization below.
  */
 struct RelAlgDagSerializer {
+  using SerializedQueryHintEntries =
+      std::vector<std::pair<size_t, std::unordered_map<unsigned, RegisteredQueryHint>>>;
+
+  static void collectHintNode(const RelAlgNode* node,
+                              std::vector<const RelAlgNode*>& nodes,
+                              std::unordered_set<const RelAlgNode*>& seen_nodes) {
+    if (!node || !seen_nodes.emplace(node).second) {
+      return;
+    }
+    nodes.push_back(node);
+    for (size_t input_idx = 0; input_idx < node->inputCount(); ++input_idx) {
+      collectHintNode(node->getInput(input_idx), nodes, seen_nodes);
+    }
+  }
+
+  static std::vector<const RelAlgNode*> collectSerializableHintNodes(
+      const RelAlgDag& rel_alg_dag) {
+    std::vector<const RelAlgNode*> nodes;
+    std::unordered_set<const RelAlgNode*> seen_nodes;
+    for (const auto& node : rel_alg_dag.nodes_) {
+      collectHintNode(node.get(), nodes, seen_nodes);
+    }
+    for (const auto& subquery : rel_alg_dag.subqueries_) {
+      if (subquery) {
+        collectHintNode(subquery->getRelAlg(), nodes, seen_nodes);
+      }
+    }
+    return nodes;
+  }
+
+  template <class Archive>
+  static void serializeQueryHints(Archive& ar, RelAlgDag& rel_alg_dag) {
+    SerializedQueryHintEntries serialized_query_hints;
+
+    if constexpr (Archive::is_saving::value) {
+      const auto hint_nodes = collectSerializableHintNodes(rel_alg_dag);
+      std::unordered_map<const RelAlgNode*, size_t> hint_node_indices;
+      for (size_t node_idx = 0; node_idx < hint_nodes.size(); ++node_idx) {
+        hint_node_indices.emplace(hint_nodes[node_idx], node_idx);
+      }
+
+      serialized_query_hints.reserve(rel_alg_dag.query_hint_.size());
+      for (const auto& hint_entry : rel_alg_dag.query_hint_) {
+        const auto hint_node_idx_it = hint_node_indices.find(hint_entry.first);
+        CHECK(hint_node_idx_it != hint_node_indices.end())
+            << "Cannot serialize query hint for a node outside the serialized DAG";
+        serialized_query_hints.emplace_back(hint_node_idx_it->second, hint_entry.second);
+      }
+      std::sort(serialized_query_hints.begin(),
+                serialized_query_hints.end(),
+                [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
+    }
+
+    ar& serialized_query_hints;
+
+    if constexpr (Archive::is_loading::value) {
+      const auto hint_nodes = collectSerializableHintNodes(rel_alg_dag);
+      rel_alg_dag.query_hint_.clear();
+      for (auto& hint_entry : serialized_query_hints) {
+        CHECK_LT(hint_entry.first, hint_nodes.size());
+        const auto hint_node = hint_nodes[hint_entry.first];
+        CHECK(hint_node);
+        const auto inserted =
+            rel_alg_dag.query_hint_.emplace(hint_node, std::move(hint_entry.second));
+        CHECK(inserted.second) << "Duplicate query hint entry in serialized DAG";
+      }
+    }
+  }
+
   /**
    * Primary serialization method for Rex/RexScalar-related classes.
    * If you create a new class that inherits from the Rex/RexScalar base class that
@@ -332,7 +405,7 @@ struct RelAlgDagSerializer {
     (ar & rel_alg_dag.build_state_);
     (ar & rel_alg_dag.nodes_);
     (ar & rel_alg_dag.subqueries_);
-    (ar & rel_alg_dag.query_hint_);
+    serializeQueryHints(ar, rel_alg_dag);
     (ar & rel_alg_dag.global_hints_);
   }
 };

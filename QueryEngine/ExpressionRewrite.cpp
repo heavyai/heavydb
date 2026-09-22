@@ -859,6 +859,101 @@ bool update_input_col_desc(
   return input_column_updated;
 }
 
+bool is_physical_table_column(const Analyzer::Expr* expr) {
+  const auto column = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  return column && column->getColumnKey().table_id >= 0;
+}
+
+bool is_supported_range_join_probe_expr(const Analyzer::Expr* expr) {
+  if (is_physical_table_column(expr)) {
+    return true;
+  }
+  const auto geo_expr = dynamic_cast<const Analyzer::GeoOperator*>(expr);
+  if (!geo_expr ||
+      !func_resolve(
+          geo_expr->getName(), "ST_Point"sv, "ST_Transform"sv, "ST_Centroid"sv)) {
+    return false;
+  }
+
+  using ColvarSet =
+      std::set<const Analyzer::ColumnVar*,
+               bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>;
+  ColvarSet colvar_set(Analyzer::ColumnVar::colvar_comp);
+  geo_expr->collect_column_var(colvar_set, /*include_agg=*/true);
+  return std::all_of(colvar_set.begin(), colvar_set.end(), [](const auto column) {
+    return column->getColumnKey().table_id >= 0;
+  });
+}
+
+bool get_unique_nest_level_for_table_key(const std::vector<InputDescriptor>& input_descs,
+                                         const shared::TableKey& table_key,
+                                         int32_t& nest_level) {
+  bool found{false};
+  for (const auto& input_desc : input_descs) {
+    if (input_desc.getTableKey() != table_key) {
+      continue;
+    }
+    if (!found) {
+      nest_level = input_desc.getNestLevel();
+      found = true;
+      continue;
+    }
+    if (nest_level != input_desc.getNestLevel()) {
+      return false;
+    }
+  }
+  return found;
+}
+
+void rebind_join_condition_column_vars(
+    std::list<std::shared_ptr<Analyzer::Expr>>& quals,
+    const std::vector<InputDescriptor>& input_descs,
+    std::list<std::shared_ptr<const InputColDescriptor>>& input_col_desc) {
+  auto ensure_input_col_desc = [&](const shared::ColumnKey& column_key,
+                                   const shared::TableKey& table_key,
+                                   const int32_t nest_level) {
+    const auto has_input_col_desc = std::any_of(
+        input_col_desc.begin(), input_col_desc.end(), [&](const auto& col_desc) {
+          const auto& scan_desc = col_desc->getScanDesc();
+          return col_desc->getColId() == column_key.column_id &&
+                 scan_desc.getTableKey() == table_key &&
+                 scan_desc.getNestLevel() == nest_level;
+        });
+    if (!has_input_col_desc) {
+      input_col_desc.emplace_back(std::make_shared<InputColDescriptor>(
+          column_key.column_id, column_key.table_id, column_key.db_id, nest_level));
+    }
+  };
+
+  using ColvarSet =
+      std::set<const Analyzer::ColumnVar*,
+               bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>;
+  for (const auto& qual : quals) {
+    ColvarSet colvar_set(Analyzer::ColumnVar::colvar_comp);
+    qual->collect_column_var(colvar_set, /*include_agg=*/true);
+    for (const auto colvar : colvar_set) {
+      int32_t nest_level{0};
+      if (get_unique_nest_level_for_table_key(
+              input_descs, colvar->getTableKey(), nest_level)) {
+        const_cast<Analyzer::ColumnVar*>(colvar)->set_rte_idx(nest_level);
+        const auto& column_key = colvar->getColumnKey();
+        if (colvar->get_type_info().is_geometry() &&
+            colvar->get_type_info().get_physical_coord_cols() > 0) {
+          for (int32_t i = 0; i < colvar->get_type_info().get_physical_coord_cols();
+               ++i) {
+            ensure_input_col_desc(
+                {column_key.db_id, column_key.table_id, column_key.column_id + 1 + i},
+                colvar->getTableKey(),
+                nest_level);
+          }
+        } else {
+          ensure_input_col_desc(column_key, colvar->getTableKey(), nest_level);
+        }
+      }
+    }
+  }
+}
+
 }  // namespace
 
 BoundingBoxIntersectJoinTranslationResult
@@ -920,6 +1015,13 @@ translate_bounding_box_intersect_with_reordering(
       // ordering for bounding box intersection, the join builder will fail.
       Analyzer::Expr* range_join_arg = r_arg;
       Analyzer::Expr* bin_oper_arg = l_arg;
+      if (!is_physical_table_column(range_join_arg) ||
+          !is_supported_range_join_probe_expr(bin_oper_arg)) {
+        VLOG(1) << "Range join not supported for non-physical build column or "
+                   "unsupported probe expression: "
+                << range_join_expr->toString();
+        return nullptr;
+      }
       auto invalid_range_join_qual =
           has_invalid_join_col_order(bin_oper_arg, range_join_arg);
       if (invalid_range_join_qual.first) {
@@ -1233,6 +1335,7 @@ BoundingBoxIntersectJoinTranslationInfo convert_bbox_intersect_join(
   bool has_bbox_intersect{false};
   for (const auto& join_condition_in : join_quals) {
     JoinCondition join_condition{{}, join_condition_in.type};
+    join_condition.query_hint = join_condition_in.query_hint;
 
     for (const auto& join_qual_expr_in : join_condition_in.quals) {
       bool try_to_rewrite_expr_to_bbox_intersect = false;
@@ -1286,6 +1389,12 @@ BoundingBoxIntersectJoinTranslationInfo convert_bbox_intersect_join(
       is_reordered |= translation_res.swap_arguments;
     }
     join_condition_per_nesting_level.push_back(join_condition);
+  }
+  if (has_bbox_intersect || is_reordered) {
+    for (auto& join_condition : join_condition_per_nesting_level) {
+      rebind_join_condition_column_vars(
+          join_condition.quals, input_descs, input_col_desc);
+    }
   }
   return {join_condition_per_nesting_level, has_bbox_intersect, is_reordered};
 }

@@ -21,6 +21,7 @@
 #include <iostream>
 #include <list>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -679,10 +680,16 @@ class InIntegerSet : public Expr {
   InIntegerSet(const std::shared_ptr<const Analyzer::Expr> a,
                const std::vector<int64_t>& values,
                const bool not_null);
+  InIntegerSet(const std::shared_ptr<const Analyzer::Expr> a,
+               std::shared_ptr<const std::vector<int64_t>> values,
+               const bool not_null);
 
   const Expr* get_arg() const { return arg.get(); }
 
-  const std::vector<int64_t>& get_value_list() const { return value_list; }
+  const std::vector<int64_t>& get_value_list() const { return *value_list; }
+  std::shared_ptr<const std::vector<int64_t>> get_value_list_shared() const {
+    return value_list;
+  }
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override;
 
@@ -691,7 +698,7 @@ class InIntegerSet : public Expr {
 
  private:
   const std::shared_ptr<const Analyzer::Expr> arg;  // the argument left of IN
-  const std::vector<int64_t> value_list;            // the list of values right of IN
+  const std::shared_ptr<const std::vector<int64_t>> value_list;
 };
 
 class MLPredictExpr : public Expr {
