@@ -9,55 +9,104 @@
 #include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
 
+#include <optional>
+
 namespace {
 
-// Returns true iff crt and prev are both equi-join conditions on the same pair of tables.
-bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
-  const auto crt_bin = dynamic_cast<const Analyzer::BinOper*>(crt);
-  const auto prev_bin = dynamic_cast<const Analyzer::BinOper*>(prev);
-  if (!crt_bin || !prev_bin) {
-    return false;
+struct NormalizedEquiJoinQual {
+  std::shared_ptr<Analyzer::Expr> qual;
+  std::set<int> outer_rte_set;
+  shared::TableKey inner_table_key;
+  int inner_rte_idx;
+  SQLOps op_type;
+};
+
+std::shared_ptr<Analyzer::Expr> remove_safe_join_normalization_cast(
+    const std::shared_ptr<Analyzer::Expr>& expr) {
+  const auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(expr);
+  if (!uoper || uoper->get_optype() != kCAST) {
+    return expr;
   }
-  if (!IS_EQUIVALENCE(crt_bin->get_optype()) || crt_bin->get_qualifier() != kONE ||
-      !IS_EQUIVALENCE(prev_bin->get_optype()) || prev_bin->get_qualifier() != kONE ||
-      // We could accept a mix of kEQ and kBW_EQ, but don't bother for now.
-      crt_bin->get_optype() != prev_bin->get_optype()) {
-    return false;
+  const auto& operand_ti = uoper->get_operand()->get_type_info();
+  const auto& cast_ti = uoper->get_type_info();
+  if (operand_ti.is_decimal() || cast_ti.is_decimal()) {
+    return expr;
+  }
+  return uoper->get_own_operand();
+}
+
+std::shared_ptr<Analyzer::ColumnVar> get_join_side_col_var(
+    const std::shared_ptr<Analyzer::Expr>& expr) {
+  auto col_var = std::dynamic_pointer_cast<Analyzer::ColumnVar>(
+      remove_safe_join_normalization_cast(expr));
+  if (col_var) {
+    return col_var;
+  }
+  const auto string_oper = std::dynamic_pointer_cast<Analyzer::StringOper>(
+      remove_safe_join_normalization_cast(expr));
+  if (string_oper && string_oper->getArity() >= 1UL) {
+    return std::dynamic_pointer_cast<Analyzer::ColumnVar>(string_oper->getOwnArg(0));
+  }
+  return nullptr;
+}
+
+std::optional<NormalizedEquiJoinQual> normalize_equi_join_qual(
+    const std::shared_ptr<Analyzer::Expr>& qual) {
+  const auto bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
+  if (!bin_oper || !IS_EQUIVALENCE(bin_oper->get_optype()) ||
+      bin_oper->get_qualifier() != kONE) {
+    return std::nullopt;
   }
 
-  auto get_rhs_col_var = [](const auto bin_oper) {
-    auto inner_col_var = std::dynamic_pointer_cast<Analyzer::ColumnVar>(
-        remove_cast(bin_oper->get_own_right_operand()));
-    if (!inner_col_var) {
-      const auto string_oper = std::dynamic_pointer_cast<Analyzer::StringOper>(
-          remove_cast(bin_oper->get_own_right_operand()));
-      if (string_oper && string_oper->getArity() >= 1UL) {
-        inner_col_var =
-            std::dynamic_pointer_cast<Analyzer::ColumnVar>(string_oper->getOwnArg(0));
-      }
-    }
-    return inner_col_var;
-  };
-
-  const std::shared_ptr<Analyzer::ColumnVar> crt_inner_col_var = get_rhs_col_var(crt_bin);
-  const std::shared_ptr<Analyzer::ColumnVar> prev_inner_col_var =
-      get_rhs_col_var(prev_bin);
-  if (!crt_inner_col_var || !prev_inner_col_var) {
-    return false;
+  auto lhs = remove_safe_join_normalization_cast(bin_oper->get_own_left_operand());
+  auto rhs = remove_safe_join_normalization_cast(bin_oper->get_own_right_operand());
+  const auto lhs_col = get_join_side_col_var(lhs);
+  const auto rhs_col = get_join_side_col_var(rhs);
+  if (!lhs_col && !rhs_col) {
+    return std::nullopt;
   }
+
   AllRangeTableIndexVisitor visitor;
-  const auto crt_outer_rte_set = visitor.visit(crt_bin->get_left_operand());
-  const auto prev_outer_rte_set = visitor.visit(prev_bin->get_left_operand());
-  // We shouldn't treat mixed nesting levels columns as a composite key tuple.
-  if (crt_outer_rte_set.size() != 1 || prev_outer_rte_set.size() != 1 ||
-      crt_outer_rte_set != prev_outer_rte_set) {
-    return false;
+  const auto lhs_rte_set = visitor.visit(lhs.get());
+  const auto rhs_rte_set = visitor.visit(rhs.get());
+  if (lhs_rte_set.size() != 1 || rhs_rte_set.size() != 1 || lhs_rte_set == rhs_rte_set) {
+    return std::nullopt;
   }
-  if (crt_inner_col_var->getTableKey() != prev_inner_col_var->getTableKey() ||
-      crt_inner_col_var->get_rte_idx() != prev_inner_col_var->get_rte_idx()) {
-    return false;
+
+  const auto lhs_max_rte = *lhs_rte_set.rbegin();
+  const auto rhs_max_rte = *rhs_rte_set.rbegin();
+  const bool lhs_is_inner =
+      lhs_col && (!rhs_col || lhs_col->get_rte_idx() > rhs_col->get_rte_idx() ||
+                  (!rhs_col && lhs_max_rte > rhs_max_rte));
+  const auto inner_expr = lhs_is_inner ? lhs : rhs;
+  const auto outer_expr = lhs_is_inner ? rhs : lhs;
+  const auto inner_col = lhs_is_inner ? lhs_col : rhs_col;
+  const auto outer_rte_set = lhs_is_inner ? rhs_rte_set : lhs_rte_set;
+  if (!inner_col) {
+    return std::nullopt;
   }
-  return true;
+
+  auto normalized_qual = std::make_shared<Analyzer::BinOper>(bin_oper->get_type_info(),
+                                                             false,
+                                                             bin_oper->get_optype(),
+                                                             bin_oper->get_qualifier(),
+                                                             outer_expr,
+                                                             inner_expr);
+  return NormalizedEquiJoinQual{normalized_qual,
+                                outer_rte_set,
+                                inner_col->getTableKey(),
+                                inner_col->get_rte_idx(),
+                                bin_oper->get_optype()};
+}
+
+// Returns true iff crt and prev are both equi-join conditions on the same pair of
+// left-deep inputs after orienting the newer input as the inner side.
+bool can_combine_with(const NormalizedEquiJoinQual& crt,
+                      const NormalizedEquiJoinQual& prev) {
+  // We could accept a mix of kEQ and kBW_EQ, but don't bother for now.
+  return crt.op_type == prev.op_type && crt.outer_rte_set == prev.outer_rte_set &&
+         crt.inner_table_key == prev.inner_table_key &&
+         crt.inner_rte_idx == prev.inner_rte_idx;
 }
 
 std::list<std::shared_ptr<Analyzer::Expr>> make_composite_equals_impl(
@@ -70,8 +119,10 @@ std::list<std::shared_ptr<Analyzer::Expr>> make_composite_equals_impl(
     const auto qual_binary = std::dynamic_pointer_cast<Analyzer::BinOper>(qual);
     CHECK(qual_binary);
     not_null = not_null && qual_binary->get_type_info().get_notnull();
-    const auto lhs_col = remove_cast(qual_binary->get_own_left_operand());
-    const auto rhs_col = remove_cast(qual_binary->get_own_right_operand());
+    const auto lhs_col =
+        remove_safe_join_normalization_cast(qual_binary->get_own_left_operand());
+    const auto rhs_col =
+        remove_safe_join_normalization_cast(qual_binary->get_own_right_operand());
     const auto lhs_ti = lhs_col->get_type_info();
     // Coalesce cols for integers, bool, and dict encoded strings. Forces baseline hash
     // join.
@@ -122,23 +173,31 @@ std::list<std::shared_ptr<Analyzer::Expr>> combine_equi_join_conditions(
   }
   std::list<std::shared_ptr<Analyzer::Expr>> coalesced_quals;
   std::vector<std::shared_ptr<Analyzer::Expr>> crt_coalesced_quals;
-  for (const auto& simple_join_qual : join_quals) {
-    if (crt_coalesced_quals.empty()) {
-      crt_coalesced_quals.push_back(simple_join_qual);
-      continue;
-    }
-    if (crt_coalesced_quals.size() >= g_maximum_conditions_to_coalesce ||
-        !can_combine_with(simple_join_qual.get(), crt_coalesced_quals.back().get())) {
+  std::optional<NormalizedEquiJoinQual> prev_normalized_qual;
+  auto flush_current = [&]() {
+    if (!crt_coalesced_quals.empty()) {
       coalesced_quals.splice(coalesced_quals.end(),
                              make_composite_equals(crt_coalesced_quals));
       crt_coalesced_quals.clear();
+      prev_normalized_qual = std::nullopt;
     }
-    crt_coalesced_quals.push_back(simple_join_qual);
+  };
+  for (const auto& simple_join_qual : join_quals) {
+    auto normalized_qual = normalize_equi_join_qual(simple_join_qual);
+    if (!normalized_qual) {
+      flush_current();
+      coalesced_quals.push_back(simple_join_qual);
+      continue;
+    }
+    if (crt_coalesced_quals.size() >= g_maximum_conditions_to_coalesce ||
+        (prev_normalized_qual &&
+         !can_combine_with(*normalized_qual, *prev_normalized_qual))) {
+      flush_current();
+    }
+    crt_coalesced_quals.push_back(normalized_qual->qual);
+    prev_normalized_qual = std::move(normalized_qual);
   }
-  if (!crt_coalesced_quals.empty()) {
-    coalesced_quals.splice(coalesced_quals.end(),
-                           make_composite_equals(crt_coalesced_quals));
-  }
+  flush_current();
   return coalesced_quals;
 }
 

@@ -27,6 +27,18 @@
 #include <future>
 #include <numeric>
 
+bool VarlenOutputInfo::containsGpuAddress(const int64_t gpu_address,
+                                          const size_t length) const {
+  if (!gpu_start_address || !cpu_buffer_ptr || !gpu_address) {
+    return false;
+  }
+  if (gpu_address < gpu_start_address) {
+    return false;
+  }
+  const auto offset_bytes = static_cast<size_t>(gpu_address - gpu_start_address);
+  return offset_bytes <= buffer_size_bytes && length <= buffer_size_bytes - offset_bytes;
+}
+
 int8_t* VarlenOutputInfo::computeCpuOffset(const int64_t gpu_offset_address) const {
   const auto gpu_start_address_ptr = reinterpret_cast<int8_t*>(gpu_start_address);
   const auto gpu_offset_address_ptr = reinterpret_cast<int8_t*>(gpu_offset_address);
@@ -36,6 +48,7 @@ int8_t* VarlenOutputInfo::computeCpuOffset(const int64_t gpu_offset_address) con
   const auto offset_bytes =
       static_cast<int64_t>(gpu_offset_address_ptr - gpu_start_address_ptr);
   CHECK_GE(offset_bytes, int64_t(0));
+  CHECK_LE(static_cast<size_t>(offset_bytes), buffer_size_bytes);
   return cpu_buffer_ptr + offset_bytes;
 }
 
@@ -77,19 +90,25 @@ std::vector<int64_t> result_set::initialize_target_values_for_storage(
       target_init_vals.push_back(0);
       continue;
     }
-    if (!target_info.sql_type.get_notnull()) {
+    const auto use_compact_init_type =
+        target_info.is_agg && (target_info.agg_arg_type.get_type() != kNULLT ||
+                               shared::is_any<kCOUNT, kCOUNT_IF, kAPPROX_QUANTILE, kMODE>(
+                                   target_info.agg_kind));
+    const auto init_type =
+        use_compact_init_type ? get_compact_type(target_info) : target_info.sql_type;
+    if (!init_type.get_notnull()) {
       int64_t init_val =
-          null_val_bit_pattern(target_info.sql_type, takes_float_argument(target_info));
+          null_val_bit_pattern(init_type, takes_float_argument(target_info));
       target_init_vals.push_back(target_info.is_agg ? init_val : 0);
     } else {
       target_init_vals.push_back(target_info.is_agg ? 0xdeadbeef : 0);
     }
-    if (target_info.agg_kind == kAVG) {
-      target_init_vals.push_back(0);
-    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_geometry()) {
+    if (target_info.sql_type.is_geometry() && !target_info.is_varlen_projection) {
       for (int i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); i++) {
         target_init_vals.push_back(0);
       }
+    } else if (target_info.agg_kind == kAVG) {
+      target_init_vals.push_back(0);
     } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
       target_init_vals.push_back(0);
     }

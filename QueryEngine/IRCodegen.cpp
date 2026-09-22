@@ -7,13 +7,429 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 #include "ExternalExecutor.h"
+#include "RelAlgOptimizer.h"
 #include "RelAlgTranslator.h"
+#include "ScalarExprVisitor.h"
 
+#include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/RangeJoinHashTable.h"
+
+#include <algorithm>
+#include <boost/algorithm/string/predicate.hpp>
+#include <limits>
+#include <optional>
 
 // Driver methods for the IR generation.
 
 extern bool g_enable_left_join_filter_hoisting;
+
+namespace {
+
+struct HashQualRank {
+  int category{0};
+  double fanout{std::numeric_limits<double>::max()};
+  size_t original_idx{0};
+  size_t tuple_count{0};
+  size_t bit_count{0};
+};
+
+std::optional<size_t> bit_count_for_range(const ExpressionRange& range) {
+  if (range.getType() != ExpressionRangeType::Integer ||
+      range.getIntMin() > range.getIntMax()) {
+    return std::nullopt;
+  }
+  const auto bit_count = static_cast<__int128>(range.getIntMax()) -
+                         static_cast<__int128>(range.getIntMin()) + 1;
+  if (bit_count < 0 ||
+      bit_count > static_cast<__int128>(std::numeric_limits<size_t>::max())) {
+    return std::nullopt;
+  }
+  return static_cast<size_t>(bit_count);
+}
+
+HashQualRank rank_hash_join_qual(const std::shared_ptr<Analyzer::BinOper>& qual,
+                                 const std::vector<InputTableInfo>& query_infos,
+                                 Executor* executor,
+                                 const size_t original_idx) {
+  HashQualRank rank;
+  rank.original_idx = original_idx;
+  if (!qual || !IS_EQUIVALENCE(qual->get_optype()) || qual->get_optype() == kBW_EQ) {
+    return rank;
+  }
+  try {
+    const auto normalized =
+        HashJoin::normalizeColumnPairs(qual.get(), executor->getTemporaryTables());
+    if (normalized.first.size() != 1 || normalized.second.front().first.size() ||
+        normalized.second.front().second.size()) {
+      rank.category = 1;
+      return rank;
+    }
+    const auto inner_col = normalized.first.front().first;
+    CHECK(inner_col);
+    const auto& inner_table_info =
+        get_inner_query_info(inner_col->getTableKey(), query_infos).info;
+    rank.tuple_count = get_hash_join_table_num_tuples(inner_table_info);
+    const auto range = getExpressionRange(inner_col, query_infos, executor);
+    const auto bit_count = bit_count_for_range(range);
+    if (!bit_count || rank.tuple_count == 0) {
+      rank.category = 1;
+      return rank;
+    }
+    rank.bit_count = *bit_count;
+    if (rank.bit_count >= rank.tuple_count) {
+      rank.category = 3;
+      rank.fanout = static_cast<double>(rank.bit_count) /
+                    static_cast<double>(std::max<size_t>(rank.tuple_count, 1));
+    } else {
+      rank.category = 2;
+      rank.fanout = static_cast<double>(rank.tuple_count) /
+                    static_cast<double>(std::max<size_t>(rank.bit_count, 1));
+    }
+    return rank;
+  } catch (...) {
+    return rank;
+  }
+}
+
+std::vector<std::pair<std::shared_ptr<Analyzer::BinOper>, HashQualRank>>
+rank_hash_join_quals(const std::list<std::shared_ptr<Analyzer::Expr>>& join_quals,
+                     const std::vector<InputTableInfo>& query_infos,
+                     Executor* executor) {
+  std::vector<std::pair<std::shared_ptr<Analyzer::BinOper>, HashQualRank>> ranked_quals;
+  size_t original_idx = 0;
+  for (const auto& join_qual : join_quals) {
+    auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
+    if (!qual_bin_oper || !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
+      ++original_idx;
+      continue;
+    }
+    ranked_quals.emplace_back(
+        qual_bin_oper,
+        rank_hash_join_qual(qual_bin_oper, query_infos, executor, original_idx));
+    ++original_idx;
+  }
+  std::stable_sort(
+      ranked_quals.begin(), ranked_quals.end(), [](const auto& lhs, const auto& rhs) {
+        const auto& lhs_rank = lhs.second;
+        const auto& rhs_rank = rhs.second;
+        if (lhs_rank.category != rhs_rank.category) {
+          return lhs_rank.category > rhs_rank.category;
+        }
+        if (lhs_rank.fanout != rhs_rank.fanout) {
+          return lhs_rank.fanout < rhs_rank.fanout;
+        }
+        return lhs_rank.original_idx < rhs_rank.original_idx;
+      });
+  return ranked_quals;
+}
+
+std::list<std::shared_ptr<Analyzer::Expr>> decompose_multicol_equi_join(
+    const std::shared_ptr<Analyzer::BinOper>& qual) {
+  std::list<std::shared_ptr<Analyzer::Expr>> decomposed_quals;
+  if (!qual || !IS_EQUIVALENCE(qual->get_optype())) {
+    return decomposed_quals;
+  }
+  const auto lhs_tuple =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(qual->get_left_operand());
+  const auto rhs_tuple =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(qual->get_right_operand());
+  if (!lhs_tuple || !rhs_tuple) {
+    return decomposed_quals;
+  }
+  const auto& lhs_components = lhs_tuple->getTuple();
+  const auto& rhs_components = rhs_tuple->getTuple();
+  CHECK_EQ(lhs_components.size(), rhs_components.size());
+  if (lhs_components.size() <= 1) {
+    return decomposed_quals;
+  }
+  for (size_t i = 0; i < lhs_components.size(); ++i) {
+    const bool not_null = lhs_components[i]->get_type_info().get_notnull() &&
+                          rhs_components[i]->get_type_info().get_notnull();
+    decomposed_quals.push_back(
+        std::make_shared<Analyzer::BinOper>(SQLTypeInfo(kBOOLEAN, not_null),
+                                            qual->get_contains_agg(),
+                                            qual->get_optype(),
+                                            qual->get_qualifier(),
+                                            lhs_components[i],
+                                            rhs_components[i]));
+  }
+  return decomposed_quals;
+}
+
+std::optional<std::string> oversized_baseline_hash_candidate_reason(
+    const std::shared_ptr<Analyzer::BinOper>& qual,
+    const std::vector<InputTableInfo>& query_infos,
+    Executor* executor,
+    const MemoryLevel memory_level,
+    const RegisteredQueryHint& query_hint) {
+  if (!qual) {
+    return std::nullopt;
+  }
+  const auto lhs_tuple =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(qual->get_left_operand());
+  const auto rhs_tuple =
+      dynamic_cast<const Analyzer::ExpressionTuple*>(qual->get_right_operand());
+  if (!lhs_tuple || !rhs_tuple || lhs_tuple->getTuple().size() <= 1) {
+    return std::nullopt;
+  }
+  try {
+    const auto normalized =
+        HashJoin::normalizeColumnPairs(qual.get(), executor->getTemporaryTables());
+    if (normalized.first.size() <= 1) {
+      return std::nullopt;
+    }
+    const auto inner_col = normalized.first.front().first;
+    CHECK(inner_col);
+    const auto& inner_table_info =
+        get_inner_query_info(inner_col->getTableKey(), query_infos).info;
+    const auto total_entries =
+        get_hash_join_table_slot_count(inner_table_info, memory_level);
+    const auto shard_count = memory_level == MemoryLevel::GPU_LEVEL
+                                 ? BaselineJoinHashTable::getShardCountForCondition(
+                                       qual.get(), executor, normalized.first)
+                                 : 0;
+    const auto entries_per_device =
+        get_entries_per_device(total_entries,
+                               shard_count,
+                               executor->getAvailableDevicesToProcessQuery(),
+                               memory_level);
+    size_t key_component_width = 4;
+    for (const auto& inner_outer_pair : normalized.first) {
+      const auto inner_key = inner_outer_pair.first;
+      CHECK(inner_key);
+      const auto logical_size = inner_key->get_type_info().get_logical_size();
+      if (logical_size > 4) {
+        key_component_width = 8;
+        break;
+      }
+    }
+    const auto key_component_count = normalized.first.size();
+    const auto entry_width = (key_component_count + 1) * key_component_width;
+    if (entry_width == 0 ||
+        entries_per_device > std::numeric_limits<size_t>::max() / entry_width) {
+      return "estimated baseline hash table size overflows size_t";
+    }
+    const auto estimated_hash_table_size = entries_per_device * entry_width;
+    const auto maybe_reject = [&](const size_t threshold) -> std::optional<std::string> {
+      if (estimated_hash_table_size <= threshold) {
+        return std::nullopt;
+      }
+      return "estimated baseline hash table is larger than a threshold (" +
+             std::to_string(estimated_hash_table_size) + " > " +
+             std::to_string(threshold) + ")";
+    };
+    if (query_hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
+      if (auto reason = maybe_reject(query_hint.max_join_hash_table_size)) {
+        return reason;
+      }
+    }
+    if (memory_level == MemoryLevel::GPU_LEVEL) {
+      if (auto reason = maybe_reject(executor->maxGpuSlabSize())) {
+        return reason;
+      }
+    }
+  } catch (const std::exception& e) {
+    return std::string("could not estimate baseline hash table size: ") + e.what();
+  }
+  return std::nullopt;
+}
+
+class ExprUsesTableRteVisitor : public ScalarExprVisitor<bool> {
+ public:
+  ExprUsesTableRteVisitor(const shared::TableKey& table_key, const int32_t rte_idx)
+      : table_key_(table_key), rte_idx_(rte_idx) {}
+
+ protected:
+  bool visitColumnVar(const Analyzer::ColumnVar* column) const override {
+    return column->get_rte_idx() == rte_idx_ &&
+           column->getTableKey().table_id == table_key_.table_id &&
+           (column->getTableKey().db_id == table_key_.db_id || table_key_.table_id < 0);
+  }
+
+  bool aggregateResult(const bool& aggregate, const bool& next_result) const override {
+    return aggregate || next_result;
+  }
+
+ private:
+  const shared::TableKey table_key_;
+  const int32_t rte_idx_;
+};
+
+bool expr_uses_table_rte(const Analyzer::Expr* expr,
+                         const shared::TableKey& table_key,
+                         const int32_t rte_idx) {
+  if (!expr) {
+    return false;
+  }
+  ExprUsesTableRteVisitor visitor(table_key, rte_idx);
+  return visitor.visit(expr);
+}
+
+bool rel_output_column_is_unique(const RelAlgNode* node,
+                                 const size_t output_idx,
+                                 const size_t depth = 0) {
+  if (!node || depth > 16 || output_idx >= node->size()) {
+    return false;
+  }
+  if (const auto scan = dynamic_cast<const RelScan*>(node)) {
+    const auto td = scan->getTableDescriptor();
+    if (!td) {
+      return false;
+    }
+    const auto cd =
+        scan->getCatalog().getMetadataForColumnBySpi(td->tableId, output_idx + 1);
+    if (!cd) {
+      return false;
+    }
+    for (const auto& constraint : scan->getCatalog().getTableConstraints(td)) {
+      if (!Catalog_Namespace::table_constraint_is_trusted(
+              constraint, g_trust_unenforced_table_constraints)) {
+        continue;
+      }
+      if (constraint.column_names.size() != 1 ||
+          !boost::iequals(constraint.column_names.front(), cd->columnName)) {
+        continue;
+      }
+      if (constraint.type == Catalog_Namespace::TableConstraintType::PrimaryKey) {
+        return true;
+      }
+      if (constraint.type == Catalog_Namespace::TableConstraintType::Unique &&
+          cd->columnType.get_notnull()) {
+        return true;
+      }
+    }
+    return false;
+  }
+  if (dynamic_cast<const RelFilter*>(node) || dynamic_cast<const RelSort*>(node)) {
+    CHECK_EQ(size_t(1), node->inputCount());
+    return rel_output_column_is_unique(node->getInput(0), output_idx, depth + 1);
+  }
+  if (const auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+    return aggregate->getGroupByCount() == 1 && output_idx == 0;
+  }
+  if (const auto compound = dynamic_cast<const RelCompound*>(node)) {
+    if (compound->isAggregate()) {
+      if (compound->getGroupByCount() != 1 || output_idx >= compound->size()) {
+        return false;
+      }
+      const auto rex_ref =
+          dynamic_cast<const RexRef*>(compound->getTargetExpr(output_idx));
+      return rex_ref && rex_ref->getIndex() == 1;
+    }
+    const auto input = dynamic_cast<const RexInput*>(compound->getTargetExpr(output_idx));
+    if (!input) {
+      return false;
+    }
+    return rel_output_column_is_unique(
+        input->getSourceNode(), input->getIndex(), depth + 1);
+  }
+  if (const auto project = dynamic_cast<const RelProject*>(node)) {
+    const auto input = dynamic_cast<const RexInput*>(project->getProjectAt(output_idx));
+    if (!input) {
+      return false;
+    }
+    return rel_output_column_is_unique(
+        input->getSourceNode(), input->getIndex(), depth + 1);
+  }
+  return false;
+}
+
+bool temp_column_is_structurally_unique(const Analyzer::ColumnVar* column,
+                                        const TableIdToNodeMap& table_id_to_node_map) {
+  CHECK(column);
+  const auto source_node =
+      get_temporary_table_source_node(column->getTableKey(), table_id_to_node_map);
+  if (!source_node) {
+    return false;
+  }
+  const auto column_id = column->getColumnKey().column_id;
+  if (column_id < 0) {
+    return false;
+  }
+  return rel_output_column_is_unique(source_node, static_cast<size_t>(column_id));
+}
+
+bool build_side_rowid_is_unreferenced(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const JoinCondition& current_level_join_conditions,
+    const std::shared_ptr<Analyzer::BinOper>& selected_hash_qual,
+    const Analyzer::ColumnVar* inner_col) {
+  CHECK(selected_hash_qual);
+  CHECK(inner_col);
+  const auto table_key = inner_col->getTableKey();
+  const auto rte_idx = inner_col->get_rte_idx();
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    if (expr_uses_table_rte(target_expr, table_key, rte_idx)) {
+      return false;
+    }
+  }
+  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
+    if (expr_uses_table_rte(groupby_expr.get(), table_key, rte_idx)) {
+      return false;
+    }
+  }
+  for (const auto& qual : ra_exe_unit.simple_quals) {
+    if (expr_uses_table_rte(qual.get(), table_key, rte_idx)) {
+      return false;
+    }
+  }
+  for (const auto& qual : ra_exe_unit.quals) {
+    if (expr_uses_table_rte(qual.get(), table_key, rte_idx)) {
+      return false;
+    }
+  }
+  for (const auto& join_condition : ra_exe_unit.join_quals) {
+    for (const auto& qual : join_condition.quals) {
+      if (qual.get() == selected_hash_qual.get()) {
+        continue;
+      }
+      if (expr_uses_table_rte(qual.get(), table_key, rte_idx)) {
+        return false;
+      }
+    }
+  }
+  for (const auto& qual : current_level_join_conditions.quals) {
+    if (qual.get() == selected_hash_qual.get()) {
+      continue;
+    }
+    if (expr_uses_table_rte(qual.get(), table_key, rte_idx)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool can_use_payload_free_unique_probe(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const JoinCondition& current_level_join_conditions,
+    const std::shared_ptr<Analyzer::BinOper>& selected_hash_qual,
+    Executor* executor) {
+  if (current_level_join_conditions.type != JoinType::INNER || !selected_hash_qual) {
+    return false;
+  }
+  try {
+    const auto normalized = HashJoin::normalizeColumnPairs(
+        selected_hash_qual.get(), executor->getTemporaryTables());
+    if (normalized.first.size() != 1 || normalized.second.size() != 1 ||
+        normalized.second.front().first.size() ||
+        normalized.second.front().second.size()) {
+      return false;
+    }
+    const auto inner_col = normalized.first.front().first;
+    if (!inner_col || inner_col->getTableKey().table_id >= 0) {
+      return false;
+    }
+    return temp_column_is_structurally_unique(inner_col,
+                                              ra_exe_unit.table_id_to_node_map) &&
+           build_side_rowid_is_unreferenced(
+               ra_exe_unit, current_level_join_conditions, selected_hash_qual, inner_col);
+  } catch (...) {
+    return false;
+  }
+}
+
+}  // namespace
 
 std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
                                                  const bool fetch_columns,
@@ -597,7 +1013,7 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
   }
 }
 
-void check_valid_join_qual(std::shared_ptr<Analyzer::BinOper>& bin_oper) {
+void check_valid_join_qual(const std::shared_ptr<Analyzer::BinOper>& bin_oper) {
   // check whether a join qual is valid before entering the hashtable build and codegen
 
   auto lhs_cv = dynamic_cast<const Analyzer::ColumnVar*>(bin_oper->get_left_operand());
@@ -681,7 +1097,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
           ra_exe_unit, level_idx, current_level_hash_table->getInnerTableId(), co);
       if (current_level_hash_table->getHashType() == HashType::OneToOne) {
         join_loops.emplace_back(
-            /*kind=*/JoinLoopKind::Singleton,
+            /*kind=*/
+            JoinLoopKind::Singleton,
             /*type=*/current_level_join_conditions.type,
             /*iteration_domain_codegen=*/
             [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
@@ -707,7 +1124,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
       } else if (auto range_join_table =
                      dynamic_cast<RangeJoinHashTable*>(current_level_hash_table.get())) {
         join_loops.emplace_back(
-            /* kind= */ JoinLoopKind::MultiSet,
+            /* kind= */
+            JoinLoopKind::MultiSet,
             /* type= */ current_level_join_conditions.type,
             /* iteration_domain_codegen= */
             [this,
@@ -739,7 +1157,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             /*nested_loop_join=*/false);
       } else {
         join_loops.emplace_back(
-            /*kind=*/JoinLoopKind::Set,
+            /*kind=*/
+            JoinLoopKind::Set,
             /*type=*/current_level_join_conditions.type,
             /*iteration_domain_codegen=*/
             [this, current_hash_table_idx, level_idx, current_level_hash_table, &co](
@@ -776,7 +1195,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
       // condition.
       VLOG(1) << "Unable to build hash table, falling back to loop join: "
               << fail_reasons_str;
-      const auto outer_join_condition_cb =
+      const auto loop_join_condition_cb =
           [this, level_idx, &co, &current_level_join_conditions](
               const std::vector<llvm::Value*>& prev_iters) {
             // The values generated for the match path don't dominate all uses
@@ -795,7 +1214,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             return left_join_cond;
           };
       join_loops.emplace_back(
-          /*kind=*/JoinLoopKind::UpperBound,
+          /*kind=*/
+          JoinLoopKind::UpperBound,
           /*type=*/current_level_join_conditions.type,
           /*iteration_domain_codegen=*/
           [this, level_idx](const std::vector<llvm::Value*>& prev_iters) {
@@ -813,9 +1233,10 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             return domain;
           },
           /*outer_condition_match=*/
-          current_level_join_conditions.type == JoinType::LEFT
+          (current_level_join_conditions.type == JoinType::LEFT ||
+           current_level_join_conditions.type == JoinType::INNER)
               ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
-                    outer_join_condition_cb)
+                    loop_join_condition_cb)
               : nullptr,
           /*found_outer_matches=*/
           current_level_join_conditions.type == JoinType::LEFT
@@ -1057,43 +1478,101 @@ std::shared_ptr<HashJoin> Executor::buildCurrentLevelHashTable(
       add_qualifier_to_execution_unit(ra_exe_unit, qual);
     }
   };
-  for (const auto& join_qual : current_level_join_conditions.quals) {
-    auto qual_bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(join_qual);
-    if (current_level_hash_table || !qual_bin_oper ||
-        !IS_EQUIVALENCE(qual_bin_oper->get_optype())) {
-      handleNonHashtableQual(current_level_join_conditions.type, join_qual);
-      if (!current_level_hash_table) {
-        fail_reasons.emplace_back("No equijoin expression found");
+  std::shared_ptr<Analyzer::Expr> selected_hash_qual;
+  bool has_equijoin_qual = false;
+  auto build_side_quals = current_level_join_conditions.quals;
+  build_side_quals.insert(build_side_quals.end(),
+                          ra_exe_unit.simple_quals.begin(),
+                          ra_exe_unit.simple_quals.end());
+  build_side_quals.insert(
+      build_side_quals.end(), ra_exe_unit.quals.begin(), ra_exe_unit.quals.end());
+  const auto memory_level = co.device_type == ExecutorDeviceType::GPU
+                                ? MemoryLevel::GPU_LEVEL
+                                : MemoryLevel::CPU_LEVEL;
+  const auto ranked_hash_quals =
+      rank_hash_join_quals(current_level_join_conditions.quals, query_infos, this);
+  const auto query_hint =
+      current_level_join_conditions.query_hint || ra_exe_unit.query_hint;
+  auto try_hash_qual = [&](const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
+                           const HashQualRank&,
+                           const bool is_fallback_candidate) {
+    if (!is_fallback_candidate) {
+      if (auto oversized_reason = oversized_baseline_hash_candidate_reason(
+              qual_bin_oper, query_infos, this, memory_level, query_hint)) {
+        fail_reasons.push_back(*oversized_reason);
+        return false;
       }
-      continue;
     }
     check_valid_join_qual(qual_bin_oper);
-    JoinHashTableOrError hash_table_or_error;
-    if (!current_level_hash_table) {
-      hash_table_or_error = buildHashTableForQualifier(
-          qual_bin_oper,
-          query_infos,
-          co.device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
-                                                    : MemoryLevel::CPU_LEVEL,
-          current_level_join_conditions.type,
-          HashType::OneToOne,
-          column_cache,
-          ra_exe_unit.hash_table_build_plan_dag,
-          ra_exe_unit.query_hint,
-          ra_exe_unit.table_id_to_node_map);
-      current_level_hash_table = hash_table_or_error.hash_table;
-    }
+    const bool payload_free_unique_probe = can_use_payload_free_unique_probe(
+        ra_exe_unit, current_level_join_conditions, qual_bin_oper, this);
+    auto hash_table_or_error =
+        buildHashTableForQualifier(qual_bin_oper,
+                                   query_infos,
+                                   memory_level,
+                                   current_level_join_conditions.type,
+                                   HashType::OneToOne,
+                                   column_cache,
+                                   ra_exe_unit.hash_table_build_plan_dag,
+                                   query_hint,
+                                   ra_exe_unit.table_id_to_node_map,
+                                   build_side_quals,
+                                   payload_free_unique_probe);
     if (hash_table_or_error.hash_table) {
+      current_level_hash_table = hash_table_or_error.hash_table;
+      selected_hash_qual = qual_bin_oper;
       plan_state_->join_info_.join_hash_tables_.push_back(hash_table_or_error.hash_table);
       plan_state_->join_info_.equi_join_tautologies_.push_back(qual_bin_oper);
+      if (current_level_hash_table->usesBuildSideGlobalRowIds()) {
+        const auto build_side_rte_idx = current_level_hash_table->getInnerTableRteIdx();
+        CHECK_GE(build_side_rte_idx, 0);
+        plan_state_->join_info_.global_build_rowid_table_indices_.insert(
+            static_cast<size_t>(build_side_rte_idx));
+      }
+      for (const auto& build_side_qual : build_side_quals) {
+        if (current_level_hash_table->isBuildSideQualifierPushedDown(
+                build_side_qual.get())) {
+          plan_state_->hoisted_filters_.insert(build_side_qual);
+        }
+      }
+      return true;
     } else {
       fail_reasons.push_back(hash_table_or_error.fail_reason);
-      if (!current_level_hash_table) {
-        VLOG(2) << "Building a hashtable based on a qual " << qual_bin_oper->toString()
-                << " fails: " << hash_table_or_error.fail_reason;
-      }
-      handleNonHashtableQual(current_level_join_conditions.type, qual_bin_oper);
     }
+    return false;
+  };
+  for (const auto& [qual_bin_oper, qual_rank] : ranked_hash_quals) {
+    has_equijoin_qual = true;
+    if (try_hash_qual(qual_bin_oper, qual_rank, false)) {
+      break;
+    }
+    const auto decomposed_quals = decompose_multicol_equi_join(qual_bin_oper);
+    if (decomposed_quals.empty()) {
+      continue;
+    }
+    const auto ranked_decomposed_quals =
+        rank_hash_join_quals(decomposed_quals, query_infos, this);
+    for (const auto& [fallback_qual, fallback_rank] : ranked_decomposed_quals) {
+      if (try_hash_qual(fallback_qual, fallback_rank, true)) {
+        break;
+      }
+    }
+    if (current_level_hash_table) {
+      break;
+    }
+  }
+  if (!has_equijoin_qual) {
+    fail_reasons.emplace_back("No equijoin expression found");
+  }
+  for (const auto& join_qual : current_level_join_conditions.quals) {
+    if (selected_hash_qual && selected_hash_qual.get() == join_qual.get()) {
+      continue;
+    }
+    if (current_level_hash_table &&
+        current_level_hash_table->isBuildSideQualifierPushedDown(join_qual.get())) {
+      continue;
+    }
+    handleNonHashtableQual(current_level_join_conditions.type, join_qual);
   }
   return current_level_hash_table;
 }

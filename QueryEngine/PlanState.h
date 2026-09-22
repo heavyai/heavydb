@@ -9,6 +9,7 @@
 
 #include "Analyzer/Analyzer.h"
 #include "QueryEngine/Descriptors/InputDescriptors.h"
+#include "QueryEngine/ExecutorDeviceType.h"
 #include "QueryEngine/JoinHashTable/HashJoin.h"
 #include "Shared/DbObjectKeys.h"
 #include "TargetExprBuilder.h"
@@ -27,6 +28,7 @@ struct JoinInfo {
                                // fold them to true during code generation
   std::vector<std::shared_ptr<HashJoin>> join_hash_tables_;
   std::unordered_set<size_t> sharded_range_table_indices_;
+  std::unordered_set<size_t> global_build_rowid_table_indices_;
 };
 
 struct PlanState {
@@ -93,9 +95,21 @@ struct PlanState {
   const std::unordered_set<shared::ColumnKey>& getColumnsToNotFetch() const;
   bool isColumnToFetch(const shared::ColumnKey& column_key) const;
   bool isColumnToNotFetch(const shared::ColumnKey& column_key) const;
+  bool isColumnToFetchHostMapped(const shared::ColumnKey& column_key) const;
+  bool isColumnToFetchSelectedDense(const shared::ColumnKey& column_key) const;
+  bool hasSelectedDenseColumnsToFetch() const;
+  bool isColumnToFetchSegmented(const InputColDescriptor& column_desc) const;
+  bool canUseSegmentedColumnFetch(const InputColDescriptor& column_desc,
+                                  const SQLTypeInfo& type_info,
+                                  ExecutorDeviceType device_type) const;
   void addColumnToFetch(const shared::ColumnKey& column_key,
                         bool unmark_lazy_fetch = false);
   void addColumnToNotFetch(const shared::ColumnKey& column_key);
+  void addColumnToFetchHostMapped(const shared::ColumnKey& column_key);
+  void addColumnToFetchSelectedDense(const shared::ColumnKey& column_key);
+  void addColumnToFetchSegmented(const InputColDescriptor& column_desc);
+  void addColumnToFetchSegmented(const InputColDescriptor& column_desc,
+                                 bool unmark_lazy_fetch);
   bool hasExpressionNeedsLazyFetch(
       const std::vector<TargetExprCodegen>& target_exprs_to_codegen) const;
   void registerNonLazyFetchExpression(
@@ -104,4 +118,7 @@ struct PlanState {
  private:
   std::unordered_set<shared::ColumnKey> columns_to_fetch_;
   mutable std::unordered_set<shared::ColumnKey> columns_to_not_fetch_;
+  std::unordered_set<shared::ColumnKey> host_mapped_columns_to_fetch_;
+  std::unordered_set<shared::ColumnKey> selected_dense_columns_to_fetch_;
+  std::unordered_set<InputColDescriptor> segmented_columns_to_fetch_;
 };

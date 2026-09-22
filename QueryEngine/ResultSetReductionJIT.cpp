@@ -312,8 +312,8 @@ std::unique_ptr<Function> setup_reduce_one_entry_idx(ReductionCode* reduction_co
   return create_function("reduce_one_entry_idx",
                          {{"this_buff", Type::Int8Ptr},
                           {"that_buff", Type::Int8Ptr},
-                          {"that_entry_idx", Type::Int32},
-                          {"that_entry_count", Type::Int32},
+                          {"that_entry_idx", Type::Int64},
+                          {"that_entry_count", Type::Int64},
                           {"this_qmd_handle", Type::VoidPtr},
                           {"that_qmd_handle", Type::VoidPtr},
                           {"serialized_varlen_buffer", Type::VoidPtr}},
@@ -327,9 +327,9 @@ std::unique_ptr<Function> setup_reduce_loop(ReductionCode* reduction_code) {
   return create_function("reduce_loop",
                          {{"this_buff", Type::Int8Ptr},
                           {"that_buff", Type::Int8Ptr},
-                          {"start_index", Type::Int32},
-                          {"end_index", Type::Int32},
-                          {"that_entry_count", Type::Int32},
+                          {"start_index", Type::Int64},
+                          {"end_index", Type::Int64},
+                          {"that_entry_count", Type::Int64},
                           {"this_qmd_handle", Type::VoidPtr},
                           {"that_qmd_handle", Type::VoidPtr},
                           {"serialized_varlen_buffer", Type::VoidPtr}},
@@ -412,7 +412,12 @@ extern "C" RUNTIME_EXPORT void serialized_varlen_buffer_sample(
       *reinterpret_cast<const std::vector<std::string>*>(serialized_varlen_buffer_handle);
   if (!serialized_varlen_buffer.empty()) {
     const auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
+    if (rhs_proj_col == -1) {
+      return;
+    }
+    CHECK_GE(rhs_proj_col, 0);
     CHECK_LT(static_cast<size_t>(rhs_proj_col), serialized_varlen_buffer.size());
+    CHECK_GT(length_to_elems, 0);
     const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col];
     const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
     *reinterpret_cast<int64_t*>(this_ptr1) = reinterpret_cast<const int64_t>(str_ptr);
@@ -480,9 +485,9 @@ extern "C" RUNTIME_EXPORT void get_group_value_reduction_rt(
     const uint32_t key_count,
     const void* this_qmd_handle,
     const int8_t* that_buff,
-    const uint32_t that_entry_idx,
-    const uint32_t that_entry_count,
-    const uint32_t row_size_bytes,
+    const uint64_t that_entry_idx,
+    const uint64_t that_entry_count,
+    const uint64_t row_size_bytes,
     int64_t** buff_out,
     uint8_t* empty) {
   const auto& this_qmd = *reinterpret_cast<const QueryMemoryDescriptor*>(this_qmd_handle);
@@ -868,8 +873,11 @@ void ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx(
   const auto serialized_varlen_buffer_arg = ir_reduce_one_entry_idx->arg(6);
   const auto row_bytes = ir_reduce_one_entry_idx->addConstant<ConstantInt>(
       get_row_bytes(query_mem_desc_), Type::Int64);
-  const auto entry_idx_64 = ir_reduce_one_entry_idx->add<Cast>(
-      Cast::CastOp::SExt, entry_idx, Type::Int64, "entry_idx_64");
+  const auto entry_idx_64 =
+      entry_idx->type() == Type::Int64
+          ? entry_idx
+          : ir_reduce_one_entry_idx->add<Cast>(
+                Cast::CastOp::SExt, entry_idx, Type::Int64, "entry_idx_64");
   const auto row_off_in_bytes = ir_reduce_one_entry_idx->add<BinaryOperator>(
       BinaryOperator::BinaryOp::Mul, entry_idx_64, row_bytes, "row_off_in_bytes");
   const auto this_row_ptr = ir_reduce_one_entry_idx->add<GetElementPtr>(
@@ -903,8 +911,11 @@ void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
   const auto serialized_varlen_buffer_arg = ir_reduce_one_entry_idx->arg(6);
   const auto row_bytes = ir_reduce_one_entry_idx->addConstant<ConstantInt>(
       get_row_bytes(query_mem_desc_), Type::Int64);
-  const auto that_entry_idx_64 = ir_reduce_one_entry_idx->add<Cast>(
-      Cast::CastOp::SExt, that_entry_idx, Type::Int64, "that_entry_idx_64");
+  const auto that_entry_idx_64 =
+      that_entry_idx->type() == Type::Int64
+          ? that_entry_idx
+          : ir_reduce_one_entry_idx->add<Cast>(
+                Cast::CastOp::SExt, that_entry_idx, Type::Int64, "that_entry_idx_64");
   const auto that_row_off_in_bytes =
       ir_reduce_one_entry_idx->add<BinaryOperator>(BinaryOperator::BinaryOp::Mul,
                                                    that_entry_idx_64,
@@ -986,7 +997,9 @@ void generate_loop_body(For* for_loop,
   const auto that_entry_idx = for_loop->add<BinaryOperator>(
       BinaryOperator::BinaryOp::Add, for_loop->iter(), start_index, "that_entry_idx");
   const auto sample_seed =
-      for_loop->add<Cast>(Cast::CastOp::SExt, that_entry_idx, Type::Int64, "");
+      that_entry_idx->type() == Type::Int64
+          ? that_entry_idx
+          : for_loop->add<Cast>(Cast::CastOp::SExt, that_entry_idx, Type::Int64, "");
   if (g_enable_dynamic_watchdog || g_enable_non_kernel_time_query_interrupt) {
     const auto checker_rt_name =
         g_enable_dynamic_watchdog ? "check_watchdog_rt" : "check_interrupt_rt";
@@ -1316,7 +1329,8 @@ std::string ResultSetReductionJIT::cacheKey() const {
   const auto targets_key = boost::algorithm::join(targets_strings, ", ");
   std::ostringstream oss;
   oss << query_mem_desc_.reductionKey() << "|" << target_init_vals_key << "|"
-      << targets_key;
+      << targets_key << "|dynamic_watchdog=" << g_enable_dynamic_watchdog
+      << "|non_kernel_interrupt=" << g_enable_non_kernel_time_query_interrupt;
   return oss.str();
 }
 
