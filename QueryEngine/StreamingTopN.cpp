@@ -43,6 +43,19 @@ size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
   return slot_idx;
 }
 
+size_t get_heap_key_slot_index(const QueryMemoryDescriptor& query_mem_desc,
+                               const std::vector<Analyzer::Expr*>& target_exprs,
+                               const size_t target_idx) {
+  if (target_idx < query_mem_desc.getColSlotContext().getColCount()) {
+    const auto& slots = query_mem_desc.getColSlotContext().getSlotsForCol(target_idx);
+    if (slots.size() == size_t(1) &&
+        query_mem_desc.getPaddedSlotWidthBytes(slots.front()) > 0) {
+      return slots.front();
+    }
+  }
+  return get_heap_key_slot_index(target_exprs, target_idx);
+}
+
 #ifdef HAVE_CUDA
 std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
     Data_Namespace::DataMgr* data_mgr,
@@ -60,11 +73,12 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
   const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit.value_or(0);
   const auto group_key_bytes = query_mem_desc.getEffectiveKeyWidth();
   const PodOrderEntry pod_oe{only_oe.tle_no, only_oe.is_desc, only_oe.nulls_first};
-  const auto key_slot_idx = get_heap_key_slot_index(ra_exe_unit.target_exprs, oe_col_idx);
+  const auto key_slot_idx =
+      get_heap_key_slot_index(query_mem_desc, ra_exe_unit.target_exprs, oe_col_idx);
   GroupByBufferLayoutInfo oe_layout{
       n * thread_count,
       query_mem_desc.getColOffInBytes(key_slot_idx),
-      static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(oe_col_idx)),
+      static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(key_slot_idx)),
       query_mem_desc.getRowSize(),
       get_target_info(ra_exe_unit.target_exprs[oe_col_idx], g_bigint_count),
       -1};
