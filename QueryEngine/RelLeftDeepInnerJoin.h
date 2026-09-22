@@ -6,7 +6,10 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
 #include <vector>
+
+#include "QueryHint.h"
 
 class RelAlgNode;
 class RelLeftDeepInnerJoin;
@@ -16,7 +19,15 @@ class RexScalar;
 std::shared_ptr<const RelAlgNode> get_left_deep_join_root(
     const std::shared_ptr<RelAlgNode>& node);
 
-void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes);
+void create_left_deep_join(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints);
+
+void flatten_left_deep_join_simple_project_inputs(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+    std::unordered_map<const RelAlgNode*,
+                       std::unordered_map<unsigned, RegisteredQueryHint>>& query_hints);
 
 void rebind_inputs_from_left_deep_join(const RexScalar* rex,
                                        const RelLeftDeepInnerJoin* left_deep_join);
