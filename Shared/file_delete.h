@@ -11,6 +11,9 @@
 
 #pragma once
 
+#include <atomic>
+#include <string>
+
 // this is to clean up the deleted files
 void file_delete(std::atomic<bool>& program_is_running,
                  const unsigned int wait_interval_seconds,

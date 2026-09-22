@@ -14,7 +14,10 @@
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/FileMgr/Page.h"
 
+#include <cstdio>
 #include <iostream>
+#include <limits>
+#include <optional>
 #include <stdexcept>
 
 #include "Logger/Logger.h"
@@ -25,9 +28,52 @@ using namespace Data_Namespace;
 
 namespace File_Namespace {
 
+extern bool g_enable_native_storage_compression;
+extern bool g_enable_file_buffer_metadata_sidecar_only;
+extern std::string g_native_storage_compression_codec;
+extern size_t g_native_storage_compression_frame_size;
+extern int g_native_storage_compression_gdeflate_level;
+
+struct NativeStorageCompressionConfig {
+  bool enabled{false};
+  std::string codec{"none"};
+  size_t frame_size{0};
+  int gdeflate_level{1};
+};
+
+NativeStorageCompressionConfig configured_native_storage_compression();
+void validate_native_storage_compression_config(
+    const NativeStorageCompressionConfig& config);
+
 // forward declarations
 class FileMgr;
 class CachingFileMgr;
+struct FileInfo;
+
+struct FileBufferReadSpan {
+  FileInfo* file_info{nullptr};
+  size_t file_offset{0};
+  size_t destination_offset{0};
+  size_t width_bytes{0};
+  size_t height{1};
+  size_t source_pitch{0};
+  size_t destination_pitch{0};
+
+  size_t bytes() const {
+    CHECK(height == 0 || width_bytes <= std::numeric_limits<size_t>::max() / height)
+        << "FileBuffer read span size overflow";
+    return width_bytes * height;
+  }
+};
+
+struct StorageRewriteStats {
+  size_t chunks_seen{0};
+  size_t chunks_rewritten{0};
+  size_t chunks_already_compressed{0};
+  size_t logical_bytes{0};
+  size_t old_physical_bytes{0};
+  size_t new_physical_bytes{0};
+};
 
 /**
  * @class   FileBuffer
@@ -64,7 +110,8 @@ class FileBuffer : public AbstractBuffer {
   FileBuffer(FileMgr* fm,
              /* const size_t pageSize,*/ const ChunkKey& chunkKey,
              const std::vector<HeaderInfo>::const_iterator& headerStartIt,
-             const std::vector<HeaderInfo>::const_iterator& headerEndIt);
+             const std::vector<HeaderInfo>::const_iterator& headerEndIt,
+             const std::vector<int8_t>* metadataPayload = nullptr);
 
   /// Destructor
   ~FileBuffer() override;
@@ -83,6 +130,28 @@ class FileBuffer : public AbstractBuffer {
             const size_t offset = 0,
             const MemoryLevel dstMemoryLevel = CPU_LEVEL,
             const int32_t deviceId = -1) override;
+  void readWithReaderThreads(int8_t* const dst,
+                             const size_t numBytes,
+                             const size_t offset,
+                             const size_t numReaderThreads);
+  void readCompressedPayloadWithReaderThreads(int8_t* const dst,
+                                              const size_t numReaderThreads);
+  std::vector<FileBufferReadSpan> getReadSpans(const size_t numBytes,
+                                               const size_t offset) const;
+  std::vector<FileBufferReadSpan> getCompressedReadSpans() const;
+  bool isStorageCompressed() const;
+  bool isLz4StorageCompressed() const;
+  bool isSnappyStorageCompressed() const;
+  bool isGdeflateStorageCompressed() const;
+  bool isBitcompStorageCompressed() const;
+  bool isBitcompSparseStorageCompressed() const;
+  size_t storageBitcompElementWidth() const;
+  size_t storageCompressedSize() const;
+  size_t storageCompressionFrameSize() const;
+  const std::vector<size_t>& storageCompressedFrameSizes() const;
+  StorageRewriteStats rewriteStoragePayload(
+      const int32_t epoch,
+      const NativeStorageCompressionConfig& compression_config);
 
   /**
    * @brief Writes the contents of source (src) into new versions of the affected logical
@@ -168,13 +237,60 @@ class FileBuffer : public AbstractBuffer {
                    const bool writeMetadata = false);
   void writeMetadata(const int32_t epoch);
   void readMetadata(const Page& page);
+  void writeMetadataBasePayload(FILE* f, int32_t metadata_version) const;
+  void writeMetadataPayload(FILE* f) const;
+  void readMetadataPayload(FILE* f, size_t payload_capacity);
+  void readMetadataPayload(const std::vector<int8_t>& payload);
+  std::vector<int8_t> serializeMetadataPayload() const;
   void setBufferHeaderSize();
+  void clearStorageCompressionMetadata();
+  std::vector<FileBufferReadSpan> getPhysicalReadSpans(const size_t requestedNumBytes,
+                                                       const size_t offset,
+                                                       const size_t physicalSize) const;
+  void readPhysicalWithReaderThreads(int8_t* const dst,
+                                     const size_t numBytes,
+                                     const size_t offset,
+                                     const size_t numReaderThreads);
+  void readCompressedWithReaderThreads(int8_t* const dst,
+                                       const size_t numBytes,
+                                       const size_t offset,
+                                       const size_t numReaderThreads);
+  void writePhysicalPayload(const int8_t* src,
+                            const size_t numBytes,
+                            const int32_t epoch);
+  void replacePhysicalPages(const int8_t* src,
+                            const size_t numBytes,
+                            const int32_t epoch);
+  void replacePhysicalPayload(const int8_t* src,
+                              const size_t numBytes,
+                              const int32_t epoch,
+                              const NativeStorageCompressionConfig& compression_config);
+  void appendToCompressedPayload(const int8_t* src,
+                                 const size_t numBytes,
+                                 const int32_t epoch);
+  void writeToCompressedPayload(const int8_t* src,
+                                const size_t numBytes,
+                                const size_t offset,
+                                const int32_t epoch);
+  void finalizePendingStorageCompression(const int32_t epoch);
+  bool shouldWriteCompressedPayload(
+      const size_t numBytes,
+      const NativeStorageCompressionConfig& compression_config) const;
+  bool canWriteMetadataSidecarOnly() const;
+  bool shouldWriteMetadataSidecarOnly() const;
+  bool usesMetadataSidecarOnly() const { return metadataSidecarOnly_; }
+  size_t nativeStorageCompressionMetadataBytesLeft(size_t payload_capacity) const;
+  bool writeCompressedPayload(const int8_t* src,
+                              const size_t numBytes,
+                              const int32_t epoch,
+                              const NativeStorageCompressionConfig& compression_config);
+  NativeStorageCompressionConfig currentStorageCompressionConfig() const;
 
   void freePage(const Page& page, const bool isRolloff);
   void freePagesBeforeEpochForMultiPage(MultiPage& multiPage,
                                         const int32_t targetEpoch,
                                         const int32_t currentEpoch);
-  void initMetadataAndPageDataSize();
+  void initMetadataAndPageDataSize(const std::vector<int8_t>* metadataPayload = nullptr);
   int32_t getFileMgrEpoch();
 
   FileMgr* fm_;  // a reference to FileMgr is needed for writing to new pages in available
@@ -190,6 +306,12 @@ class FileBuffer : public AbstractBuffer {
   size_t pageDataSize_;
   size_t reservedHeaderSize_;  // lets make this a constant now for simplicity - 128 bytes
   ChunkKey chunkKey_;
+  uint32_t storageCompressionCodec_{0};
+  size_t storageCompressionFrameSize_{0};
+  size_t compressedSize_{0};
+  std::vector<size_t> compressedFrameSizes_;
+  std::optional<NativeStorageCompressionConfig> pendingStorageCompressionConfig_;
+  bool metadataSidecarOnly_{false};
 };
 
 }  // namespace File_Namespace

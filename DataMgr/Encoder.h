@@ -134,7 +134,7 @@ class DateDaysOverflowValidator {
 
 class Encoder {
  public:
-  enum MetadataVersion : int32_t { kBase = 0, kRaster };
+  enum MetadataVersion : int32_t { kBase = 0, kRaster, kNativeStorageCompression };
 
   static Encoder* Create(Data_Namespace::AbstractBuffer* buffer,
                          const SQLTypeInfo sqlType);
@@ -289,9 +289,29 @@ class Encoder {
   void setRasterTileInfo(const RasterTileInfo& tile) { raster_tile_ = tile; }
   void setMetadata(const ChunkMetadata& meta);
 
-  static inline constexpr int32_t metadata_version_ = MetadataVersion::kRaster;
+  static inline constexpr int32_t metadata_version_ =
+      MetadataVersion::kNativeStorageCompression;
 
  protected:
+  class MetadataRollbackGuard {
+   public:
+    explicit MetadataRollbackGuard(Encoder& encoder)
+        : encoder_(encoder), metadata_(encoder.getMetadata()) {}
+
+    ~MetadataRollbackGuard() {
+      if (!committed_) {
+        encoder_.setMetadata(metadata_);
+      }
+    }
+
+    void commit() { committed_ = true; }
+
+   private:
+    Encoder& encoder_;
+    ChunkMetadata metadata_;
+    bool committed_{false};
+  };
+
   size_t num_elems_;
   RasterTileInfo raster_tile_;
 

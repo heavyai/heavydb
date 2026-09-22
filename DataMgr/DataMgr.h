@@ -125,6 +125,15 @@ class DataMgr {
                                  const MemoryLevel memoryLevel,
                                  const int deviceId = 0,
                                  const size_t numBytes = 0);
+  // Insert host data into the CPU pool as a clean cache entry. The returned buffer is
+  // pinned and must be unpinned by the caller.
+  AbstractBuffer* cacheCpuChunkBuffer(const ChunkKey& key,
+                                      AbstractBuffer* sourceBuffer,
+                                      const size_t numBytes = 0);
+  std::vector<AbstractBuffer*> getChunkBuffers(
+      const std::vector<BufferFetchRequest>& requests,
+      const MemoryLevel memoryLevel,
+      const int deviceId = 0);
   void deleteChunk(const ChunkKey& key, const MemoryLevel mem_level, const int device_id);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix);
   void deleteChunksWithPrefix(const ChunkKey& keyPrefix, const MemoryLevel memLevel);
