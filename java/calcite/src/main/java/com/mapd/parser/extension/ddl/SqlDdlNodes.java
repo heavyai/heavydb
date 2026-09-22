@@ -112,6 +112,16 @@ public class SqlDdlNodes {
     };
   }
 
+  /** Creates a FOREIGN KEY constraint. */
+  public static SqlKeyConstraint foreign(SqlParserPos pos,
+          SqlIdentifier name,
+          SqlNodeList columnList,
+          SqlIdentifier referencesTable,
+          SqlNodeList referencesColumnList) {
+    return SqlKeyConstraint.foreign(
+            pos, name, columnList, referencesTable, referencesColumnList);
+  }
+
   /** Creates a SHARD KEY constraint. */
   public static SqlKeyConstraint shard(SqlParserPos pos, SqlIdentifier name) {
     return SqlKeyConstraint.shard(pos, name);

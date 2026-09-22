@@ -14,6 +14,8 @@ set(catalog_source_files
     SharedDictionaryValidator.cpp
     SysCatalog.cpp
     SysCatalog.h
+    TableConstraints.cpp
+    TableConstraints.h
     ForeignServer.h
     ForeignTable.cpp
     DdlCommandExecutor.cpp

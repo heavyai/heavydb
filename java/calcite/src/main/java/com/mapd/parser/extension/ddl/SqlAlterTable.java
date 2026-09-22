@@ -63,6 +63,8 @@ public class SqlAlterTable extends SqlDdl {
     RENAME_TABLE,
     RENAME_COLUMN,
     ADD_COLUMN,
+    ADD_CONSTRAINT,
+    DROP_CONSTRAINT,
     ALTER_COLUMN,
     DROP_COLUMN,
     ALTER_OPTIONS
@@ -75,6 +77,7 @@ public class SqlAlterTable extends SqlDdl {
     private String newTableName;
     private String columnName;
     private String newColumnName;
+    private String constraintName;
     private SqlNodeList columnList;
 
     public void setPos(final SqlParserPos pos) {
@@ -106,6 +109,16 @@ public class SqlAlterTable extends SqlDdl {
       this.columnList = columnList;
     }
 
+    public void addConstraint(final SqlNodeList constraintList) {
+      this.alterType = AlterType.ADD_CONSTRAINT;
+      this.columnList = constraintList;
+    }
+
+    public void dropConstraint(final String constraintName) {
+      this.alterType = AlterType.DROP_CONSTRAINT;
+      this.constraintName = constraintName;
+    }
+
     public void addAlterColumnList(final SqlNodeList columnList) {
       this.alterType = AlterType.ALTER_COLUMN;
       this.columnList = columnList;
@@ -123,6 +136,7 @@ public class SqlAlterTable extends SqlDdl {
               newTableName,
               columnName,
               newColumnName,
+              constraintName,
               columnList,
               super.options);
     }
@@ -138,6 +152,8 @@ public class SqlAlterTable extends SqlDdl {
   private String columnName;
   @Expose
   private String newColumnName;
+  @Expose
+  private String constraintName;
   @Expose
   private String command;
   @Expose
@@ -156,6 +172,7 @@ public class SqlAlterTable extends SqlDdl {
           final String newTableName,
           final String columnName,
           final String newColumnName,
+          final String constraintName,
           final SqlNodeList columnList,
           final Map<String, String> options) {
     super(OPERATOR, pos);
@@ -164,6 +181,7 @@ public class SqlAlterTable extends SqlDdl {
     this.newTableName = newTableName;
     this.columnName = columnName;
     this.newColumnName = newColumnName;
+    this.constraintName = constraintName;
     this.options = options;
     this.columnList = columnList;
     this.command = OPERATOR.getName();
@@ -215,6 +233,27 @@ public class SqlAlterTable extends SqlDdl {
           map.put("columnData", elements_list);
         }
 
+        break;
+      case ADD_CONSTRAINT:
+        map.put("alterType", "ADD_CONSTRAINT");
+        if (this.columnList != null) {
+          List<Object> elements_list = jsonBuilder.list();
+          for (SqlNode elementNode : this.columnList) {
+            if (!(elementNode instanceof SqlCall)) {
+              throw new CalciteException("Constraint definition for table "
+                              + this.tableName.toString()
+                              + " is invalid: " + elementNode.toString(),
+                      null);
+            }
+            elements_list.add(elementNode);
+          }
+          map.put("constraintData", elements_list);
+        }
+
+        break;
+      case DROP_CONSTRAINT:
+        map.put("alterType", "DROP_CONSTRAINT");
+        map.put("constraintName", this.constraintName);
         break;
       case ALTER_COLUMN:
         map.put("alterType", "ALTER_COLUMN");
