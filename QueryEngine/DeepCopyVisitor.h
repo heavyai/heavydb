@@ -57,7 +57,7 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
   RetType visitInIntegerSet(const Analyzer::InIntegerSet* in_integer_set) const override {
     return makeExpr<Analyzer::InIntegerSet>(
         visit(in_integer_set->get_arg()),
-        in_integer_set->get_value_list(),
+        in_integer_set->get_value_list_shared(),
         in_integer_set->get_type_info().get_notnull());
   }
 

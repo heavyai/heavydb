@@ -27,6 +27,8 @@ void eliminate_dead_subqueries(std::vector<std::shared_ptr<RexSubQuery>>& subque
 void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void hoist_filter_cond_to_cross_join(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
+void inline_geo_join_input_filters(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void simplify_sort(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void sink_projected_boolean_expr_to_join(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
