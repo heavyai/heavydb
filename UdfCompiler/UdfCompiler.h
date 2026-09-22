@@ -34,6 +34,7 @@ class UdfCompiler {
   std::pair<std::string, std::string> compileUdf(const std::string& udf_file_name) const;
 
   static std::string getAstFileName(const std::string& udf_file_name);
+  static std::string findClangPath(const std::string& clang_path_override = "");
 
  private:
   /**

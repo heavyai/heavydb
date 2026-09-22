@@ -275,14 +275,27 @@ UdfClangDriver::UdfClangDriver(
                     clang::SourceLocation());
 }
 
+std::string findProgramByName(const std::string& program_name) {
+  const auto program_path = llvm::sys::findProgramByName(program_name);
+  return program_path ? program_path.get() : "";
+}
+
 std::string get_clang_path(const std::string& clang_path_override) {
   if (clang_path_override.empty()) {
-    const auto clang_path = (llvm::sys::findProgramByName("clang++").get());
-    if (clang_path.empty()) {
-      throw std::runtime_error(
-          "Unable to find clang++ to compile user defined functions");
+    const auto clang_path = findProgramByName("clang++");
+    if (!clang_path.empty()) {
+      return clang_path;
     }
-    return clang_path;
+
+    const auto versioned_clang_path =
+        findProgramByName("clang++-" + std::to_string(CLANG_VERSION_MAJOR));
+    if (!versioned_clang_path.empty()) {
+      return versioned_clang_path;
+    }
+
+    throw std::runtime_error("Unable to find clang++ or clang++-" +
+                             std::to_string(CLANG_VERSION_MAJOR) +
+                             " to compile user defined functions");
   } else {
     if (!boost::filesystem::exists(clang_path_override)) {
       throw std::runtime_error("Path provided for udf compiler " + clang_path_override +
@@ -298,6 +311,10 @@ std::string get_clang_path(const std::string& clang_path_override) {
 }
 
 }  // namespace
+
+std::string UdfCompiler::findClangPath(const std::string& clang_path_override) {
+  return get_clang_path(clang_path_override);
+}
 
 UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
                          const std::string& clang_path_override)
