@@ -22,6 +22,15 @@
 #include "ResultSet.h"
 #include "Shared/TargetInfo.h"
 
+namespace gpu_shared_memory {
+
+inline bool supports_non_grouped_sum(const TargetInfo& target_info) {
+  return target_info.agg_kind == kSUM &&
+         (target_info.agg_arg_type.is_integer() || target_info.agg_arg_type.is_decimal());
+}
+
+}  // namespace gpu_shared_memory
+
 /**
  * This is a builder class for extra functions that are required to
  * support GPU shared memory usage for GroupByPerfectHash query types.

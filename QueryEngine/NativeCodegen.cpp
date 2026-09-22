@@ -53,6 +53,30 @@ static_assert(false, "LLVM Version >= 14 is required.");
 #include <llvm/Support/Host.h>
 #endif
 
+#include <boost/filesystem.hpp>
+#include <boost/filesystem/operations.hpp>
+#include <boost/system/errc.hpp>
+#include <boost/system/error_code.hpp>
+
+#include <openssl/evp.h>
+
+#include <unistd.h>
+
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cctype>
+#include <charconv>
+#include <ctime>
+#include <fstream>
+#include <iomanip>
+#include <iterator>
+#include <limits>
+#include <mutex>
+#include <optional>
+#include <string_view>
+#include <thread>
+
 #include "CudaMgr/CudaMgr.h"
 #include "Geospatial/GeosVersion.h"
 #include "QueryEngine/CodeGenerator.h"
@@ -68,11 +92,18 @@ static_assert(false, "LLVM Version >= 14 is required.");
 #include "QueryEngine/UsedColumnsVisitor.h"
 #include "Shared/InlineNullValues.h"
 #include "Shared/MathUtils.h"
+#include "Shared/heavyai_path.h"
+#include "Shared/scope.h"
 #include "StreamingTopN.h"
 
 using heavyai::ErrorCode;
 
 float g_fraction_code_cache_to_evict = 0.2;
+std::string g_gpu_cubin_cache_path;
+size_t g_gpu_cubin_cache_max_size_in_bytes = size_t{1} << 30;
+extern bool g_enable_gpu_aggregate_payload_host_mapping;
+extern bool g_enable_gpu_selected_dense_aggregate_payload_fetch;
+extern bool g_enable_result_reduction_pipeline;
 
 #ifdef ENABLE_GEOS
 
@@ -751,6 +782,7 @@ declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) nounwind
 declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) nounwind
+declare i32 @llvm.ctpop.i32(i32)
 declare i64 @get_thread_index();
 declare i64 @get_block_dim();
 declare i64 @get_block_index();
@@ -763,6 +795,7 @@ declare i64* @init_shared_mem_nop(i64*, i32);
 declare i64* @declare_dynamic_shared_memory();
 declare void @write_back_nop(i64*, i64*, i32);
 declare void @write_back_non_grouped_agg(i64*, i64*, i32);
+declare void @write_back_non_grouped_agg_sum_skip_val(i64*, i64*, i32, i64);
 declare void @init_group_by_buffer_gpu(i64*, i64*, i32, i32, i32, i1, i8);
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i32);
 declare i64* @get_group_value_with_watchdog(i64*, i32, i64*, i32, i32, i32);
@@ -773,6 +806,7 @@ declare i64* @get_group_value_fast_with_original_key(i64*, i64, i64, i64, i64, i
 declare i32 @get_columnar_group_bin_offset(i64*, i64, i64, i64);
 declare i64 @baseline_hash_join_idx_32(i8*, i8*, i64, i64);
 declare i64 @baseline_hash_join_idx_64(i8*, i8*, i64, i64);
+declare i64 @ranked_bitmap_hash_join_idx(i8*, i64, i64, i64, i64, i64, i64, i64);
 declare i64 @get_composite_key_index_32(i32*, i64, i32*, i64);
 declare i64 @get_composite_key_index_64(i64*, i64, i64*, i64);
 declare i64 @get_bucket_key_for_range_compressed(i8*, i64, double);
@@ -894,6 +928,7 @@ declare i64 @DateAddNullable(i32, i64, i64, i64);
 declare i64 @DateAddHighPrecision(i32, i64, i64, i32);
 declare i64 @DateAddHighPrecisionNullable(i32, i64, i64, i32, i64);
 declare {i8*,i64} @string_decode(i8*, i64);
+declare i8* @segmented_column_ptr(i8*, i64, i64);
 declare i32 @array_size(i8*, i64, i32);
 declare i32 @array_size_nullable(i8*, i64, i32, i32);
 declare i32 @array_size_1_nullable(i8*, i64, i32);
@@ -965,6 +1000,7 @@ declare i8 @string_ne_nullable(i8*, i32, i8*, i32, i8);
 declare i1 @regexp_like(i8*, i32, i8*, i32, i8);
 declare i8 @regexp_like_nullable(i8*, i32, i8*, i32, i8, i8);
 declare void @linear_probabilistic_count(i8*, i32, i8*, i32);
+declare void @hll_probabilistic_count(i8*, i32, i8*, i32);
 declare void @agg_count_distinct_bitmap_gpu(i64*, i64, i64, i64, i64, i64, i64, i64);
 declare void @agg_count_distinct_bitmap_skip_val_gpu(i64*, i64, i64, i64, i64, i64, i64, i64, i64);
 declare void @agg_approximate_count_distinct_gpu(i64*, i64, i32, i64, i64);
@@ -973,6 +1009,7 @@ declare i64 @decimal_division_gpu(i64, i64, i64, i64);
 declare void @record_error_code(i32, i32*);
 declare i32 @get_error_code(i32*);
 declare i1 @dynamic_watchdog();
+declare i1 @dynamic_watchdog_with_critical_edge(i1);
 declare i1 @check_interrupt();
 declare void @force_sync();
 declare void @sync_warp();
@@ -1228,6 +1265,457 @@ std::unordered_set<llvm::Function*> findAliveRuntimeFuncs(
   }
   return visited;
 }
+
+std::string sha1_hex(const void* const data, const size_t size) {
+  std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
+  unsigned int digest_size{0};
+  if (EVP_Digest(data, size, digest.data(), &digest_size, EVP_sha1(), nullptr) != 1 ||
+      digest_size != size_t{20}) {
+    throw std::runtime_error("Failed to compute GPU cubin cache SHA-1 digest");
+  }
+
+  std::ostringstream out;
+  out << std::hex << std::setfill('0');
+  for (size_t i = 0; i < digest_size; ++i) {
+    out << std::setw(2) << static_cast<unsigned int>(digest[i]);
+  }
+  return out.str();
+}
+
+std::string sha1_hex(const std::string& data) {
+  return sha1_hex(data.data(), data.size());
+}
+
+std::string read_file_for_hash(const boost::filesystem::path& path) {
+  std::ifstream input(path.string(), std::ios::binary);
+  if (!input) {
+    throw std::runtime_error("Failed to open GPU code cache input file: " +
+                             path.string());
+  }
+  return std::string(std::istreambuf_iterator<char>(input),
+                     std::istreambuf_iterator<char>());
+}
+
+std::string hash_file_contents(const boost::filesystem::path& path) {
+  return sha1_hex(read_file_for_hash(path));
+}
+
+boost::filesystem::path gpu_runtime_input_path(const std::string& filename) {
+  boost::filesystem::path path{heavyai::get_root_abs_path()};
+  path /= "QueryEngine";
+  path /= filename;
+  if (!boost::filesystem::exists(path)) {
+    throw std::runtime_error("GPU code cache input file not found: " + path.string());
+  }
+  return path;
+}
+
+std::string gpu_cubin_cache_static_salt(const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
+  if (!cuda_mgr) {
+    throw std::invalid_argument("GPU cubin cache requires a CUDA manager");
+  }
+  static std::once_flag once;
+  static std::string salt;
+  std::call_once(once, [cuda_mgr] {
+    int driver_version = 0;
+    const auto driver_status = cuDriverGetVersion(&driver_version);
+    if (driver_status != CUDA_SUCCESS) {
+      throw std::runtime_error(CudaMgr_Namespace::error_message(driver_status));
+    }
+    const auto* device_properties = cuda_mgr->getDeviceProperties(0);
+    if (!device_properties) {
+      throw std::runtime_error("GPU cubin cache could not inspect CUDA device 0");
+    }
+    std::ostringstream out;
+    // The serialized query IR is part of each entry key. Keep the generation stable
+    // across unrelated HeavyDB rebuilds, and validate cross-binary hits against the PTX
+    // produced by the current executable before loading them.
+    out << "heavydb-gpu-cubin-cache-v3\n";
+    // Bump this when ptx_to_cubin changes a linker input or an output-affecting JIT
+    // option that is not already fingerprinted below.
+    out << "codegen_abi=1\n";
+    out << "llvm=" << LLVM_VERSION_MAJOR << "." << LLVM_VERSION_MINOR << "."
+        << LLVM_VERSION_PATCH << "\n";
+    out << "cuda_driver=" << driver_version << "\n";
+    out << "compute=" << device_properties->computeMajor << "."
+        << device_properties->computeMinor << "\n";
+    out << "llvm_gpu_arch="
+        << CudaMgr_Namespace::CudaMgr::deviceArchToSM(cuda_mgr->getDeviceArch()) << "\n";
+    out << "cuda_rt_fatbin="
+        << hash_file_contents(gpu_runtime_input_path("cuda_mapd_rt.fatbin")) << "\n";
+    out << "cuda_table_functions="
+        << hash_file_contents(gpu_runtime_input_path("CudaTableFunctions.a")) << "\n";
+    const auto append_extension_module_hash = [&out](const Executor::ExtModuleKinds kind,
+                                                     const char* const label) {
+      const auto source_it = Executor::extension_module_sources.find(kind);
+      if (source_it == Executor::extension_module_sources.end() ||
+          !boost::filesystem::exists(source_it->second)) {
+        return;
+      }
+      out << label << "=" << hash_file_contents(source_it->second) << "\n";
+    };
+    append_extension_module_hash(Executor::ExtModuleKinds::template_module,
+                                 "runtime_functions");
+    append_extension_module_hash(Executor::ExtModuleKinds::rt_h3_module, "h3_runtime");
+    append_extension_module_hash(Executor::ExtModuleKinds::rt_libdevice_module,
+                                 "libdevice");
+    salt = out.str();
+  });
+  return salt;
+}
+
+const std::string& gpu_cubin_cache_executable_digest() {
+  static const auto digest = hash_file_contents("/proc/self/exe");
+  return digest;
+}
+
+bool is_sha1_hex_digest(const std::string& digest) {
+  return digest.size() == size_t{40} &&
+         std::all_of(digest.begin(), digest.end(), [](const unsigned char c) {
+           return std::isxdigit(c) != 0;
+         });
+}
+
+bool can_use_persistent_gpu_cubin_cache(const Executor* executor) {
+  CHECK(executor);
+  // Runtime registration clears the in-memory cache, but the persistent key does not
+  // contain UDF module bodies. Avoid reloading stale native code until those modules have
+  // a stable content fingerprint in the cache key.
+  return !g_gpu_cubin_cache_path.empty() && !executor->has_udf_module(/*is_gpu=*/true) &&
+         !executor->has_rt_udf_module(/*is_gpu=*/true);
+}
+
+std::string gpu_cubin_cache_key(const CodeCacheKey& code_cache_key,
+                                const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
+  std::ostringstream key_material;
+  key_material << gpu_cubin_cache_static_salt(cuda_mgr);
+  for (const auto& part : code_cache_key) {
+    key_material << part.size() << '\n' << part << '\n';
+  }
+  return sha1_hex(key_material.str());
+}
+
+std::string gpu_cubin_cache_generation(const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
+  return sha1_hex(gpu_cubin_cache_static_salt(cuda_mgr));
+}
+
+std::optional<boost::filesystem::path> gpu_cubin_cache_file(
+    const CodeCacheKey& code_cache_key,
+    const CudaMgr_Namespace::CudaMgr* cuda_mgr) {
+  if (g_gpu_cubin_cache_path.empty() || code_cache_key.empty()) {
+    return std::nullopt;
+  }
+  boost::filesystem::path cache_dir{g_gpu_cubin_cache_path};
+  return cache_dir / gpu_cubin_cache_generation(cuda_mgr) /
+         (gpu_cubin_cache_key(code_cache_key, cuda_mgr) + ".cubin");
+}
+
+struct CachedCubin {
+  boost::filesystem::path path;
+  CubinResult cubin;
+  std::string ptx_digest;
+};
+
+constexpr std::string_view kGpuCubinCacheFileMagic{"heavydb-cubin-cache-v2"};
+
+std::mutex& gpu_cubin_cache_filesystem_mutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
+void touch_gpu_cubin_cache_file(const boost::filesystem::path& cache_file) {
+  boost::system::error_code ec;
+  boost::filesystem::last_write_time(cache_file, std::time(nullptr), ec);
+}
+
+void remove_gpu_cubin_cache_file_unlocked(const boost::filesystem::path& cache_file,
+                                          const std::string& reason) {
+  boost::system::error_code ec;
+  boost::filesystem::remove(cache_file, ec);
+  LOG(WARNING) << "Removed GPU cubin cache file " << cache_file.string() << ": " << reason
+               << (ec ? " (remove failed: " + ec.message() + ")" : "");
+}
+
+void remove_gpu_cubin_cache_file(const boost::filesystem::path& cache_file,
+                                 const std::string& reason) {
+  std::lock_guard<std::mutex> lock(gpu_cubin_cache_filesystem_mutex());
+  remove_gpu_cubin_cache_file_unlocked(cache_file, reason);
+}
+
+void prune_gpu_cubin_cache_unlocked(
+    const boost::filesystem::path& cache_dir,
+    const boost::filesystem::path& current_generation_dir) {
+  boost::system::error_code ec;
+  if (!boost::filesystem::exists(cache_dir, ec)) {
+    return;
+  }
+
+  struct CacheEntry {
+    boost::filesystem::path path;
+    uintmax_t size;
+    std::time_t mtime;
+    bool current_generation;
+  };
+
+  std::vector<CacheEntry> entries;
+  uintmax_t total_size = 0;
+  constexpr std::time_t stale_temp_file_age_seconds = 24 * 60 * 60;
+  const auto now = std::time(nullptr);
+  const auto inspect_file = [&](const boost::filesystem::path& path,
+                                const bool current_generation) {
+    if (!boost::filesystem::is_regular_file(path, ec)) {
+      ec.clear();
+      return;
+    }
+    if (path.extension() == ".tmp" &&
+        path.filename().string().find(".cubin.") != std::string::npos) {
+      const auto mtime = boost::filesystem::last_write_time(path, ec);
+      if (ec) {
+        ec.clear();
+        return;
+      }
+      if (now >= mtime && now - mtime >= stale_temp_file_age_seconds) {
+        boost::filesystem::remove(path, ec);
+        if (ec) {
+          LOG(WARNING) << "Failed to remove stale GPU cubin cache temporary file "
+                       << path.string() << ": " << ec.message();
+          ec.clear();
+        }
+      }
+      return;
+    }
+    if (path.extension() != ".cubin") {
+      return;
+    }
+    const auto size = boost::filesystem::file_size(path, ec);
+    if (ec) {
+      ec.clear();
+      return;
+    }
+    const auto mtime = boost::filesystem::last_write_time(path, ec);
+    if (ec) {
+      ec.clear();
+      return;
+    }
+    entries.push_back({path, size, mtime, current_generation});
+    total_size += size;
+  };
+
+  for (boost::filesystem::directory_iterator it(cache_dir, ec), end; !ec && it != end;
+       it.increment(ec)) {
+    const auto& path = it->path();
+    if (boost::filesystem::is_directory(path, ec)) {
+      if (ec) {
+        ec.clear();
+        continue;
+      }
+      const bool current_generation = path == current_generation_dir;
+      for (boost::filesystem::directory_iterator generation_it(path, ec), generation_end;
+           !ec && generation_it != generation_end;
+           generation_it.increment(ec)) {
+        inspect_file(generation_it->path(), current_generation);
+      }
+      if (ec) {
+        break;
+      }
+    } else {
+      ec.clear();
+      inspect_file(path, false);
+    }
+  }
+
+  if (ec) {
+    LOG(WARNING) << "Failed to scan GPU cubin cache directory " << cache_dir.string()
+                 << ": " << ec.message();
+    return;
+  }
+
+  if (g_gpu_cubin_cache_max_size_in_bytes == 0) {
+    return;
+  }
+
+  const auto max_size = static_cast<uintmax_t>(g_gpu_cubin_cache_max_size_in_bytes);
+  if (total_size <= max_size) {
+    return;
+  }
+
+  std::sort(entries.begin(), entries.end(), [](const auto& lhs, const auto& rhs) {
+    if (lhs.current_generation != rhs.current_generation) {
+      return !lhs.current_generation;
+    }
+    return std::tie(lhs.mtime, lhs.path) < std::tie(rhs.mtime, rhs.path);
+  });
+
+  for (const auto& entry : entries) {
+    if (total_size <= max_size) {
+      break;
+    }
+    boost::filesystem::remove(entry.path, ec);
+    if (ec) {
+      LOG(WARNING) << "Failed to prune GPU cubin cache file " << entry.path.string()
+                   << ": " << ec.message();
+      ec.clear();
+      continue;
+    }
+    total_size -= entry.size;
+  }
+}
+
+std::optional<CachedCubin> read_gpu_cubin_cache(
+    const CodeCacheKey& code_cache_key,
+    const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+    const bool require_current_executable) {
+  try {
+    std::lock_guard<std::mutex> lock(gpu_cubin_cache_filesystem_mutex());
+    const auto cache_file = gpu_cubin_cache_file(code_cache_key, cuda_mgr);
+    if (!cache_file) {
+      return std::nullopt;
+    }
+
+    boost::system::error_code file_error;
+    if (!boost::filesystem::exists(*cache_file, file_error)) {
+      if (file_error &&
+          file_error != boost::system::errc::make_error_condition(
+                            boost::system::errc::no_such_file_or_directory)) {
+        LOG(WARNING) << "Failed to inspect GPU cubin cache file: " << cache_file->string()
+                     << ": " << file_error.message();
+      }
+      return std::nullopt;
+    }
+
+    const auto cache_file_size = boost::filesystem::file_size(*cache_file, file_error);
+    if (file_error) {
+      LOG(WARNING) << "Failed to inspect GPU cubin cache file: " << cache_file->string()
+                   << ": " << file_error.message();
+      return std::nullopt;
+    }
+    if (cache_file_size == 0 || (g_gpu_cubin_cache_max_size_in_bytes > 0 &&
+                                 cache_file_size > g_gpu_cubin_cache_max_size_in_bytes)) {
+      remove_gpu_cubin_cache_file_unlocked(*cache_file, "invalid cached module size");
+      return std::nullopt;
+    }
+
+    std::ifstream input(cache_file->string(), std::ios::binary);
+    if (!input) {
+      LOG(WARNING) << "Failed to read GPU cubin cache file: " << cache_file->string();
+      return std::nullopt;
+    }
+    std::string magic;
+    std::string payload_size_text;
+    std::string expected_digest;
+    std::string ptx_digest;
+    std::string validated_executable_digest;
+    if (!std::getline(input, magic) || !std::getline(input, payload_size_text) ||
+        !std::getline(input, expected_digest) || !std::getline(input, ptx_digest) ||
+        !std::getline(input, validated_executable_digest) ||
+        magic != kGpuCubinCacheFileMagic) {
+      remove_gpu_cubin_cache_file_unlocked(*cache_file, "invalid cached module header");
+      return std::nullopt;
+    }
+    uint64_t payload_size_u64{0};
+    const auto parse_result =
+        std::from_chars(payload_size_text.data(),
+                        payload_size_text.data() + payload_size_text.size(),
+                        payload_size_u64);
+    const auto header_end = input.tellg();
+    if (parse_result.ec != std::errc{} ||
+        parse_result.ptr != payload_size_text.data() + payload_size_text.size() ||
+        payload_size_u64 == 0 || payload_size_u64 > std::numeric_limits<size_t>::max() ||
+        header_end < 0 ||
+        payload_size_u64 >
+            static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max()) ||
+        static_cast<uintmax_t>(header_end) > cache_file_size ||
+        payload_size_u64 != cache_file_size - static_cast<uintmax_t>(header_end) ||
+        !is_sha1_hex_digest(expected_digest) || !is_sha1_hex_digest(ptx_digest) ||
+        !is_sha1_hex_digest(validated_executable_digest)) {
+      remove_gpu_cubin_cache_file_unlocked(*cache_file, "invalid cached module header");
+      return std::nullopt;
+    }
+    if (require_current_executable &&
+        validated_executable_digest != gpu_cubin_cache_executable_digest()) {
+      return std::nullopt;
+    }
+    const auto payload_size = static_cast<size_t>(payload_size_u64);
+    std::vector<int8_t> bytes(payload_size);
+    input.read(reinterpret_cast<char*>(bytes.data()), payload_size);
+    if (input.gcount() != static_cast<std::streamsize>(payload_size) ||
+        sha1_hex(bytes.data(), bytes.size()) != expected_digest) {
+      remove_gpu_cubin_cache_file_unlocked(*cache_file,
+                                           "cached module checksum mismatch");
+      return std::nullopt;
+    }
+    touch_gpu_cubin_cache_file(*cache_file);
+    return CachedCubin{*cache_file,
+                       CubinResult::fromCubinBytes(std::move(bytes)),
+                       std::move(ptx_digest)};
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Failed to read GPU cubin cache: " << e.what();
+    return std::nullopt;
+  }
+}
+
+void write_gpu_cubin_cache(const CodeCacheKey& code_cache_key,
+                           const CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                           const CubinResult& cubin_result,
+                           const std::string& ptx_digest) {
+  try {
+    std::lock_guard<std::mutex> lock(gpu_cubin_cache_filesystem_mutex());
+    const auto cache_file = gpu_cubin_cache_file(code_cache_key, cuda_mgr);
+    if (!cache_file || !is_sha1_hex_digest(ptx_digest) ||
+        cubin_result.moduleSize() == 0 || !cubin_result.moduleImage() ||
+        (g_gpu_cubin_cache_max_size_in_bytes > 0 &&
+         cubin_result.moduleSize() > g_gpu_cubin_cache_max_size_in_bytes)) {
+      return;
+    }
+
+    std::ostringstream header_stream;
+    header_stream << kGpuCubinCacheFileMagic << '\n'
+                  << cubin_result.moduleSize() << '\n'
+                  << sha1_hex(cubin_result.moduleImage(), cubin_result.moduleSize())
+                  << '\n'
+                  << ptx_digest << '\n'
+                  << gpu_cubin_cache_executable_digest() << '\n';
+    const auto header = header_stream.str();
+    if (g_gpu_cubin_cache_max_size_in_bytes > 0 &&
+        (header.size() > g_gpu_cubin_cache_max_size_in_bytes ||
+         cubin_result.moduleSize() >
+             g_gpu_cubin_cache_max_size_in_bytes - header.size())) {
+      return;
+    }
+
+    boost::filesystem::create_directories(cache_file->parent_path());
+    static std::atomic<uint64_t> temp_file_counter{0};
+    const auto tmp_file =
+        cache_file->string() + "." + std::to_string(::getpid()) + "." +
+        std::to_string(std::hash<std::thread::id>{}(std::this_thread::get_id())) + "." +
+        std::to_string(temp_file_counter.fetch_add(1, std::memory_order_relaxed)) +
+        ".tmp";
+    ScopeGuard remove_tmp_file = [&tmp_file] {
+      boost::system::error_code remove_error;
+      boost::filesystem::remove(tmp_file, remove_error);
+    };
+    {
+      std::ofstream output(tmp_file, std::ios::binary | std::ios::trunc);
+      if (!output) {
+        LOG(WARNING) << "Failed to create GPU cubin cache file: " << tmp_file;
+        return;
+      }
+      output.write(header.data(), header.size());
+      output.write(static_cast<const char*>(cubin_result.moduleImage()),
+                   cubin_result.moduleSize());
+      output.close();
+      if (!output) {
+        LOG(WARNING) << "Failed to write complete GPU cubin cache file: " << tmp_file;
+        return;
+      }
+    }
+    boost::filesystem::rename(tmp_file, *cache_file);
+    const boost::filesystem::path cache_dir{g_gpu_cubin_cache_path};
+    prune_gpu_cubin_cache_unlocked(cache_dir, cache_file->parent_path());
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Failed to store GPU cubin cache file: " << e.what();
+  }
+}
 #endif
 
 }  // namespace
@@ -1307,7 +1795,7 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     const bool is_gpu_smem_used,
     const CompilationOptions& co,
     const GPUTarget& gpu_target,
-    std::chrono::steady_clock::time_point& compile_start_timer) {
+    const CodeCacheKey& code_cache_key) {
 #ifdef HAVE_CUDA
   auto timer = DEBUG_TIMER(__func__);
   auto llvm_module = func->getParent();
@@ -1477,10 +1965,38 @@ std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
     throw QueryMustRunOnCpu();
   }
   LOG(PTX) << "PTX for the GPU:\n" << ptx << "\nEnd of PTX";
+  const auto ptx_digest = sha1_hex(ptx);
+  if (can_use_persistent_gpu_cubin_cache(executor)) {
+    auto cached_cubin = read_gpu_cubin_cache(
+        code_cache_key, gpu_target.cuda_mgr, /*require_current_executable=*/false);
+    if (cached_cubin && cached_cubin->ptx_digest == ptx_digest) {
+      try {
+        auto gpu_compilation_context = std::make_shared<GpuCompilationContext>(
+            std::move(cached_cubin->cubin), wrapper_func->getName().str());
+        gpu_compilation_context->createGpuDeviceCompilationContextForDevices(
+            executor->getAvailableDevicesToProcessQuery(),
+            gpu_target.cuda_mgr,
+            /*parallel_load=*/true);
+        // Record trust only after this exact executable reproduced the cached PTX and
+        // CUDA loaded the module on every selected device. Future restarts can then skip
+        // GPU code generation entirely.
+        write_gpu_cubin_cache(code_cache_key,
+                              gpu_target.cuda_mgr,
+                              gpu_compilation_context->cubinResult(),
+                              ptx_digest);
+        return gpu_compilation_context;
+      } catch (const std::exception& e) {
+        remove_gpu_cubin_cache_file(cached_cubin->path,
+                                    "failed to load PTX-validated GPU module for " +
+                                        wrapper_func->getName().str() + ": " + e.what());
+      }
+    }
+  }
   CubinResult cubin_result = ptx_to_cubin(
       ptx, gpu_target.cuda_mgr, *executor->getAvailableDevicesToProcessQuery().begin());
-  VLOG(1) << "GPU code compilation finished: " << timer_stop(compile_start_timer)
-          << " ms";
+  if (can_use_persistent_gpu_cubin_cache(executor)) {
+    write_gpu_cubin_cache(code_cache_key, gpu_target.cuda_mgr, cubin_result, ptx_digest);
+  }
   auto gpu_compilation_context = std::make_shared<GpuCompilationContext>(
       std::move(cubin_result), wrapper_func->getName().str());
   gpu_compilation_context->createGpuDeviceCompilationContextForDevices(
@@ -1517,7 +2033,28 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
         getAvailableDevicesToProcessQuery(), cuda_mgr);
     return cached_code;
   }
-  auto compile_start = timer_start();
+
+  std::optional<CachedCubin> cached_cubin;
+  if (can_use_persistent_gpu_cubin_cache(this)) {
+    cached_cubin =
+        read_gpu_cubin_cache(key, cuda_mgr, /*require_current_executable=*/true);
+  }
+  if (cached_cubin) {
+    try {
+      auto compilation_context = std::make_shared<GpuCompilationContext>(
+          std::move(cached_cubin->cubin), multifrag_query_func->getName().str());
+      compilation_context->createGpuDeviceCompilationContextForDevices(
+          getAvailableDevicesToProcessQuery(), cuda_mgr, /*parallel_load=*/true);
+      QueryEngine::getInstance()->gpu_code_accessor->put(key, compilation_context);
+      return std::dynamic_pointer_cast<CompilationContext>(compilation_context);
+    } catch (const std::exception& e) {
+      remove_gpu_cubin_cache_file(cached_cubin->path,
+                                  "failed to load cached GPU module for " +
+                                      multifrag_query_func->getName().str() + ": " +
+                                      e.what());
+    }
+  }
+
   bool row_func_not_inlined = false;
   if (no_inline) {
     for (auto it = llvm::inst_begin(cgen_state_->row_func_),
@@ -1528,7 +2065,8 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
         auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
         auto const func_name = CodegenUtil::getCalledFunctionName(get_gv_call);
         if (func_name &&
-            (*func_name == "array_size" || *func_name == "linear_probabilistic_count")) {
+            (*func_name == "array_size" || *func_name == "linear_probabilistic_count" ||
+             *func_name == "hll_probabilistic_count")) {
           mark_function_never_inline(cgen_state_->row_func_);
           row_func_not_inlined = true;
           break;
@@ -1550,7 +2088,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                                                                is_gpu_smem_used,
                                                                co,
                                                                gpu_target,
-                                                               compile_start);
+                                                               key);
   } catch (CudaMgr_Namespace::CudaErrorException& cuda_error) {
     if (cuda_error.getStatus() == CUDA_ERROR_OUT_OF_MEMORY) {
       // Thrown if memory not able to be allocated on gpu
@@ -1566,7 +2104,7 @@ std::shared_ptr<CompilationContext> Executor::optimizeAndCodegenGPU(
                                                                  is_gpu_smem_used,
                                                                  co,
                                                                  gpu_target,
-                                                                 compile_start);
+                                                                 key);
     } else {
       throw;
     }
@@ -1646,13 +2184,14 @@ void Executor::initializeNVPTXBackend() const {
 
 // A small number of runtime functions don't get through CgenState::emitCall. List them
 // explicitly here and always clone their implementation from the runtime module.
-constexpr std::array<std::string_view, 18> TARGET_RUNTIME_FUNCTIONS_FOR_MODULE_CLONING{
+constexpr std::array<std::string_view, 20> TARGET_RUNTIME_FUNCTIONS_FOR_MODULE_CLONING{
     {"query_stub_hoisted_literals",
      "multifrag_query_hoisted_literals",
      "query_stub",
      "multifrag_query",
      "fixed_width_int_decode",
      "fixed_width_unsigned_decode",
+     "segmented_column_ptr",
      "diff_fixed_width_int_decode",
      "fixed_width_double_decode",
      "fixed_width_float_decode",
@@ -1664,7 +2203,8 @@ constexpr std::array<std::string_view, 18> TARGET_RUNTIME_FUNCTIONS_FOR_MODULE_C
      "group_buff_idx_impl",
      "init_shared_mem",
      "init_shared_mem_nop",
-     "write_back_nop"}};
+     "write_back_nop",
+     "ranked_bitmap_hash_join_idx"}};
 bool CodeGenerator::alwaysCloneRuntimeFunction(const llvm::Function* func) {
   auto const candidate_func_name = func->getName().str();
   return std::any_of(TARGET_RUNTIME_FUNCTIONS_FOR_MODULE_CLONING.begin(),
@@ -1778,7 +2318,8 @@ void bind_pos_placeholders(const std::string& pos_fn_name,
 void set_row_func_argnames(llvm::Function* row_func,
                            const size_t in_col_count,
                            const size_t agg_col_count,
-                           const bool hoist_literals) {
+                           const bool hoist_literals,
+                           const bool use_dense_pos) {
   auto arg_it = row_func->arg_begin();
 
   if (agg_col_count) {
@@ -1806,6 +2347,11 @@ void set_row_func_argnames(llvm::Function* row_func,
 
   arg_it->setName("pos");
   ++arg_it;
+
+  if (use_dense_pos) {
+    arg_it->setName("dense_pos");
+    ++arg_it;
+  }
 
   arg_it->setName("frag_row_off");
   ++arg_it;
@@ -1835,7 +2381,8 @@ llvm::Function* create_row_function(const size_t in_col_count,
                                     const size_t agg_col_count,
                                     const bool hoist_literals,
                                     llvm::Module* llvm_module,
-                                    llvm::LLVMContext& context) {
+                                    llvm::LLVMContext& context,
+                                    const bool use_dense_pos) {
   std::vector<llvm::Type*> row_process_arg_types;
 
   if (agg_col_count) {
@@ -1863,6 +2410,11 @@ llvm::Function* create_row_function(const size_t in_col_count,
 
   // position argument
   row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+
+  if (use_dense_pos) {
+    // Dense position argument, used by selected-row layouts.
+    row_process_arg_types.push_back(llvm::Type::getInt64Ty(context));
+  }
 
   // fragment row offset argument
   row_process_arg_types.push_back(llvm::Type::getInt64PtrTy(context));
@@ -1897,7 +2449,8 @@ llvm::Function* create_row_function(const size_t in_col_count,
       ft, llvm::Function::ExternalLinkage, "row_func", llvm_module);
 
   // set the row function argument names; for debugging purposes only
-  set_row_func_argnames(row_func, in_col_count, agg_col_count, hoist_literals);
+  set_row_func_argnames(
+      row_func, in_col_count, agg_col_count, hoist_literals, use_dense_pos);
 
   return row_func;
 }
@@ -2188,10 +2741,11 @@ void Executor::createErrorCheckControlFlow(
         if (run_with_dynamic_watchdog) {
           CHECK(pos);
           llvm::Value* call_watchdog_lv = nullptr;
+          llvm::Value* watchdog_critical_edge_lv = nullptr;
           if (device_type == ExecutorDeviceType::GPU) {
-            // In order to make sure all threads within a block see the same barrier,
-            // only those blocks whose none of their threads have experienced the critical
-            // edge will go through the dynamic watchdog computation
+            // Full blocks use the block-synchronous watchdog. The final partial block
+            // uses a warp-synchronous path that is safe when the row-count boundary has
+            // made some lanes inactive.
             CHECK(row_count);
             auto crit_edge_rem =
                 (blockSize() & (blockSize() - 1))
@@ -2203,11 +2757,9 @@ void Executor::createErrorCheckControlFlow(
                           cgen_state_->llInt(static_cast<int64_t>(blockSize() - 1)));
             auto crit_edge_threshold = ir_builder.CreateSub(row_count, crit_edge_rem);
             crit_edge_threshold->setName("crit_edge_threshold");
-
-            // only those threads where pos < crit_edge_threshold go through dynamic
-            // watchdog call
-            call_watchdog_lv =
-                ir_builder.CreateICmp(llvm::ICmpInst::ICMP_SLT, pos, crit_edge_threshold);
+            watchdog_critical_edge_lv =
+                ir_builder.CreateICmp(llvm::ICmpInst::ICMP_SGE, pos, crit_edge_threshold);
+            call_watchdog_lv = cgen_state_->llBool(true);
           } else {
             // CPU path: run watchdog for every 64th row
             auto dw_predicate = ir_builder.CreateAnd(pos, uint64_t(0x3f));
@@ -2222,8 +2774,20 @@ void Executor::createErrorCheckControlFlow(
           auto watchdog_check_bb = llvm::BasicBlock::Create(
               cgen_state_->context_, ".watchdog_check", query_func, error_check_bb);
           llvm::IRBuilder<> watchdog_ir_builder(watchdog_check_bb);
-          auto detected_timeout = watchdog_ir_builder.CreateCall(
-              cgen_state_->module_->getFunction("dynamic_watchdog"), {});
+          llvm::Value* detected_timeout = nullptr;
+          if (device_type == ExecutorDeviceType::GPU) {
+            CHECK(watchdog_critical_edge_lv);
+            auto watchdog_with_critical_edge = cgen_state_->module_->getOrInsertFunction(
+                "dynamic_watchdog_with_critical_edge",
+                llvm::FunctionType::get(llvm::Type::getInt1Ty(cgen_state_->context_),
+                                        {llvm::Type::getInt1Ty(cgen_state_->context_)},
+                                        false));
+            detected_timeout = watchdog_ir_builder.CreateCall(
+                watchdog_with_critical_edge, {watchdog_critical_edge_lv});
+          } else {
+            detected_timeout = watchdog_ir_builder.CreateCall(
+                cgen_state_->module_->getFunction("dynamic_watchdog"), {});
+          }
           auto timeout_err_lv = watchdog_ir_builder.CreateSelect(
               detected_timeout,
               cgen_state_->llInt(int32_t(ErrorCode::OUT_OF_TIME)),
@@ -2368,7 +2932,7 @@ void Executor::createErrorCheckControlFlow(
         if (!err_lv_returned_from_row_func) {
           err_lv_returned_from_row_func = err_lv;
         }
-        if (device_type == ExecutorDeviceType::GPU && g_enable_dynamic_watchdog) {
+        if (device_type == ExecutorDeviceType::GPU && run_with_dynamic_watchdog) {
           // let kernel execution finish as expected, regardless of the observed error,
           // unless it is from the dynamic watchdog where all threads within that block
           // return together.
@@ -2736,6 +3300,233 @@ bool has_case_expr_within_groupby_expr(RelAlgExecutionUnit const& ra_exe_unit) {
   return false;
 }
 
+using ColVarSet =
+    std::set<const Analyzer::ColumnVar*,
+             bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>;
+
+ColVarSet make_colvar_set() {
+  return ColVarSet(Analyzer::ColumnVar::colvar_comp);
+}
+
+void collect_colvars(const Analyzer::Expr* expr,
+                     ColVarSet& colvar_set,
+                     const bool include_agg) {
+  if (expr) {
+    expr->collect_column_var(colvar_set, include_agg);
+  }
+}
+
+void collect_colvars(const std::list<std::shared_ptr<Analyzer::Expr>>& exprs,
+                     ColVarSet& colvar_set,
+                     const bool include_agg) {
+  for (const auto& expr : exprs) {
+    collect_colvars(expr.get(), colvar_set, include_agg);
+  }
+}
+
+bool is_fixed_width_real_table_column(const Analyzer::ColumnVar* col_var,
+                                      const shared::TableKey& table_key) {
+  if (!col_var) {
+    return false;
+  }
+  const auto& column_key = col_var->getColumnKey();
+  if (column_key.db_id != table_key.db_id || column_key.table_id != table_key.table_id) {
+    return false;
+  }
+  const auto cd = get_column_descriptor_maybe(column_key);
+  if (!cd || cd->isVirtualCol) {
+    return false;
+  }
+  const auto& ti = cd->columnType;
+  return !ti.is_array() && !ti.is_geometry() && !ti.is_varlen() && !ti.usesFlatBuffer() &&
+         !ti.is_string() && ti.get_size() > 0;
+}
+
+const Analyzer::ColumnVar* simple_qual_column_operand(const Analyzer::Expr* expr) {
+  // The CPU selector compares physical column values directly. Cast semantics must
+  // remain in the generated query, so casted predicates use the ordinary GPU path.
+  return dynamic_cast<const Analyzer::ColumnVar*>(expr);
+}
+
+bool is_selected_dense_supported_simple_qual(const Analyzer::Expr* expr,
+                                             const shared::TableKey& table_key) {
+  const auto comp_expr = dynamic_cast<const Analyzer::BinOper*>(expr);
+  if (!comp_expr) {
+    return false;
+  }
+  switch (comp_expr->get_optype()) {
+    case kGE:
+    case kGT:
+    case kLE:
+    case kLT:
+    case kEQ:
+      break;
+    default:
+      return false;
+  }
+  const auto lhs_col = simple_qual_column_operand(comp_expr->get_left_operand());
+  if (!lhs_col || !is_fixed_width_real_table_column(lhs_col, table_key) ||
+      lhs_col->get_rte_idx() != 0) {
+    return false;
+  }
+  const auto rhs_const =
+      dynamic_cast<const Analyzer::Constant*>(comp_expr->get_right_operand());
+  if (!rhs_const) {
+    return false;
+  }
+  const auto& lhs_ti = lhs_col->get_type_info();
+  return lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() || lhs_ti.is_fp();
+}
+
+bool can_use_gpu_selected_dense_aggregate_payload_fetch(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const CompilationOptions& co) {
+  const bool has_groupby =
+      ra_exe_unit.groupby_exprs.size() > 1 ||
+      (ra_exe_unit.groupby_exprs.size() == 1 && ra_exe_unit.groupby_exprs.front());
+  if (!g_enable_gpu_selected_dense_aggregate_payload_fetch ||
+      g_enable_gpu_aggregate_payload_host_mapping ||
+      co.device_type != ExecutorDeviceType::GPU || ra_exe_unit.estimator ||
+      ra_exe_unit.input_descs.size() != 1 ||
+      ra_exe_unit.input_descs.front().getSourceType() != InputSourceType::TABLE ||
+      !ra_exe_unit.join_quals.empty() || has_groupby ||
+      ra_exe_unit.simple_quals.empty()) {
+    return false;
+  }
+  const auto& table_key = ra_exe_unit.input_descs.front().getTableKey();
+  for (const auto& simple_qual : ra_exe_unit.simple_quals) {
+    if (!is_selected_dense_supported_simple_qual(simple_qual.get(), table_key)) {
+      return false;
+    }
+  }
+  if (!ra_exe_unit.quals.empty()) {
+    return false;
+  }
+
+  auto predicate_colvars = make_colvar_set();
+  collect_colvars(ra_exe_unit.simple_quals, predicate_colvars, true);
+  std::unordered_set<shared::ColumnKey> predicate_columns;
+  for (const auto col_var : predicate_colvars) {
+    predicate_columns.emplace(col_var->getColumnKey());
+  }
+
+  auto payload_colvars = make_colvar_set();
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+    if (!agg_expr || agg_expr->get_is_distinct()) {
+      return false;
+    }
+    collect_colvars(agg_expr->get_arg(), payload_colvars, true);
+    collect_colvars(agg_expr->get_arg1().get(), payload_colvars, true);
+  }
+  for (const auto col_var : payload_colvars) {
+    if (!is_fixed_width_real_table_column(col_var, table_key)) {
+      return false;
+    }
+  }
+  return std::any_of(
+      payload_colvars.begin(), payload_colvars.end(), [&](const auto col_var) {
+        return !predicate_columns.count(col_var->getColumnKey());
+      });
+}
+
+void mark_gpu_selected_dense_aggregate_payload_columns(
+    PlanState* plan_state,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const CompilationOptions& co) {
+  if (!plan_state ||
+      !can_use_gpu_selected_dense_aggregate_payload_fetch(ra_exe_unit, co)) {
+    return;
+  }
+  const auto& table_key = ra_exe_unit.input_descs.front().getTableKey();
+  auto predicate_colvars = make_colvar_set();
+  collect_colvars(ra_exe_unit.simple_quals, predicate_colvars, true);
+  std::unordered_set<shared::ColumnKey> predicate_columns;
+  for (const auto col_var : predicate_colvars) {
+    predicate_columns.emplace(col_var->getColumnKey());
+  }
+
+  auto payload_colvars = make_colvar_set();
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+    CHECK(agg_expr);
+    collect_colvars(agg_expr->get_arg(), payload_colvars, true);
+    collect_colvars(agg_expr->get_arg1().get(), payload_colvars, true);
+  }
+  for (const auto col_var : payload_colvars) {
+    if (!is_fixed_width_real_table_column(col_var, table_key)) {
+      continue;
+    }
+    const auto& column_key = col_var->getColumnKey();
+    if (predicate_columns.count(column_key)) {
+      continue;
+    }
+    plan_state->addColumnToFetchSelectedDense(column_key);
+  }
+}
+
+void mark_gpu_host_mapped_aggregate_payload_columns(
+    PlanState* plan_state,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const CompilationOptions& co) {
+  const bool has_groupby =
+      ra_exe_unit.groupby_exprs.size() > 1 ||
+      (ra_exe_unit.groupby_exprs.size() == 1 && ra_exe_unit.groupby_exprs.front());
+  if (!g_enable_gpu_aggregate_payload_host_mapping ||
+      co.device_type != ExecutorDeviceType::GPU || !plan_state || ra_exe_unit.estimator ||
+      ra_exe_unit.input_descs.size() != 1 ||
+      ra_exe_unit.input_descs.front().getSourceType() != InputSourceType::TABLE ||
+      !ra_exe_unit.join_quals.empty() || has_groupby ||
+      (ra_exe_unit.simple_quals.empty() && ra_exe_unit.quals.empty())) {
+    return;
+  }
+
+  const auto& table_key = ra_exe_unit.input_descs.front().getTableKey();
+  auto predicate_colvars = make_colvar_set();
+  collect_colvars(ra_exe_unit.simple_quals, predicate_colvars, true);
+  collect_colvars(ra_exe_unit.quals, predicate_colvars, true);
+  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
+    collect_colvars(groupby_expr.get(), predicate_colvars, true);
+  }
+  for (const auto& join_condition : ra_exe_unit.join_quals) {
+    collect_colvars(join_condition.quals, predicate_colvars, true);
+  }
+
+  std::unordered_set<shared::ColumnKey> predicate_columns;
+  for (const auto col_var : predicate_colvars) {
+    predicate_columns.emplace(col_var->getColumnKey());
+  }
+
+  auto payload_colvars = make_colvar_set();
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+    if (!agg_expr) {
+      auto target_colvars = make_colvar_set();
+      collect_colvars(target_expr, target_colvars, true);
+      if (!target_colvars.empty()) {
+        return;
+      }
+      continue;
+    }
+    if (agg_expr->get_is_distinct()) {
+      return;
+    }
+    collect_colvars(agg_expr->get_arg(), payload_colvars, true);
+    collect_colvars(agg_expr->get_arg1().get(), payload_colvars, true);
+  }
+
+  for (const auto col_var : payload_colvars) {
+    if (!is_fixed_width_real_table_column(col_var, table_key)) {
+      continue;
+    }
+    const auto& column_key = col_var->getColumnKey();
+    if (predicate_columns.count(column_key)) {
+      continue;
+    }
+    plan_state->addColumnToFetchHostMapped(column_key);
+  }
+}
+
 bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr,
                                  const RelAlgExecutionUnit& ra_exe_unit,
                                  const CudaMgr_Namespace::CudaMgr* cuda_mgr,
@@ -2770,21 +3561,16 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
     if (cuda_blocksize < query_mem_desc_ptr->getEntryCount()) {
       return false;
     }
-    // skip shared memory usage when dealing with 1) variable length targets, 2)
-    // not a COUNT aggregate
+    // Keep the established COUNT path available independently. The experimental
+    // reduction pipeline additionally permits exact, null-aware SUM reductions.
     const auto target_infos =
         target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc_ptr);
-    std::unordered_set<SQLAgg> supported_aggs{kCOUNT, kCOUNT_IF};
-    if (std::find_if(target_infos.begin(),
-                     target_infos.end(),
-                     [&supported_aggs](const TargetInfo& ti) {
-                       if (ti.sql_type.is_varlen() ||
-                           !supported_aggs.count(ti.agg_kind)) {
-                         return true;
-                       } else {
-                         return false;
-                       }
-                     }) == target_infos.end()) {
+    if (std::find_if(target_infos.begin(), target_infos.end(), [](const TargetInfo& ti) {
+          const bool is_count = shared::is_any<kCOUNT, kCOUNT_IF>(ti.agg_kind);
+          const bool is_pipeline_sum = g_enable_result_reduction_pipeline &&
+                                       gpu_shared_memory::supports_non_grouped_sum(ti);
+          return ti.sql_type.is_varlen() || (!is_count && !is_pipeline_sum);
+        }) == target_infos.end()) {
       return true;
     }
   }
@@ -2794,10 +3580,9 @@ bool is_gpu_shared_mem_supported(const QueryMemoryDescriptor* query_mem_desc_ptr
     // Fundamentally, we should use shared memory whenever the output buffer
     // is small enough so that we can fit it in the shared memory and yet expect
     // good occupancy.
-    // For now, we allow keyless, row-wise layout, and only for perfect hash
-    // group by operations.
-    if (query_mem_desc_ptr->hasKeylessHash() &&
-        query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
+    // For now, we allow row-wise layout, with or without explicit key columns,
+    // and only for perfect hash group by operations.
+    if (query_mem_desc_ptr->countDistinctDescriptorsLogicallyEmpty() &&
         !query_mem_desc_ptr->useStreamingTopN()) {
       const size_t shared_memory_threshold_bytes = std::min(
           g_gpu_smem_threshold == 0 ? SIZE_MAX : g_gpu_smem_threshold,
@@ -2951,7 +3736,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       query_infos,
       row_set_mem_owner,
       has_cardinality_estimation ? std::optional<int64_t>(max_groups_buffer_entry_guess)
-                                 : std::nullopt);
+                                 : std::nullopt,
+      eo.with_watchdog);
   auto query_mem_desc =
       group_by_and_aggregate.initQueryMemoryDescriptor(eo.allow_multifrag,
                                                        max_groups_buffer_entry_guess,
@@ -3058,10 +3844,14 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   auto agg_fnames =
       get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());
+  const auto target_infos =
+      target_exprs_to_infos(ra_exe_unit.target_exprs, *query_mem_desc);
 
   const auto agg_slot_count = ra_exe_unit.estimator ? size_t(1) : agg_fnames.size();
 
   const bool is_group_by{query_mem_desc->isGroupBy()};
+  const bool use_selected_rowids =
+      !is_group_by && can_use_gpu_selected_dense_aggregate_payload_fetch(ra_exe_unit, co);
   auto [query_func, row_func_call] = is_group_by
                                          ? query_group_by_template(cgen_state_->module_,
                                                                    co.hoist_literals,
@@ -3073,7 +3863,9 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                                           agg_slot_count,
                                                           co.hoist_literals,
                                                           !!ra_exe_unit.estimator,
-                                                          gpu_smem_context);
+                                                          use_selected_rowids,
+                                                          gpu_smem_context,
+                                                          target_infos);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
   bind_pos_placeholders("pos_step", false, query_func, cgen_state_->module_);
@@ -3098,7 +3890,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                                                is_group_by ? 0 : agg_slot_count,
                                                co.hoist_literals,
                                                cgen_state_->module_,
-                                               cgen_state_->context_);
+                                               cgen_state_->context_,
+                                               use_selected_rowids);
   CHECK(cgen_state_->row_func_);
   cgen_state_->row_func_bb_ =
       llvm::BasicBlock::Create(cgen_state_->context_, "entry", cgen_state_->row_func_);
@@ -3124,6 +3917,50 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       buildJoinLoops(body_execution_unit, co, eo, query_infos, column_cache);
 
   plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
+  mark_gpu_selected_dense_aggregate_payload_columns(plan_state_.get(), ra_exe_unit, co);
+  mark_gpu_host_mapped_aggregate_payload_columns(plan_state_.get(), ra_exe_unit, co);
+  if (g_enable_result_reduction_pipeline && co.device_type == ExecutorDeviceType::GPU &&
+      !ra_exe_unit.join_quals.empty() && ra_exe_unit.input_descs.size() > 1) {
+    for (const auto& col_desc : ra_exe_unit.input_col_descs) {
+      CHECK(col_desc);
+      SQLTypeInfo ti;
+      if (col_desc->getScanDesc().getSourceType() == InputSourceType::TABLE) {
+        if (col_desc->getScanDesc().getNestLevel() < 1) {
+          continue;
+        }
+        const auto td = Catalog_Namespace::get_metadata_for_table(
+            col_desc->getScanDesc().getTableKey());
+        if (td && td->nShards > 0) {
+          continue;
+        }
+        const auto cd = get_column_descriptor_maybe(col_desc->getColumnKey());
+        if (!cd || cd->isVirtualCol) {
+          continue;
+        }
+        ti = cd->columnType;
+      } else if (col_desc->getScanDesc().getSourceType() == InputSourceType::RESULT) {
+        CHECK_LT(col_desc->getScanDesc().getTableKey().table_id, 0);
+        const auto temporary_tables = getTemporaryTables();
+        if (!temporary_tables) {
+          continue;
+        }
+        const auto it =
+            temporary_tables->find(col_desc->getScanDesc().getTableKey().table_id);
+        if (it == temporary_tables->end()) {
+          continue;
+        }
+        ti = it->second->getColType(col_desc->getColId());
+      } else {
+        continue;
+      }
+      if (ti.is_array() || ti.is_geometry() ||
+          (ti.is_string() && ti.get_compression() == kENCODING_NONE) ||
+          ti.usesFlatBuffer() || ti.get_size() <= 0) {
+        continue;
+      }
+      plan_state_->addColumnToFetchSegmented(*col_desc);
+    }
+  }
   for (auto& simple_qual : ra_exe_unit.simple_quals) {
     plan_state_->addSimpleQual(simple_qual);
   }
@@ -3265,12 +4102,19 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 #endif
 
   auto const device_str = co.device_type == ExecutorDeviceType::CPU ? "CPU:\n" : "GPU:\n";
-  // Serialize the important LLVM IR functions to text for SQL EXPLAIN.
-  std::string llvm_ir =
-      serialize_llvm_object(multifrag_query_func) + serialize_llvm_object(query_func) +
-      serialize_llvm_object(cgen_state_->row_func_) +
-      (cgen_state_->filter_func_ ? serialize_llvm_object(cgen_state_->filter_func_) : "");
-  VLOG(3) << "Unoptimized IR for the " << device_str << "\n" << llvm_ir << "\nEnd of IR";
+  // Normal execution does not consume the textual IR. Avoid serializing the module a
+  // second time in addition to the code-cache key below unless EXPLAIN or verbose
+  // diagnostics need it.
+  std::string llvm_ir;
+  if (eo.just_explain || VLOGGING(3)) {
+    llvm_ir =
+        serialize_llvm_object(multifrag_query_func) + serialize_llvm_object(query_func) +
+        serialize_llvm_object(cgen_state_->row_func_) +
+        (cgen_state_->filter_func_ ? serialize_llvm_object(cgen_state_->filter_func_)
+                                   : "");
+    VLOG(3) << "Unoptimized IR for the " << device_str << "\n"
+            << llvm_ir << "\nEnd of IR";
+  }
   if (eo.just_explain && co.explain_type == ExecutorExplainType::Optimized) {
 #ifdef WITH_JIT_DEBUG
     throw std::runtime_error(

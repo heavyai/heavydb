@@ -185,7 +185,6 @@ std::unordered_map<int, void*> ScalarCodeGenerator::generateNativeGPUCode(
   gpu_target.cuda_mgr = cuda_mgr_.get();
   gpu_target.cgen_state = cgen_state_;
   gpu_target.row_func_not_inlined = false;
-  auto compile_start = timer_start();
   gpu_compilation_context_ =
       CodeGenerator::generateNativeGPUCode(executor,
                                            func,
@@ -194,6 +193,6 @@ std::unordered_map<int, void*> ScalarCodeGenerator::generateNativeGPUCode(
                                            /*is_gpu_smem_used=*/false,
                                            co,
                                            gpu_target,
-                                           compile_start);
+                                           CodeCacheKey{});
   return gpu_compilation_context_->getNativeFunctionPointers();
 }

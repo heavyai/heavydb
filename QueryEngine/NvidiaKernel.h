@@ -43,18 +43,26 @@ inline std::ostream& operator<<(std::ostream& os, CudaErrorLog const cuda_error_
     }
 #endif  // HAVE_CUDA
 
+extern unsigned int g_cuda_jit_max_parallel_threads;
+
 struct CubinResult {
   void* cubin;
+  std::vector<int8_t> cubin_storage;
   std::vector<CUjit_option> option_keys;
   std::vector<void*> option_values;
   CUlinkState link_state;
   size_t cubin_size;
+  bool link_state_valid;
 
   std::string info_log;
   std::string error_log;
   size_t jit_wall_time_idx;
 
   CubinResult();
+  static CubinResult fromCubinBytes(std::vector<int8_t> bytes);
+  const void* moduleImage() const;
+  size_t moduleSize() const;
+  bool hasLinkState() const { return link_state_valid; }
   inline float jitWallTime() const {
     return *reinterpret_cast<float const*>(&option_values[jit_wall_time_idx]);
   }
@@ -105,11 +113,13 @@ class GpuDeviceCompilationContext {
 class GpuCompilationContext : public CompilationContext {
  public:
   GpuCompilationContext(CubinResult&& cubin_result, std::string const& function_name)
-      : cubin_result_(std::move(cubin_result)), function_name_(function_name) {}
+      : cubin_result_(std::move(cubin_result))
+      , function_name_(function_name)
+      , cu_link_state_destroyed_(!cubin_result_.hasLinkState()) {}
 
   ~GpuCompilationContext() {
 #ifdef HAVE_CUDA
-    if (!cu_link_state_destroyed_) {
+    if (!cu_link_state_destroyed_ && cubin_result_.hasLinkState()) {
       checkCudaErrors(cuLinkDestroy(cubin_result_.link_state));
     }
 #endif
@@ -117,30 +127,8 @@ class GpuCompilationContext : public CompilationContext {
 #ifdef HAVE_CUDA
   void createGpuDeviceCompilationContextForDevices(
       std::set<int> const& device_ids,
-      CudaMgr_Namespace::CudaMgr const* cuda_mgr) {
-    for (auto device_id : device_ids) {
-      auto it = contexts_per_device_.find(device_id);
-      if (it == contexts_per_device_.end()) {
-        auto device_context = std::make_unique<GpuDeviceCompilationContext>(
-            cubin_result_.cubin,
-            cubin_result_.cubin_size,
-            function_name_,
-            device_id,
-            cuda_mgr,
-            cubin_result_.option_keys.size(),
-            cubin_result_.option_keys.data(),
-            cubin_result_.option_values.data());
-        contexts_per_device_.emplace(device_id, std::move(device_context));
-        if (!cu_link_state_destroyed_ &&
-            contexts_per_device_.size() ==
-                static_cast<size_t>(cuda_mgr->getDeviceCount())) {
-          // all GPUs have this module; we do not need to load the module anymore
-          checkCudaErrors(cuLinkDestroy(cubin_result_.link_state));
-          cu_link_state_destroyed_ = true;
-        }
-      }
-    }
-  }
+      CudaMgr_Namespace::CudaMgr const* cuda_mgr,
+      bool parallel_load = false);
 #endif
 
   std::pair<void*, void*> getNativeCode(const size_t device_id) const {
@@ -173,12 +161,14 @@ class GpuCompilationContext : public CompilationContext {
     return contexts_per_device_.begin()->second.get()->getModuleSize();
   }
 
+  const CubinResult& cubinResult() const {
+    return cubin_result_;
+  }
+
  private:
   CubinResult cubin_result_;
   std::string function_name_;
-#ifdef HAVE_CUDA
   bool cu_link_state_destroyed_{false};
-#endif
   std::unordered_map<int, std::unique_ptr<GpuDeviceCompilationContext>>
       contexts_per_device_;
 };

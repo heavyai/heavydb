@@ -124,6 +124,10 @@ void QueryPlanDagExtractor::extractQueryPlanDagImpl(
   CHECK(res.has_value());
   top_node->setRelNodeDagId(res.value());
   dag_extractor.extracted_dag_.push_back(::toString(res.value()));
+  if (dag_extractor.analyze_join_ops_) {
+    dag_extractor.addTableIdToNodeLink({0, static_cast<int32_t>(top_node->getId())},
+                                       top_node);
+  }
 
   // visit child node if necessary
   if (auto table_func_node = dynamic_cast<const RelTableFunction*>(top_node)) {
@@ -214,6 +218,9 @@ void QueryPlanDagExtractor::register_and_visit(const RelAlgNode* parent_node,
   auto res = global_dag_.addNodeIfAbsent(child_node);
   if (validateNodeId(child_node, res) &&
       registerNodeToDagCache(parent_node, child_node, res)) {
+    if (analyze_join_ops_) {
+      addTableIdToNodeLink({0, static_cast<int32_t>(child_node->getId())}, child_node);
+    }
     for (size_t i = 0; i < child_node->inputCount(); i++) {
       visit(child_node, child_node->getInput(i));
     }
@@ -472,9 +479,16 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
     for (const auto& join_qual : current_level_join_conditions.quals) {
       auto qual_bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(join_qual);
       auto join_qual_str = ::toString(join_qual);
+      auto add_filter_op = [&]() {
+        if (visited_filter_ops.insert(join_qual_str).second) {
+          filter_ops.push_back(join_qual);
+        }
+      };
       if (qual_bin_oper) {
         is_geo_join = qual_bin_oper->is_bbox_intersect_oper();
-        if (join_qual == current_level_join_conditions.quals.front()) {
+        const auto is_hashtable_build_qual =
+            join_qual == current_level_join_conditions.quals.front();
+        if (is_hashtable_build_qual) {
           // set op_info based on the first qual
           op_info = OpInfo{::toString(qual_bin_oper->get_optype()),
                            ::toString(qual_bin_oper->get_qualifier()),
@@ -513,30 +527,38 @@ void QueryPlanDagExtractor::handleLeftDeepJoinTree(
               }
               if (!lhs_cvs.empty() && !rhs_cvs.empty()) {
                 found_valid_col_vars = true;
-                if (inner_input_idx == -1) {
-                  inner_input_idx =
-                      get_input_idx(rel_left_deep_join, lhs_cvs.front()->getTableKey());
+                if (is_hashtable_build_qual) {
+                  if (inner_input_idx == -1) {
+                    inner_input_idx =
+                        get_input_idx(rel_left_deep_join, lhs_cvs.front()->getTableKey());
+                  }
+                  if (outer_input_idx == -1) {
+                    outer_input_idx =
+                        get_input_idx(rel_left_deep_join, rhs_cvs.front()->getTableKey());
+                  }
+                  std::copy(lhs_cvs.begin(),
+                            lhs_cvs.end(),
+                            std::back_inserter(inner_join_cols));
+                  std::copy(rhs_cvs.begin(),
+                            rhs_cvs.end(),
+                            std::back_inserter(outer_join_cols));
+                } else {
+                  // Residual join predicates affect the result of this translated join,
+                  // but they do not participate in the hash-table build key. Keeping
+                  // them in filter_ops preserves the rel DAG semantics without making
+                  // hashtable cache lookup depend on columns that are never materialized
+                  // into the hash table.
+                  add_filter_op();
                 }
-                if (outer_input_idx == -1) {
-                  outer_input_idx =
-                      get_input_idx(rel_left_deep_join, rhs_cvs.front()->getTableKey());
-                }
-                std::copy(
-                    lhs_cvs.begin(), lhs_cvs.end(), std::back_inserter(inner_join_cols));
-                std::copy(
-                    rhs_cvs.begin(), rhs_cvs.end(), std::back_inserter(outer_join_cols));
               }
             }
-            if (!found_valid_col_vars &&
-                visited_filter_ops.insert(join_qual_str).second) {
-              filter_ops.push_back(join_qual);
+            if (!found_valid_col_vars) {
+              add_filter_op();
             }
           }
         }
       } else {
-        if (visited_filter_ops.insert(join_qual_str).second) {
-          filter_ops.push_back(join_qual);
-        }
+        add_filter_op();
       }
     }
     if (!is_geo_join && (inner_join_cols.size() != outer_join_cols.size())) {
