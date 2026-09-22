@@ -10,6 +10,7 @@
 #include "ResultSetReductionJIT.h"
 #include "ResultSetReductionOps.h"
 
+#include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 
 llvm::Type* llvm_type(const Type type, llvm::LLVMContext& ctx) {
@@ -256,11 +257,58 @@ void translate_body(const std::vector<std::unique_ptr<Instruction>>& body,
           mapped_value(alloca->array_size(), m),
           alloca->label());
     } else if (auto memcpy = dynamic_cast<const MemCpy*>(instr_ptr)) {
-      cgen_state->ir_builder_.CreateMemCpy(mapped_value(memcpy->dest(), m),
-                                           LLVM_MAYBE_ALIGN(0),
-                                           mapped_value(memcpy->source(), m),
-                                           LLVM_MAYBE_ALIGN(0),
-                                           mapped_value(memcpy->size(), m));
+      auto* memcpy_size = mapped_value(memcpy->size(), m);
+      if (const auto constant_size = llvm::dyn_cast<llvm::ConstantInt>(memcpy_size)) {
+        auto* dest = mapped_value(memcpy->dest(), m);
+        auto* source = mapped_value(memcpy->source(), m);
+        auto* i8_type = llvm::Type::getInt8Ty(ctx);
+        auto* index_type = llvm::Type::getInt64Ty(ctx);
+        auto pointer_to = [](llvm::Value* ptr, llvm::Type* elem_type) {
+          const auto ptr_type = llvm::cast<llvm::PointerType>(ptr->getType());
+          return llvm::PointerType::get(elem_type, ptr_type->getAddressSpace());
+        };
+        auto* dest_i8 = cgen_state->ir_builder_.CreatePointerCast(
+            dest, pointer_to(dest, i8_type), "memcpy_dest_i8");
+        auto* source_i8 = cgen_state->ir_builder_.CreatePointerCast(
+            source, pointer_to(source, i8_type), "memcpy_source_i8");
+
+        uint64_t offset = 0;
+        auto emit_copy = [&](const unsigned byte_width, llvm::Type* value_type) {
+          auto* offset_lv = llvm::ConstantInt::get(index_type, offset);
+          auto* dest_addr =
+              cgen_state->ir_builder_.CreateGEP(i8_type, dest_i8, offset_lv);
+          auto* source_addr =
+              cgen_state->ir_builder_.CreateGEP(i8_type, source_i8, offset_lv);
+          auto* typed_dest = cgen_state->ir_builder_.CreatePointerCast(
+              dest_addr, pointer_to(dest_addr, value_type));
+          auto* typed_source = cgen_state->ir_builder_.CreatePointerCast(
+              source_addr, pointer_to(source_addr, value_type));
+          auto* copied_value =
+              cgen_state->ir_builder_.CreateLoad(value_type, typed_source);
+          cgen_state->ir_builder_.CreateStore(copied_value, typed_dest);
+          offset += byte_width;
+        };
+
+        const auto total_bytes = constant_size->getZExtValue();
+        while (offset + sizeof(int64_t) <= total_bytes) {
+          emit_copy(sizeof(int64_t), llvm::Type::getInt64Ty(ctx));
+        }
+        while (offset + sizeof(int32_t) <= total_bytes) {
+          emit_copy(sizeof(int32_t), llvm::Type::getInt32Ty(ctx));
+        }
+        while (offset + sizeof(int16_t) <= total_bytes) {
+          emit_copy(sizeof(int16_t), llvm::Type::getInt16Ty(ctx));
+        }
+        while (offset + sizeof(int8_t) <= total_bytes) {
+          emit_copy(sizeof(int8_t), llvm::Type::getInt8Ty(ctx));
+        }
+      } else {
+        cgen_state->ir_builder_.CreateMemCpy(mapped_value(memcpy->dest(), m),
+                                             LLVM_MAYBE_ALIGN(0),
+                                             mapped_value(memcpy->source(), m),
+                                             LLVM_MAYBE_ALIGN(0),
+                                             memcpy_size);
+      }
     } else if (auto ret_early = dynamic_cast<const ReturnEarly*>(instr_ptr)) {
       return_early(mapped_value(ret_early->cond(), m),
                    reduction_code,
@@ -294,7 +342,10 @@ void translate_for(const For* for_loop,
   // The start and end indices are absolute. Subtract the start index from the iterator.
   const auto iteration_count =
       cgen_state->ir_builder_.CreateSub(end_index, start_index, "iteration_count");
-  const auto upper_bound = cgen_state->ir_builder_.CreateSExt(iteration_count, i64_type);
+  llvm::Value* upper_bound{iteration_count};
+  if (iteration_count->getType() != i64_type) {
+    upper_bound = cgen_state->ir_builder_.CreateSExt(iteration_count, i64_type);
+  }
   const auto bb_exit =
       llvm::BasicBlock::Create(ctx, ".exit", mapped_function(ir_reduce_loop, f));
   JoinLoop join_loop(
@@ -320,11 +371,13 @@ void translate_for(const For* for_loop,
             ".loop_body",
             cgen_state->ir_builder_.GetInsertBlock()->getParent());
         cgen_state->ir_builder_.SetInsertPoint(loop_body_bb);
-        // Make the iterator the same type as start and end indices (32-bit integer).
-        const auto loop_iter =
-            cgen_state->ir_builder_.CreateTrunc(iterators.back(),
-                                                get_int_type(32, cgen_state->context_),
-                                                "relative_entry_idx");
+        // Keep the reduction iterator wide enough for large result buffers.
+        auto loop_iter = iterators.back();
+        const auto start_index = mapped_value(for_loop->start(), m);
+        if (loop_iter->getType() != start_index->getType()) {
+          loop_iter = cgen_state->ir_builder_.CreateIntCast(
+              loop_iter, start_index->getType(), true, "relative_entry_idx");
+        }
         m.emplace(for_loop->iter(), loop_iter);
         translate_body(for_loop->body(),
                        ir_reduce_loop,

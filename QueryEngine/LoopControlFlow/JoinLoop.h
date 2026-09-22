@@ -86,6 +86,13 @@ class JoinLoop {
       llvm::Value* current_condition_match_ptr,
       CgenState* cgen_state);
 
+  static std::pair<llvm::BasicBlock*, llvm::Value*> evaluateInnerJoinCondition(
+      const JoinLoop& join_loop,
+      const std::vector<llvm::Value*>& iterators,
+      llvm::Value* have_more_inner_rows,
+      llvm::BasicBlock* no_more_inner_rows_bb,
+      CgenState* cgen_state);
+
   const JoinLoopKind kind_;
   // SQL type of the join.
   const JoinType type_;

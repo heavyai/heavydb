@@ -18,7 +18,9 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
     const size_t aggr_col_count,
     const bool hoist_literals,
     const bool is_estimate_query,
-    const GpuSharedMemoryContext& gpu_smem_context);
+    const bool use_selected_rowids,
+    const GpuSharedMemoryContext& gpu_smem_context,
+    const std::vector<TargetInfo>& target_infos);
 std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
     llvm::Module*,
     const bool hoist_literals,

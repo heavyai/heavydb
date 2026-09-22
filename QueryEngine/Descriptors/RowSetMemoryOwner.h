@@ -7,11 +7,14 @@
 
 #include <boost/noncopyable.hpp>
 #include <deque>
+#include <exception>
+#include <functional>
 #include <list>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "Analyzer/Analyzer.h"
@@ -19,6 +22,7 @@
 #include "DataMgr/AbstractBuffer.h"
 #include "DataMgr/Allocators/ArenaAllocator.h"
 #include "DataMgr/Allocators/CpuMgrArenaAllocator.h"
+#include "DataMgr/Allocators/CudaAllocator.h"
 #include "DataMgr/Allocators/FastAllocator.h"
 #include "DataMgr/DataMgr.h"
 #include "Logger/Logger.h"
@@ -39,6 +43,7 @@ class Catalog;
 }
 
 class ResultSet;
+class HashJoin;
 
 /**
  * Handles allocations and outputs for all stages in a query, either explicitly or via a
@@ -206,6 +211,40 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
 
   void clearNonOwnedGroupByBuffers() { non_owned_group_by_buffers_.clear(); }
 
+  std::shared_ptr<HashJoin> getCachedJoinHashTable(const std::string& cache_key) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    const auto it = cached_join_hash_tables_.find(cache_key);
+    if (it == cached_join_hash_tables_.end()) {
+      return nullptr;
+    }
+    return it->second;
+  }
+
+  void putCachedJoinHashTable(const std::string& cache_key,
+                              std::shared_ptr<HashJoin> hash_table) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    cached_join_hash_tables_[cache_key] = std::move(hash_table);
+  }
+
+  std::shared_ptr<const std::vector<int64_t>> getCachedStringLikeIds(
+      const std::string& cache_key) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    const auto it = cached_string_like_ids_.find(cache_key);
+    return it == cached_string_like_ids_.end() ? nullptr : it->second;
+  }
+
+  void putCachedStringLikeIds(const std::string& cache_key,
+                              std::shared_ptr<const std::vector<int64_t>> matching_ids) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    cached_string_like_ids_.emplace(cache_key, std::move(matching_ids));
+  }
+
+  void retainExternalStringTranslationMap(std::shared_ptr<const void> owner) {
+    CHECK(owner);
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    external_string_translation_map_owners_.push_back(std::move(owner));
+  }
+
   void addVarlenBuffer(void* varlen_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     varlen_buffers_.emplace(varlen_buffer);
@@ -298,7 +337,7 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
     const auto map_key = generate_translation_map_key(
         source_proxy->getDictionary()->getDictKey(), string_op_infos);
     auto it = str_proxy_numeric_translation_maps_owned_.lower_bound(map_key);
-    if (it->first != map_key) {
+    if (it == str_proxy_numeric_translation_maps_owned_.end() || it->first != map_key) {
       it = str_proxy_numeric_translation_maps_owned_.emplace_hint(
           it, map_key, source_proxy->buildNumericTranslationMap(string_op_infos));
     }
@@ -337,6 +376,40 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
                .first;
     }
     return it->second.get();
+  }
+
+  Data_Namespace::AbstractBuffer* getOrAddStringProxyTranslationDeviceBuffer(
+      const std::string& map_key,
+      const int device_id,
+      const size_t num_bytes,
+      Data_Namespace::DataMgr* data_mgr,
+      const std::function<void(Data_Namespace::AbstractBuffer*)>& initializer) {
+    CHECK(data_mgr);
+    const auto device_map_key = map_key + "{device_id:" + std::to_string(device_id) +
+                                ", bytes:" + std::to_string(num_bytes) + "}";
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    auto it = str_proxy_translation_device_buffers_owned_.find(device_map_key);
+    if (it != str_proxy_translation_device_buffers_owned_.end()) {
+      CHECK_EQ(it->second.num_bytes, num_bytes);
+      return it->second.buffer.get();
+    }
+
+    auto buffer = std::shared_ptr<Data_Namespace::AbstractBuffer>(
+        CudaAllocator::allocGpuAbstractBuffer(data_mgr, num_bytes, device_id),
+        [data_mgr](auto* owned_buffer) noexcept {
+          try {
+            data_mgr->free(owned_buffer);
+          } catch (const std::exception& e) {
+            LOG(ERROR) << "Failed to release string translation GPU buffer: " << e.what();
+          } catch (...) {
+            LOG(ERROR) << "Failed to release string translation GPU buffer";
+          }
+        });
+    initializer(buffer.get());
+    it = str_proxy_translation_device_buffers_owned_
+             .emplace(device_map_key, DeviceBufferEntry{std::move(buffer), num_bytes})
+             .first;
+    return it->second.buffer.get();
   }
 
   StringDictionaryProxy* getStringDictProxy(const shared::StringDictKey& dict_key) const {
@@ -552,6 +625,12 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       str_proxy_union_translation_maps_owned_;
   std::map<std::string, StringDictionaryProxy::TranslationMap<Datum>>
       str_proxy_numeric_translation_maps_owned_;
+  std::vector<std::shared_ptr<const void>> external_string_translation_map_owners_;
+  struct DeviceBufferEntry {
+    std::shared_ptr<Data_Namespace::AbstractBuffer> buffer;
+    size_t num_bytes;
+  };
+  std::map<std::string, DeviceBufferEntry> str_proxy_translation_device_buffers_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   StringDictionaryGenerations string_dictionary_generations_;
 
@@ -574,6 +653,9 @@ class RowSetMemoryOwner final : public SimpleAllocator, boost::noncopyable {
       count_distinct_buffer_fast_allocators_;
   std::unordered_map<size_t, std::unique_ptr<std::vector<int32_t>>>
       source_sd_to_temp_sd_trans_map_;
+  std::unordered_map<std::string, std::shared_ptr<HashJoin>> cached_join_hash_tables_;
+  std::unordered_map<std::string, std::shared_ptr<const std::vector<int64_t>>>
+      cached_string_like_ids_;
 
   size_t executor_id_;
   int32_t next_temp_dict_id_;
