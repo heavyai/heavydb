@@ -8,6 +8,7 @@
 #include <sys/types.h>
 
 #include <algorithm>
+#include <cctype>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -17,13 +18,18 @@ using namespace std::string_literals;
 
 #include <filesystem>
 #include "CommandLineOptions.h"
+#include "CudaMgr/CudaMgr.h"
+#include "DataMgr/FileMgr/FileBuffer.h"
+#include "DataMgr/FileMgr/FileInfo.h"
 #include "ImportExport/ForeignDataImporter.h"
 #include "MapDRelease.h"
 #include "MigrationMgr/MigrationMgr.h"
 #include "QueryEngine/GroupByAndAggregate.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/BitmapJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/RankedBitmapJoinHashTable.h"
 #include "Shared/Compressor.h"
 #include "Shared/Encryption.h"
 #include "Shared/MathUtils.h"
@@ -62,10 +68,33 @@ extern std::string g_logs_system_tables_refresh_interval;
 extern size_t g_logs_system_tables_max_files_count;
 extern bool g_uniform_request_ids_per_thrift_call;
 extern size_t g_gpu_code_cache_max_size_in_bytes;
+extern std::string g_gpu_cubin_cache_path;
+extern size_t g_gpu_cubin_cache_max_size_in_bytes;
+extern unsigned int g_cuda_jit_max_parallel_threads;
 extern bool g_use_cpu_mem_pool_for_output_buffers;
 extern bool g_use_cpu_mem_pool_size_for_max_cpu_slab_size;
 extern bool g_verbose_lock_logging;
 extern bool g_enable_data_mgr_global_lock;
+extern bool g_enable_gpu_input_cpu_buffer_bypass;
+extern bool g_enable_gpu_input_prefetch;
+extern bool g_enable_gpu_input_batched_prefetch;
+extern size_t g_gpu_input_prefetch_workers;
+extern bool g_enable_gpu_aggregate_payload_host_mapping;
+extern bool g_enable_gpu_selected_dense_aggregate_payload_fetch;
+extern size_t g_gpu_input_cpu_buffer_bypass_staging_buffer_bytes;
+extern size_t g_gpu_input_cpu_buffer_bypass_reader_threads;
+extern size_t g_gpu_input_compressed_batch_max_bytes;
+extern bool g_enable_gpu_input_compressed_pipeline;
+extern bool g_enable_gpu_input_compressed_peer_exchange;
+extern std::string g_gpu_input_cpu_buffer_bypass_mode;
+extern size_t g_jump_buffer_slots_per_device;
+extern bool g_enable_lazy_jump_buffer_allocation;
+extern bool g_enable_background_jump_buffer_allocation;
+extern std::string g_peer_copy_mode_name;
+extern int g_peer_copy_mode;
+extern bool g_enable_temporary_resultset_peer_access;
+extern bool g_enable_temporary_resultset_payload_peer_access;
+extern bool g_enable_partitioned_baseline_gpu_reduction;
 
 extern std::string g_heavyiq_url;
 extern size_t g_max_concurrent_llm_transform_call;
@@ -73,8 +102,19 @@ extern int32_t g_llm_transform_call_timeout_ms;
 extern int64_t g_llm_transform_max_num_unique_value;
 
 extern bool g_enable_gpu_dynamic_smem;
+extern bool g_enable_bitmap_hashjoin;
+extern bool g_enable_ranked_bitmap_hashjoin;
 
 extern bool g_force_exact_count_for_approx_count_distinct;
+
+namespace File_Namespace {
+extern bool g_enable_file_mgr_manifests;
+extern bool g_enable_native_storage_compression;
+extern bool g_enable_file_buffer_metadata_sidecar_only;
+extern std::string g_native_storage_compression_codec;
+extern size_t g_native_storage_compression_frame_size;
+extern int g_native_storage_compression_gdeflate_level;
+}  // namespace File_Namespace
 
 namespace Catalog_Namespace {
 extern bool g_log_user_id;
@@ -392,6 +432,17 @@ void CommandLineOptions::fillOptions() {
           ->implicit_value(true),
       "Enable the bounding box intersect hash join framework to enable post-filtering of "
       "pairs of geometries before actually comptuing geometry function.");
+  desc.add_options()(
+      "enable-bitmap-hashjoin",
+      po::value<bool>(&g_enable_bitmap_hashjoin)
+          ->default_value(g_enable_bitmap_hashjoin)
+          ->implicit_value(true),
+      "Enable exact bitmap membership hash tables for SEMI and ANTI joins.");
+  desc.add_options()("enable-ranked-bitmap-hashjoin",
+                     po::value<bool>(&g_enable_ranked_bitmap_hashjoin)
+                         ->default_value(g_enable_ranked_bitmap_hashjoin)
+                         ->implicit_value(true),
+                     "Enable ranked bitmap hash tables for eligible GPU inner joins.");
   desc.add_options()("enable-hashjoin-many-to-many",
                      po::value<bool>(&g_enable_hashjoin_many_to_many)
                          ->default_value(g_enable_hashjoin_many_to_many)
@@ -458,8 +509,8 @@ void CommandLineOptions::fillOptions() {
                          ->implicit_value(true),
                      "Enable watchdog.");
   desc.add_options()("watchdog-max-projected-rows-per-device",
-                     po::value<size_t>(&g_watchdog_max_projected_rows_per_device)
-                         ->default_value(g_watchdog_max_projected_rows_per_device),
+                     po::value<size_t>(&watchdog_max_projected_rows_per_device)
+                         ->default_value(watchdog_max_projected_rows_per_device),
                      "Max number of rows allowed to be projected when running a query "
                      "with watchdog enabled.");
   desc.add_options()(
@@ -872,6 +923,19 @@ void CommandLineOptions::fillOptions() {
           ->default_value(g_enable_stringdict_parallel)
           ->implicit_value(true),
       "Allow StringDictionary to parallelize loads using multiple threads");
+  desc.add_options()("stringdict-parallel-sort",
+                     po::value<bool>(&g_enable_stringdict_parallel_sort)
+                         ->default_value(g_enable_stringdict_parallel_sort)
+                         ->implicit_value(true),
+                     "Allow StringDictionary to parallelize sorted-cache construction");
+  desc.add_options()(
+      "enable-lazy-string-dictionary-hash-recovery",
+      po::value<bool>(&g_enable_lazy_string_dictionary_hash_recovery)
+          ->default_value(g_enable_lazy_string_dictionary_hash_recovery)
+          ->implicit_value(true),
+      "Map recovered string dictionaries immediately and defer rebuilding their ID "
+      "lookup hashes until an operation requires them. Also enable associated "
+      "storage-backed dictionary scan and string-view transformation fast paths.");
   desc.add_options()("log-user-id",
                      po::value<bool>(&Catalog_Namespace::g_log_user_id)
                          ->default_value(Catalog_Namespace::g_log_user_id)
@@ -1047,6 +1111,37 @@ void CommandLineOptions::fillDeveloperOptions() {
                          ->default_value(g_enable_lazy_fetch)
                          ->implicit_value(true),
                      "Enable lazy fetch columns in query results.");
+  desc.add_options()(
+      "enable-deferred-lazy-fetch",
+      po::value<bool>(&g_enable_deferred_lazy_fetch)
+          ->default_value(g_enable_deferred_lazy_fetch)
+          ->implicit_value(true),
+      "Load fixed-width lazy table columns only when a ResultSet consumer requests "
+      "them.");
+  desc.add_options()("enable-gpu-input-cpu-prefetch",
+                     po::value<bool>(&g_enable_gpu_input_cpu_prefetch)
+                         ->default_value(g_enable_gpu_input_cpu_prefetch)
+                         ->implicit_value(true),
+                     "Prefetch CPU input chunks before GPU query input materialization.");
+  desc.add_options()(
+      "enable-gpu-input-prefetch",
+      po::value<bool>(&g_enable_gpu_input_prefetch)
+          ->default_value(g_enable_gpu_input_prefetch)
+          ->implicit_value(true),
+      "Prefetch table input chunks directly into the target GPU before query input "
+      "materialization.");
+  desc.add_options()(
+      "enable-gpu-input-batched-prefetch",
+      po::value<bool>(&g_enable_gpu_input_batched_prefetch)
+          ->default_value(g_enable_gpu_input_batched_prefetch)
+          ->implicit_value(true),
+      "Fetch GPU input prefetch chunks as one compressed native-storage batch per "
+      "query fetch task.");
+  desc.add_options()(
+      "gpu-input-prefetch-workers",
+      po::value<size_t>(&g_gpu_input_prefetch_workers)
+          ->default_value(g_gpu_input_prefetch_workers),
+      "Maximum number of GPU input prefetch workers per query fetch task.");
   desc.add_options()("enable-shared-mem-group-by",
                      po::value<bool>(&g_enable_smem_group_by)
                          ->default_value(g_enable_smem_group_by)
@@ -1068,6 +1163,116 @@ void CommandLineOptions::fillDeveloperOptions() {
                          ->implicit_value(true),
                      "Enable use of a global lock when accessing or updating table data");
   desc.add_options()(
+      "enable-native-storage-compression",
+      po::value<bool>(&File_Namespace::g_enable_native_storage_compression)
+          ->default_value(File_Namespace::g_enable_native_storage_compression)
+          ->implicit_value(true),
+      "Compress newly written native FileMgr chunk payloads when the codec reduces "
+      "physical bytes. Existing chunks are not rewritten by this flag.");
+  desc.add_options()(
+      "native-storage-compression-codec",
+      po::value<std::string>(&File_Namespace::g_native_storage_compression_codec)
+          ->default_value(File_Namespace::g_native_storage_compression_codec),
+      "Native storage compression codec for newly written chunks. Supported values: "
+      "'none', 'lz4', 'snappy', 'bitcomp-sparse' or 'bitcomp-default' when "
+      "available. 'adaptive' selects the smallest Snappy or Bitcomp-default "
+      "representation supported by the build per FileBuffer, "
+      "and 'gdeflate' when nvCOMP CPU codecs are available. GDeflate requires "
+      "FileBuffer metadata sidecar-only mode and tables with zero rollback epochs.");
+  desc.add_options()(
+      "native-storage-compression-frame-size",
+      po::value<size_t>(&File_Namespace::g_native_storage_compression_frame_size)
+          ->default_value(File_Namespace::g_native_storage_compression_frame_size),
+      "Uncompressed frame size for native storage compression. The default is 64 KiB.");
+  desc.add_options()(
+      "native-storage-compression-gdeflate-level",
+      po::value<int>(&File_Namespace::g_native_storage_compression_gdeflate_level)
+          ->default_value(File_Namespace::g_native_storage_compression_gdeflate_level),
+      "CPU compression level for newly written native GDeflate frames, from 0 through "
+      "12. Level 1 favors write throughput while retaining most of the measured ratio "
+      "benefit.");
+  desc.add_options()(
+      "enable-file-mgr-manifests",
+      po::value<bool>(&File_Namespace::g_enable_file_mgr_manifests)
+          ->default_value(File_Namespace::g_enable_file_mgr_manifests)
+          ->implicit_value(true),
+      "Enable advisory page-header and physical FileBuffer metadata manifests. "
+      "Sidecar-only tables always load their required durable metadata manifest.");
+  desc.add_options()(
+      "enable-file-buffer-metadata-sidecar-only",
+      po::value<bool>(&File_Namespace::g_enable_file_buffer_metadata_sidecar_only)
+          ->default_value(File_Namespace::g_enable_file_buffer_metadata_sidecar_only)
+          ->implicit_value(true),
+      "Store current FileBuffer metadata only in the native metadata sidecar for "
+      "eligible newly checkpointed chunks. Physical metadata pages remain required "
+      "for rollback tables and zero-page chunks.");
+  desc.add_options()(
+      "enable-gpu-input-cpu-buffer-bypass",
+      po::value<bool>(&g_enable_gpu_input_cpu_buffer_bypass)
+          ->default_value(g_enable_gpu_input_cpu_buffer_bypass)
+          ->implicit_value(true),
+      "For native table GPU input fetches, bypass permanent CPU buffer pool residency "
+      "on CPU cache misses and stream through bounded host staging buffers.");
+  desc.add_options()(
+      "enable-gpu-aggregate-payload-host-mapping",
+      po::value<bool>(&g_enable_gpu_aggregate_payload_host_mapping)
+          ->default_value(g_enable_gpu_aggregate_payload_host_mapping)
+          ->implicit_value(true),
+      "Experimentally keep fixed-width aggregate-only table payload columns in CPU "
+      "memory and map them for GPU reads in selective single-table aggregates.");
+  desc.add_options()(
+      "enable-gpu-selected-dense-aggregate-payload-fetch",
+      po::value<bool>(&g_enable_gpu_selected_dense_aggregate_payload_fetch)
+          ->default_value(g_enable_gpu_selected_dense_aggregate_payload_fetch)
+          ->implicit_value(true),
+      "Experimentally fetch fixed-width aggregate-only table payload columns as dense "
+      "selected vectors for selective single-table aggregates.");
+  desc.add_options()(
+      "gpu-input-cpu-buffer-bypass-staging-buffer-bytes",
+      po::value<size_t>(&g_gpu_input_cpu_buffer_bypass_staging_buffer_bytes)
+          ->default_value(g_gpu_input_cpu_buffer_bypass_staging_buffer_bytes),
+      "Host staging buffer size per chunk fetch for "
+      "enable-gpu-input-cpu-buffer-bypass. 0 disables the bypass.");
+  desc.add_options()(
+      "gpu-input-cpu-buffer-bypass-reader-threads",
+      po::value<size_t>(&g_gpu_input_cpu_buffer_bypass_reader_threads)
+          ->default_value(g_gpu_input_cpu_buffer_bypass_reader_threads),
+      "Maximum native file reader threads per staged GPU input fetch when "
+      "enable-gpu-input-cpu-buffer-bypass is active. The default avoids nested "
+      "reader fanout because GPU input materialization is already parallel across "
+      "devices and columns.");
+  desc.add_options()(
+      "gpu-input-compressed-batch-max-bytes",
+      po::value<size_t>(&g_gpu_input_compressed_batch_max_bytes)
+          ->default_value(g_gpu_input_compressed_batch_max_bytes),
+      "Maximum compressed payload bytes submitted in one nvCOMP GPU input batch. "
+      "Larger requests are split at chunk boundaries, and allocation failures are "
+      "retried with smaller batches. 0 disables the configured payload limit.");
+  desc.add_options()(
+      "enable-gpu-input-compressed-pipeline",
+      po::value<bool>(&g_enable_gpu_input_compressed_pipeline)
+          ->default_value(g_enable_gpu_input_compressed_pipeline)
+          ->implicit_value(true),
+      "Overlap one compressed native-table H2D payload transfer with nvCOMP decoding "
+      "of the preceding payload. The configured compressed batch byte limit is split "
+      "across two bounded GPU workspaces.");
+  desc.add_options()(
+      "enable-gpu-input-compressed-peer-exchange",
+      po::value<bool>(&g_enable_gpu_input_compressed_peer_exchange)
+          ->default_value(g_enable_gpu_input_compressed_peer_exchange)
+          ->implicit_value(true),
+      "Allow concurrent GPU consumers of the same compressed native-table chunk to "
+      "share one storage read. The compressed payload is copied directly between "
+      "peer-accessible GPUs and decoded into each GPU's normal input buffer.");
+  desc.add_options()(
+      "gpu-input-cpu-buffer-bypass-mode",
+      po::value<std::string>(&g_gpu_input_cpu_buffer_bypass_mode)
+          ->default_value(g_gpu_input_cpu_buffer_bypass_mode),
+      "Native GPU input CPU-buffer bypass mode. 'staged' streams file reads through "
+      "bounded pinned host staging buffers. 'mmap' experimentally maps native table "
+      "files and copies page-cache-backed page payloads directly into GPU input "
+      "buffers.");
+  desc.add_options()(
       "jump-buffer-size",
       po::value<size_t>(&g_jump_buffer_size)->default_value(g_jump_buffer_size),
       "Size of pinned jump buffer per GPU (used to accelerate data transfers to and "
@@ -1077,6 +1282,23 @@ void CommandLineOptions::fillDeveloperOptions() {
       po::value<size_t>(&g_jump_buffer_parallel_copy_threads)
           ->default_value(g_jump_buffer_parallel_copy_threads),
       "Number of threads to parallelize copy to and from pinned jump buffers per GPU.");
+  desc.add_options()(
+      "jump-buffer-slots-per-device",
+      po::value<size_t>(&g_jump_buffer_slots_per_device)
+          ->default_value(g_jump_buffer_slots_per_device),
+      "Number of concurrent pinned jump-buffer transfers allowed per GPU. Each slot "
+      "allocates jump-buffer-size bytes of pinned host memory per GPU.");
+  desc.add_options()(
+      "enable-lazy-jump-buffer-allocation",
+      po::value<bool>(&g_enable_lazy_jump_buffer_allocation)
+          ->default_value(g_enable_lazy_jump_buffer_allocation),
+      "Allocate pinned jump-buffer slots on first use instead of during server startup.");
+  desc.add_options()(
+      "enable-background-jump-buffer-allocation",
+      po::value<bool>(&g_enable_background_jump_buffer_allocation)
+          ->default_value(g_enable_background_jump_buffer_allocation),
+      "Warm lazy pinned jump-buffer slots in background threads after server startup. "
+      "Only active when enable-lazy-jump-buffer-allocation is true.");
   desc.add_options()("jump-buffer-min-h2d-transfer-threshold",
                      po::value<size_t>(&g_jump_buffer_min_h2d_transfer_threshold)
                          ->default_value(g_jump_buffer_min_h2d_transfer_threshold),
@@ -1087,6 +1309,36 @@ void CommandLineOptions::fillDeveloperOptions() {
                          ->default_value(g_jump_buffer_min_d2h_transfer_threshold),
                      "Minimum device-to-host transfer size in bytes above which jump "
                      "buffers will be used for data transfer.");
+  desc.add_options()(
+      "peer-copy-mode",
+      po::value<std::string>(&g_peer_copy_mode_name)
+          ->default_value(g_peer_copy_mode_name),
+      "Cross-GPU device-to-device copy transport. 'direct' uses CUDA peer copies "
+      "directly when peer access is available, 'staged' uses per-GPU-pair peer-copy "
+      "staging buffers, and 'host' forces host-staged fallback.");
+  desc.add_options()(
+      "peer-copy-staging-buffer-size",
+      po::value<size_t>(&g_peer_copy_staging_buffer_size)
+          ->default_value(g_peer_copy_staging_buffer_size),
+      "Maximum per-GPU-pair peer-copy staging buffer size in bytes. Only used when "
+      "peer-copy-mode=staged. Cross-GPU device-to-device copies are chunked at "
+      "this size; 0 falls back to host-staged copies.");
+  desc.add_options()(
+      "enable-temporary-resultset-peer-access",
+      po::value<bool>(&g_enable_temporary_resultset_peer_access)
+          ->default_value(g_enable_temporary_resultset_peer_access)
+          ->implicit_value(true),
+      "Allow GPU kernels to read peer-resident temporary ResultSet fragments "
+      "directly when CUDA peer access is available, avoiding eager replication "
+      "of large temporary join columns to every GPU.");
+  desc.add_options()(
+      "enable-temporary-resultset-payload-peer-access",
+      po::value<bool>(&g_enable_temporary_resultset_payload_peer_access)
+          ->default_value(g_enable_temporary_resultset_payload_peer_access)
+          ->implicit_value(true),
+      "Allow GPU kernels to read peer-resident segmented temporary ResultSet payload "
+      "columns directly when CUDA peer access is available, while leaving join-key "
+      "hash-table builds on the peer-copy path.");
   desc.add_options()("num-executors",
                      po::value<int>(&system_parameters.num_executors)
                          ->default_value(system_parameters.num_executors),
@@ -1190,6 +1442,25 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->implicit_value(true),
       "Enable parallel processing of a single data fragment on CPU. This can improve CPU "
       "load balance and decrease reduction overhead.");
+  desc.add_options()(
+      "enable-result-reduction-pipeline",
+      po::value<bool>(&g_enable_result_reduction_pipeline)
+          ->default_value(g_enable_result_reduction_pipeline)
+          ->implicit_value(true),
+      "Enable experimental device-resident intermediate results, aggregate result "
+      "reuse, and asynchronous GPU result reduction. Unsupported shapes use the "
+      "existing materialization and reduction paths.");
+  desc.add_options()(
+      "enable-partitioned-baseline-gpu-reduction",
+      po::value<bool>(&g_enable_partitioned_baseline_gpu_reduction)
+          ->default_value(g_enable_partitioned_baseline_gpu_reduction)
+          ->implicit_value(true),
+      "Enable experimental partitioned GPU reduction for baseline hash result sets.");
+  desc.add_options()("enable-gpu-result-reduction-pipeline",
+                     po::value<bool>(&g_enable_result_reduction_pipeline)
+                         ->default_value(g_enable_result_reduction_pipeline)
+                         ->implicit_value(true),
+                     "Deprecated alias for --enable-result-reduction-pipeline.");
   desc.add_options()(
       "cpu-sub-task-size",
       po::value<size_t>(&g_cpu_sub_task_size)->default_value(g_cpu_sub_task_size),
@@ -1297,6 +1568,23 @@ void CommandLineOptions::fillDeveloperOptions() {
       po::value<size_t>(&g_gpu_code_cache_max_size_in_bytes)
           ->default_value(g_gpu_code_cache_max_size_in_bytes),
       "The maximum size of cached compiled codes for the gpu code cache in bytes.");
+  desc.add_options()(
+      "gpu-cubin-cache-path",
+      po::value<std::string>(&g_gpu_cubin_cache_path)
+          ->default_value(g_gpu_cubin_cache_path),
+      "Directory for the optional persistent GPU cubin cache. Empty disables it.");
+  desc.add_options()(
+      "gpu-cubin-cache-max-size-in-bytes",
+      po::value<size_t>(&g_gpu_cubin_cache_max_size_in_bytes)
+          ->default_value(g_gpu_cubin_cache_max_size_in_bytes),
+      "Maximum on-disk size of the optional persistent GPU cubin cache in bytes. "
+      "Set to 0 to disable pruning.");
+  desc.add_options()(
+      "cuda-jit-max-parallel-threads",
+      po::value<unsigned int>(&g_cuda_jit_max_parallel_threads)
+          ->default_value(g_cuda_jit_max_parallel_threads),
+      "Maximum CUDA JIT split-compilation thread count. 0 uses all available CPUs; "
+      "1 disables split compilation. Requires CUDA 13 or newer.");
 
   desc.add_options()("ssl-private-key",
                      po::value<std::string>(&system_parameters.ssl_key_file)
@@ -1726,6 +2014,14 @@ void CommandLineOptions::validate() {
             << enable_non_kernel_time_query_interrupt;
 
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
+  if (system_parameters.enable_experimental_query_rewrites &&
+      !g_enable_ranked_bitmap_hashjoin && !g_allow_cpu_retry &&
+      !g_allow_query_step_cpu_retry) {
+    LOG(WARNING)
+        << "Experimental query rewrites are enabled while ranked bitmap hash joins "
+           "and both CPU retry paths are disabled. Sparse intermediate keysets may "
+           "have no executable join layout on GPU.";
+  }
   LOG(INFO) << " LogUserId is set to " << Catalog_Namespace::g_log_user_id;
   LOG(INFO) << " Maximum idle session duration " << idle_session_duration;
   LOG(INFO) << " Maximum active session duration " << max_session_duration;
@@ -2083,6 +2379,9 @@ void CommandLineOptions::validate() {
   }
 
   LOG(INFO) << "Jump buffer size is set to " << g_jump_buffer_size;
+  if (g_jump_buffer_size == 1) {
+    throw std::runtime_error("jump-buffer-size must be 0 or at least 2 bytes");
+  }
 
   LOG(INFO) << "Jump buffer parallel copy thread count is set to "
             << g_jump_buffer_parallel_copy_threads;
@@ -2090,10 +2389,97 @@ void CommandLineOptions::validate() {
     throw std::runtime_error(
         "jump-buffer-parallel-copy-threads must be greater than or equal to 1");
   }
+  LOG(INFO) << "Jump buffer slots per device is set to "
+            << g_jump_buffer_slots_per_device;
+  if (g_jump_buffer_slots_per_device < 1) {
+    throw std::runtime_error(
+        "jump-buffer-slots-per-device must be greater than or equal to 1");
+  }
+  LOG(INFO) << "Lazy jump buffer allocation is "
+            << (g_enable_lazy_jump_buffer_allocation ? "enabled" : "disabled");
+  LOG(INFO) << "Background jump buffer allocation is "
+            << (g_enable_background_jump_buffer_allocation ? "enabled" : "disabled");
+  LOG(INFO) << "GPU input prefetch is "
+            << (g_enable_gpu_input_prefetch ? "enabled" : "disabled");
+  LOG(INFO) << "GPU input batched prefetch is "
+            << (g_enable_gpu_input_batched_prefetch ? "enabled" : "disabled");
+  LOG(INFO) << "GPU input prefetch worker count is set to "
+            << g_gpu_input_prefetch_workers;
+  if (g_gpu_input_prefetch_workers < 1) {
+    throw std::runtime_error(
+        "gpu-input-prefetch-workers must be greater than or equal to 1");
+  }
+  LOG(INFO) << "GPU aggregate payload host mapping is "
+            << (g_enable_gpu_aggregate_payload_host_mapping ? "enabled" : "disabled");
+  LOG(INFO) << "GPU selected-dense aggregate payload fetch is "
+            << (g_enable_gpu_selected_dense_aggregate_payload_fetch ? "enabled"
+                                                                    : "disabled");
+  LOG(INFO) << "Native storage compression is "
+            << (File_Namespace::g_enable_native_storage_compression ? "enabled"
+                                                                    : "disabled");
+  std::transform(File_Namespace::g_native_storage_compression_codec.begin(),
+                 File_Namespace::g_native_storage_compression_codec.end(),
+                 File_Namespace::g_native_storage_compression_codec.begin(),
+                 [](const unsigned char c) { return std::tolower(c); });
+  LOG(INFO) << "Native storage compression codec is set to "
+            << File_Namespace::g_native_storage_compression_codec;
+  LOG(INFO) << "Native storage compression frame size is set to "
+            << File_Namespace::g_native_storage_compression_frame_size;
+  LOG(INFO) << "Native storage GDeflate compression level is set to "
+            << File_Namespace::g_native_storage_compression_gdeflate_level;
+  LOG(INFO) << "FileBuffer metadata sidecar-only mode is "
+            << (File_Namespace::g_enable_file_buffer_metadata_sidecar_only ? "enabled"
+                                                                           : "disabled");
+  LOG(INFO) << "FileMgr manifests are "
+            << (File_Namespace::g_enable_file_mgr_manifests ? "enabled" : "disabled");
+  try {
+    File_Namespace::validate_native_storage_compression_config(
+        File_Namespace::configured_native_storage_compression());
+  } catch (const std::invalid_argument& e) {
+    throw std::runtime_error(e.what());
+  }
+  LOG(INFO) << "GPU input CPU buffer bypass reader thread count is set to "
+            << g_gpu_input_cpu_buffer_bypass_reader_threads;
+  if (g_gpu_input_cpu_buffer_bypass_reader_threads < 1) {
+    throw std::runtime_error(
+        "gpu-input-cpu-buffer-bypass-reader-threads must be greater than or equal to 1");
+  }
+  LOG(INFO) << "GPU input compressed batch maximum payload size is set to "
+            << g_gpu_input_compressed_batch_max_bytes << " bytes";
+  LOG(INFO) << "GPU input compressed transfer/decode pipeline is "
+            << (g_enable_gpu_input_compressed_pipeline ? "enabled" : "disabled");
+  LOG(INFO) << "GPU input compressed peer exchange is "
+            << (g_enable_gpu_input_compressed_peer_exchange ? "enabled" : "disabled");
+  LOG(INFO) << "GPU input CPU buffer bypass mode is set to "
+            << g_gpu_input_cpu_buffer_bypass_mode;
+  if (g_gpu_input_cpu_buffer_bypass_mode != "staged" &&
+      g_gpu_input_cpu_buffer_bypass_mode != "mmap") {
+    throw std::runtime_error(
+        "gpu-input-cpu-buffer-bypass-mode must be either 'staged' or 'mmap'");
+  }
   LOG(INFO) << "Jump buffer minimum host-to-device transfer threshold is set to "
             << g_jump_buffer_min_h2d_transfer_threshold;
   LOG(INFO) << "Jump buffer minimum device-to-host transfer threshold is set to "
             << g_jump_buffer_min_d2h_transfer_threshold;
+
+  LOG(INFO) << "Peer-copy mode is set to " << g_peer_copy_mode_name;
+  if (g_peer_copy_mode_name == "direct") {
+    g_peer_copy_mode = CudaMgr_Namespace::kPeerCopyModeDirect;
+  } else if (g_peer_copy_mode_name == "staged") {
+    g_peer_copy_mode = CudaMgr_Namespace::kPeerCopyModeStaged;
+  } else if (g_peer_copy_mode_name == "host") {
+    g_peer_copy_mode = CudaMgr_Namespace::kPeerCopyModeHost;
+  } else {
+    throw std::runtime_error("peer-copy-mode must be one of: direct, staged, host");
+  }
+  LOG(INFO) << "Peer-copy staging buffer size is set to "
+            << g_peer_copy_staging_buffer_size;
+  LOG(INFO) << "Temporary ResultSet peer access is set to "
+            << g_enable_temporary_resultset_peer_access;
+  LOG(INFO) << "Temporary ResultSet payload peer access is set to "
+            << g_enable_temporary_resultset_payload_peer_access;
+  LOG(INFO) << "Partitioned baseline GPU result reduction is set to "
+            << g_enable_partitioned_baseline_gpu_reduction;
 
   LOG(INFO) << "Export timestamps in ISO format set to "
             << g_export_timestamps_in_iso_format;
@@ -2272,12 +2658,20 @@ boost::optional<int> CommandLineOptions::parse_command_line(
           CacheItemType::BASELINE_HT, g_hashtable_cache_total_bytes);
       BoundingBoxIntersectJoinHashTable::getHashTableCache()->setTotalCacheSize(
           CacheItemType::BBOX_INTERSECT_HT, g_hashtable_cache_total_bytes);
+      BitmapJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::BITMAP_HT, g_hashtable_cache_total_bytes);
+      RankedBitmapJoinHashTable::getHashTableCache()->setTotalCacheSize(
+          CacheItemType::RANKED_BITMAP_HT, g_hashtable_cache_total_bytes);
       PerfectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
           CacheItemType::PERFECT_HT, g_max_cacheable_hashtable_size_bytes);
       BaselineJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
           CacheItemType::BASELINE_HT, g_max_cacheable_hashtable_size_bytes);
       BoundingBoxIntersectJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
           CacheItemType::BBOX_INTERSECT_HT, g_max_cacheable_hashtable_size_bytes);
+      BitmapJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+          CacheItemType::BITMAP_HT, g_max_cacheable_hashtable_size_bytes);
+      RankedBitmapJoinHashTable::getHashTableCache()->setMaxCacheItemSize(
+          CacheItemType::RANKED_BITMAP_HT, g_max_cacheable_hashtable_size_bytes);
     }
     g_optimize_cuda_block_and_grid_sizes = optimize_cuda_block_and_grid_sizes;
   } catch (po::error& e) {
@@ -2457,7 +2851,18 @@ boost::optional<int> CommandLineOptions::parse_command_line(
     return 1;
   }
   LOG(INFO) << "Number of maximum GPU per query is set to " << g_max_num_gpu_per_query;
-
+  LOG(INFO) << "Persistent GPU cubin cache path: "
+            << (g_gpu_cubin_cache_path.empty() ? "<disabled>" : g_gpu_cubin_cache_path);
+  LOG(INFO) << "Persistent GPU cubin cache max size in bytes: "
+            << g_gpu_cubin_cache_max_size_in_bytes;
+  LOG(INFO) << "CUDA JIT split-compilation maximum thread count: "
+            << g_cuda_jit_max_parallel_threads;
+#if !defined(HAVE_CUDA) || !defined(CUDA_VERSION) || CUDA_VERSION < 13000
+  if (g_cuda_jit_max_parallel_threads != 1) {
+    throw std::runtime_error(
+        "cuda-jit-max-parallel-threads requires a CUDA 13 or newer build");
+  }
+#endif
   LOG(INFO) << "Use CPU memory pool for output buffers is set to "
             << g_use_cpu_mem_pool_for_output_buffers;
 
