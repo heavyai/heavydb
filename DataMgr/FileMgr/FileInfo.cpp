@@ -4,7 +4,9 @@
  */
 
 #include "FileInfo.h"
+#include <cstring>
 #include <iostream>
+#include <stdexcept>
 #include "../../Shared/File.h"
 #include "FileMgr.h"
 #include "Page.h"
@@ -51,13 +53,13 @@ void FileInfo::initNewFile() {
 }
 
 size_t FileInfo::write(const size_t offset, const size_t size, const int8_t* buf) {
-  std::lock_guard<std::mutex> lock(readWriteMutex_);
+  std::unique_lock<std::shared_mutex> lock(readWriteMutex_);
   isDirty = true;
   return fileMgr->writeFile(f, offset, size, buf);
 }
 
 size_t FileInfo::read(const size_t offset, const size_t size, int8_t* buf) {
-  std::lock_guard<std::mutex> lock(readWriteMutex_);
+  std::shared_lock<std::shared_mutex> lock(readWriteMutex_);
   return File_Namespace::read(f, offset, size, buf, file_path);
 }
 
@@ -76,20 +78,39 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec) {
     // replicated in TableArchiver and possibly elsewhere).
     constexpr size_t MAX_INTS_TO_READ{10};  // currently use 1+6 ints
     int32_t ints[MAX_INTS_TO_READ];
-    CHECK_EQ(fseek(f, pageNum * pageSize, SEEK_SET), 0);
-    CHECK_EQ(fread(ints, sizeof(int32_t), MAX_INTS_TO_READ, f), MAX_INTS_TO_READ);
+    if (pageSize < sizeof(ints)) {
+      throw std::runtime_error("FileMgr page is too small for its header probe: " +
+                               file_path);
+    }
+    CHECK_EQ(File_Namespace::readPartialPage(f,
+                                             pageSize,
+                                             0,
+                                             sizeof(ints),
+                                             pageNum,
+                                             reinterpret_cast<int8_t*>(ints),
+                                             file_path),
+             sizeof(ints));
 
-    auto headerSize = ints[0];
+    const auto headerSize = ints[0];
     if (headerSize == 0) {
       // no header for this page - insert into free list
       freePages.insert(pageNum);
       continue;
     }
 
-    // headerSize doesn't include headerSize itself
-    // We're tying ourself to headers of ints here
-    size_t numHeaderElems = headerSize / sizeof(int32_t);
-    CHECK_GE(numHeaderElems, size_t(2));
+    // headerSize excludes its own word and includes at least the database/table key,
+    // page id, and epoch. Reject corrupt lengths before indexing the fixed probe.
+    if (headerSize < static_cast<int32_t>(4 * sizeof(int32_t)) ||
+        headerSize % static_cast<int32_t>(sizeof(int32_t)) != 0) {
+      throw std::runtime_error("Invalid FileMgr page header size " +
+                               std::to_string(headerSize) + " in " + file_path +
+                               " at page " + std::to_string(pageNum));
+    }
+    const auto numHeaderElems = static_cast<size_t>(headerSize) / sizeof(int32_t);
+    if (numHeaderElems > MAX_INTS_TO_READ - 1) {
+      throw std::runtime_error("FileMgr page header exceeds the startup probe in " +
+                               file_path + " at page " + std::to_string(pageNum));
+    }
     // We don't want to read headerSize in our header - so start
     // reading 4 bytes past it
     ChunkKey chunkKey(&ints[1], &ints[1 + numHeaderElems - 2]);
@@ -212,7 +233,7 @@ std::string FileInfo::print() const {
 }
 
 int32_t FileInfo::syncToDisk() {
-  std::lock_guard<std::mutex> lock(readWriteMutex_);
+  std::unique_lock<std::shared_mutex> lock(readWriteMutex_);
   if (isDirty) {
     if (fflush(f) != 0) {
       LOG(FATAL) << "Error trying to flush changes to disk, the error was: "

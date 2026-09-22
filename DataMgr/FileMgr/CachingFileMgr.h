@@ -268,7 +268,8 @@ class CachingFileMgr : public FileMgr {
   CachingFileBuffer* allocateBuffer(
       const ChunkKey& key,
       const std::vector<HeaderInfo>::const_iterator& headerStartIt,
-      const std::vector<HeaderInfo>::const_iterator& headerEndIt) override;
+      const std::vector<HeaderInfo>::const_iterator& headerEndIt,
+      const std::vector<int8_t>* metadataPayload = nullptr) override;
 
   /**
    * @brief checks whether a page should be deleted.
@@ -402,7 +403,8 @@ class CachingFileMgr : public FileMgr {
   FileBuffer* createBufferFromHeaders(
       const ChunkKey& key,
       const std::vector<HeaderInfo>::const_iterator& startIt,
-      const std::vector<HeaderInfo>::const_iterator& endIt) override;
+      const std::vector<HeaderInfo>::const_iterator& endIt,
+      const std::vector<int8_t>* metadataPayload = nullptr) override;
 
   /**
    * @brief Creates a buffer.
