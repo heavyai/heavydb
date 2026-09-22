@@ -49,6 +49,10 @@ class QueryRewriter {
   std::shared_ptr<Analyzer::CaseExpr> generateCaseExprForCountDistinctOnGroupByCol(
       std::shared_ptr<Analyzer::Expr> expr) const;
 
+  std::shared_ptr<Analyzer::CaseExpr> generateCaseExprForNullableAggOnGroupByCol(
+      std::shared_ptr<Analyzer::Expr> expr,
+      const SQLTypeInfo& result_ti) const;
+
   const std::vector<InputTableInfo>& query_infos_;
   Executor* executor_;
   mutable std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;

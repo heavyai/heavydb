@@ -292,7 +292,8 @@ class PerfectJoinHashTable : public HashJoin {
 bool needs_dictionary_translation(
     const InnerOuter& inner_outer_col_pair,
     const InnerOuterStringOpInfos& inner_outer_string_op_infos,
-    const Executor* executor);
+    const Executor* executor,
+    const TableIdToNodeMap& table_id_to_node_map);
 
 inline Data_Namespace::MemoryLevel get_effective_memory_level(
     const Data_Namespace::MemoryLevel memory_level,
@@ -312,6 +313,14 @@ std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
 const InputTableInfo& get_inner_query_info(
     const shared::TableKey& inner_table_key,
     const std::vector<InputTableInfo>& query_infos);
+
+size_t get_hash_join_table_num_tuples(const Fragmenter_Namespace::TableInfo& table_info);
+
+size_t get_hash_join_fragment_num_tuples(
+    const Fragmenter_Namespace::TableInfo& table_info);
+
+size_t get_hash_join_table_slot_count(const Fragmenter_Namespace::TableInfo& table_info,
+                                      const Data_Namespace::MemoryLevel memory_level);
 
 size_t get_entries_per_device(const size_t total_entries,
                               const size_t shard_count,

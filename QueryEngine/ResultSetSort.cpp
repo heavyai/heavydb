@@ -43,24 +43,25 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   const auto& oe = order_entries.front();
   CHECK_GT(oe.tle_no, 0);
   CHECK_LE(static_cast<size_t>(oe.tle_no), targets_.size());
-  size_t logical_slot_idx = 0;
-  size_t physical_slot_off = 0;
-  for (size_t i = 0; i < static_cast<size_t>(oe.tle_no - 1); ++i) {
-    physical_slot_off += query_mem_desc_.getPaddedSlotWidthBytes(logical_slot_idx);
-    logical_slot_idx =
-        advance_slot(logical_slot_idx, targets_[i], separate_varlen_storage_valid_);
-  }
-  const auto col_off =
-      get_slot_off_quad(query_mem_desc_) * sizeof(int64_t) + physical_slot_off;
-  const size_t col_bytes = query_mem_desc_.getPaddedSlotWidthBytes(logical_slot_idx);
-  const auto row_bytes = get_row_bytes(query_mem_desc_);
+  const auto target_idx = static_cast<size_t>(oe.tle_no - 1);
   const auto target_groupby_indices_sz = query_mem_desc_.targetGroupbyIndicesSize();
-  CHECK(target_groupby_indices_sz == 0 ||
-        static_cast<size_t>(oe.tle_no) <= target_groupby_indices_sz);
+  CHECK(target_groupby_indices_sz == 0 || target_idx < target_groupby_indices_sz);
   const int64_t target_groupby_index{
-      target_groupby_indices_sz == 0
-          ? -1
-          : query_mem_desc_.getTargetGroupbyIndex(oe.tle_no - 1)};
+      target_groupby_indices_sz == 0 ? -1
+                                     : query_mem_desc_.getTargetGroupbyIndex(target_idx)};
+  size_t col_off{0};
+  size_t col_bytes{0};
+  if (target_groupby_index >= 0) {
+    col_bytes = query_mem_desc_.getEffectiveKeyWidth();
+  } else {
+    const auto& target_slots =
+        query_mem_desc_.getColSlotContext().getSlotsForCol(target_idx);
+    CHECK(!target_slots.empty());
+    const auto slot_idx = target_slots.front();
+    col_off = query_mem_desc_.getColOffInBytes(slot_idx);
+    col_bytes = query_mem_desc_.getPaddedSlotWidthBytes(slot_idx);
+  }
+  const auto row_bytes = get_row_bytes(query_mem_desc_);
   GroupByBufferLayoutInfo layout{query_mem_desc_.getEntryCount(),
                                  col_off,
                                  col_bytes,
@@ -146,10 +147,11 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
           permutation_.end(), strided_permutation.begin(), strided_permutation.end());
     }
     auto pv = PermutationView(permutation_.data(), permutation_.size());
-    initMaterializedSortBuffers(order_entries, false);
-    topPermutation(pv, top_n, createComparator(order_entries, pv, executor, false).get());
-    if (top_n < permutation_.size()) {
-      permutation_.resize(top_n);
+    initMaterializedSortBuffers(order_entries, false, pv.size());
+    pv = topPermutation(
+        pv, top_n, createComparator(order_entries, pv, executor, false).get());
+    if (pv.size() < permutation_.size()) {
+      permutation_.resize(pv.size());
       permutation_.shrink_to_fit();
     }
     return;

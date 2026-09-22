@@ -630,6 +630,30 @@ ExpressionRange getExpressionRange(
   CHECK_LT(static_cast<size_t>(rte_idx), query_infos.size());
   bool is_outer_join_proj = rte_idx > 0 && executor->containsLeftDeepOuterJoin();
   const auto& column_key = col_expr->getColumnKey();
+  const auto& col_ti = col_expr->get_type_info();
+  if (column_key.table_id < 0 && col_ti.is_boolean()) {
+    return ExpressionRange::makeIntRange(
+        0, 1, 0, !col_ti.get_notnull() || is_outer_join_proj);
+  }
+  if (column_key.table_id < 0 && col_ti.is_string()) {
+    if (col_ti.get_compression() == kENCODING_DICT) {
+      const auto& dict_key = col_ti.getStringDictKey();
+      if (dict_key.db_id > 0 && !dict_key.isTransientDict()) {
+        auto* sdp = executor->getStringDictionaryProxy(
+            dict_key, executor->getRowSetMemoryOwner(), true);
+        CHECK(sdp);
+        const auto persisted_entries = static_cast<int64_t>(sdp->storageEntryCount());
+        const auto transient_entries = static_cast<int64_t>(sdp->transientEntryCount());
+        const int64_t min_id = transient_entries ? -transient_entries - 1 : 0;
+        const int64_t max_id = persisted_entries ? persisted_entries - 1 : -2;
+        return ExpressionRange::makeIntRange(
+            min_id, max_id, 0, !col_ti.get_notnull() || is_outer_join_proj);
+      }
+    }
+    // Temporary result-set strings without a stable dictionary id can carry conservative
+    // integer metadata after dictionary translation. Treat those ranges as unknown.
+    return ExpressionRange::makeInvalidRange();
+  }
   if (column_key.table_id > 0) {
     auto col_range = executor->getColRange(
         PhysicalInput{column_key.column_id, column_key.table_id, column_key.db_id});

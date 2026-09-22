@@ -18,10 +18,38 @@
 
 #include "../ThriftSerializers.h"
 
+#include <limits>
 #include <numeric>
 #include <stdexcept>
 
 extern bool g_bigint_count;
+
+namespace {
+
+size_t checked_size_add(const size_t lhs,
+                        const size_t rhs,
+                        const char* const description) {
+  if (rhs > std::numeric_limits<size_t>::max() - lhs) {
+    throw std::overflow_error(description);
+  }
+  return lhs + rhs;
+}
+
+size_t checked_size_multiply(const size_t lhs,
+                             const size_t rhs,
+                             const char* const description) {
+  if (lhs != 0 && rhs > std::numeric_limits<size_t>::max() / lhs) {
+    throw std::overflow_error(description);
+  }
+  return lhs * rhs;
+}
+
+size_t checked_align_to_int64(const size_t value, const char* const description) {
+  return checked_size_add(value, sizeof(int64_t) - 1, description) &
+         ~(sizeof(int64_t) - 1);
+}
+
+}  // namespace
 
 ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list,
                                const std::vector<int64_t>& col_exprs_to_not_project) {
@@ -158,13 +186,16 @@ size_t ColSlotContext::getSlotCount() const {
 }
 
 size_t ColSlotContext::getAllSlotsPaddedSize() const {
-  return std::accumulate(slot_sizes_.cbegin(),
-                         slot_sizes_.cend(),
-                         size_t(0),
-                         [](size_t sum, const auto& slot_size) {
-                           CHECK_GE(slot_size.padded_size, 0);
-                           return sum + static_cast<size_t>(slot_size.padded_size);
-                         });
+  size_t total_size{0};
+  for (const auto& slot_size : slot_sizes_) {
+    if (slot_size.padded_size < 0) {
+      throw std::invalid_argument("Negative ResultSet slot size");
+    }
+    total_size = checked_size_add(total_size,
+                                  static_cast<size_t>(slot_size.padded_size),
+                                  "ResultSet row width overflow");
+  }
+  return total_size;
 }
 
 size_t ColSlotContext::getAllSlotsAlignedPaddedSize() const {
@@ -172,32 +203,43 @@ size_t ColSlotContext::getAllSlotsAlignedPaddedSize() const {
 }
 
 size_t ColSlotContext::getAlignedPaddedSizeForRange(const size_t end) const {
-  return std::accumulate(slot_sizes_.cbegin(),
-                         slot_sizes_.cbegin() + end,
-                         size_t(0),
-                         [](size_t sum, const auto& slot_size) {
-                           CHECK_GE(slot_size.padded_size, 0);
-                           const auto chosen_bytes =
-                               static_cast<size_t>(slot_size.padded_size);
-                           if (chosen_bytes == sizeof(int64_t)) {
-                             return align_to_int64(sum) + chosen_bytes;
-                           } else {
-                             return sum + chosen_bytes;
-                           }
-                         });
+  if (end > slot_sizes_.size()) {
+    throw std::out_of_range("ResultSet slot range exceeds its descriptor");
+  }
+  size_t total_size{0};
+  for (size_t slot_idx = 0; slot_idx < end; ++slot_idx) {
+    const auto padded_size = slot_sizes_[slot_idx].padded_size;
+    if (padded_size < 0) {
+      throw std::invalid_argument("Negative ResultSet slot size");
+    }
+    const auto chosen_bytes = static_cast<size_t>(padded_size);
+    if (chosen_bytes == sizeof(int64_t)) {
+      total_size =
+          checked_align_to_int64(total_size, "ResultSet slot alignment overflow");
+    }
+    total_size =
+        checked_size_add(total_size, chosen_bytes, "ResultSet row width overflow");
+  }
+  return total_size;
 }
 
 size_t ColSlotContext::getTotalBytesOfColumnarBuffers(const size_t entry_count) const {
-  const auto total_bytes = std::accumulate(
-      slot_sizes_.cbegin(),
-      slot_sizes_.cend(),
-      size_t(0),
-      [entry_count](size_t sum, const auto& slot_size) {
-        CHECK_GE(slot_size.padded_size, 0);
-        return sum +
-               align_to_int64(static_cast<size_t>(slot_size.padded_size) * entry_count);
-      });
-  return align_to_int64(total_bytes);
+  size_t total_bytes{0};
+  for (const auto& slot_size : slot_sizes_) {
+    if (slot_size.padded_size < 0) {
+      throw std::invalid_argument("Negative ResultSet slot size");
+    }
+    const auto slot_bytes =
+        checked_size_multiply(static_cast<size_t>(slot_size.padded_size),
+                              entry_count,
+                              "Columnar ResultSet slot size overflow");
+    total_bytes = checked_size_add(
+        total_bytes,
+        checked_align_to_int64(slot_bytes, "Columnar ResultSet slot alignment overflow"),
+        "Columnar ResultSet buffer size overflow");
+  }
+  return checked_align_to_int64(total_bytes,
+                                "Columnar ResultSet buffer alignment overflow");
 }
 
 int8_t ColSlotContext::getMinPaddedByteSize(const int8_t actual_min_byte_width) const {
@@ -236,10 +278,12 @@ size_t ColSlotContext::getCompactByteWidth() const {
 }
 
 size_t ColSlotContext::getColOnlyOffInBytes(const size_t slot_idx) const {
-  CHECK_LT(slot_idx, slot_sizes_.size());
+  if (slot_idx >= slot_sizes_.size()) {
+    throw std::out_of_range("ResultSet slot index exceeds its descriptor");
+  }
   auto offset_bytes = getAlignedPaddedSizeForRange(slot_idx);
   if (slot_sizes_[slot_idx].padded_size == sizeof(int64_t)) {
-    offset_bytes = align_to_int64(offset_bytes);
+    offset_bytes = checked_align_to_int64(offset_bytes, "ResultSet slot offset overflow");
   }
   return offset_bytes;
 }
@@ -254,6 +298,9 @@ void ColSlotContext::clear() {
 }
 
 void ColSlotContext::alignPaddedSlots(const bool sort_on_gpu) {
+  if (slot_sizes_.empty()) {
+    return;
+  }
   size_t total_bytes{0};
   for (size_t slot_idx = 0; slot_idx < slot_sizes_.size(); slot_idx++) {
     auto chosen_bytes = slot_sizes_[slot_idx].padded_size;
