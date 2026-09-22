@@ -10,7 +10,9 @@
  */
 
 #include "Shared/File.h"
+#include "Shared/file_delete.h"
 
+#include <unistd.h>
 #include <algorithm>
 #include <atomic>
 #include <cerrno>
@@ -18,8 +20,10 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "Shared/heavyai_fs.h"
 
@@ -114,38 +118,73 @@ bool removeFile(const std::string& base_path, const std::string& filename) {
 
 namespace {
 
-std::string get_posix_read_error(FILE* f,
-                                 const size_t offset,
-                                 const size_t size,
-                                 int8_t* buf) {
-  std::clearerr(f);
+size_t checked_page_offset(const size_t page_size,
+                           const size_t page_num,
+                           const size_t within_page_offset = 0) {
+  if (page_size != 0 && page_num > std::numeric_limits<size_t>::max() / page_size) {
+    throw std::overflow_error("File page offset multiplication overflow");
+  }
+  const auto page_offset = page_num * page_size;
+  if (within_page_offset > std::numeric_limits<size_t>::max() - page_offset) {
+    throw std::overflow_error("File page offset addition overflow");
+  }
+  return page_offset + within_page_offset;
+}
 
-  // NOTE: In the system calls below, `errno` is used. Such use is
-  // guaranteed to be thread-safe by the POSIX standard (1c and later):
-  //
-  // "To circumvent the resulting nondeterminism, POSIX.1c redefines errno
-  // as a service that can access the per-thread error number as follows
-  // (ISO/IEC 9945:1-1996, §2.4)"
-  //
-  // See https://unix.org/whitepapers/reentrant.html
+template <typename Syscall>
+size_t positional_io_exact(FILE* f,
+                           const size_t offset,
+                           const size_t size,
+                           int8_t* buf,
+                           const std::string& file_path,
+                           const char* operation,
+                           Syscall syscall) {
+  if (!f) {
+    throw std::invalid_argument("Cannot " + std::string(operation) +
+                                " through a null file stream.");
+  }
+  const auto max_file_offset = static_cast<uintmax_t>(std::numeric_limits<off_t>::max());
+  if (static_cast<uintmax_t>(offset) > max_file_offset ||
+      static_cast<uintmax_t>(size) > max_file_offset - offset) {
+    throw std::overflow_error(
+        "File " + std::string(operation) +
+        " range exceeds the platform file-offset limit: " + file_path);
+  }
 
   int fd = fileno(f);
   if (fd == -1) {
-    return "error obtaining file descriptor from file stream: " +
-           std::string(strerror(errno));
+    LOG(FATAL) << "Error obtaining file descriptor for " << operation
+               << " from file: " << file_path << ", error was: " << std::strerror(errno);
   }
 
-  if (lseek(fd, static_cast<off_t>(offset), SEEK_SET) == static_cast<off_t>(-1)) {
-    return "error seeking in file: " + std::string(strerror(errno));
+  size_t total_bytes = 0;
+  while (total_bytes < size) {
+    const auto remaining_bytes = size - total_bytes;
+    const auto request_bytes = std::min(
+        remaining_bytes, static_cast<size_t>(std::numeric_limits<ssize_t>::max()));
+    const auto request_offset = offset + total_bytes;
+    const auto rv =
+        syscall(fd, buf + total_bytes, request_bytes, static_cast<off_t>(request_offset));
+    if (rv == -1) {
+      if (errno == EINTR) {
+        continue;
+      }
+      LOG(FATAL) << "Error trying to " << operation << " file: " << file_path
+                 << ", offset: " << request_offset << ", size: " << request_bytes
+                 << ", error was: " << std::strerror(errno);
+    }
+    if (rv == 0) {
+      LOG(FATAL) << "Unexpected EOF while trying to " << operation
+                 << " file: " << file_path << ", offset: " << request_offset
+                 << ", size: " << request_bytes << ", total requested: " << size
+                 << ", total completed: " << total_bytes;
+    }
+    total_bytes += static_cast<size_t>(rv);
   }
 
-  ssize_t read_return_value = ::read(fd, buf, size);
-  if (read_return_value == -1) {
-    return "error reading file: " + std::string(strerror(errno));
-  }
-
-  return "no error encountered using POSIX read";
+  return total_bytes;
 }
+
 }  // namespace
 
 size_t read(FILE* f,
@@ -153,37 +192,29 @@ size_t read(FILE* f,
             const size_t size,
             int8_t* buf,
             const std::string& file_path) {
-  // read "size" bytes from the offset location in the file into the buffer
-  CHECK_EQ(fseek(f, static_cast<long>(offset), SEEK_SET), 0);
-  size_t bytesRead = fread(buf, sizeof(int8_t), size, f);
-  auto expected_bytes_read = sizeof(int8_t) * size;
-  const bool file_read_error_occured = std::ferror(f);
-  std::string error_msg;
-  if (bytesRead != expected_bytes_read && file_read_error_occured) {
-    error_msg = get_posix_read_error(f, offset, size, buf);
-  }
-  CHECK_EQ(bytesRead, expected_bytes_read)
-      << "Unexpected number of bytes read from file: " << file_path
-      << ". Expected bytes read: " << expected_bytes_read
-      << ", actual bytes read: " << bytesRead << ", offset: " << offset
-      << ", file stream error set: " << (file_read_error_occured ? "true" : "false")
-      << ", EOF reached: " << (std::feof(f) ? "true" : "false") << ", " << error_msg;
-  return bytesRead;
+  return positional_io_exact(
+      f,
+      offset,
+      size,
+      buf,
+      file_path,
+      "read",
+      [](int fd, int8_t* dst, size_t request_bytes, off_t request_offset) {
+        return ::pread(fd, dst, request_bytes, request_offset);
+      });
 }
 
 size_t write(FILE* f, const size_t offset, const size_t size, const int8_t* buf) {
-  // write size bytes from the buffer to the offset location in the file
-  if (fseek(f, static_cast<long>(offset), SEEK_SET) != 0) {
-    LOG(FATAL)
-        << "Error trying to write to file (during positioning seek) the error was: "
-        << std::strerror(errno);
-  }
-  size_t bytesWritten = fwrite(buf, sizeof(int8_t), size, f);
-  if (bytesWritten != sizeof(int8_t) * size) {
-    LOG(FATAL) << "Error trying to write to file (during fwrite) the error was: "
-               << std::strerror(errno);
-  }
-  return bytesWritten;
+  return positional_io_exact(
+      f,
+      offset,
+      size,
+      const_cast<int8_t*>(buf),
+      "<unknown>",
+      "write",
+      [](int fd, int8_t* src, size_t request_bytes, off_t request_offset) {
+        return ::pwrite(fd, src, request_bytes, request_offset);
+      });
 }
 
 size_t append(FILE* f, const size_t size, const int8_t* buf) {
@@ -195,7 +226,7 @@ size_t readPage(FILE* f,
                 const size_t pageNum,
                 int8_t* buf,
                 const std::string& file_path) {
-  return read(f, pageNum * pageSize, pageSize, buf, file_path);
+  return read(f, checked_page_offset(pageSize, pageNum), pageSize, buf, file_path);
 }
 
 size_t readPartialPage(FILE* f,
@@ -205,11 +236,12 @@ size_t readPartialPage(FILE* f,
                        const size_t pageNum,
                        int8_t* buf,
                        const std::string& file_path) {
-  return read(f, pageNum * pageSize + offset, readSize, buf, file_path);
+  return read(
+      f, checked_page_offset(pageSize, pageNum, offset), readSize, buf, file_path);
 }
 
 size_t writePage(FILE* f, const size_t pageSize, const size_t pageNum, int8_t* buf) {
-  return write(f, pageNum * pageSize, pageSize, buf);
+  return write(f, checked_page_offset(pageSize, pageNum), pageSize, buf);
 }
 
 size_t writePartialPage(FILE* f,
@@ -218,7 +250,7 @@ size_t writePartialPage(FILE* f,
                         const size_t writeSize,
                         const size_t pageNum,
                         int8_t* buf) {
-  return write(f, pageNum * pageSize + offset, writeSize, buf);
+  return write(f, checked_page_offset(pageSize, pageNum, offset), writeSize, buf);
 }
 
 size_t appendPage(FILE* f, const size_t pageSize, int8_t* buf) {
@@ -276,7 +308,6 @@ void renameForDelete(const std::string directoryName) {
 
 // file_delete() implementation lives here; see Shared/file_delete.h.
 
-#include <atomic>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
 #include <chrono>
@@ -286,17 +317,32 @@ void file_delete(std::atomic<bool>& program_is_running,
                  const unsigned int wait_interval_seconds,
                  const std::string base_path) {
   const auto wait_duration = std::chrono::seconds(wait_interval_seconds);
+  constexpr auto shutdown_poll_interval = std::chrono::milliseconds(100);
   const boost::filesystem::path path(base_path);
+  boost::system::error_code last_scan_error;
   while (program_is_running) {
     using vec = std::vector<boost::filesystem::path>;  // store paths,
     vec v;
     boost::system::error_code ec;
 
-    // copy vector from iterator as was getting weird random errors if
-    // removed direct from iterator
-    copy(boost::filesystem::directory_iterator(path),
-         boost::filesystem::directory_iterator(),
-         back_inserter(v));
+    // Snapshot entries before deleting them; removing entries while iterating caused
+    // intermittent traversal errors.
+    boost::filesystem::directory_iterator file_it(path, ec);
+    const boost::filesystem::directory_iterator end_it;
+    while (!ec && file_it != end_it) {
+      v.emplace_back(file_it->path());
+      file_it.increment(ec);
+    }
+    if (ec) {
+      if (ec != last_scan_error) {
+        LOG(ERROR) << "Failed to scan deleted-file directory " << path << ": "
+                   << ec.message();
+      }
+      last_scan_error = ec;
+    } else if (last_scan_error) {
+      LOG(INFO) << "Resumed scanning deleted-file directory " << path;
+      last_scan_error.clear();
+    }
     for (vec::const_iterator it(v.begin()); it != v.end(); ++it) {
       std::string object_name(it->string());
 
@@ -309,6 +355,15 @@ void file_delete(std::atomic<bool>& program_is_running,
       }
     }
 
-    std::this_thread::sleep_for(wait_duration);
+    const auto wake_time = std::chrono::steady_clock::now() + wait_duration;
+    while (program_is_running) {
+      const auto now = std::chrono::steady_clock::now();
+      if (now >= wake_time) {
+        break;
+      }
+      const auto remaining = wake_time - now;
+      std::this_thread::sleep_for(
+          remaining < shutdown_poll_interval ? remaining : shutdown_poll_interval);
+    }
   }
 }
