@@ -7,9 +7,15 @@
 #include "StringDictionary/StringDictionaryProxy.h"
 #include "StringOps/StringOps.h"
 
+#include <tbb/concurrent_hash_map.h>
+#include <tbb/concurrent_unordered_set.h>
+#include <tbb/concurrent_vector.h>
+#include <tbb/enumerable_thread_specific.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_sort.h>
 #include <tbb/task_arena.h>
 #include <algorithm>
+#include <bitset>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/iterator/transform_iterator.hpp>
@@ -21,6 +27,8 @@
 #include <string_view>
 #include <thread>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 
 // TODO(adb): fixup
 #include <sys/fcntl.h>
@@ -78,6 +86,93 @@ string_dict_hash_t hash_string(const std::string_view& str) {
   }
   return str_hash;
 }
+
+class PercentLiteralLikeMatcher {
+ public:
+  PercentLiteralLikeMatcher(const std::string_view pattern, const char escape)
+      : pattern_(pattern)
+      , has_percent_(pattern.find('%') != std::string_view::npos)
+      , leading_percent_(!pattern.empty() && pattern.front() == '%')
+      , trailing_percent_(!pattern.empty() && pattern.back() == '%') {
+    if (pattern.find(escape) != std::string_view::npos ||
+        pattern.find('_') != std::string_view::npos ||
+        pattern.find('[') != std::string_view::npos) {
+      return;
+    }
+
+    size_t begin = 0;
+    while (begin < pattern.size()) {
+      const auto end = pattern.find('%', begin);
+      const auto literal_end = end == std::string_view::npos ? pattern.size() : end;
+      if (literal_end > begin) {
+        literals_.push_back(pattern.substr(begin, literal_end - begin));
+      }
+      if (end == std::string_view::npos) {
+        break;
+      }
+      begin = end + 1;
+    }
+    supported_ = true;
+  }
+
+  bool supported() const { return supported_; }
+
+  bool matches(const std::string_view str) const {
+    if (!has_percent_) {
+      return str == pattern_;
+    }
+    if (literals_.empty()) {
+      return true;
+    }
+
+    size_t search_begin = 0;
+    size_t search_end = str.size();
+    size_t first_literal = 0;
+    size_t last_literal = literals_.size();
+
+    if (!leading_percent_) {
+      const auto prefix = literals_.front();
+      if (str.size() < prefix.size() || str.substr(0, prefix.size()) != prefix) {
+        return false;
+      }
+      search_begin = prefix.size();
+      ++first_literal;
+    }
+
+    if (!trailing_percent_) {
+      const auto suffix = literals_.back();
+      if (str.size() < suffix.size() ||
+          str.substr(str.size() - suffix.size()) != suffix) {
+        return false;
+      }
+      search_end = str.size() - suffix.size();
+      --last_literal;
+    }
+
+    if (search_begin > search_end) {
+      return false;
+    }
+    for (size_t literal_index = first_literal; literal_index < last_literal;
+         ++literal_index) {
+      const auto literal = literals_[literal_index];
+      const auto position = str.find(literal, search_begin);
+      if (position == std::string_view::npos || position > search_end ||
+          literal.size() > search_end - position) {
+        return false;
+      }
+      search_begin = position + literal.size();
+    }
+    return search_begin <= search_end;
+  }
+
+ private:
+  std::string_view pattern_;
+  std::vector<std::string_view> literals_;
+  bool has_percent_;
+  bool leading_percent_;
+  bool trailing_percent_;
+  bool supported_{false};
+};
 
 struct ThreadInfo {
   int64_t num_threads{0};
@@ -142,6 +237,8 @@ bool SortedStringPermutation::operator()(const int32_t lhs, const int32_t rhs) c
 }
 
 bool g_enable_stringdict_parallel{false};
+bool g_enable_stringdict_parallel_sort{false};
+bool g_enable_lazy_string_dictionary_hash_recovery{false};
 constexpr int32_t StringDictionary::INVALID_STR_ID;
 constexpr size_t StringDictionary::MAX_STRLEN;
 constexpr size_t StringDictionary::MAX_STRCOUNT;
@@ -207,62 +304,17 @@ StringDictionary::StringDictionary(const shared::StringDictKey& dict_key,
       if (bytes % sizeof(StringIdxEntry) != 0) {
         LOG(WARNING) << "Offsets " << offsets_path_ << " file is truncated";
       }
-      const uint64_t str_count =
+      str_count_ =
           storage_is_empty ? 0 : getNumStringsFromStorage(bytes / sizeof(StringIdxEntry));
-      collisions_ = 0;
-      // at this point we know the size of the StringDict we need to load
-      // so lets reallocate the vector to the correct size
-      const uint64_t max_entries =
-          std::max(round_up_p2(str_count * 2 + 1),
-                   round_up_p2(std::max(initial_capacity, static_cast<size_t>(1))));
-      std::vector<int32_t> new_str_ids(max_entries, INVALID_STR_ID);
-      string_id_string_dict_hash_table_.swap(new_str_ids);
-      if (materialize_hashes_) {
-        std::vector<string_dict_hash_t> new_hash_cache(max_entries / 2);
-        hash_cache_.swap(new_hash_cache);
+      if (str_count_ > 0) {
+        const auto& final_entry = offset_map_[str_count_ - 1];
+        payload_file_off_ = final_entry.off + final_entry.size;
       }
-      // Bail early if we know we don't have strings to add (i.e. a new or empty
-      // dictionary)
-      if (str_count == 0) {
+      if (g_enable_lazy_string_dictionary_hash_recovery && str_count_ > 0) {
+        hash_table_recovered_.store(false, std::memory_order_relaxed);
         return;
       }
-
-      unsigned string_id = 0;
-      std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
-
-      uint32_t thread_inits = 0;
-      const auto thread_count = std::thread::hardware_concurrency();
-      const uint32_t items_per_thread = std::max<uint32_t>(
-          2000, std::min<uint32_t>(200000, (str_count / thread_count) + 1));
-      std::vector<std::future<std::vector<std::pair<string_dict_hash_t, unsigned int>>>>
-          dictionary_futures;
-      for (string_id = 0; string_id < str_count; string_id += items_per_thread) {
-        dictionary_futures.emplace_back(std::async(
-            std::launch::async, [string_id, str_count, items_per_thread, this] {
-              std::vector<std::pair<string_dict_hash_t, unsigned int>> hashVec;
-              for (uint32_t curr_id = string_id;
-                   curr_id < string_id + items_per_thread && curr_id < str_count;
-                   curr_id++) {
-                const auto recovered = getStringFromStorage(curr_id);
-                if (recovered.canary) {
-                  // hit the canary, recovery finished
-                  break;
-                } else {
-                  std::string_view temp(recovered.c_str_ptr, recovered.size);
-                  hashVec.emplace_back(std::make_pair(hash_string(temp), temp.size()));
-                }
-              }
-              return hashVec;
-            }));
-        thread_inits++;
-        if (thread_inits % thread_count == 0) {
-          processDictionaryFutures(dictionary_futures);
-        }
-      }
-      // gather last few threads
-      if (dictionary_futures.size() != 0) {
-        processDictionaryFutures(dictionary_futures);
-      }
+      recoverHashTableFromStorageUnlocked();
       VLOG(1) << "Opened string dictionary " << folder << " # Strings: " << str_count_
               << " Hash table size: " << string_id_string_dict_hash_table_.size()
               << " Fill rate: "
@@ -293,15 +345,199 @@ void StringDictionary::processDictionaryFutures(
     for (const auto& hash : hashVec) {
       const uint32_t bucket =
           computeUniqueBucketWithHash(hash.first, string_id_string_dict_hash_table_);
-      payload_file_off_ += hash.second;
-      string_id_string_dict_hash_table_[bucket] = static_cast<int32_t>(str_count_);
+      string_id_string_dict_hash_table_[bucket] = static_cast<int32_t>(hash.second);
       if (materialize_hashes_) {
-        hash_cache_[str_count_] = hash.first;
+        hash_cache_[hash.second] = hash.first;
       }
-      ++str_count_;
     }
   }
   dictionary_futures.clear();
+}
+
+void StringDictionary::recoverHashTableFromStorageUnlocked() {
+  collisions_ = 0;
+  const uint64_t max_entries = std::max(
+      round_up_p2(str_count_ * 2 + 1),
+      round_up_p2(std::max(string_id_string_dict_hash_table_.size(), size_t(1))));
+  std::vector<int32_t> new_str_ids(max_entries, INVALID_STR_ID);
+  string_id_string_dict_hash_table_.swap(new_str_ids);
+  if (materialize_hashes_) {
+    std::vector<string_dict_hash_t> new_hash_cache(max_entries / 2);
+    hash_cache_.swap(new_hash_cache);
+  }
+  if (str_count_ == 0) {
+    hash_table_recovered_.store(true, std::memory_order_release);
+    return;
+  }
+
+  const auto thread_count = std::max(1u, std::thread::hardware_concurrency());
+  const uint32_t items_per_thread = std::max<uint32_t>(
+      2000, std::min<uint32_t>(200000, (str_count_ / thread_count) + 1));
+  std::vector<std::future<std::vector<std::pair<string_dict_hash_t, unsigned int>>>>
+      dictionary_futures;
+  uint32_t thread_inits{0};
+  for (uint32_t string_id = 0; string_id < str_count_; string_id += items_per_thread) {
+    dictionary_futures.emplace_back(
+        std::async(std::launch::async, [string_id, items_per_thread, this] {
+          std::vector<std::pair<string_dict_hash_t, unsigned int>> hash_vec;
+          for (uint32_t curr_id = string_id;
+               curr_id < string_id + items_per_thread && curr_id < str_count_;
+               ++curr_id) {
+            const auto recovered = getStringFromStorage(curr_id);
+            if (recovered.canary) {
+              break;
+            }
+            const std::string_view string_view(recovered.c_str_ptr, recovered.size);
+            hash_vec.emplace_back(hash_string(string_view), curr_id);
+          }
+          return hash_vec;
+        }));
+    if (++thread_inits % thread_count == 0) {
+      processDictionaryFutures(dictionary_futures);
+    }
+  }
+  if (!dictionary_futures.empty()) {
+    processDictionaryFutures(dictionary_futures);
+  }
+  hash_table_recovered_.store(true, std::memory_order_release);
+}
+
+void StringDictionary::ensureHashTableRecovered() const {
+  if (hash_table_recovered_.load(std::memory_order_acquire)) {
+    return;
+  }
+  auto mutable_this = const_cast<StringDictionary*>(this);
+  std::lock_guard<std::shared_mutex> write_lock(mutable_this->rw_mutex_);
+  if (!mutable_this->hash_table_recovered_.load(std::memory_order_relaxed)) {
+    mutable_this->recoverHashTableFromStorageUnlocked();
+  }
+}
+
+bool StringDictionary::isHashTableRecovered() const noexcept {
+  return hash_table_recovered_.load(std::memory_order_acquire);
+}
+
+size_t StringDictionary::lookupStringsByScanWithoutHash(
+    const std::vector<std::string_view>& lookup_strings,
+    int32_t* string_ids,
+    const int64_t generation) const {
+  CHECK(string_ids);
+  if (lookup_strings.empty()) {
+    return 0;
+  }
+
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+  const int64_t dictionary_generation = generation >= 0 ? generation : str_count_;
+  CHECK_GE(dictionary_generation, 0L);
+  CHECK_LE(dictionary_generation, static_cast<int64_t>(str_count_));
+
+  std::unordered_map<std::string_view, size_t> candidate_index;
+  candidate_index.reserve(lookup_strings.size());
+  std::vector<std::string_view> candidates;
+  candidates.reserve(lookup_strings.size());
+  for (size_t lookup_idx = 0; lookup_idx < lookup_strings.size(); ++lookup_idx) {
+    const auto lookup_string = lookup_strings[lookup_idx];
+    if (lookup_string.empty()) {
+      string_ids[lookup_idx] = inline_int_null_value<int32_t>();
+      continue;
+    }
+    const auto [candidate_it, inserted] =
+        candidate_index.emplace(lookup_string, candidates.size());
+    if (inserted) {
+      candidates.push_back(lookup_string);
+    }
+  }
+
+  std::vector<int32_t> candidate_ids(candidates.size(), INVALID_STR_ID);
+  std::vector<bool> candidate_is_cached(candidates.size(), false);
+  constexpr size_t max_cacheable_lookup_batch{1024};
+  const bool use_scan_lookup_cache = candidates.size() <= max_cacheable_lookup_batch;
+  if (use_scan_lookup_cache) {
+    std::lock_guard<std::mutex> cache_lock(scan_lookup_cache_mutex_);
+    for (size_t candidate_idx = 0; candidate_idx < candidates.size(); ++candidate_idx) {
+      const auto cache_it = scan_lookup_cache_.find(candidates[candidate_idx]);
+      if (cache_it != scan_lookup_cache_.end() &&
+          cache_it->second.generation == dictionary_generation) {
+        candidate_ids[candidate_idx] = cache_it->second.string_id;
+        candidate_is_cached[candidate_idx] = true;
+      }
+    }
+  }
+
+  std::unordered_map<std::string_view, size_t> scan_candidate_index;
+  scan_candidate_index.reserve(candidates.size());
+  std::unordered_set<size_t> candidate_lengths;
+  candidate_lengths.reserve(candidates.size());
+  for (size_t candidate_idx = 0; candidate_idx < candidates.size(); ++candidate_idx) {
+    if (!candidate_is_cached[candidate_idx]) {
+      scan_candidate_index.emplace(candidates[candidate_idx], candidate_idx);
+      candidate_lengths.insert(candidates[candidate_idx].size());
+    }
+  }
+
+  if (!scan_candidate_index.empty() && dictionary_generation > 0) {
+    constexpr int64_t target_strings_per_thread{200000};
+    ThreadInfo thread_info(std::thread::hardware_concurrency(),
+                           dictionary_generation,
+                           target_strings_per_thread);
+    tbb::concurrent_vector<std::pair<size_t, int32_t>> persisted_matches;
+    tbb::task_arena limited_arena(thread_info.num_threads);
+    limited_arena.execute([&] {
+      tbb::parallel_for(
+          tbb::blocked_range<int32_t>(
+              0, dictionary_generation, thread_info.num_elems_per_thread),
+          [&](const tbb::blocked_range<int32_t>& range) {
+            for (int32_t string_id = range.begin(); string_id != range.end();
+                 ++string_id) {
+              if (!candidate_lengths.count(offset_map_[string_id].size)) {
+                continue;
+              }
+              const auto candidate_it =
+                  scan_candidate_index.find(getStringFromStorageFast(string_id));
+              if (candidate_it != scan_candidate_index.end()) {
+                persisted_matches.emplace_back(candidate_it->second, string_id);
+              }
+            }
+          },
+          tbb::simple_partitioner());
+    });
+    for (const auto& [candidate_idx, persisted_id] : persisted_matches) {
+      auto& candidate_id = candidate_ids[candidate_idx];
+      candidate_id = candidate_id == INVALID_STR_ID
+                         ? persisted_id
+                         : std::min(candidate_id, persisted_id);
+    }
+  }
+
+  if (use_scan_lookup_cache) {
+    constexpr size_t max_scan_lookup_cache_entries{4096};
+    std::lock_guard<std::mutex> cache_lock(scan_lookup_cache_mutex_);
+    if (scan_lookup_cache_.size() + candidates.size() > max_scan_lookup_cache_entries) {
+      scan_lookup_cache_.clear();
+      scan_lookup_cache_size_ = 0;
+    }
+    for (size_t candidate_idx = 0; candidate_idx < candidates.size(); ++candidate_idx) {
+      const auto [cache_it, inserted] = scan_lookup_cache_.insert_or_assign(
+          std::string(candidates[candidate_idx]),
+          ScanLookupCacheEntry{dictionary_generation, candidate_ids[candidate_idx]});
+      if (inserted) {
+        scan_lookup_cache_size_ += cache_it->first.size() + sizeof(ScanLookupCacheEntry);
+      }
+    }
+  }
+
+  size_t num_strings_not_found{0};
+  for (size_t lookup_idx = 0; lookup_idx < lookup_strings.size(); ++lookup_idx) {
+    const auto lookup_string = lookup_strings[lookup_idx];
+    if (lookup_string.empty()) {
+      continue;
+    }
+    const auto candidate_it = candidate_index.find(lookup_string);
+    CHECK(candidate_it != candidate_index.end());
+    string_ids[lookup_idx] = candidate_ids[candidate_it->second];
+    num_strings_not_found += string_ids[lookup_idx] == INVALID_STR_ID;
+  }
+  return num_strings_not_found;
 }
 
 const shared::StringDictKey& StringDictionary::getDictKey() const noexcept {
@@ -359,6 +595,7 @@ StringDictionary::~StringDictionary() noexcept {
 }
 
 int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
+  ensureHashTableRecovered();
   return getOrAddImpl(str);
 }
 
@@ -393,6 +630,270 @@ std::vector<std::string> StringDictionary::getStringsForRange(
                     });
 
   return result;
+}
+
+void StringDictionary::fillStringOpUnionTranslationMap(
+    int32_t* translated_ids,
+    const int64_t source_generation,
+    const StringOps_Namespace::StringOps& string_ops,
+    const std::function<bool(int32_t)>& mask_functor,
+    const StringAddCallback& add_transient_callback,
+    const StringIdLookupCallback& lookup_transient_callback) const {
+  CHECK(translated_ids);
+  CHECK_GE(source_generation, 0L);
+  if (source_generation == 0L) {
+    return;
+  }
+
+  tbb::concurrent_unordered_set<std::string> unique_strings;
+  const bool has_string_ops = string_ops.size() > 0;
+  constexpr int64_t target_strings_per_thread{1000};
+  ThreadInfo thread_info(
+      std::thread::hardware_concurrency(), source_generation, target_strings_per_thread);
+  try_parallelize_llm_transform(thread_info, string_ops, source_generation);
+  CHECK_GE(thread_info.num_threads, 1L);
+  CHECK_GE(thread_info.num_elems_per_thread, 1L);
+
+  auto process_source_string = [&](const int32_t source_string_id,
+                                   std::string& string_ops_storage) {
+    const auto source_string = getStringFromStorageFast(source_string_id);
+    return has_string_ops ? string_ops(source_string, string_ops_storage) : source_string;
+  };
+
+  tbb::task_arena limited_arena(thread_info.num_threads);
+  limited_arena.execute([&] {
+    std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+    tbb::parallel_for(
+        tbb::blocked_range<int32_t>(
+            0, source_generation, thread_info.num_elems_per_thread /* tbb grain_size */),
+        [&](const tbb::blocked_range<int32_t>& range) {
+          std::string string_ops_storage;
+          for (int32_t source_string_id = range.begin(); source_string_id != range.end();
+               ++source_string_id) {
+            if (!mask_functor(source_string_id)) {
+              continue;
+            }
+            const auto processed_string =
+                process_source_string(source_string_id, string_ops_storage);
+            if (!processed_string.empty()) {
+              unique_strings.insert(std::string(processed_string));
+            }
+          }
+        },
+        tbb::simple_partitioner());
+  });
+
+  for (const auto& str : unique_strings) {
+    add_transient_callback(str);
+  }
+
+  limited_arena.execute([&] {
+    std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+    tbb::parallel_for(
+        tbb::blocked_range<int32_t>(
+            0, source_generation, thread_info.num_elems_per_thread /* tbb grain_size */),
+        [&](const tbb::blocked_range<int32_t>& range) {
+          std::string string_ops_storage;
+          for (int32_t source_string_id = range.begin(); source_string_id != range.end();
+               ++source_string_id) {
+            if (!mask_functor(source_string_id)) {
+              continue;
+            }
+            const auto processed_string =
+                process_source_string(source_string_id, string_ops_storage);
+            translated_ids[source_string_id] =
+                processed_string.empty() ? inline_int_null_value<int32_t>()
+                                         : lookup_transient_callback(processed_string);
+          }
+        },
+        tbb::simple_partitioner());
+  });
+}
+
+bool StringDictionary::tryBuildSelfStringOpUnionTranslationMapWithoutHash(
+    int32_t* translated_ids,
+    const int64_t generation,
+    const StringOps_Namespace::StringOps& string_ops,
+    const StringAddCallback& add_transient_callback,
+    const StringIdLookupCallback& lookup_transient_callback,
+    size_t& num_untranslated_strings) const {
+  CHECK(translated_ids);
+  CHECK_GE(generation, 0L);
+  CHECK_GT(string_ops.size(), 0UL);
+  CHECK_LE(generation, static_cast<int64_t>(str_count_));
+  if (generation == 0 || isHashTableRecovered()) {
+    num_untranslated_strings = 0;
+    return generation == 0;
+  }
+
+  const auto& string_op_pipeline = string_ops.getStringOps();
+  if (std::any_of(string_op_pipeline.begin(),
+                  string_op_pipeline.end(),
+                  [](const auto& string_op) {
+                    return string_op->getOpInfo().getOpKind() ==
+                           SqlStringOpKind::LLM_TRANSFORM;
+                  })) {
+    return false;
+  }
+
+  constexpr size_t max_unique_transformed_strings{1'000'000};
+  constexpr int64_t target_strings_per_thread{1000};
+  ThreadInfo thread_info(
+      std::thread::hardware_concurrency(), generation, target_strings_per_thread);
+  CHECK_GE(thread_info.num_threads, 1L);
+  CHECK_GE(thread_info.num_elems_per_thread, 1L);
+
+  using CandidateIndexMap = tbb::concurrent_hash_map<std::string, int32_t>;
+  using LocalCandidateIndexMap = std::unordered_map<std::string_view, int32_t>;
+  using SourceLengthSet = std::bitset<MAX_STRLEN + 1>;
+  CandidateIndexMap candidate_indices;
+  tbb::concurrent_vector<std::string> candidates;
+  tbb::enumerable_thread_specific<LocalCandidateIndexMap> local_candidate_indices;
+  tbb::enumerable_thread_specific<SourceLengthSet> source_lengths;
+  std::atomic<bool> candidate_limit_exceeded{false};
+  tbb::task_arena limited_arena(thread_info.num_threads);
+  {
+    std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+    limited_arena.execute([&] {
+      tbb::parallel_for(
+          tbb::blocked_range<int32_t>(0, generation, thread_info.num_elems_per_thread),
+          [&](const tbb::blocked_range<int32_t>& range) {
+            constexpr size_t max_local_candidates{4096};
+            auto& local_candidates = local_candidate_indices.local();
+            auto& local_source_lengths = source_lengths.local();
+            std::string string_ops_storage;
+            for (int32_t string_id = range.begin(); string_id != range.end();
+                 ++string_id) {
+              if (candidate_limit_exceeded.load(std::memory_order_relaxed)) {
+                break;
+              }
+              const auto source_string = getStringFromStorageFast(string_id);
+              local_source_lengths.set(source_string.size());
+              const auto transformed_string =
+                  string_ops.evalViewOrCopy(source_string, string_ops_storage);
+              if (transformed_string.empty()) {
+                translated_ids[string_id] = inline_int_null_value<int32_t>();
+                continue;
+              }
+
+              auto local_candidate_it = local_candidates.find(transformed_string);
+              int32_t candidate_idx{INVALID_STR_ID};
+              if (local_candidate_it != local_candidates.end()) {
+                candidate_idx = local_candidate_it->second;
+              } else {
+                const std::string transformed_key(transformed_string);
+                CandidateIndexMap::const_accessor read_accessor;
+                if (candidate_indices.find(read_accessor, transformed_key)) {
+                  candidate_idx = read_accessor->second;
+                  read_accessor.release();
+                } else {
+                  CandidateIndexMap::accessor write_accessor;
+                  if (candidate_indices.insert(write_accessor, transformed_key)) {
+                    const auto candidate_it = candidates.push_back(write_accessor->first);
+                    const auto new_candidate_idx = candidate_it - candidates.begin();
+                    if (new_candidate_idx >= static_cast<decltype(new_candidate_idx)>(
+                                                 max_unique_transformed_strings)) {
+                      write_accessor->second = INVALID_STR_ID;
+                      candidate_limit_exceeded.store(true, std::memory_order_relaxed);
+                      break;
+                    }
+                    write_accessor->second = static_cast<int32_t>(new_candidate_idx);
+                  }
+                  candidate_idx = write_accessor->second;
+                  write_accessor.release();
+                }
+                if (candidate_idx == INVALID_STR_ID) {
+                  candidate_limit_exceeded.store(true, std::memory_order_relaxed);
+                  break;
+                }
+                if (local_candidates.size() < max_local_candidates) {
+                  local_candidates.emplace(candidates[candidate_idx], candidate_idx);
+                }
+              }
+              translated_ids[string_id] = candidate_idx;
+            }
+          },
+          tbb::simple_partitioner());
+    });
+  }
+  if (candidate_limit_exceeded.load(std::memory_order_relaxed)) {
+    return false;
+  }
+  local_candidate_indices.clear();
+  candidate_indices.clear();
+
+  std::vector<int32_t> candidate_ids(candidates.size(), INVALID_STR_ID);
+  std::vector<std::string_view> candidate_views;
+  candidate_views.reserve(candidates.size());
+  for (const auto& candidate : candidates) {
+    candidate_views.emplace_back(candidate);
+  }
+  SourceLengthSet observed_source_lengths;
+  for (const auto& local_source_lengths : source_lengths) {
+    observed_source_lengths |= local_source_lengths;
+  }
+  const bool candidate_may_be_persisted = std::any_of(
+      candidate_views.begin(), candidate_views.end(), [&](const auto candidate) {
+        return candidate.size() <= MAX_STRLEN &&
+               observed_source_lengths.test(candidate.size());
+      });
+  if (candidate_may_be_persisted) {
+    lookupStringsByScanWithoutHash(candidate_views, candidate_ids.data(), generation);
+  }
+
+  std::vector<uint8_t> candidate_was_initially_available(candidates.size(), false);
+  size_t num_new_transients{0};
+  for (size_t candidate_idx = 0; candidate_idx < candidates.size(); ++candidate_idx) {
+    if (candidate_ids[candidate_idx] != INVALID_STR_ID) {
+      candidate_was_initially_available[candidate_idx] = true;
+      continue;
+    }
+    const auto transient_id = lookup_transient_callback(candidates[candidate_idx]);
+    if (transient_id != INVALID_STR_ID) {
+      candidate_ids[candidate_idx] = transient_id;
+      candidate_was_initially_available[candidate_idx] = true;
+    } else {
+      ++num_new_transients;
+    }
+  }
+  constexpr size_t max_allowed_transients =
+      static_cast<size_t>(std::numeric_limits<int32_t>::max() - 2);
+  if (num_new_transients > max_allowed_transients) {
+    throw std::runtime_error(
+        "Self string-operation translation exceeds the transient string ID domain");
+  }
+
+  for (size_t candidate_idx = 0; candidate_idx < candidates.size(); ++candidate_idx) {
+    if (candidate_ids[candidate_idx] == INVALID_STR_ID) {
+      add_transient_callback(candidates[candidate_idx]);
+      candidate_ids[candidate_idx] = lookup_transient_callback(candidates[candidate_idx]);
+      CHECK_LT(candidate_ids[candidate_idx], INVALID_STR_ID);
+    }
+  }
+
+  std::atomic<size_t> untranslated_count{0};
+  limited_arena.execute([&] {
+    tbb::parallel_for(
+        tbb::blocked_range<int32_t>(0, generation, thread_info.num_elems_per_thread),
+        [&](const tbb::blocked_range<int32_t>& range) {
+          size_t local_untranslated_count{0};
+          for (int32_t string_id = range.begin(); string_id != range.end(); ++string_id) {
+            const auto candidate_idx = translated_ids[string_id];
+            if (candidate_idx == inline_int_null_value<int32_t>()) {
+              continue;
+            }
+            CHECK_GE(candidate_idx, 0);
+            CHECK_LT(static_cast<size_t>(candidate_idx), candidate_ids.size());
+            translated_ids[string_id] = candidate_ids[candidate_idx];
+            local_untranslated_count += !candidate_was_initially_available[candidate_idx];
+          }
+          untranslated_count.fetch_add(local_untranslated_count,
+                                       std::memory_order_relaxed);
+        },
+        tbb::simple_partitioner());
+  });
+  num_untranslated_strings = untranslated_count.load(std::memory_order_relaxed);
+  return true;
 }
 
 namespace {
@@ -508,6 +1009,29 @@ size_t StringDictionary::getBulk(const std::vector<String>& string_vec,
   if (num_lookup_strings == 0) {
     return 0;
   }
+  constexpr size_t max_scan_lookup_strings{1024};
+  if (g_enable_lazy_string_dictionary_hash_recovery && !isHashTableRecovered() &&
+      static_cast<size_t>(num_lookup_strings) <= max_scan_lookup_strings) {
+    std::vector<std::string_view> lookup_strings;
+    lookup_strings.reserve(num_lookup_strings);
+    for (const auto& input_string : string_vec) {
+      if (input_string.size() > StringDictionary::MAX_STRLEN) {
+        throw_string_too_long_error(input_string, dict_key_);
+      }
+      lookup_strings.emplace_back(input_string);
+    }
+    std::vector<int32_t> scanned_ids(num_lookup_strings);
+    const auto num_strings_not_found =
+        lookupStringsByScanWithoutHash(lookup_strings, scanned_ids.data(), generation);
+    for (int64_t string_idx = 0; string_idx < num_lookup_strings; ++string_idx) {
+      encoded_vec[string_idx] =
+          scanned_ids[string_idx] == inline_int_null_value<int32_t>()
+              ? inline_int_null_value<T>()
+              : static_cast<T>(scanned_ids[string_idx]);
+    }
+    return num_strings_not_found;
+  }
+  ensureHashTableRecovered();
 
   const ThreadInfo thread_info(
       std::thread::hardware_concurrency(), num_lookup_strings, target_strings_per_thread);
@@ -595,6 +1119,7 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
     getOrAddBulkParallel(input_strings, output_string_ids);
     return;
   }
+  ensureHashTableRecovered();
   // Single-thread path.
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
 
@@ -650,6 +1175,7 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
 template <class T, class String>
 void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_strings,
                                             T* output_string_ids) {
+  ensureHashTableRecovered();
   // Compute hashes of the input strings up front, and in parallel,
   // as the string hashing does not need to be behind the subsequent write_lock
   std::vector<string_dict_hash_t> input_strings_hashes(input_strings.size());
@@ -745,6 +1271,7 @@ template void StringDictionary::getOrAddBulk(
 
 template <class String>
 int32_t StringDictionary::getIdOfString(const String& str) const {
+  ensureHashTableRecovered();
   std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   return getUnlocked(str);
 }
@@ -796,12 +1323,18 @@ size_t StringDictionary::storageEntryCount() const {
   return storageEntryCountUnlocked();
 }
 
+bool StringDictionary::isSortedPermutationCacheComplete() const {
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+  return sorted_permutation_cache_.size() == str_count_;
+}
+
 template <typename T>
 std::vector<T> StringDictionary::getLikeImpl(const std::string& pattern,
                                              const bool icase,
                                              const bool is_simple,
                                              const char escape,
                                              const size_t generation) const {
+  CHECK_LE(generation, static_cast<size_t>(str_count_));
   constexpr size_t grain_size{1000};
   auto is_like_impl = icase       ? is_simple ? string_ilike_simple : string_ilike
                       : is_simple ? string_like_simple
@@ -809,22 +1342,42 @@ std::vector<T> StringDictionary::getLikeImpl(const std::string& pattern,
   auto const num_threads = static_cast<size_t>(cpu_threads());
   std::vector<std::vector<T>> worker_results(num_threads);
   tbb::task_arena limited_arena(num_threads);
-  limited_arena.execute([&] {
-    tbb::parallel_for(
-        tbb::blocked_range<size_t>(0, generation, grain_size),
-        [&is_like_impl, &pattern, &escape, &worker_results, this](
-            const tbb::blocked_range<size_t>& range) {
-          auto& result_vector =
-              worker_results[tbb::this_task_arena::current_thread_index()];
-          for (size_t i = range.begin(); i < range.end(); ++i) {
-            const auto str = getStringUnlocked(i);
-            if (is_like_impl(
-                    str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)) {
-              result_vector.push_back(i);
+  const auto populate_worker_results = [&](const auto& matches_at) {
+    limited_arena.execute([&] {
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, generation, grain_size),
+          [&matches_at, &worker_results](const tbb::blocked_range<size_t>& range) {
+            auto& result_vector =
+                worker_results[tbb::this_task_arena::current_thread_index()];
+            for (size_t i = range.begin(); i < range.end(); ++i) {
+              if (matches_at(i)) {
+                result_vector.push_back(i);
+              }
             }
-          }
-        });
-  });
+          });
+    });
+  };
+  if (g_enable_lazy_string_dictionary_hash_recovery) {
+    const PercentLiteralLikeMatcher percent_literal_matcher(pattern, escape);
+    if (!icase && !is_simple && percent_literal_matcher.supported()) {
+      populate_worker_results([&](const size_t string_id) {
+        return percent_literal_matcher.matches(
+            getStringFromStorageFast(static_cast<int32_t>(string_id)));
+      });
+    } else {
+      populate_worker_results([&](const size_t string_id) {
+        const auto str = getStringFromStorageFast(static_cast<int32_t>(string_id));
+        return is_like_impl(
+            str.data(), str.size(), pattern.c_str(), pattern.size(), escape);
+      });
+    }
+  } else {
+    populate_worker_results([&](const size_t string_id) {
+      const auto str = getStringUnlocked(static_cast<int32_t>(string_id));
+      return is_like_impl(
+          str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape);
+    });
+  }
   // partial_sum to get 1) a start offset for each thread and 2) the total # elems
   std::vector<size_t> start_offsets(num_threads + 1, 0);
   auto vec_size = [](std::vector<T> const& vec) { return vec.size(); };
@@ -848,22 +1401,58 @@ std::vector<T> StringDictionary::getLikeImpl(const std::string& pattern,
   return result;
 }
 template <>
-std::vector<int32_t> StringDictionary::getLike<int32_t>(const std::string& pattern,
-                                                        const bool icase,
-                                                        const bool is_simple,
-                                                        const char escape,
-                                                        const size_t generation) const {
+std::shared_ptr<const std::vector<int32_t>> StringDictionary::getLikeShared<int32_t>(
+    const std::string& pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape,
+    const size_t generation) const {
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
-  const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape);
+  const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape, generation);
   const auto it = like_i32_cache_.find(cache_key);
   if (it != like_i32_cache_.end()) {
     return it->second;
   }
 
-  auto result = getLikeImpl<int32_t>(pattern, icase, is_simple, escape, generation);
-  // place result into cache for reuse if similar query
-  const auto it_ok = like_i32_cache_.insert(std::make_pair(cache_key, result));
-  like_cache_size_ += (pattern.size() + 3 + (result.size() * sizeof(int32_t)));
+  auto result = std::make_shared<const std::vector<int32_t>>(
+      getLikeImpl<int32_t>(pattern, icase, is_simple, escape, generation));
+  const auto it_ok = like_i32_cache_.emplace(cache_key, result);
+  like_cache_size_ +=
+      pattern.size() + 3 + sizeof(generation) + result->size() * sizeof(int32_t);
+
+  CHECK(it_ok.second);
+
+  return result;
+}
+
+template <>
+std::vector<int32_t> StringDictionary::getLike<int32_t>(const std::string& pattern,
+                                                        const bool icase,
+                                                        const bool is_simple,
+                                                        const char escape,
+                                                        const size_t generation) const {
+  return *getLikeShared<int32_t>(pattern, icase, is_simple, escape, generation);
+}
+
+template <>
+std::shared_ptr<const std::vector<int64_t>> StringDictionary::getLikeShared<int64_t>(
+    const std::string& pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape,
+    const size_t generation) const {
+  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
+  const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape, generation);
+  const auto it = like_i64_cache_.find(cache_key);
+  if (it != like_i64_cache_.end()) {
+    return it->second;
+  }
+
+  auto result = std::make_shared<const std::vector<int64_t>>(
+      getLikeImpl<int64_t>(pattern, icase, is_simple, escape, generation));
+  const auto it_ok = like_i64_cache_.emplace(cache_key, result);
+  like_cache_size_ +=
+      pattern.size() + 3 + sizeof(generation) + result->size() * sizeof(int64_t);
 
   CHECK(it_ok.second);
 
@@ -876,21 +1465,7 @@ std::vector<int64_t> StringDictionary::getLike<int64_t>(const std::string& patte
                                                         const bool is_simple,
                                                         const char escape,
                                                         const size_t generation) const {
-  std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
-  const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape);
-  const auto it = like_i64_cache_.find(cache_key);
-  if (it != like_i64_cache_.end()) {
-    return it->second;
-  }
-
-  auto result = getLikeImpl<int64_t>(pattern, icase, is_simple, escape, generation);
-  // place result into cache for reuse if similar query
-  const auto it_ok = like_i64_cache_.insert(std::make_pair(cache_key, result));
-  like_cache_size_ += (pattern.size() + 3 + (result.size() * sizeof(int64_t)));
-
-  CHECK(it_ok.second);
-
-  return result;
+  return *getLikeShared<int64_t>(pattern, icase, is_simple, escape, generation);
 }
 
 std::vector<int32_t> StringDictionary::getEquals(std::string pattern,
@@ -1456,7 +2031,7 @@ uint32_t StringDictionary::computeBucketFromStorageAndMemory(
       break;
     }
     if (!materialize_hashes_ || (input_string_hash == hash_cache_[candidate_string_id])) {
-      if (candidate_string_id > 0 &&
+      if (candidate_string_id >= 0 &&
           static_cast<size_t>(candidate_string_id) >= storage_high_water_mark) {
         // The candidate string is not in storage yet but in our string_memory_ids temp
         // buffer
@@ -1516,6 +2091,14 @@ void StringDictionary::checkAndConditionallyIncreasePayloadCapacity(
         write_length - (payload_file_size_ - payload_file_off_);
     if (!isTemp_) {
       CHECK_GE(payload_fd_, 0);
+#ifdef __linux__
+      const auto old_payload_file_size = payload_file_size_;
+      addPayloadCapacity(min_capacity_needed);
+      CHECK(payload_file_off_ + write_length <= payload_file_size_);
+      payload_map_ = reinterpret_cast<char*>(heavyai::checked_mremap(
+          payload_map_, old_payload_file_size, payload_file_size_));
+      total_mmap_size += payload_file_size_ - old_payload_file_size;
+#else
       heavyai::checked_munmap(payload_map_, payload_file_size_);
       total_mmap_size -= payload_file_size_;
       addPayloadCapacity(min_capacity_needed);
@@ -1523,6 +2106,7 @@ void StringDictionary::checkAndConditionallyIncreasePayloadCapacity(
       payload_map_ =
           reinterpret_cast<char*>(heavyai::checked_mmap(payload_fd_, payload_file_size_));
       total_mmap_size += payload_file_size_;
+#endif
     } else {
       addPayloadCapacity(min_capacity_needed);
       CHECK(payload_file_off_ + write_length <= payload_file_size_);
@@ -1538,13 +2122,22 @@ void StringDictionary::checkAndConditionallyIncreaseOffsetCapacity(
         write_length - (offset_file_size_ - offset_file_off);
     if (!isTemp_) {
       CHECK_GE(offset_fd_, 0);
+#ifdef __linux__
+      const auto old_offset_file_size = offset_file_size_;
+      addOffsetCapacity(min_capacity_needed);
+      CHECK(offset_file_off + write_length <= offset_file_size_);
+      offset_map_ = reinterpret_cast<StringIdxEntry*>(
+          heavyai::checked_mremap(offset_map_, old_offset_file_size, offset_file_size_));
+      total_mmap_size += offset_file_size_ - old_offset_file_size;
+#else
       heavyai::checked_munmap(offset_map_, offset_file_size_);
-      total_mmap_size += offset_file_size_;
+      total_mmap_size -= offset_file_size_;
       addOffsetCapacity(min_capacity_needed);
       CHECK(offset_file_off + write_length <= offset_file_size_);
       offset_map_ = reinterpret_cast<StringIdxEntry*>(
           heavyai::checked_mmap(offset_fd_, offset_file_size_));
       total_mmap_size += offset_file_size_;
+#endif
     } else {
       addOffsetCapacity(min_capacity_needed);
       CHECK(offset_file_off + write_length <= offset_file_size_);
@@ -1696,6 +2289,11 @@ void StringDictionary::invalidateInvertedIndex() noexcept {
   if (!equal_cache_.empty()) {
     decltype(equal_cache_)().swap(equal_cache_);
   }
+  {
+    std::lock_guard<std::mutex> cache_lock(scan_lookup_cache_mutex_);
+    scan_lookup_cache_.clear();
+    scan_lookup_cache_size_ = 0;
+  }
   compare_cache_.invalidateInvertedIndex();
 
   like_cache_size_ = 0;
@@ -1751,11 +2349,16 @@ void StringDictionary::sortCache(std::vector<int32_t>& cache) {
   // this boost sort is creating some problems when we use UTF-8 encoded strings.
   // TODO (vraj): investigate What is wrong with boost sort and try to mitigate it.
 
-  std::sort(cache.begin(), cache.end(), [this](int32_t a, int32_t b) {
+  const auto string_id_less = [this](int32_t a, int32_t b) {
     auto a_str = this->getStringFromStorage(a);
     auto b_str = this->getStringFromStorage(b);
     return string_lt(a_str.c_str_ptr, a_str.size, b_str.c_str_ptr, b_str.size);
-  });
+  };
+  if (g_enable_stringdict_parallel_sort) {
+    tbb::parallel_sort(cache.begin(), cache.end(), string_id_less);
+  } else {
+    std::sort(cache.begin(), cache.end(), string_id_less);
+  }
 }
 
 void StringDictionary::mergeSortedCache(std::vector<int32_t>& temp_sorted_cache) {
@@ -1951,6 +2554,11 @@ size_t StringDictionary::buildDictionaryTranslationMap(
     StringLookupCallback const& dest_transient_lookup_callback,
     const StringOps_Namespace::StringOps& string_ops) const {
   auto timer = DEBUG_TIMER(__func__);
+  const bool has_string_ops = string_ops.size() > 0;
+  if (materialize_hashes_ && !has_string_ops) {
+    ensureHashTableRecovered();
+  }
+  dest_dict->ensureHashTableRecovered();
   CHECK_GE(source_generation, 0L);
   CHECK_GE(dest_generation, 0L);
   const int64_t num_source_strings = source_generation;
@@ -1989,8 +2597,6 @@ size_t StringDictionary::buildDictionaryTranslationMap(
   // in other contexts been shown to exhibit better performance when low
   // numbers of threads are needed than just letting tbb figure the number of threads,
   // but should benchmark in this specific context
-
-  const bool has_string_ops = string_ops.size();
 
   tbb::task_arena limited_arena(thread_info.num_threads);
   std::vector<size_t> num_strings_not_translated_per_thread(thread_info.num_threads, 0UL);
@@ -2145,10 +2751,12 @@ void StringDictionary::buildDictionaryNumericTranslationMap(
 
 size_t StringDictionary::computeCacheSize() const {
   std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+  std::lock_guard<std::mutex> scan_cache_lock(scan_lookup_cache_mutex_);
   return string_id_string_dict_hash_table_.size() * sizeof(int32_t) +
          hash_cache_.size() * sizeof(string_dict_hash_t) +
          sorted_cache_.size() * sizeof(int32_t) + like_cache_size_ + regex_cache_size_ +
-         equal_cache_size_ + compare_cache_size_ + strings_cache_size_;
+         equal_cache_size_ + compare_cache_size_ + strings_cache_size_ +
+         scan_lookup_cache_size_;
 }
 
 StringDictionary::StringDictMemoryUsage StringDictionary::getStringDictMemoryUsage() {
