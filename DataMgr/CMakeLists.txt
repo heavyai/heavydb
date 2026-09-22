@@ -118,8 +118,28 @@ endif()
 
 add_library(DataMgr ${datamgr_source_files})
 add_dependencies(DataMgr Calcite)
+target_include_directories(
+  DataMgr
+  PRIVATE ${CMAKE_SOURCE_DIR}/DataMgr/ForeignStorage ${Snappy_INCLUDE_DIRS})
+if(nvcomp_cpu_INCLUDE_DIR AND nvcomp_cpu_LIBRARY)
+  target_compile_definitions(DataMgr PRIVATE HAVE_NVCOMP_GDEFLATE)
+  target_include_directories(DataMgr PRIVATE ${nvcomp_cpu_INCLUDE_DIR})
+endif()
+if(ENABLE_CUDA AND nvcomp_INCLUDE_DIR AND nvcomp_LIBRARY)
+  target_compile_definitions(DataMgr PRIVATE HAVE_NVCOMP)
+  target_include_directories(DataMgr PRIVATE ${nvcomp_INCLUDE_DIR})
+endif()
+if(ENABLE_CUDA AND nvcomp_BITCOMP_FOUND)
+  target_compile_definitions(DataMgr PRIVATE HAVE_NVCOMP_BITCOMP)
+endif()
 
-target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${CMAKE_DL_LIBS})
+target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY} ${TBB_LIBS} ${lz4_LIBRARY} ${Snappy_LIBRARIES} ${CMAKE_DL_LIBS})
+if(nvcomp_cpu_INCLUDE_DIR AND nvcomp_cpu_LIBRARY)
+  target_link_libraries(DataMgr ${nvcomp_cpu_LIBRARY})
+endif()
+if(ENABLE_CUDA AND nvcomp_INCLUDE_DIR AND nvcomp_LIBRARY)
+  target_link_libraries(DataMgr ${nvcomp_LIBRARY})
+endif()
 # Generator expressions such as "$<$<BOOL:${ENABLE_FOLLY}>:${XXX_LIBRARIES}>"
 # cannot be used in target_link_libraries.
 # See https://cmake.org/cmake/help/latest/command/target_link_libraries.html for details,

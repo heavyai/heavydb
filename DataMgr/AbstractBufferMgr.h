@@ -11,6 +11,8 @@
 #pragma once
 
 #include <boost/preprocessor.hpp>
+#include <stdexcept>
+#include <vector>
 #include "AbstractBuffer.h"
 #include "Shared/types.h"
 
@@ -35,6 +37,11 @@ DEFINE_ENUM_WITH_STRING_CONVERSIONS(
     (CACHING_FILE_MGR)(FILE_MGR)(CPU_MGR)(GPU_MGR)(GLOBAL_FILE_MGR)(PERSISTENT_STORAGE_MGR)(FOREIGN_STORAGE_MGR))
 
 namespace Data_Namespace {
+
+struct BufferFetchRequest {
+  ChunkKey key;
+  size_t num_bytes{0};
+};
 
 /**
  * @class   AbstractBufferMgr
@@ -63,9 +70,32 @@ class AbstractBufferMgr {
   virtual void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
                                        const bool purge = true) = 0;
   virtual AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) = 0;
+  // Returns a native on-disk buffer when this manager can prove the key is backed by
+  // HeavyDB storage. Managers serving foreign or otherwise non-native data return null.
+  virtual AbstractBuffer* getBufferIfNativeStorage(const ChunkKey&, const size_t = 0) {
+    return nullptr;
+  }
+  virtual std::vector<AbstractBuffer*> getBuffers(
+      const std::vector<BufferFetchRequest>& requests) {
+    std::vector<AbstractBuffer*> buffers;
+    buffers.reserve(requests.size());
+    for (const auto& request : requests) {
+      buffers.push_back(getBuffer(request.key, request.num_bytes));
+    }
+    return buffers;
+  }
   virtual void fetchBuffer(const ChunkKey& key,
                            AbstractBuffer* destBuffer,
                            const size_t numBytes = 0) = 0;
+  virtual void fetchBuffers(const std::vector<BufferFetchRequest>& requests,
+                            const std::vector<AbstractBuffer*>& destBuffers) {
+    if (requests.size() != destBuffers.size()) {
+      throw std::runtime_error("Mismatched batch fetch request and destination counts");
+    }
+    for (size_t i = 0; i < requests.size(); ++i) {
+      fetchBuffer(requests[i].key, destBuffers[i], requests[i].num_bytes);
+    }
+  }
   virtual AbstractBuffer* putBuffer(const ChunkKey& key,
                                     AbstractBuffer* srcBuffer,
                                     const size_t numBytes = 0) = 0;
