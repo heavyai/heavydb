@@ -536,15 +536,25 @@ public final class HeavyDBParser {
 
   public String buildRATreeAndPerformQueryOptimization(
           String query, final HeavyDBParserOptions parserOptions) throws IOException {
-    HeavyDBSchema schema = new HeavyDBSchema(
-            dataDir, this, dbPort, dbUser, sock_transport_properties, dbUser.getDB());
-    HeavyDBPlanner planner = getPlanner(
-            true, parserOptions.isWatchdogEnabled());
+    final boolean previousMetadataState = HeavyDBTable.setOptimizerMetadataEnabled(
+            parserOptions.isExperimentalQueryRewritesEnabled());
+    final boolean previousConstraintTrustState =
+            HeavyDBTable.setTrustUnenforcedTableConstraints(
+                    parserOptions.trustUnenforcedTableConstraints());
+    try {
+      HeavyDBSchema schema = new HeavyDBSchema(
+              dataDir, this, dbPort, dbUser, sock_transport_properties, dbUser.getDB());
+      HeavyDBPlanner planner = getPlanner(
+              true, parserOptions.isWatchdogEnabled());
 
-    planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
-    RelRoot optRel = planner.buildRATreeAndPerformQueryOptimization(query, schema);
-    optRel = replaceIsTrue(planner.getTypeFactory(), optRel);
-    return HeavyDBSerializer.toString(optRel.project());
+      planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
+      RelRoot optRel = planner.buildRATreeAndPerformQueryOptimization(query, schema);
+      optRel = replaceIsTrue(planner.getTypeFactory(), optRel);
+      return HeavyDBSerializer.toString(normalizeAggregateGroupKeys(optRel.project()));
+    } finally {
+      HeavyDBTable.setTrustUnenforcedTableConstraints(previousConstraintTrustState);
+      HeavyDBTable.setOptimizerMetadataEnabled(previousMetadataState);
+    }
   }
 
   public Pair<String, Boolean> processSql(
@@ -564,37 +574,48 @@ public final class HeavyDBParser {
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
-    if (sqlNode instanceof JsonSerializableDdl) {
-      return new Pair<String, Boolean>(
-              ((JsonSerializableDdl) sqlNode).toJsonString(), false);
-    }
+    final boolean previousMetadataState = HeavyDBTable.setOptimizerMetadataEnabled(
+            parserOptions.isExperimentalQueryRewritesEnabled());
+    final boolean previousConstraintTrustState =
+            HeavyDBTable.setTrustUnenforcedTableConstraints(
+                    parserOptions.trustUnenforcedTableConstraints());
+    try {
 
-    if (sqlNode instanceof SqlDdl) {
-      return new Pair<String, Boolean>(sqlNode.toString(), false);
-    }
+      if (sqlNode instanceof JsonSerializableDdl) {
+        return new Pair<String, Boolean>(
+                ((JsonSerializableDdl) sqlNode).toJsonString(), false);
+      }
 
-    final HeavyDBPlanner planner = getPlanner(
-            true, parserOptions.isWatchdogEnabled());
-    planner.advanceToValidate();
+      if (sqlNode instanceof SqlDdl) {
+        return new Pair<String, Boolean>(sqlNode.toString(), false);
+      }
 
-    final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
-    RelNode project = sqlRel.project();
-    if (project == null) {
-      throw new RuntimeException("Cannot convert the sql to AST");
+      final HeavyDBPlanner planner = getPlanner(
+              true, parserOptions.isWatchdogEnabled());
+      planner.advanceToValidate();
+
+      final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
+      RelNode project = sqlRel.project();
+      if (project == null) {
+        throw new RuntimeException("Cannot convert the sql to AST");
+      }
+      // Normalize non-prefix Aggregate group keys (a Calcite 1.41.0 decorrelation shape
+      // HeavyDB can't execute) before explain/serialization. See normalizeAggregateGroupKeys.
+      project = normalizeAggregateGroupKeys(project);
+      if (parserOptions.isExplainDetail()) {
+        StringWriter sw = new StringWriter();
+        RelWriter planWriter = new HeavyDBRelWriterImpl(
+                new PrintWriter(sw), SqlExplainLevel.EXPPLAN_ATTRIBUTES, false);
+        project.explain(planWriter);
+        return new Pair<String, Boolean>(sw.toString(), true);
+      } else if (parserOptions.isExplain()) {
+        return new Pair<String, Boolean>(RelOptUtil.toString(project), true);
+      }
+      return new Pair<String, Boolean>(HeavyDBSerializer.toString(project), true);
+    } finally {
+      HeavyDBTable.setTrustUnenforcedTableConstraints(previousConstraintTrustState);
+      HeavyDBTable.setOptimizerMetadataEnabled(previousMetadataState);
     }
-    // Normalize non-prefix Aggregate group keys (a Calcite 1.41.0 decorrelation shape
-    // HeavyDB can't execute) before explain/serialization. See normalizeAggregateGroupKeys.
-    project = normalizeAggregateGroupKeys(project);
-    if (parserOptions.isExplainDetail()) {
-      StringWriter sw = new StringWriter();
-      RelWriter planWriter = new HeavyDBRelWriterImpl(
-              new PrintWriter(sw), SqlExplainLevel.EXPPLAN_ATTRIBUTES, false);
-      project.explain(planWriter);
-      return new Pair<String, Boolean>(sw.toString(), true);
-    } else if (parserOptions.isExplain()) {
-      return new Pair<String, Boolean>(RelOptUtil.toString(sqlRel.project()), true);
-    }
-    return new Pair<String, Boolean>(HeavyDBSerializer.toString(project), true);
   }
 
   // Calcite 1.41.0 (unlike 1.25.0) can emit a LogicalAggregate whose group keys aren't
