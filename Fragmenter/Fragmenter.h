@@ -42,6 +42,7 @@ struct InsertChunks {
   std::map</*column_id=*/int, std::shared_ptr<Chunk_NS::Chunk> > chunks;
   std::vector<size_t> valid_row_indices; /* specifies which row indices in chunk are valid
                                             for insertion */
+  size_t num_column_append_threads{1};
 };
 
 /**
@@ -87,6 +88,7 @@ class FragmentInfo {
 
   void setChunkMetadataMap(const ChunkMetadataMap& chunk_metadata_map) {
     this->chunkMetadataMap = chunk_metadata_map;
+    synthesizedMetadataIsValid = true;
   }
 
   void setChunkMetadata(const int col, std::shared_ptr<ChunkMetadata> chunkMetadata) {
@@ -105,7 +107,10 @@ class FragmentInfo {
 
   bool isEmptyPhysicalFragment() const { return physicalTableId >= 0 && !numTuples; }
 
-  void setPhysicalNumTuples(const size_t physNumTuples) { numTuples = physNumTuples; }
+  void setPhysicalNumTuples(const size_t physNumTuples) {
+    numTuples = physNumTuples;
+    synthesizedNumTuplesIsValid = true;
+  }
 
   void invalidateChunkMetadataMap() const { synthesizedMetadataIsValid = false; };
   void invalidateNumTuples() const { synthesizedNumTuplesIsValid = false; }
