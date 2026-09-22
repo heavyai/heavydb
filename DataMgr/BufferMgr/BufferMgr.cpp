@@ -38,6 +38,7 @@ inline size_t convert_num_bytes_to_num_pages(size_t num_bytes, size_t page_size)
   CHECK_EQ(num_bytes % page_size, size_t(0));
   return num_bytes / page_size;
 }
+
 }  // namespace
 
 /// Allocates memSize bytes for the buffer pool and initializes the free memory map.
@@ -327,7 +328,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
     } catch (std::runtime_error& error) {  // failed to allocate slab
       LOG(INFO) << "ALLOCATION Attempted slab of " << allocated_num_pages << " pages ("
                 << (allocated_num_pages * page_size_) << "B) failed "
-                << getStringMgrType() << ":" << device_id_;
+                << getStringMgrType() << ":" << device_id_ << ": " << error.what();
       // check if there is any point halving currentMaxSlabSize and trying again
       // if the request wont fit in half available then let try once at full size
       // if we have already tries at full size and failed then break as
@@ -809,7 +810,12 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
                  "Buffer size: "
               << buffer_size << ", num bytes to fetch: " << num_bytes
               << ", chunk key: " << key_to_string(key);
-      parent_mgr_->fetchBuffer(key, buffer, num_bytes);
+      try {
+        parent_mgr_->fetchBuffer(key, buffer, num_bytes);
+      } catch (...) {
+        buffer->unPin();
+        throw;
+      }
     }
     return buffer;
   } else {  // If wasn't in pool then we need to fetch it
@@ -835,6 +841,115 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
     }
     return buffer;
   }
+}
+
+std::vector<AbstractBuffer*> BufferMgr::getBuffers(
+    const std::vector<Data_Namespace::BufferFetchRequest>& requests) {
+  if (requests.empty()) {
+    return {};
+  }
+
+  struct AggregatedRequest {
+    ChunkKey key;
+    size_t num_bytes{0};
+    std::vector<size_t> request_indices;
+  };
+
+  std::map<ChunkKey, AggregatedRequest> aggregated_requests;
+  for (size_t request_idx = 0; request_idx < requests.size(); ++request_idx) {
+    auto& request = aggregated_requests[requests[request_idx].key];
+    if (request.request_indices.empty()) {
+      request.key = requests[request_idx].key;
+    }
+    request.num_bytes = std::max(request.num_bytes, requests[request_idx].num_bytes);
+    request.request_indices.push_back(request_idx);
+  }
+
+  std::vector<std::unique_lock<std::mutex>> chunk_locks;
+  chunk_locks.reserve(aggregated_requests.size());
+  std::shared_lock<std::shared_mutex> clear_slabs_global_lock(clear_slabs_global_mutex_);
+  for (const auto& [key, unused] : aggregated_requests) {
+    chunk_locks.emplace_back(getChunkMutex(key));
+  }
+
+  std::vector<AbstractBuffer*> buffers(requests.size(), nullptr);
+  std::vector<AggregatedRequest> buffers_to_create;
+  std::vector<Data_Namespace::BufferFetchRequest> fetch_requests;
+  std::vector<AbstractBuffer*> fetch_dest_buffers;
+  std::vector<ChunkKey> created_buffer_keys;
+
+  {
+    std::shared_lock<std::shared_mutex> slab_lock(slab_mutex_);
+    for (const auto& [key, request] : aggregated_requests) {
+      auto buffer_it = getChunkSegment(key);
+      if (!buffer_it.has_value()) {
+        buffers_to_create.push_back(request);
+        continue;
+      }
+
+      auto buffer = buffer_it.value()->getBuffer();
+      CHECK(buffer);
+      for (size_t i = 0; i < request.request_indices.size(); ++i) {
+        buffer->pin();
+      }
+      buffer_it.value()->setLastTouched(incrementEpoch());
+      for (const auto request_idx : request.request_indices) {
+        buffers[request_idx] = buffer;
+      }
+      if (buffer->size() < request.num_bytes) {
+        fetch_requests.push_back({key, request.num_bytes});
+        fetch_dest_buffers.push_back(buffer);
+      }
+    }
+  }
+
+  for (const auto& request : buffers_to_create) {
+    auto buffer = createBufferUnlocked(request.key, page_size_, request.num_bytes);
+    for (size_t i = 1; i < request.request_indices.size(); ++i) {
+      buffer->pin();
+    }
+    for (const auto request_idx : request.request_indices) {
+      buffers[request_idx] = buffer;
+    }
+    created_buffer_keys.push_back(request.key);
+    fetch_requests.push_back({request.key, request.num_bytes});
+    fetch_dest_buffers.push_back(buffer);
+  }
+
+  const auto cleanup_failed_batch = [&] {
+    for (const auto& [key, request] : aggregated_requests) {
+      if (std::find(created_buffer_keys.begin(), created_buffer_keys.end(), key) !=
+          created_buffer_keys.end()) {
+        continue;
+      }
+      auto* buffer = buffers[request.request_indices.front()];
+      CHECK(buffer);
+      for (size_t i = 0; i < request.request_indices.size(); ++i) {
+        buffer->unPin();
+      }
+    }
+    for (const auto& key : created_buffer_keys) {
+      deleteBufferUnlocked(key);
+    }
+  };
+
+  if (!fetch_requests.empty()) {
+    try {
+      parent_mgr_->fetchBuffers(fetch_requests, fetch_dest_buffers);
+    } catch (const foreign_storage::ForeignStorageException& error) {
+      cleanup_failed_batch();
+      LOG(WARNING) << "Get chunks - Could not load chunks from foreign storage. "
+                   << "Error was " << error.what();
+      throw;
+    } catch (const std::exception& error) {
+      cleanup_failed_batch();
+      LOG(FATAL) << "Get chunks - Could not find chunks in buffer pool or parent "
+                    "buffer pools. Error was "
+                 << error.what();
+    }
+  }
+
+  return buffers;
 }
 
 void BufferMgr::fetchBuffer(const ChunkKey& key,
@@ -883,6 +998,7 @@ void BufferMgr::fetchBuffer(const ChunkKey& key,
                 << ", chunk key: " << key_to_string(key);
         parent_mgr_->fetchBuffer(key, buffer, num_bytes);
       } catch (const foreign_storage::ForeignStorageException& error) {
+        buffer->unPin();
         LOG(WARNING) << "Could not fetch parent chunk " << key_to_string(key)
                      << " from foreign storage. Error was " << error.what();
         throw;
@@ -1095,6 +1211,11 @@ MemoryInfo BufferMgr::getMemoryInfo() const {
       memory_data.num_pages = segment.num_pages;
       memory_data.touch = segment.getLastTouched();
       memory_data.mem_status = segment.mem_status;
+      memory_data.pin_count = 0;
+      if (segment.mem_status == USED) {
+        auto buffer = segment.getBuffer();
+        memory_data.pin_count = buffer ? buffer->getPinCount() : 0;
+      }
       memory_data.chunk_key.insert(memory_data.chunk_key.end(),
                                    segment.chunk_key.begin(),
                                    segment.chunk_key.end());
