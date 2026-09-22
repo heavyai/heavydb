@@ -796,7 +796,11 @@ TEST_F(GeospatialJoinTest, STDistanceWithEncodedTextPredicateAndProjection) {
   auto const query =
       "SELECT t2.name FROM text_and_geom_table_1 AS t1 JOIN text_and_geom_table_2 AS t2 "
       "ON ST_DISTANCE(t1.geom, t2.geom) < 3.0 WHERE t1.name ILIKE '%a%';";
+  auto const count_query =
+      "SELECT count(*) FROM text_and_geom_table_1 AS t1 JOIN text_and_geom_table_2 AS "
+      "t2 ON ST_DISTANCE(t1.geom, t2.geom) < 3.0 WHERE t1.name ILIKE '%a%';";
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(execSQL(count_query, dt)));
     ASSERT_EQ("c", boost::get<std::string>(v<NullableString>(execSQL(query, dt))));
   }
 }
@@ -2655,10 +2659,12 @@ TEST_F(BoundingBoxIntersectRewriteTest, TemporaryTable) {
       "st_distance(R.p1, S.p2) < 0.01;"};
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    g_from_table_reordering = true;
-    EXPECT_NO_THROW(execSQL(query, dt));
-    g_from_table_reordering = false;
-    EXPECT_ANY_THROW(execSQL(query, dt));
+    for (bool const table_reordering : {true, false}) {
+      // Both table-ordering paths should now lower to executable geospatial
+      // join plans; previously the non-reordered temporary-table shape failed.
+      g_from_table_reordering = table_reordering;
+      EXPECT_EQ(int64_t(1), v<int64_t>(execSQL(query, dt)));
+    }
   }
 }
 
