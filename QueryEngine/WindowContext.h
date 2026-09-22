@@ -255,6 +255,7 @@ struct CPUExecutionCtx {
 
 struct GPUExecutionCtx {
   Data_Namespace::AbstractBuffer* output_gpu_{nullptr};
+  Data_Namespace::AbstractBuffer* precomputed_output_gpu_{nullptr};
   Data_Namespace::AbstractBuffer* partitions_buf_gpu_holder_{nullptr};
   Data_Namespace::AbstractBuffer* dummy_count_gpu_{nullptr};
   Data_Namespace::AbstractBuffer* dummy_offset_gpu_{nullptr};
@@ -270,6 +271,9 @@ struct GPUExecutionCtx {
   ~GPUExecutionCtx() {
     if (output_gpu_) {
       data_mgr_->free(output_gpu_);
+    }
+    if (precomputed_output_gpu_) {
+      data_mgr_->free(precomputed_output_gpu_);
     }
     if (partitions_buf_gpu_holder_) {
       data_mgr_->free(partitions_buf_gpu_holder_);
@@ -381,6 +385,8 @@ class WindowFunctionContext {
 
   // Returns a pointer to the output buffer of the window function result.
   const int8_t* output() const;
+  bool hasPrecomputedOutput() const;
+  const int8_t* precomputedOutput() const;
 
   // Returns a pointer to the sorted row index buffer
   const int64_t* sortedPartition() const;
@@ -483,6 +489,12 @@ class WindowFunctionContext {
 
   void fillPartitionEnd();
 
+  bool canComputeRankingOnGpu() const;
+  bool computeRankingOnGpu();
+  bool canComputePartitionExtremaOnGpu() const;
+  bool computePartitionExtremaOnGpu();
+  void copyPartitionBuffersToGpu();
+
   void resizeStorageForWindowFraming(bool const for_reuse = false);
 
   const QueryPlanHash computeAggregateTreeCacheKey() const;
@@ -496,6 +508,7 @@ class WindowFunctionContext {
   const Analyzer::WindowFunction* window_func_;
   QueryPlanHash partition_cache_key_;
   QueryPlanHash sorted_partition_cache_key_;
+  bool precomputed_output_{false};
 
   // The number of elements in the table.
   size_t elem_count_;

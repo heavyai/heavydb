@@ -34,6 +34,13 @@ static std::unordered_map<SQLTypes, cost_t> GEO_TYPE_COSTS{{kPOINT, 60},
                                                            {kPOLYGON, 80},
                                                            {kMULTIPOLYGON, 90}};
 
+size_t get_reordering_cardinality(const InputTableInfo& table_info) {
+  if (!table_info.info.fragments.empty() && table_info.info.fragments.front().resultSet) {
+    return table_info.info.getNumTuples();
+  }
+  return table_info.info.getNumTuplesUpperBound();
+}
+
 static bool force_table_reordering_st_contain_func(std::string_view target_func_name) {
   return std::any_of(BoundingBoxIntersectJoinSupportedFunction::
                          ST_CONTAIN_FORCE_TABLE_REORDERING_TARGET_FUNC.begin(),
@@ -478,9 +485,9 @@ std::vector<node_t> traverse_join_cost_graph(
         }
         if (inner_rte >= 0 && outer_rte >= 0) {
           const auto inner_cardinality =
-              table_infos[inner_rte].info.getNumTuplesUpperBound();
+              get_reordering_cardinality(table_infos[inner_rte]);
           const auto outer_cardinality =
-              table_infos[outer_rte].info.getNumTuplesUpperBound();
+              get_reordering_cardinality(table_infos[outer_rte]);
           if (inner_cardinality > g_trivial_loop_join_threshold) {
             if (inner_rte == static_cast<int>(start)) {
               // inner is driving the join loop but also has a valid join column
@@ -647,8 +654,8 @@ std::vector<node_t> get_node_input_permutation(
   // Use the number of tuples in each table to break ties in BFS.
   const auto compare_node = [&table_infos](const node_t lhs_nest_level,
                                            const node_t rhs_nest_level) {
-    return table_infos[lhs_nest_level].info.getNumTuplesUpperBound() <
-           table_infos[rhs_nest_level].info.getNumTuplesUpperBound();
+    return get_reordering_cardinality(table_infos[lhs_nest_level]) <
+           get_reordering_cardinality(table_infos[rhs_nest_level]);
   };
   const auto compare_edge = [&compare_node](const TraversalEdge& lhs_edge,
                                             const TraversalEdge& rhs_edge) {

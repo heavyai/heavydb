@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <vector>
 #include "../../../Shared/SqlTypesLayout.h"
+#include "../../../Shared/sqldefs.h"
 #include "../../../Shared/sqltypes.h"
 
 #ifdef HAVE_CUDA
@@ -121,6 +122,7 @@ struct JoinChunk {
   const int8_t*
       col_buff;  // actually from AbstractBuffer::getMemoryPtr() via Chunk_NS::Chunk
   size_t num_elems;
+  size_t rowid_offset;
 };
 
 struct JoinColumn {
@@ -141,6 +143,30 @@ struct JoinColumnTypeInfo {
   const int64_t translated_null_val;
   const ColumnType column_type;
 };
+
+struct JoinColumnFilter {
+  bool enabled;
+  JoinColumn filter_column;
+  JoinColumnTypeInfo type_info;
+  bool has_lower_bound;
+  bool lower_bound_inclusive;
+  int64_t lower_bound;
+  bool has_upper_bound;
+  bool upper_bound_inclusive;
+  int64_t upper_bound;
+};
+
+inline JoinColumnFilter make_empty_join_column_filter() {
+  return JoinColumnFilter{false,
+                          JoinColumn{nullptr, 0, 0, 0, 0},
+                          JoinColumnTypeInfo{0, 0, 0, 0, false, 0, Signed},
+                          false,
+                          false,
+                          0,
+                          false,
+                          false,
+                          0};
+}
 
 inline ColumnType get_join_column_type_kind(const SQLTypeInfo& ti) {
   if (ti.is_date_in_days()) {
@@ -171,6 +197,7 @@ struct OneToOnePerfectJoinHashTableFillFuncArgs {
   const JoinColumnTypeInfo type_info;
   const int32_t* sd_inner_to_outer_translation_map;
   const int32_t min_inner_elem;
+  const int32_t max_inner_elem;
   const int64_t bucket_normalization;  // used only if we call bucketized_hash_join
 };
 
@@ -181,6 +208,7 @@ struct OneToManyPerfectJoinHashTableFillFuncArgs {
   const JoinColumnTypeInfo type_info;
   const int32_t* sd_inner_to_outer_translation_map;
   const int32_t min_inner_elem;
+  const int32_t max_inner_elem;
   const int64_t bucket_normalization;  // used only if we call bucketized_hash_join
   const bool for_window_framing;
 };
@@ -213,6 +241,252 @@ void fill_hash_join_buff_on_device_sharded_bucketized(
     CUstream cuda_stream,
     OneToOnePerfectJoinHashTableFillFuncArgs const args,
     ShardInfo const shard_info);
+
+void fill_join_bitmap(uint32_t* bitmap,
+                      const JoinColumn join_column,
+                      const JoinColumnTypeInfo type_info,
+                      const JoinColumnFilter filter,
+                      const int64_t min_val,
+                      const int64_t max_val,
+                      const int32_t cpu_thread_idx,
+                      const int32_t cpu_thread_count);
+
+void fill_join_bitmap_on_device(uint32_t* bitmap,
+                                const JoinColumn join_column,
+                                const JoinColumnTypeInfo type_info,
+                                const JoinColumnFilter filter,
+                                const int64_t min_val,
+                                const int64_t max_val,
+                                CUstream cuda_stream);
+
+void fill_join_bitmap_segmented(uint64_t* bitmap_chunks,
+                                const int64_t bitmap_chunk_word_count,
+                                const JoinColumn join_column,
+                                const JoinColumnTypeInfo type_info,
+                                const JoinColumnFilter filter,
+                                const int64_t min_val,
+                                const int64_t max_val,
+                                const int32_t cpu_thread_idx,
+                                const int32_t cpu_thread_count);
+
+void fill_join_bitmap_segmented_on_device(uint64_t* bitmap_chunks,
+                                          const int64_t bitmap_chunk_word_count,
+                                          const JoinColumn join_column,
+                                          const JoinColumnTypeInfo type_info,
+                                          const JoinColumnFilter filter,
+                                          const int64_t min_val,
+                                          const int64_t max_val,
+                                          CUstream cuda_stream);
+
+void build_ranked_bitmap_index(uint32_t* rank_blocks,
+                               const uint32_t* bitmap,
+                               const int64_t bitmap_word_count,
+                               const int64_t rank_block_word_count,
+                               const int32_t cpu_thread_idx,
+                               const int32_t cpu_thread_count);
+
+void build_ranked_bitmap_index_on_device(uint32_t* rank_blocks,
+                                         const uint32_t* bitmap,
+                                         const int64_t bitmap_word_count,
+                                         const int64_t rank_block_word_count,
+                                         CUstream cuda_stream);
+
+void bitwise_or_uint32_on_device(uint32_t* destination,
+                                 const uint32_t* source,
+                                 const int64_t count,
+                                 CUstream cuda_stream);
+
+int fill_ranked_bitmap_payload(uint32_t* payload,
+                               const uint32_t* bitmap,
+                               const uint32_t* rank_blocks,
+                               const JoinColumn join_column,
+                               const JoinColumnTypeInfo type_info,
+                               const JoinColumnFilter filter,
+                               const int64_t min_val,
+                               const int64_t max_val,
+                               const int64_t rank_block_word_count,
+                               const int64_t payload_count,
+                               const int32_t cpu_thread_idx,
+                               const int32_t cpu_thread_count);
+
+int fill_ranked_bitmap_payload_unique(uint32_t* payload,
+                                      const uint32_t* bitmap,
+                                      const uint32_t* rank_blocks,
+                                      const JoinColumn join_column,
+                                      const JoinColumnTypeInfo type_info,
+                                      const int64_t min_val,
+                                      const int64_t max_val,
+                                      const int64_t rank_block_word_count,
+                                      const int64_t payload_count,
+                                      const int32_t cpu_thread_idx,
+                                      const int32_t cpu_thread_count);
+
+int fill_ranked_bitmap_payload_segmented(uint64_t* payload_chunks,
+                                         const int64_t payload_chunk_word_count,
+                                         const uint32_t* bitmap,
+                                         const uint32_t* rank_blocks,
+                                         const JoinColumn join_column,
+                                         const JoinColumnTypeInfo type_info,
+                                         const JoinColumnFilter filter,
+                                         const int64_t min_val,
+                                         const int64_t max_val,
+                                         const int64_t rank_block_word_count,
+                                         const int64_t payload_count,
+                                         const int32_t cpu_thread_idx,
+                                         const int32_t cpu_thread_count);
+
+int fill_ranked_bitmap_payload_unique_segmented(uint64_t* payload_chunks,
+                                                const int64_t payload_chunk_word_count,
+                                                const uint32_t* bitmap,
+                                                const uint32_t* rank_blocks,
+                                                const JoinColumn join_column,
+                                                const JoinColumnTypeInfo type_info,
+                                                const int64_t min_val,
+                                                const int64_t max_val,
+                                                const int64_t rank_block_word_count,
+                                                const int64_t payload_count,
+                                                const int32_t cpu_thread_idx,
+                                                const int32_t cpu_thread_count);
+
+void fill_ranked_bitmap_payload_on_device(uint32_t* payload,
+                                          const uint32_t* bitmap,
+                                          const uint32_t* rank_blocks,
+                                          const JoinColumn join_column,
+                                          const JoinColumnTypeInfo type_info,
+                                          const JoinColumnFilter filter,
+                                          const int64_t min_val,
+                                          const int64_t max_val,
+                                          const int64_t rank_block_word_count,
+                                          const int64_t payload_count,
+                                          int* dev_err_buff,
+                                          CUstream cuda_stream);
+
+void fill_ranked_bitmap_payload_unique_on_device(uint32_t* payload,
+                                                 const uint32_t* bitmap,
+                                                 const uint32_t* rank_blocks,
+                                                 const JoinColumn join_column,
+                                                 const JoinColumnTypeInfo type_info,
+                                                 const int64_t min_val,
+                                                 const int64_t max_val,
+                                                 const int64_t rank_block_word_count,
+                                                 const int64_t payload_count,
+                                                 int* dev_err_buff,
+                                                 CUstream cuda_stream);
+
+void fill_ranked_bitmap_payload_segmented_on_device(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const JoinColumnFilter filter,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff,
+    CUstream cuda_stream);
+
+void fill_ranked_bitmap_payload_unique_segmented_on_device(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff,
+    CUstream cuda_stream);
+
+void count_ranked_bitmap_matches(uint32_t* counts,
+                                 const uint32_t* bitmap,
+                                 const uint32_t* rank_blocks,
+                                 const JoinColumn join_column,
+                                 const JoinColumnTypeInfo type_info,
+                                 const int64_t min_val,
+                                 const int64_t max_val,
+                                 const int64_t rank_block_word_count,
+                                 const int32_t cpu_thread_idx,
+                                 const int32_t cpu_thread_count);
+
+void count_ranked_bitmap_matches_on_device(uint32_t* counts,
+                                           const uint32_t* bitmap,
+                                           const uint32_t* rank_blocks,
+                                           const JoinColumn join_column,
+                                           const JoinColumnTypeInfo type_info,
+                                           const int64_t min_val,
+                                           const int64_t max_val,
+                                           const int64_t rank_block_word_count,
+                                           CUstream cuda_stream);
+
+int fill_ranked_bitmap_payload_one_to_many(uint32_t* payload,
+                                           uint32_t* counts,
+                                           const uint32_t* offsets,
+                                           const uint32_t* bitmap,
+                                           const uint32_t* rank_blocks,
+                                           const JoinColumn join_column,
+                                           const JoinColumnTypeInfo type_info,
+                                           const int64_t min_val,
+                                           const int64_t max_val,
+                                           const int64_t rank_block_word_count,
+                                           const int64_t payload_count,
+                                           const int32_t cpu_thread_idx,
+                                           const int32_t cpu_thread_count);
+
+int fill_ranked_bitmap_payload_one_to_many_segmented(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    uint32_t* counts,
+    const uint32_t* offsets,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count);
+
+void fill_ranked_bitmap_payload_one_to_many_on_device(uint32_t* payload,
+                                                      uint32_t* counts,
+                                                      const uint32_t* offsets,
+                                                      const uint32_t* bitmap,
+                                                      const uint32_t* rank_blocks,
+                                                      const JoinColumn join_column,
+                                                      const JoinColumnTypeInfo type_info,
+                                                      const int64_t min_val,
+                                                      const int64_t max_val,
+                                                      const int64_t rank_block_word_count,
+                                                      const int64_t payload_count,
+                                                      int* dev_err_buff,
+                                                      CUstream cuda_stream);
+
+void fill_ranked_bitmap_payload_one_to_many_segmented_on_device(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    uint32_t* counts,
+    const uint32_t* offsets,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff,
+    CUstream cuda_stream);
+
+void exclusive_scan_uint32_on_device(const uint32_t* input,
+                                     uint32_t* output,
+                                     const int64_t count,
+                                     CUstream cuda_stream);
 
 void fill_one_to_many_hash_table(OneToManyPerfectJoinHashTableFillFuncArgs const args,
                                  int32_t const cpu_thread_count);
@@ -351,6 +625,7 @@ void fill_one_to_many_baseline_hash_table_32(
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
     const std::vector<int32_t>& sd_min_inner_elems,
+    const std::vector<int32_t>& sd_max_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join = false,
     const bool is_geo_compressed = false,
@@ -366,6 +641,7 @@ void fill_one_to_many_baseline_hash_table_64(
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
     const std::vector<int32_t>& sd_min_inner_elems,
+    const std::vector<int32_t>& sd_max_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join = false,
     const bool is_geo_compressed = false,

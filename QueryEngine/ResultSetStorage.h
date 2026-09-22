@@ -68,6 +68,9 @@ struct ColumnLazyFetchInfo {
   const bool is_lazily_fetched;
   const int local_col_id;
   const SQLTypeInfo type;
+  // Fixed-width columns from fragment-local table or temporary-result scans can emit
+  // lazy-fetch row ids local to their producing storage; varlen columns use global ids.
+  const bool use_storage_local_rowid;
 };
 
 struct OneIntegerColumnRow {
@@ -78,7 +81,9 @@ struct OneIntegerColumnRow {
 struct VarlenOutputInfo {
   int64_t gpu_start_address;
   int8_t* cpu_buffer_ptr;
+  size_t buffer_size_bytes;
 
+  bool containsGpuAddress(const int64_t gpu_address, const size_t length) const;
   int8_t* computeCpuOffset(const int64_t gpu_offset_address) const;
 };
 
@@ -99,6 +104,8 @@ class ResultSetStorage {
       const std::vector<std::string>& serialized_varlen_buffer) const;
 
   int8_t* getUnderlyingBuffer() const;
+
+  const QueryMemoryDescriptor& getQueryMemDesc() const { return query_mem_desc_; }
 
   size_t getEntryCount() const { return query_mem_desc_.getEntryCount(); }
 
@@ -255,7 +262,7 @@ size_t get_byteoff_of_slot(const size_t slot_idx,
                            const QueryMemoryDescriptor& query_mem_desc);
 
 GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
-                                         const uint32_t groups_buffer_entry_count,
+                                         const size_t groups_buffer_entry_count,
                                          const int64_t* key,
                                          const uint32_t key_count,
                                          const size_t key_width,
@@ -263,7 +270,7 @@ GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
                                          const int64_t* that_buff_i64,
                                          const size_t that_entry_idx,
                                          const size_t that_entry_count,
-                                         const uint32_t row_size_quad);
+                                         const size_t row_size_quad);
 
 std::vector<int64_t> initialize_target_values_for_storage(
     const std::vector<TargetInfo>& targets);
