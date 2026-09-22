@@ -50,6 +50,10 @@ struct SystemParameters {
   std::string ssl_trust_ca_file = "";
   bool enable_calcite_view_optimize =
       true;  // allow calcite to optimize the relalgebra for a view query
+  bool enable_experimental_query_rewrites =
+      false;  // opt in to experimental join/aggregate relational rewrites
+  bool trust_unenforced_table_constraints =
+      false;  // expose declarative PK/UNIQUE/FK metadata to the optimizer
   size_t calcite_timeout = 5000;     // calcite connect/send/receive timeout
   size_t calcite_keepalive = false;  // calcite keepalive connection
   int num_executors = 4;
