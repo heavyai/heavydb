@@ -339,7 +339,13 @@ std::pair<key_t, void*> get_shm(size_t shmsz) {
 std::pair<key_t, std::shared_ptr<arrow::Buffer>> get_shm_buffer(size_t size) {
   auto [key, ipc_ptr] = get_shm(size);
   std::shared_ptr<arrow::Buffer> buffer(
-      new arrow::MutableBuffer(static_cast<uint8_t*>(ipc_ptr), size));
+      new arrow::MutableBuffer(static_cast<uint8_t*>(ipc_ptr), size),
+      [ipc_ptr](arrow::Buffer* buffer) {
+        delete buffer;
+        if (shmdt(ipc_ptr) < 0) {
+          LOG(ERROR) << "Failed to detach Arrow shared-memory buffer: errno " << errno;
+        }
+      });
   return std::make_pair<key_t, std::shared_ptr<arrow::Buffer>>(std::move(key),
                                                                std::move(buffer));
 }
@@ -713,6 +719,19 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     return ARROW_RECORDBATCH_MAKE(schema, 0, result_columns);
   }
 
+  if (results_->hasDeferredLazyFetchChunks()) {
+    auto timer = DEBUG_TIMER("materialize deferred lazy fetch for Arrow");
+    std::vector<size_t> lazy_column_indices;
+    const auto& lazy_fetch_info = results_->getLazyFetchInfo();
+    lazy_column_indices.reserve(lazy_fetch_info.size());
+    for (size_t target_idx = 0; target_idx < lazy_fetch_info.size(); ++target_idx) {
+      if (lazy_fetch_info[target_idx].is_lazily_fetched) {
+        lazy_column_indices.push_back(target_idx);
+      }
+    }
+    results_->materializeDeferredLazyFetchColumnsForOutputRows(lazy_column_indices);
+  }
+
   const size_t entry_count = top_n_ < 0
                                  ? results_->entryCount()
                                  : std::min(size_t(top_n_), results_->entryCount());
@@ -723,9 +742,61 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   result_columns.resize(col_count);
   std::vector<ColumnBuilder> builders(col_count);
 
-  // Create array builders
+  std::vector<size_t> sparse_dictionary_columns;
+  const auto result_row_count = results_->rowCount();
+  CHECK_GT(result_row_count, size_t(0));
+  std::vector<SQLTypeInfo> col_types;
+  col_types.reserve(col_count);
   for (size_t i = 0; i < col_count; ++i) {
-    initializeColumnBuilder(builders[i], results_->getColType(i), i, schema->field(i));
+    const auto& col_type = col_types.emplace_back(results_->getColType(i));
+    if (!col_type.is_dict_encoded_type()) {
+      continue;
+    }
+    const auto sdp = results_->getStringDictionaryProxy(col_type.getStringDictKey());
+    CHECK(sdp);
+    if (!shouldUseBulkDictionaryFetch(result_row_count, sdp->entryCount())) {
+      sparse_dictionary_columns.push_back(i);
+    }
+  }
+  auto sparse_dictionary_values = [&] {
+    auto timer = DEBUG_TIMER("collect sparse Arrow dictionaries");
+    return results_->getUniqueStringsForDictEncodedTargetCols(sparse_dictionary_columns);
+  }();
+  CHECK_EQ(sparse_dictionary_columns.size(), sparse_dictionary_values.size());
+  std::vector<const ResultSet::UniqueStringsForDictEncodedTargetCol*>
+      sparse_dictionary_values_by_column(col_count, nullptr);
+  for (size_t i = 0; i < sparse_dictionary_columns.size(); ++i) {
+    sparse_dictionary_values_by_column[sparse_dictionary_columns[i]] =
+        &sparse_dictionary_values[i];
+  }
+
+  // Create array builders
+  const bool parallel_sparse_dictionary_builders =
+      result_row_count > 10000 && sparse_dictionary_columns.size() > 1;
+  std::vector<std::future<void>> sparse_dictionary_builder_tasks;
+  sparse_dictionary_builder_tasks.reserve(sparse_dictionary_columns.size());
+  const auto parent_thread_local_ids = logger::thread_local_ids();
+  for (size_t i = 0; i < col_count; ++i) {
+    if (parallel_sparse_dictionary_builders && sparse_dictionary_values_by_column[i]) {
+      sparse_dictionary_builder_tasks.emplace_back(std::async(std::launch::async, [&, i] {
+        logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+        DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
+        initializeColumnBuilder(builders[i],
+                                col_types[i],
+                                i,
+                                schema->field(i),
+                                sparse_dictionary_values_by_column[i]);
+      }));
+    } else {
+      initializeColumnBuilder(builders[i],
+                              col_types[i],
+                              i,
+                              schema->field(i),
+                              sparse_dictionary_values_by_column[i]);
+    }
+  }
+  for (auto& task : sparse_dictionary_builder_tasks) {
+    task.get();
   }
 
   // TODO(miyu): speed up for columnar buffers
@@ -939,7 +1010,9 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   const bool multithreaded = entry_count > 10000 && !results_->isTruncated();
   // Don't believe we ever output directly from a table function, but this
   // might be possible with a future query plan optimization
+  const auto logical_row_count = results_->rowCount();
   bool use_columnar_converter = results_->isDirectColumnarConversionPossible() &&
+                                logical_row_count == entry_count &&
                                 (results_->getQueryMemDesc().getQueryDescriptionType() ==
                                      QueryDescriptionType::Projection ||
                                  results_->getQueryMemDesc().getQueryDescriptionType() ==
@@ -1015,7 +1088,12 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     auto timer = DEBUG_TIMER("row converter");
     row_count = 0;
     if (multithreaded) {
-      const size_t cpu_count = cpu_threads();
+      constexpr size_t min_rows_per_worker{16384};
+      const size_t cpu_count =
+          std::max<size_t>(1,
+                           std::min<size_t>(cpu_threads(),
+                                            (entry_count + min_rows_per_worker - 1) /
+                                                min_rows_per_worker));
       std::vector<std::future<size_t>> child_threads;
       std::vector<std::vector<std::shared_ptr<ValueArray>>> column_value_segs(
           cpu_count, std::vector<std::shared_ptr<ValueArray>>(col_count, nullptr));
@@ -1181,6 +1259,17 @@ std::shared_ptr<arrow::Field> ArrowResultSetConverter::makeField(
       name, get_arrow_type(target_type, device_type_), !target_type.get_notnull());
 }
 
+bool ArrowResultSetConverter::shouldUseBulkDictionaryFetch(
+    const size_t result_row_count,
+    const size_t dictionary_entry_count) const {
+  CHECK_GT(result_row_count, size_t(0));
+  const auto dictionary_to_result_size_ratio =
+      static_cast<double>(dictionary_entry_count) / result_row_count;
+  return result_row_count > min_result_size_for_bulk_dictionary_fetch_ &&
+         dictionary_to_result_size_ratio <=
+             max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch_;
+}
+
 void ArrowResultSet::deallocateArrowResultBuffer(
     const ArrowResult& result,
     const ExecutorDeviceType device_type,
@@ -1223,7 +1312,9 @@ void ArrowResultSetConverter::initializeColumnBuilder(
     ColumnBuilder& column_builder,
     const SQLTypeInfo& col_type,
     const size_t results_col_slot_idx,
-    const std::shared_ptr<arrow::Field>& field) const {
+    const std::shared_ptr<arrow::Field>& field,
+    const ResultSet::UniqueStringsForDictEncodedTargetCol* sparse_dictionary_values)
+    const {
   column_builder.field = field;
   column_builder.col_type = col_type;
   column_builder.physical_type = col_type.is_dict_encoded_string()
@@ -1248,8 +1339,6 @@ void ArrowResultSetConverter::initializeColumnBuilder(
 
     const auto sdp = results_->getStringDictionaryProxy(dict_key);
     const size_t dictionary_proxy_entries = sdp->entryCount();
-    const double dictionary_to_result_size_ratio =
-        static_cast<double>(dictionary_proxy_entries) / result_set_rows;
 
     // We are conservative with when we do a bulk dictionary fetch,
     // even though it is generally more efficient than dictionary unique value "plucking",
@@ -1266,13 +1355,12 @@ void ArrowResultSetConverter::initializeColumnBuilder(
     // resources than our server.)
 
     const bool do_dictionary_bulk_fetch =
-        result_set_rows > min_result_size_for_bulk_dictionary_fetch_ &&
-        dictionary_to_result_size_ratio <=
-            max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch_;
+        shouldUseBulkDictionaryFetch(result_set_rows, dictionary_proxy_entries);
 
     arrow::StringBuilder str_array_builder;
 
     if (do_dictionary_bulk_fetch) {
+      CHECK(!sparse_dictionary_values);
       VLOG(1) << "Arrow dictionary creation: bulk copying all dictionary "
               << " entries for column at offset " << results_col_slot_idx << ". "
               << "Column has " << dictionary_proxy_entries << " string entries"
@@ -1312,10 +1400,15 @@ void ArrowResultSetConverter::initializeColumnBuilder(
       // unique strings. Note that the unique string for a unique string id are both
       // placed at the same offset in their respective vectors
 
-      auto unique_ids_and_strings =
-          results_->getUniqueStringsForDictEncodedTargetCol(results_col_slot_idx);
-      const auto& unique_ids = unique_ids_and_strings.first;
-      const auto& unique_strings = unique_ids_and_strings.second;
+      std::optional<ResultSet::UniqueStringsForDictEncodedTargetCol>
+          local_sparse_dictionary_values;
+      if (!sparse_dictionary_values) {
+        local_sparse_dictionary_values =
+            results_->getUniqueStringsForDictEncodedTargetCol(results_col_slot_idx);
+        sparse_dictionary_values = &*local_sparse_dictionary_values;
+      }
+      const auto& unique_ids = sparse_dictionary_values->first;
+      const auto& unique_strings = sparse_dictionary_values->second;
       ARROW_THROW_NOT_OK(str_array_builder.AppendValues(unique_strings));
       const int32_t num_unique_strings = unique_strings.size();
       CHECK_EQ(num_unique_strings, unique_ids.size());
@@ -1400,9 +1493,9 @@ void appendToColumnBuilder<arrow::Decimal128Builder, int64_t>(
   auto typed_builder =
       dynamic_cast<arrow::Decimal128Builder*>(column_builder.builder.get());
   CHECK(typed_builder);
-  CHECK_EQ(is_valid->size(), vals.size());
   if (column_builder.field->nullable()) {
     CHECK(is_valid.get());
+    CHECK_EQ(is_valid->size(), vals.size());
     for (size_t i = 0; i < vals.size(); i++) {
       const auto v = vals[i];
       const auto valid = (*is_valid)[i];
@@ -1427,10 +1520,10 @@ void appendToColumnBuilder<arrow::StringBuilder, std::string>(
   std::vector<std::string> vals = boost::get<std::vector<std::string>>(values);
   auto typed_builder = dynamic_cast<arrow::StringBuilder*>(column_builder.builder.get());
   CHECK(typed_builder);
-  CHECK_EQ(is_valid->size(), vals.size());
 
   if (column_builder.field->nullable()) {
     CHECK(is_valid.get());
+    CHECK_EQ(is_valid->size(), vals.size());
 
     // TODO: Generate this instead of the boolean bitmap
     std::vector<uint8_t> transformed_bitmap;
@@ -1458,11 +1551,13 @@ void appendToColumnBuilder<arrow::StringDictionary32Builder, int32_t>(
   // remap negative values if ArrowStringRemapMode == ONLY_TRANSIENT_STRINGS_REMAPPED or
   // everything if ALL_STRINGS_REMAPPED
   CHECK(column_builder.string_remap_mode != ArrowStringRemapMode::INVALID);
+  CHECK(!is_valid || is_valid->size() == vals.size());
   for (size_t i = 0; i < vals.size(); i++) {
     auto& val = vals[i];
+    const bool valid = !is_valid || (*is_valid)[i];
     if ((column_builder.string_remap_mode == ArrowStringRemapMode::ALL_STRINGS_REMAPPED ||
          val < 0) &&
-        (*is_valid)[i]) {
+        valid) {
       vals[i] = column_builder.string_remapping.at(val);
     }
   }
@@ -1496,6 +1591,8 @@ void appendToListColumnBuilder(ArrowResultSetConverter::ColumnBuilder& column_bu
   auto value_builder = static_cast<BUILDER_TYPE*>(list_builder->value_builder());
 
   if (column_builder.field->nullable()) {
+    CHECK(is_valid);
+    CHECK_EQ(is_valid->size(), vals.size());
     for (size_t i = 0; i < vals.size(); i++) {
       if ((*is_valid)[i]) {
         const auto& val = vals[i];
@@ -1518,19 +1615,20 @@ void appendToListColumnBuilder(ArrowResultSetConverter::ColumnBuilder& column_bu
       }
     }
   } else {
-    for (size_t i = 0; i < vals.size(); i++) {
-      if ((*is_valid)[i]) {
-        const auto& val = vals[i];
-        ARROW_THROW_NOT_OK(list_builder->Append());
-        if constexpr (std::is_same_v<BUILDER_TYPE, arrow::BooleanBuilder>) {
-          std::vector<uint8_t> bval(val.size());
-          std::copy(val.begin(), val.end(), bval.begin());
-          ARROW_THROW_NOT_OK(value_builder->AppendValues(bval.data(), bval.size()));
-        } else {
-          ARROW_THROW_NOT_OK(value_builder->AppendValues(val.data(), val.size()));
-        }
+    for (const auto& val : vals) {
+      std::vector<uint8_t> bitmap(val.size());
+      std::transform(val.begin(), val.end(), bitmap.begin(), [](VALUE_TYPE pvalue) {
+        return static_cast<VALUE_TYPE>(pvalue) != null_type<VALUE_TYPE>::value;
+      });
+      ARROW_THROW_NOT_OK(list_builder->Append());
+      if constexpr (std::is_same_v<BUILDER_TYPE, arrow::BooleanBuilder>) {
+        std::vector<uint8_t> bval(val.size());
+        std::copy(val.begin(), val.end(), bval.begin());
+        ARROW_THROW_NOT_OK(
+            value_builder->AppendValues(bval.data(), bval.size(), bitmap.data()));
       } else {
-        ARROW_THROW_NOT_OK(list_builder->AppendNull());
+        ARROW_THROW_NOT_OK(
+            value_builder->AppendValues(val.data(), val.size(), bitmap.data()));
       }
     }
   }
@@ -1553,6 +1651,8 @@ void appendToListColumnBuilder<arrow::StringDictionaryBuilder, int64_t>(
   CHECK(value_builder);
 
   if (column_builder.field->nullable()) {
+    CHECK(is_valid);
+    CHECK_EQ(is_valid->size(), vec2d.size());
     for (size_t i = 0; i < vec2d.size(); i++) {
       if ((*is_valid)[i]) {
         auto& vec1d = vec2d[i];
@@ -1570,15 +1670,16 @@ void appendToListColumnBuilder<arrow::StringDictionaryBuilder, int64_t>(
       }
     }
   } else {
-    for (size_t i = 0; i < vec2d.size(); i++) {
-      if ((*is_valid)[i]) {
-        auto& vec1d = vec2d[i];
-        ARROW_THROW_NOT_OK(list_builder->Append());
-        remap_string_values(column_builder, {}, vec1d);
-        ARROW_THROW_NOT_OK(value_builder->AppendIndices(vec1d.data(), vec1d.size()));
-      } else {
-        ARROW_THROW_NOT_OK(list_builder->AppendNull());
-      }
+    for (auto& vec1d : vec2d) {
+      std::vector<uint8_t> bitmap(vec1d.size());
+      std::transform(vec1d.begin(), vec1d.end(), bitmap.begin(), [](int64_t pvalue) {
+        return pvalue != null_type<int32_t>::value;
+      });
+      ARROW_THROW_NOT_OK(list_builder->Append());
+      ARROW_THROW_NOT_OK(value_builder->InsertMemoValues(*column_builder.string_array));
+      remap_string_values(column_builder, bitmap, vec1d);
+      ARROW_THROW_NOT_OK(value_builder->AppendIndices(
+          vec1d.data(), static_cast<int64_t>(vec1d.size()), bitmap.data()));
     }
   }
 }
