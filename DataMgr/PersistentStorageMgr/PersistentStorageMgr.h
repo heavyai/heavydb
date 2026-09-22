@@ -9,6 +9,7 @@
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
+#include "Shared/heavyai_shared_mutex.h"
 
 using namespace Data_Namespace;
 
@@ -25,6 +26,8 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   void deleteBuffersWithPrefix(const ChunkKey& chunk_key_prefix,
                                const bool purge) override;
   AbstractBuffer* getBuffer(const ChunkKey& chunk_key, const size_t num_bytes) override;
+  AbstractBuffer* getBufferIfNativeStorage(const ChunkKey& chunk_key,
+                                           const size_t num_bytes) override;
   void fetchBuffer(const ChunkKey& chunk_key,
                    AbstractBuffer* destination_buffer,
                    const size_t num_bytes) override;
@@ -68,12 +71,15 @@ class PersistentStorageMgr : public AbstractBufferMgr {
   File_Namespace::DiskCacheConfig disk_cache_config_;
 
  private:
-  std::unique_lock<std::mutex> getTableAccessLock(const ChunkKey& table_key);
-  std::mutex& getTableAccessMutex(const ChunkKey& table_key);
+  heavyai::unique_lock<heavyai::shared_mutex> getTableAccessLock(
+      const ChunkKey& table_key);
+  heavyai::shared_lock<heavyai::shared_mutex> getTableReadAccessLock(
+      const ChunkKey& table_key);
+  heavyai::shared_mutex& getTableAccessMutex(const ChunkKey& table_key);
   void deleteTableAccessMutex(const ChunkKey& table_key);
 
   std::mutex table_access_mutex_map_mutex_;
 
   using DbAndTableId = std::pair<int32_t, int32_t>;
-  std::map<DbAndTableId, std::mutex> table_access_mutex_map_;
+  std::map<DbAndTableId, heavyai::shared_mutex> table_access_mutex_map_;
 };
