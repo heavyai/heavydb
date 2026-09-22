@@ -8,7 +8,10 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <atomic>
 #include <condition_variable>
+#include <exception>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -28,11 +31,21 @@ class JumpBufferTransferMgr {
 
   bool shouldUseForDeviceToHostTransfer(size_t num_bytes) const;
 
+  void startBackgroundAllocations();
+
   bool copyHostToDevice(int8_t* device_ptr,
                         const int8_t* host_ptr,
                         size_t num_bytes,
                         int32_t device_num,
                         CUstream cuda_stream);
+
+  bool copyHostToDeviceFromPinnedProducer(
+      int8_t* device_ptr,
+      size_t num_bytes,
+      int32_t device_num,
+      CUstream cuda_stream,
+      const std::function<void(int8_t* host_ptr, size_t num_bytes, size_t offset)>&
+          producer);
 
   bool copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
@@ -48,6 +61,7 @@ class JumpBufferTransferMgr {
     int8_t* buffer{nullptr};
     size_t size{0};          // Total size of jump buffer
     size_t segment_size{0};  // Size of each segment (half of total buffer)
+    std::atomic<bool> allocation_in_progress{false};
 
     std::mutex
         transfer_mutex;      // For synchronizing concurrent transfers/use of jump buffers
@@ -62,13 +76,28 @@ class JumpBufferTransferMgr {
                           true};  // true when consumer has finished copying from segment
     bool write_finished{false};   // Signals end of all data writes
     bool error_occurred{false};   // Signals error during data transfer
-    size_t segment_buffer_size{0};  // Actual size of buffer in segment
+    std::exception_ptr transfer_exception;
+    size_t segment_buffer_size[2]{0, 0};  // Actual size of each queued segment
   };
 
+  void startBackgroundAllocation(QueuedJumpBuffer& jump_buffer, int32_t device_num);
+  void joinBackgroundAllocationThreads();
   void resetTransferState(QueuedJumpBuffer& jump_buffer);
+  bool ensureJumpBufferAllocated(QueuedJumpBuffer& jump_buffer, int32_t device_num);
+  void recordTransferError(QueuedJumpBuffer& jump_buffer);
   std::thread createHostToDeviceProducer(QueuedJumpBuffer& jump_buffer,
                                          const int8_t* host_ptr,
                                          size_t num_bytes);
+  std::thread createHostToDeviceProducer(
+      QueuedJumpBuffer& jump_buffer,
+      size_t num_bytes,
+      const std::function<void(int8_t* host_ptr, size_t num_bytes, size_t offset)>&
+          producer);
+  void runHostToDeviceProducer(
+      QueuedJumpBuffer& jump_buffer,
+      size_t num_bytes,
+      const std::function<void(int8_t* host_ptr, size_t num_bytes, size_t offset)>&
+          producer);
   std::thread createHostToDeviceConsumer(QueuedJumpBuffer& jump_buffer,
                                          int8_t* device_ptr,
                                          int32_t device_num,
@@ -79,8 +108,10 @@ class JumpBufferTransferMgr {
                                          CUstream cuda_stream,
                                          size_t num_bytes);
   std::thread createDeviceToHostConsumer(QueuedJumpBuffer& jump_buffer, int8_t* host_ptr);
+  QueuedJumpBuffer* tryLockJumpBuffer(int32_t device_num);
 
-  std::vector<std::unique_ptr<QueuedJumpBuffer>> jump_buffers_;
+  std::vector<std::vector<std::unique_ptr<QueuedJumpBuffer>>> jump_buffers_;
+  std::vector<std::thread> allocation_threads_;
 
   const size_t device_count_;
   const std::vector<CUcontext>& device_contexts_;

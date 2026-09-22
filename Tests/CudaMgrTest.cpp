@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include "CudaMgr/CudaMgr.h"
+#include "Shared/scope.h"
 #include "TestHelpers.h"
 
 extern size_t g_jump_buffer_size;
@@ -66,6 +67,98 @@ TEST_F(DataTransferTest, WithoutJumpBuffers) {
 TEST_F(DataTransferTest, WithJumpBuffers) {
   g_jump_buffer_size = 5;
   copyDataToDeviceAndBackAndAssertExpectedContent();
+}
+
+TEST(DeviceTransferTest, DeviceToDeviceCopy) {
+  auto cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
+  if (cuda_mgr->getDeviceCount() < 2) {
+    GTEST_SKIP() << "Device-to-device transfer test requires at least two GPUs";
+  }
+
+  constexpr int32_t src_device_id{0};
+  constexpr int32_t dest_device_id{1};
+  if (!cuda_mgr->canAccessPeer(dest_device_id, src_device_id)) {
+    GTEST_SKIP() << "CUDA reports no peer access from device " << src_device_id
+                 << " to device " << dest_device_id;
+  }
+
+  constexpr size_t num_transfer_bytes{4096};
+  std::vector<int8_t> host_src(num_transfer_bytes);
+  std::iota(host_src.begin(), host_src.end(), 1);
+  std::vector<int8_t> host_dest(num_transfer_bytes);
+
+  auto src_device_buffer = cuda_mgr->allocateDeviceMem(num_transfer_bytes, src_device_id);
+  ScopeGuard free_src_device_buffer = [&] { cuda_mgr->freeDeviceMem(src_device_buffer); };
+  auto dest_device_buffer =
+      cuda_mgr->allocateDeviceMem(num_transfer_bytes, dest_device_id);
+  ScopeGuard free_dest_device_buffer = [&] {
+    cuda_mgr->freeDeviceMem(dest_device_buffer);
+  };
+
+  cuda_mgr->copyHostToDevice(src_device_buffer,
+                             host_src.data(),
+                             num_transfer_bytes,
+                             src_device_id,
+                             "CudaMgrTest");
+  cuda_mgr->copyDeviceToDevice(dest_device_buffer,
+                               src_device_buffer,
+                               num_transfer_bytes,
+                               dest_device_id,
+                               src_device_id,
+                               "CudaMgrTest");
+  cuda_mgr->copyDeviceToHost(
+      host_dest.data(), dest_device_buffer, num_transfer_bytes, "CudaMgrTest");
+
+  EXPECT_EQ(host_dest, host_src);
+}
+
+TEST(DeviceTransferTest, PeerCopyableDeviceToDeviceCopy) {
+  auto cuda_mgr = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
+  if (cuda_mgr->getDeviceCount() < 2) {
+    GTEST_SKIP() << "Peer-copyable device transfer test requires at least two GPUs";
+  }
+
+  constexpr int32_t src_device_id{0};
+  constexpr int32_t dest_device_id{1};
+  if (!cuda_mgr->canAccessPeer(dest_device_id, src_device_id)) {
+    GTEST_SKIP() << "CUDA reports no peer access from device " << src_device_id
+                 << " to device " << dest_device_id;
+  }
+
+  constexpr size_t num_transfer_bytes{4096};
+  std::vector<int8_t> host_src(num_transfer_bytes);
+  std::iota(host_src.begin(), host_src.end(), 1);
+  std::vector<int8_t> host_dest(num_transfer_bytes);
+
+  auto src_device_buffer =
+      cuda_mgr->allocatePeerCopyableDeviceMem(num_transfer_bytes, src_device_id);
+  ScopeGuard free_src_device_buffer = [&] {
+    cuda_mgr->freePeerCopyableDeviceMem(src_device_buffer, src_device_id);
+  };
+  auto dest_device_buffer =
+      cuda_mgr->allocatePeerCopyableDeviceMem(num_transfer_bytes, dest_device_id);
+  ScopeGuard free_dest_device_buffer = [&] {
+    cuda_mgr->freePeerCopyableDeviceMem(dest_device_buffer, dest_device_id);
+  };
+
+  cuda_mgr->copyHostToDevice(src_device_buffer,
+                             host_src.data(),
+                             num_transfer_bytes,
+                             src_device_id,
+                             "CudaMgrTest");
+  cuda_mgr->copyPeerToPeer(dest_device_buffer,
+                           src_device_buffer,
+                           num_transfer_bytes,
+                           dest_device_id,
+                           src_device_id,
+                           "CudaMgrTest");
+  cuda_mgr->copyDeviceToHost(host_dest.data(),
+                             dest_device_buffer,
+                             num_transfer_bytes,
+                             dest_device_id,
+                             "CudaMgrTest");
+
+  EXPECT_EQ(host_dest, host_src);
 }
 
 int main(int argc, char** argv) {
