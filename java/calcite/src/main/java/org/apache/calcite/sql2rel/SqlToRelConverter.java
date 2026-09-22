@@ -674,7 +674,8 @@ public class SqlToRelConverter {
       result = result.accept(new NestedJsonFunctionRelRewriter());
     }
 
-    // propagate the hints.
+    // Propagate hints after HeavyDB's JSON rel rewrite so the Calcite 1.41 hint
+    // semantics are preserved for the final relational tree.
     result = RelOptUtil.propagateRelHints(result, false);
     return RelRoot.of(result, validatedRowType, query.getKind())
         .withCollation(collation)
@@ -831,23 +832,45 @@ public class SqlToRelConverter {
 
     if (select.hasHints()) {
       final List<RelHint> hints = SqlUtil.getRelHint(hintStrategies, select.getHints());
-      // Attach the hints to the first Hintable node we found from the root node.
-      bb.setRoot(bb.root()
-          .accept(
-              new RelShuttleImpl() {
-                boolean attached = false;
-                @Override public RelNode visitChild(RelNode parent, int i, RelNode child) {
-                  if (parent instanceof Hintable && !attached) {
-                    attached = true;
-                    return ((Hintable) parent).attachHints(hints);
-                  } else {
-                    return super.visitChild(parent, i, child);
-                  }
-                }
-              }), true);
+      bb.setRoot(attachHintsToFirstHintable(bb.root(), hints), true);
     } else {
       bb.setRoot(bb.root(), true);
     }
+  }
+
+  private static RelNode attachHintList(RelNode rel, List<RelHint> hints) {
+    if (!(rel instanceof Hintable) || hints.isEmpty()) {
+      return rel;
+    }
+    List<RelHint> mergedHints = new ArrayList<>(((Hintable) rel).getHints());
+    for (RelHint hint : hints) {
+      if (!mergedHints.contains(hint)) {
+        mergedHints.add(hint);
+      }
+    }
+    return ((Hintable) rel).attachHints(mergedHints);
+  }
+
+  private static RelNode attachHintsToFirstHintable(RelNode root, List<RelHint> hints) {
+    if (hints.isEmpty()) {
+      return root;
+    }
+    if (root instanceof Hintable) {
+      return attachHintList(root, hints);
+    }
+    return root.accept(new RelShuttleImpl() {
+      boolean attached = false;
+
+      @Override
+      public RelNode visitChild(RelNode parent, int i, RelNode child) {
+        if (child instanceof Hintable && !attached) {
+          attached = true;
+          return attachHintList(child, hints);
+        } else {
+          return super.visitChild(parent, i, child);
+        }
+      }
+    });
   }
 
   /**
