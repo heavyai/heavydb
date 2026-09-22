@@ -147,6 +147,7 @@ struct SortInfo {
 struct JoinCondition {
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   JoinType type;
+  RegisteredQueryHint query_hint{RegisteredQueryHint::defaults()};
 };
 
 using JoinQualsPerNestingLevel = std::vector<JoinCondition>;
