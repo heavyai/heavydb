@@ -4,6 +4,10 @@ User-facing product documentation is published at:
 
 https://docs.nvidia.com/heavyai
 
+## Standalone engineering guides
+
+- [GPU Query Acceleration and Native Storage Guide](GPU_QUERY_ACCELERATION_AND_STORAGE_GUIDE.md)
+
 When built via ``dev-tools``, developer documentation HTML is written to
 ``build/<distro>/docs/html/`` (for example ``build/ubuntu22.04/docs/html/``).
 The CMake and manual venv paths below still write to ``docs/build/html/``.
