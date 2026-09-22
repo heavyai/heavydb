@@ -15,17 +15,21 @@
 #include "Utils/Regexp.h"
 #include "Utils/StringLike.h"
 
+#include <tbb/blocked_range.h>
 #include <tbb/concurrent_unordered_set.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_reduce.h>
 #include <tbb/task_arena.h>
 
 #include <algorithm>
 #include <atomic>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <unordered_set>
 
 StringDictionaryProxy::StringDictionaryProxy(std::shared_ptr<StringDictionary> sd,
                                              const shared::StringDictKey& string_dict_key,
@@ -39,6 +43,88 @@ int32_t truncate_to_generation(const int32_t id, const size_t generation) {
   CHECK_GE(id, 0);
   return static_cast<size_t>(id) >= generation ? StringDictionary::INVALID_STR_ID : id;
 }
+
+namespace {
+
+bool is_valid_translated_string_id(const int32_t id) {
+  return id != StringDictionary::INVALID_STR_ID && id != inline_int_null_value<int32_t>();
+}
+
+struct TranslatedStringIdRange {
+  bool has_value{false};
+  int32_t min{0};
+  int32_t max{0};
+
+  void add(const int32_t id) {
+    if (!is_valid_translated_string_id(id)) {
+      return;
+    }
+    if (!has_value) {
+      has_value = true;
+      min = id;
+      max = id;
+      return;
+    }
+    min = std::min(min, id);
+    max = std::max(max, id);
+  }
+
+  TranslatedStringIdRange merge(const TranslatedStringIdRange& other) const {
+    if (!has_value) {
+      return other;
+    }
+    if (!other.has_value) {
+      return *this;
+    }
+    return {true, std::min(min, other.min), std::max(max, other.max)};
+  }
+};
+
+void tightenStringOpTranslationMapRange(StringDictionaryProxy::IdMap& id_map) {
+  // String ops such as SUBSTRING can collapse a large source dictionary into a tiny
+  // transient output domain. Use that actual domain for downstream group-by planning.
+  auto const& translated_ids = id_map.getVectorMap();
+  constexpr size_t min_parallel_range_size = 1'000'000;
+  constexpr size_t grain_size = 1'000'000;
+
+  auto scan_range = [&translated_ids](const size_t begin, const size_t end) {
+    TranslatedStringIdRange range;
+    for (size_t idx = begin; idx < end; ++idx) {
+      range.add(translated_ids[idx]);
+    }
+    return range;
+  };
+
+  TranslatedStringIdRange actual_range;
+  if (translated_ids.size() >= min_parallel_range_size) {
+    actual_range = tbb::parallel_reduce(
+        tbb::blocked_range<size_t>(0, translated_ids.size(), grain_size),
+        TranslatedStringIdRange{},
+        [&translated_ids](const tbb::blocked_range<size_t>& range,
+                          TranslatedStringIdRange local_range) {
+          for (size_t idx = range.begin(); idx != range.end(); ++idx) {
+            local_range.add(translated_ids[idx]);
+          }
+          return local_range;
+        },
+        [](const TranslatedStringIdRange& lhs, const TranslatedStringIdRange& rhs) {
+          return lhs.merge(rhs);
+        });
+  } else {
+    actual_range = scan_range(0, translated_ids.size());
+  }
+
+  if (!actual_range.has_value) {
+    id_map.setRangeStart(0);
+    id_map.setRangeEnd(0);
+    return;
+  }
+  CHECK_LT(actual_range.max, std::numeric_limits<int32_t>::max());
+  id_map.setRangeStart(actual_range.min);
+  id_map.setRangeEnd(actual_range.max + 1);
+}
+
+}  // namespace
 
 std::vector<int32_t> StringDictionaryProxy::getTransientBulk(
     const std::vector<std::string>& strings) const {
@@ -168,8 +254,22 @@ std::string StringDictionaryProxy::getString(int32_t string_id) const {
   return getStringUnlocked(string_id);
 }
 
+bool StringDictionaryProxy::canDecodeStringId(const int32_t string_id) const {
+  if (string_id == inline_int_null_value<int32_t>() ||
+      string_id == StringDictionary::INVALID_STR_ID) {
+    return false;
+  }
+  if (string_id >= 0) {
+    return static_cast<size_t>(string_id) < storageEntryCount();
+  }
+  const auto string_index = transientIdToIndex(string_id);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+  return string_index < transient_string_vec_.size();
+}
+
 std::string StringDictionaryProxy::getStringUnlocked(const int32_t string_id) const {
-  if (string_id >= 0 && storageEntryCount() > 0) {
+  if (string_id >= 0) {
+    CHECK_LT(static_cast<size_t>(string_id), storageEntryCount());
     return string_dict_->getString(string_id);
   }
   unsigned const string_index = transientIdToIndex(string_id);
@@ -179,19 +279,30 @@ std::string StringDictionaryProxy::getStringUnlocked(const int32_t string_id) co
 
 std::vector<std::string> StringDictionaryProxy::getStrings(
     const std::vector<int32_t>& string_ids) const {
-  std::vector<std::string> strings;
-  if (!string_ids.empty()) {
-    strings.reserve(string_ids.size());
-    for (const auto string_id : string_ids) {
+  std::vector<std::string> strings(string_ids.size());
+  const auto copy_strings = [&](const size_t begin, const size_t end) {
+    for (size_t i = begin; i < end; ++i) {
+      const auto string_id = string_ids[i];
       if (string_id >= 0) {
-        strings.emplace_back(string_dict_->getString(string_id));
+        strings[i] = string_dict_->getString(string_id);
       } else if (inline_int_null_value<int32_t>() == string_id) {
-        strings.emplace_back("");
+        strings[i].clear();
       } else {
         unsigned const string_index = transientIdToIndex(string_id);
-        strings.emplace_back(*transient_string_vec_[string_index]);
+        strings[i] = *transient_string_vec_[string_index];
       }
     }
+  };
+
+  constexpr size_t parallel_lookup_threshold{10000};
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+  if (string_ids.size() >= parallel_lookup_threshold) {
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, string_ids.size()),
+                      [&](const tbb::blocked_range<size_t>& range) {
+                        copy_strings(range.begin(), range.end());
+                      });
+  } else {
+    copy_strings(0, string_ids.size());
   }
   return strings;
 }
@@ -378,6 +489,64 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOt
   order_translation_locks(
       source_dict_id, dest_dict_id, source_proxy_read_lock, dest_proxy_write_lock);
 
+  const bool has_string_ops = string_ops.size();
+  if (g_enable_lazy_string_dictionary_hash_recovery && has_string_ops &&
+      this == dest_proxy && generation_ >= 0 && transientEntryCountUnlocked() <= 1024 &&
+      !string_dict_->isHashTableRecovered()) {
+    auto id_map = initIdMap();
+    if (id_map.empty()) {
+      return id_map;
+    }
+
+    const size_t initial_transient_count = transientEntryCountUnlocked();
+    std::unordered_set<std::string> initial_transient_strings;
+    initial_transient_strings.reserve(initial_transient_count);
+    std::vector<std::string> transformed_transient_strings;
+    transformed_transient_strings.reserve(initial_transient_count);
+    for (size_t transient_idx = 0; transient_idx < initial_transient_count;
+         ++transient_idx) {
+      const auto& transient_string = *transient_string_vec_[transient_idx];
+      initial_transient_strings.insert(transient_string);
+      transformed_transient_strings.push_back(string_ops(transient_string));
+    }
+
+    size_t num_untranslated_strings{0};
+    if (string_dict_->tryBuildSelfStringOpUnionTranslationMapWithoutHash(
+            id_map.storageData(),
+            generation_,
+            string_ops,
+            [dest_proxy](const std::string_view transformed_string) {
+              dest_proxy->getOrAddTransientUnlocked(transformed_string);
+            },
+            [dest_proxy](const std::string_view transformed_string) {
+              return dest_proxy->lookupTransientStringUnlocked(transformed_string);
+            },
+            num_untranslated_strings)) {
+      if (initial_transient_count > 0) {
+        std::vector<int32_t> persisted_transient_ids(initial_transient_count);
+        string_dict_->getBulk(
+            transformed_transient_strings, persisted_transient_ids.data(), generation_);
+        for (size_t transient_idx = 0; transient_idx < initial_transient_count;
+             ++transient_idx) {
+          const auto& transformed_string = transformed_transient_strings[transient_idx];
+          auto translated_id = persisted_transient_ids[transient_idx];
+          if (translated_id == StringDictionary::INVALID_STR_ID) {
+            translated_id = dest_proxy->lookupTransientStringUnlocked(transformed_string);
+            if (translated_id == StringDictionary::INVALID_STR_ID) {
+              translated_id = dest_proxy->getOrAddTransientUnlocked(transformed_string);
+            }
+            num_untranslated_strings +=
+                !initial_transient_strings.count(transformed_string);
+          }
+          id_map[transientIndexToId(transient_idx)] = translated_id;
+        }
+      }
+      id_map.setNumUntranslatedStrings(num_untranslated_strings);
+      tightenStringOpTranslationMapRange(id_map);
+      return id_map;
+    }
+  }
+
   auto id_map =
       buildIntersectionTranslationMapToOtherProxyUnlocked(dest_proxy, string_ops);
   if (id_map.empty()) {
@@ -400,8 +569,6 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOt
     }
     const int32_t map_domain_start = id_map.domainStart();
     const int32_t map_domain_end = id_map.domainEnd();
-
-    const bool has_string_ops = string_ops.size();
 
     // Define the masking functor
     auto mask_functor = [&id_map](int32_t id) {
@@ -426,60 +593,30 @@ StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOt
     // Process stored strings
     {
       auto stored_timer = DEBUG_TIMER("UnionTranslationMapToOtherProxy:StoredStrings");
+      auto* translation_map_stored_entries_ptr = id_map.storageData();
 
-      // Use getStringsForRange to safely retrieve strings with masking
-      std::vector<std::string> processed_strings =
-          string_dict_->getStringsForRange(0, map_domain_end, string_ops, mask_functor);
-
-      tbb::concurrent_unordered_set<std::string> unique_strings;
-
-      tbb::parallel_for(tbb::blocked_range<int32_t>(0, map_domain_end),
-                        [&](const tbb::blocked_range<int32_t>& range) {
-                          for (int32_t source_string_id = range.begin();
-                               source_string_id != range.end();
-                               ++source_string_id) {
-                            const auto& processed_string =
-                                processed_strings[source_string_id];
-                            if (!processed_string.empty()) {
-                              unique_strings.insert(processed_string);
-                            }
-                          }
-                        });
-
-      // Insert unique strings into destination proxy
-      {
-        auto dedup_timer = DEBUG_TIMER("UnionTranslationMapToOtherProxy:DedupStrings");
-        for (const auto& str : unique_strings) {
-          dest_proxy->getOrAddTransientUnlocked(str);
-        }
-      }
-
-      // Map processed strings to destination IDs
-      {
-        auto map_timer = DEBUG_TIMER("UnionTranslationMapToOtherProxy:MapStrings");
-        tbb::parallel_for(
-            tbb::blocked_range<int32_t>(0, map_domain_end),
-            [&](const tbb::blocked_range<int32_t>& range) {
-              for (int32_t source_string_id = range.begin();
-                   source_string_id != range.end();
-                   ++source_string_id) {
-                if (id_map[source_string_id] == StringDictionary::INVALID_STR_ID) {
-                  const auto& processed_string = processed_strings[source_string_id];
-                  if (!processed_string.empty()) {
-                    id_map[source_string_id] =
-                        dest_proxy->lookupTransientStringUnlocked(processed_string);
-                  }
-                }
-              }
-            });
-      }
+      string_dict_->fillStringOpUnionTranslationMap(
+          translation_map_stored_entries_ptr,
+          map_domain_end,
+          string_ops,
+          mask_functor,
+          [dest_proxy](std::string_view processed_string) {
+            dest_proxy->getOrAddTransientUnlocked(processed_string);
+          },
+          [dest_proxy](std::string_view processed_string) {
+            return dest_proxy->lookupTransientStringUnlocked(processed_string);
+          });
     }
   }
 
   // Update id_map range
-  const size_t num_dest_transients = dest_proxy->transientEntryCountUnlocked();
-  id_map.setRangeStart(
-      num_dest_transients > 0 ? -1 - static_cast<int32_t>(num_dest_transients) : 0);
+  if (has_string_ops) {
+    tightenStringOpTranslationMapRange(id_map);
+  } else {
+    const size_t num_dest_transients = dest_proxy->transientEntryCountUnlocked();
+    id_map.setRangeStart(
+        num_dest_transients > 0 ? -1 - static_cast<int32_t>(num_dest_transients) : 0);
+  }
   return id_map;
 }
 
@@ -503,15 +640,29 @@ std::vector<T> StringDictionaryProxy::getLike(const std::string& pattern,
                                               const bool icase,
                                               const bool is_simple,
                                               const char escape) const {
+  return *getLikeShared<T>(pattern, icase, is_simple, escape);
+}
+
+template <typename T>
+std::shared_ptr<const std::vector<T>> StringDictionaryProxy::getLikeShared(
+    const std::string& pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape) const {
   CHECK_GE(generation_, 0);
-  auto result = string_dict_->getLike<T>(pattern, icase, is_simple, escape, generation_);
+  auto persisted_result =
+      string_dict_->getLikeShared<T>(pattern, icase, is_simple, escape, generation_);
+  if (transient_string_vec_.empty()) {
+    return persisted_result;
+  }
+  auto result = std::make_shared<std::vector<T>>(*persisted_result);
   auto is_like_impl = icase       ? is_simple ? string_ilike_simple : string_ilike
                       : is_simple ? string_like_simple
                                   : string_like;
   for (unsigned index = 0; index < transient_string_vec_.size(); ++index) {
     auto const str = *transient_string_vec_[index];
     if (is_like_impl(str.c_str(), str.size(), pattern.c_str(), pattern.size(), escape)) {
-      result.push_back(transientIndexToId(index));
+      result->push_back(transientIndexToId(index));
     }
   }
   return result;
@@ -528,6 +679,18 @@ template std::vector<int64_t> StringDictionaryProxy::getLike<int64_t>(
     const bool icase,
     const bool is_simple,
     const char escape) const;
+
+template std::shared_ptr<const std::vector<int32_t>>
+StringDictionaryProxy::getLikeShared<int32_t>(const std::string& pattern,
+                                              const bool icase,
+                                              const bool is_simple,
+                                              const char escape) const;
+
+template std::shared_ptr<const std::vector<int64_t>>
+StringDictionaryProxy::getLikeShared<int64_t>(const std::string& pattern,
+                                              const bool icase,
+                                              const bool is_simple,
+                                              const char escape) const;
 
 namespace {
 
@@ -590,6 +753,10 @@ SortedStringPermutation StringDictionaryProxy::getSortedPermutation(
                                             should_sort_descending);
 }
 
+bool StringDictionaryProxy::isSortedPermutationCacheComplete() const {
+  return string_dict_->isSortedPermutationCacheComplete();
+}
+
 namespace {
 
 bool is_regexp_like(const std::string& str,
@@ -629,8 +796,11 @@ std::pair<const char*, size_t> StringDictionaryProxy::getStringBytes(
 }
 
 size_t StringDictionaryProxy::storageEntryCount() const {
-  const size_t num_storage_entries{generation_ == -1 ? string_dict_->storageEntryCount()
-                                                     : generation_};
+  const auto dictionary_entry_count = string_dict_->storageEntryCount();
+  const size_t num_storage_entries{
+      generation_ == -1
+          ? dictionary_entry_count
+          : std::min(static_cast<size_t>(generation_), dictionary_entry_count)};
   CHECK_LE(num_storage_entries, static_cast<size_t>(std::numeric_limits<int32_t>::max()));
   return num_storage_entries;
 }
@@ -682,7 +852,9 @@ class StringLocalCallback : public StringDictionary::StringCallback {
 
  public:
   StringLocalCallback(StringDictionaryProxy* sdp, StringDictionaryProxy::IdMap& id_map)
-      : sdp_(sdp), id_map_(id_map) {}
+      : sdp_(sdp), id_map_(id_map) {
+    sdp_->string_dict_->ensureHashTableRecovered();
+  }
   void operator()(std::string const& str, int32_t const string_id) override {
     operator()(std::string_view(str), string_id);
   }
@@ -724,6 +896,38 @@ size_t StringDictionaryProxy::getTransientBulkImpl(
   const size_t num_strings = strings.size();
   if (num_strings == 0) {
     return 0UL;
+  }
+  if (g_enable_lazy_string_dictionary_hash_recovery &&
+      !string_dict_->isHashTableRecovered()) {
+    std::vector<size_t> persisted_lookup_indices;
+    persisted_lookup_indices.reserve(num_strings);
+    {
+      auto read_lock = take_read_lock ? std::shared_lock<std::shared_mutex>(rw_mutex_)
+                                      : std::shared_lock<std::shared_mutex>();
+      for (size_t string_idx = 0; string_idx < num_strings; ++string_idx) {
+        string_ids[string_idx] = lookupTransientStringUnlocked(strings[string_idx]);
+        if (string_ids[string_idx] == StringDictionary::INVALID_STR_ID) {
+          persisted_lookup_indices.push_back(string_idx);
+        }
+      }
+    }
+    if (persisted_lookup_indices.empty()) {
+      return 0UL;
+    }
+
+    std::vector<std::string> persisted_lookup_strings;
+    persisted_lookup_strings.reserve(persisted_lookup_indices.size());
+    for (const auto string_idx : persisted_lookup_indices) {
+      persisted_lookup_strings.push_back(strings[string_idx]);
+    }
+    std::vector<int32_t> persisted_string_ids(persisted_lookup_strings.size());
+    const auto num_strings_not_found = string_dict_->getBulk(
+        persisted_lookup_strings, persisted_string_ids.data(), generation_);
+    for (size_t lookup_idx = 0; lookup_idx < persisted_lookup_indices.size();
+         ++lookup_idx) {
+      string_ids[persisted_lookup_indices[lookup_idx]] = persisted_string_ids[lookup_idx];
+    }
+    return num_strings_not_found;
   }
   // StringDictionary::getBulk returns the number of strings not found
   if (string_dict_->getBulk(strings, string_ids, generation_) == 0UL) {
