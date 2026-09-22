@@ -34,6 +34,8 @@ import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.TableModify.Operation;
 import org.apache.calcite.rel.externalize.HeavyDBRelWriterImpl;
+import org.apache.calcite.rel.hint.Hintable;
+import org.apache.calcite.rel.hint.RelHint;
 import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
@@ -1248,14 +1250,26 @@ public final class HeavyDBParser {
     RelRoot relRootNode = planner.getRelRoot(validateR);
     relRootNode = replaceIsTrue(planner.getTypeFactory(), relRootNode);
     RelNode rootNode = planner.optimizeRATree(
-            relRootNode.project(), parserOptions.isViewOptimizeEnabled(), foundView);
+            relRootNode.project(),
+            parserOptions.isViewOptimizeEnabled(),
+            foundView,
+            parserOptions.isExperimentalQueryRewritesEnabled());
+    relRootNode = replaceIsTrue(planner.getTypeFactory(),
+            new RelRoot(rootNode,
+                    relRootNode.validatedRowType,
+                    relRootNode.kind,
+                    relRootNode.fields,
+                    relRootNode.collation,
+                    relRootNode.hints));
+    rootNode = relRootNode.rel;
+    rootNode = attachHintsToFirstHintable(rootNode, relRootNode.hints);
     planner.close();
     RelRoot rr = new RelRoot(rootNode,
             relRootNode.validatedRowType,
             relRootNode.kind,
             relRootNode.fields,
             relRootNode.collation,
-            Collections.emptyList());
+            relRootNode.hints);
     return rr;
   }
 
@@ -1304,7 +1318,42 @@ public final class HeavyDBParser {
             root.kind,
             root.fields,
             root.collation,
-            Collections.emptyList());
+            root.hints);
+  }
+
+  private static RelNode attachHintList(RelNode rel, List<RelHint> hints) {
+    if (!(rel instanceof Hintable) || hints.isEmpty()) {
+      return rel;
+    }
+    List<RelHint> mergedHints = new ArrayList<>(((Hintable) rel).getHints());
+    for (RelHint hint : hints) {
+      if (!mergedHints.contains(hint)) {
+        mergedHints.add(hint);
+      }
+    }
+    return ((Hintable) rel).attachHints(mergedHints);
+  }
+
+  private static RelNode attachHintsToFirstHintable(RelNode root, List<RelHint> hints) {
+    if (hints.isEmpty()) {
+      return root;
+    }
+    if (root instanceof Hintable) {
+      return attachHintList(root, hints);
+    }
+    return root.accept(new RelShuttleImpl() {
+      boolean attached = false;
+
+      @Override
+      protected RelNode visitChild(RelNode parent, int i, RelNode child) {
+        if (child instanceof Hintable && !attached) {
+          attached = true;
+          return attachHintList(child, hints);
+        } else {
+          return super.visitChild(parent, i, child);
+        }
+      }
+    });
   }
 
   private SqlNode parseSql(String sql, final boolean legacy_syntax, Planner planner)
