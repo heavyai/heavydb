@@ -1001,8 +1001,13 @@ class LegacyReplicatedPartitionsTest : public SystemCatalogMigrationTest {
         std::string(BASE_PATH) + "/" + shared::kDataDirectoryName;
     auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(
         data_path, sys_parms, nullptr, false, 0);
-    auto calcite = std::make_shared<Calcite>(
-        -1, 3280, std::string(BASE_PATH), 1024, 5000, true, "");
+    auto calcite = std::make_shared<Calcite>(-1,
+                                            QueryRunner::db_handler_calcite_port(),
+                                            std::string(BASE_PATH),
+                                            1024,
+                                            5000,
+                                            true,
+                                            "");
     AuthMetadata auth_metadata;
     SC::instance().init(BASE_PATH, data_mgr, auth_metadata, calcite, false, {});
   }
