@@ -5,9 +5,39 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
+#include "StringDictionary/StringDictionary.h"
 
 #include <future>
 #include <memory>
+
+namespace {
+
+int64_t in_values_bitmap_null_val(const SQLTypeInfo& ti) {
+  if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
+    return StringDictionary::INVALID_STR_ID;
+  }
+  return inline_int_null_val(ti);
+}
+
+std::optional<int64_t> in_values_bitmap_alternate_null_val(const SQLTypeInfo& ti) {
+  if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
+    return inline_int_null_val(ti);
+  }
+  return std::nullopt;
+}
+
+std::optional<int64_t> in_values_bitmap_dict_entry_count(const SQLTypeInfo& ti,
+                                                         Executor* executor) {
+  if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
+    auto* const sdp = executor->getStringDictionaryProxy(
+        ti.getStringDictKey(), executor->getRowSetMemoryOwner(), true);
+    CHECK(sdp);
+    return static_cast<int64_t>(sdp->storageEntryCount());
+  }
+  return std::nullopt;
+}
+
+}  // namespace
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
                                     const CompilationOptions& co) {
@@ -27,6 +57,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
     result = cgen_state_->llInt(int8_t(0));
   }
   CHECK(result);
+  bool rhs_has_null = false;
   if (co.hoist_literals) {  // TODO(alex): remove this constraint
     auto in_vals_bitmap = createInValuesBitmap(expr, co);
     if (in_vals_bitmap) {
@@ -42,6 +73,11 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
   }
   if (expr_ti.get_notnull()) {
     for (auto in_val : expr->get_value_list()) {
+      const auto in_val_const =
+          dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
+      if (in_val_const && in_val_const->get_is_null()) {
+        continue;
+      }
       result = cgen_state_->ir_builder_.CreateOr(
           result,
           toBool(
@@ -49,10 +85,22 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
     }
   } else {
     for (auto in_val : expr->get_value_list()) {
+      const auto in_val_const =
+          dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
+      if (in_val_const && in_val_const->get_is_null()) {
+        rhs_has_null = true;
+        continue;
+      }
       const auto crt =
           codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co);
       result = cgen_state_->emitCall("logical_or",
                                      {result, crt, cgen_state_->inlineIntNull(expr_ti)});
+    }
+    if (rhs_has_null) {
+      result = cgen_state_->emitCall("logical_or",
+                                     {result,
+                                      cgen_state_->inlineIntNull(expr_ti),
+                                      cgen_state_->inlineIntNull(expr_ti)});
     }
   }
   return result;
@@ -66,13 +114,29 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
     throw std::runtime_error("IN not supported for unnested expressions");
   }
   const auto& ti = in_integer_set->get_arg()->get_type_info();
-  const auto needle_null_val = inline_int_null_val(ti);
+  const auto needle_null_val = in_values_bitmap_null_val(ti);
   if (!co.hoist_literals) {
-    // We never run without literal hoisting in real world scenarios, this avoids a crash
-    // when testing.
-    throw std::runtime_error(
-        "IN subquery with many right-hand side values not supported when literal "
-        "hoisting is disabled");
+    const auto& expr_ti = in_integer_set->get_type_info();
+    CHECK(expr_ti.is_boolean());
+    const auto lhs_lvs = codegen(in_arg, true, co);
+    CHECK_EQ(size_t(1), lhs_lvs.size());
+    llvm::Value* result =
+        expr_ti.get_notnull()
+            ? llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_),
+                                     false)
+            : cgen_state_->llInt(int8_t(0));
+    for (const auto value : in_integer_set->get_value_list()) {
+      Datum datum{0};
+      datum.bigintval = value;
+      Analyzer::Constant in_val(ti, value == needle_null_val, datum);
+      const auto crt = codegenCmp(kEQ, kONE, lhs_lvs, ti, &in_val, co);
+      result =
+          expr_ti.get_notnull()
+              ? cgen_state_->ir_builder_.CreateOr(result, toBool(crt))
+              : cgen_state_->emitCall("logical_or",
+                                      {result, crt, cgen_state_->inlineIntNull(expr_ti)});
+    }
+    return result;
   }
   auto in_vals_bitmap = std::make_unique<InValuesBitmap>(
       in_integer_set->get_value_list(),
@@ -80,7 +144,9 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
       co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                 : Data_Namespace::CPU_LEVEL,
       executor(),
-      co);
+      co,
+      in_values_bitmap_alternate_null_val(ti),
+      in_values_bitmap_dict_entry_count(ti, executor()));
   const auto& in_integer_set_ti = in_integer_set->get_type_info();
   CHECK(in_integer_set_ti.is_boolean());
   const auto lhs_lvs = codegen(in_arg, true, co);
@@ -115,78 +181,98 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
   if (val_count > 3) {
     using ListIterator = decltype(value_list.begin());
     std::vector<int64_t> values;
-    const auto needle_null_val = inline_int_null_val(ti);
-    const int worker_count = val_count > 10000 ? cpu_threads() : int(1);
-    std::vector<std::vector<int64_t>> values_set(worker_count, std::vector<int64_t>());
-    std::vector<std::future<bool>> worker_threads;
-    auto start_it = value_list.begin();
-    for (size_t i = 0,
-                start_val = 0,
-                stride = (val_count + worker_count - 1) / worker_count;
-         i < val_count && start_val < val_count;
-         ++i, start_val += stride, std::advance(start_it, stride)) {
-      auto end_it = start_it;
-      std::advance(end_it, std::min(stride, val_count - start_val));
-      const auto do_work = [&](std::vector<int64_t>& out_vals,
-                               const ListIterator start,
-                               const ListIterator end) -> bool {
-        for (auto val_it = start; val_it != end; ++val_it) {
-          const auto& in_val = *val_it;
-          const auto in_val_const =
-              dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
-          if (!in_val_const) {
-            return false;
-          }
-          const auto& in_val_ti = in_val->get_type_info();
-          CHECK(in_val_ti == ti || get_nullable_type_info(in_val_ti) == ti);
-          if (ti.is_string()) {
-            CHECK(sdp);
-            const auto string_id =
-                in_val_const->get_is_null()
-                    ? needle_null_val
-                    : sdp->getIdOfString(*in_val_const->get_constval().stringval);
-            if (string_id != StringDictionary::INVALID_STR_ID) {
-              out_vals.push_back(string_id);
+    const auto needle_null_val = in_values_bitmap_null_val(ti);
+    if (ti.is_string()) {
+      CHECK(sdp);
+      std::vector<std::string> string_values;
+      string_values.reserve(val_count);
+      size_t null_count{0};
+      for (const auto& in_val : value_list) {
+        const auto in_val_const =
+            dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
+        if (!in_val_const) {
+          return nullptr;
+        }
+        const auto& in_val_ti = in_val->get_type_info();
+        CHECK(in_val_ti == ti || get_nullable_type_info(in_val_ti) == ti);
+        if (in_val_const->get_is_null()) {
+          ++null_count;
+        } else {
+          CHECK(in_val_const->get_constval().stringval);
+          string_values.push_back(*in_val_const->get_constval().stringval);
+        }
+      }
+      values.assign(null_count, needle_null_val);
+      const auto string_ids = sdp->getTransientBulk(string_values);
+      for (const auto string_id : string_ids) {
+        if (string_id != StringDictionary::INVALID_STR_ID) {
+          values.push_back(string_id);
+        }
+      }
+    } else {
+      const int worker_count = val_count > 10000 ? cpu_threads() : int(1);
+      std::vector<std::vector<int64_t>> values_set(worker_count, std::vector<int64_t>());
+      std::vector<std::future<bool>> worker_threads;
+      auto start_it = value_list.begin();
+      for (size_t i = 0,
+                  start_val = 0,
+                  stride = (val_count + worker_count - 1) / worker_count;
+           i < val_count && start_val < val_count;
+           ++i, start_val += stride, std::advance(start_it, stride)) {
+        auto end_it = start_it;
+        std::advance(end_it, std::min(stride, val_count - start_val));
+        const auto do_work = [&](std::vector<int64_t>& out_vals,
+                                 const ListIterator start,
+                                 const ListIterator end) -> bool {
+          for (auto val_it = start; val_it != end; ++val_it) {
+            const auto& in_val = *val_it;
+            const auto in_val_const =
+                dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(in_val.get()));
+            if (!in_val_const) {
+              return false;
             }
-          } else {
+            const auto& in_val_ti = in_val->get_type_info();
+            CHECK(in_val_ti == ti || get_nullable_type_info(in_val_ti) == ti);
             out_vals.push_back(CodeGenerator::codegenIntConst(in_val_const, cgen_state_)
                                    ->getSExtValue());
           }
+          return true;
+        };
+        if (worker_count > 1) {
+          worker_threads.push_back(std::async(
+              std::launch::async, do_work, std::ref(values_set[i]), start_it, end_it));
+        } else {
+          do_work(std::ref(values), start_it, end_it);
         }
-        return true;
-      };
+      }
+      bool success = true;
+      for (auto& worker : worker_threads) {
+        success &= worker.get();
+      }
+      if (!success) {
+        return nullptr;
+      }
       if (worker_count > 1) {
-        worker_threads.push_back(std::async(
-            std::launch::async, do_work, std::ref(values_set[i]), start_it, end_it));
-      } else {
-        do_work(std::ref(values), start_it, end_it);
-      }
-    }
-    bool success = true;
-    for (auto& worker : worker_threads) {
-      success &= worker.get();
-    }
-    if (!success) {
-      return nullptr;
-    }
-    if (worker_count > 1) {
-      size_t total_val_count = 0;
-      for (auto& vals : values_set) {
-        total_val_count += vals.size();
-      }
-      values.reserve(total_val_count);
-      for (auto& vals : values_set) {
-        values.insert(values.end(), vals.begin(), vals.end());
+        size_t total_val_count = 0;
+        for (auto& vals : values_set) {
+          total_val_count += vals.size();
+        }
+        values.reserve(total_val_count);
+        for (auto& vals : values_set) {
+          values.insert(values.end(), vals.begin(), vals.end());
+        }
       }
     }
     try {
-      return std::make_unique<InValuesBitmap>(values,
-                                              needle_null_val,
-                                              co.device_type == ExecutorDeviceType::GPU
-                                                  ? Data_Namespace::GPU_LEVEL
-                                                  : Data_Namespace::CPU_LEVEL,
-                                              executor(),
-                                              co);
+      return std::make_unique<InValuesBitmap>(
+          values,
+          needle_null_val,
+          co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                    : Data_Namespace::CPU_LEVEL,
+          executor(),
+          co,
+          in_values_bitmap_alternate_null_val(ti),
+          in_values_bitmap_dict_entry_count(ti, executor()));
     } catch (...) {
       return nullptr;
     }
