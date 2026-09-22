@@ -55,6 +55,7 @@ extern bool g_enable_odbc_stats_scan;
 #endif
 
 extern bool g_enable_fsi;
+extern bool g_enable_gpu_input_cpu_buffer_bypass;
 extern bool g_enable_s3_fsi;
 extern bool g_enable_seconds_refresh;
 extern bool g_allow_s3_server_privileges;
@@ -5507,6 +5508,25 @@ INSTANTIATE_TEST_SUITE_P(DISABLED_DifferentDataSources,
                          ParquetDetectColumnTest,
                          testing::Values("s3_public"),
                          [](const auto& param_info) { return param_info.param; });
+
+TEST_F(SelectQueryTest, NativeStorageLookupRejectsForeignTable) {
+  sql(getCreateForeignTableQuery("(i INTEGER)", "two_row_1_2", "parquet"));
+
+  const auto saved_gpu_input_bypass = g_enable_gpu_input_cpu_buffer_bypass;
+  ScopeGuard restore_gpu_input_bypass = [&] {
+    g_enable_gpu_input_cpu_buffer_bypass = saved_gpu_input_bypass;
+  };
+  g_enable_gpu_input_cpu_buffer_bypass = true;
+
+  auto& catalog = getCatalog();
+  const auto chunk_key = getChunkKeyFromTable(catalog, default_table_name, {1, 0});
+  auto* persistent_storage_mgr = catalog.getDataMgr().getPersistentStorageMgr();
+  ASSERT_NE(persistent_storage_mgr, nullptr);
+  EXPECT_EQ(persistent_storage_mgr->getBufferIfNativeStorage(chunk_key, 0), nullptr);
+
+  sqlAndCompareResult("SELECT i FROM " + default_table_name + " ORDER BY i;",
+                      {{i(1)}, {i(2)}});
+}
 
 TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
   const auto query = getCreateForeignTableQuery(
@@ -11662,7 +11682,7 @@ TEST_F(AlterForeignTableRegularTableTest, RenameRegularTable) {
 
 class AlterForeignTablePermissionTest : public AlterForeignTableTest {
   void SetUp() override {
-    loginAdmin();
+    switchToAdmin();
     AlterForeignTableTest::SetUp();
     dropTestUserIfExists();
   }
@@ -11670,7 +11690,12 @@ class AlterForeignTablePermissionTest : public AlterForeignTableTest {
     if (skip_teardown_) {
       return;
     }
-    loginAdmin();
+    const auto session_to_close = getDbHandlerAndSessionId().second;
+    const auto close_non_admin_session = !getCurrentUser().isSuper;
+    switchToAdmin();
+    if (close_non_admin_session) {
+      logout(session_to_close);
+    }
     dropTestUserIfExists();
     AlterForeignTableTest::TearDown();
   }
@@ -12727,6 +12752,29 @@ class PrefetchLimitTest : public RecoverCacheQueryTest {
     }
     return expected;
   }
+
+  void runPartialFragmentLimitMultiLinestring() {
+    // 2 fragments (3 varlen data + 3 varlen index + 1 empty) + 1 varlen data.
+    size_t size_limit =
+        (max_buffer_size_ * 3U + index_buffer_size_ * 3U) * 2U + max_buffer_size_;
+    cache_->setDataSizeLimit(size_limit);
+
+    sql(createForeignTableQuery({{"mlinestring", "MULTILINESTRING"}},
+                                getDataFilesPath() + "GeoTypes/multilinestring.parquet",
+                                wrapper_type_,
+                                {{"fragment_size", "1"}}));
+    sql("SELECT COUNT(*) FROM " + default_table_name + ";");
+
+    // Despite having room for part of a third fragment we should only store 2, because
+    // caching a geo-column should be atomic.
+    auto mock_data_wrapper = std::make_shared<CountChunksMockWrapper>(14);
+    setMockWrapper(mock_data_wrapper, default_table_name);
+
+    sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                        {{"MULTILINESTRING ((0 0,0 0))"},
+                         {"MULTILINESTRING ((0 0,1 1),(1 1,2 2))"},
+                         {"MULTILINESTRING ((3 3,4 4))"}});
+  }
 };
 
 // If the cache is too small to prefetch all the chunks we want for the query, then we
@@ -12816,7 +12864,9 @@ TEST_F(PrefetchLimitTest, PartialFragmentLimitVarlen) {
     expected.push_back({std::to_string(number)});
   }
 
-  sqlAndCompareResult("SELECT text_unencoded FROM " + default_table_name + ";", expected);
+  sqlAndCompareResult(
+      "SELECT text_unencoded FROM " + default_table_name + " ORDER BY text_unencoded;",
+      expected);
 }
 
 // This point chunk is made up of 3 physical chunks.
@@ -12891,27 +12941,17 @@ TEST_F(PrefetchLimitTest, PartialFragmentLimitLinestring) {
 
 // This multilinestring is composed of 7 physical chunks
 TEST_F(PrefetchLimitTest, PartialFragmentLimitMultiLinestring) {
-  // 2 fragments (3 varlen data + 3 varlen index + 1 empty) + 1 varlen data.
-  size_t size_limit =
-      (max_buffer_size_ * 3U + index_buffer_size_ * 3U) * 2U + max_buffer_size_;
-  cache_->setDataSizeLimit(size_limit);
-
-  sql(createForeignTableQuery({{"mlinestring", "MULTILINESTRING"}},
-                              getDataFilesPath() + "GeoTypes/multilinestring.parquet",
-                              wrapper_type_,
-                              {{"fragment_size", "1"}}));
-  sql("SELECT COUNT(*) FROM " + default_table_name + ";");
-
-  // Despite having room for part of a third fragment we should only store 2, because
-  // caching a geo-column should be atomic.
-  auto mock_data_wrapper = std::make_shared<CountChunksMockWrapper>(14);
-  setMockWrapper(mock_data_wrapper, default_table_name);
-
-  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
-                      {{"MULTILINESTRING ((0 0,0 0))"},
-                       {"MULTILINESTRING ((0 0,1 1),(1 1,2 2))"},
-                       {"MULTILINESTRING ((3 3,4 4))"}});
+  runPartialFragmentLimitMultiLinestring();
 };
+
+TEST_F(PrefetchLimitTest, PartialFragmentLimitMultiLinestringGpuLazyFetch) {
+  const auto original_mode = getExecuteMode();
+  ScopeGuard restore_mode = [&] { setExecuteMode(original_mode); };
+  if (!setExecuteMode(TExecuteMode::GPU)) {
+    GTEST_SKIP() << "GPU not available";
+  }
+  runPartialFragmentLimitMultiLinestring();
+}
 
 // This polygon is composed of 8 physical chunks
 TEST_F(PrefetchLimitTest, PartialFragmentLimitPolygon) {

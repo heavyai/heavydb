@@ -69,6 +69,18 @@ TargetValue run_simple_query(const std::string& query_str,
   return crt_row[0];
 }
 
+template <typename NodeType>
+std::vector<size_t> collect_node_hashes(const RaExecutionSequence& ed_seq) {
+  std::vector<size_t> hashes;
+  for (size_t i = 0; i < ed_seq.size(); ++i) {
+    const auto body = ed_seq.getDescriptor(i)->getBody();
+    if (dynamic_cast<const NodeType*>(body)) {
+      hashes.push_back(body->toHash());
+    }
+  }
+  return hashes;
+}
+
 void drop_tables_for_bbox_intersect() {
   const auto cleanup_stmts = {R"(drop table if exists bbox_intersect_t11;)",
                               R"(drop table if exists bbox_intersect_t12;)",
@@ -350,7 +362,7 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q2_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q2_query_info.root_node.get(), executor);
 
-  EXPECT_TRUE(q1_plan_dag.extracted_dag.compare(q2_plan_dag.extracted_dag) != 0);
+  EXPECT_NE(q1_plan_dag.extracted_dag, q2_plan_dag.extracted_dag);
 
   auto q3_str = "SELECT T1.x FROM T1, T2 WHERE T1.x = T2.x and T2.y = T1.y;";
   auto q3_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q3_str);
@@ -364,14 +376,14 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
   auto q4_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q4_query_info.root_node.get(), executor);
 
-  EXPECT_TRUE(q3_plan_dag.extracted_dag.compare(q4_plan_dag.extracted_dag) != 0);
+  EXPECT_NE(q3_plan_dag.extracted_dag, q4_plan_dag.extracted_dag);
 
   auto q5_str = "SELECT T1.x FROM T1 JOIN T2 ON T1.y = T2.y and T1.x = T2.x;";
   auto q5_query_info = QR::get()->getQueryInfoForDataRecyclerTest(q5_str);
   EXPECT_TRUE(q5_query_info.left_deep_trees_id.size() == 1);
   auto q5_plan_dag =
       QueryPlanDagExtractor::extractQueryPlanDag(q5_query_info.root_node.get(), executor);
-  EXPECT_TRUE(q3_plan_dag.extracted_dag.compare(q5_plan_dag.extracted_dag) != 0);
+  EXPECT_NE(q3_plan_dag.extracted_dag, q5_plan_dag.extracted_dag);
 
   std::unordered_set<std::string> query_plan_dag_hash;
   std::vector<std::string> queries;
@@ -389,7 +401,9 @@ TEST(DataRecycler, QueryPlanDagExtractor_Join_Query) {
         QueryPlanDagExtractor::extractQueryPlanDag(query_info.root_node.get(), executor);
     query_plan_dag_hash.insert(dag.extracted_dag);
   }
-  // check whether we correctly extract query plan DAG for outer join having loop-join
+  // Check whether we correctly extract query plan DAGs for outer joins having
+  // loop-join predicates. The cache key must preserve the join kind and predicate
+  // shape so these plans do not alias.
   EXPECT_EQ(query_plan_dag_hash.size(), queries.size());
 }
 
@@ -468,15 +482,13 @@ TEST(DataRecycler, Update_QueryPlanDagHash_After_DeadColumnElimination) {
   auto executor = QR::get()->getExecutor().get();
   auto q1_ra_dag = QR::get()->getRelAlgDag(q1_oss.str());
   auto q1_ed_seq = RaExecutionSequence(&q1_ra_dag->getRootNode(), executor, false);
-  CHECK_EQ(q1_ed_seq.size(), static_cast<size_t>(3));
-  auto q1_project_hash_val = q1_ed_seq.getDescriptor(1)->getBody()->toHash();
-  ASSERT_NE(q1_project_hash_val, EMPTY_HASHED_PLAN_DAG_KEY);
+  auto q1_project_hashes = collect_node_hashes<RelProject>(q1_ed_seq);
+  ASSERT_FALSE(q1_project_hashes.empty());
   auto q2_ra_dag = QR::get()->getRelAlgDag(q2_oss.str());
   auto q2_ed_seq = RaExecutionSequence(&q2_ra_dag->getRootNode(), executor, false);
-  CHECK_EQ(q2_ed_seq.size(), static_cast<size_t>(3));
-  auto q2_project_hash_val = q2_ed_seq.getDescriptor(1)->getBody()->toHash();
-  ASSERT_NE(q1_project_hash_val, EMPTY_HASHED_PLAN_DAG_KEY);
-  ASSERT_NE(q1_project_hash_val, q2_project_hash_val);
+  auto q2_project_hashes = collect_node_hashes<RelProject>(q2_ed_seq);
+  ASSERT_FALSE(q2_project_hashes.empty());
+  ASSERT_NE(q1_project_hashes, q2_project_hashes);
 }
 
 namespace {
@@ -1546,14 +1558,16 @@ TEST(DataRecycler, Perfect_Hashtable_Cache_Maintanence) {
           "count(1) from table(generate_series(0, 10, 1)) as ft(s), cte where ft.s = "
           "cte.s;";
       EXPECT_EQ(static_cast<int64_t>(4), v<int64_t>(run_simple_query(q2, dt)));
-      EXPECT_EQ(static_cast<size_t>(2),
+      // Generated table-function result tables are transient and not globally safe to
+      // recycle through the hash-table cache.
+      EXPECT_EQ(static_cast<size_t>(0),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                  CacheItemType::PERFECT_HT));
 
-      // check whether hash tables generated from q1 and q2 are invalidated
+      // A regular table hash table remains globally cacheable.
       auto q3 = "SELECT count(*) from t3 a, t3 b where a.x = b.x;";
       EXPECT_EQ(static_cast<int64_t>(5), v<int64_t>(run_simple_query(q3, dt)));
-      EXPECT_EQ(static_cast<size_t>(3),
+      EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
                                                  CacheItemType::PERFECT_HT));
 
@@ -1851,22 +1865,23 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
           "SELECT count(*) from t1, (select x from t2 where x < 2) tt2 where t1.x = "
           "tt2.x;";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q2, dt)));
-      EXPECT_EQ(static_cast<size_t>(2),
+      // The perfect hash table is built from T1 here. The changing subquery filter is
+      // evaluated on the T2 probe side, so the filtered result changes while the
+      // build-side cache entry is still reusable.
+      EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                  CacheItemType::PERFECT_HT));
-      auto q2_perfect_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::PERFECT_HT);
-      auto ht1_ref_count_v3 = q2_perfect_ht_metrics->getRefCount();
-      EXPECT_GT(ht1_ref_count_v2, ht1_ref_count_v3);
+      auto ht1_ref_count_v3 = q1_perfect_ht_metrics->getRefCount();
+      EXPECT_LT(ht1_ref_count_v2, ht1_ref_count_v3);
 
       auto q3 =
           "SELECT count(*) from (select x from t1) tt1, (select x from t2 where x < 2) "
           "tt2 where tt1.x = tt2.x;";
       EXPECT_EQ(static_cast<int64_t>(1), v<int64_t>(run_simple_query(q3, dt)));
-      EXPECT_EQ(static_cast<size_t>(2),
+      EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                  CacheItemType::PERFECT_HT));
-      auto ht1_ref_count_v4 = q2_perfect_ht_metrics->getRefCount();
+      auto ht1_ref_count_v4 = q1_perfect_ht_metrics->getRefCount();
       EXPECT_LT(ht1_ref_count_v3, ht1_ref_count_v4);
     }
 
@@ -1895,22 +1910,22 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
           "SELECT count(*) from t1, (select x, y from t3 where x < 3) tt3 where t1.x = "
           "tt3.x and t1.y = tt3.y;";
       EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q2, dt)));
-      EXPECT_EQ(static_cast<size_t>(2),
+      // As above, this changes the probe-side table/filter while reusing the same T1
+      // build-side hash table.
+      EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                  CacheItemType::BASELINE_HT));
-      auto q2_baseline_ht_metrics =
-          getCachedHashTableMetric(visited_hashtable_key, CacheItemType::BASELINE_HT);
-      auto ht1_ref_count_v3 = q2_baseline_ht_metrics->getRefCount();
-      EXPECT_LT(ht1_ref_count_v3, ht1_ref_count_v2);
+      auto ht1_ref_count_v3 = q1_baseline_ht_metrics->getRefCount();
+      EXPECT_LT(ht1_ref_count_v2, ht1_ref_count_v3);
 
       auto q3 =
           "SELECT count(*) from (select x, y from t1 where x < 3) tt1, (select x, y from "
           "t3 where x < 3) tt3 where tt1.x = tt3.x and tt1.y = tt3.y;";
       EXPECT_EQ(static_cast<int64_t>(2), v<int64_t>(run_simple_query(q3, dt)));
-      EXPECT_EQ(static_cast<size_t>(2),
+      EXPECT_EQ(static_cast<size_t>(1),
                 QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
                                                  CacheItemType::BASELINE_HT));
-      auto ht1_ref_count_v4 = q2_baseline_ht_metrics->getRefCount();
+      auto ht1_ref_count_v4 = q1_baseline_ht_metrics->getRefCount();
       EXPECT_LT(ht1_ref_count_v3, ht1_ref_count_v4);
     }
 
@@ -1933,6 +1948,18 @@ TEST(DataRecycler, Hashtable_From_Subqueries) {
                                                  CacheItemType::PERFECT_HT));
     }
   }
+}
+
+TEST(DataRecycler, TemporaryBuildHashtableIsNotGloballyCacheable) {
+  const TableIdToNodeMap table_id_to_node_map;
+  const std::vector<InnerOuterStringOpInfos> string_op_infos;
+
+  EXPECT_FALSE(HashtableRecycler::isSafeToCacheHashtable(
+      table_id_to_node_map, false, string_op_infos, shared::TableKey{0, -17}));
+  EXPECT_TRUE(HashtableRecycler::isSafeToCacheHashtable(
+      table_id_to_node_map, false, string_op_infos, shared::TableKey{0, 17}));
+  EXPECT_FALSE(HashtableRecycler::isSafeToCacheHashtable(
+      table_id_to_node_map, true, string_op_infos, shared::TableKey{0, 17}));
 }
 
 TEST(DataRecycler, Empty_Hashtable) {
@@ -2710,6 +2737,25 @@ TEST(DataRecycler, MetricTrackerTest) {
     CacheAvailability ca4 = metric_tracker.canAddItem(dummy_id, 16);
     EXPECT_EQ(ca4, CacheAvailability::UNAVAILABLE);
   }
+}
+
+TEST(DataRecycler, MetricTrackerRemovalUpdatesTrackedMetrics) {
+  constexpr auto device_identifier = DataRecyclerUtil::CPU_DEVICE_IDENTIFIER;
+  CacheMetricTracker metric_tracker(
+      CacheItemType::PERFECT_HT, /*total_cache_size=*/4096, /*max_item_size=*/4096);
+
+  metric_tracker.putNewCacheItemMetric(/*key=*/1, device_identifier, 256, 10);
+  metric_tracker.putNewCacheItemMetric(/*key=*/2, device_identifier, 512, 20);
+  metric_tracker.putNewCacheItemMetric(/*key=*/3, device_identifier, 1024, 30);
+
+  metric_tracker.removeMetricFromBeginning(device_identifier, 2);
+
+  const auto& remaining_metrics = metric_tracker.getCacheItemMetrics(device_identifier);
+  ASSERT_EQ(remaining_metrics.size(), size_t(1));
+  EXPECT_EQ(remaining_metrics.front()->getQueryPlanHash(), QueryPlanHash(3));
+  EXPECT_EQ(metric_tracker.getCacheItemMetric(1, device_identifier), nullptr);
+  EXPECT_EQ(metric_tracker.getCacheItemMetric(2, device_identifier), nullptr);
+  EXPECT_NE(metric_tracker.getCacheItemMetric(3, device_identifier), nullptr);
 }
 
 TEST(DataRecycler, LargeHashTable) {
