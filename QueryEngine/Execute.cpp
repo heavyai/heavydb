@@ -13,15 +13,23 @@
 #include <cuda.h>
 #endif  // HAVE_CUDA
 #include <RexVisitor.h>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <cstring>
 #include <ctime>
+#include <exception>
 #include <future>
 #include <memory>
 #include <mutex>
 #include <numeric>
+#include <queue>
 #include <set>
+#include <sstream>
 #include <thread>
+#include <tuple>
 #include <type_traits>
+#include <unordered_set>
 
 #include "Catalog/Catalog.h"
 #include "CudaMgr/CudaMgr.h"
@@ -38,6 +46,7 @@
 #include "QueryEngine/ExecutorResourceMgr/ExecutorResourceMgr.h"
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
+#include "QueryEngine/GpuInitGroups.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/OutputBufferInitialization.h"
 #include "QueryEngine/QueryDispatchQueue.h"
@@ -45,6 +54,7 @@
 #include "QueryEngine/QueryRewrite.h"
 #include "QueryEngine/QueryTemplateGenerator.h"
 #include "QueryEngine/RelAlgDag.h"
+#include "QueryEngine/ResultSetBufferAccessors.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/SpeculativeTopN.h"
@@ -53,6 +63,7 @@
 #include "QueryEngine/TableFunctions/TableFunctionExecutionContext.h"
 #include "QueryEngine/Utils/SerializeLiterals.h"
 #include "QueryEngine/Visitors/TransientStringLiteralsVisitor.h"
+#include "Shared/DateConverters.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/heavyai_path.h"
@@ -71,6 +82,8 @@ size_t g_watchdog_in_clause_max_num_elem_bitmap{1 << 25};
 size_t g_watchdog_in_clause_max_num_input_rows{5000000};
 size_t g_in_clause_num_elem_skip_bitmap{100};
 bool g_enable_cpu_sub_tasks{false};
+bool g_enable_result_reduction_pipeline{false};
+bool g_enable_partitioned_baseline_gpu_reduction{false};
 size_t g_cpu_sub_task_size{500'000};
 bool g_enable_filter_function{true};
 unsigned g_dynamic_watchdog_time_limit{10000};
@@ -118,7 +131,15 @@ bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
 extern bool g_enable_string_functions;
+extern bool g_enable_gpu_input_cpu_buffer_bypass;
 bool g_enable_lazy_fetch{true};
+bool g_enable_deferred_lazy_fetch{false};
+bool g_enable_gpu_input_cpu_prefetch{false};
+bool g_enable_gpu_input_prefetch{false};
+bool g_enable_gpu_input_batched_prefetch{false};
+size_t g_gpu_input_prefetch_workers{32};
+bool g_enable_gpu_aggregate_payload_host_mapping{false};
+bool g_enable_gpu_selected_dense_aggregate_payload_fetch{false};
 bool g_enable_runtime_query_interrupt{true};
 bool g_enable_non_kernel_time_query_interrupt{true};
 bool g_use_estimator_result_cache{true};
@@ -610,6 +631,70 @@ StringDictionaryProxy* RowSetMemoryOwner::getOrAddStringDictProxy(
   return lit_str_dict_proxy_.get();
 }
 
+namespace {
+
+bool is_cacheable_transient_union_translation(
+    const shared::StringDictKey& source_dict_key,
+    const shared::StringDictKey& dest_dict_key,
+    const RowSetMemoryOwner::StringTranslationType translation_type,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    const bool with_generation) {
+  // String ops such as SUBSTRING(dict_col, ...) materialize transient result strings
+  // on the destination proxy. The destination can be either a query-local temp
+  // dictionary or the same persistent dictionary key as the source proxy.
+  return with_generation &&
+         translation_type == RowSetMemoryOwner::StringTranslationType::SOURCE_UNION &&
+         !string_op_infos.empty() && source_dict_key.db_id > 0 &&
+         (dest_dict_key.db_id < 0 || dest_dict_key == source_dict_key);
+}
+
+std::string transient_union_translation_cache_key(
+    const shared::StringDictKey& source_dict_key,
+    const shared::StringDictKey& dest_dict_key,
+    const void* source_dict,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos) {
+  std::ostringstream oss;
+  oss << "{source_dict_key:" << source_dict_key << ", dest_dict_key:" << dest_dict_key
+      << ", source_dict:" << source_dict << ", translation_type:SOURCE_UNION"
+      << ", StringOps:" << string_op_infos << "}";
+  return oss.str();
+}
+
+std::vector<std::string> snapshot_dest_transient_strings(
+    const StringDictionaryProxy* dest_proxy) {
+  std::vector<std::string> dest_transient_strings;
+  const auto& transient_strings = dest_proxy->getTransientVector();
+  dest_transient_strings.reserve(transient_strings.size());
+  for (const auto* str : transient_strings) {
+    CHECK(str);
+    dest_transient_strings.emplace_back(*str);
+  }
+  return dest_transient_strings;
+}
+
+bool replay_dest_transient_strings(
+    StringDictionaryProxy* dest_proxy,
+    const std::vector<std::string>& dest_transient_strings) {
+  const auto& existing_transient_strings = dest_proxy->getTransientVector();
+  if (existing_transient_strings.size() > dest_transient_strings.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < existing_transient_strings.size(); ++i) {
+    CHECK(existing_transient_strings[i]);
+    if (*existing_transient_strings[i] != dest_transient_strings[i]) {
+      return false;
+    }
+  }
+  const auto string_ids = dest_proxy->getOrAddTransientBulk(dest_transient_strings);
+  CHECK_EQ(string_ids.size(), dest_transient_strings.size());
+  for (size_t i = 0; i < string_ids.size(); ++i) {
+    CHECK_EQ(StringDictionaryProxy::transientIndexToId(i), string_ids[i]);
+  }
+  return true;
+}
+
+}  // namespace
+
 const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
     const shared::StringDictKey& source_dict_key,
     const shared::StringDictKey& dest_dict_key,
@@ -620,6 +705,69 @@ const StringDictionaryProxy::IdMap* Executor::getStringProxyTranslationMap(
   CHECK(row_set_mem_owner);
   std::lock_guard<std::mutex> lock(
       str_dict_mutex_);  // TODO: can we use RowSetMemOwner state mutex here?
+
+  if (g_enable_result_reduction_pipeline &&
+      is_cacheable_transient_union_translation(source_dict_key,
+                                               dest_dict_key,
+                                               translation_type,
+                                               string_op_infos,
+                                               with_generation)) {
+    const auto source_generation =
+        row_set_mem_owner->getStringDictionaryGenerations().getGeneration(
+            source_dict_key);
+    auto source_proxy =
+        row_set_mem_owner->getOrAddStringDictProxy(source_dict_key, with_generation);
+    auto dest_proxy =
+        row_set_mem_owner->getOrAddStringDictProxy(dest_dict_key, with_generation);
+    if (source_generation >= 0) {
+      const auto* source_dictionary = source_proxy->getDictionary();
+      const auto map_key = transient_union_translation_cache_key(
+          source_dict_key, dest_dict_key, source_dictionary, string_op_infos);
+      std::shared_ptr<const CachedStringProxyUnionTranslationMap> cached_entry;
+      {
+        std::lock_guard<std::mutex> cache_lock(
+            cached_string_proxy_union_translation_maps_mutex_);
+        const auto cached_it = cached_string_proxy_union_translation_maps_.find(map_key);
+        if (cached_it != cached_string_proxy_union_translation_maps_.end() &&
+            cached_it->second->source_dictionary == source_dictionary &&
+            cached_it->second->source_generation == source_generation) {
+          cached_entry = cached_it->second;
+        }
+      }
+      if (cached_entry) {
+        if (replay_dest_transient_strings(dest_proxy,
+                                          cached_entry->dest_transient_strings)) {
+          row_set_mem_owner->retainExternalStringTranslationMap(cached_entry);
+          return &cached_entry->id_map;
+        }
+        return row_set_mem_owner->getOrAddStringProxyTranslationMap(source_dict_key,
+                                                                    dest_dict_key,
+                                                                    with_generation,
+                                                                    translation_type,
+                                                                    string_op_infos);
+      }
+
+      auto id_map =
+          source_proxy->buildUnionTranslationMapToOtherProxy(dest_proxy, string_op_infos);
+      auto dest_transient_strings = snapshot_dest_transient_strings(dest_proxy);
+      auto new_entry = std::make_shared<const CachedStringProxyUnionTranslationMap>(
+          CachedStringProxyUnionTranslationMap{source_dictionary,
+                                               source_generation,
+                                               std::move(id_map),
+                                               std::move(dest_transient_strings)});
+      {
+        std::lock_guard<std::mutex> cache_lock(
+            cached_string_proxy_union_translation_maps_mutex_);
+        auto& current_entry = cached_string_proxy_union_translation_maps_[map_key];
+        if (!current_entry || current_entry->source_generation <= source_generation) {
+          current_entry = new_entry;
+        }
+      }
+      row_set_mem_owner->retainExternalStringTranslationMap(new_entry);
+      return &new_entry->id_map;
+    }
+  }
+
   return row_set_mem_owner->getOrAddStringProxyTranslationMap(
       source_dict_key, dest_dict_key, with_generation, translation_type, string_op_infos);
 }
@@ -751,7 +899,11 @@ const TableGeneration& Executor::getTableGeneration(
 }
 
 ExpressionRange Executor::getColRange(const PhysicalInput& phys_input) const {
-  return agg_col_range_cache_.getColRange(phys_input);
+  const auto col_range = agg_col_range_cache_.getOptionalColRange(phys_input);
+  if (!col_range) {
+    return ExpressionRange::makeInvalidRange();
+  }
+  return *col_range;
 }
 
 namespace {
@@ -1022,16 +1174,37 @@ bool Executor::hasLazyFetchColumns(
 }
 
 std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
-    const std::vector<Analyzer::Expr*>& target_exprs) const {
+    const std::vector<Analyzer::Expr*>& target_exprs,
+    const bool may_use_storage_local_rowid) const {
   CHECK(plan_state_);
   std::vector<ColumnLazyFetchInfo> col_lazy_fetch_info;
+  const auto uses_storage_local_lazy_fetch_rowid =
+      [may_use_storage_local_rowid](const shared::ColumnKey& column_key,
+                                    const SQLTypeInfo& type_info) {
+        if (!may_use_storage_local_rowid) {
+          return false;
+        }
+        if (type_info.is_varlen() || type_info.usesFlatBuffer() ||
+            column_key.table_id == 0) {
+          return false;
+        }
+        if (column_key.table_id < 0) {
+          return true;
+        }
+        if (column_key.db_id <= 0) {
+          return false;
+        }
+        return Catalog_Namespace::get_metadata_for_table(
+                   {column_key.db_id, column_key.table_id}) != nullptr;
+      };
   for (const auto target_expr : target_exprs) {
     if (!plan_state_->isLazyFetchColumn(target_expr)) {
       col_lazy_fetch_info.emplace_back(
-          ColumnLazyFetchInfo{false, -1, SQLTypeInfo(kNULLT, false)});
+          ColumnLazyFetchInfo{false, -1, SQLTypeInfo(kNULLT, false), false});
     } else {
       const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
       CHECK(col_var);
+      const auto& col_ti = col_var->get_type_info();
       auto rte_idx = (col_var->get_rte_idx() == -1) ? 0 : col_var->get_rte_idx();
       const auto cd = get_column_descriptor_maybe(col_var->getColumnKey());
       if (cd && IS_GEO(cd->columnType.get_type())) {
@@ -1046,22 +1219,40 @@ std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
           const auto col0_var = makeExpr<Analyzer::ColumnVar>(col0_ti, col_key, rte_idx);
           const auto local_col0_id = plan_state_->getLocalColumnId(col0_var.get(), false);
           col_lazy_fetch_info.emplace_back(
-              ColumnLazyFetchInfo{true, local_col0_id, col0_ti});
+              ColumnLazyFetchInfo{true,
+                                  local_col0_id,
+                                  col0_ti,
+                                  uses_storage_local_lazy_fetch_rowid(col_key, col0_ti)});
         }
       } else {
         auto local_col_id = plan_state_->getLocalColumnId(col_var, false);
-        const auto& col_ti = col_var->get_type_info();
-        col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, local_col_id, col_ti});
+        const auto use_storage_local_rowid =
+            uses_storage_local_lazy_fetch_rowid(col_var->getColumnKey(), col_ti);
+        col_lazy_fetch_info.emplace_back(
+            ColumnLazyFetchInfo{true, local_col_id, col_ti, use_storage_local_rowid});
       }
     }
   }
   return col_lazy_fetch_info;
 }
 
+bool may_use_storage_local_lazy_fetch_rowid(const RelAlgExecutionUnit& ra_exe_unit) {
+  return ra_exe_unit.input_descs.size() == size_t(1) &&
+         (ra_exe_unit.input_descs.front().getSourceType() == InputSourceType::TABLE ||
+          ra_exe_unit.input_descs.front().getSourceType() == InputSourceType::RESULT) &&
+         ra_exe_unit.sort_info.order_entries.empty() &&
+         ra_exe_unit.sort_info.offset == size_t(0);
+}
+
 void Executor::clearMetaInfoCache() {
   input_table_info_cache_.clear();
   agg_col_range_cache_.clear();
   table_generations_.clear();
+}
+
+void Executor::clearStringProxyUnionTranslationCache() {
+  std::lock_guard<std::mutex> lock(cached_string_proxy_union_translation_maps_mutex_);
+  cached_string_proxy_union_translation_maps_.clear();
 }
 
 /**
@@ -1114,13 +1305,15 @@ namespace {
 void update_input_fragment_device_ids(std::set<int> const& device_ids_to_use,
                                       std::vector<InputTableInfo> const& input_table_info,
                                       InputTableInfoCache& input_table_info_cache,
-                                      int const executor_id) {
+                                      int const executor_id,
+                                      const bool remap_temporary_results) {
   std::vector<int> const device_ids_vec(device_ids_to_use.begin(),
                                         device_ids_to_use.end());
   std::unordered_map<int, int> updated_device_id_map;
   for (InputTableInfo const& table_info : input_table_info) {
     auto const& table_key = table_info.table_key;
-    if (table_key.table_id > 0) {
+    if (!table_info.info.fragments.empty() &&
+        (table_key.table_id > 0 || remap_temporary_results)) {
       Fragmenter_Namespace::TableInfo copied_table_info = table_info.info.copyTableInfo();
       // this logic honors the order of values of existing fragment.deviceIds
       // to follow the previous device id selection logic as much as we can
@@ -1135,9 +1328,12 @@ void update_input_fragment_device_ids(std::set<int> const& device_ids_to_use,
             updated_device_id_map.size() % device_ids_vec.size();
         CHECK_LT(logical_device_id, static_cast<int>(device_ids_vec.size()));
         auto const updated_device_id = device_ids_vec[logical_device_id];
-        // our query execution logic on sharded tables should consider shard id as a
-        // criteria to determine device id that process fragments having the same shard id
-        // otherwise, we can use the predefined fragment.deviceIds for the decision
+        // Our query execution logic on sharded tables should consider shard id as a
+        // criteria to determine device id that processes fragments having the same shard
+        // id. Otherwise, use the predefined fragment.deviceIds for the decision. The
+        // same remapping is required for device-resident temporary ResultSets because the
+        // next query step may pick a different GPU set and fetch/peer-copy by fragment
+        // id.
         auto const it =
             updated_device_id_map
                 .emplace(fragment.shard >= 0 ? fragment.shard : previous_device_id,
@@ -1223,22 +1419,24 @@ int determine_num_devices_to_use(RelAlgNode const* body,
                                  std::unordered_set<size_t>& visited_rel_nodes,
                                  std::vector<InputTableInfo> const& input_table_info,
                                  int const total_device_count,
-                                 int const min_num_frags,
+                                 int const num_frags_for_device_selection,
                                  bool const force_to_single_device) {
   int num_devices_for_the_query = total_device_count;
   if (force_to_single_device) {
-    // force to use a single available device since the query has no physical input
-    // table or has single-fragmented input, i.e., RelSort.
+    // Force a single available device for query shapes that cannot currently
+    // dispatch independent work across devices, i.e. RelTableFunction.
     VLOG(1) << "Force to use a single device to execute the query";
     num_devices_for_the_query = 1;
   } else {
     // `g_max_num_gpu_per_query` == 0 means using our default behavior: use as much GPU as
     // possible up to total # GPUs the system has (let's say `G`)
-    // note that `min_num_frags` can be larger than `G`, but `num_devices_for_the_query`
+    // note that `num_frags_for_device_selection` can be larger than `G`, but
+    // `num_devices_for_the_query`
     // can be set up to G since `g_max_num_gpu_per_query` <= `G`
-    num_devices_for_the_query = g_max_num_gpu_per_query == 0
-                                    ? std::min(min_num_frags, total_device_count)
-                                    : std::min(g_max_num_gpu_per_query, min_num_frags);
+    num_devices_for_the_query =
+        g_max_num_gpu_per_query == 0
+            ? std::min(num_frags_for_device_selection, total_device_count)
+            : std::min(g_max_num_gpu_per_query, num_frags_for_device_selection);
     auto needs_synthesize_metadata = [&input_table_info]() {
       for (InputTableInfo const& table_info : input_table_info) {
         if (table_info.table_key.table_id < 0) {
@@ -1273,9 +1471,14 @@ std::pair<bool, ExecutorDeviceType> fixup_device_type_for_device_ids_selection(
   if (dynamic_cast<const RelTableFunction*>(query_step_root_node)) {
     force_to_single_device = true;
   } else if (auto project = dynamic_cast<const RelProject*>(query_step_root_node)) {
-    if (project->isDeleteViaSelect() || project->isUpdateViaSelect() ||
-        project->hasWindowFunctionExpr()) {
+    if (project->isDeleteViaSelect() || project->isUpdateViaSelect()) {
       chosen_device_type = ExecutorDeviceType::CPU;
+    } else if (project->hasWindowFunctionExpr() &&
+               chosen_device_type == ExecutorDeviceType::GPU) {
+      // RelAlgExecutor has already rejected window shapes that cannot execute on GPU.
+      // Window execution currently supports one GPU, so select and remap fragments to
+      // that device instead of independently overriding the resolved device type here.
+      force_to_single_device = true;
     }
   } else if (auto compound = dynamic_cast<const RelCompound*>(query_step_root_node)) {
     if (compound->isDeleteViaSelect() || compound->isUpdateViaSelect()) {
@@ -1285,21 +1488,30 @@ std::pair<bool, ExecutorDeviceType> fixup_device_type_for_device_ids_selection(
   return std::make_pair(force_to_single_device, chosen_device_type);
 }
 
-int determine_min_num_frags(std::vector<InputTableInfo> const& input_table_info) {
-  int min_num_frags = std::numeric_limits<int32_t>::max();
-  for (InputTableInfo const& table_info : input_table_info) {
-    if (table_info.table_key.table_id > 0) {
-      const auto td = Catalog_Namespace::get_metadata_for_table(table_info.table_key);
-      CHECK(td);
-      if (td->nShards > 0) {
-        min_num_frags = std::min(min_num_frags, td->nShards);
-        continue;
-      }
+int get_device_selection_fragment_count(const InputTableInfo& table_info) {
+  if (table_info.table_key.table_id > 0) {
+    const auto td = Catalog_Namespace::get_metadata_for_table(table_info.table_key);
+    CHECK(td);
+    if (td->nShards > 0) {
+      return td->nShards;
     }
-    min_num_frags =
-        std::min(min_num_frags, static_cast<int>(table_info.info.fragments.size()));
   }
-  return min_num_frags != std::numeric_limits<int32_t>::max() ? min_num_frags : 0;
+  return static_cast<int>(table_info.info.fragments.size());
+}
+
+int determine_num_frags_for_device_selection(
+    std::vector<InputTableInfo> const& input_table_info,
+    const bool use_broadcast_aware_selection) {
+  // The result pipeline can broadcast inner inputs, so a one-fragment dimension or
+  // synthesized temporary result must not collapse a join whose driver has many
+  // fragments. Disabled mode preserves the established minimum-fragment policy.
+  int num_frags = use_broadcast_aware_selection ? 0 : std::numeric_limits<int32_t>::max();
+  for (InputTableInfo const& table_info : input_table_info) {
+    const auto table_fragment_count = get_device_selection_fragment_count(table_info);
+    num_frags = use_broadcast_aware_selection ? std::max(num_frags, table_fragment_count)
+                                              : std::min(num_frags, table_fragment_count);
+  }
+  return num_frags == std::numeric_limits<int32_t>::max() ? 0 : num_frags;
 }
 
 void log_chosen_device_ids_to_use(std::set<int> const& device_ids_to_use,
@@ -1338,15 +1550,16 @@ void Executor::determineAvailableDevicesToProcessQuery(
       fixup_device_type_for_device_ids_selection(query_step_root_node, device_type);
 
   // determine device ids to use per device type
-  int min_num_frags = determine_min_num_frags(input_table_info);
+  int num_frags_for_device_selection = determine_num_frags_for_device_selection(
+      input_table_info, g_enable_result_reduction_pipeline);
   auto add_device_id_for_cpu_query = [&] {
     constexpr int cpu_device_id = 0;
     device_ids_to_use_.insert(cpu_device_id);
   };
-  if (min_num_frags == 0) {
+  if (num_frags_for_device_selection == 0) {
     VLOG(1) << "Detecting an empty fragment case: force to use a single device";
     force_to_single_device = true;
-    min_num_frags = 1;
+    num_frags_for_device_selection = 1;
   }
   if (chosen_device_type == ExecutorDeviceType::GPU) {
 #if HAVE_CUDA
@@ -1360,7 +1573,7 @@ void Executor::determineAvailableDevicesToProcessQuery(
                                      visited_rel_nodes_,
                                      input_table_info,
                                      total_device_count,
-                                     min_num_frags,
+                                     num_frags_for_device_selection,
                                      force_to_single_device);
     // for now, we use a simple round-robin approach to determine
     // a set of device_ids but we can add more sophisticated algorithm
@@ -1381,8 +1594,11 @@ void Executor::determineAvailableDevicesToProcessQuery(
       }
     }
 
-    update_input_fragment_device_ids(
-        device_ids_to_use_, input_table_info, input_table_info_cache_, executor_id_);
+    update_input_fragment_device_ids(device_ids_to_use_,
+                                     input_table_info,
+                                     input_table_info_cache_,
+                                     executor_id_,
+                                     g_enable_result_reduction_pipeline);
 #else
     // this case the query is CPU mode query
     add_device_id_for_cpu_query();
@@ -1681,10 +1897,11 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
     const RelAlgExecutionUnit& ra_exe_unit,
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const QueryMemoryDescriptor& query_mem_desc) const {
+    const QueryMemoryDescriptor& query_mem_desc,
+    const std::vector<InputTableInfo>& query_infos) const {
   auto timer = DEBUG_TIMER(__func__);
   if (ra_exe_unit.estimator) {
-    return reduce_estimator_results(ra_exe_unit, results_per_device);
+    return reduce_estimator_results(ra_exe_unit, results_per_device, executor_id_);
   }
 
   if (results_per_device.empty()) {
@@ -1703,12 +1920,16 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
     return reduceMultiDeviceResultSets(
         unique_results,
         row_set_mem_owner,
-        ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
+        ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
+        ra_exe_unit,
+        query_infos);
   }
   return reduceMultiDeviceResultSets(
       results_per_device,
       row_set_mem_owner,
-      ResultSet::fixupQueryMemoryDescriptor(query_mem_desc));
+      ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
+      ra_exe_unit,
+      query_infos);
 }
 
 std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>
@@ -1751,24 +1972,3352 @@ ReductionCode get_reduction_code(
   return result;
 };
 
+ReductionCode get_reduction_code_for_result_set(const size_t executor_id,
+                                                const ResultSet& result_set,
+                                                int64_t* compilation_queue_time) {
+  auto clock_begin = timer_start();
+  ResultSetReductionJIT reduction_jit(result_set.getQueryMemDesc(),
+                                      result_set.getTargetInfos(),
+                                      result_set.getTargetInitVals(),
+                                      executor_id);
+  auto result = reduction_jit.codegen();
+  *compilation_queue_time += timer_stop(clock_begin);
+  return result;
+}
+
+std::optional<size_t> checked_size_add(const size_t lhs, const size_t rhs) {
+  if (rhs > std::numeric_limits<size_t>::max() - lhs) {
+    return std::nullopt;
+  }
+  return lhs + rhs;
+}
+
+std::optional<size_t> checked_size_multiply(const size_t lhs, const size_t rhs) {
+  if (lhs != 0 && rhs > std::numeric_limits<size_t>::max() / lhs) {
+    return std::nullopt;
+  }
+  return lhs * rhs;
+}
+
+#ifdef HAVE_CUDA
+constexpr size_t kBaselineGpuReductionEntryCountMultiplier = 2;
+
+std::optional<size_t> baseline_reduction_entry_count_for_gpu(
+    const size_t source_entry_count) {
+  if (source_entry_count == 0) {
+    return std::nullopt;
+  }
+  return checked_size_multiply(source_entry_count,
+                               kBaselineGpuReductionEntryCountMultiplier);
+}
+#endif
+
+template <typename Reducer>
+ResultSetPtr try_gpu_reduction_with_oom_fallback(const char* reducer_name,
+                                                 Reducer&& reducer) {
+  try {
+    return reducer();
+  } catch (const OutOfMemory& error) {
+    VLOG(1) << reducer_name
+            << " unavailable due to GPU memory pressure: " << error.what();
+    return nullptr;
+  }
+}
+
+#ifdef HAVE_CUDA
+class CudaAllocatorRollbackGuard {
+ public:
+  void track(const std::shared_ptr<CudaAllocator>& allocator) {
+    CHECK(allocator);
+    if (std::any_of(checkpoints_.begin(), checkpoints_.end(), [&](const auto& entry) {
+          return entry.first.get() == allocator.get();
+        })) {
+      return;
+    }
+    checkpoints_.emplace_back(allocator, allocator->allocationCheckpoint());
+  }
+
+  void commit() noexcept { committed_ = true; }
+
+  ~CudaAllocatorRollbackGuard() {
+    if (committed_) {
+      return;
+    }
+    for (auto it = checkpoints_.rbegin(); it != checkpoints_.rend(); ++it) {
+      it->first->rollbackAllocationsTo(it->second);
+    }
+  }
+
+ private:
+  std::vector<std::pair<std::shared_ptr<CudaAllocator>, size_t>> checkpoints_;
+  bool committed_{false};
+};
+
+bool count_distinct_descriptors_safe_for_group_key_output(
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t target_count) {
+  if (query_mem_desc.countDistinctDescriptorsLogicallyEmpty()) {
+    return true;
+  }
+  if (target_count == 0 || query_mem_desc.targetGroupbyIndicesSize() != target_count) {
+    return false;
+  }
+  for (size_t target_idx = 0; target_idx < target_count; ++target_idx) {
+    if (query_mem_desc.getTargetGroupbyIndex(target_idx) < 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::optional<DeviceBaselineHashReductionSlot::Op> baseline_gpu_reduction_op(
+    const TargetInfo& target_info) {
+  if (target_info.is_distinct || target_info.sql_type.is_array() ||
+      target_info.sql_type.is_geometry() || target_info.sql_type.is_varlen()) {
+    return std::nullopt;
+  }
+  if (!target_info.is_agg) {
+    return std::nullopt;
+  }
+  switch (target_info.agg_kind) {
+    case kCOUNT:
+    case kCOUNT_IF:
+    case kSUM:
+    case kSUM_IF:
+    case kAVG:
+      return DeviceBaselineHashReductionSlot::Sum;
+    case kMIN:
+      if (target_info.sql_type.is_fp() || takes_float_argument(target_info)) {
+        return std::nullopt;
+      }
+      return DeviceBaselineHashReductionSlot::Min;
+    case kMAX:
+      if (target_info.sql_type.is_fp() || takes_float_argument(target_info)) {
+        return std::nullopt;
+      }
+      return DeviceBaselineHashReductionSlot::Max;
+    default:
+      return std::nullopt;
+  }
+}
+
+size_t rowwise_agg_payload_width(const TargetInfo& target_info,
+                                 const size_t padded_slot_width) {
+  CHECK_GT(padded_slot_width, size_t(0));
+  if (takes_float_argument(target_info) && target_info.agg_kind != kAVG) {
+    CHECK_GE(padded_slot_width, sizeof(float));
+    return sizeof(float);
+  }
+  return padded_slot_width;
+}
+
+std::optional<int64_t> checked_scale_decimal_value(const int64_t value,
+                                                   const unsigned scale) {
+  const auto unsigned_factor = exp_to_scale(scale);
+  if (unsigned_factor > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+    return std::nullopt;
+  }
+  int64_t scaled_value{0};
+  if (__builtin_mul_overflow(
+          value, static_cast<int64_t>(unsigned_factor), &scaled_value)) {
+    return std::nullopt;
+  }
+  return scaled_value;
+}
+
+std::optional<int64_t> entry_filter_literal_as_integral_value(
+    const ResultSetEntryLiteral& literal,
+    const SQLTypeInfo& target_type) {
+  if (literal.is_null || literal.type_info.is_fp() || target_type.is_fp()) {
+    return std::nullopt;
+  }
+  if (literal.type_info.is_decimal()) {
+    if (target_type.is_decimal()) {
+      return convert_decimal_value_to_scale(
+          literal.int_val, literal.type_info, target_type);
+    }
+    return literal.type_info.get_scale() == 0 ? std::optional<int64_t>(literal.int_val)
+                                              : std::nullopt;
+  }
+  if (target_type.is_decimal()) {
+    return checked_scale_decimal_value(literal.int_val, target_type.get_scale());
+  }
+  if (literal.type_info.get_type() == kBOOLEAN) {
+    return literal.bool_val ? 1 : 0;
+  }
+  return literal.int_val;
+}
+
+std::optional<double> entry_filter_literal_as_fp_value(
+    const ResultSetEntryLiteral& literal,
+    const SQLTypeInfo& target_type) {
+  if (literal.is_null) {
+    return std::nullopt;
+  }
+  if (literal.type_info.is_fp()) {
+    return literal.double_val;
+  }
+  if (literal.type_info.is_decimal()) {
+    return literal.int_val /
+           static_cast<double>(exp_to_scale(literal.type_info.get_scale()));
+  }
+  if (literal.type_info.get_type() == kBOOLEAN) {
+    return literal.bool_val ? 1.0 : 0.0;
+  }
+  if (target_type.is_decimal()) {
+    return literal.int_val * static_cast<double>(exp_to_scale(target_type.get_scale()));
+  }
+  return static_cast<double>(literal.int_val);
+}
+
+std::optional<DeviceResultSetEntryComparison> make_device_entry_comparison(
+    const ResultSetEntryComparison& comparison,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const std::vector<TargetInfo>& targets) {
+  if (comparison.target_idx >= targets.size()) {
+    return std::nullopt;
+  }
+  const auto& target_info = targets[comparison.target_idx];
+  if (target_info.agg_kind == kAVG || target_info.sql_type.is_varlen() ||
+      target_info.sql_type.is_array() || target_info.sql_type.is_geometry()) {
+    return std::nullopt;
+  }
+
+  DeviceResultSetEntryComparison device_comparison;
+  if (query_mem_desc.targetGroupbyIndicesSize() > 0) {
+    const auto groupby_idx = query_mem_desc.getTargetGroupbyIndex(comparison.target_idx);
+    if (groupby_idx >= 0) {
+      // Fast perfect-hash group keys are derived from the source bin index and are not
+      // physically present in the row payload.
+      if ((query_mem_desc.usesGetGroupValueFast() &&
+           !query_mem_desc.mustUseBaselineSort()) ||
+          query_mem_desc.hasKeylessHash()) {
+        return std::nullopt;
+      }
+      device_comparison.target_width =
+          static_cast<uint8_t>(query_mem_desc.getEffectiveKeyWidth());
+      device_comparison.target_offset =
+          static_cast<uint64_t>(groupby_idx) * device_comparison.target_width;
+    }
+  }
+  if (!device_comparison.target_width) {
+    const auto& slots =
+        query_mem_desc.getColSlotContext().getSlotsForCol(comparison.target_idx);
+    if (slots.size() != size_t(1)) {
+      return std::nullopt;
+    }
+    const auto slot_idx = slots.front();
+    if (query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx)) {
+      return std::nullopt;
+    }
+    const auto slot_width = query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
+    if (slot_width <= 0) {
+      return std::nullopt;
+    }
+    const auto payload_width =
+        rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+    if (payload_width != sizeof(int8_t) && payload_width != sizeof(int16_t) &&
+        payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
+      return std::nullopt;
+    }
+    const auto target_offset = query_mem_desc.getColOffInBytes(slot_idx);
+    if (target_offset > query_mem_desc.getRowSize() ||
+        payload_width > query_mem_desc.getRowSize() - target_offset) {
+      return std::nullopt;
+    }
+    device_comparison.target_width = static_cast<uint8_t>(payload_width);
+    device_comparison.target_offset = target_offset;
+  }
+
+  const auto& target_type = target_info.sql_type;
+  device_comparison.op = comparison.op;
+  device_comparison.nullable = !target_type.get_notnull();
+  device_comparison.null_bits =
+      null_val_bit_pattern(target_type, takes_float_argument(target_info));
+  device_comparison.is_fp = target_type.is_fp();
+  device_comparison.is_float =
+      target_type.is_fp() && (target_type.get_type() == kFLOAT ||
+                              device_comparison.target_width == sizeof(int32_t));
+  if (device_comparison.is_fp) {
+    const auto literal =
+        entry_filter_literal_as_fp_value(comparison.literal, target_type);
+    if (!literal) {
+      return std::nullopt;
+    }
+    device_comparison.fp_literal = *literal;
+  } else {
+    const auto literal =
+        entry_filter_literal_as_integral_value(comparison.literal, target_type);
+    if (!literal) {
+      return std::nullopt;
+    }
+    device_comparison.int_literal = *literal;
+  }
+  return device_comparison;
+}
+
+std::optional<std::vector<DeviceResultSetEntryComparison>> make_device_entry_filter(
+    const ResultSetEntryFilter& entry_filter,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const std::vector<TargetInfo>& targets) {
+  if (entry_filter.empty()) {
+    return std::nullopt;
+  }
+  std::vector<DeviceResultSetEntryComparison> comparisons;
+  comparisons.reserve(entry_filter.size());
+  for (const auto& comparison : entry_filter) {
+    auto device_comparison =
+        make_device_entry_comparison(comparison, query_mem_desc, targets);
+    if (!device_comparison) {
+      return std::nullopt;
+    }
+    comparisons.push_back(*device_comparison);
+  }
+  return comparisons;
+}
+
+std::optional<std::vector<DeviceBaselineHashReductionSlot>> make_rowwise_group_by_slots(
+    const ResultSet& result_set,
+    const QueryDescriptionType query_description_type) {
+  const auto& query_mem_desc = result_set.getQueryMemDesc();
+  const auto& targets = result_set.getTargetInfos();
+  const auto& init_vals = result_set.getTargetInitVals();
+  const bool keyless_perfect_hash =
+      query_description_type == QueryDescriptionType::GroupByPerfectHash &&
+      query_mem_desc.hasKeylessHash();
+  auto reject = [](const std::string&)
+      -> std::optional<std::vector<DeviceBaselineHashReductionSlot>> {
+    return std::nullopt;
+  };
+  if (query_mem_desc.getQueryDescriptionType() != query_description_type ||
+      query_mem_desc.didOutputColumnar() ||
+      (query_mem_desc.hasKeylessHash() && !keyless_perfect_hash) ||
+      query_mem_desc.hasVarlenOutput() ||
+      !count_distinct_descriptors_safe_for_group_key_output(query_mem_desc,
+                                                            targets.size()) ||
+      query_mem_desc.getNumModeTargets() > 0) {
+    return reject("unsupported query memory descriptor");
+  }
+  if (query_mem_desc.getEffectiveKeyWidth() != size_t(4) &&
+      query_mem_desc.getEffectiveKeyWidth() != size_t(8)) {
+    return reject("unsupported key width");
+  }
+  if (query_mem_desc.getRowSize() == 0 ||
+      query_mem_desc.getRowSize() % sizeof(int64_t) != 0) {
+    return reject("unsupported row size");
+  }
+
+  std::vector<DeviceBaselineHashReductionSlot> slots;
+  size_t init_agg_val_idx = 0;
+  for (size_t target_idx = 0; target_idx < targets.size(); ++target_idx) {
+    if (query_mem_desc.targetGroupbyIndicesSize() > 0) {
+      CHECK_LT(target_idx, query_mem_desc.targetGroupbyIndicesSize());
+      if (query_mem_desc.getTargetGroupbyIndex(target_idx) >= 0) {
+        continue;
+      }
+    }
+    const auto& target_info = targets[target_idx];
+    // Non-aggregate targets of a perfect-hash group-by are group-key projections.
+    // Equal bins have equal values, so merging the physical keys needs no payload op.
+    if (!target_info.is_agg &&
+        query_description_type == QueryDescriptionType::GroupByPerfectHash) {
+      continue;
+    }
+    const auto op = baseline_gpu_reduction_op(target_info);
+    if (!op) {
+      return reject("unsupported target " + std::to_string(target_idx) + ": " +
+                    target_info.toString());
+    }
+    const auto& col_slots = query_mem_desc.getColSlotContext().getSlotsForCol(target_idx);
+    const auto expected_slot_count = target_info.agg_kind == kAVG ? size_t(2) : size_t(1);
+    if (col_slots.size() != expected_slot_count) {
+      return reject("target " + std::to_string(target_idx) + " maps to " +
+                    std::to_string(col_slots.size()) + " slots, expected " +
+                    std::to_string(expected_slot_count));
+    }
+    if (init_agg_val_idx >= init_vals.size()) {
+      return reject("slot init value missing for target " + std::to_string(target_idx));
+    }
+    for (size_t target_slot_idx = 0; target_slot_idx < col_slots.size();
+         ++target_slot_idx) {
+      const auto slot_idx = col_slots[target_slot_idx];
+      if (query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx)) {
+        return reject("flatbuffer slot " + std::to_string(slot_idx));
+      }
+      const auto slot_width = query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
+      if (slot_width != sizeof(int32_t) && slot_width != sizeof(int64_t)) {
+        return reject("unsupported slot width " + std::to_string(slot_width));
+      }
+      const auto payload_width =
+          rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+      if (payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
+        return reject("unsupported payload width " + std::to_string(payload_width));
+      }
+      if (slot_idx >= query_mem_desc.getSlotCount()) {
+        return reject("slot index out of range " + std::to_string(slot_idx));
+      }
+      const auto slot_offset = query_mem_desc.getColOffInBytes(slot_idx);
+      if (slot_offset > std::numeric_limits<uint32_t>::max()) {
+        return reject("slot offset exceeds GPU reduction ABI " +
+                      std::to_string(slot_offset));
+      }
+      size_t init_val_idx = 0;
+      for (size_t previous_slot_idx = 0; previous_slot_idx < slot_idx;
+           ++previous_slot_idx) {
+        if (query_mem_desc.getPaddedSlotWidthBytes(previous_slot_idx) > 0) {
+          ++init_val_idx;
+        }
+      }
+      if (init_val_idx >= init_vals.size()) {
+        return reject("slot init value missing for slot " + std::to_string(slot_idx));
+      }
+      if ((*op == DeviceBaselineHashReductionSlot::Min ||
+           *op == DeviceBaselineHashReductionSlot::Max) &&
+          target_info.sql_type.is_fp()) {
+        return reject("floating point min/max target " + std::to_string(target_idx));
+      }
+      const bool avg_count_slot =
+          target_info.agg_kind == kAVG && target_slot_idx == size_t(1);
+      slots.push_back(DeviceBaselineHashReductionSlot{
+          static_cast<uint32_t>(slot_offset),
+          init_vals[init_val_idx],
+          static_cast<uint8_t>(payload_width),
+          static_cast<uint8_t>(*op),
+          avg_count_slot ? false : target_info.skip_null_val,
+          avg_count_slot
+              ? false
+              : target_info.sql_type.is_fp() || takes_float_argument(target_info)});
+    }
+    ++init_agg_val_idx;
+  }
+  return slots;
+}
+
+std::optional<std::vector<DeviceBaselineHashReductionSlot>>
+make_baseline_gpu_reduction_slots(const ResultSet& result_set) {
+  return make_rowwise_group_by_slots(result_set,
+                                     QueryDescriptionType::GroupByBaselineHash);
+}
+
+std::optional<std::vector<DeviceBaselineHashReductionSlot>>
+make_perfect_hash_gpu_reduction_slots(const ResultSet& result_set) {
+  return make_rowwise_group_by_slots(result_set,
+                                     QueryDescriptionType::GroupByPerfectHash);
+}
+
+struct PerfectHashGpuKeylessInfo {
+  bool keyless{false};
+  uint32_t key_slot_offset{0};
+  uint8_t key_slot_width{0};
+  int64_t key_init_val{0};
+};
+
+std::optional<size_t> target_init_val_index_for_slot(
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t slot_idx) {
+  if (slot_idx >= query_mem_desc.getSlotCount() ||
+      query_mem_desc.getPaddedSlotWidthBytes(slot_idx) <= 0) {
+    return std::nullopt;
+  }
+  size_t init_val_idx = 0;
+  for (size_t previous_slot_idx = 0; previous_slot_idx < slot_idx; ++previous_slot_idx) {
+    if (query_mem_desc.getPaddedSlotWidthBytes(previous_slot_idx) > 0) {
+      ++init_val_idx;
+    }
+  }
+  return init_val_idx;
+}
+
+struct TargetSlotOwner {
+  size_t target_idx;
+  size_t first_slot_idx;
+};
+
+std::optional<TargetSlotOwner> find_target_slot_owner(
+    const std::vector<TargetInfo>& targets,
+    const size_t slot_idx,
+    const bool separate_varlen_storage) {
+  size_t first_slot_idx = 0;
+  for (size_t target_idx = 0; target_idx < targets.size(); ++target_idx) {
+    const auto next_slot_idx =
+        advance_slot(first_slot_idx, targets[target_idx], separate_varlen_storage);
+    if (slot_idx >= first_slot_idx && slot_idx < next_slot_idx) {
+      return TargetSlotOwner{target_idx, first_slot_idx};
+    }
+    first_slot_idx = next_slot_idx;
+  }
+  return std::nullopt;
+}
+
+size_t keyless_marker_read_width(const QueryMemoryDescriptor& query_mem_desc,
+                                 const std::vector<TargetInfo>& targets,
+                                 const size_t marker_slot_idx) {
+  auto read_width =
+      static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(marker_slot_idx));
+  CHECK_GT(read_width, size_t(0));
+  const auto owner =
+      find_target_slot_owner(targets, marker_slot_idx, /*separate_varlen_storage=*/false);
+  if (!owner || owner->first_slot_idx != marker_slot_idx) {
+    return read_width;
+  }
+  return rowwise_agg_payload_width(targets[owner->target_idx], read_width);
+}
+
+int64_t init_value_for_read_width(const int64_t init_val, const size_t read_width) {
+  CHECK(read_width == sizeof(int64_t) || read_width == sizeof(int32_t) ||
+        read_width == sizeof(int16_t) || read_width == sizeof(int8_t));
+  int8_t init_val_buffer[sizeof(init_val)]{};
+  std::memcpy(init_val_buffer, &init_val, sizeof(init_val));
+  return read_int_from_buff(init_val_buffer, read_width);
+}
+
+std::optional<PerfectHashGpuKeylessInfo> make_perfect_hash_gpu_keyless_info(
+    const ResultSet& result_set) {
+  const auto& query_mem_desc = result_set.getQueryMemDesc();
+  if (!query_mem_desc.hasKeylessHash()) {
+    return PerfectHashGpuKeylessInfo{};
+  }
+  if (query_mem_desc.getQueryDescriptionType() !=
+      QueryDescriptionType::GroupByPerfectHash) {
+    return std::nullopt;
+  }
+  const auto key_slot_idx = query_mem_desc.getTargetIdxForKey();
+  if (key_slot_idx < 0 ||
+      static_cast<size_t>(key_slot_idx) >= query_mem_desc.getSlotCount()) {
+    return std::nullopt;
+  }
+  const auto key_slot_width = keyless_marker_read_width(
+      query_mem_desc, result_set.getTargetInfos(), key_slot_idx);
+  if (key_slot_width != sizeof(int8_t) && key_slot_width != sizeof(int16_t) &&
+      key_slot_width != sizeof(int32_t) && key_slot_width != sizeof(int64_t)) {
+    return std::nullopt;
+  }
+  const auto init_val_idx = target_init_val_index_for_slot(query_mem_desc, key_slot_idx);
+  if (!init_val_idx || *init_val_idx >= result_set.getTargetInitVals().size()) {
+    return std::nullopt;
+  }
+  const auto key_slot_offset = query_mem_desc.getColOffInBytes(key_slot_idx);
+  if (key_slot_offset > std::numeric_limits<uint32_t>::max()) {
+    return std::nullopt;
+  }
+  return PerfectHashGpuKeylessInfo{
+      true,
+      static_cast<uint32_t>(key_slot_offset),
+      static_cast<uint8_t>(key_slot_width),
+      init_value_for_read_width(result_set.getTargetInitVals()[*init_val_idx],
+                                key_slot_width)};
+}
+
+struct RowwiseColumnPublishSpec {
+  size_t column_idx{0};
+  size_t source_offset{0};
+  size_t source_width{0};
+  size_t output_width{0};
+  std::optional<int64_t> dict_entry_count;
+  int64_t source_null_val{QueryMemoryDescriptor::noTranslatedGroupbyNull()};
+  int64_t normalized_null_val{0};
+};
+
+bool is_supported_int_publish_width(const size_t width) {
+  return width == sizeof(int8_t) || width == sizeof(int16_t) ||
+         width == sizeof(int32_t) || width == sizeof(int64_t);
+}
+
+bool can_publish_width_conversion(const SQLTypeInfo& logical_ti,
+                                  const size_t source_width,
+                                  const size_t output_width,
+                                  const bool allow_width_conversion) {
+  if (source_width == output_width) {
+    return true;
+  }
+  if (!allow_width_conversion) {
+    return false;
+  }
+  if (!is_supported_int_publish_width(source_width) ||
+      !is_supported_int_publish_width(output_width)) {
+    return false;
+  }
+  return logical_ti.is_integer() || logical_ti.is_boolean() || logical_ti.is_time() ||
+         logical_ti.is_timeinterval() || logical_ti.is_dict_encoded_string();
+}
+
+bool all_output_columns_are_group_keys(const QueryMemoryDescriptor& query_mem_desc,
+                                       const size_t column_count) {
+  if (query_mem_desc.targetGroupbyIndicesSize() != column_count) {
+    return false;
+  }
+  for (size_t column_idx = 0; column_idx < column_count; ++column_idx) {
+    if (query_mem_desc.getTargetGroupbyIndex(column_idx) < 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::optional<RowwiseColumnPublishSpec> get_rowwise_column_publish_spec(
+    const ResultSet& result_set,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t column_idx,
+    const size_t row_size,
+    const size_t key_width,
+    const bool allow_width_conversion) {
+  const auto logical_ti = get_logical_type_info(result_set.getColType(column_idx));
+  if (logical_ti.is_varlen() ||
+      (logical_ti.is_string() && !logical_ti.is_dict_encoded_string())) {
+    return std::nullopt;
+  }
+  const auto elem_size = logical_ti.get_size();
+  if (elem_size <= 0) {
+    return std::nullopt;
+  }
+  const auto& slots = query_mem_desc.getColSlotContext().getSlotsForCol(column_idx);
+  if (slots.size() != size_t(1)) {
+    return std::nullopt;
+  }
+
+  const auto slot_idx = slots.front();
+  size_t source_offset{0};
+  size_t source_width{0};
+  int64_t target_groupby_idx{-1};
+  const auto& target_info = result_set.getTargetInfos()[column_idx];
+  if (!target_info.is_agg && query_mem_desc.targetGroupbyIndicesSize() > 0) {
+    CHECK_LT(column_idx, query_mem_desc.targetGroupbyIndicesSize());
+    target_groupby_idx = query_mem_desc.getTargetGroupbyIndex(column_idx);
+  }
+  if (target_groupby_idx >= 0) {
+    if ((query_mem_desc.usesGetGroupValueFast() &&
+         !query_mem_desc.mustUseBaselineSort()) ||
+        query_mem_desc.hasKeylessHash()) {
+      return std::nullopt;
+    }
+    if (query_mem_desc.getPaddedSlotWidthBytes(slot_idx) != 0) {
+      return std::nullopt;
+    }
+    const auto checked_source_offset =
+        checked_size_multiply(static_cast<size_t>(target_groupby_idx), key_width);
+    if (!checked_source_offset) {
+      return std::nullopt;
+    }
+    source_offset = *checked_source_offset;
+    source_width = key_width;
+  } else {
+    if (query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx)) {
+      return std::nullopt;
+    }
+    const auto padded_slot_width = query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
+    if (padded_slot_width <= 0) {
+      return std::nullopt;
+    }
+    source_offset = query_mem_desc.getColOffInBytes(slot_idx);
+    source_width =
+        rowwise_agg_payload_width(target_info, static_cast<size_t>(padded_slot_width));
+  }
+  const auto output_width = static_cast<size_t>(elem_size);
+  const bool allow_column_width_conversion =
+      allow_width_conversion || target_groupby_idx >= 0 || target_info.is_agg;
+  if (source_offset > row_size || source_width > row_size - source_offset) {
+    return std::nullopt;
+  }
+  if (!can_publish_width_conversion(
+          logical_ti, source_width, output_width, allow_column_width_conversion)) {
+    return std::nullopt;
+  }
+  std::optional<int64_t> dict_entry_count;
+  int64_t source_null_val{QueryMemoryDescriptor::noTranslatedGroupbyNull()};
+  int64_t normalized_null_val{0};
+  if (!target_info.is_agg) {
+    const auto translated_null_key =
+        query_mem_desc.getTranslatedGroupbyNullForTarget(column_idx);
+    if (translated_null_key) {
+      source_null_val = *translated_null_key;
+      normalized_null_val = inline_fixed_encoding_null_val(logical_ti);
+    }
+  }
+  if (logical_ti.is_dict_encoded_string()) {
+    auto* const string_dict_proxy =
+        result_set.getStringDictionaryProxy(logical_ti.getStringDictKey());
+    CHECK(string_dict_proxy);
+    const auto storage_entry_count = string_dict_proxy->storageEntryCount();
+    if (storage_entry_count > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+      return std::nullopt;
+    }
+    dict_entry_count = static_cast<int64_t>(storage_entry_count);
+    normalized_null_val = inline_fixed_encoding_null_val(logical_ti);
+  }
+  return RowwiseColumnPublishSpec{column_idx,
+                                  source_offset,
+                                  source_width,
+                                  output_width,
+                                  dict_entry_count,
+                                  source_null_val,
+                                  normalized_null_val};
+}
+
+std::vector<RowwiseColumnPublishSpec> collect_rowwise_column_publish_specs(
+    const ResultSet& result_set,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t row_size,
+    const size_t key_width) {
+  const auto& lazy_fetch_info = result_set.getLazyFetchInfo();
+  const bool require_all_columns =
+      all_output_columns_are_group_keys(query_mem_desc, result_set.colCount());
+  std::vector<RowwiseColumnPublishSpec> specs;
+  specs.reserve(result_set.colCount());
+  for (size_t column_idx = 0; column_idx < result_set.colCount(); ++column_idx) {
+    if (!lazy_fetch_info.empty()) {
+      CHECK_LT(column_idx, lazy_fetch_info.size());
+      if (lazy_fetch_info[column_idx].is_lazily_fetched) {
+        if (require_all_columns) {
+          return {};
+        }
+        continue;
+      }
+    }
+    auto spec = get_rowwise_column_publish_spec(
+        result_set, query_mem_desc, column_idx, row_size, key_width, require_all_columns);
+    if (!spec) {
+      if (require_all_columns) {
+        return {};
+      }
+      continue;
+    }
+    specs.push_back(*spec);
+  }
+  return specs;
+}
+
+bool can_publish_all_group_by_device_columns_from_rowwise(
+    const ResultSet& result_set,
+    const QueryMemoryDescriptor& query_mem_desc) {
+  if (query_mem_desc.targetGroupbyIndicesSize() != result_set.colCount()) {
+    return false;
+  }
+  if (!all_output_columns_are_group_keys(query_mem_desc, result_set.colCount())) {
+    return false;
+  }
+  const auto specs =
+      collect_rowwise_column_publish_specs(result_set,
+                                           query_mem_desc,
+                                           query_mem_desc.getRowSize(),
+                                           query_mem_desc.getEffectiveKeyWidth());
+  return specs.size() == result_set.colCount();
+}
+
+bool publish_group_by_device_columns_from_rowwise(
+    ResultSet& result_set,
+    CudaAllocator& device_allocator,
+    const int8_t* rowwise_buffer,
+    const size_t row_count,
+    const int device_id,
+    const uint64_t* source_entry_indices = nullptr) {
+  if (!rowwise_buffer || row_count == 0) {
+    return false;
+  }
+  const auto& query_mem_desc = result_set.getQueryMemDesc();
+  const auto query_type = query_mem_desc.getQueryDescriptionType();
+  const bool supported_query_type =
+      query_type == QueryDescriptionType::GroupByBaselineHash ||
+      query_type == QueryDescriptionType::GroupByPerfectHash;
+  const bool count_distinct_descriptors_safe =
+      query_mem_desc.countDistinctDescriptorsLogicallyEmpty() ||
+      all_output_columns_are_group_keys(query_mem_desc, result_set.colCount());
+  if (!supported_query_type || query_mem_desc.didOutputColumnar() ||
+      (query_mem_desc.hasKeylessHash() &&
+       query_type != QueryDescriptionType::GroupByPerfectHash) ||
+      query_mem_desc.hasVarlenOutput() || !count_distinct_descriptors_safe ||
+      query_mem_desc.getNumModeTargets() > 0) {
+    return false;
+  }
+
+  const auto row_size = query_mem_desc.getRowSize();
+  const auto key_width = query_mem_desc.getEffectiveKeyWidth();
+  const auto& col_slot_context = query_mem_desc.getColSlotContext();
+  for (size_t column_idx = 0; column_idx < result_set.colCount(); ++column_idx) {
+    if (col_slot_context.getSlotsForCol(column_idx).size() != size_t(1)) {
+      return false;
+    }
+  }
+  const auto specs = collect_rowwise_column_publish_specs(
+      result_set, query_mem_desc, row_size, key_width);
+  if (specs.empty()) {
+    return false;
+  }
+  for (const auto& spec : specs) {
+    if (!checked_size_multiply(row_count, spec.output_width)) {
+      return false;
+    }
+  }
+  std::vector<bool> published(result_set.colCount(), false);
+  size_t published_columns{0};
+  for (const auto& spec : specs) {
+    const auto column_bytes = checked_size_multiply(row_count, spec.output_width);
+    CHECK(column_bytes);
+    auto* column_buffer = device_allocator.alloc(*column_bytes);
+    extract_fixed_width_column_from_rows_on_device(rowwise_buffer,
+                                                   column_buffer,
+                                                   row_count,
+                                                   row_size,
+                                                   spec.source_offset,
+                                                   spec.source_width,
+                                                   spec.output_width,
+                                                   spec.dict_entry_count.value_or(-1),
+                                                   spec.source_null_val,
+                                                   spec.normalized_null_val,
+                                                   device_id,
+                                                   device_allocator.getCudaStream());
+    result_set.addDeviceColumnarBufferFragment(
+        spec.column_idx, device_id, column_buffer, row_count);
+    published[spec.column_idx] = true;
+    ++published_columns;
+  }
+
+  const bool can_synthesize_implicit_group_key =
+      source_entry_indices && query_mem_desc.usesGetGroupValueFast() &&
+      !query_mem_desc.mustUseBaselineSort() &&
+      query_mem_desc.getGroupbyColCount() == size_t(1);
+  if (can_synthesize_implicit_group_key) {
+    for (size_t column_idx = 0; column_idx < result_set.colCount(); ++column_idx) {
+      if (published[column_idx]) {
+        continue;
+      }
+      const auto& target_info = result_set.getTargetInfos()[column_idx];
+      int64_t target_groupby_idx{-1};
+      if (query_mem_desc.targetGroupbyIndicesSize() > 0) {
+        CHECK_LT(column_idx, query_mem_desc.targetGroupbyIndicesSize());
+        target_groupby_idx = query_mem_desc.getTargetGroupbyIndex(column_idx);
+      } else if (!target_info.is_agg) {
+        target_groupby_idx = 0;
+      }
+      if (target_groupby_idx != 0) {
+        continue;
+      }
+      const auto logical_ti = get_logical_type_info(result_set.getColType(column_idx));
+      const auto elem_size = logical_ti.get_size();
+      if (elem_size <= 0 || logical_ti.is_varlen() ||
+          !is_supported_int_publish_width(static_cast<size_t>(elem_size))) {
+        continue;
+      }
+      const auto output_width = static_cast<size_t>(elem_size);
+      const auto column_bytes = checked_size_multiply(row_count, output_width);
+      if (!column_bytes) {
+        continue;
+      }
+      auto* column_buffer = device_allocator.alloc(*column_bytes);
+      const auto translated_null =
+          query_mem_desc.getTranslatedGroupbyNullForTarget(column_idx);
+      synthesize_perfect_hash_group_key_column_on_device(
+          source_entry_indices,
+          column_buffer,
+          row_count,
+          output_width,
+          query_mem_desc.getMinVal(),
+          query_mem_desc.getBucket(),
+          translated_null.value_or(QueryMemoryDescriptor::noTranslatedGroupbyNull()),
+          translated_null ? inline_fixed_encoding_null_val(logical_ti) : int64_t(0),
+          device_id,
+          device_allocator.getCudaStream());
+      result_set.addDeviceColumnarBufferFragment(
+          column_idx, device_id, column_buffer, row_count);
+      published[column_idx] = true;
+      ++published_columns;
+    }
+  }
+  return published_columns > 0;
+}
+
+bool can_filter_sparse_baseline_hash_on_gpu(
+    const ResultSet& result_set,
+    const std::vector<DeviceResultSetEntryComparison>& comparisons) {
+  const auto& query_mem_desc = result_set.getQueryMemDesc();
+  if (comparisons.empty() || result_set.getDeviceType() != ExecutorDeviceType::GPU ||
+      query_mem_desc.getQueryDescriptionType() !=
+          QueryDescriptionType::GroupByBaselineHash ||
+      query_mem_desc.didOutputColumnar() || query_mem_desc.hasKeylessHash() ||
+      query_mem_desc.hasVarlenOutput() || query_mem_desc.getRowSize() == 0 ||
+      query_mem_desc.getRowSize() % sizeof(int64_t) != 0 ||
+      (query_mem_desc.getEffectiveKeyWidth() != size_t(4) &&
+       query_mem_desc.getEffectiveKeyWidth() != size_t(8))) {
+    return false;
+  }
+  const auto publish_specs =
+      collect_rowwise_column_publish_specs(result_set,
+                                           query_mem_desc,
+                                           query_mem_desc.getRowSize(),
+                                           query_mem_desc.getEffectiveKeyWidth());
+  if (publish_specs.size() != result_set.colCount()) {
+    return false;
+  }
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> fragments;
+  return result_set.getDeviceRowwiseBufferFragments(fragments) &&
+         fragments.size() == size_t(1) && fragments.front().entry_count > 0;
+}
+
+// A populated optional means the filter was applied. Its ResultSet is null when no
+// rows matched; an empty optional asks the caller to retain the normal fallback path.
+std::optional<ResultSetPtr> try_filter_sparse_baseline_hash_on_gpu(
+    const size_t executor_id,
+    const ResultSet& source_result,
+    const std::vector<DeviceResultSetEntryComparison>& comparisons) {
+  if (!can_filter_sparse_baseline_hash_on_gpu(source_result, comparisons)) {
+    return std::nullopt;
+  }
+  const auto executor = Executor::getExecutor(executor_id);
+  if (!executor) {
+    return std::nullopt;
+  }
+
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> fragments;
+  CHECK(source_result.getDeviceRowwiseBufferFragments(fragments));
+  CHECK_EQ(fragments.size(), size_t(1));
+  const auto& fragment = fragments.front();
+  const auto device_id = fragment.device_id;
+  const auto cuda_stream = executor->getCudaStream(device_id);
+  auto retained_allocator =
+      std::make_shared<CudaAllocator>(executor->getDataMgr(), device_id, cuda_stream);
+  auto transient_allocator = executor->getCudaAllocatorShared(device_id);
+  CHECK(retained_allocator);
+  CHECK(transient_allocator);
+  CudaAllocatorRollbackGuard allocation_guard;
+  allocation_guard.track(retained_allocator);
+  allocation_guard.track(transient_allocator);
+  transient_allocator->waitForReadyEvent(fragment.ready_event);
+
+  const auto comparison_bytes =
+      checked_size_multiply(comparisons.size(), sizeof(DeviceResultSetEntryComparison));
+  if (!comparison_bytes) {
+    return std::nullopt;
+  }
+  auto* device_comparisons = reinterpret_cast<DeviceResultSetEntryComparison*>(
+      transient_allocator->alloc(*comparison_bytes));
+  transient_allocator->copyToDevice(device_comparisons,
+                                    comparisons.data(),
+                                    *comparison_bytes,
+                                    "GPU baseline hash post-boundary filter");
+  auto* device_row_count =
+      reinterpret_cast<uint64_t*>(transient_allocator->alloc(sizeof(uint64_t)));
+
+  const auto& query_mem_desc = source_result.getQueryMemDesc();
+  const auto row_size = query_mem_desc.getRowSize();
+  const auto filtered_row_count =
+      count_matching_baseline_hash_rows_on_device(fragment.buffer,
+                                                  fragment.entry_count,
+                                                  row_size,
+                                                  query_mem_desc.getEffectiveKeyWidth(),
+                                                  device_comparisons,
+                                                  comparisons.size(),
+                                                  nullptr,
+                                                  0,
+                                                  device_row_count,
+                                                  device_id,
+                                                  cuda_stream);
+  if (filtered_row_count > fragment.entry_count) {
+    return std::nullopt;
+  }
+  if (filtered_row_count == 0) {
+    return ResultSetPtr{};
+  }
+
+  const auto compacted_bytes = checked_size_multiply(filtered_row_count, row_size);
+  if (!compacted_bytes || *compacted_bytes > executor->maxGpuSlabSize()) {
+    return std::nullopt;
+  }
+  auto* compacted_buffer = retained_allocator->alloc(*compacted_bytes);
+  compact_matching_baseline_hash_rows_on_device(fragment.buffer,
+                                                compacted_buffer,
+                                                device_row_count,
+                                                fragment.entry_count,
+                                                row_size,
+                                                query_mem_desc.getEffectiveKeyWidth(),
+                                                device_comparisons,
+                                                comparisons.size(),
+                                                nullptr,
+                                                0,
+                                                device_id,
+                                                cuda_stream);
+  uint64_t verified_row_count{0};
+  transient_allocator->copyFromDevice(&verified_row_count,
+                                      device_row_count,
+                                      sizeof(verified_row_count),
+                                      "GPU baseline hash filtered row count");
+  if (verified_row_count != filtered_row_count) {
+    return std::nullopt;
+  }
+
+  auto compact_query_mem_desc = query_mem_desc;
+  compact_query_mem_desc.setEntryCount(filtered_row_count);
+  auto filtered_result =
+      std::make_shared<ResultSet>(source_result.getTargetInfos(),
+                                  std::vector<ColumnLazyFetchInfo>{},
+                                  std::vector<std::vector<const int8_t*>>{},
+                                  ColumnBufferLayouts{},
+                                  std::vector<std::vector<int64_t>>{},
+                                  std::vector<int64_t>{},
+                                  ExecutorDeviceType::GPU,
+                                  device_id,
+                                  -1,
+                                  compact_query_mem_desc,
+                                  source_result.getRowSetMemOwner(),
+                                  source_result.getBlockSize(),
+                                  source_result.getGridSize());
+  filtered_result->setCudaAllocator(retained_allocator);
+  auto* filtered_storage = const_cast<ResultSetStorage*>(
+      filtered_result->allocateStorage(source_result.getTargetInitVals()));
+  filtered_result->setCachedRowCount(filtered_row_count);
+  filtered_result->markBaselineHashDenseForReduction(filtered_row_count);
+  filtered_result->addDeviceRowwiseBufferFragment(
+      device_id, compacted_buffer, filtered_row_count);
+  if (!publish_group_by_device_columns_from_rowwise(*filtered_result,
+                                                    *retained_allocator,
+                                                    compacted_buffer,
+                                                    filtered_row_count,
+                                                    device_id)) {
+    return std::nullopt;
+  }
+  filtered_result->markDeviceColumnarFragmentsCoverLogicalRows();
+  if (filtered_result->canDeferDeviceColumnarCpuMaterialization()) {
+    filtered_result->markDeviceColumnarCpuStorageInvalid();
+  } else {
+    retained_allocator->copyFromDevice(filtered_storage->getUnderlyingBuffer(),
+                                       compacted_buffer,
+                                       *compacted_bytes,
+                                       "GPU baseline hash filtered rows");
+    filtered_result->markDeviceColumnarCpuStorageValid();
+  }
+  allocation_guard.commit();
+  return filtered_result;
+}
+
+bool should_retain_gpu_baseline_reduction_fragments(const size_t total_input_rows,
+                                                    const size_t output_rows,
+                                                    const size_t row_size,
+                                                    const size_t slot_count) {
+  if (slot_count > 0) {
+    return true;
+  }
+
+  constexpr size_t max_small_payload_free_reduction_bytes = size_t(512) << 20;
+  const auto output_bytes = checked_size_multiply(output_rows, row_size);
+  if (output_bytes && *output_bytes <= max_small_payload_free_reduction_bytes) {
+    return true;
+  }
+
+  constexpr size_t material_reduction_numerator = 3;
+  constexpr size_t material_reduction_denominator = 4;
+  return static_cast<unsigned __int128>(output_rows) * material_reduction_denominator <
+         static_cast<unsigned __int128>(total_input_rows) * material_reduction_numerator;
+}
+#endif
+
+ResultSetPtr try_reduce_baseline_hash_result_sets_partitioned_on_gpu(
+    const size_t executor_id,
+    const std::vector<ResultSetPtr>& baseline_hash_results,
+    const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
+  if (!g_enable_partitioned_baseline_gpu_reduction ||
+      device_type != ExecutorDeviceType::GPU ||
+      baseline_hash_results.size() <= size_t(1)) {
+    return nullptr;
+  }
+  const auto executor = Executor::getExecutor(executor_id);
+  if (!executor) {
+    return nullptr;
+  }
+  const auto& first = *baseline_hash_results.front();
+  auto slots = make_baseline_gpu_reduction_slots(first);
+  if (!slots) {
+    return nullptr;
+  }
+  const auto& query_mem_desc = first.getQueryMemDesc();
+  if (query_mem_desc.hasKeylessHash() || query_mem_desc.didOutputColumnar() ||
+      query_mem_desc.hasVarlenOutput()) {
+    return nullptr;
+  }
+
+  struct SourceFragment {
+    ResultSet::DeviceRowwiseBufferFragment fragment;
+    std::shared_ptr<CudaAllocator> allocator;
+    uint64_t* counts_device{nullptr};
+    uint64_t* offsets_device{nullptr};
+    uint64_t* write_counts_device{nullptr};
+    int8_t* partitioned_buffer{nullptr};
+    std::shared_ptr<CudaStreamReadyEvent> partition_ready_event;
+    std::vector<uint64_t> counts;
+    std::vector<uint64_t> offsets;
+    size_t compacted_count{0};
+  };
+
+  std::vector<SourceFragment> source_fragments;
+  std::vector<int> partition_device_ids;
+  size_t total_entry_count{0};
+  for (const auto& result_set : baseline_hash_results) {
+    CHECK(result_set);
+    if (result_set->getDeviceType() != ExecutorDeviceType::GPU ||
+        result_set->getQueryMemDesc().reductionKey() !=
+            first.getQueryMemDesc().reductionKey()) {
+      return nullptr;
+    }
+    std::vector<ResultSet::DeviceRowwiseBufferFragment> fragments;
+    if (!result_set->getDeviceRowwiseBufferFragments(fragments) ||
+        fragments.size() != size_t(1)) {
+      return nullptr;
+    }
+    const auto& fragment = fragments.front();
+    if (fragment.entry_count == 0) {
+      continue;
+    }
+    auto allocator = executor->getCudaAllocatorShared(fragment.device_id);
+    CHECK(allocator);
+    source_fragments.push_back(SourceFragment{fragment, allocator});
+    const auto updated_total_entry_count =
+        checked_size_add(total_entry_count, fragment.entry_count);
+    if (!updated_total_entry_count) {
+      return nullptr;
+    }
+    total_entry_count = *updated_total_entry_count;
+    if (std::find(partition_device_ids.begin(),
+                  partition_device_ids.end(),
+                  fragment.device_id) == partition_device_ids.end()) {
+      partition_device_ids.push_back(fragment.device_id);
+    }
+  }
+  if (source_fragments.size() <= size_t(1) || partition_device_ids.size() <= size_t(1) ||
+      total_entry_count == 0) {
+    return nullptr;
+  }
+  std::sort(partition_device_ids.begin(), partition_device_ids.end());
+
+  const auto row_size = query_mem_desc.getRowSize();
+  const auto key_width = query_mem_desc.getEffectiveKeyWidth();
+  const auto key_count = query_mem_desc.getGroupbyColCount();
+  if (row_size == 0) {
+    return nullptr;
+  }
+  constexpr size_t min_partitioned_reduction_bytes = size_t(256) << 20;
+  if (total_entry_count < min_partitioned_reduction_bytes / row_size) {
+    return nullptr;
+  }
+
+  const auto partition_count = partition_device_ids.size();
+  const auto checked_counter_bytes =
+      checked_size_multiply(partition_count, sizeof(uint64_t));
+  if (!checked_counter_bytes) {
+    return nullptr;
+  }
+  const auto counter_bytes = *checked_counter_bytes;
+  std::vector<uint64_t> partition_total_counts(partition_count, 0);
+  CudaAllocatorRollbackGuard source_allocation_guard;
+  for (const auto& source : source_fragments) {
+    source_allocation_guard.track(source.allocator);
+  }
+
+  for (auto& source : source_fragments) {
+    auto* allocator = source.allocator.get();
+    allocator->waitForReadyEvent(source.fragment.ready_event);
+    source.counts.resize(partition_count);
+    source.offsets.resize(partition_count);
+    source.counts_device = reinterpret_cast<uint64_t*>(allocator->alloc(counter_bytes));
+    count_baseline_hash_partition_rows_on_device(source.fragment.buffer,
+                                                 source.counts_device,
+                                                 source.fragment.entry_count,
+                                                 row_size,
+                                                 key_width,
+                                                 key_count,
+                                                 partition_count,
+                                                 source.fragment.device_id,
+                                                 source.allocator->getCudaStream());
+    allocator->copyFromDevice(source.counts.data(),
+                              source.counts_device,
+                              counter_bytes,
+                              "GPU baseline hash partition counts");
+    uint64_t running_offset{0};
+    for (size_t partition_idx = 0; partition_idx < partition_count; ++partition_idx) {
+      source.offsets[partition_idx] = running_offset;
+      if (source.counts[partition_idx] >
+              std::numeric_limits<uint64_t>::max() - running_offset ||
+          source.counts[partition_idx] > std::numeric_limits<uint64_t>::max() -
+                                             partition_total_counts[partition_idx]) {
+        return nullptr;
+      }
+      running_offset += source.counts[partition_idx];
+      partition_total_counts[partition_idx] += source.counts[partition_idx];
+    }
+    if (running_offset > source.fragment.entry_count ||
+        running_offset > std::numeric_limits<size_t>::max()) {
+      return nullptr;
+    }
+    source.compacted_count = static_cast<size_t>(running_offset);
+    if (source.compacted_count == 0) {
+      continue;
+    }
+    const auto partitioned_buffer_bytes =
+        checked_size_multiply(source.compacted_count, row_size);
+    if (!partitioned_buffer_bytes) {
+      return nullptr;
+    }
+    source.offsets_device = reinterpret_cast<uint64_t*>(allocator->alloc(counter_bytes));
+    source.write_counts_device =
+        reinterpret_cast<uint64_t*>(allocator->alloc(counter_bytes));
+    allocator->copyToDevice(source.offsets_device,
+                            source.offsets.data(),
+                            counter_bytes,
+                            "GPU baseline hash partition offsets");
+    source.partitioned_buffer = allocator->alloc(*partitioned_buffer_bytes);
+    partition_baseline_hash_rows_on_device(source.fragment.buffer,
+                                           source.partitioned_buffer,
+                                           source.write_counts_device,
+                                           source.offsets_device,
+                                           source.fragment.entry_count,
+                                           row_size,
+                                           key_width,
+                                           key_count,
+                                           partition_count,
+                                           source.fragment.device_id,
+                                           source.allocator->getCudaStream());
+    source.partition_ready_event = allocator->recordReadyEvent();
+  }
+
+  auto cuda_mgr = executor->getDataMgr()->getCudaMgr();
+  CHECK(cuda_mgr);
+
+  for (size_t partition_idx = 0; partition_idx < partition_count; ++partition_idx) {
+    const auto partition_input_rows =
+        static_cast<size_t>(partition_total_counts[partition_idx]);
+    if (partition_input_rows == 0) {
+      continue;
+    }
+    const auto destination_entry_count =
+        baseline_reduction_entry_count_for_gpu(partition_input_rows);
+    if (!destination_entry_count) {
+      return nullptr;
+    }
+    const auto destination_bytes =
+        checked_size_multiply(*destination_entry_count, row_size);
+    if (!destination_bytes || *destination_bytes > executor->maxGpuSlabSize()) {
+      return nullptr;
+    }
+  }
+
+  struct PartitionReductionOutput {
+    ResultSetPtr result;
+    size_t input_rows{0};
+    size_t output_rows{0};
+  };
+
+  auto reduce_partition = [&](const size_t partition_idx) -> PartitionReductionOutput {
+    const auto partition_input_rows =
+        static_cast<size_t>(partition_total_counts[partition_idx]);
+    if (partition_input_rows == 0) {
+      return {};
+    }
+    const int destination_device_id = partition_device_ids[partition_idx];
+    auto transient_allocator = executor->getCudaAllocatorShared(destination_device_id);
+    CHECK(transient_allocator);
+    CudaAllocatorRollbackGuard partition_allocation_guard;
+    partition_allocation_guard.track(transient_allocator);
+    auto* transient_allocator_ptr = transient_allocator.get();
+    const auto cuda_stream = executor->getCudaStream(destination_device_id);
+    const auto destination_entry_count =
+        baseline_reduction_entry_count_for_gpu(partition_input_rows);
+    if (!destination_entry_count) {
+      return {nullptr, partition_input_rows, 0};
+    }
+    const auto destination_bytes =
+        checked_size_multiply(*destination_entry_count, row_size);
+    if (!destination_bytes) {
+      return {nullptr, partition_input_rows, 0};
+    }
+    auto* destination_buffer = transient_allocator_ptr->alloc(*destination_bytes);
+    int64_t* init_vals_device{nullptr};
+    if (!first.getTargetInitVals().empty()) {
+      const auto init_vals_bytes =
+          checked_size_multiply(first.getTargetInitVals().size(), sizeof(int64_t));
+      if (!init_vals_bytes) {
+        return {nullptr, partition_input_rows, 0};
+      }
+      init_vals_device =
+          reinterpret_cast<int64_t*>(transient_allocator_ptr->alloc(*init_vals_bytes));
+      transient_allocator_ptr->copyToDevice(
+          init_vals_device,
+          first.getTargetInitVals().data(),
+          *init_vals_bytes,
+          "GPU partitioned baseline hash reducer init values");
+    }
+    cuda_mgr->setContext(destination_device_id);
+    init_group_by_buffer_on_device(reinterpret_cast<int64_t*>(destination_buffer),
+                                   init_vals_device,
+                                   *destination_entry_count,
+                                   query_mem_desc.getGroupbyColCount(),
+                                   query_mem_desc.getEffectiveKeyWidth(),
+                                   query_mem_desc.getRowSize() / sizeof(int64_t),
+                                   query_mem_desc.hasKeylessHash(),
+                                   1,
+                                   first.getBlockSize(),
+                                   first.getGridSize(),
+                                   cuda_stream);
+
+    DeviceBaselineHashReductionSlot* slots_device{nullptr};
+    if (!slots->empty()) {
+      const auto slots_bytes =
+          checked_size_multiply(slots->size(), sizeof(DeviceBaselineHashReductionSlot));
+      if (!slots_bytes) {
+        return {nullptr, partition_input_rows, 0};
+      }
+      slots_device = reinterpret_cast<DeviceBaselineHashReductionSlot*>(
+          transient_allocator_ptr->alloc(*slots_bytes));
+      transient_allocator_ptr->copyToDevice(
+          slots_device,
+          slots->data(),
+          *slots_bytes,
+          "GPU partitioned baseline hash reducer slots");
+    }
+    auto* reduction_scratch =
+        reinterpret_cast<uint64_t*>(transient_allocator_ptr->alloc(sizeof(uint64_t)));
+
+    for (const auto& source : source_fragments) {
+      const auto source_partition_rows =
+          static_cast<size_t>(source.counts[partition_idx]);
+      if (source_partition_rows == 0) {
+        continue;
+      }
+      CHECK(source.partitioned_buffer);
+      const auto source_bytes = checked_size_multiply(source_partition_rows, row_size);
+      const auto source_offset = static_cast<size_t>(source.offsets[partition_idx]);
+      const auto source_offset_bytes = checked_size_multiply(source_offset, row_size);
+      if (!source_bytes || !source_offset_bytes ||
+          source_offset > source.compacted_count ||
+          source_partition_rows > source.compacted_count - source_offset) {
+        return {nullptr, partition_input_rows, 0};
+      }
+      auto* source_buffer = source.partitioned_buffer + *source_offset_bytes;
+      transient_allocator->waitForReadyEvent(source.partition_ready_event);
+      if (source.fragment.device_id != destination_device_id) {
+        auto* local_source_buffer = transient_allocator_ptr->alloc(*source_bytes);
+        cuda_mgr->copyDeviceToDevice(local_source_buffer,
+                                     source_buffer,
+                                     *source_bytes,
+                                     destination_device_id,
+                                     source.fragment.device_id,
+                                     "GPU partitioned baseline hash reducer source rows",
+                                     cuda_stream);
+        source_buffer = local_source_buffer;
+      }
+      const bool reduction_success =
+          reduce_baseline_hash_rows_on_device(destination_buffer,
+                                              *destination_entry_count,
+                                              source_buffer,
+                                              source_partition_rows,
+                                              row_size,
+                                              key_width,
+                                              key_count,
+                                              slots_device,
+                                              slots->size(),
+                                              reinterpret_cast<int*>(reduction_scratch),
+                                              destination_device_id,
+                                              cuda_stream);
+      if (!reduction_success) {
+        return {nullptr, partition_input_rows, 0};
+      }
+    }
+
+    const auto compacted_row_count =
+        count_non_empty_baseline_hash_rows_on_device(destination_buffer,
+                                                     *destination_entry_count,
+                                                     row_size,
+                                                     key_width,
+                                                     reduction_scratch,
+                                                     destination_device_id,
+                                                     cuda_stream);
+    if (compacted_row_count == 0 || compacted_row_count > *destination_entry_count) {
+      return {nullptr, partition_input_rows, 0};
+    }
+    auto retained_allocator = std::make_shared<CudaAllocator>(
+        executor->getDataMgr(), destination_device_id, cuda_stream);
+    partition_allocation_guard.track(retained_allocator);
+    const auto compacted_buffer_bytes =
+        checked_size_multiply(compacted_row_count, row_size);
+    if (!compacted_buffer_bytes) {
+      return {nullptr, partition_input_rows, 0};
+    }
+    auto* compacted_buffer = retained_allocator->alloc(*compacted_buffer_bytes);
+    auto* compacted_row_count_device =
+        reinterpret_cast<uint64_t*>(transient_allocator_ptr->alloc(sizeof(uint64_t)));
+    compact_baseline_hash_rows_on_device(destination_buffer,
+                                         compacted_buffer,
+                                         compacted_row_count_device,
+                                         *destination_entry_count,
+                                         row_size,
+                                         key_width,
+                                         destination_device_id,
+                                         cuda_stream);
+    uint64_t verified_row_count{0};
+    transient_allocator_ptr->copyFromDevice(
+        &verified_row_count,
+        compacted_row_count_device,
+        sizeof(verified_row_count),
+        "GPU partitioned baseline hash reducer row count");
+    if (verified_row_count != compacted_row_count) {
+      LOG(ERROR) << "GPU partitioned baseline reduction produced an inconsistent row "
+                    "count: expected="
+                 << compacted_row_count << " actual=" << verified_row_count;
+      return {nullptr, partition_input_rows, 0};
+    }
+
+    auto compact_query_mem_desc = query_mem_desc;
+    compact_query_mem_desc.setEntryCount(compacted_row_count);
+    auto partition_result =
+        std::make_shared<ResultSet>(first.getTargetInfos(),
+                                    std::vector<ColumnLazyFetchInfo>{},
+                                    std::vector<std::vector<const int8_t*>>{},
+                                    ColumnBufferLayouts{},
+                                    std::vector<std::vector<int64_t>>{},
+                                    std::vector<int64_t>{},
+                                    ExecutorDeviceType::GPU,
+                                    destination_device_id,
+                                    -1,
+                                    compact_query_mem_desc,
+                                    first.getRowSetMemOwner(),
+                                    first.getBlockSize(),
+                                    first.getGridSize());
+    partition_result->setCudaAllocator(retained_allocator);
+    auto* compact_storage = const_cast<ResultSetStorage*>(
+        partition_result->allocateStorage(first.getTargetInitVals()));
+    partition_result->setCachedRowCount(compacted_row_count);
+    partition_result->markBaselineHashDenseForReduction(compacted_row_count);
+    retained_allocator->copyFromDevice(compact_storage->getUnderlyingBuffer(),
+                                       compacted_buffer,
+                                       *compacted_buffer_bytes,
+                                       "GPU partitioned baseline hash reduced rows");
+    const auto retain_device_fragments = should_retain_gpu_baseline_reduction_fragments(
+        partition_input_rows, compacted_row_count, row_size, slots->size());
+    const bool publish_device_columns =
+        !retain_device_fragments &&
+        query_mem_desc.getQueryDescriptionType() ==
+            QueryDescriptionType::GroupByBaselineHash &&
+        !query_mem_desc.didOutputColumnar() && !query_mem_desc.hasKeylessHash() &&
+        !query_mem_desc.hasVarlenOutput() &&
+        count_distinct_descriptors_safe_for_group_key_output(query_mem_desc,
+                                                             first.colCount()) &&
+        query_mem_desc.getNumModeTargets() == 0 &&
+        can_publish_all_group_by_device_columns_from_rowwise(first, query_mem_desc);
+    if (retain_device_fragments || publish_device_columns) {
+      if (retain_device_fragments) {
+        partition_result->addDeviceRowwiseBufferFragment(
+            destination_device_id, compacted_buffer, compacted_row_count);
+      }
+      if (publish_group_by_device_columns_from_rowwise(*partition_result,
+                                                       *retained_allocator,
+                                                       compacted_buffer,
+                                                       compacted_row_count,
+                                                       destination_device_id)) {
+        partition_result->markDeviceColumnarFragmentsCoverLogicalRows();
+      }
+    }
+    partition_allocation_guard.commit();
+    return {std::move(partition_result), partition_input_rows, compacted_row_count};
+  };
+
+  std::vector<std::future<PartitionReductionOutput>> partition_futures;
+  partition_futures.reserve(partition_count);
+  for (size_t partition_idx = 0; partition_idx < partition_count; ++partition_idx) {
+    if (partition_total_counts[partition_idx] == 0) {
+      continue;
+    }
+    partition_futures.push_back(
+        std::async(std::launch::async, reduce_partition, partition_idx));
+  }
+
+  std::vector<ResultSetPtr> partition_results;
+  partition_results.reserve(partition_futures.size());
+  size_t total_output_rows{0};
+  for (auto& partition_future : partition_futures) {
+    auto output = partition_future.get();
+    const auto updated_total_output_rows =
+        checked_size_add(total_output_rows, output.output_rows);
+    if (!updated_total_output_rows) {
+      return nullptr;
+    }
+    total_output_rows = *updated_total_output_rows;
+    if (output.input_rows > 0 && !output.result) {
+      return nullptr;
+    }
+    if (output.result) {
+      partition_results.push_back(std::move(output.result));
+    }
+  }
+
+  if (partition_results.empty()) {
+    return nullptr;
+  }
+  auto reduced_result = partition_results.front();
+  for (size_t partition_idx = 1; partition_idx < partition_results.size();
+       ++partition_idx) {
+    reduced_result->append(*partition_results[partition_idx]);
+  }
+  reduced_result->setCachedRowCount(total_output_rows);
+  reduced_result->markBaselineHashDenseForReduction(total_output_rows);
+  source_allocation_guard.commit();
+  return reduced_result;
+#else
+  (void)executor_id;
+  (void)baseline_hash_results;
+  (void)device_type;
+  return nullptr;
+#endif
+}
+
+ResultSetPtr try_reduce_baseline_hash_result_sets_on_gpu(
+    const size_t executor_id,
+    const std::vector<ResultSetPtr>& baseline_hash_results,
+    const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
+  if (!g_enable_result_reduction_pipeline || device_type != ExecutorDeviceType::GPU ||
+      baseline_hash_results.size() <= size_t(1)) {
+    return nullptr;
+  }
+  const auto executor = Executor::getExecutor(executor_id);
+  if (!executor) {
+    return nullptr;
+  }
+  const auto& first = *baseline_hash_results.front();
+  auto slots = make_baseline_gpu_reduction_slots(first);
+  if (!slots) {
+    return nullptr;
+  }
+  const auto& query_mem_desc = first.getQueryMemDesc();
+  const bool can_publish_all_group_by_device_columns =
+      can_publish_all_group_by_device_columns_from_rowwise(first, query_mem_desc);
+
+  struct SourceFragment {
+    ResultSet::DeviceRowwiseBufferFragment fragment;
+  };
+  std::vector<SourceFragment> source_fragments;
+  size_t total_entry_count{0};
+  for (const auto& result_set : baseline_hash_results) {
+    CHECK(result_set);
+    if (result_set->getDeviceType() != ExecutorDeviceType::GPU ||
+        result_set->getQueryMemDesc().reductionKey() !=
+            first.getQueryMemDesc().reductionKey()) {
+      return nullptr;
+    }
+    std::vector<ResultSet::DeviceRowwiseBufferFragment> fragments;
+    if (!result_set->getDeviceRowwiseBufferFragments(fragments) ||
+        fragments.size() != size_t(1)) {
+      return nullptr;
+    }
+    const auto updated_total_entry_count =
+        checked_size_add(total_entry_count, fragments.front().entry_count);
+    if (!updated_total_entry_count) {
+      return nullptr;
+    }
+    total_entry_count = *updated_total_entry_count;
+    source_fragments.push_back(SourceFragment{fragments.front()});
+  }
+  if (total_entry_count == 0) {
+    return nullptr;
+  }
+
+  const auto destination_it =
+      std::max_element(source_fragments.begin(),
+                       source_fragments.end(),
+                       [](const auto& lhs, const auto& rhs) {
+                         return lhs.fragment.entry_count < rhs.fragment.entry_count;
+                       });
+  CHECK(destination_it != source_fragments.end());
+  const int destination_device_id =
+      can_publish_all_group_by_device_columns ? 0 : destination_it->fragment.device_id;
+  auto transient_allocator = executor->getCudaAllocatorShared(destination_device_id);
+  CHECK(transient_allocator);
+  CudaAllocatorRollbackGuard allocation_guard;
+  allocation_guard.track(transient_allocator);
+  auto* transient_allocator_ptr = transient_allocator.get();
+  auto cuda_mgr = executor->getDataMgr()->getCudaMgr();
+  CHECK(cuda_mgr);
+  const auto cuda_stream = executor->getCudaStream(destination_device_id);
+
+  const auto row_size = query_mem_desc.getRowSize();
+  if (row_size == 0) {
+    return nullptr;
+  }
+  const auto destination_entry_count =
+      baseline_reduction_entry_count_for_gpu(total_entry_count);
+  if (!destination_entry_count) {
+    return nullptr;
+  }
+  const auto destination_bytes =
+      checked_size_multiply(*destination_entry_count, row_size);
+  if (!destination_bytes || *destination_bytes > executor->maxGpuSlabSize()) {
+    return nullptr;
+  }
+  auto* destination_buffer = transient_allocator_ptr->alloc(*destination_bytes);
+  int64_t* init_vals_device{nullptr};
+  if (!first.getTargetInitVals().empty()) {
+    const auto init_vals_bytes =
+        checked_size_multiply(first.getTargetInitVals().size(), sizeof(int64_t));
+    if (!init_vals_bytes) {
+      return nullptr;
+    }
+    init_vals_device =
+        reinterpret_cast<int64_t*>(transient_allocator_ptr->alloc(*init_vals_bytes));
+    transient_allocator_ptr->copyToDevice(init_vals_device,
+                                          first.getTargetInitVals().data(),
+                                          *init_vals_bytes,
+                                          "GPU baseline hash reducer init values");
+  }
+  cuda_mgr->setContext(destination_device_id);
+  init_group_by_buffer_on_device(reinterpret_cast<int64_t*>(destination_buffer),
+                                 init_vals_device,
+                                 *destination_entry_count,
+                                 query_mem_desc.getGroupbyColCount(),
+                                 query_mem_desc.getEffectiveKeyWidth(),
+                                 query_mem_desc.getRowSize() / sizeof(int64_t),
+                                 query_mem_desc.hasKeylessHash(),
+                                 1,
+                                 first.getBlockSize(),
+                                 first.getGridSize(),
+                                 cuda_stream);
+
+  DeviceBaselineHashReductionSlot* slots_device{nullptr};
+  if (!slots->empty()) {
+    const auto slots_bytes =
+        checked_size_multiply(slots->size(), sizeof(DeviceBaselineHashReductionSlot));
+    if (!slots_bytes) {
+      return nullptr;
+    }
+    slots_device = reinterpret_cast<DeviceBaselineHashReductionSlot*>(
+        transient_allocator_ptr->alloc(*slots_bytes));
+    transient_allocator_ptr->copyToDevice(
+        slots_device, slots->data(), *slots_bytes, "GPU baseline hash reducer slots");
+  }
+  auto* reduction_scratch =
+      reinterpret_cast<uint64_t*>(transient_allocator_ptr->alloc(sizeof(uint64_t)));
+
+  bool reduction_success{true};
+  for (const auto& source : source_fragments) {
+    transient_allocator->waitForReadyEvent(source.fragment.ready_event);
+    auto* source_buffer = source.fragment.buffer;
+    const auto source_bytes =
+        checked_size_multiply(source.fragment.entry_count, row_size);
+    if (!source_bytes) {
+      return nullptr;
+    }
+    if (source.fragment.device_id != destination_device_id) {
+      auto* local_source_buffer = transient_allocator_ptr->alloc(*source_bytes);
+      cuda_mgr->copyDeviceToDevice(local_source_buffer,
+                                   const_cast<int8_t*>(source.fragment.buffer),
+                                   *source_bytes,
+                                   destination_device_id,
+                                   source.fragment.device_id,
+                                   "GPU baseline hash reducer source rows",
+                                   cuda_stream);
+      source_buffer = local_source_buffer;
+    }
+    reduction_success &=
+        reduce_baseline_hash_rows_on_device(destination_buffer,
+                                            *destination_entry_count,
+                                            source_buffer,
+                                            source.fragment.entry_count,
+                                            row_size,
+                                            query_mem_desc.getEffectiveKeyWidth(),
+                                            query_mem_desc.getGroupbyColCount(),
+                                            slots_device,
+                                            slots->size(),
+                                            reinterpret_cast<int*>(reduction_scratch),
+                                            destination_device_id,
+                                            cuda_stream);
+    if (!reduction_success) {
+      return nullptr;
+    }
+  }
+
+  const auto compacted_row_count =
+      count_non_empty_baseline_hash_rows_on_device(destination_buffer,
+                                                   *destination_entry_count,
+                                                   row_size,
+                                                   query_mem_desc.getEffectiveKeyWidth(),
+                                                   reduction_scratch,
+                                                   destination_device_id,
+                                                   cuda_stream);
+  if (compacted_row_count == 0 || compacted_row_count > *destination_entry_count) {
+    return nullptr;
+  }
+  const auto retain_device_fragments = should_retain_gpu_baseline_reduction_fragments(
+      total_entry_count, compacted_row_count, row_size, slots->size());
+  const bool publish_device_columns =
+      !retain_device_fragments &&
+      query_mem_desc.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByBaselineHash &&
+      !query_mem_desc.didOutputColumnar() && !query_mem_desc.hasKeylessHash() &&
+      !query_mem_desc.hasVarlenOutput() &&
+      count_distinct_descriptors_safe_for_group_key_output(query_mem_desc,
+                                                           first.colCount()) &&
+      query_mem_desc.getNumModeTargets() == 0 && can_publish_all_group_by_device_columns;
+  std::shared_ptr<CudaAllocator> retained_allocator;
+  CudaAllocator* compacted_buffer_allocator{transient_allocator_ptr};
+  if (retain_device_fragments || publish_device_columns) {
+    retained_allocator = std::make_shared<CudaAllocator>(
+        executor->getDataMgr(), destination_device_id, cuda_stream);
+    allocation_guard.track(retained_allocator);
+    if (retain_device_fragments) {
+      compacted_buffer_allocator = retained_allocator.get();
+    }
+  }
+  const auto compacted_buffer_bytes =
+      checked_size_multiply(compacted_row_count, row_size);
+  if (!compacted_buffer_bytes) {
+    return nullptr;
+  }
+  auto* compacted_buffer = compacted_buffer_allocator->alloc(*compacted_buffer_bytes);
+  auto* compacted_row_count_device =
+      reinterpret_cast<uint64_t*>(transient_allocator_ptr->alloc(sizeof(uint64_t)));
+  compact_baseline_hash_rows_on_device(destination_buffer,
+                                       compacted_buffer,
+                                       compacted_row_count_device,
+                                       *destination_entry_count,
+                                       row_size,
+                                       query_mem_desc.getEffectiveKeyWidth(),
+                                       destination_device_id,
+                                       cuda_stream);
+  uint64_t verified_row_count{0};
+  transient_allocator_ptr->copyFromDevice(&verified_row_count,
+                                          compacted_row_count_device,
+                                          sizeof(verified_row_count),
+                                          "GPU baseline hash reducer row count");
+  if (verified_row_count != compacted_row_count) {
+    LOG(ERROR) << "GPU baseline reduction produced an inconsistent row count: expected="
+               << compacted_row_count << " actual=" << verified_row_count;
+    return nullptr;
+  }
+
+  auto compact_query_mem_desc = query_mem_desc;
+  compact_query_mem_desc.setEntryCount(compacted_row_count);
+  const auto reduced_device_type = (retain_device_fragments || publish_device_columns)
+                                       ? ExecutorDeviceType::GPU
+                                       : ExecutorDeviceType::CPU;
+  const auto reduced_device_id =
+      (retain_device_fragments || publish_device_columns) ? destination_device_id : -1;
+  auto reduced_result =
+      std::make_shared<ResultSet>(first.getTargetInfos(),
+                                  std::vector<ColumnLazyFetchInfo>{},
+                                  std::vector<std::vector<const int8_t*>>{},
+                                  ColumnBufferLayouts{},
+                                  std::vector<std::vector<int64_t>>{},
+                                  std::vector<int64_t>{},
+                                  reduced_device_type,
+                                  reduced_device_id,
+                                  -1,
+                                  compact_query_mem_desc,
+                                  first.getRowSetMemOwner(),
+                                  first.getBlockSize(),
+                                  first.getGridSize());
+  if (retain_device_fragments || publish_device_columns) {
+    reduced_result->setCudaAllocator(retained_allocator);
+  }
+  auto* compact_storage = const_cast<ResultSetStorage*>(
+      reduced_result->allocateStorage(first.getTargetInitVals()));
+  reduced_result->setCachedRowCount(compacted_row_count);
+  reduced_result->markBaselineHashDenseForReduction(compacted_row_count);
+  if (retain_device_fragments) {
+    reduced_result->addDeviceRowwiseBufferFragment(
+        destination_device_id, compacted_buffer, compacted_row_count);
+    if (publish_group_by_device_columns_from_rowwise(*reduced_result,
+                                                     *retained_allocator,
+                                                     compacted_buffer,
+                                                     compacted_row_count,
+                                                     destination_device_id)) {
+      reduced_result->markDeviceColumnarFragmentsCoverLogicalRows();
+    }
+  } else if (publish_device_columns) {
+    const auto published =
+        publish_group_by_device_columns_from_rowwise(*reduced_result,
+                                                     *retained_allocator,
+                                                     compacted_buffer,
+                                                     compacted_row_count,
+                                                     destination_device_id);
+    if (!published) {
+      return nullptr;
+    }
+    reduced_result->markDeviceColumnarFragmentsCoverLogicalRows();
+  }
+  const bool deferred_cpu_materialization =
+      (retain_device_fragments || publish_device_columns) &&
+      reduced_result->canDeferDeviceColumnarCpuMaterialization();
+  if (deferred_cpu_materialization) {
+    reduced_result->markDeviceColumnarCpuStorageInvalid();
+  } else {
+    compacted_buffer_allocator->copyFromDevice(compact_storage->getUnderlyingBuffer(),
+                                               compacted_buffer,
+                                               *compacted_buffer_bytes,
+                                               "GPU baseline hash reduced rows");
+  }
+  allocation_guard.commit();
+  return reduced_result;
+#else
+  (void)executor_id;
+  (void)baseline_hash_results;
+  (void)device_type;
+  return nullptr;
+#endif
+}
+
+bool can_try_perfect_hash_gpu_reduction(const ResultSet& result_set) {
+#ifdef HAVE_CUDA
+  if (result_set.getDeviceType() != ExecutorDeviceType::GPU ||
+      result_set.getQueryMemDesc().didOutputColumnar() ||
+      !make_perfect_hash_gpu_reduction_slots(result_set)) {
+    return false;
+  }
+  const auto input_bytes = checked_size_multiply(
+      result_set.entryCount(), result_set.getQueryMemDesc().getRowSize());
+  if (!input_bytes || *input_bytes < kMinGpuPerfectHashReductionInputBytes) {
+    return false;
+  }
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> fragments;
+  return result_set.getDeviceRowwiseBufferFragments(fragments) &&
+         fragments.size() == size_t(1);
+#else
+  (void)result_set;
+  return false;
+#endif
+}
+
+constexpr size_t kMinGpuPerfectHashReductionTotalInputBytes = size_t{32} << 20;
+
+constexpr size_t kMinGpuPerfectHashTreeReductionTotalInputBytes = size_t{1} << 30;
+
+#ifdef HAVE_CUDA
+std::optional<ResultSet::DeviceRowwiseBufferFragment>
+try_reduce_perfect_hash_fragments_as_tree_on_gpu(
+    const size_t executor_id,
+    std::vector<ResultSet::DeviceRowwiseBufferFragment> source_fragments,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const PerfectHashGpuKeylessInfo& keyless_info,
+    const std::vector<DeviceBaselineHashReductionSlot>& slots) {
+  if (source_fragments.size() < size_t(4) ||
+      g_peer_copy_mode != CudaMgr_Namespace::kPeerCopyModeDirect) {
+    return std::nullopt;
+  }
+  const auto executor = Executor::getExecutor(executor_id);
+  if (!executor) {
+    return std::nullopt;
+  }
+  const auto entry_count = source_fragments.front().entry_count;
+  const auto row_size = query_mem_desc.getRowSize();
+  const auto buffer_bytes = checked_size_multiply(entry_count, row_size);
+  const auto total_input_bytes =
+      buffer_bytes ? checked_size_multiply(*buffer_bytes, source_fragments.size())
+                   : std::nullopt;
+  if (!buffer_bytes || *buffer_bytes > executor->maxGpuSlabSize() || !total_input_bytes ||
+      *total_input_bytes < kMinGpuPerfectHashTreeReductionTotalInputBytes) {
+    return std::nullopt;
+  }
+
+  std::unordered_set<int> source_devices;
+  for (const auto& source : source_fragments) {
+    if (!source.buffer || !source.owner || source.entry_count != entry_count ||
+        !source_devices.insert(source.device_id).second) {
+      return std::nullopt;
+    }
+  }
+  std::sort(
+      source_fragments.begin(),
+      source_fragments.end(),
+      [](const auto& lhs, const auto& rhs) { return lhs.device_id < rhs.device_id; });
+
+  auto cuda_mgr = executor->getDataMgr()->getCudaMgr();
+  CHECK(cuda_mgr);
+  auto reduce_pair = [&](const ResultSet::DeviceRowwiseBufferFragment& lhs,
+                         const ResultSet::DeviceRowwiseBufferFragment& rhs)
+      -> std::optional<ResultSet::DeviceRowwiseBufferFragment> {
+    const int destination_device_id = lhs.device_id;
+    if (!cuda_mgr->canAccessPeer(destination_device_id, rhs.device_id)) {
+      return std::nullopt;
+    }
+    const auto cuda_stream = executor->getCudaStream(destination_device_id);
+    auto transient_allocator = executor->getCudaAllocatorShared(destination_device_id);
+    auto retained_allocator = std::make_shared<CudaAllocator>(
+        executor->getDataMgr(), destination_device_id, cuda_stream);
+    CHECK(transient_allocator);
+    CudaAllocatorRollbackGuard transient_allocation_guard;
+    transient_allocation_guard.track(transient_allocator);
+    transient_allocator->waitForReadyEvent(lhs.ready_event);
+    transient_allocator->waitForReadyEvent(rhs.ready_event);
+
+    auto* destination_buffer = retained_allocator->alloc(*buffer_bytes);
+    cuda_mgr->copyDeviceToDevice(destination_buffer,
+                                 const_cast<int8_t*>(lhs.buffer),
+                                 *buffer_bytes,
+                                 destination_device_id,
+                                 lhs.device_id,
+                                 "GPU perfect hash tree seed rows",
+                                 cuda_stream);
+    auto* local_source_buffer = transient_allocator->alloc(*buffer_bytes);
+    cuda_mgr->copyDeviceToDevice(local_source_buffer,
+                                 const_cast<int8_t*>(rhs.buffer),
+                                 *buffer_bytes,
+                                 destination_device_id,
+                                 rhs.device_id,
+                                 "GPU perfect hash tree source rows",
+                                 cuda_stream);
+
+    DeviceBaselineHashReductionSlot* slots_device{nullptr};
+    if (!slots.empty()) {
+      const auto slots_bytes =
+          checked_size_multiply(slots.size(), sizeof(DeviceBaselineHashReductionSlot));
+      if (!slots_bytes) {
+        return std::nullopt;
+      }
+      slots_device = reinterpret_cast<DeviceBaselineHashReductionSlot*>(
+          transient_allocator->alloc(*slots_bytes));
+      transient_allocator->copyToDevice(slots_device,
+                                        slots.data(),
+                                        *slots_bytes,
+                                        "GPU perfect hash tree reducer slots");
+    }
+    auto* reduction_scratch =
+        reinterpret_cast<uint64_t*>(transient_allocator->alloc(sizeof(uint64_t)));
+    if (!reduce_perfect_hash_rows_on_device(destination_buffer,
+                                            local_source_buffer,
+                                            entry_count,
+                                            row_size,
+                                            query_mem_desc.getEffectiveKeyWidth(),
+                                            query_mem_desc.getGroupbyColCount(),
+                                            keyless_info.keyless,
+                                            keyless_info.key_slot_offset,
+                                            keyless_info.key_slot_width,
+                                            keyless_info.key_init_val,
+                                            slots_device,
+                                            slots.size(),
+                                            reinterpret_cast<int*>(reduction_scratch),
+                                            destination_device_id,
+                                            cuda_stream)) {
+      return std::nullopt;
+    }
+    auto ready_event = retained_allocator->recordReadyEvent();
+    return ResultSet::DeviceRowwiseBufferFragment{destination_buffer,
+                                                  entry_count,
+                                                  destination_device_id,
+                                                  std::move(retained_allocator),
+                                                  std::move(ready_event)};
+  };
+
+  // Keep each round distributed so independent peer copies overlap. New destination
+  // buffers leave every original input intact if a round cannot complete.
+  while (source_fragments.size() > size_t(1)) {
+    std::vector<std::future<std::optional<ResultSet::DeviceRowwiseBufferFragment>>>
+        futures;
+    futures.reserve(source_fragments.size() / size_t(2));
+    for (size_t source_idx = 0; source_idx + 1 < source_fragments.size();
+         source_idx += 2) {
+      futures.push_back(std::async(std::launch::async,
+                                   reduce_pair,
+                                   source_fragments[source_idx],
+                                   source_fragments[source_idx + 1]));
+    }
+    std::vector<ResultSet::DeviceRowwiseBufferFragment> next_round;
+    next_round.reserve((source_fragments.size() + size_t(1)) / size_t(2));
+    bool reduction_failed{false};
+    for (auto& future : futures) {
+      auto reduced = future.get();
+      if (!reduced) {
+        reduction_failed = true;
+      } else {
+        next_round.push_back(std::move(*reduced));
+      }
+    }
+    if (reduction_failed) {
+      return std::nullopt;
+    }
+    if (source_fragments.size() % size_t(2) != 0) {
+      next_round.push_back(std::move(source_fragments.back()));
+    }
+    source_fragments = std::move(next_round);
+  }
+  return std::move(source_fragments.front());
+}
+#endif
+
+ResultSetPtr try_reduce_perfect_hash_result_sets_on_gpu(
+    const size_t executor_id,
+    const std::vector<ResultSetPtr>& perfect_hash_results,
+    const ExecutorDeviceType device_type,
+    const ResultSetEntryFilter* deferred_entry_filter = nullptr) {
+#ifdef HAVE_CUDA
+  if (!g_enable_result_reduction_pipeline || device_type != ExecutorDeviceType::GPU ||
+      perfect_hash_results.empty()) {
+    return nullptr;
+  }
+  const auto executor = Executor::getExecutor(executor_id);
+  if (!executor) {
+    return nullptr;
+  }
+  const auto& first = *perfect_hash_results.front();
+  const auto first_input_bytes =
+      checked_size_multiply(first.entryCount(), first.getQueryMemDesc().getRowSize());
+  const auto total_input_bytes =
+      first_input_bytes
+          ? checked_size_multiply(*first_input_bytes, perfect_hash_results.size())
+          : std::nullopt;
+  if (first.getQueryMemDesc().didOutputColumnar() || !first_input_bytes ||
+      *first_input_bytes < kMinGpuPerfectHashReductionInputBytes || !total_input_bytes ||
+      *total_input_bytes < kMinGpuPerfectHashReductionTotalInputBytes) {
+    return nullptr;
+  }
+  auto slots = make_perfect_hash_gpu_reduction_slots(first);
+  if (!slots) {
+    return nullptr;
+  }
+  const auto keyless_info = make_perfect_hash_gpu_keyless_info(first);
+  if (!keyless_info) {
+    return nullptr;
+  }
+  std::optional<std::vector<DeviceResultSetEntryComparison>> device_entry_filter;
+  if (keyless_info->keyless && deferred_entry_filter && !deferred_entry_filter->empty()) {
+    device_entry_filter = make_device_entry_filter(
+        *deferred_entry_filter, first.getQueryMemDesc(), first.getTargetInfos());
+  }
+
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> source_fragments;
+  source_fragments.reserve(perfect_hash_results.size());
+  for (const auto& result_set : perfect_hash_results) {
+    CHECK(result_set);
+    if (result_set->getDeviceType() != ExecutorDeviceType::GPU ||
+        result_set->getQueryMemDesc().reductionKey() !=
+            first.getQueryMemDesc().reductionKey()) {
+      return nullptr;
+    }
+    std::vector<ResultSet::DeviceRowwiseBufferFragment> fragments;
+    if (!result_set->getDeviceRowwiseBufferFragments(fragments) ||
+        fragments.size() != size_t(1) ||
+        fragments.front().entry_count != first.entryCount()) {
+      return nullptr;
+    }
+    source_fragments.push_back(fragments.front());
+  }
+  if (source_fragments.empty() || first.entryCount() == 0) {
+    return nullptr;
+  }
+
+  if (auto tree_reduced =
+          try_reduce_perfect_hash_fragments_as_tree_on_gpu(executor_id,
+                                                           source_fragments,
+                                                           first.getQueryMemDesc(),
+                                                           *keyless_info,
+                                                           *slots)) {
+    source_fragments.clear();
+    source_fragments.push_back(std::move(*tree_reduced));
+  }
+
+  const int destination_device_id = source_fragments.front().device_id;
+  auto retained_allocator =
+      std::make_shared<CudaAllocator>(executor->getDataMgr(),
+                                      destination_device_id,
+                                      executor->getCudaStream(destination_device_id));
+  auto transient_allocator = executor->getCudaAllocatorShared(destination_device_id);
+  CHECK(retained_allocator);
+  CHECK(transient_allocator);
+  CudaAllocatorRollbackGuard allocation_guard;
+  allocation_guard.track(retained_allocator);
+  allocation_guard.track(transient_allocator);
+  auto* transient_allocator_ptr = transient_allocator.get();
+  auto cuda_mgr = executor->getDataMgr()->getCudaMgr();
+  CHECK(cuda_mgr);
+  const auto cuda_stream = executor->getCudaStream(destination_device_id);
+
+  const auto& query_mem_desc = first.getQueryMemDesc();
+  const auto entry_count = first.entryCount();
+  const auto row_size = query_mem_desc.getRowSize();
+  const auto destination_bytes = checked_size_multiply(entry_count, row_size);
+  if (!destination_bytes || *destination_bytes > executor->maxGpuSlabSize()) {
+    return nullptr;
+  }
+  auto* destination_buffer = retained_allocator->alloc(*destination_bytes);
+
+  auto copy_source_to_destination =
+      [&](const ResultSet::DeviceRowwiseBufferFragment& source,
+          int8_t* destination,
+          const char* tag) {
+        transient_allocator->waitForReadyEvent(source.ready_event);
+        auto* mutable_source = const_cast<int8_t*>(source.buffer);
+        cuda_mgr->copyDeviceToDevice(destination,
+                                     mutable_source,
+                                     *destination_bytes,
+                                     destination_device_id,
+                                     source.device_id,
+                                     tag,
+                                     cuda_stream);
+      };
+
+  copy_source_to_destination(
+      source_fragments.front(), destination_buffer, "GPU perfect hash reducer seed rows");
+
+  DeviceBaselineHashReductionSlot* slots_device{nullptr};
+  if (!slots->empty()) {
+    const auto slots_bytes =
+        checked_size_multiply(slots->size(), sizeof(DeviceBaselineHashReductionSlot));
+    if (!slots_bytes) {
+      return nullptr;
+    }
+    slots_device = reinterpret_cast<DeviceBaselineHashReductionSlot*>(
+        transient_allocator_ptr->alloc(*slots_bytes));
+    transient_allocator_ptr->copyToDevice(
+        slots_device, slots->data(), *slots_bytes, "GPU perfect hash reducer slots");
+  }
+  auto* reduction_scratch =
+      reinterpret_cast<uint64_t*>(transient_allocator_ptr->alloc(sizeof(uint64_t)));
+
+  bool reduction_success{true};
+  int8_t* local_source_buffer{nullptr};
+  for (size_t source_idx = 1; source_idx < source_fragments.size(); ++source_idx) {
+    const auto& source = source_fragments[source_idx];
+    transient_allocator->waitForReadyEvent(source.ready_event);
+    auto* source_buffer = source.buffer;
+    if (source.device_id != destination_device_id) {
+      if (!local_source_buffer) {
+        local_source_buffer = transient_allocator_ptr->alloc(*destination_bytes);
+      }
+      cuda_mgr->copyDeviceToDevice(local_source_buffer,
+                                   const_cast<int8_t*>(source.buffer),
+                                   *destination_bytes,
+                                   destination_device_id,
+                                   source.device_id,
+                                   "GPU perfect hash reducer source rows",
+                                   cuda_stream);
+      source_buffer = local_source_buffer;
+    }
+    reduction_success &=
+        reduce_perfect_hash_rows_on_device(destination_buffer,
+                                           source_buffer,
+                                           entry_count,
+                                           row_size,
+                                           query_mem_desc.getEffectiveKeyWidth(),
+                                           query_mem_desc.getGroupbyColCount(),
+                                           keyless_info->keyless,
+                                           keyless_info->key_slot_offset,
+                                           keyless_info->key_slot_width,
+                                           keyless_info->key_init_val,
+                                           slots_device,
+                                           slots->size(),
+                                           reinterpret_cast<int*>(reduction_scratch),
+                                           destination_device_id,
+                                           cuda_stream);
+    if (!reduction_success) {
+      return nullptr;
+    }
+  }
+
+  auto compacted_row_count =
+      keyless_info->keyless
+          ? count_non_empty_keyless_hash_rows_on_device(destination_buffer,
+                                                        entry_count,
+                                                        row_size,
+                                                        keyless_info->key_slot_offset,
+                                                        keyless_info->key_slot_width,
+                                                        keyless_info->key_init_val,
+                                                        reduction_scratch,
+                                                        destination_device_id,
+                                                        cuda_stream)
+          : count_non_empty_baseline_hash_rows_on_device(
+                destination_buffer,
+                entry_count,
+                row_size,
+                query_mem_desc.getEffectiveKeyWidth(),
+                reduction_scratch,
+                destination_device_id,
+                cuda_stream);
+  if (compacted_row_count > entry_count) {
+    return nullptr;
+  }
+
+  DeviceResultSetEntryComparison* device_entry_filter_ptr{nullptr};
+  if (device_entry_filter) {
+    const auto filter_bytes = checked_size_multiply(
+        device_entry_filter->size(), sizeof(DeviceResultSetEntryComparison));
+    if (!filter_bytes) {
+      return nullptr;
+    }
+    device_entry_filter_ptr = reinterpret_cast<DeviceResultSetEntryComparison*>(
+        transient_allocator_ptr->alloc(*filter_bytes));
+    transient_allocator_ptr->copyToDevice(device_entry_filter_ptr,
+                                          device_entry_filter->data(),
+                                          *filter_bytes,
+                                          "GPU perfect hash post-reduction filter");
+  }
+
+  int8_t* compacted_buffer{nullptr};
+  uint64_t* compacted_entry_indices{nullptr};
+  const bool needs_compaction =
+      compacted_row_count < entry_count || device_entry_filter_ptr;
+  if (needs_compaction && compacted_row_count > 0) {
+    const auto compacted_buffer_bytes =
+        checked_size_multiply(compacted_row_count, row_size);
+    if (!compacted_buffer_bytes) {
+      return nullptr;
+    }
+    compacted_buffer = retained_allocator->alloc(*compacted_buffer_bytes);
+    if (keyless_info->keyless) {
+      const auto entry_indices_bytes =
+          checked_size_multiply(compacted_row_count, sizeof(uint64_t));
+      if (!entry_indices_bytes) {
+        return nullptr;
+      }
+      compacted_entry_indices =
+          reinterpret_cast<uint64_t*>(retained_allocator->alloc(*entry_indices_bytes));
+    }
+    auto* compacted_row_count_device =
+        reinterpret_cast<uint64_t*>(transient_allocator_ptr->alloc(sizeof(uint64_t)));
+    if (keyless_info->keyless) {
+      if (device_entry_filter_ptr) {
+        compact_matching_keyless_hash_rows_on_device(destination_buffer,
+                                                     compacted_buffer,
+                                                     compacted_row_count_device,
+                                                     compacted_entry_indices,
+                                                     entry_count,
+                                                     row_size,
+                                                     keyless_info->key_slot_offset,
+                                                     keyless_info->key_slot_width,
+                                                     keyless_info->key_init_val,
+                                                     device_entry_filter_ptr,
+                                                     device_entry_filter->size(),
+                                                     destination_device_id,
+                                                     cuda_stream);
+      } else {
+        compact_keyless_hash_rows_on_device(destination_buffer,
+                                            compacted_buffer,
+                                            compacted_row_count_device,
+                                            compacted_entry_indices,
+                                            entry_count,
+                                            row_size,
+                                            keyless_info->key_slot_offset,
+                                            keyless_info->key_slot_width,
+                                            keyless_info->key_init_val,
+                                            destination_device_id,
+                                            cuda_stream);
+      }
+    } else {
+      compact_baseline_hash_rows_on_device(destination_buffer,
+                                           compacted_buffer,
+                                           compacted_row_count_device,
+                                           entry_count,
+                                           row_size,
+                                           query_mem_desc.getEffectiveKeyWidth(),
+                                           destination_device_id,
+                                           cuda_stream);
+    }
+    uint64_t verified_row_count{0};
+    transient_allocator_ptr->copyFromDevice(&verified_row_count,
+                                            compacted_row_count_device,
+                                            sizeof(verified_row_count),
+                                            "GPU perfect hash reducer row count");
+    const auto expected_max_row_count = compacted_row_count;
+    if (verified_row_count > expected_max_row_count ||
+        (!device_entry_filter_ptr && verified_row_count != expected_max_row_count)) {
+      LOG(ERROR) << "GPU perfect hash reduction produced an inconsistent row count: "
+                    "expected_max="
+                 << expected_max_row_count << " actual=" << verified_row_count;
+      return nullptr;
+    }
+    compacted_row_count = static_cast<size_t>(verified_row_count);
+  }
+
+  auto reduced_result =
+      std::make_shared<ResultSet>(first.getTargetInfos(),
+                                  std::vector<ColumnLazyFetchInfo>{},
+                                  std::vector<std::vector<const int8_t*>>{},
+                                  ColumnBufferLayouts{},
+                                  std::vector<std::vector<int64_t>>{},
+                                  std::vector<int64_t>{},
+                                  ExecutorDeviceType::GPU,
+                                  destination_device_id,
+                                  -1,
+                                  query_mem_desc,
+                                  first.getRowSetMemOwner(),
+                                  first.getBlockSize(),
+                                  first.getGridSize());
+  reduced_result->setCudaAllocator(retained_allocator);
+  auto* reduced_storage = const_cast<ResultSetStorage*>(
+      reduced_result->allocateStorage(first.getTargetInitVals()));
+  reduced_result->setCachedRowCount(compacted_row_count);
+  const bool retain_device_fragments = compacted_row_count < entry_count;
+  if (retain_device_fragments && compacted_row_count > 0) {
+    if (publish_group_by_device_columns_from_rowwise(*reduced_result,
+                                                     *retained_allocator,
+                                                     compacted_buffer,
+                                                     compacted_row_count,
+                                                     destination_device_id,
+                                                     compacted_entry_indices)) {
+      reduced_result->markDeviceColumnarFragmentsCoverLogicalRows();
+      if (reduced_result->canDeferDeviceColumnarCpuMaterialization()) {
+        reduced_result->markDeviceColumnarFragmentsFormDenseCpuRows();
+      }
+    }
+  }
+  if (retain_device_fragments) {
+    reduced_result->addDeviceRowwiseBufferFragment(
+        destination_device_id, destination_buffer, entry_count);
+  }
+  if (device_entry_filter_ptr) {
+    reduced_result->markEntryFilterApplied();
+  }
+  if (retain_device_fragments &&
+      reduced_result->canDeferDeviceColumnarCpuMaterialization()) {
+    reduced_result->markDeviceColumnarCpuStorageInvalid();
+  } else {
+    retained_allocator->copyFromDevice(reduced_storage->getUnderlyingBuffer(),
+                                       destination_buffer,
+                                       *destination_bytes,
+                                       "GPU perfect hash reduced rows");
+    reduced_result->markDeviceColumnarCpuStorageValid();
+  }
+  allocation_guard.commit();
+  return reduced_result;
+#else
+  (void)executor_id;
+  (void)perfect_hash_results;
+  (void)device_type;
+  (void)deferred_entry_filter;
+  return nullptr;
+#endif
+}
+
+struct BaselineGroupByAppendPlan {
+  enum class Kind { CannotAppend, AppendDisjoint, AppendWithBoundaryReduction };
+
+  Kind kind{Kind::CannotAppend};
+  std::vector<int64_t> boundary_keys;
+};
+
+class AsyncResultSetReducer {
+ public:
+  AsyncResultSetReducer(
+      const size_t executor_id,
+      const bool baseline_hash_reduction,
+      const ExecutorDeviceType device_type,
+      BaselineGroupByAppendPlan baseline_hash_append_plan = {},
+      std::optional<ResultSetEntryFilter> deferred_sparse_baseline_filter = std::nullopt,
+      const bool defer_sparse_baseline_append_compaction = false)
+      : executor_id_(executor_id)
+      , baseline_hash_reduction_(baseline_hash_reduction)
+      , device_type_(device_type)
+      , baseline_hash_append_plan_(std::move(baseline_hash_append_plan))
+      , deferred_sparse_baseline_filter_(std::move(deferred_sparse_baseline_filter))
+      , defer_sparse_baseline_append_compaction_(defer_sparse_baseline_append_compaction)
+      , parent_thread_local_ids_(logger::thread_local_ids()) {
+    worker_ = std::thread([this] { run(); });
+  }
+
+  ~AsyncResultSetReducer() { cancel(); }
+
+  void add(ResultSetPtr&& result_set, std::vector<size_t>&& fragment_ids) {
+    CHECK(result_set);
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      if (done_ || cancelled_) {
+        return;
+      }
+      queue_.push(Item{std::move(result_set), std::move(fragment_ids)});
+    }
+    cv_.notify_one();
+  }
+
+  ResultSetPtr finish(int64_t* compilation_queue_time) {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      done_ = true;
+    }
+    cv_.notify_one();
+    join();
+    if (exception_) {
+      std::rethrow_exception(exception_);
+    }
+    if (compilation_queue_time) {
+      *compilation_queue_time += compilation_queue_time_;
+    }
+    if (reduced_result_) {
+      if (!reduced_result_->isBaselineHashDenseForReduction() &&
+          !reduced_result_->isEntryFilterApplied() && !perfect_hash_gpu_reduced_) {
+        reduced_result_->invalidateCachedRowCount();
+      }
+    }
+    return std::move(reduced_result_);
+  }
+
+  void cancel() noexcept {
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      cancelled_ = true;
+      done_ = true;
+      std::queue<Item> empty;
+      queue_.swap(empty);
+    }
+    cv_.notify_one();
+    join();
+  }
+
+ private:
+  struct Item {
+    ResultSetPtr result_set;
+    std::vector<size_t> fragment_ids;
+  };
+
+  void join() noexcept {
+    if (worker_.joinable()) {
+      worker_.join();
+    }
+  }
+
+  void run() noexcept {
+    try {
+      logger::LocalIdsScopeGuard lisg = parent_thread_local_ids_.setNewThreadId();
+      while (true) {
+        auto item = nextItem();
+        if (!item.result_set) {
+          break;
+        }
+        reduce(std::move(item));
+      }
+      if (isCancelled()) {
+        return;
+      }
+      if (baseline_hash_reduction_) {
+        finishBaselineHashReduction();
+      } else if (collect_perfect_hash_reduction_) {
+        finishPerfectHashReduction();
+      }
+    } catch (...) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      exception_ = std::current_exception();
+      cancelled_ = true;
+      done_ = true;
+      std::queue<Item> empty;
+      queue_.swap(empty);
+    }
+  }
+
+  Item nextItem() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait(lock, [this] { return cancelled_ || done_ || !queue_.empty(); });
+    if (cancelled_) {
+      return {};
+    }
+    if (queue_.empty()) {
+      CHECK(done_);
+      return {};
+    }
+    auto item = std::move(queue_.front());
+    queue_.pop();
+    return item;
+  }
+
+  bool isCancelled() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return cancelled_;
+  }
+
+  void reduce(Item&& item) {
+    CHECK(item.result_set);
+    if (baseline_hash_reduction_) {
+      collectBaselineHash(std::move(item.result_set), std::move(item.fragment_ids));
+      return;
+    }
+    if (!perfect_hash_reduction_decided_ && !reduced_result_) {
+      perfect_hash_reduction_decided_ = true;
+      collect_perfect_hash_reduction_ =
+          can_try_perfect_hash_gpu_reduction(*item.result_set);
+    }
+    if (collect_perfect_hash_reduction_) {
+      collectPerfectHash(std::move(item.result_set));
+      return;
+    }
+    if (!reduced_result_) {
+      reduced_result_ = std::move(item.result_set);
+      return;
+    }
+    if (!reduction_code_) {
+      auto reduction_code = get_reduction_code_for_result_set(
+          executor_id_, *reduced_result_, &compilation_queue_time_);
+      reduction_code_ = std::make_unique<ReductionCode>(std::move(reduction_code));
+    }
+    reduced_result_->getStorage()->reduce(
+        *item.result_set->getStorage(), {}, *reduction_code_, executor_id_);
+    reduced_result_->clearDeviceColumnarBufferFragments();
+    reduced_result_->clearDeviceRowwiseBufferFragments();
+    reduced_result_->markDeviceColumnarCpuStorageValid();
+  }
+
+  void collectBaselineHash(ResultSetPtr&& incoming_result,
+                           std::vector<size_t>&& fragment_ids) {
+    if (isBaselineAppendPipeline()) {
+      collectBaselineHashAppend(std::move(incoming_result), std::move(fragment_ids));
+      return;
+    }
+    baseline_hash_results_.push_back(
+        compactBaselineHashForReduction(std::move(incoming_result)));
+  }
+
+  void collectPerfectHash(ResultSetPtr&& incoming_result) {
+    perfect_hash_results_.push_back(std::move(incoming_result));
+  }
+
+  void finishBaselineHashReduction() {
+    if (isBaselineAppendPipeline()) {
+      finishBaselineHashAppend();
+      return;
+    }
+    if (baseline_hash_results_.empty()) {
+      return;
+    }
+    if (baseline_hash_results_.size() == size_t(1)) {
+      reduced_result_ = std::move(baseline_hash_results_.front());
+      return;
+    }
+
+    std::vector<ResultSet*> result_sets;
+    result_sets.reserve(baseline_hash_results_.size());
+    for (const auto& result_set : baseline_hash_results_) {
+      CHECK(result_set);
+      result_sets.push_back(result_set.get());
+    }
+
+    if (auto gpu_reduced = try_gpu_reduction_with_oom_fallback(
+            "partitioned baseline GPU reduction", [&] {
+              return try_reduce_baseline_hash_result_sets_partitioned_on_gpu(
+                  executor_id_, baseline_hash_results_, device_type_);
+            })) {
+      reduced_result_ = std::move(gpu_reduced);
+      return;
+    }
+
+    if (auto gpu_reduced =
+            try_gpu_reduction_with_oom_fallback("baseline GPU reduction", [&] {
+              return try_reduce_baseline_hash_result_sets_on_gpu(
+                  executor_id_, baseline_hash_results_, device_type_);
+            })) {
+      reduced_result_ = std::move(gpu_reduced);
+      return;
+    }
+
+    ResultSetManager rs_manager;
+    rs_manager.reduce(result_sets, executor_id_);
+    auto reduced_result = rs_manager.getOwnResultSet();
+    CHECK(reduced_result);
+    reduced_result_ = std::move(reduced_result);
+    reduced_result_->invalidateCachedRowCount();
+  }
+
+  void finishPerfectHashReduction() {
+    if (perfect_hash_results_.empty()) {
+      return;
+    }
+
+    if (auto gpu_reduced =
+            try_gpu_reduction_with_oom_fallback("perfect-hash GPU reduction", [&] {
+              return try_reduce_perfect_hash_result_sets_on_gpu(
+                  executor_id_,
+                  perfect_hash_results_,
+                  device_type_,
+                  deferred_sparse_baseline_filter_ ? &*deferred_sparse_baseline_filter_
+                                                   : nullptr);
+            })) {
+      reduced_result_ = std::move(gpu_reduced);
+      perfect_hash_gpu_reduced_ = true;
+      return;
+    }
+
+    if (perfect_hash_results_.size() == size_t(1)) {
+      reduced_result_ = std::move(perfect_hash_results_.front());
+      return;
+    }
+
+    std::vector<ResultSet*> result_sets;
+    result_sets.reserve(perfect_hash_results_.size());
+    for (const auto& result_set : perfect_hash_results_) {
+      CHECK(result_set);
+      result_sets.push_back(result_set.get());
+    }
+
+    ResultSetManager rs_manager;
+    auto* reduced_result = rs_manager.reduce(result_sets, executor_id_);
+    CHECK(reduced_result);
+    for (auto& result_set : perfect_hash_results_) {
+      if (result_set.get() == reduced_result) {
+        reduced_result_ = std::move(result_set);
+        break;
+      }
+    }
+    CHECK(reduced_result_);
+    reduced_result_->invalidateCachedRowCount();
+  }
+
+  bool isBaselineAppendPipeline() const {
+    return baseline_hash_reduction_ && baseline_hash_append_plan_.kind !=
+                                           BaselineGroupByAppendPlan::Kind::CannotAppend;
+  }
+
+  void collectBaselineHashAppend(ResultSetPtr&& incoming_result, std::vector<size_t>&&) {
+    CHECK(incoming_result);
+    const bool entry_filter_applied_before_copy =
+        incoming_result->wasSparseBaselineEntryFilterAppliedBeforeCopy();
+    bool retain_device_rowwise_for_post_filter{false};
+#ifdef HAVE_CUDA
+    std::optional<std::vector<DeviceResultSetEntryComparison>> device_entry_filter;
+    if (!entry_filter_applied_before_copy && defer_sparse_baseline_append_compaction_ &&
+        deferred_sparse_baseline_filter_ && !deferred_sparse_baseline_filter_->empty()) {
+      device_entry_filter = make_device_entry_filter(*deferred_sparse_baseline_filter_,
+                                                     incoming_result->getQueryMemDesc(),
+                                                     incoming_result->getTargetInfos());
+      if (device_entry_filter && !can_filter_sparse_baseline_hash_on_gpu(
+                                     *incoming_result, *device_entry_filter)) {
+        device_entry_filter.reset();
+      }
+    }
+    retain_device_rowwise_for_post_filter = device_entry_filter.has_value();
+#endif
+
+    if (baseline_hash_append_plan_.kind ==
+        BaselineGroupByAppendPlan::Kind::AppendWithBoundaryReduction) {
+      auto boundary_rows = incoming_result->extractAndClearBaselineHashEntries(
+          baseline_hash_append_plan_.boundary_keys,
+          retain_device_rowwise_for_post_filter);
+      if (boundary_rows) {
+        boundary_result_owners_.push_back(std::move(boundary_rows));
+      }
+    }
+
+    bool device_filter_applied{false};
+#ifdef HAVE_CUDA
+    if (device_entry_filter) {
+      try {
+        auto filtered_result = try_filter_sparse_baseline_hash_on_gpu(
+            executor_id_, *incoming_result, *device_entry_filter);
+        if (filtered_result) {
+          device_filter_applied = true;
+          if (!*filtered_result) {
+            return;
+          }
+          incoming_result = std::move(*filtered_result);
+        }
+      } catch (const OutOfMemory& error) {
+        VLOG(1) << "GPU baseline hash post-boundary filter unavailable: " << error.what();
+      }
+    }
+#endif
+
+    if (defer_sparse_baseline_append_compaction_) {
+      if (!entry_filter_applied_before_copy && !device_filter_applied &&
+          deferred_sparse_baseline_filter_) {
+        if (auto compacted = incoming_result->compactBaselineHashForReduction(
+                0, &*deferred_sparse_baseline_filter_)) {
+          incoming_result = std::move(compacted);
+        }
+      }
+    } else {
+      incoming_result = compactBaselineHashForReduction(std::move(incoming_result));
+    }
+
+    const auto updated_append_row_count =
+        checked_size_add(append_row_count_, incoming_result->rowCount());
+    if (!updated_append_row_count) {
+      throw std::overflow_error("Pipelined result row count overflow");
+    }
+    append_row_count_ = *updated_append_row_count;
+    if (!reduced_result_) {
+      reduced_result_ = std::move(incoming_result);
+    } else {
+      reduced_result_->append(*incoming_result);
+    }
+  }
+
+  ResultSetPtr finishBoundaryRows() {
+    if (boundary_result_owners_.empty()) {
+      return nullptr;
+    }
+    if (boundary_result_owners_.size() == size_t(1)) {
+      return std::move(boundary_result_owners_.front());
+    }
+
+    std::vector<ResultSet*> boundary_result_sets;
+    boundary_result_sets.reserve(boundary_result_owners_.size());
+    for (const auto& boundary_rows : boundary_result_owners_) {
+      CHECK(boundary_rows);
+      boundary_result_sets.push_back(boundary_rows.get());
+    }
+
+    ResultSetManager rs_manager;
+    rs_manager.reduce(boundary_result_sets, executor_id_);
+    auto reduced_results = rs_manager.getOwnResultSet();
+    CHECK(reduced_results);
+    if (auto compacted_results = reduced_results->compactBaselineHashForReduction(0)) {
+      reduced_results = std::move(compacted_results);
+    }
+    reduced_results->clearDeviceColumnarBufferFragments();
+    reduced_results->clearDeviceRowwiseBufferFragments();
+    reduced_results->markDeviceColumnarCpuStorageValid();
+    reduced_results->invalidateCachedRowCount();
+    return reduced_results;
+  }
+
+  void finishBaselineHashAppend() {
+    auto boundary_rows = finishBoundaryRows();
+    if (boundary_rows) {
+      const auto updated_append_row_count =
+          checked_size_add(append_row_count_, boundary_rows->rowCount());
+      if (!updated_append_row_count) {
+        throw std::overflow_error("Pipelined boundary row count overflow");
+      }
+      append_row_count_ = *updated_append_row_count;
+      if (reduced_result_) {
+        if (!reduced_result_->appendDeviceOnlyColumnarFragmentsFromCpuBaselineHashResult(
+                *boundary_rows)) {
+          reduced_result_->append(*boundary_rows);
+        }
+      } else {
+        reduced_result_ = std::move(boundary_rows);
+      }
+    }
+    if (reduced_result_) {
+      reduced_result_->invalidateCachedRowCount();
+      reduced_result_->setCachedRowCount(append_row_count_);
+    }
+  }
+
+  ResultSetPtr compactBaselineHashForReduction(ResultSetPtr&& result_set) {
+    CHECK(result_set);
+    constexpr size_t min_async_baseline_compaction_entry_count = 1000000;
+    auto compacted = result_set->compactBaselineHashForReduction(
+        min_async_baseline_compaction_entry_count);
+    if (!compacted) {
+      return std::move(result_set);
+    }
+    return compacted;
+  }
+
+  const size_t executor_id_;
+  const bool baseline_hash_reduction_;
+  const ExecutorDeviceType device_type_;
+  BaselineGroupByAppendPlan baseline_hash_append_plan_;
+  std::optional<ResultSetEntryFilter> deferred_sparse_baseline_filter_;
+  const bool defer_sparse_baseline_append_compaction_;
+  const logger::ThreadLocalIds parent_thread_local_ids_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  std::queue<Item> queue_;
+  bool done_{false};
+  bool cancelled_{false};
+  std::thread worker_;
+  std::exception_ptr exception_;
+  ResultSetPtr reduced_result_;
+  std::vector<ResultSetPtr> baseline_hash_results_;
+  std::vector<ResultSetPtr> boundary_result_owners_;
+  std::vector<ResultSetPtr> perfect_hash_results_;
+  std::unique_ptr<ReductionCode> reduction_code_;
+  int64_t compilation_queue_time_{0};
+  size_t append_row_count_{0};
+  bool perfect_hash_reduction_decided_{false};
+  bool collect_perfect_hash_reduction_{false};
+  bool perfect_hash_gpu_reduced_{false};
+};
+
+bool can_use_result_reduction_pipeline(const RelAlgExecutionUnit& ra_exe_unit,
+                                       const QueryMemoryDescriptor& query_mem_desc,
+                                       const QueryCompilationDescriptor& query_comp_desc,
+                                       const ExecutionOptions& eo,
+                                       const bool is_agg,
+                                       const bool allow_baseline_hash_rehash_pipeline,
+                                       const bool has_render_info) {
+  if (!g_enable_result_reduction_pipeline) {
+    return false;
+  }
+  if (has_render_info) {
+    return false;
+  }
+  if (!is_agg) {
+    return false;
+  }
+  if (query_comp_desc.getDeviceType() != ExecutorDeviceType::GPU &&
+      query_comp_desc.getDeviceType() != ExecutorDeviceType::CPU) {
+    return false;
+  }
+  if (eo.estimate_output_cardinality || ra_exe_unit.estimator) {
+    return false;
+  }
+  if (query_mem_desc.threadsCanReuseGroupByBuffers()) {
+    return false;
+  }
+  if (query_mem_desc.getQueryDescriptionType() ==
+      QueryDescriptionType::GroupByBaselineHash) {
+    if (!allow_baseline_hash_rehash_pipeline) {
+      return false;
+    }
+  }
+  if (query_mem_desc.hasKeylessHash()) {
+    for (const auto target_expr : ra_exe_unit.target_exprs) {
+      if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) &&
+          target_expr->get_type_info().is_dict_encoded_string()) {
+        return false;
+      }
+    }
+  }
+  if (query_mem_desc.hasVarlenOutput()) {
+    return false;
+  }
+  if (use_speculative_top_n(ra_exe_unit, query_mem_desc) ||
+      GroupByAndAggregate::shard_count_for_top_groups(ra_exe_unit)) {
+    return false;
+  }
+  return true;
+}
+
+bool uses_integer_chunk_metadata(const SQLTypeInfo& ti) {
+  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  switch (type) {
+    case kBOOLEAN:
+    case kTINYINT:
+    case kSMALLINT:
+    case kINT:
+    case kBIGINT:
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return true;
+    case kCHAR:
+    case kVARCHAR:
+    case kTEXT:
+      return ti.get_compression() == kENCODING_DICT;
+    default:
+      return false;
+  }
+}
+
+struct FragmentGroupKeyRange {
+  int64_t min;
+  int64_t max;
+  size_t result_idx;
+  size_t fragment_idx;
+};
+
+std::optional<std::pair<int64_t, int64_t>> get_int_metadata_range(
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const int column_id) {
+  const auto& metadata_map = fragment.getChunkMetadataMap();
+  const auto metadata_it = metadata_map.find(column_id);
+  if (metadata_it == metadata_map.end() || !metadata_it->second) {
+    return std::nullopt;
+  }
+  const auto& metadata = *metadata_it->second;
+  if (metadata.isPlaceholder() || metadata.chunkStats.has_nulls ||
+      !uses_integer_chunk_metadata(metadata.sqlType)) {
+    return std::nullopt;
+  }
+  const auto min = extract_int_type_from_datum(metadata.chunkStats.min, metadata.sqlType);
+  const auto max = extract_int_type_from_datum(metadata.chunkStats.max, metadata.sqlType);
+  if (min > max) {
+    return std::nullopt;
+  }
+  return std::make_pair(min, max);
+}
+
+bool ranges_overlap(const FragmentGroupKeyRange& lhs, const FragmentGroupKeyRange& rhs) {
+  return lhs.min <= rhs.max && rhs.min <= lhs.max;
+}
+
+const Analyzer::ColumnVar* get_single_outer_groupby_col(
+    const RelAlgExecutionUnit& ra_exe_unit) {
+  if (ra_exe_unit.input_descs.empty() || ra_exe_unit.groupby_exprs.size() != size_t(1)) {
+    return nullptr;
+  }
+  const auto groupby_col =
+      dynamic_cast<const Analyzer::ColumnVar*>(ra_exe_unit.groupby_exprs.front().get());
+  if (!groupby_col || groupby_col->getColumnKey().table_id <= 0) {
+    return nullptr;
+  }
+  if (groupby_col->getTableKey() != ra_exe_unit.input_descs.front().getTableKey()) {
+    return nullptr;
+  }
+  return groupby_col;
+}
+
+BaselineGroupByAppendPlan get_baseline_groupby_append_plan(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& query_infos,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const std::vector<std::vector<size_t>>& result_fragment_ids) {
+  if (!g_enable_result_reduction_pipeline || result_fragment_ids.size() <= size_t(1) ||
+      query_mem_desc.getQueryDescriptionType() !=
+          QueryDescriptionType::GroupByBaselineHash) {
+    return {};
+  }
+
+  const auto groupby_col = get_single_outer_groupby_col(ra_exe_unit);
+  if (!groupby_col) {
+    return {};
+  }
+  const auto& groupby_column_key = groupby_col->getColumnKey();
+  const auto outer_table_key = ra_exe_unit.input_descs.front().getTableKey();
+  const auto query_info_it =
+      std::find_if(query_infos.begin(), query_infos.end(), [&](const auto& query_info) {
+        return query_info.table_key == outer_table_key;
+      });
+  if (query_info_it == query_infos.end()) {
+    return {};
+  }
+  std::vector<FragmentGroupKeyRange> ranges;
+  for (size_t result_idx = 0; result_idx < result_fragment_ids.size(); ++result_idx) {
+    const auto& fragment_ids = result_fragment_ids[result_idx];
+    if (fragment_ids.empty()) {
+      return {};
+    }
+    for (const auto fragment_idx : fragment_ids) {
+      if (fragment_idx >= query_info_it->info.fragments.size()) {
+        return {};
+      }
+      const auto range = get_int_metadata_range(
+          query_info_it->info.fragments[fragment_idx], groupby_column_key.column_id);
+      if (!range) {
+        return {};
+      }
+      ranges.push_back(
+          FragmentGroupKeyRange{range->first, range->second, result_idx, fragment_idx});
+    }
+  }
+
+  std::sort(ranges.begin(), ranges.end(), [](const auto& lhs, const auto& rhs) {
+    return std::tie(lhs.min, lhs.max, lhs.result_idx, lhs.fragment_idx) <
+           std::tie(rhs.min, rhs.max, rhs.result_idx, rhs.fragment_idx);
+  });
+  std::set<int64_t> boundary_keys;
+  for (size_t i = 0; i < ranges.size(); ++i) {
+    for (size_t j = i + 1; j < ranges.size() && ranges[j].min <= ranges[i].max; ++j) {
+      if (ranges[i].result_idx != ranges[j].result_idx &&
+          ranges_overlap(ranges[i], ranges[j])) {
+        const auto overlap_min = std::max(ranges[i].min, ranges[j].min);
+        const auto overlap_max = std::min(ranges[i].max, ranges[j].max);
+        if (overlap_min == overlap_max) {
+          boundary_keys.insert(overlap_min);
+          continue;
+        }
+        return {};
+      }
+    }
+  }
+  if (boundary_keys.empty()) {
+    return {BaselineGroupByAppendPlan::Kind::AppendDisjoint, {}};
+  }
+  return {BaselineGroupByAppendPlan::Kind::AppendWithBoundaryReduction,
+          std::vector<int64_t>(boundary_keys.begin(), boundary_keys.end())};
+}
+
+std::vector<std::vector<size_t>> get_result_fragment_ids(
+    const std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device) {
+  std::vector<std::vector<size_t>> result_fragment_ids;
+  result_fragment_ids.reserve(results_per_device.size());
+  for (const auto& result : results_per_device) {
+    result_fragment_ids.push_back(result.second);
+  }
+  return result_fragment_ids;
+}
+
+BaselineGroupByAppendPlan get_baseline_groupby_append_plan(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& query_infos,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device) {
+  return get_baseline_groupby_append_plan(ra_exe_unit,
+                                          query_infos,
+                                          query_mem_desc,
+                                          get_result_fragment_ids(results_per_device));
+}
+
+std::vector<std::vector<size_t>> get_kernel_fragment_ids(
+    const std::vector<std::unique_ptr<ExecutionKernel>>& kernels) {
+  std::vector<std::vector<size_t>> result_fragment_ids;
+  result_fragment_ids.reserve(kernels.size());
+  for (const auto& kernel : kernels) {
+    CHECK(kernel);
+    const auto fragment_list = kernel->get_fragment_list();
+    if (fragment_list.empty()) {
+      result_fragment_ids.emplace_back();
+      continue;
+    }
+    result_fragment_ids.push_back(fragment_list.front().fragment_ids);
+  }
+  return result_fragment_ids;
+}
+
+std::vector<int64_t> preserved_boundary_keys_for_fragments(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& query_infos,
+    const std::vector<int64_t>& boundary_keys,
+    const std::vector<size_t>& fragment_ids) {
+  if (boundary_keys.empty() || fragment_ids.empty()) {
+    return {};
+  }
+  const auto groupby_col = get_single_outer_groupby_col(ra_exe_unit);
+  if (!groupby_col) {
+    return {};
+  }
+  const auto outer_table_key = ra_exe_unit.input_descs.front().getTableKey();
+  const auto query_info_it =
+      std::find_if(query_infos.begin(), query_infos.end(), [&](const auto& query_info) {
+        return query_info.table_key == outer_table_key;
+      });
+  if (query_info_it == query_infos.end()) {
+    return {};
+  }
+
+  std::vector<int64_t> preserved_keys;
+  for (const auto fragment_idx : fragment_ids) {
+    if (fragment_idx >= query_info_it->info.fragments.size()) {
+      return {};
+    }
+    const auto range = get_int_metadata_range(query_info_it->info.fragments[fragment_idx],
+                                              groupby_col->getColumnKey().column_id);
+    if (!range) {
+      return {};
+    }
+    for (const auto key : boundary_keys) {
+      if (range->first <= key && key <= range->second) {
+        preserved_keys.push_back(key);
+      }
+    }
+  }
+  std::sort(preserved_keys.begin(), preserved_keys.end());
+  preserved_keys.erase(std::unique(preserved_keys.begin(), preserved_keys.end()),
+                       preserved_keys.end());
+  return preserved_keys;
+}
+
+void configure_deferred_sparse_baseline_filter_before_copy(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& query_infos,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const QueryCompilationDescriptor& query_comp_desc,
+    std::vector<std::unique_ptr<ExecutionKernel>>& kernels) {
+  if (!g_enable_result_reduction_pipeline ||
+      query_comp_desc.getDeviceType() != ExecutorDeviceType::GPU ||
+      query_mem_desc.getQueryDescriptionType() !=
+          QueryDescriptionType::GroupByBaselineHash ||
+      kernels.size() <= size_t(1)) {
+    return;
+  }
+
+  const auto result_fragment_ids = get_kernel_fragment_ids(kernels);
+  const auto append_plan = get_baseline_groupby_append_plan(
+      ra_exe_unit, query_infos, query_mem_desc, result_fragment_ids);
+  if (append_plan.kind == BaselineGroupByAppendPlan::Kind::CannotAppend) {
+    return;
+  }
+  const bool apply_deferred_filter =
+      ra_exe_unit.defer_sparse_baseline_append_compaction &&
+      static_cast<bool>(ra_exe_unit.deferred_sparse_baseline_filter);
+  const bool preserve_boundary_keys =
+      append_plan.kind == BaselineGroupByAppendPlan::Kind::AppendWithBoundaryReduction;
+  if (!apply_deferred_filter && !preserve_boundary_keys) {
+    return;
+  }
+
+  for (size_t kernel_idx = 0; kernel_idx < kernels.size(); ++kernel_idx) {
+    auto preserved_keys = preserve_boundary_keys ? preserved_boundary_keys_for_fragments(
+                                                       ra_exe_unit,
+                                                       query_infos,
+                                                       append_plan.boundary_keys,
+                                                       result_fragment_ids[kernel_idx])
+                                                 : std::vector<int64_t>{};
+    kernels[kernel_idx]->setDeferredSparseBaselineFilterBeforeCopy(
+        std::move(preserved_keys));
+  }
+}
+
+ResultSetPtr append_disjoint_result_sets(
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device) {
+  bool all_dense_baseline_results =
+      std::all_of(results_per_device.begin(), results_per_device.end(), [](auto& result) {
+        return result.first && result.first->isBaselineHashDenseForReduction();
+      });
+  size_t dense_row_count{0};
+  if (all_dense_baseline_results) {
+    for (const auto& result : results_per_device) {
+      const auto updated_dense_row_count =
+          checked_size_add(dense_row_count, result.first->rowCount());
+      if (!updated_dense_row_count) {
+        all_dense_baseline_results = false;
+        break;
+      }
+      dense_row_count = *updated_dense_row_count;
+    }
+  }
+  auto reduced_results = results_per_device.front().first;
+  CHECK(reduced_results);
+  for (size_t i = 1; i < results_per_device.size(); ++i) {
+    auto& next = results_per_device[i].first;
+    CHECK(next);
+    reduced_results->append(*next);
+  }
+  if (all_dense_baseline_results) {
+    reduced_results->setCachedRowCount(dense_row_count);
+  } else {
+    reduced_results->invalidateCachedRowCount();
+  }
+  return reduced_results;
+}
+
+std::optional<size_t> total_result_set_entry_count(
+    const std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device) {
+  size_t total{0};
+  for (const auto& result : results_per_device) {
+    CHECK(result.first);
+    const auto updated_total = checked_size_add(total, result.first->entryCount());
+    if (!updated_total) {
+      return std::nullopt;
+    }
+    total = *updated_total;
+  }
+  return total;
+}
+
+bool compact_sparse_baseline_hash_results(
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
+    const std::string& purpose,
+    const ResultSetEntryFilter* entry_filter = nullptr) {
+  constexpr size_t min_append_compaction_entry_count = 1000000;
+  (void)purpose;
+  std::vector<ResultSetPtr> compacted_results(results_per_device.size());
+  for (size_t result_idx = 0; result_idx < results_per_device.size(); ++result_idx) {
+    auto& result = results_per_device[result_idx];
+    auto& source = result.first;
+    CHECK(source);
+    if (source->isBaselineHashDenseForReduction()) {
+      continue;
+    }
+    auto compacted =
+        entry_filter
+            ? source->compactBaselineHashForReduction(0, entry_filter)
+            : source->compactBaselineHashForReduction(min_append_compaction_entry_count);
+    if (compacted) {
+      compacted_results[result_idx] = std::move(compacted);
+    } else {
+      if (entry_filter) {
+        return false;
+      }
+    }
+  }
+  for (size_t result_idx = 0; result_idx < compacted_results.size(); ++result_idx) {
+    if (compacted_results[result_idx]) {
+      results_per_device[result_idx].first = std::move(compacted_results[result_idx]);
+    }
+  }
+  return true;
+}
+
+bool has_dense_baseline_hash_result(
+    const QueryMemoryDescriptor& query_mem_desc,
+    const std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device) {
+  return query_mem_desc.getQueryDescriptionType() ==
+             QueryDescriptionType::GroupByBaselineHash &&
+         std::any_of(results_per_device.begin(),
+                     results_per_device.end(),
+                     [](const auto& result) {
+                       return result.first &&
+                              result.first->isBaselineHashDenseForReduction();
+                     });
+}
+
+ResultSetPtr reduce_baseline_hash_result_sets_with_rehashing(
+    const std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
+    const size_t executor_id) {
+  std::vector<ResultSet*> result_sets;
+  result_sets.reserve(results_per_device.size());
+  for (const auto& result : results_per_device) {
+    CHECK(result.first);
+    result_sets.push_back(result.first.get());
+  }
+  ResultSetManager rs_manager;
+  rs_manager.reduce(result_sets, executor_id);
+  auto reduced_results = rs_manager.getOwnResultSet();
+  CHECK(reduced_results);
+  reduced_results->clearDeviceColumnarBufferFragments();
+  reduced_results->clearDeviceRowwiseBufferFragments();
+  reduced_results->markDeviceColumnarCpuStorageValid();
+  reduced_results->invalidateCachedRowCount();
+  return reduced_results;
+}
+
+ResultSetPtr reduce_baseline_boundary_keys(
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
+    const std::vector<int64_t>& boundary_keys,
+    const size_t executor_id) {
+  CHECK(!results_per_device.empty());
+  CHECK(!boundary_keys.empty());
+  std::vector<ResultSetPtr> boundary_result_owners;
+  std::vector<ResultSet*> boundary_result_sets;
+  boundary_result_owners.reserve(results_per_device.size());
+  boundary_result_sets.reserve(results_per_device.size());
+  for (auto& result : results_per_device) {
+    auto& source = result.first;
+    CHECK(source);
+    auto boundary_rows = source->extractAndClearBaselineHashEntries(boundary_keys);
+    if (!boundary_rows) {
+      continue;
+    }
+    boundary_result_sets.push_back(boundary_rows.get());
+    boundary_result_owners.push_back(std::move(boundary_rows));
+  }
+  if (boundary_result_sets.empty()) {
+    return nullptr;
+  }
+  if (boundary_result_sets.size() == size_t(1)) {
+    return std::move(boundary_result_owners.front());
+  }
+  ResultSetManager rs_manager;
+  rs_manager.reduce(boundary_result_sets, executor_id);
+  auto reduced_results = rs_manager.getOwnResultSet();
+  CHECK(reduced_results);
+  if (auto compacted_results = reduced_results->compactBaselineHashForReduction(0)) {
+    reduced_results = std::move(compacted_results);
+  }
+  reduced_results->clearDeviceColumnarBufferFragments();
+  reduced_results->clearDeviceRowwiseBufferFragments();
+  reduced_results->markDeviceColumnarCpuStorageValid();
+  reduced_results->invalidateCachedRowCount();
+  return reduced_results;
+}
+
 }  // namespace
 
 ResultSetPtr Executor::reduceMultiDeviceResultSets(
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const QueryMemoryDescriptor& query_mem_desc) const {
+    const QueryMemoryDescriptor& query_mem_desc,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& query_infos) const {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<ResultSet> reduced_results = results_per_device.front().first;
 
   int64_t compilation_queue_time = 0;
   if (results_per_device.size() > size_t(1)) {
+    const auto append_plan = get_baseline_groupby_append_plan(
+        ra_exe_unit, query_infos, query_mem_desc, results_per_device);
+    if (append_plan.kind == BaselineGroupByAppendPlan::Kind::AppendDisjoint) {
+      if (ra_exe_unit.defer_sparse_baseline_append_compaction) {
+        if (ra_exe_unit.deferred_sparse_baseline_filter &&
+            compact_sparse_baseline_hash_results(
+                results_per_device,
+                "before append using deferred aggregate filter",
+                &*ra_exe_unit.deferred_sparse_baseline_filter)) {
+        }
+      } else {
+        compact_sparse_baseline_hash_results(results_per_device, "before append");
+      }
+      return append_disjoint_result_sets(results_per_device);
+    }
+    if (append_plan.kind ==
+        BaselineGroupByAppendPlan::Kind::AppendWithBoundaryReduction) {
+      auto reduced_boundary_rows = reduce_baseline_boundary_keys(
+          results_per_device, append_plan.boundary_keys, executor_id_);
+      if (ra_exe_unit.defer_sparse_baseline_append_compaction) {
+        if (ra_exe_unit.deferred_sparse_baseline_filter &&
+            compact_sparse_baseline_hash_results(
+                results_per_device,
+                "before append using deferred aggregate filter",
+                &*ra_exe_unit.deferred_sparse_baseline_filter)) {
+        }
+      } else {
+        compact_sparse_baseline_hash_results(results_per_device, "before append");
+      }
+      std::optional<size_t> row_count =
+          reduced_boundary_rows ? std::optional<size_t>(reduced_boundary_rows->rowCount())
+                                : std::optional<size_t>(size_t(0));
+      for (const auto& result : results_per_device) {
+        row_count = checked_size_add(*row_count, result.first->rowCount());
+        if (!row_count) {
+          break;
+        }
+      }
+      auto appended_results = append_disjoint_result_sets(results_per_device);
+      if (reduced_boundary_rows) {
+        const auto deferred_boundary_cpu_storage =
+            appended_results->appendDeviceOnlyColumnarFragmentsFromCpuBaselineHashResult(
+                *reduced_boundary_rows);
+        if (!deferred_boundary_cpu_storage) {
+          appended_results->append(*reduced_boundary_rows);
+        }
+      }
+      appended_results->invalidateCachedRowCount();
+      if (row_count) {
+        appended_results->setCachedRowCount(*row_count);
+      }
+      appended_results->addCompilationQueueTime(compilation_queue_time);
+      return appended_results;
+    }
+    if (query_mem_desc.getQueryDescriptionType() ==
+        QueryDescriptionType::GroupByBaselineHash) {
+      compact_sparse_baseline_hash_results(results_per_device, "before reduction");
+      reduced_results = results_per_device.front().first;
+      const auto total_entry_count = total_result_set_entry_count(results_per_device);
+      if (has_dense_baseline_hash_result(query_mem_desc, results_per_device) ||
+          !total_entry_count || *total_entry_count > reduced_results->entryCount()) {
+        std::vector<ResultSetPtr> baseline_hash_results;
+        baseline_hash_results.reserve(results_per_device.size());
+        for (const auto& result : results_per_device) {
+          baseline_hash_results.push_back(result.first);
+        }
+        if (auto gpu_reduced = try_gpu_reduction_with_oom_fallback(
+                "partitioned baseline GPU reduction", [&] {
+                  return try_reduce_baseline_hash_result_sets_partitioned_on_gpu(
+                      executor_id_, baseline_hash_results, ExecutorDeviceType::GPU);
+                })) {
+          return gpu_reduced;
+        }
+        if (auto gpu_reduced =
+                try_gpu_reduction_with_oom_fallback("baseline GPU reduction", [&] {
+                  return try_reduce_baseline_hash_result_sets_on_gpu(
+                      executor_id_, baseline_hash_results, ExecutorDeviceType::GPU);
+                })) {
+          return gpu_reduced;
+        }
+        return reduce_baseline_hash_result_sets_with_rehashing(results_per_device,
+                                                               executor_id_);
+      }
+    }
+    if (query_mem_desc.getQueryDescriptionType() ==
+        QueryDescriptionType::GroupByPerfectHash) {
+      std::vector<ResultSetPtr> perfect_hash_results;
+      perfect_hash_results.reserve(results_per_device.size());
+      for (const auto& result : results_per_device) {
+        perfect_hash_results.push_back(result.first);
+      }
+      if (auto gpu_reduced =
+              try_gpu_reduction_with_oom_fallback("perfect-hash GPU reduction", [&] {
+                return try_reduce_perfect_hash_result_sets_on_gpu(
+                    executor_id_,
+                    perfect_hash_results,
+                    ExecutorDeviceType::GPU,
+                    ra_exe_unit.deferred_sparse_baseline_filter
+                        ? &*ra_exe_unit.deferred_sparse_baseline_filter
+                        : nullptr);
+              })) {
+        return gpu_reduced;
+      }
+    }
     const auto reduction_code =
         get_reduction_code(executor_id_, results_per_device, &compilation_queue_time);
 
     for (size_t i = 1; i < results_per_device.size(); ++i) {
+      auto reduction_source = results_per_device[i].first;
+      if (auto compacted_source = reduction_source->compactBaselineHashForReduction()) {
+        reduction_source = std::move(compacted_source);
+      }
       reduced_results->getStorage()->reduce(
-          *(results_per_device[i].first->getStorage()), {}, reduction_code, executor_id_);
+          *(reduction_source->getStorage()), {}, reduction_code, executor_id_);
     }
+    reduced_results->clearDeviceColumnarBufferFragments();
+    reduced_results->clearDeviceRowwiseBufferFragments();
+    reduced_results->markDeviceColumnarCpuStorageValid();
+    reduced_results->invalidateCachedRowCount();
+  }
+  if (results_per_device.size() == size_t(1) && !g_enable_result_reduction_pipeline) {
+    reduced_results->clearDeviceColumnarBufferFragments();
+    reduced_results->clearDeviceRowwiseBufferFragments();
+    reduced_results->markDeviceColumnarCpuStorageValid();
     reduced_results->invalidateCachedRowCount();
   }
   reduced_results->addCompilationQueueTime(compilation_queue_time);
@@ -1982,9 +5531,64 @@ std::string sort_algorithm_to_string(const SortAlgorithm algorithm) {
   return "";
 }
 
+bool table_key_less(const shared::TableKey& lhs, const shared::TableKey& rhs) {
+  return std::tie(lhs.db_id, lhs.table_id) < std::tie(rhs.db_id, rhs.table_id);
+}
+
+void add_result_table_key(std::vector<shared::TableKey>& result_table_keys,
+                          const InputDescriptor& input_desc) {
+  if (input_desc.getSourceType() == InputSourceType::RESULT) {
+    result_table_keys.push_back(input_desc.getTableKey());
+  }
+}
+
+std::vector<shared::TableKey> get_result_table_keys(
+    const RelAlgExecutionUnit& ra_exe_unit) {
+  std::vector<shared::TableKey> result_table_keys;
+  for (const auto& input_desc : ra_exe_unit.input_descs) {
+    add_result_table_key(result_table_keys, input_desc);
+  }
+  for (const auto& input_col_desc : ra_exe_unit.input_col_descs) {
+    add_result_table_key(result_table_keys, input_col_desc->getScanDesc());
+  }
+  std::sort(result_table_keys.begin(), result_table_keys.end(), table_key_less);
+  result_table_keys.erase(std::unique(result_table_keys.begin(), result_table_keys.end()),
+                          result_table_keys.end());
+  return result_table_keys;
+}
+
+void add_temporary_result_source_discriminators(
+    std::ostringstream& os,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const TemporaryTableSourceInfoMap* temporary_source_info,
+    std::unordered_set<shared::TableKey>& table_keys,
+    bool& cacheable) {
+  for (const auto& result_table_key : get_result_table_keys(ra_exe_unit)) {
+    const TemporaryTableSourceInfo* source_info{nullptr};
+    if (temporary_source_info) {
+      const auto source_info_it = temporary_source_info->find(result_table_key.table_id);
+      if (source_info_it != temporary_source_info->end()) {
+        source_info = &source_info_it->second;
+      }
+    }
+    if (!source_info) {
+      cacheable = false;
+      os << "|result-source-missing:" << result_table_key;
+      continue;
+    }
+    os << "|result-source:" << result_table_key << ':' << source_info->rel_alg_hash << ':'
+       << source_info->query_plan_dag_hash;
+    table_keys.insert(source_info->physical_table_keys.begin(),
+                      source_info->physical_table_keys.end());
+  }
+}
+
 }  // namespace
 
-CardinalityCacheKey::CardinalityCacheKey(const RelAlgExecutionUnit& ra_exe_unit) {
+CardinalityCacheKey::CardinalityCacheKey(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::string& cache_context,
+    const TemporaryTableSourceInfoMap* temporary_source_info) {
   // todo(yoonmin): replace a cache key as a DAG representation of a query plan
   // instead of ra_exec_unit description if possible
   std::ostringstream os;
@@ -2031,19 +5635,29 @@ CardinalityCacheKey::CardinalityCacheKey(const RelAlgExecutionUnit& ra_exe_unit)
       os << expr->toString() << ",";
     }
   }
+  add_temporary_result_source_discriminators(
+      os, ra_exe_unit, temporary_source_info, table_keys, cacheable);
   os << ::toString(ra_exe_unit.estimator == nullptr);
   os << std::to_string(ra_exe_unit.scan_limit);
+  if (ra_exe_unit.query_hint.isHintRegistered(QueryHint::kNDVGroupsEstimatorMultiplier)) {
+    os << "|ndv-multiplier=" << ra_exe_unit.query_hint.ndv_groups_estimator_multiplier;
+  }
+  if (!cache_context.empty()) {
+    os << "|context=" << cache_context;
+  }
   key = os.str();
   query_plan_dag_hash = ra_exe_unit.query_plan_dag_hash;
 }
 
 bool CardinalityCacheKey::operator==(const CardinalityCacheKey& other) const {
-  return key == other.key && query_plan_dag_hash == other.query_plan_dag_hash;
+  return key == other.key && query_plan_dag_hash == other.query_plan_dag_hash &&
+         cacheable == other.cacheable;
 }
 
 size_t CardinalityCacheKey::hash() const {
   auto hash = boost::hash_value(key);
   boost::hash_combine(hash, query_plan_dag_hash);
+  boost::hash_combine(hash, cacheable);
   return hash;
 }
 
@@ -2133,7 +5747,8 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                        const ExecutionOptions& eo,
                                        RenderInfo* render_info,
                                        const bool has_cardinality_estimation,
-                                       ColumnCacheMap& column_cache) {
+                                       ColumnCacheMap& column_cache,
+                                       ResultSetColumnCache* result_set_column_cache) {
   VLOG(1) << "Executor " << executor_id_ << " is executing work unit:" << ra_exe_unit_in;
   auto copied_co = co;
   copied_co.device_type = getDeviceTypeForTargets(ra_exe_unit_in, co.device_type);
@@ -2161,7 +5776,8 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                       row_set_mem_owner_,
                                       render_info,
                                       has_cardinality_estimation,
-                                      column_cache);
+                                      column_cache,
+                                      result_set_column_cache);
     if (result) {
       result->setKernelQueueTime(kernel_queue_time_ms_);
       result->addCompilationQueueTime(compilation_queue_time_ms_);
@@ -2171,8 +5787,13 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
     }
     return result;
   } catch (const CompilationRetryNewScanLimit& e) {
+    auto retry_max_groups_buffer_entry_guess = max_groups_buffer_entry_guess;
+    if (e.new_scan_limit_ && retry_max_groups_buffer_entry_guess &&
+        e.new_scan_limit_ < retry_max_groups_buffer_entry_guess) {
+      retry_max_groups_buffer_entry_guess = e.new_scan_limit_;
+    }
     auto result =
-        executeWorkUnitImpl(max_groups_buffer_entry_guess,
+        executeWorkUnitImpl(retry_max_groups_buffer_entry_guess,
                             is_agg,
                             false,
                             query_infos,
@@ -2182,7 +5803,9 @@ ResultSetPtr Executor::executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                             row_set_mem_owner_,
                             render_info,
                             has_cardinality_estimation,
-                            column_cache);
+                            column_cache,
+                            result_set_column_cache);
+    max_groups_buffer_entry_guess = retry_max_groups_buffer_entry_guess;
     if (result) {
       result->setKernelQueueTime(kernel_queue_time_ms_);
       result->addCompilationQueueTime(compilation_queue_time_ms_);
@@ -2205,10 +5828,18 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     RenderInfo* render_info,
     const bool has_cardinality_estimation,
-    ColumnCacheMap& column_cache) {
+    ColumnCacheMap& column_cache,
+    ResultSetColumnCache* result_set_column_cache) {
   INJECT_TIMER(Exec_executeWorkUnit);
+  const auto previous_result_set_column_cache = active_result_set_column_cache_;
+  active_result_set_column_cache_ = result_set_column_cache;
+  ScopeGuard reset_active_result_set_column_cache = [this,
+                                                     previous_result_set_column_cache] {
+    active_result_set_column_cache_ = previous_result_set_column_cache;
+  };
   const auto [ra_exe_unit, deleted_cols_map] = addDeletedColumn(ra_exe_unit_in, co);
   CHECK(!query_infos.empty());
+
   if (!max_groups_buffer_entry_guess) {
     // The query has failed the first execution attempt because of running out
     // of group by slots. Make the conservative choice: allocate fragment size
@@ -2221,11 +5852,22 @@ ResultSetPtr Executor::executeWorkUnitImpl(
   int8_t crt_min_byte_width{MAX_BYTE_WIDTH_SUPPORTED};
   do {
     SharedKernelContext shared_context(query_infos);
-    ColumnFetcher column_fetcher(this, column_cache);
+    ColumnFetcher column_fetcher(this, column_cache, result_set_column_cache);
+    const auto previous_iteration_result_set_column_cache =
+        active_result_set_column_cache_;
+    active_result_set_column_cache_ = column_fetcher.getResultSetColumnCache();
+    ScopeGuard reset_iteration_result_set_column_cache =
+        [this, previous_iteration_result_set_column_cache] {
+          active_result_set_column_cache_ = previous_iteration_result_set_column_cache;
+        };
+    if (g_enable_deferred_lazy_fetch) {
+      column_fetcher.setResultSetColumnSelections(ra_exe_unit.input_col_descs);
+    }
     ScopeGuard scope_guard = [&column_fetcher] {
       column_fetcher.freeLinearizedBuf();
       column_fetcher.freeTemporaryCpuLinearizedIdxBuf();
     };
+
     auto query_comp_desc_owned = std::make_unique<QueryCompilationDescriptor>();
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
     if (eo.executor_type == ExecutorType::Native) {
@@ -2261,7 +5903,25 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       return executeExplain(*query_comp_desc_owned);
     }
 
-    if (query_mem_desc_owned->canUsePerDeviceCardinality(ra_exe_unit)) {
+    const auto device_type = query_comp_desc_owned->getDeviceType();
+    bool uses_lazy_fetch = false;
+    if (plan_state_ && plan_state_->allow_lazy_fetch_) {
+      for (const auto& col :
+           getColLazyFetchInfo(ra_exe_unit.target_exprs,
+                               may_use_storage_local_lazy_fetch_rowid(ra_exe_unit))) {
+        if (col.is_lazily_fetched) {
+          uses_lazy_fetch = true;
+          break;
+        }
+      }
+    }
+    const bool uses_multifrag_gpu_kernel = device_type == ExecutorDeviceType::GPU &&
+                                           eo.allow_multifrag &&
+                                           (!uses_lazy_fetch || is_agg);
+    const bool can_use_per_device_cardinality =
+        device_type != ExecutorDeviceType::GPU || uses_multifrag_gpu_kernel;
+    if (can_use_per_device_cardinality &&
+        query_mem_desc_owned->canUsePerDeviceCardinality(ra_exe_unit)) {
       auto const max_rows_per_device =
           query_mem_desc_owned->getMaxPerDeviceCardinality(ra_exe_unit);
       if (max_rows_per_device && *max_rows_per_device >= 0 &&
@@ -2272,6 +5932,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         throw CompilationRetryNewScanLimit(*max_rows_per_device);
       }
     }
+    std::shared_ptr<AsyncResultSetReducer> async_result_reducer;
     if (!eo.just_validate) {
       auto const available_cpus = static_cast<size_t>(cpu_threads());
       try {
@@ -2286,7 +5947,53 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                      *query_mem_desc_owned,
                                      render_info);
         if (!kernels.empty()) {
+          configure_deferred_sparse_baseline_filter_before_copy(ra_exe_unit,
+                                                                query_infos,
+                                                                *query_mem_desc_owned,
+                                                                *query_comp_desc_owned,
+                                                                kernels);
           row_set_mem_owner_->setKernelMemoryAllocator(kernels.size());
+          const bool baseline_hash_reduction =
+              query_mem_desc_owned->getQueryDescriptionType() ==
+              QueryDescriptionType::GroupByBaselineHash;
+          const auto baseline_hash_append_plan =
+              baseline_hash_reduction
+                  ? get_baseline_groupby_append_plan(ra_exe_unit,
+                                                     query_infos,
+                                                     *query_mem_desc_owned,
+                                                     get_kernel_fragment_ids(kernels))
+                  : BaselineGroupByAppendPlan{};
+          const bool can_pipeline_baseline_hash_append =
+              baseline_hash_append_plan.kind !=
+              BaselineGroupByAppendPlan::Kind::CannotAppend;
+          const bool allow_baseline_hash_pipeline =
+              baseline_hash_reduction && kernels.size() > size_t(1) &&
+              (baseline_hash_append_plan.kind ==
+                   BaselineGroupByAppendPlan::Kind::CannotAppend ||
+               can_pipeline_baseline_hash_append);
+          const bool use_result_reduction_pipeline =
+              can_use_result_reduction_pipeline(ra_exe_unit,
+                                                *query_mem_desc_owned,
+                                                *query_comp_desc_owned,
+                                                eo,
+                                                is_agg,
+                                                allow_baseline_hash_pipeline,
+                                                render_info != nullptr);
+          if (use_result_reduction_pipeline) {
+            async_result_reducer = std::make_shared<AsyncResultSetReducer>(
+                executor_id_,
+                baseline_hash_reduction,
+                query_comp_desc_owned->getDeviceType(),
+                can_pipeline_baseline_hash_append ? baseline_hash_append_plan
+                                                  : BaselineGroupByAppendPlan{},
+                ra_exe_unit.deferred_sparse_baseline_filter,
+                ra_exe_unit.defer_sparse_baseline_append_compaction);
+            shared_context.setResultConsumer([async_result_reducer](
+                                                 ResultSetPtr&& result_set,
+                                                 std::vector<size_t>&& fragment_ids) {
+              async_result_reducer->add(std::move(result_set), std::move(fragment_ids));
+            });
+          }
         }
         if (g_enable_executor_resource_mgr) {
           launchKernelsViaResourceMgr(shared_context,
@@ -2294,12 +6001,20 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                       query_comp_desc_owned->getDeviceType(),
                                       ra_exe_unit.input_descs,
                                       *query_mem_desc_owned,
+                                      eo,
                                       available_cpus);
         } else {
           launchKernelsLocked(
               shared_context, std::move(kernels), query_comp_desc_owned->getDeviceType());
         }
+        if (async_result_reducer) {
+          shared_context.clearResultConsumer();
+        }
       } catch (QueryExecutionError& e) {
+        if (async_result_reducer) {
+          shared_context.clearResultConsumer();
+          async_result_reducer->cancel();
+        }
         if (eo.with_dynamic_watchdog && interrupted_.load() &&
             e.hasErrorCode(ErrorCode::OUT_OF_TIME)) {
           throw QueryExecutionError(ErrorCode::INTERRUPTED);
@@ -2311,6 +6026,12 @@ ResultSetPtr Executor::executeWorkUnitImpl(
             static_cast<size_t>(crt_min_byte_width << 1) <= sizeof(int64_t)) {
           crt_min_byte_width <<= 1;
           continue;
+        }
+        throw;
+      } catch (...) {
+        if (async_result_reducer) {
+          shared_context.clearResultConsumer();
+          async_result_reducer->cancel();
         }
         throw;
       }
@@ -2352,6 +6073,16 @@ ResultSetPtr Executor::executeWorkUnitImpl(
             ra_exe_unit_in.per_device_cardinality.emplace_back(result.second,
                                                                static_cast<size_t>(*p));
             result.first->moveToBegin();
+          }
+        }
+        if (async_result_reducer) {
+          int64_t async_reduction_compilation_queue_time{0};
+          auto reduced_results =
+              async_result_reducer->finish(&async_reduction_compilation_queue_time);
+          if (reduced_results) {
+            reduced_results->addCompilationQueueTime(
+                async_reduction_compilation_queue_time);
+            return reduced_results;
           }
         }
         return collectAllDeviceResults(shared_context,
@@ -2643,6 +6374,7 @@ void Executor::addTransientStringLiterals(
           CHECK(sdp);
           TransientStringLiteralsVisitor visitor(sdp, this);
           visitor.visit(expr);
+          visitor.flushStringLiterals();
         }
       };
 
@@ -2818,8 +6550,11 @@ ResultSetPtr Executor::collectAllDeviceResults(
   if (shard_count && !result_per_device.empty()) {
     return collectAllDeviceShardedTopResults(shared_context, ra_exe_unit, device_type);
   }
-  return reduceMultiDeviceResults(
-      ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
+  return reduceMultiDeviceResults(ra_exe_unit,
+                                  result_per_device,
+                                  row_set_mem_owner,
+                                  query_mem_desc,
+                                  shared_context.getQueryInfos());
 }
 
 namespace {
@@ -3010,18 +6745,23 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
   const auto device_type = query_comp_desc.getDeviceType();
   const bool uses_lazy_fetch =
       plan_state_->allow_lazy_fetch_ &&
-      has_lazy_fetched_columns(getColLazyFetchInfo(ra_exe_unit.target_exprs));
+      has_lazy_fetched_columns(getColLazyFetchInfo(
+          ra_exe_unit.target_exprs, may_use_storage_local_lazy_fetch_rowid(ra_exe_unit)));
   const bool use_multifrag_kernel = (device_type == ExecutorDeviceType::GPU) &&
                                     eo.allow_multifrag && (!uses_lazy_fetch || is_agg);
   CHECK_GT(device_ids_to_use_.size(), 0);
 
-  fragment_descriptor.buildFragmentKernelMap(ra_exe_unit,
-                                             shared_context.getFragOffsets(),
-                                             device_ids_to_use_,
-                                             device_type,
-                                             use_multifrag_kernel,
-                                             g_inner_join_fragment_skipping,
-                                             this);
+  fragment_descriptor.buildFragmentKernelMap(
+      ra_exe_unit,
+      shared_context.getFragOffsets(),
+      device_ids_to_use_,
+      device_type,
+      query_mem_desc.getQueryDescriptionType(),
+      g_enable_result_reduction_pipeline ? query_mem_desc.getEntryCount() : size_t(0),
+      uses_lazy_fetch,
+      use_multifrag_kernel,
+      g_inner_join_fragment_skipping,
+      this);
   if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
     checkWorkUnitWatchdog(
         ra_exe_unit, table_infos, device_type, device_ids_to_use_.size());
@@ -3045,6 +6785,10 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
                                       render_info](const int device_id,
                                                    const FragmentsList& frag_list,
                                                    const int64_t rowid_lookup_key) {
+      if (!frag_list.size()) {
+        return;
+      }
+      CHECK_GE(device_id, 0);
       execution_kernels.emplace_back(
           std::make_unique<ExecutionKernel>(ra_exe_unit,
                                             ExecutorDeviceType::GPU,
@@ -3064,15 +6808,18 @@ std::vector<std::unique_ptr<ExecutionKernel>> Executor::createKernels(
     VLOG(1) << query_mem_desc.toString();
 
     if (!ra_exe_unit.use_bump_allocator && allow_single_frag_table_opt &&
-        (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) &&
-        table_infos.size() == 1 && table_infos.front().table_key.table_id > 0) {
-      const auto max_frag_size =
-          table_infos.front().info.getFragmentNumTuplesUpperBound();
-      if (max_frag_size < query_mem_desc.getEntryCount()) {
-        LOG(INFO) << "Lowering scan limit from " << query_mem_desc.getEntryCount()
-                  << " to match max fragment size " << max_frag_size
-                  << " for kernel per fragment execution path.";
-        throw CompilationRetryNewScanLimit(max_frag_size);
+        query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+      const auto max_kernel_output_rows =
+          g_enable_result_reduction_pipeline
+              ? fragment_descriptor.getMaxKernelOutputRowCountEstimate(ra_exe_unit)
+              : (table_infos.size() == size_t(1) &&
+                         table_infos.front().table_key.table_id > 0
+                     ? std::optional<size_t>(
+                           table_infos.front().info.getFragmentNumTuplesUpperBound())
+                     : std::nullopt);
+      if (max_kernel_output_rows &&
+          *max_kernel_output_rows < query_mem_desc.getEntryCount()) {
+        throw CompilationRetryNewScanLimit(*max_kernel_output_rows);
       }
     }
 
@@ -3135,7 +6882,12 @@ void Executor::launchKernelsImpl(SharedKernelContext& shared_context,
       kernels.empty() ? nullptr : &kernels[0]->ra_exe_unit_;
 
 #ifdef HAVE_TBB
+  // A shared context may be launched again for bounded batches or an OOM retry. The
+  // previous launch has drained before this boundary, so release any slot-owned
+  // contexts before the next launch. Only the opt-in CPU-subtask path allocates them.
+  shared_context.clearThreadExecutionContexts();
   if (g_enable_cpu_sub_tasks && device_type == ExecutorDeviceType::CPU) {
+    shared_context.resetThreadExecutionContexts(num_threads);
     shared_context.setThreadPool(&tg);
   }
   ScopeGuard pool_guard([&shared_context]() { shared_context.setThreadPool(nullptr); });
@@ -3181,7 +6933,7 @@ void Executor::launchKernelsImpl(SharedKernelContext& shared_context,
   tg.wait();
 #endif
 
-  for (auto& exec_ctx : shared_context.getTlsExecutionContext()) {
+  for (auto& exec_ctx : shared_context.getThreadExecutionContexts()) {
     // The first arg is used for GPU only, it's not our case.
     // TODO: add QueryExecutionContext::getRowSet() interface
     // for our case.
@@ -3215,25 +6967,68 @@ void Executor::launchKernelsViaResourceMgr(
     const ExecutorDeviceType device_type,
     const std::vector<InputDescriptor>& input_descs,
     const QueryMemoryDescriptor& query_mem_desc,
+    const ExecutionOptions& eo,
     const size_t available_cpus) {
   // CPU queries in general, plus some GPU queries, i.e. certain types of top-k sorts,
   // can generate more kernels than cores/GPU devices, so allow handle this for now
   // by capping the number of requested slots from GPU than actual GPUs
   const size_t num_kernels = kernels.size();
+  if (device_type == ExecutorDeviceType::GPU && eo.max_gpu_kernel_concurrency > 0 &&
+      num_kernels > eo.max_gpu_kernel_concurrency) {
+    const auto batch_size = eo.max_gpu_kernel_concurrency;
+    LOG(WARNING) << "Batching " << num_kernels << " GPU kernels into groups of "
+                 << batch_size << " for bounded retry execution.";
+    for (size_t batch_begin = 0; batch_begin < num_kernels; batch_begin += batch_size) {
+      std::vector<std::unique_ptr<ExecutionKernel>> kernel_batch;
+      const auto batch_end = std::min(batch_begin + batch_size, num_kernels);
+      kernel_batch.reserve(batch_end - batch_begin);
+      for (size_t kernel_idx = batch_begin; kernel_idx < batch_end; ++kernel_idx) {
+        kernel_batch.emplace_back(std::move(kernels[kernel_idx]));
+      }
+      launchKernelsViaResourceMgr(shared_context,
+                                  std::move(kernel_batch),
+                                  device_type,
+                                  input_descs,
+                                  query_mem_desc,
+                                  eo,
+                                  available_cpus);
+    }
+    return;
+  }
+  const auto slot_resource_type =
+      device_type == ExecutorDeviceType::GPU
+          ? ExecutorResourceMgr_Namespace::ResourceType::GPU_SLOTS
+          : ExecutorResourceMgr_Namespace::ResourceType::CPU_SLOTS;
+  const size_t max_compute_slots = std::max<size_t>(
+      size_t(1), executor_resource_mgr_->get_resource_info(slot_resource_type).second);
+  const bool can_stream_kernel_results = shared_context.hasResultConsumer();
   auto const cap_slots =
       num_kernels > available_cpus && query_mem_desc.threadsCanReuseGroupByBuffers();
+  const size_t unconstrained_compute_slots =
+      can_stream_kernel_results || cap_slots ? std::min(num_kernels, max_compute_slots)
+                                             : num_kernels;
   const size_t num_compute_slots =
-      cap_slots
-          ? std::min(num_kernels,
-                     executor_resource_mgr_
-                         ->get_resource_info(
-                             device_type == ExecutorDeviceType::GPU
-                                 ? ExecutorResourceMgr_Namespace::ResourceType::GPU_SLOTS
-                                 : ExecutorResourceMgr_Namespace::ResourceType::CPU_SLOTS)
-                         .second)
-          : num_kernels;
-  const size_t cpu_result_mem_bytes_per_kernel =
-      query_mem_desc.getBufferSizeBytes(device_type);
+      device_type == ExecutorDeviceType::GPU && eo.max_gpu_kernel_concurrency > 0
+          ? std::min(unconstrained_compute_slots, eo.max_gpu_kernel_concurrency)
+          : unconstrained_compute_slots;
+  const size_t min_compute_slots =
+      can_stream_kernel_results && num_compute_slots > 0 ? size_t(1) : num_compute_slots;
+  const bool uses_bump_projection_kernel_per_fragment =
+      num_kernels > 1 && !kernels.empty() &&
+      kernels.front()->ra_exe_unit_.use_bump_allocator &&
+      query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection;
+  const size_t result_buffer_entry_count_per_kernel =
+      uses_bump_projection_kernel_per_fragment
+          ? query_mem_desc.getEntryCount() / num_kernels +
+                (query_mem_desc.getEntryCount() % num_kernels ? size_t(1) : size_t(0))
+          : query_mem_desc.getEntryCount();
+  const size_t cpu_result_mem_bytes_per_kernel = query_mem_desc.getBufferSizeBytes(
+      device_type, result_buffer_entry_count_per_kernel);
+  if (device_type == ExecutorDeviceType::GPU && eo.max_gpu_kernel_concurrency > 0 &&
+      num_compute_slots < unconstrained_compute_slots) {
+    LOG(WARNING) << "Limiting GPU kernel concurrency from " << unconstrained_compute_slots
+                 << " to " << num_compute_slots << " slots for bounded retry execution.";
+  }
 
   std::vector<std::pair<int32_t, FragmentsList>> kernel_fragments_list;
   kernel_fragments_list.reserve(num_kernels);
@@ -3249,7 +7044,9 @@ void Executor::launchKernelsViaResourceMgr(
 
   auto gen_resource_request_info = [device_type,
                                     num_compute_slots,
+                                    min_compute_slots,
                                     cpu_result_mem_bytes_per_kernel,
+                                    can_stream_kernel_results,
                                     &chunk_request_info,
                                     &query_mem_desc]() {
     if (device_type == ExecutorDeviceType::GPU) {
@@ -3259,15 +7056,16 @@ void Executor::launchKernelsViaResourceMgr(
           static_cast<size_t>(0),                               // cpu_slots
           static_cast<size_t>(0),                               // min_cpu_slots,
           num_compute_slots,                                    // gpu_slots
-          num_compute_slots,                                    // min_gpu_slots
+          min_compute_slots,                                    // min_gpu_slots
           cpu_result_mem_bytes_per_kernel * num_compute_slots,  // cpu_result_mem,
-          cpu_result_mem_bytes_per_kernel * num_compute_slots,  // min_cpu_result_mem,
+          cpu_result_mem_bytes_per_kernel * min_compute_slots,  // min_cpu_result_mem,
           chunk_request_info,                                   // chunks needed
-          false);  // output_buffers_reusable_intra_thrad
+          can_stream_kernel_results);  // output_buffers_reusable_intra_thread
     } else {
-      const size_t min_cpu_slots{1};
+      const size_t min_cpu_slots{can_stream_kernel_results ? min_compute_slots
+                                                           : size_t(1)};
       const size_t min_cpu_result_mem =
-          query_mem_desc.threadsCanReuseGroupByBuffers()
+          (query_mem_desc.threadsCanReuseGroupByBuffers() || can_stream_kernel_results)
               ? cpu_result_mem_bytes_per_kernel * min_cpu_slots
               : cpu_result_mem_bytes_per_kernel * num_compute_slots;
       return ExecutorResourceMgr_Namespace::RequestInfo(
@@ -3280,13 +7078,12 @@ void Executor::launchKernelsViaResourceMgr(
           cpu_result_mem_bytes_per_kernel * num_compute_slots,  // cpu_result_mem
           min_cpu_result_mem,                                   // min_cpu_result_mem
           chunk_request_info,                                   // chunks needed
-          query_mem_desc
-              .threadsCanReuseGroupByBuffers());  // output_buffers_reusable_intra_thread
+          query_mem_desc.threadsCanReuseGroupByBuffers() ||
+              can_stream_kernel_results);  // output_buffers_reusable_intra_thread
     }
   };
 
   const auto resource_request_info = gen_resource_request_info();
-
   auto clock_begin = timer_start();
   const bool is_empty_request =
       resource_request_info.cpu_slots == 0UL && resource_request_info.gpu_slots == 0UL;
@@ -3295,9 +7092,9 @@ void Executor::launchKernelsViaResourceMgr(
                        : executor_resource_mgr_->request_resources(resource_request_info);
   const auto num_cpu_threads =
       is_empty_request ? 0UL : resource_handle->get_resource_grant().cpu_slots;
+  const auto num_gpu_slots =
+      is_empty_request ? 0UL : resource_handle->get_resource_grant().gpu_slots;
   if (device_type == ExecutorDeviceType::GPU) {
-    const auto num_gpu_slots =
-        is_empty_request ? 0UL : resource_handle->get_resource_grant().gpu_slots;
     VLOG(1) << "In Executor::LaunchKernels executor " << getExecutorId() << " requested "
             << "between " << resource_request_info.min_gpu_slots << " and "
             << resource_request_info.gpu_slots << " GPU slots, and was granted "
@@ -3308,8 +7105,11 @@ void Executor::launchKernelsViaResourceMgr(
             << resource_request_info.cpu_slots << " CPU slots, and was granted "
             << num_cpu_threads << " CPU slots.";
   }
-  kernel_queue_time_ms_ += timer_stop(clock_begin);
-  launchKernelsImpl(shared_context, std::move(kernels), device_type, num_cpu_threads);
+  const auto resource_wait_ms = timer_stop(clock_begin);
+  kernel_queue_time_ms_ += resource_wait_ms;
+  const auto num_launch_threads =
+      device_type == ExecutorDeviceType::GPU ? num_gpu_slots : num_cpu_threads;
+  launchKernelsImpl(shared_context, std::move(kernels), device_type, num_launch_threads);
 }
 
 std::vector<size_t> Executor::getTableFragmentIndices(
@@ -3333,12 +7133,86 @@ std::vector<size_t> Executor::getTableFragmentIndices(
     return {outer_frag_idx};
   }
   const auto& outer_fragment_info = (*outer_table_fragments)[outer_frag_idx];
+
+  const Analyzer::ColumnVar* range_prune_inner_col{nullptr};
+  std::optional<std::pair<int64_t, int64_t>> outer_join_range;
+  if (g_enable_result_reduction_pipeline &&
+      plan_state_->join_info_.global_build_rowid_table_indices_.count(table_idx)) {
+    bool has_payload_column{false};
+    bool all_payload_columns_segmented{true};
+    for (const auto& col_desc : ra_exe_unit.input_col_descs) {
+      CHECK(col_desc);
+      const auto& scan_desc = col_desc->getScanDesc();
+      if (scan_desc.getNestLevel() != static_cast<int>(table_idx)) {
+        continue;
+      }
+      if (scan_desc.getSourceType() != InputSourceType::TABLE) {
+        all_payload_columns_segmented = false;
+        break;
+      }
+      const auto cd = get_column_descriptor_maybe(col_desc->getColumnKey());
+      if (!cd || cd->isVirtualCol) {
+        continue;
+      }
+      has_payload_column = true;
+      if (!plan_state_->isColumnToFetchSegmented(*col_desc)) {
+        all_payload_columns_segmented = false;
+        break;
+      }
+    }
+
+    if (has_payload_column && all_payload_columns_segmented) {
+      const Analyzer::BinOper* join_condition{nullptr};
+      if (ra_exe_unit.join_quals.empty()) {
+        CHECK(!inner_table_id_to_join_condition.empty());
+        const auto condition_it = inner_table_id_to_join_condition.find(table_key);
+        CHECK(condition_it != inner_table_id_to_join_condition.end());
+        join_condition = condition_it->second;
+      } else {
+        CHECK_EQ(plan_state_->join_info_.equi_join_tautologies_.size(),
+                 plan_state_->join_info_.join_hash_tables_.size());
+        for (size_t i = 0; i < plan_state_->join_info_.join_hash_tables_.size(); ++i) {
+          if (plan_state_->join_info_.join_hash_tables_[i]->getInnerTableRteIdx() ==
+              static_cast<int>(table_idx)) {
+            CHECK(!join_condition);
+            join_condition = plan_state_->join_info_.equi_join_tautologies_[i].get();
+          }
+        }
+      }
+      if (join_condition && join_condition->get_optype() == kEQ &&
+          !join_condition->is_bbox_intersect_oper()) {
+        const auto inner_outer_pairs =
+            HashJoin::normalizeColumnPairs(join_condition, getTemporaryTables()).first;
+        if (inner_outer_pairs.size() == size_t(1)) {
+          const auto inner_col = inner_outer_pairs.front().first;
+          const auto outer_col =
+              dynamic_cast<const Analyzer::ColumnVar*>(inner_outer_pairs.front().second);
+          if (inner_col && outer_col && inner_col->getTableKey() == table_key &&
+              outer_col->getTableKey() == outer_input_desc.getTableKey() &&
+              inner_col->get_type_info() == outer_col->get_type_info()) {
+            range_prune_inner_col = inner_col;
+            outer_join_range = get_int_metadata_range(
+                outer_fragment_info, outer_col->getColumnKey().column_id);
+          }
+        }
+      }
+    }
+  }
+
   auto& inner_frags = table_frags_it->second;
   CHECK_LT(size_t(1), ra_exe_unit.input_descs.size());
   std::vector<size_t> all_frag_ids;
   for (size_t inner_frag_idx = 0; inner_frag_idx < inner_frags->size();
        ++inner_frag_idx) {
     const auto& inner_frag_info = (*inner_frags)[inner_frag_idx];
+    if (range_prune_inner_col && outer_join_range) {
+      const auto inner_join_range = get_int_metadata_range(
+          inner_frag_info, range_prune_inner_col->getColumnKey().column_id);
+      if (inner_join_range && (inner_join_range->second < outer_join_range->first ||
+                               outer_join_range->second < inner_join_range->first)) {
+        continue;
+      }
+    }
     if (skipFragmentPair(outer_fragment_info,
                          inner_frag_info,
                          table_idx,
@@ -3398,6 +7272,7 @@ bool Executor::skipFragmentPair(
   if (join_condition->is_bbox_intersect_oper()) {
     return false;
   }
+
   size_t shard_count{0};
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(
           join_condition->get_left_operand())) {
@@ -3424,6 +7299,32 @@ const ColumnDescriptor* try_get_column_descriptor(const InputColDescriptor* col_
 
 }  // namespace
 
+namespace {
+
+bool is_projection_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {
+  return ra_exe_unit.groupby_exprs.size() == size_t(1) &&
+         !ra_exe_unit.groupby_exprs.front();
+}
+
+bool can_direct_peer_read_temporary_payloads(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const Data_Namespace::MemoryLevel memory_level) {
+  return memory_level == Data_Namespace::GPU_LEVEL &&
+         !is_projection_execution_unit(ra_exe_unit) && !ra_exe_unit.groupby_exprs.empty();
+}
+
+bool should_fetch_all_fragments_for_scan(
+    const size_t scan_idx,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const FragmentsList& selected_fragments,
+    const std::unordered_set<size_t>& sharded_range_table_indices,
+    const std::unordered_set<size_t>& global_build_rowid_table_indices,
+    const size_t physical_fragment_count,
+    const bool lazy_fetch_column = false,
+    const bool input_count_implies_broadcast = true);
+
+}  // namespace
+
 std::map<shared::TableKey, std::vector<uint64_t>> get_table_id_to_frag_offsets(
     const std::vector<InputDescriptor>& input_descs,
     const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments) {
@@ -3446,6 +7347,7 @@ FetchResultFragmentInfo Executor::getAllFragmentInfo(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
     const std::vector<InputDescriptor>& input_descs,
+    const FragmentsList& selected_fragments,
     const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments) {
   FetchResultFragmentInfo all_frag_info;
   const auto tab_id_to_frag_offsets =
@@ -3464,8 +7366,13 @@ FetchResultFragmentInfo Executor::getAllFragmentInfo(
           all_tables_fragments.find(input_descs[tab_idx].getTableKey());
       CHECK(fragments_it != all_tables_fragments.end());
       const auto& fragments = *fragments_it->second;
-      if (ra_exe_unit.join_quals.empty() || tab_idx == 0 ||
-          plan_state_->join_info_.sharded_range_table_indices_.count(tab_idx)) {
+      if (!should_fetch_all_fragments_for_scan(
+              tab_idx,
+              ra_exe_unit,
+              selected_fragments,
+              plan_state_->join_info_.sharded_range_table_indices_,
+              plan_state_->join_info_.global_build_rowid_table_indices_,
+              fragments.size())) {
         const auto& fragment = fragments[frag_id];
         num_rows.push_back(fragment.getNumTuples());
       } else {
@@ -3491,42 +7398,80 @@ FetchResultFragmentInfo Executor::getAllFragmentInfo(
   return all_frag_info;
 }
 
-// Only fetch columns of hash-joined inner fact table whose fetch are not deferred from
-// all the table fragments.
-bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
-                                     const RelAlgExecutionUnit& ra_exe_unit,
-                                     const FragmentsList& selected_fragments) const {
+namespace {
+
+bool should_fetch_all_fragments_for_scan(
+    const size_t scan_idx,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const FragmentsList& selected_fragments,
+    const std::unordered_set<size_t>& sharded_range_table_indices,
+    const std::unordered_set<size_t>& global_build_rowid_table_indices,
+    const size_t physical_fragment_count,
+    const bool lazy_fetch_column,
+    const bool input_count_implies_broadcast) {
   const auto& input_descs = ra_exe_unit.input_descs;
+  const bool join_like_step =
+      !ra_exe_unit.join_quals.empty() ||
+      (input_count_implies_broadcast && input_descs.size() > size_t(2));
+  const bool requires_global_build_rowids =
+      global_build_rowid_table_indices.count(scan_idx);
+  const bool sharded_range_table = sharded_range_table_indices.count(scan_idx);
+  const bool reject = scan_idx >= selected_fragments.size() || input_descs.size() < 2 ||
+                      !join_like_step ||
+                      selected_fragments[scan_idx].fragment_ids.empty() ||
+                      physical_fragment_count <= size_t(1) ||
+                      (sharded_range_table && !requires_global_build_rowids) ||
+                      (ra_exe_unit.join_quals.empty() && lazy_fetch_column);
+  if (reject) {
+    return false;
+  }
+  return requires_global_build_rowids || scan_idx > size_t(0);
+}
+
+}  // namespace
+
+// Only fetch columns of hash-joined non-driver fact tables whose fetches are not
+// deferred from all table fragments.
+bool Executor::needFetchAllFragments(
+    const InputColDescriptor& inner_col_desc,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const FragmentsList& selected_fragments,
+    const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments) const {
   const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
-  if (nest_level < 1 ||
-      inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE ||
-      ra_exe_unit.join_quals.empty() || input_descs.size() < 2 ||
-      (ra_exe_unit.join_quals.empty() &&
-       plan_state_->isLazyFetchColumn(inner_col_desc))) {
+  if (nest_level < 0 ||
+      inner_col_desc.getScanDesc().getSourceType() != InputSourceType::TABLE) {
     return false;
   }
   const auto& table_key = inner_col_desc.getScanDesc().getTableKey();
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
   CHECK_EQ(table_key, selected_fragments[nest_level].table_key);
-  const auto& fragments = selected_fragments[nest_level].fragment_ids;
-  return fragments.size() > 1;
+  const auto fragments_it = all_tables_fragments.find(table_key);
+  CHECK(fragments_it != all_tables_fragments.end());
+  return should_fetch_all_fragments_for_scan(
+      static_cast<size_t>(nest_level),
+      ra_exe_unit,
+      selected_fragments,
+      plan_state_->join_info_.sharded_range_table_indices_,
+      plan_state_->join_info_.global_build_rowid_table_indices_,
+      fragments_it->second->size(),
+      plan_state_->isLazyFetchColumn(inner_col_desc),
+      false);
 }
 
-bool Executor::needLinearizeAllFragments(
-    const ColumnDescriptor* cd,
-    const InputColDescriptor& inner_col_desc,
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const FragmentsList& selected_fragments,
-    const Data_Namespace::MemoryLevel memory_level) const {
+bool Executor::needLinearizeAllFragments(const ColumnDescriptor* cd,
+                                         const InputColDescriptor& inner_col_desc,
+                                         const RelAlgExecutionUnit& ra_exe_unit,
+                                         const FragmentsList& selected_fragments,
+                                         const Data_Namespace::MemoryLevel memory_level,
+                                         const size_t physical_fragment_count) const {
   const int nest_level = inner_col_desc.getScanDesc().getNestLevel();
   const auto& table_key = inner_col_desc.getScanDesc().getTableKey();
   CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
   CHECK_EQ(table_key, selected_fragments[nest_level].table_key);
-  const auto& fragments = selected_fragments[nest_level].fragment_ids;
-  auto need_linearize =
+  const auto need_linearize =
       cd->columnType.is_array() ||
       (cd->columnType.is_string() && !cd->columnType.is_dict_encoded_type());
-  return table_key.table_id > 0 && need_linearize && fragments.size() > 1;
+  return table_key.table_id > 0 && need_linearize && physical_fragment_count > 1;
 }
 
 std::ostream& operator<<(std::ostream& os, FetchResult const& fetch_result) {
@@ -3535,6 +7480,13 @@ std::ostream& operator<<(std::ostream& os, FetchResult const& fetch_result) {
             << " frag_offsets"
             << shared::printContainer(fetch_result.fragment_info.frag_offsets)
             << " frag_ids" << shared::printContainer(fetch_result.fragment_info.frag_ids);
+}
+
+namespace {
+std::tuple<bool, int64_t> get_decimal_rhs_value_in_column_scale(
+    const int64_t rhs_value,
+    const SQLTypeInfo& lhs_type,
+    const SQLTypeInfo& rhs_type);
 }
 
 FetchResult Executor::fetchChunks(
@@ -3548,7 +7500,8 @@ FetchResult Executor::fetchChunks(
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks,
     DeviceAllocator* device_allocator,
     const size_t thread_idx,
-    const bool allow_runtime_interrupt) {
+    const bool allow_runtime_interrupt,
+    const bool materializes_for_later_step) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(fetchChunks);
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
@@ -3558,116 +7511,1042 @@ FetchResult Executor::fetchChunks(
                             local_col_to_frag_pos,
                             col_global_ids,
                             selected_fragments,
-                            ra_exe_unit);
+                            ra_exe_unit,
+                            all_tables_fragments);
 
   CartesianProduct<std::vector<std::vector<size_t>>> frag_ids_crossjoin(
       selected_fragments_crossjoin);
-  std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
-  for (const auto& selected_frag_ids : frag_ids_crossjoin) {
-    std::vector<const int8_t*> frag_col_buffers(
-        plan_state_->global_to_local_col_ids_.size());
-    for (const auto& col_id : col_global_ids) {
-      if (allow_runtime_interrupt) {
-        bool isInterrupted = false;
-        {
-          heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
-              executor_session_mutex_);
-          const auto query_session = getCurrentQuerySession(session_read_lock);
-          isInterrupted =
-              checkIsQuerySessionInterrupted(query_session, session_read_lock);
-        }
-        if (isInterrupted) {
-          throw QueryExecutionError(ErrorCode::INTERRUPTED);
-        }
+  const auto selected_dense_column_operand =
+      [](const Analyzer::Expr* expr) -> const Analyzer::ColumnVar* {
+    return dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  };
+
+  const auto read_fixed_width_int =
+      [](const int8_t* data, const size_t row_idx, const SQLTypeInfo& ti) -> int64_t {
+    const auto offset = row_idx * static_cast<size_t>(ti.get_size());
+    int64_t value{0};
+    switch (ti.get_size()) {
+      case 1:
+        value = reinterpret_cast<const int8_t*>(data + offset)[0];
+        break;
+      case 2:
+        value = reinterpret_cast<const int16_t*>(data + offset)[0];
+        break;
+      case 4:
+        value = reinterpret_cast<const int32_t*>(data + offset)[0];
+        break;
+      case 8:
+        value = reinterpret_cast<const int64_t*>(data + offset)[0];
+        break;
+      default:
+        CHECK(false) << ti;
+    }
+    if (ti.get_compression() == kENCODING_DATE_IN_DAYS) {
+      return DateConverters::get_epoch_seconds_from_days(value);
+    }
+    return value;
+  };
+
+  const auto read_fixed_width_fp =
+      [](const int8_t* data, const size_t row_idx, const SQLTypeInfo& ti) -> double {
+    const auto offset = row_idx * static_cast<size_t>(ti.get_size());
+    switch (ti.get_type()) {
+      case kFLOAT:
+        return reinterpret_cast<const float*>(data + offset)[0];
+      case kDOUBLE:
+        return reinterpret_cast<const double*>(data + offset)[0];
+      default:
+        CHECK(false) << ti;
+    }
+    return 0.0;
+  };
+
+  const auto compare_i64 =
+      [](const int64_t lhs, const int64_t rhs, const SQLOps op) -> bool {
+    switch (op) {
+      case kGE:
+        return lhs >= rhs;
+      case kGT:
+        return lhs > rhs;
+      case kLE:
+        return lhs <= rhs;
+      case kLT:
+        return lhs < rhs;
+      case kEQ:
+        return lhs == rhs;
+      default:
+        return false;
+    }
+  };
+
+  const auto compare_fp =
+      [](const double lhs, const double rhs, const SQLOps op) -> bool {
+    switch (op) {
+      case kGE:
+        return lhs >= rhs;
+      case kGT:
+        return lhs > rhs;
+      case kLE:
+        return lhs <= rhs;
+      case kLT:
+        return lhs < rhs;
+      case kEQ:
+        return lhs == rhs;
+      default:
+        return false;
+    }
+  };
+
+  struct SelectedDenseQual {
+    const int8_t* data;
+    SQLTypeInfo type_info;
+    SQLOps op;
+    bool is_fp;
+    int64_t rhs_i64;
+    double rhs_fp;
+  };
+
+  const auto build_selected_dense_quals =
+      [&](const shared::TableKey& table_key,
+          const size_t frag_id) -> std::optional<std::vector<SelectedDenseQual>> {
+    std::vector<SelectedDenseQual> quals;
+    quals.reserve(ra_exe_unit.simple_quals.size());
+    for (const auto& simple_qual : ra_exe_unit.simple_quals) {
+      const auto comp_expr =
+          std::dynamic_pointer_cast<const Analyzer::BinOper>(simple_qual);
+      if (!comp_expr) {
+        return std::nullopt;
       }
-      if (g_enable_dynamic_watchdog && interrupted_.load()) {
-        throw QueryExecutionError(ErrorCode::INTERRUPTED);
+      const auto lhs_col = selected_dense_column_operand(comp_expr->get_left_operand());
+      const auto rhs_const =
+          dynamic_cast<const Analyzer::Constant*>(comp_expr->get_right_operand());
+      if (!lhs_col || !rhs_const || lhs_col->get_rte_idx() != 0) {
+        return std::nullopt;
       }
-      CHECK(col_id);
-      const auto cd = try_get_column_descriptor(col_id.get());
-      if (cd && cd->isVirtualCol) {
-        CHECK_EQ("rowid", cd->columnName);
-        continue;
+      const auto col_id = lhs_col->getColumnKey().column_id;
+      const auto cd = get_column_descriptor({table_key, col_id});
+      if (!cd || cd->isVirtualCol || cd->columnType.is_varlen() ||
+          cd->columnType.is_string() || cd->columnType.is_array() ||
+          cd->columnType.is_geometry() || cd->columnType.usesFlatBuffer() ||
+          cd->columnType.get_size() <= 0) {
+        return std::nullopt;
       }
-      const auto& table_key = col_id->getScanDesc().getTableKey();
-      const auto fragments_it = all_tables_fragments.find(table_key);
-      CHECK(fragments_it != all_tables_fragments.end());
-      const auto fragments = fragments_it->second;
-      auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
-      CHECK(it != plan_state_->global_to_local_col_ids_.end());
-      CHECK_LT(static_cast<size_t>(it->second),
-               plan_state_->global_to_local_col_ids_.size());
-      const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
-      if (!fragments->size()) {
-        return {};
-      }
-      CHECK_LT(frag_id, fragments->size());
-      auto memory_level_for_column = memory_level;
-      const shared::ColumnKey tbl_col_key{col_id->getScanDesc().getTableKey(),
-                                          col_id->getColId()};
-      if (!plan_state_->isColumnToFetch(tbl_col_key)) {
-        memory_level_for_column = Data_Namespace::CPU_LEVEL;
-      }
-      if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-        frag_col_buffers[it->second] =
-            column_fetcher.getResultSetColumn(col_id.get(),
-                                              memory_level_for_column,
-                                              device_id,
-                                              device_allocator,
-                                              thread_idx);
-      } else {
-        if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
-          // determine if we need special treatment to linearlize multi-frag table
-          // i.e., a column that is classified as varlen type, i.e., array
-          // for now, we only support fixed-length array that contains
-          // geo point coordianates but we can support more types in this way
-          if (needLinearizeAllFragments(
-                  cd, *col_id, ra_exe_unit, selected_fragments, memory_level)) {
-            bool for_lazy_fetch = false;
-            if (plan_state_->isColumnToNotFetch(tbl_col_key)) {
-              for_lazy_fetch = true;
-              VLOG(2) << "Try to linearize lazy fetch column (col_id: " << cd->columnId
-                      << ", col_name: " << cd->columnName << ")";
-            }
-            frag_col_buffers[it->second] = column_fetcher.linearizeColumnFragments(
-                col_id->getScanDesc().getTableKey(),
-                col_id->getColId(),
-                all_tables_fragments,
-                chunks,
-                chunk_iterators,
-                for_lazy_fetch ? Data_Namespace::CPU_LEVEL : memory_level,
-                for_lazy_fetch ? 0 : device_id,
-                device_allocator,
-                thread_idx);
-          } else {
-            frag_col_buffers[it->second] = column_fetcher.getAllTableColumnFragments(
-                col_id->getScanDesc().getTableKey(),
-                col_id->getColId(),
-                all_tables_fragments,
-                memory_level_for_column,
-                device_id,
-                device_allocator,
-                thread_idx);
-          }
+      const auto data =
+          column_fetcher.getOneTableColumnFragment(table_key,
+                                                   frag_id,
+                                                   col_id,
+                                                   all_tables_fragments,
+                                                   chunks,
+                                                   chunk_iterators,
+                                                   Data_Namespace::CPU_LEVEL,
+                                                   0,
+                                                   device_allocator);
+      CHECK(data);
+
+      SelectedDenseQual qual{
+          data, cd->columnType, comp_expr->get_optype(), cd->columnType.is_fp(), 0, 0.0};
+      if (qual.is_fp) {
+        const auto datum_fp = rhs_const->get_constval();
+        const auto rhs_type = rhs_const->get_type_info().get_type();
+        if (rhs_type == kFLOAT) {
+          qual.rhs_fp = datum_fp.floatval;
+        } else if (rhs_type == kDOUBLE) {
+          qual.rhs_fp = datum_fp.doubleval;
         } else {
-          frag_col_buffers[it->second] = column_fetcher.getOneTableColumnFragment(
-              col_id->getScanDesc().getTableKey(),
-              frag_id,
-              col_id->getColId(),
-              all_tables_fragments,
-              chunks,
-              chunk_iterators,
-              memory_level_for_column,
-              device_id,
-              device_allocator);
+          return std::nullopt;
+        }
+      } else {
+        llvm::LLVMContext local_context;
+        CgenState local_cgen_state(local_context);
+        auto rhs_val =
+            CodeGenerator::codegenIntConst(rhs_const, &local_cgen_state)->getSExtValue();
+        bool rhs_value_is_valid{false};
+        std::tie(rhs_value_is_valid, rhs_val) = get_decimal_rhs_value_in_column_scale(
+            rhs_val, cd->columnType, rhs_const->get_type_info());
+        if (!rhs_value_is_valid) {
+          return std::nullopt;
+        }
+        qual.rhs_i64 = rhs_val;
+      }
+      quals.push_back(std::move(qual));
+    }
+    return quals;
+  };
+
+  const auto build_selected_dense_rowids =
+      [&](const shared::TableKey& table_key,
+          const size_t frag_id,
+          const Fragmenter_Namespace::FragmentInfo& fragment)
+      -> std::optional<std::vector<int64_t>> {
+    auto quals = build_selected_dense_quals(table_key, frag_id);
+    if (!quals) {
+      return std::nullopt;
+    }
+    if (fragment.getNumTuples() >
+        static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+      throw std::overflow_error("Selected dense fragment row count overflow");
+    }
+    std::vector<int64_t> rowids;
+    rowids.reserve(fragment.getNumTuples());
+    for (size_t row_idx = 0; row_idx < fragment.getNumTuples(); ++row_idx) {
+      bool row_matches = true;
+      for (const auto& qual : *quals) {
+        if (qual.is_fp) {
+          row_matches =
+              compare_fp(read_fixed_width_fp(qual.data, row_idx, qual.type_info),
+                         qual.rhs_fp,
+                         qual.op);
+        } else {
+          row_matches =
+              compare_i64(read_fixed_width_int(qual.data, row_idx, qual.type_info),
+                          qual.rhs_i64,
+                          qual.op);
+        }
+        if (!row_matches) {
+          break;
+        }
+      }
+      if (row_matches) {
+        rowids.push_back(static_cast<int64_t>(row_idx));
+      }
+    }
+    return rowids;
+  };
+
+  const auto copy_selected_dense_payload =
+      [&](const shared::TableKey& table_key,
+          const size_t frag_id,
+          const int col_id,
+          const ColumnDescriptor* cd,
+          const std::vector<int64_t>& selected_rowids) -> const int8_t* {
+    CHECK(device_allocator);
+    CHECK(cd);
+    const auto src = column_fetcher.getOneTableColumnFragment(table_key,
+                                                              frag_id,
+                                                              col_id,
+                                                              all_tables_fragments,
+                                                              chunks,
+                                                              chunk_iterators,
+                                                              Data_Namespace::CPU_LEVEL,
+                                                              0,
+                                                              device_allocator);
+    CHECK(src);
+    const size_t byte_width = static_cast<size_t>(cd->columnType.get_size());
+    const auto checked_out_bytes =
+        checked_size_multiply(selected_rowids.size(), byte_width);
+    if (!checked_out_bytes) {
+      throw std::overflow_error("Selected dense payload size overflow");
+    }
+    const size_t out_bytes = *checked_out_bytes;
+    if (out_bytes == 0) {
+      return nullptr;
+    }
+    if (selected_rowids.back() < 0) {
+      throw std::runtime_error("Selected dense payload has a negative rowid");
+    }
+    const auto source_row_count =
+        checked_size_add(static_cast<size_t>(selected_rowids.back()), size_t{1});
+    if (!source_row_count || !checked_size_multiply(*source_row_count, byte_width)) {
+      throw std::overflow_error("Selected dense payload source size overflow");
+    }
+    std::vector<int8_t> dense_payload(out_bytes);
+    for (size_t selected_idx = 0; selected_idx < selected_rowids.size(); ++selected_idx) {
+      const auto source_row = static_cast<size_t>(selected_rowids[selected_idx]);
+      memcpy(dense_payload.data() + selected_idx * byte_width,
+             src + source_row * byte_width,
+             byte_width);
+    }
+    auto gpu_payload = device_allocator->alloc(out_bytes);
+    device_allocator->copyToDevice(
+        gpu_payload, dense_payload.data(), out_bytes, "Selected dense payload");
+    return gpu_payload;
+  };
+
+  struct InputChunkPrefetch {
+    const ColumnDescriptor* column_descriptor;
+    ChunkKey chunk_key;
+    size_t num_bytes;
+    size_t num_elements;
+  };
+  const auto collect_prefetchable_input_chunks =
+      [&](const Data_Namespace::MemoryLevel target_memory_level,
+          const int target_device_id) {
+        std::vector<InputChunkPrefetch> chunk_prefetches;
+        std::set<ChunkKey> seen_chunk_keys;
+
+        for (const auto& selected_frag_ids : frag_ids_crossjoin) {
+          for (const auto& col_id : col_global_ids) {
+            CHECK(col_id);
+            const auto cd = try_get_column_descriptor(col_id.get());
+            if (!cd || cd->isVirtualCol) {
+              continue;
+            }
+            const auto& table_key = col_id->getScanDesc().getTableKey();
+            const shared::ColumnKey tbl_col_key{table_key, col_id->getColId()};
+            if (!plan_state_->isColumnToFetch(tbl_col_key)) {
+              continue;
+            }
+            if (plan_state_->isColumnToFetchSelectedDense(tbl_col_key) ||
+                plan_state_->isColumnToFetchHostMapped(tbl_col_key)) {
+              continue;
+            }
+            if (col_id->getScanDesc().getSourceType() != InputSourceType::TABLE) {
+              continue;
+            }
+            if (cd->columnType.is_varlen() && !cd->columnType.is_fixlen_array()) {
+              continue;
+            }
+            if (needFetchAllFragments(
+                    *col_id, ra_exe_unit, selected_fragments, all_tables_fragments)) {
+              continue;
+            }
+
+            const auto fragments_it = all_tables_fragments.find(table_key);
+            CHECK(fragments_it != all_tables_fragments.end());
+            const auto fragments = fragments_it->second;
+            auto local_col_it = plan_state_->global_to_local_col_ids_.find(*col_id);
+            CHECK(local_col_it != plan_state_->global_to_local_col_ids_.end());
+            const size_t frag_id =
+                selected_frag_ids[local_col_to_frag_pos[local_col_it->second]];
+            if (!fragments->size()) {
+              continue;
+            }
+            CHECK_LT(frag_id, fragments->size());
+            const auto& fragment = (*fragments)[frag_id];
+            if (fragment.isEmptyPhysicalFragment()) {
+              continue;
+            }
+            auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id->getColId());
+            CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
+            ChunkKey chunk_key{table_key.db_id,
+                               fragment.physicalTableId,
+                               col_id->getColId(),
+                               fragment.fragmentId};
+            if (!seen_chunk_keys.insert(chunk_key).second ||
+                data_mgr_->isBufferOnDevice(
+                    chunk_key, target_memory_level, target_device_id)) {
+              continue;
+            }
+            chunk_prefetches.push_back(
+                InputChunkPrefetch{cd,
+                                   std::move(chunk_key),
+                                   chunk_meta_it->second->numBytes,
+                                   chunk_meta_it->second->numElements});
+          }
+        }
+        return chunk_prefetches;
+      };
+
+  std::vector<InputChunkPrefetch> cpu_chunk_prefetches;
+  std::atomic<size_t> next_cpu_prefetch_idx{0};
+  std::vector<std::future<void>> cpu_prefetch_workers;
+  bool cpu_prefetch_started = false;
+
+  std::vector<InputChunkPrefetch> gpu_chunk_prefetches;
+  std::atomic<size_t> next_gpu_prefetch_idx{0};
+  std::vector<std::shared_ptr<Chunk_NS::Chunk>> gpu_prefetch_chunk_holders;
+  std::mutex gpu_prefetch_chunk_holders_mutex;
+  std::vector<std::future<void>> gpu_prefetch_workers;
+  bool gpu_prefetch_started = false;
+
+  struct PrefetchWorkerJoiner {
+    std::vector<std::future<void>>& cpu_workers;
+    std::vector<std::future<void>>& gpu_workers;
+
+    ~PrefetchWorkerJoiner() {
+      wait(cpu_workers);
+      wait(gpu_workers);
+    }
+
+   private:
+    static void wait(std::vector<std::future<void>>& workers) noexcept {
+      for (auto& worker : workers) {
+        if (worker.valid()) {
+          try {
+            worker.wait();
+          } catch (...) {
+          }
         }
       }
     }
-    all_frag_col_buffers.push_back(frag_col_buffers);
+  } prefetch_worker_joiner{cpu_prefetch_workers, gpu_prefetch_workers};
+
+  if (g_enable_gpu_input_cpu_prefetch && !g_enable_gpu_input_prefetch &&
+      memory_level == Data_Namespace::GPU_LEVEL) {
+    cpu_chunk_prefetches =
+        collect_prefetchable_input_chunks(Data_Namespace::CPU_LEVEL, 0);
+    if (!cpu_chunk_prefetches.empty()) {
+      const size_t worker_count =
+          std::max<size_t>(1,
+                           std::min({cpu_chunk_prefetches.size(),
+                                     static_cast<size_t>(cpu_threads()),
+                                     size_t(32)}));
+      cpu_prefetch_started = true;
+      cpu_prefetch_workers.reserve(worker_count);
+      for (size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
+        cpu_prefetch_workers.push_back(std::async(std::launch::async, [&, this] {
+          while (true) {
+            const auto i = next_cpu_prefetch_idx.fetch_add(1);
+            if (i >= cpu_chunk_prefetches.size()) {
+              return;
+            }
+            if (allow_runtime_interrupt) {
+              bool isInterrupted = false;
+              {
+                heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+                    executor_session_mutex_);
+                const auto query_session = getCurrentQuerySession(session_read_lock);
+                isInterrupted =
+                    checkIsQuerySessionInterrupted(query_session, session_read_lock);
+              }
+              if (isInterrupted) {
+                throw QueryExecutionError(ErrorCode::INTERRUPTED);
+              }
+            }
+            if (g_enable_dynamic_watchdog && interrupted_.load()) {
+              throw QueryExecutionError(ErrorCode::INTERRUPTED);
+            }
+
+            const auto& prefetch = cpu_chunk_prefetches[i];
+            Chunk_NS::Chunk::getChunk(prefetch.column_descriptor,
+                                      data_mgr_,
+                                      prefetch.chunk_key,
+                                      Data_Namespace::CPU_LEVEL,
+                                      0,
+                                      prefetch.num_bytes,
+                                      prefetch.num_elements);
+          }
+        }));
+      }
+    }
   }
-  auto const fragment_info = getAllFragmentInfo(
-      ra_exe_unit, frag_ids_crossjoin, ra_exe_unit.input_descs, all_tables_fragments);
-  return {std::move(all_frag_col_buffers), std::move(fragment_info)};
+
+  if (g_enable_gpu_input_prefetch && memory_level == Data_Namespace::GPU_LEVEL) {
+    gpu_chunk_prefetches =
+        collect_prefetchable_input_chunks(Data_Namespace::GPU_LEVEL, device_id);
+    if (!gpu_chunk_prefetches.empty()) {
+      gpu_prefetch_chunk_holders.reserve(gpu_chunk_prefetches.size());
+      if (g_enable_gpu_input_batched_prefetch) {
+        std::vector<Data_Namespace::BufferFetchRequest> requests;
+        requests.reserve(gpu_chunk_prefetches.size());
+        for (const auto& prefetch : gpu_chunk_prefetches) {
+          requests.push_back({prefetch.chunk_key, prefetch.num_bytes});
+        }
+        auto buffers =
+            data_mgr_->getChunkBuffers(requests, Data_Namespace::GPU_LEVEL, device_id);
+        CHECK_EQ(buffers.size(), gpu_chunk_prefetches.size());
+        for (size_t i = 0; i < buffers.size(); ++i) {
+          auto chunk = Chunk_NS::Chunk::getChunk(
+              gpu_chunk_prefetches[i].column_descriptor, buffers[i], nullptr);
+          chunks.push_back(std::move(chunk));
+        }
+      } else {
+        const size_t worker_count =
+            std::max<size_t>(1,
+                             std::min({gpu_chunk_prefetches.size(),
+                                       static_cast<size_t>(cpu_threads()),
+                                       g_gpu_input_prefetch_workers}));
+        gpu_prefetch_started = true;
+        gpu_prefetch_workers.reserve(worker_count);
+        for (size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
+          gpu_prefetch_workers.push_back(std::async(std::launch::async, [&, this] {
+            while (true) {
+              const auto i = next_gpu_prefetch_idx.fetch_add(1);
+              if (i >= gpu_chunk_prefetches.size()) {
+                return;
+              }
+              if (allow_runtime_interrupt) {
+                bool isInterrupted = false;
+                {
+                  heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+                      executor_session_mutex_);
+                  const auto query_session = getCurrentQuerySession(session_read_lock);
+                  isInterrupted =
+                      checkIsQuerySessionInterrupted(query_session, session_read_lock);
+                }
+                if (isInterrupted) {
+                  throw QueryExecutionError(ErrorCode::INTERRUPTED);
+                }
+              }
+              if (g_enable_dynamic_watchdog && interrupted_.load()) {
+                throw QueryExecutionError(ErrorCode::INTERRUPTED);
+              }
+
+              const auto& prefetch = gpu_chunk_prefetches[i];
+              auto chunk = Chunk_NS::Chunk::getChunk(prefetch.column_descriptor,
+                                                     data_mgr_,
+                                                     prefetch.chunk_key,
+                                                     Data_Namespace::GPU_LEVEL,
+                                                     device_id,
+                                                     prefetch.num_bytes,
+                                                     prefetch.num_elements);
+              std::lock_guard<std::mutex> lock(gpu_prefetch_chunk_holders_mutex);
+              gpu_prefetch_chunk_holders.push_back(std::move(chunk));
+            }
+          }));
+        }
+      }
+    }
+  }
+  const auto wait_for_cpu_prefetches = [&]() {
+    if (!cpu_prefetch_started) {
+      return;
+    }
+    for (auto& worker : cpu_prefetch_workers) {
+      worker.get();
+    }
+    cpu_prefetch_workers.clear();
+    cpu_prefetch_started = false;
+  };
+
+  const auto wait_for_gpu_prefetches = [&]() {
+    if (!gpu_prefetch_started) {
+      return;
+    }
+    for (auto& worker : gpu_prefetch_workers) {
+      worker.get();
+    }
+    for (auto& chunk : gpu_prefetch_chunk_holders) {
+      chunks.push_back(std::move(chunk));
+    }
+    gpu_prefetch_workers.clear();
+    gpu_prefetch_started = false;
+  };
+
+  std::vector<std::vector<const int8_t*>> all_frag_col_buffers;
+  ColumnBufferLayouts all_frag_col_buffer_layouts;
+  std::vector<std::vector<const int64_t*>> all_frag_selected_rowids;
+  DeferredLazyFetchChunks all_frag_deferred_lazy_fetch_chunks;
+  bool has_deferred_lazy_fetch_chunks{false};
+  LazyFetchSourceMetadata lazy_fetch_source_metadata;
+  std::unordered_map<size_t, std::unordered_set<const ChunkMetadata*>>
+      seen_lazy_fetch_source_metadata;
+  std::vector<std::optional<int64_t>> selected_dense_num_rows;
+  std::vector<std::shared_ptr<void>> fetch_owners;
+  const bool allow_result_payload_peer_access =
+      can_direct_peer_read_temporary_payloads(ra_exe_unit, memory_level);
+  std::unordered_set<size_t> output_lazy_fetch_local_col_ids;
+  std::unordered_map<size_t, bool> output_lazy_fetch_uses_storage_local_rowid;
+  if (memory_level == Data_Namespace::GPU_LEVEL && plan_state_->allow_lazy_fetch_) {
+    const auto lazy_fetch_info = getColLazyFetchInfo(
+        ra_exe_unit.target_exprs, may_use_storage_local_lazy_fetch_rowid(ra_exe_unit));
+    CHECK_EQ(lazy_fetch_info.size(), ra_exe_unit.target_exprs.size());
+    for (size_t target_idx = 0; target_idx < lazy_fetch_info.size(); ++target_idx) {
+      const auto& info = lazy_fetch_info[target_idx];
+      if (info.is_lazily_fetched) {
+        CHECK_GE(info.local_col_id, 0);
+        const auto& target_type = ra_exe_unit.target_exprs[target_idx]->get_type_info();
+        const auto physical_column_count =
+            target_type.is_geometry() ? target_type.get_physical_coord_cols() : 1;
+        CHECK_GT(physical_column_count, 0);
+        for (int physical_column_idx = 0; physical_column_idx < physical_column_count;
+             ++physical_column_idx) {
+          const auto local_col_id =
+              static_cast<size_t>(info.local_col_id + physical_column_idx);
+          CHECK_LT(local_col_id, plan_state_->global_to_local_col_ids_.size());
+          output_lazy_fetch_local_col_ids.insert(local_col_id);
+          output_lazy_fetch_uses_storage_local_rowid[local_col_id] =
+              output_lazy_fetch_uses_storage_local_rowid[local_col_id] ||
+              info.use_storage_local_rowid;
+        }
+      }
+    }
+  }
+  if (g_enable_deferred_lazy_fetch && memory_level == Data_Namespace::GPU_LEVEL) {
+    struct DeferredResultColumns {
+      ResultSetPtr result_set;
+      std::vector<size_t> target_logical_indices;
+    };
+    std::unordered_map<const ResultSet*, DeferredResultColumns> deferred_result_columns;
+    for (const auto& col_id : col_global_ids) {
+      CHECK(col_id);
+      if (col_id->getScanDesc().getSourceType() != InputSourceType::RESULT) {
+        continue;
+      }
+      const shared::ColumnKey result_col_key{col_id->getScanDesc().getTableKey(),
+                                             col_id->getColId()};
+      if (!plan_state_->isColumnToFetch(result_col_key)) {
+        continue;
+      }
+      auto result_set = get_temporary_table(temporary_tables_, result_col_key.table_id);
+      CHECK(result_set);
+      if (!result_set->hasDeferredLazyFetchChunks()) {
+        continue;
+      }
+      auto& columns = deferred_result_columns[result_set.get()];
+      columns.result_set = std::move(result_set);
+      columns.target_logical_indices.push_back(
+          static_cast<size_t>(result_col_key.column_id));
+    }
+    for (auto& [result_set_ptr, columns] : deferred_result_columns) {
+      CHECK_EQ(result_set_ptr, columns.result_set.get());
+      std::sort(columns.target_logical_indices.begin(),
+                columns.target_logical_indices.end());
+      columns.target_logical_indices.erase(
+          std::unique(columns.target_logical_indices.begin(),
+                      columns.target_logical_indices.end()),
+          columns.target_logical_indices.end());
+      column_fetcher.setResultSetColumnSelection(columns.result_set,
+                                                 columns.target_logical_indices);
+    }
+  }
+  std::unordered_map<size_t, DeferredLazyFetchChunkPtr>
+      linearized_deferred_lazy_fetch_chunks;
+  {
+    for (const auto& selected_frag_ids : frag_ids_crossjoin) {
+      std::vector<const int8_t*> frag_col_buffers(
+          plan_state_->global_to_local_col_ids_.size());
+      std::vector<ColumnBufferLayout> frag_col_buffer_layouts(
+          plan_state_->global_to_local_col_ids_.size(), ColumnBufferLayout::Fragment);
+      DeferredLazyFetchChunkFragment frag_deferred_lazy_fetch_chunks(
+          plan_state_->global_to_local_col_ids_.size());
+      std::vector<const int64_t*> frag_selected_rowids;
+      std::optional<std::vector<int64_t>> selected_dense_rowids;
+      const bool use_selected_dense_fetch =
+          memory_level == Data_Namespace::GPU_LEVEL &&
+          plan_state_->hasSelectedDenseColumnsToFetch() &&
+          ra_exe_unit.input_descs.size() == size_t(1) && selected_frag_ids.size() == 1 &&
+          ra_exe_unit.input_descs.front().getSourceType() == InputSourceType::TABLE;
+      if (use_selected_dense_fetch) {
+        const auto& table_key = ra_exe_unit.input_descs.front().getTableKey();
+        const auto fragments_it = all_tables_fragments.find(table_key);
+        CHECK(fragments_it != all_tables_fragments.end());
+        const auto fragments = fragments_it->second;
+        const auto frag_id = selected_frag_ids.front();
+        CHECK_LT(frag_id, fragments->size());
+        const auto& fragment = (*fragments)[frag_id];
+        selected_dense_rowids = build_selected_dense_rowids(table_key, frag_id, fragment);
+        CHECK(selected_dense_rowids)
+            << "Selected-dense predicate eligibility accepted a predicate shape that "
+               "runtime rowid construction cannot evaluate.";
+        if (selected_dense_rowids->size() >
+            static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
+          throw std::overflow_error("Selected dense row count overflow");
+        }
+        selected_dense_num_rows.push_back(
+            static_cast<int64_t>(selected_dense_rowids->size()));
+        const auto checked_rowid_bytes =
+            checked_size_multiply(selected_dense_rowids->size(), sizeof(int64_t));
+        if (!checked_rowid_bytes) {
+          throw std::overflow_error("Selected dense rowid buffer size overflow");
+        }
+        const auto rowid_bytes = *checked_rowid_bytes;
+        const int64_t* device_selected_rowids = nullptr;
+        if (rowid_bytes > 0) {
+          auto rowid_buffer = device_allocator->alloc(rowid_bytes);
+          device_allocator->copyToDevice(rowid_buffer,
+                                         selected_dense_rowids->data(),
+                                         rowid_bytes,
+                                         "Selected dense rowids");
+          device_selected_rowids = reinterpret_cast<const int64_t*>(rowid_buffer);
+        }
+        frag_selected_rowids.push_back(device_selected_rowids);
+      } else {
+        selected_dense_num_rows.push_back(std::nullopt);
+      }
+      for (const auto& col_id : col_global_ids) {
+        CHECK(col_id);
+        if (allow_runtime_interrupt) {
+          bool isInterrupted = false;
+          {
+            heavyai::shared_lock<heavyai::shared_mutex> session_read_lock(
+                executor_session_mutex_);
+            const auto query_session = getCurrentQuerySession(session_read_lock);
+            isInterrupted =
+                checkIsQuerySessionInterrupted(query_session, session_read_lock);
+          }
+          if (isInterrupted) {
+            throw QueryExecutionError(ErrorCode::INTERRUPTED);
+          }
+        }
+        if (g_enable_dynamic_watchdog && interrupted_.load()) {
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
+        }
+        const auto cd = try_get_column_descriptor(col_id.get());
+        if (cd && cd->isVirtualCol) {
+          CHECK_EQ("rowid", cd->columnName);
+          continue;
+        }
+        const auto& table_key = col_id->getScanDesc().getTableKey();
+        const auto fragments_it = all_tables_fragments.find(table_key);
+        CHECK(fragments_it != all_tables_fragments.end());
+        const auto fragments = fragments_it->second;
+        auto it = plan_state_->global_to_local_col_ids_.find(*col_id);
+        CHECK(it != plan_state_->global_to_local_col_ids_.end());
+        CHECK_LT(static_cast<size_t>(it->second),
+                 plan_state_->global_to_local_col_ids_.size());
+        const size_t frag_id = selected_frag_ids[local_col_to_frag_pos[it->second]];
+        if (!fragments->size()) {
+          return {};
+        }
+        CHECK_LT(frag_id, fragments->size());
+        const auto& fragment = (*fragments)[frag_id];
+        auto memory_level_for_column = memory_level;
+        const shared::ColumnKey tbl_col_key{col_id->getScanDesc().getTableKey(),
+                                            col_id->getColId()};
+        ResultSetPtr result_set;
+        if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
+          result_set = get_temporary_table(temporary_tables_, tbl_col_key.table_id);
+        }
+        if (!plan_state_->isColumnToFetch(tbl_col_key)) {
+          const bool needed_for_lazy_output =
+              output_lazy_fetch_local_col_ids.count(static_cast<size_t>(it->second));
+          const bool fetches_all_table_fragments =
+              col_id->getScanDesc().getSourceType() == InputSourceType::TABLE &&
+              needFetchAllFragments(
+                  *col_id, ra_exe_unit, selected_fragments, all_tables_fragments);
+          if (g_enable_deferred_lazy_fetch && memory_level == Data_Namespace::GPU_LEVEL &&
+              needed_for_lazy_output && cd &&
+              col_id->getScanDesc().getSourceType() == InputSourceType::TABLE &&
+              !cd->isVirtualCol && !cd->columnType.is_varlen() &&
+              !cd->columnType.is_array() && !cd->columnType.is_geometry() &&
+              !cd->columnType.usesFlatBuffer() && cd->columnType.get_size() > 0) {
+            auto& column_metadata = lazy_fetch_source_metadata[it->second];
+            auto& seen_metadata = seen_lazy_fetch_source_metadata[it->second];
+            const auto add_fragment_metadata = [&](const auto& source_fragment) {
+              if (source_fragment.isEmptyPhysicalFragment()) {
+                return;
+              }
+              const auto metadata_it =
+                  source_fragment.getChunkMetadataMap().find(col_id->getColId());
+              CHECK(metadata_it != source_fragment.getChunkMetadataMap().end());
+              if (seen_metadata.insert(metadata_it->second.get()).second) {
+                column_metadata.push_back(
+                    LazyFetchSourceMetadataEntry{metadata_it->second, cd->columnType});
+              }
+            };
+            if (fetches_all_table_fragments) {
+              for (const auto& source_fragment : *fragments) {
+                add_fragment_metadata(source_fragment);
+              }
+            } else {
+              add_fragment_metadata(fragment);
+            }
+          }
+          if (memory_level == Data_Namespace::GPU_LEVEL &&
+              col_id->getScanDesc().getSourceType() == InputSourceType::TABLE &&
+              !needed_for_lazy_output) {
+            frag_col_buffers[it->second] = nullptr;
+            continue;
+          }
+          const bool can_defer_lazy_fetch =
+              g_enable_deferred_lazy_fetch && memory_level == Data_Namespace::GPU_LEVEL &&
+              needed_for_lazy_output && cd &&
+              col_id->getScanDesc().getSourceType() == InputSourceType::TABLE &&
+              !cd->isVirtualCol && !cd->columnType.is_varlen() &&
+              !cd->columnType.is_array() && !cd->columnType.is_geometry() &&
+              !cd->columnType.usesFlatBuffer() && cd->columnType.get_size() > 0 &&
+              (!fetches_all_table_fragments ||
+               !output_lazy_fetch_uses_storage_local_rowid.at(
+                   static_cast<size_t>(it->second)));
+          if (can_defer_lazy_fetch) {
+            frag_col_buffers[it->second] = nullptr;
+            if (fetches_all_table_fragments) {
+              frag_col_buffer_layouts[it->second] = ColumnBufferLayout::Linearized;
+              auto& deferred_chunk =
+                  linearized_deferred_lazy_fetch_chunks[static_cast<size_t>(it->second)];
+              if (!deferred_chunk) {
+                std::vector<DeferredLazyFetchChunkSource> sources;
+                sources.reserve(fragments->size());
+                for (const auto& source_fragment : *fragments) {
+                  if (source_fragment.isEmptyPhysicalFragment()) {
+                    continue;
+                  }
+                  const auto chunk_meta_it =
+                      source_fragment.getChunkMetadataMap().find(col_id->getColId());
+                  CHECK(chunk_meta_it != source_fragment.getChunkMetadataMap().end());
+                  sources.push_back(DeferredLazyFetchChunkSource{
+                      ChunkKey{table_key.db_id,
+                               source_fragment.physicalTableId,
+                               col_id->getColId(),
+                               source_fragment.fragmentId},
+                      chunk_meta_it->second->numBytes,
+                      chunk_meta_it->second->numElements});
+                }
+                if (!sources.empty()) {
+                  deferred_chunk = std::make_shared<DeferredLazyFetchChunk>(
+                      *cd, data_mgr_, std::move(sources));
+                }
+              }
+              frag_deferred_lazy_fetch_chunks[it->second] = deferred_chunk;
+              has_deferred_lazy_fetch_chunks =
+                  has_deferred_lazy_fetch_chunks || static_cast<bool>(deferred_chunk);
+            } else if (!fragment.isEmptyPhysicalFragment()) {
+              const auto chunk_meta_it =
+                  fragment.getChunkMetadataMap().find(col_id->getColId());
+              CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
+              ChunkKey chunk_key{table_key.db_id,
+                                 fragment.physicalTableId,
+                                 col_id->getColId(),
+                                 fragment.fragmentId};
+              frag_deferred_lazy_fetch_chunks[it->second] =
+                  std::make_shared<DeferredLazyFetchChunk>(
+                      *cd,
+                      data_mgr_,
+                      std::move(chunk_key),
+                      chunk_meta_it->second->numBytes,
+                      chunk_meta_it->second->numElements);
+              has_deferred_lazy_fetch_chunks = true;
+            }
+            continue;
+          }
+          if (memory_level == Data_Namespace::GPU_LEVEL &&
+              col_id->getScanDesc().getSourceType() == InputSourceType::RESULT &&
+              !needed_for_lazy_output) {
+            CHECK(result_set);
+            const auto logical_ti =
+                get_logical_type_info(result_set->getColType(tbl_col_key.column_id));
+            std::vector<ResultSet::DeviceColumnarBufferFragment> device_fragments;
+            if (logical_ti.get_size() > 0 && !logical_ti.is_varlen() &&
+                !logical_ti.is_string() &&
+                result_set->getDeviceColumnarBufferFragments(
+                    tbl_col_key.column_id,
+                    static_cast<size_t>(logical_ti.get_size()),
+                    device_fragments) &&
+                !device_fragments.empty()) {
+              frag_col_buffers[it->second] = nullptr;
+              continue;
+            }
+          }
+          memory_level_for_column = Data_Namespace::CPU_LEVEL;
+        }
+        if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
+          CHECK(result_set);
+          const auto scan_nest_level = col_id->getScanDesc().getNestLevel();
+          CHECK_GE(scan_nest_level, 0);
+          const auto scan_idx = static_cast<size_t>(scan_nest_level);
+          CHECK_LT(scan_idx, selected_fragments.size());
+          const bool fetch_all_result_fragments = should_fetch_all_fragments_for_scan(
+              scan_idx,
+              ra_exe_unit,
+              selected_fragments,
+              plan_state_->join_info_.sharded_range_table_indices_,
+              plan_state_->join_info_.global_build_rowid_table_indices_,
+              all_tables_fragments.at(ra_exe_unit.input_descs[scan_idx].getTableKey())
+                  ->size());
+          const bool selected_result_fragment_is_whole_table =
+              fragments->size() == size_t(1) && fragment.fragmentId == 0 &&
+              fragment.getNumTuples() == result_set->rowCount();
+          const int result_frag_id =
+              fetch_all_result_fragments || selected_result_fragment_is_whole_table
+                  ? -1
+                  : static_cast<int>(frag_id);
+          const auto result_column_layout = result_frag_id < 0
+                                                ? ColumnBufferLayout::Linearized
+                                                : ColumnBufferLayout::Fragment;
+          if (memory_level_for_column == Data_Namespace::GPU_LEVEL &&
+              plan_state_->isColumnToFetchSegmented(*col_id)) {
+            frag_col_buffers[it->second] = column_fetcher.getResultSetColumnSegmented(
+                col_id.get(),
+                memory_level_for_column,
+                device_id,
+                device_allocator,
+                thread_idx,
+                result_frag_id,
+                allow_result_payload_peer_access);
+            frag_col_buffer_layouts[it->second] = ColumnBufferLayout::Segmented;
+          } else {
+            frag_col_buffers[it->second] =
+                column_fetcher.getResultSetColumn(col_id.get(),
+                                                  memory_level_for_column,
+                                                  device_id,
+                                                  device_allocator,
+                                                  thread_idx,
+                                                  result_frag_id);
+            frag_col_buffer_layouts[it->second] = result_column_layout;
+          }
+        } else {
+          const bool use_segmented_column_fetch =
+              memory_level_for_column == Data_Namespace::GPU_LEVEL &&
+              plan_state_->isColumnToFetch(tbl_col_key) &&
+              plan_state_->isColumnToFetchSegmented(*col_id);
+          if (use_segmented_column_fetch) {
+            std::vector<size_t> segmented_frag_ids;
+            const bool fetch_all_fragments = needFetchAllFragments(
+                *col_id, ra_exe_unit, selected_fragments, all_tables_fragments);
+            if (fetch_all_fragments) {
+              const auto nest_level = col_id->getScanDesc().getNestLevel();
+              CHECK_GE(nest_level, 0);
+              CHECK_LT(static_cast<size_t>(nest_level), selected_fragments.size());
+              segmented_frag_ids = selected_fragments[nest_level].fragment_ids;
+            } else {
+              segmented_frag_ids.push_back(frag_id);
+            }
+            {
+              frag_col_buffers[it->second] =
+                  column_fetcher.getTableColumnFragmentsSegmented(
+                      col_id->getScanDesc().getTableKey(),
+                      col_id->getColId(),
+                      all_tables_fragments,
+                      segmented_frag_ids,
+                      memory_level_for_column,
+                      device_id,
+                      device_allocator);
+            }
+            frag_col_buffer_layouts[it->second] = ColumnBufferLayout::Segmented;
+            continue;
+          }
+          const bool fetch_all_fragments = needFetchAllFragments(
+              *col_id, ra_exe_unit, selected_fragments, all_tables_fragments);
+          if (fetch_all_fragments) {
+            // determine if we need special treatment to linearlize multi-frag table
+            // i.e., a column that is classified as varlen type, i.e., array
+            // for now, we only support fixed-length array that contains
+            // geo point coordianates but we can support more types in this way
+            if (needLinearizeAllFragments(cd,
+                                          *col_id,
+                                          ra_exe_unit,
+                                          selected_fragments,
+                                          memory_level,
+                                          fragments->size())) {
+              bool for_lazy_fetch = false;
+              if (plan_state_->isColumnToNotFetch(tbl_col_key)) {
+                for_lazy_fetch = true;
+                VLOG(2) << "Try to linearize lazy fetch column (col_id: " << cd->columnId
+                        << ", col_name: " << cd->columnName << ")";
+              }
+              const auto linearized_memory_level =
+                  for_lazy_fetch ? Data_Namespace::CPU_LEVEL : memory_level;
+              {
+                frag_col_buffers[it->second] = column_fetcher.linearizeColumnFragments(
+                    col_id->getScanDesc().getTableKey(),
+                    col_id->getColId(),
+                    all_tables_fragments,
+                    chunks,
+                    chunk_iterators,
+                    linearized_memory_level,
+                    for_lazy_fetch ? 0 : device_id,
+                    device_allocator,
+                    thread_idx);
+              }
+              frag_col_buffer_layouts[it->second] = ColumnBufferLayout::Linearized;
+            } else {
+              {
+                frag_col_buffers[it->second] = column_fetcher.getAllTableColumnFragments(
+                    col_id->getScanDesc().getTableKey(),
+                    col_id->getColId(),
+                    all_tables_fragments,
+                    memory_level_for_column,
+                    device_id,
+                    device_allocator,
+                    thread_idx);
+              }
+              frag_col_buffer_layouts[it->second] = ColumnBufferLayout::Linearized;
+            }
+          } else {
+            const bool fetch_selected_dense_payload =
+                memory_level_for_column == Data_Namespace::GPU_LEVEL &&
+                selected_dense_rowids.has_value() &&
+                col_id->getScanDesc().getSourceType() == InputSourceType::TABLE &&
+                plan_state_->isColumnToFetchSelectedDense(tbl_col_key) && cd &&
+                !cd->isVirtualCol && !cd->columnType.is_array() &&
+                !cd->columnType.is_geometry() && !cd->columnType.is_varlen() &&
+                !cd->columnType.usesFlatBuffer() && !cd->columnType.is_string() &&
+                cd->columnType.get_size() > 0;
+            if (fetch_selected_dense_payload) {
+              {
+                frag_col_buffers[it->second] =
+                    copy_selected_dense_payload(col_id->getScanDesc().getTableKey(),
+                                                frag_id,
+                                                col_id->getColId(),
+                                                cd,
+                                                *selected_dense_rowids);
+              }
+              continue;
+            }
+            const bool fetch_host_mapped_payload =
+                memory_level_for_column == Data_Namespace::GPU_LEVEL &&
+                col_id->getScanDesc().getSourceType() == InputSourceType::TABLE &&
+                plan_state_->isColumnToFetchHostMapped(tbl_col_key) && cd &&
+                !cd->isVirtualCol && !cd->columnType.is_array() &&
+                !cd->columnType.is_geometry() && !cd->columnType.is_varlen() &&
+                !cd->columnType.usesFlatBuffer() && !cd->columnType.is_string() &&
+                cd->columnType.get_size() > 0 && data_mgr_->getCudaMgr();
+            const int8_t* fetched_column{nullptr};
+            {
+              fetched_column = column_fetcher.getOneTableColumnFragment(
+                  col_id->getScanDesc().getTableKey(),
+                  frag_id,
+                  col_id->getColId(),
+                  all_tables_fragments,
+                  chunks,
+                  chunk_iterators,
+                  fetch_host_mapped_payload ? Data_Namespace::CPU_LEVEL
+                                            : memory_level_for_column,
+                  fetch_host_mapped_payload ? 0 : device_id,
+                  device_allocator);
+            }
+            if (fetch_host_mapped_payload && fetched_column) {
+              const auto chunk_meta_it =
+                  fragment.getChunkMetadataMap().find(col_id->getColId());
+              CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
+              const auto num_bytes = chunk_meta_it->second->numBytes;
+              if (const auto mapped_column =
+                      data_mgr_->getCudaMgr()->registerMappedHostMemory(
+                          fetched_column, num_bytes, device_id)) {
+                frag_col_buffers[it->second] = *mapped_column;
+                fetch_owners.emplace_back(
+                    const_cast<int8_t*>(fetched_column),
+                    [cuda_mgr = data_mgr_->getCudaMgr(), fetched_column, num_bytes](
+                        void*) {
+                      cuda_mgr->unregisterMappedHostMemory(fetched_column, num_bytes);
+                    });
+              } else {
+                frag_col_buffers[it->second] = column_fetcher.getOneTableColumnFragment(
+                    col_id->getScanDesc().getTableKey(),
+                    frag_id,
+                    col_id->getColId(),
+                    all_tables_fragments,
+                    chunks,
+                    chunk_iterators,
+                    memory_level_for_column,
+                    device_id,
+                    device_allocator);
+              }
+            } else {
+              frag_col_buffers[it->second] = fetched_column;
+            }
+          }
+        }
+      }
+      all_frag_col_buffers.push_back(frag_col_buffers);
+      all_frag_col_buffer_layouts.push_back(frag_col_buffer_layouts);
+      all_frag_deferred_lazy_fetch_chunks.push_back(
+          std::move(frag_deferred_lazy_fetch_chunks));
+      if (!frag_selected_rowids.empty()) {
+        all_frag_selected_rowids.push_back(frag_selected_rowids);
+      }
+    }
+  }
+  {
+    wait_for_gpu_prefetches();
+    wait_for_cpu_prefetches();
+  }
+  auto fragment_info = getAllFragmentInfo(ra_exe_unit,
+                                          frag_ids_crossjoin,
+                                          ra_exe_unit.input_descs,
+                                          selected_fragments,
+                                          all_tables_fragments);
+  CHECK_EQ(fragment_info.num_rows.size(), selected_dense_num_rows.size());
+  for (size_t frag_idx = 0; frag_idx < selected_dense_num_rows.size(); ++frag_idx) {
+    if (selected_dense_num_rows[frag_idx]) {
+      CHECK_EQ(fragment_info.num_rows[frag_idx].size(), size_t(1));
+      fragment_info.num_rows[frag_idx][0] = *selected_dense_num_rows[frag_idx];
+    }
+  }
+  if (!all_frag_selected_rowids.empty()) {
+    CHECK_EQ(all_frag_selected_rowids.size(), all_frag_col_buffers.size());
+  }
+  if (!has_deferred_lazy_fetch_chunks) {
+    all_frag_deferred_lazy_fetch_chunks.clear();
+  }
+  return {std::move(all_frag_col_buffers),
+          std::move(all_frag_col_buffer_layouts),
+          std::move(all_frag_selected_rowids),
+          std::move(fragment_info),
+          std::move(fetch_owners),
+          std::move(all_frag_deferred_lazy_fetch_chunks),
+          std::move(lazy_fetch_source_metadata)};
 }
 
 namespace {
@@ -3703,16 +8582,17 @@ std::list<std::shared_ptr<const InputColDescriptor>> get_selected_input_col_desc
   return selected;
 }
 
-// Set N consecutive elements of frag_col_buffers to ptr in the range of local_col_id.
-void set_mod_range(std::vector<int8_t const*>& frag_col_buffers,
-                   int8_t const* const ptr,
+// Set N consecutive elements of a local-column vector in the range of local_col_id.
+template <typename T>
+void set_mod_range(std::vector<T>& values,
+                   const T& value,
                    size_t const local_col_id,
                    size_t const N) {
   size_t const begin = local_col_id - local_col_id % N;  // N divides begin
   size_t const end = begin + N;
-  CHECK_LE(end, frag_col_buffers.size()) << (void*)ptr << ' ' << local_col_id << ' ' << N;
+  CHECK_LE(end, values.size()) << local_col_id << ' ' << N;
   for (size_t i = begin; i < end; ++i) {
-    frag_col_buffers[i] = ptr;
+    values[i] = value;
   }
 }
 }  // namespace
@@ -3776,6 +8656,19 @@ FetchResult Executor::fetchUnionChunks(
   }
   std::vector<const int8_t*> frag_col_buffers(
       plan_state_->global_to_local_col_ids_.size());
+  std::vector<ColumnBufferLayout> frag_col_buffer_layouts(
+      plan_state_->global_to_local_col_ids_.size(), ColumnBufferLayout::Fragment);
+  std::unordered_set<size_t> output_lazy_fetch_local_col_ids;
+  if (memory_level == Data_Namespace::GPU_LEVEL && plan_state_->allow_lazy_fetch_) {
+    for (const auto& info :
+         getColLazyFetchInfo(ra_exe_unit.target_exprs,
+                             may_use_storage_local_lazy_fetch_rowid(ra_exe_unit))) {
+      if (info.is_lazily_fetched) {
+        CHECK_GE(info.local_col_id, 0);
+        output_lazy_fetch_local_col_ids.insert(static_cast<size_t>(info.local_col_id));
+      }
+    }
+  }
   for (const auto& col_id : selected_input_col_descs) {
     CHECK(col_id);
     const auto cd = try_get_column_descriptor(col_id.get());
@@ -3794,22 +8687,93 @@ FetchResult Executor::fetchUnionChunks(
     if (fragments->empty()) {
       return {};
     }
-    MemoryLevel const memory_level_for_column =
-        plan_state_->isColumnToFetch({selected_table_key, col_id->getColId()})
-            ? memory_level
-            : Data_Namespace::CPU_LEVEL;
-    int8_t const* ptr;
+    ResultSetPtr result_set;
     if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-      ptr = column_fetcher.getResultSetColumn(
-          col_id.get(), memory_level_for_column, device_id, device_allocator, thread_idx);
-    } else if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
-      ptr = column_fetcher.getAllTableColumnFragments(selected_table_key,
+      result_set = get_temporary_table(temporary_tables_,
+                                       col_id->getScanDesc().getTableKey().table_id);
+    }
+    const bool fetch_column =
+        plan_state_->isColumnToFetch({selected_table_key, col_id->getColId()});
+    MemoryLevel const memory_level_for_column =
+        fetch_column ? memory_level : Data_Namespace::CPU_LEVEL;
+    if (memory_level == Data_Namespace::GPU_LEVEL &&
+        memory_level_for_column == Data_Namespace::CPU_LEVEL &&
+        col_id->getScanDesc().getSourceType() == InputSourceType::RESULT &&
+        !output_lazy_fetch_local_col_ids.count(local_col_id)) {
+      CHECK(result_set);
+      const auto logical_ti =
+          get_logical_type_info(result_set->getColType(col_id->getColId()));
+      std::vector<ResultSet::DeviceColumnarBufferFragment> device_fragments;
+      if (logical_ti.get_size() > 0 && !logical_ti.is_varlen() &&
+          !logical_ti.is_string() &&
+          result_set->getDeviceColumnarBufferFragments(
+              col_id->getColId(),
+              static_cast<size_t>(logical_ti.get_size()),
+              device_fragments) &&
+          !device_fragments.empty()) {
+        frag_col_buffers[local_col_id] = nullptr;
+        continue;
+      }
+    }
+    int8_t const* ptr;
+    ColumnBufferLayout col_buffer_layout = ColumnBufferLayout::Fragment;
+    if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
+      CHECK(result_set);
+      const auto& fragment = (*fragments)[frag_id];
+      const bool selected_result_fragment_is_whole_table =
+          fragments->size() == size_t(1) && fragment.fragmentId == 0 &&
+          fragment.getNumTuples() == result_set->rowCount();
+      const int result_frag_id =
+          selected_result_fragment_is_whole_table ? -1 : static_cast<int>(frag_id);
+      col_buffer_layout = result_frag_id < 0 ? ColumnBufferLayout::Linearized
+                                             : ColumnBufferLayout::Fragment;
+      if (memory_level_for_column == Data_Namespace::GPU_LEVEL &&
+          plan_state_->isColumnToFetchSegmented(*col_id)) {
+        ptr = column_fetcher.getResultSetColumnSegmented(
+            col_id.get(),
+            memory_level_for_column,
+            device_id,
+            device_allocator,
+            thread_idx,
+            result_frag_id,
+            can_direct_peer_read_temporary_payloads(ra_exe_unit, memory_level));
+        col_buffer_layout = ColumnBufferLayout::Segmented;
+      } else {
+        ptr = column_fetcher.getResultSetColumn(col_id.get(),
+                                                memory_level_for_column,
+                                                device_id,
+                                                device_allocator,
+                                                thread_idx,
+                                                result_frag_id);
+      }
+    } else if (needFetchAllFragments(
+                   *col_id, ra_exe_unit, selected_fragments, all_tables_fragments)) {
+      if (needLinearizeAllFragments(cd,
+                                    *col_id,
+                                    ra_exe_unit,
+                                    selected_fragments,
+                                    memory_level_for_column,
+                                    fragments->size())) {
+        ptr = column_fetcher.linearizeColumnFragments(selected_table_key,
                                                       col_id->getColId(),
                                                       all_tables_fragments,
+                                                      chunks,
+                                                      chunk_iterators,
                                                       memory_level_for_column,
                                                       device_id,
                                                       device_allocator,
                                                       thread_idx);
+        col_buffer_layout = ColumnBufferLayout::Linearized;
+      } else {
+        ptr = column_fetcher.getAllTableColumnFragments(selected_table_key,
+                                                        col_id->getColId(),
+                                                        all_tables_fragments,
+                                                        memory_level_for_column,
+                                                        device_id,
+                                                        device_allocator,
+                                                        thread_idx);
+        col_buffer_layout = ColumnBufferLayout::Linearized;
+      }
     } else {
       ptr = column_fetcher.getOneTableColumnFragment(selected_table_key,
                                                      frag_id,
@@ -3823,9 +8787,14 @@ FetchResult Executor::fetchUnionChunks(
     }
     // Set frag_col_buffers[i]=ptr for i in mod input_descs.size() range of local_col_id.
     set_mod_range(frag_col_buffers, ptr, local_col_id, input_descs.size());
+    set_mod_range(
+        frag_col_buffer_layouts, col_buffer_layout, local_col_id, input_descs.size());
   }
-  auto const fragment_info = getAllFragmentInfo(
-      ra_exe_unit, frag_ids_crossjoin, input_descs, all_tables_fragments);
+  auto const fragment_info = getAllFragmentInfo(ra_exe_unit,
+                                                frag_ids_crossjoin,
+                                                input_descs,
+                                                selected_fragments,
+                                                all_tables_fragments);
 
   VLOG(2) << "frag_col_buffers=" << shared::printContainer(frag_col_buffers)
           << " num_rows=" << shared::printContainer(fragment_info.num_rows)
@@ -3838,16 +8807,27 @@ FetchResult Executor::fetchUnionChunks(
       {{fragment_info.num_rows[0][input_descs_index]}},
       {{fragment_info.frag_offsets[0][input_descs_index]}},
       {{fragment_info.frag_ids[0][input_descs_index]}}};
-  return {{std::move(frag_col_buffers)}, std::move(single_fragment_info)};
+  return {{std::move(frag_col_buffers)},
+          {std::move(frag_col_buffer_layouts)},
+          {},
+          std::move(single_fragment_info)};
 }
 
-std::vector<size_t> Executor::getFragmentCount(const FragmentsList& selected_fragments,
-                                               const size_t scan_idx,
-                                               const RelAlgExecutionUnit& ra_exe_unit) {
-  if ((ra_exe_unit.input_descs.size() > size_t(2) || !ra_exe_unit.join_quals.empty()) &&
-      scan_idx > 0 &&
-      !plan_state_->join_info_.sharded_range_table_indices_.count(scan_idx) &&
-      !selected_fragments[scan_idx].fragment_ids.empty()) {
+std::vector<size_t> Executor::getFragmentCount(
+    const FragmentsList& selected_fragments,
+    const size_t scan_idx,
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments) {
+  const auto fragments_it =
+      all_tables_fragments.find(ra_exe_unit.input_descs[scan_idx].getTableKey());
+  CHECK(fragments_it != all_tables_fragments.end());
+  if (should_fetch_all_fragments_for_scan(
+          scan_idx,
+          ra_exe_unit,
+          selected_fragments,
+          plan_state_->join_info_.sharded_range_table_indices_,
+          plan_state_->join_info_.global_build_rowid_table_indices_,
+          fragments_it->second->size())) {
     // Fetch all fragments
     return {size_t(0)};
   }
@@ -3860,15 +8840,16 @@ void Executor::buildSelectedFragsMapping(
     std::vector<size_t>& local_col_to_frag_pos,
     const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
     const FragmentsList& selected_fragments,
-    const RelAlgExecutionUnit& ra_exe_unit) {
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments) {
   local_col_to_frag_pos.resize(plan_state_->global_to_local_col_ids_.size());
   size_t frag_pos{0};
   const auto& input_descs = ra_exe_unit.input_descs;
   for (size_t scan_idx = 0; scan_idx < input_descs.size(); ++scan_idx) {
     const auto& table_key = input_descs[scan_idx].getTableKey();
     CHECK_EQ(selected_fragments[scan_idx].table_key, table_key);
-    selected_fragments_crossjoin.push_back(
-        getFragmentCount(selected_fragments, scan_idx, ra_exe_unit));
+    selected_fragments_crossjoin.push_back(getFragmentCount(
+        selected_fragments, scan_idx, ra_exe_unit, all_tables_fragments));
     for (const auto& col_id : col_global_ids) {
       CHECK(col_id);
       const auto& input_desc = col_id->getScanDesc();
@@ -3929,6 +8910,8 @@ int32_t Executor::executePlanWithoutGroupBy(
     const int device_id,
     const uint32_t start_rowid,
     const uint32_t num_tables,
+    const bool with_dynamic_watchdog,
+    const unsigned dynamic_watchdog_time_limit,
     const bool allow_runtime_interrupt,
     RenderInfo* render_info,
     const bool optimize_cuda_block_and_grid_sizes,
@@ -4003,12 +8986,16 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                  device_id,
                                                  &error_code,
                                                  num_tables,
+                                                 with_dynamic_watchdog,
+                                                 dynamic_watchdog_time_limit,
                                                  allow_runtime_interrupt,
                                                  join_hash_table_ptrs,
                                                  render_allocator_map_ptr,
                                                  optimize_cuda_block_and_grid_sizes);
       output_memory_scope.reset(new OutVecOwner(out_vec));
-    } catch (const OutOfMemory&) {
+    } catch (const OutOfMemory& e) {
+      LOG(WARNING) << "GPU kernel launch memory failure: device=GPU:" << device_id
+                   << " error=" << e.what();
       return int32_t(ErrorCode::OUT_OF_GPU_MEM);
     } catch (const std::exception& e) {
       LOG(FATAL) << "Error launching the GPU kernel: " << e.what();
@@ -4151,6 +9138,8 @@ int32_t Executor::executePlanWithGroupBy(
     const int64_t scan_limit,
     const uint32_t start_rowid,
     const uint32_t num_tables,
+    const bool with_dynamic_watchdog,
+    const unsigned dynamic_watchdog_time_limit,
     const bool allow_runtime_interrupt,
     RenderInfo* render_info,
     const bool optimize_cuda_block_and_grid_sizes,
@@ -4270,11 +9259,15 @@ int32_t Executor::executePlanWithGroupBy(
           device_id,
           &error_code,
           num_tables,
+          with_dynamic_watchdog,
+          dynamic_watchdog_time_limit,
           allow_runtime_interrupt,
           join_hash_table_ptrs,
           render_allocator_map_ptr,
           optimize_cuda_block_and_grid_sizes);
-    } catch (const OutOfMemory&) {
+    } catch (const OutOfMemory& e) {
+      LOG(WARNING) << "GPU kernel launch memory failure: device=GPU:" << device_id
+                   << " error=" << e.what();
       return int32_t(ErrorCode::OUT_OF_GPU_MEM);
     } catch (const OutOfRenderMemory&) {
       return int32_t(ErrorCode::OUT_OF_RENDER_MEM);
@@ -4365,16 +9358,11 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
   auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
   for (size_t i = 0; i < ld_count; ++i) {
     CHECK_LT(i, query_infos.size());
-    const auto frag_count = query_infos[i].info.fragments.size();
     if (i > 0) {
       cgen_state_->frag_offsets_.push_back(nullptr);
     } else {
-      if (frag_count > 1) {
-        cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(
-            frag_off_ptr->getType()->getPointerElementType(), frag_off_ptr));
-      } else {
-        cgen_state_->frag_offsets_.push_back(nullptr);
-      }
+      cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(
+          frag_off_ptr->getType()->getPointerElementType(), frag_off_ptr));
     }
   }
 }
@@ -4388,7 +9376,9 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     ColumnCacheMap& column_cache,
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint,
-    const TableIdToNodeMap& table_id_to_node_map) {
+    const TableIdToNodeMap& table_id_to_node_map,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& build_side_quals,
+    const bool payload_free_unique_probe) {
   if (!g_enable_bbox_intersect_hashjoin && qual_bin_oper->is_bbox_intersect_oper()) {
     return {nullptr,
             "Bounding box intersection disabled, attempting to fall back to loop join"};
@@ -4407,8 +9397,27 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                      this,
                                      hashtable_build_dag_map,
                                      query_hint,
-                                     table_id_to_node_map);
+                                     table_id_to_node_map,
+                                     build_side_quals,
+                                     payload_free_unique_probe);
     return {tbl, ""};
+  } catch (const HashJoinOutOfMemory& e) {
+    if (memory_level == MemoryLevel::GPU_LEVEL) {
+      throw QueryMustRunOnCpu(e.what());
+    }
+    return {nullptr, e.what()};
+  } catch (const JoinHashTableTooBig& e) {
+    if (query_hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
+      throw;
+    }
+    return {nullptr, e.what()};
+  } catch (const TooManyHashEntries& e) {
+    return {nullptr, e.what()};
+  } catch (const TooBigHashTableForBoundingBoxIntersect& e) {
+    if (query_hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
+      throw;
+    }
+    return {nullptr, e.what()};
   } catch (const HashJoinFail& e) {
     return {nullptr, e.what()};
   }
@@ -4633,6 +9642,39 @@ std::tuple<bool, int64_t, int64_t> get_hpt_overflow_underflow_safe_scaled_values
   return std::make_tuple(false, chunk_min, chunk_max);
 }
 
+std::tuple<bool, int64_t> get_decimal_rhs_value_in_column_scale(
+    const int64_t rhs_value,
+    const SQLTypeInfo& lhs_type,
+    const SQLTypeInfo& rhs_type) {
+  if (!lhs_type.is_decimal()) {
+    return {true, rhs_value};
+  }
+  if (!rhs_type.is_decimal() && !rhs_type.is_integer()) {
+    return {false, rhs_value};
+  }
+
+  const auto lhs_scale = lhs_type.get_scale();
+  const auto rhs_scale = rhs_type.is_decimal() ? rhs_type.get_scale() : 0;
+  const auto scale_delta = lhs_scale - rhs_scale;
+  if (scale_delta < 0) {
+    return {false, rhs_value};
+  }
+
+  using checked_int64_t = boost::multiprecision::number<
+      boost::multiprecision::cpp_int_backend<64,
+                                             64,
+                                             boost::multiprecision::signed_magnitude,
+                                             boost::multiprecision::checked,
+                                             void>>;
+  try {
+    const auto scaled_rhs =
+        checked_int64_t(rhs_value) * checked_int64_t(exp_to_scale(scale_delta));
+    return {true, int64_t(scaled_rhs)};
+  } catch (const std::overflow_error&) {
+    return {false, rhs_value};
+  }
+}
+
 }  // namespace
 
 bool Executor::isFragmentFullyDeleted(
@@ -4640,7 +9682,7 @@ bool Executor::isFragmentFullyDeleted(
     const Fragmenter_Namespace::FragmentInfo& fragment) {
   // Skip temporary tables
   const auto& table_key = table_desc.getTableKey();
-  if (table_key.table_id < 0) {
+  if (table_key.db_id <= 0 || table_key.table_id <= 0) {
     return false;
   }
 
@@ -4700,34 +9742,38 @@ FragmentSkipStatus Executor::canSkipFragmentForFpQual(
 
   // Todo: dedup the following comparison code with the integer/timestamp path, it is
   // slightly tricky due to do cleanly as we do not have rowid on this path
+  bool skippable{false};
   switch (comp_expr->get_optype()) {
     case kGE:
       if (chunk_max < rhs_val) {
-        return FragmentSkipStatus::SKIPPABLE;
+        skippable = true;
       }
       break;
     case kGT:
       if (chunk_max <= rhs_val) {
-        return FragmentSkipStatus::SKIPPABLE;
+        skippable = true;
       }
       break;
     case kLE:
       if (chunk_min > rhs_val) {
-        return FragmentSkipStatus::SKIPPABLE;
+        skippable = true;
       }
       break;
     case kLT:
       if (chunk_min >= rhs_val) {
-        return FragmentSkipStatus::SKIPPABLE;
+        skippable = true;
       }
       break;
     case kEQ:
       if (chunk_min > rhs_val || chunk_max < rhs_val) {
-        return FragmentSkipStatus::SKIPPABLE;
+        skippable = true;
       }
       break;
     default:
       break;
+  }
+  if (skippable) {
+    return FragmentSkipStatus::SKIPPABLE;
   }
   return FragmentSkipStatus::NOT_SKIPPABLE;
 }
@@ -4738,6 +9784,11 @@ std::pair<bool, int64_t> Executor::skipFragment(
     const std::list<std::shared_ptr<Analyzer::Expr>>& simple_quals,
     const std::vector<uint64_t>& frag_offsets,
     const size_t frag_idx) {
+  const auto& table_key = table_desc.getTableKey();
+  if (table_key.db_id <= 0 || table_key.table_id <= 0) {
+    return {false, -1};
+  }
+
   // First check to see if all of fragment is deleted, in which case we know we can skip
   if (isFragmentFullyDeleted(table_desc, fragment)) {
     VLOG(2) << "Skipping deleted fragment with table id: " << fragment.physicalTableId
@@ -4774,10 +9825,11 @@ std::pair<bool, int64_t> Executor::skipFragment(
       // is this possible?
       return {false, -1};
     }
-    if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time() &&
-        !lhs->get_type_info().is_fp()) {
+    if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_decimal() &&
+        !lhs->get_type_info().is_time() && !lhs->get_type_info().is_fp()) {
       continue;
     }
+    const int col_id = lhs_col->getColumnKey().column_id;
     if (lhs->get_type_info().is_fp()) {
       const auto fragment_skip_status =
           canSkipFragmentForFpQual(comp_expr.get(), lhs_col, fragment, rhs_const);
@@ -4804,13 +9856,11 @@ std::pair<bool, int64_t> Executor::skipFragment(
       continue;
     }
 
-    const int col_id = lhs_col->getColumnKey().column_id;
     auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
     int64_t chunk_min{0};
     int64_t chunk_max{0};
     bool is_rowid{false};
     size_t start_rowid{0};
-    const auto& table_key = table_desc.getTableKey();
     if (chunk_meta_it == fragment.getChunkMetadataMap().end()) {
       auto cd = get_column_descriptor({table_key, col_id});
       if (cd->isVirtualCol) {
@@ -4820,6 +9870,8 @@ std::pair<bool, int64_t> Executor::skipFragment(
         chunk_min = frag_offsets[frag_idx] + start_rowid;
         chunk_max = frag_offsets[frag_idx + 1] - 1 + start_rowid;
         is_rowid = true;
+      } else {
+        continue;
       }
     } else {
       const auto& chunk_type = lhs_col->get_type_info();
@@ -4873,39 +9925,50 @@ std::pair<bool, int64_t> Executor::skipFragment(
     CgenState local_cgen_state(local_context);
     CodeGenerator code_generator(&local_cgen_state, nullptr);
 
-    const auto rhs_val =
+    auto rhs_val =
         CodeGenerator::codegenIntConst(rhs_const, &local_cgen_state)->getSExtValue();
+    bool rhs_value_is_valid{false};
+    std::tie(rhs_value_is_valid, rhs_val) = get_decimal_rhs_value_in_column_scale(
+        rhs_val, lhs_col->get_type_info(), rhs_const->get_type_info());
+    if (!rhs_value_is_valid) {
+      continue;
+    }
 
+    bool skippable{false};
     switch (comp_expr->get_optype()) {
       case kGE:
         if (chunk_max < rhs_val) {
-          return {true, -1};
+          skippable = true;
         }
         break;
       case kGT:
         if (chunk_max <= rhs_val) {
-          return {true, -1};
+          skippable = true;
         }
         break;
       case kLE:
         if (chunk_min > rhs_val) {
-          return {true, -1};
+          skippable = true;
         }
         break;
       case kLT:
         if (chunk_min >= rhs_val) {
-          return {true, -1};
+          skippable = true;
         }
         break;
       case kEQ:
         if (chunk_min > rhs_val || chunk_max < rhs_val) {
-          return {true, -1};
-        } else if (is_rowid) {
-          return {false, rhs_val - start_rowid};
+          skippable = true;
         }
         break;
       default:
         break;
+    }
+    if (skippable) {
+      return {true, -1};
+    }
+    if (comp_expr->get_optype() == kEQ && is_rowid) {
+      return {false, rhs_val - start_rowid};
     }
   }
   return {false, -1};
@@ -5003,6 +10066,7 @@ StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
   // the case then we need to populate them here to make sure that the generations are set
   // correctly.
   prepare_string_dictionaries(phys_inputs);
+  std::set<shared::StringDictKey> dict_keys;
   for (const auto& phys_input : phys_inputs) {
     const auto catalog =
         Catalog_Namespace::SysCatalog::instance().getCatalog(phys_input.db_id);
@@ -5012,12 +10076,42 @@ StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
     const auto& col_ti =
         cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
     if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
-      const auto& dict_key = col_ti.getStringDictKey();
+      dict_keys.insert(col_ti.getStringDictKey());
+    }
+  }
+
+  struct DictionaryGeneration {
+    shared::StringDictKey dict_key;
+    std::future<int64_t> future;
+  };
+  if (!g_enable_result_reduction_pipeline) {
+    for (const auto& dict_key : dict_keys) {
+      const auto catalog =
+          Catalog_Namespace::SysCatalog::instance().getCatalog(dict_key.db_id);
+      CHECK(catalog);
       const auto dd = catalog->getMetadataForDict(dict_key.dict_id);
       CHECK(dd && dd->stringDict);
-      string_dictionary_generations.setGeneration(dict_key,
-                                                  dd->stringDict->storageEntryCount());
+      string_dictionary_generations.setGeneration(
+          dict_key, static_cast<int64_t>(dd->stringDict->storageEntryCount()));
     }
+    return string_dictionary_generations;
+  }
+  std::vector<DictionaryGeneration> dictionary_generations;
+  dictionary_generations.reserve(dict_keys.size());
+  for (const auto& dict_key : dict_keys) {
+    dictionary_generations.push_back(DictionaryGeneration{
+        dict_key, std::async(std::launch::async, [dict_key] {
+          const auto catalog =
+              Catalog_Namespace::SysCatalog::instance().getCatalog(dict_key.db_id);
+          CHECK(catalog);
+          const auto dd = catalog->getMetadataForDict(dict_key.dict_id);
+          CHECK(dd && dd->stringDict);
+          return static_cast<int64_t>(dd->stringDict->storageEntryCount());
+        })});
+  }
+  for (auto& dictionary_generation : dictionary_generations) {
+    string_dictionary_generations.setGeneration(dictionary_generation.dict_key,
+                                                dictionary_generation.future.get());
   }
   return string_dictionary_generations;
 }
@@ -5365,13 +10459,10 @@ void Executor::enableRuntimeQueryInterrupt(
 
 void Executor::addToCardinalityCache(const CardinalityCacheKey& cache_key,
                                      const size_t cache_value) {
-  if (g_use_estimator_result_cache) {
+  if (g_use_estimator_result_cache && cache_key.isCacheable()) {
     heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
-    auto const [itr, inserted] = cardinality_cache_.emplace(cache_key, cache_value);
-    if (inserted) {
-      VLOG(1) << "Put estimated cardinality to the cache (cache_key: " << cache_key.hash()
-              << ", value: " << cache_value << ')';
-    } else {
+    const auto [itr, inserted] = cardinality_cache_.emplace(cache_key, cache_value);
+    if (!inserted) {
       CHECK_EQ(itr->second, cache_value)
           << "Cardinality cache contains unexpected pair (" << itr->first.hash() << ','
           << itr->second << ')';
@@ -5381,22 +10472,46 @@ void Executor::addToCardinalityCache(const CardinalityCacheKey& cache_key,
 
 Executor::CachedCardinality Executor::getCachedCardinality(
     const CardinalityCacheKey& cache_key) {
-  if (g_use_estimator_result_cache) {
+  if (g_use_estimator_result_cache && cache_key.isCacheable()) {
     heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
-    auto const itr = cardinality_cache_.find(cache_key);
+    const auto itr = cardinality_cache_.find(cache_key);
     if (itr != cardinality_cache_.end()) {
-      VLOG(1) << "Reuse cached cardinality (cache_key: " << itr->first.hash()
-              << ", value : " << itr->second << ")";
       return {true, itr->second};
     }
   }
   return {false, -1};
 }
 
+void Executor::addToFilteredCountCache(const CardinalityCacheKey& cache_key,
+                                       const FilteredCountCacheValue& cache_value) {
+  if (g_use_estimator_result_cache && cache_key.isCacheable()) {
+    heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
+    const auto [itr, inserted] = filtered_count_cache_.emplace(cache_key, cache_value);
+    if (!inserted) {
+      CHECK(itr->second == cache_value)
+          << "Filtered count cache contains unexpected pair (" << itr->first.hash() << ','
+          << itr->second.count << ')';
+    }
+  }
+}
+
+Executor::CachedFilteredCount Executor::getCachedFilteredCount(
+    const CardinalityCacheKey& cache_key) {
+  if (g_use_estimator_result_cache && cache_key.isCacheable()) {
+    heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
+    const auto itr = filtered_count_cache_.find(cache_key);
+    if (itr != filtered_count_cache_.end()) {
+      return {true, itr->second};
+    }
+  }
+  return {false, {}};
+}
+
 void Executor::clearCardinalityCache() {
   if (g_use_estimator_result_cache) {
     heavyai::unique_lock<heavyai::shared_mutex> lock(recycler_mutex_);
     cardinality_cache_.clear();
+    filtered_count_cache_.clear();
   }
 }
 
@@ -5410,12 +10525,19 @@ void Executor::invalidateCardinalityCacheForTable(const shared::TableKey& table_
         it++;
       }
     }
+    for (auto it = filtered_count_cache_.begin(); it != filtered_count_cache_.end();) {
+      if (it->first.containsTableKey(table_key)) {
+        it = filtered_count_cache_.erase(it);
+      } else {
+        it++;
+      }
+    }
   }
 }
 
 size_t Executor::getNumCachedCardinality() const {
   heavyai::shared_lock<heavyai::shared_mutex> lock(recycler_mutex_);
-  return cardinality_cache_.size();
+  return cardinality_cache_.size() + filtered_count_cache_.size();
 }
 
 std::vector<QuerySessionStatus> Executor::getQuerySessionInfo(
@@ -5443,8 +10565,9 @@ const std::vector<size_t> Executor::getExecutorIdsRunningQuery(
   auto it = queries_session_map_.find(interrupt_session);
   if (it != queries_session_map_.end()) {
     for (auto& kv : it->second) {
-      if (kv.second.getQueryStatus() ==
-          QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL) {
+      const auto query_status = kv.second.getQueryStatus();
+      if (query_status == QuerySessionStatus::QueryStatus::RUNNING_QUERY_KERNEL ||
+          query_status == QuerySessionStatus::QueryStatus::RUNNING_REDUCTION) {
         res.push_back(kv.second.getExecutorId());
       }
     }
@@ -5619,11 +10742,20 @@ void Executor::clearCudaAllocator() {
   cuda_allocators_.clear();
 }
 
+size_t Executor::getCudaAllocatorCount() const {
+  heavyai::shared_lock<heavyai::shared_mutex> read_lock(executors_cache_mutex_);
+  return cuda_allocators_.size();
+}
+
 std::unordered_map<int, void*> const& Executor::getActiveKernelModule() {
   return gpu_active_kernel_module_;
 }
 
 std::map<int, std::shared_ptr<Executor>> Executor::executors_;
+std::mutex Executor::cached_string_proxy_union_translation_maps_mutex_;
+std::map<std::string,
+         std::shared_ptr<const Executor::CachedStringProxyUnionTranslationMap>>
+    Executor::cached_string_proxy_union_translation_maps_;
 
 // contain the interrupt flag's status per query session
 InterruptFlagMap Executor::queries_interrupt_flag_;
@@ -5644,6 +10776,8 @@ std::shared_ptr<ExecutorResourceMgr_Namespace::ExecutorResourceMgr>
 QueryPlanDagCache Executor::query_plan_dag_cache_;
 heavyai::shared_mutex Executor::recycler_mutex_;
 std::unordered_map<CardinalityCacheKey, size_t> Executor::cardinality_cache_;
+std::unordered_map<CardinalityCacheKey, Executor::FilteredCountCacheValue>
+    Executor::filtered_count_cache_;
 // Executor has a single global result set recycler holder
 // which contains two recyclers related to query resultset
 ResultSetRecyclerHolder Executor::resultset_recycler_holder_;

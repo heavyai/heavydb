@@ -49,7 +49,17 @@ class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
     const int table_id = scan_td->tableId;
     CHECK_GT(table_id, 0);
     auto db_id = scan_ra->getCatalog().getDatabaseId();
-    return {{col_id, table_id, db_id}};
+    PhysicalInputSet inputs{{col_id, table_id, db_id}};
+    const auto cd = scan_ra->getCatalog().getMetadataForColumnBySpi(table_id, col_id);
+    if (cd && cd->columnType.get_physical_cols() > 0) {
+      CHECK(cd->columnType.is_geometry());
+      for (auto i = 1; i <= cd->columnType.get_physical_cols(); ++i) {
+        inputs.insert({static_cast<int>(SPIMAP_GEO_PHYSICAL_INPUT(input->getIndex(), i)),
+                       table_id,
+                       db_id});
+      }
+    }
+    return inputs;
   }
 
   PhysicalInputSet visitSubQuery(const RexSubQuery* subquery) const override {

@@ -11,12 +11,14 @@
 
 #include "Shared/threading.h"
 
-#ifdef HAVE_TBB
-#include "tbb/enumerable_thread_specific.h"
-#endif
+#include <functional>
+#include <memory>
+#include <vector>
 
 class SharedKernelContext {
  public:
+  using ResultConsumer = std::function<void(ResultSetPtr&&, std::vector<size_t>&&)>;
+
   SharedKernelContext(const std::vector<InputTableInfo>& query_infos)
       : query_infos_(query_infos)
 #ifdef HAVE_TBB
@@ -31,6 +33,12 @@ class SharedKernelContext {
                         std::vector<size_t> outer_table_fragment_ids);
 
   std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& getFragmentResults();
+
+  void setResultConsumer(ResultConsumer result_consumer);
+
+  void clearResultConsumer();
+
+  bool hasResultConsumer();
 
   const std::vector<InputTableInfo>& getQueryInfos() const {
     return query_infos_;
@@ -53,13 +61,24 @@ class SharedKernelContext {
   void setThreadPool(threading::task_group* tg) {
     task_group_ = tg;
   }
-  auto& getTlsExecutionContext() {
-    return tls_execution_context_;
+  void clearThreadExecutionContexts() {
+    thread_execution_contexts_.clear();
+  }
+  void resetThreadExecutionContexts(const size_t num_threads) {
+    thread_execution_contexts_.resize(num_threads);
+  }
+  auto& getExecutionContextForThread(const size_t thread_idx) {
+    CHECK_LT(thread_idx, thread_execution_contexts_.size());
+    return thread_execution_contexts_[thread_idx];
+  }
+  auto& getThreadExecutionContexts() {
+    return thread_execution_contexts_;
   }
 #endif  // HAVE_TBB
 
  private:
   std::mutex reduce_mutex_;
+  ResultConsumer result_consumer_;
   std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> all_fragment_results_;
 
   std::vector<uint64_t> all_frag_row_offsets_;
@@ -73,8 +92,9 @@ class SharedKernelContext {
 
 #ifdef HAVE_TBB
   threading::task_group* task_group_;
-  tbb::enumerable_thread_specific<std::unique_ptr<QueryExecutionContext>>
-      tls_execution_context_;
+  // TBB runs at most one task in each arena slot at a time. Key execution contexts by
+  // that same slot because reusable CPU group-by buffers use the slot as their owner.
+  std::vector<std::unique_ptr<QueryExecutionContext>> thread_execution_contexts_;
 #endif  // HAVE_TBB
 };
 
@@ -107,6 +127,14 @@ class ExecutionKernel {
            const size_t thread_idx,
            SharedKernelContext& shared_context);
 
+  void setDeferredSparseBaselineFilterBeforeCopy(std::vector<int64_t> preserved_keys);
+  bool applyDeferredSparseBaselineFilterBeforeCopy() const {
+    return apply_deferred_sparse_baseline_filter_before_copy_;
+  }
+  const std::vector<int64_t>& deferredSparseBaselinePreservedKeys() const {
+    return deferred_sparse_baseline_preserved_keys_;
+  }
+
   FragmentsList get_fragment_list() const { return frag_list; }
   int32_t get_chosen_device_id() const { return chosen_device_id; }
   const RelAlgExecutionUnit& ra_exe_unit_;
@@ -124,6 +152,8 @@ class ExecutionKernel {
   const int64_t rowid_lookup_key;
 
   ResultSetPtr device_results_;
+  bool apply_deferred_sparse_baseline_filter_before_copy_{false};
+  std::vector<int64_t> deferred_sparse_baseline_preserved_keys_;
 
   void runImpl(Executor* executor,
                const size_t thread_idx,

@@ -4,6 +4,7 @@
  */
 
 #include "QueryEngine/RelAlgExecutor.h"
+#include "Catalog/TableConstraints.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "Fragmenter/InsertDataLoader.h"
@@ -37,11 +38,13 @@
 #include "Shared/shard_key.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <boost/range/adaptor/reversed.hpp>
 
 #include <algorithm>
 #include <functional>
 #include <numeric>
+#include <sstream>
 
 bool g_enable_column_level_security{true};
 bool g_skip_intermediate_count{true};
@@ -57,10 +60,35 @@ extern bool g_enable_watchdog;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern size_t g_preflight_count_query_threshold;
 extern bool g_enable_bump_allocator;
+extern size_t g_max_memory_allocation_size;
 extern size_t g_default_max_groups_buffer_entry_guess;
 extern bool g_enable_system_tables;
+extern bool g_enable_result_reduction_pipeline;
+extern bool g_enable_deferred_lazy_fetch;
 
 namespace {
+
+RegisteredQueryHint get_query_hint_for_work_unit(const RelAlgDag* query_dag,
+                                                 const RelAlgNode* body);
+
+std::string estimator_cache_context(const CompilationOptions& co,
+                                    const Executor* executor) {
+  CHECK(executor);
+  std::ostringstream context;
+  context << "device=" << ::toString(co.device_type)
+          << ",reduction_pipeline=" << g_enable_result_reduction_pipeline
+          << ",ndv_multiplier=" << g_ndv_groups_estimator_multiplier
+          << ",estimator_failure_cap=" << g_estimator_failure_max_groupby_size;
+  if (co.device_type == ExecutorDeviceType::GPU) {
+    context << ",slab=" << executor->maxGpuSlabSize() << ",devices=";
+    for (const auto device_id : executor->getAvailableDevicesToProcessQuery()) {
+      context << device_id << ',';
+    }
+  } else {
+    context << ",slab=" << executor->maxCpuSlabSize();
+  }
+  return context.str();
+}
 
 bool node_is_aggregate(const RelAlgNode* ra) {
   const auto compound = dynamic_cast<const RelCompound*>(ra);
@@ -221,6 +249,110 @@ void prepare_for_system_table_execution(const RelAlgNode& ra_node,
 bool has_valid_query_plan_dag(const RelAlgNode* node) {
   return node->getQueryPlanDagHash() != EMPTY_HASHED_PLAN_DAG_KEY;
 }
+
+QueryPlanHash get_structural_query_step_cache_key(const RelAlgNode* node) {
+  CHECK(node);
+  auto hash_value = node->toHash();
+  boost::hash_combine(hash_value, "intra-query-structural-result");
+  return hash_value;
+}
+
+std::vector<QueryPlanHash> get_simple_project_expr_hashes(const RelProject* project) {
+  std::vector<QueryPlanHash> target_expr_hashes;
+  if (!project || !project->isSimple()) {
+    return target_expr_hashes;
+  }
+  target_expr_hashes.reserve(project->size());
+  for (size_t i = 0; i < project->size(); ++i) {
+    const auto rex_input = dynamic_cast<const RexInput*>(project->getProjectAt(i));
+    CHECK(rex_input);
+    target_expr_hashes.push_back(rex_input->toHash());
+  }
+  return target_expr_hashes;
+}
+
+std::vector<TargetMetaInfo> get_project_prefix_targets_meta(
+    const RelProject* project,
+    const std::vector<TargetMetaInfo>& cached_targets_meta) {
+  CHECK_LE(project->size(), cached_targets_meta.size());
+  std::vector<TargetMetaInfo> targets_meta;
+  targets_meta.reserve(project->size());
+  for (size_t i = 0; i < project->size(); ++i) {
+    const auto& cached_target_meta = cached_targets_meta[i];
+    targets_meta.emplace_back(project->getFieldName(i),
+                              cached_target_meta.get_type_info(),
+                              cached_target_meta.get_physical_type_info());
+  }
+  return targets_meta;
+}
+
+std::optional<QueryPlanHash> get_compound_projection_prefix_cache_key(
+    const RelCompound* compound) {
+  if (!compound || compound->isAggregate() || compound->isDeleteViaSelect() ||
+      compound->isUpdateViaSelect() || compound->inputCount() == 0) {
+    return std::nullopt;
+  }
+
+  auto hash_value = typeid(RelCompound).hash_code();
+  boost::hash_combine(hash_value, "projection-prefix");
+  if (compound->getFilterExpr()) {
+    boost::hash_combine(hash_value, "filter");
+    boost::hash_combine(hash_value, compound->getFilterExpr()->toHash());
+  } else {
+    boost::hash_combine(hash_value, "no-filter");
+  }
+  for (size_t input_idx = 0; input_idx < compound->inputCount(); ++input_idx) {
+    boost::hash_combine(hash_value, compound->getInput(input_idx)->toHash());
+  }
+  return hash_value;
+}
+
+std::optional<QueryPlanHash> get_compound_aggregate_prefix_cache_key(
+    const RelCompound* compound) {
+  if (!compound || !compound->isAggregate() || compound->getGroupByCount() == 0 ||
+      compound->inputCount() == 0) {
+    return std::nullopt;
+  }
+
+  auto hash_value = typeid(RelCompound).hash_code();
+  boost::hash_combine(hash_value, "aggregate-prefix");
+  boost::hash_combine(hash_value, compound->getGroupByCount());
+  if (compound->getFilterExpr()) {
+    boost::hash_combine(hash_value, compound->getFilterExpr()->toHash());
+  }
+  for (size_t group_idx = 0; group_idx < compound->getGroupByCount(); ++group_idx) {
+    boost::hash_combine(hash_value, compound->getScalarSource(group_idx)->toHash());
+  }
+  for (size_t input_idx = 0; input_idx < compound->inputCount(); ++input_idx) {
+    boost::hash_combine(hash_value, compound->getInput(input_idx)->toHash());
+  }
+  return hash_value;
+}
+
+std::vector<QueryPlanHash> get_compound_target_expr_hashes(const RelCompound* compound) {
+  std::vector<QueryPlanHash> target_expr_hashes;
+  target_expr_hashes.reserve(compound->size());
+  for (size_t i = 0; i < compound->size(); ++i) {
+    target_expr_hashes.push_back(compound->getTargetExpr(i)->toHash());
+  }
+  return target_expr_hashes;
+}
+
+std::vector<TargetMetaInfo> get_compound_prefix_targets_meta(
+    const RelCompound* compound,
+    const std::vector<TargetMetaInfo>& cached_targets_meta) {
+  CHECK_LE(compound->size(), cached_targets_meta.size());
+  std::vector<TargetMetaInfo> targets_meta;
+  targets_meta.reserve(compound->size());
+  for (size_t i = 0; i < compound->size(); ++i) {
+    const auto& cached_target_meta = cached_targets_meta[i];
+    targets_meta.emplace_back(compound->getFieldName(i),
+                              cached_target_meta.get_type_info(),
+                              cached_target_meta.get_physical_type_info());
+  }
+  return targets_meta;
+}
+
 }  // namespace
 
 void build_render_targets(RenderInfo& render_info,
@@ -488,6 +620,46 @@ bool RelAlgExecutor::canUseResultsetCache(const ExecutionOptions& eo) const {
          !query_for_partial_outer_frag;
 }
 
+void RelAlgExecutor::addTemporaryTable(const int node_id,
+                                       const ResultSetPtr& result,
+                                       const RelAlgNode* source_node) {
+  CHECK(result);
+  CHECK_LT(node_id, 0);
+  const auto inserted = temporary_tables_.emplace(node_id, result).second;
+  CHECK(inserted) << "Failed to add temporary table (node_id: " << node_id << ")";
+  if (source_node) {
+    auto source_node_snapshot = source_node->deepCopy();
+    CHECK(source_node_snapshot);
+    source_node_snapshot->clearContextData();
+    CHECK(temporary_table_source_nodes_.emplace(node_id, std::move(source_node_snapshot))
+              .second);
+    CHECK(temporary_table_source_info_
+              .emplace(node_id,
+                       TemporaryTableSourceInfo{source_node->toHash(),
+                                                source_node->getQueryPlanDagHash(),
+                                                get_physical_table_inputs(source_node)})
+              .second);
+  }
+  VLOG(1) << "Add temporary table (node_id: " << node_id << ")";
+}
+
+void RelAlgExecutor::eraseFromTemporaryTables(const int node_id) {
+  if (temporary_tables_.erase(node_id)) {
+    temporary_table_source_nodes_.erase(node_id);
+    temporary_table_source_info_.erase(node_id);
+    VLOG(1) << "Erase temporary table (node_id: " << node_id << ")";
+  }
+}
+
+void RelAlgExecutor::addTemporaryTableSourceNodes(
+    TableIdToNodeMap& table_id_to_node_map) const {
+  for (const auto& [node_id, source_node] : temporary_table_source_nodes_) {
+    if (source_node) {
+      table_id_to_node_map.emplace(shared::TableKey{0, -node_id}, source_node.get());
+    }
+  }
+}
+
 size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
                                              const ExecutionOptions& eo) {
   if (eo.find_push_down_candidates) {
@@ -520,6 +692,8 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
   }
 
   decltype(temporary_tables_)().swap(temporary_tables_);
+  temporary_table_source_nodes_.clear();
+  temporary_table_source_info_.clear();
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   executor_->temporary_tables_ = &temporary_tables_;
 
@@ -830,7 +1004,10 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
         if (cd && cd->columnType.get_physical_cols() > 0) {
           CHECK(IS_GEO(cd->columnType.get_type()));
           std::unordered_set<const RexInput*> synthesized_physical_inputs;
-          for (auto i = 0; i < cd->columnType.get_physical_cols(); i++) {
+          for (auto i = 0; i < cd->columnType.get_physical_cols(); ++i) {
+            // RexInput indexes are zero-based SPIs. collect_used_input_desc converts
+            // them back to SPIs with +1, so hidden geo ordinal i + 1 is represented
+            // here by passing i to SPIMAP_GEO_PHYSICAL_INPUT.
             auto physical_input =
                 new RexInput(scan_ra, SPIMAP_GEO_PHYSICAL_INPUT(col_id, i));
             synthesized_physical_inputs_owned_.emplace_back(physical_input);
@@ -895,6 +1072,103 @@ std::unordered_map<const RelAlgNode*, int> get_input_nest_levels(
   return input_to_nest_level;
 }
 
+RexInput resolve_output_reference_for_descriptor(const RelAlgNode* node,
+                                                 const unsigned index) {
+  CHECK(node);
+  auto output = get_node_output(node);
+  CHECK_LT(static_cast<size_t>(index), output.size());
+  auto ref = output[index];
+
+  while (true) {
+    const auto source = ref.getSourceNode();
+    CHECK(source);
+    const auto ref_index = ref.getIndex();
+
+    if (const auto project = dynamic_cast<const RelProject*>(source)) {
+      if (!project->isSimple()) {
+        return ref;
+      }
+      CHECK_LT(static_cast<size_t>(ref_index), project->size());
+      const auto project_input =
+          dynamic_cast<const RexInput*>(project->getProjectAt(ref_index));
+      CHECK(project_input);
+      ref = *project_input;
+      continue;
+    }
+
+    if (const auto compound = dynamic_cast<const RelCompound*>(source)) {
+      if (compound->isAggregate()) {
+        return ref;
+      }
+      CHECK_LT(static_cast<size_t>(ref_index), compound->getScalarSourcesSize());
+      const auto compound_input =
+          dynamic_cast<const RexInput*>(compound->getScalarSource(ref_index));
+      if (!compound_input) {
+        return ref;
+      }
+      ref = *compound_input;
+      continue;
+    }
+
+    if (const auto filter = dynamic_cast<const RelFilter*>(source)) {
+      output = get_node_output(filter->getInput(0));
+      CHECK_LT(static_cast<size_t>(ref_index), output.size());
+      ref = output[ref_index];
+      continue;
+    }
+
+    if (const auto sort = dynamic_cast<const RelSort*>(source)) {
+      output = get_node_output(sort->getInput(0));
+      CHECK_LT(static_cast<size_t>(ref_index), output.size());
+      ref = output[ref_index];
+      continue;
+    }
+
+    if (dynamic_cast<const RelLeftDeepInnerJoin*>(source)) {
+      output = get_node_output(source);
+      CHECK_LT(static_cast<size_t>(ref_index), output.size());
+      ref = output[ref_index];
+      continue;
+    }
+
+    if (dynamic_cast<const RelJoin*>(source)) {
+      output = get_node_output(source);
+      CHECK_LT(static_cast<size_t>(ref_index), output.size());
+      ref = output[ref_index];
+      continue;
+    }
+
+    return ref;
+  }
+}
+
+std::optional<RexInput> find_direct_input_reference(
+    const RexInput* used_input,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+  CHECK(used_input);
+  const auto resolved_used_input = resolve_output_reference_for_descriptor(
+      used_input->getSourceNode(), used_input->getIndex());
+
+  std::optional<RexInput> matched_ref;
+  for (const auto& input_nest_level : input_to_nest_level) {
+    const auto input = input_nest_level.first;
+    CHECK(input);
+    for (size_t output_idx = 0; output_idx < input->size(); ++output_idx) {
+      const auto input_ref = resolve_output_reference_for_descriptor(
+          input, static_cast<unsigned>(output_idx));
+      if (input_ref.getSourceNode() != resolved_used_input.getSourceNode() ||
+          input_ref.getIndex() != resolved_used_input.getIndex()) {
+        continue;
+      }
+      if (matched_ref) {
+        return std::nullopt;
+      }
+      matched_ref = RexInput(input, output_idx);
+    }
+  }
+  return matched_ref;
+}
+
 std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>>
 get_used_inputs(const RelCompound* compound) {
   RexUsedInputsVisitor visitor;
@@ -928,6 +1202,11 @@ get_used_inputs(const RelAggregate* aggregate) {
     for (size_t i = 0; i < agg_expr->size(); ++i) {
       const auto operand_idx = agg_expr->getOperand(i);
       CHECK_GE(in_metainfo.size(), static_cast<size_t>(operand_idx));
+      if (g_enable_experimental_query_rewrites && i == 0 &&
+          agg_expr->getKind() == kCOUNT && !agg_expr->isDistinct() &&
+          in_metainfo[operand_idx].get_type_info().get_notnull()) {
+        continue;
+      }
       auto synthesized_used_input = new RexInput(source, operand_idx);
       used_inputs_owned.emplace_back(synthesized_used_input);
       used_inputs.insert(synthesized_used_input);
@@ -970,11 +1249,16 @@ get_used_inputs(const RelFilter* filter) {
     const auto scan_source = dynamic_cast<const RelScan*>(source);
     if (scan_source) {
       CHECK(source->getOutputMetainfo().empty());
+      RexUsedInputsVisitor visitor;
       for (size_t i = 0; i < scan_source->size(); ++i) {
         auto synthesized_used_input = new RexInput(scan_source, i);
         used_inputs_owned.emplace_back(synthesized_used_input);
-        used_inputs.insert(synthesized_used_input);
+        const auto source_inputs = visitor.visit(synthesized_used_input);
+        used_inputs.insert(source_inputs.begin(), source_inputs.end());
       }
+      const auto& physical_inputs = visitor.get_inputs_owned();
+      used_inputs_owned.insert(
+          used_inputs_owned.end(), physical_inputs.begin(), physical_inputs.end());
     } else {
       const auto& partial_in_metadata = source->getOutputMetainfo();
       for (size_t i = 0; i < partial_in_metadata.size(); ++i) {
@@ -1103,7 +1387,34 @@ void collect_used_input_desc(
       input_col_descs_unique.insert(std::make_shared<const InputColDescriptor>(
           col_id, table_key.table_id, table_key.db_id, nest_level));
     } else if (!dynamic_cast<const RelLogicalUnion*>(ra_node)) {
-      throw std::runtime_error("Bushy joins not supported");
+      const auto direct_ref =
+          find_direct_input_reference(used_input, input_to_nest_level);
+      if (!direct_ref) {
+        VLOG(1) << "Unable to map RexInput "
+                << used_input->toString(RelRexToStringConfig::defaults())
+                << " while collecting descriptors for "
+                << ra_node->toString(RelRexToStringConfig::defaults())
+                << "; available direct inputs:";
+        for (const auto& input_nest_level : input_to_nest_level) {
+          VLOG(1) << "  nest " << input_nest_level.second << ": "
+                  << input_nest_level.first->toString(RelRexToStringConfig::defaults());
+        }
+        throw std::runtime_error("Bushy joins not supported");
+      }
+      const auto direct_input = direct_ref->getSourceNode();
+      const auto direct_table_key = table_key_from_ra(direct_input);
+      const auto direct_it = input_to_nest_level.find(direct_input);
+      CHECK(direct_it != input_to_nest_level.end());
+      auto direct_col_id = direct_ref->getIndex();
+      if (auto rel_scan = dynamic_cast<const RelScan*>(direct_input)) {
+        direct_col_id = rel_scan->getCatalog().getColumnIdBySpi(direct_table_key.table_id,
+                                                                direct_col_id + 1);
+      }
+      input_col_descs_unique.insert(
+          std::make_shared<const InputColDescriptor>(direct_col_id,
+                                                     direct_table_key.table_id,
+                                                     direct_table_key.db_id,
+                                                     direct_it->second));
     }
   }
 }
@@ -1175,10 +1486,72 @@ get_input_desc(const RA* ra_node,
       input_desc_pair.first, input_desc_pair.second, used_inputs_owned);
 }
 
-bool is_update_or_delete_or_window_query_step(const RelAlgNode* root) {
+bool is_gpu_window_function_kind_supported(const SqlWindowFunctionKind kind) {
+  if (!g_enable_result_reduction_pipeline) {
+    return false;
+  }
+  switch (kind) {
+    case SqlWindowFunctionKind::ROW_NUMBER:
+    case SqlWindowFunctionKind::RANK:
+    case SqlWindowFunctionKind::DENSE_RANK:
+    case SqlWindowFunctionKind::NTILE:
+    case SqlWindowFunctionKind::MIN:
+    case SqlWindowFunctionKind::MAX:
+      return true;
+    default:
+      return false;
+  }
+}
+
+struct RexWindowFunctionGpuSupport {
+  bool saw_window{false};
+  bool supported{true};
+};
+
+class RexWindowFunctionGpuSupportVisitor
+    : public RexVisitor<RexWindowFunctionGpuSupport> {
+ public:
+  RexWindowFunctionGpuSupport visitOperator(
+      const RexOperator* rex_operator) const override {
+    auto result = RexVisitor<RexWindowFunctionGpuSupport>::visitOperator(rex_operator);
+    const auto window_func = dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
+    if (!window_func) {
+      return result;
+    }
+    result.saw_window = true;
+    result.supported =
+        result.supported && is_gpu_window_function_kind_supported(window_func->getKind());
+    return result;
+  }
+
+ protected:
+  RexWindowFunctionGpuSupport aggregateResult(
+      const RexWindowFunctionGpuSupport& aggregate,
+      const RexWindowFunctionGpuSupport& next_result) const override {
+    return {aggregate.saw_window || next_result.saw_window,
+            aggregate.supported && next_result.supported};
+  }
+
+  RexWindowFunctionGpuSupport defaultResult() const override { return {}; }
+};
+
+bool project_has_gpu_supported_window_functions(const RelProject* project) {
+  if (!project || !project->hasWindowFunctionExpr()) {
+    return false;
+  }
+  const RexWindowFunctionGpuSupportVisitor visitor;
+  RexWindowFunctionGpuSupport support;
+  for (size_t i = 0; i < project->size(); ++i) {
+    const auto next = visitor.visit(project->getProjectAt(i));
+    support.saw_window = support.saw_window || next.saw_window;
+    support.supported = support.supported && next.supported;
+  }
+  return support.saw_window && support.supported;
+}
+
+bool is_update_or_delete_query_step(const RelAlgNode* root) {
   if (auto project = dynamic_cast<const RelProject*>(root)) {
-    if (project->isDeleteViaSelect() || project->isUpdateViaSelect() ||
-        project->hasWindowFunctionExpr()) {
+    if (project->isDeleteViaSelect() || project->isUpdateViaSelect()) {
       return true;
     }
   } else if (auto compound = dynamic_cast<const RelCompound*>(root)) {
@@ -1187,6 +1560,34 @@ bool is_update_or_delete_or_window_query_step(const RelAlgNode* root) {
     }
   }
   return false;
+}
+
+bool should_force_cpu_for_query_step(const RelAlgNode* root) {
+  if (is_update_or_delete_query_step(root)) {
+    return true;
+  }
+  const auto project = dynamic_cast<const RelProject*>(root);
+  return project && project->hasWindowFunctionExpr() &&
+         !project_has_gpu_supported_window_functions(project);
+}
+
+bool can_fuse_aggregate_input_project(const RelAggregate* aggregate,
+                                      const RelProject* project);
+
+const RelAlgNode* get_body_for_device_selection_metadata(const RelAlgNode* body) {
+  if (dynamic_cast<const RelSort*>(body)) {
+    // RelSort is handled without executing kernel, but device selection needs
+    // the metadata of the input that will actually be processed.
+    return body->getInput(0);
+  }
+  if (const auto aggregate = dynamic_cast<const RelAggregate*>(body)) {
+    const auto input_project = dynamic_cast<const RelProject*>(aggregate->getInput(0));
+    if (g_enable_result_reduction_pipeline &&
+        can_fuse_aggregate_input_project(aggregate, input_project)) {
+      return input_project;
+    }
+  }
+  return body;
 }
 
 }  // namespace
@@ -1207,17 +1608,12 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   executor_->clearDevicesToUse();
   auto co_copied = co;
-  if (is_update_or_delete_or_window_query_step(body)) {
+  if (should_force_cpu_for_query_step(body)) {
     co_copied.device_type = ExecutorDeviceType::CPU;
   }
   if (!(dynamic_cast<const RelLogicalValues*>(body) ||
         dynamic_cast<const RelModify*>(body))) {
-    auto body_for_metadata_gen = body;
-    if (dynamic_cast<const RelSort*>(body)) {
-      // RelSort is handled without executing kernel
-      // but we need to process its input node
-      body_for_metadata_gen = body->getInput(0);
-    }
+    auto body_for_metadata_gen = get_body_for_device_selection_metadata(body);
     CHECK(body_for_metadata_gen);
     auto input_to_nest_level = get_input_nest_levels(body_for_metadata_gen, {});
     std::tie(input_descs, input_col_descs, std::ignore) =
@@ -1227,11 +1623,13 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
         body, input_table_info, step_idx, co_copied.device_type);
   }
 #if HAVE_CUDA
-  if (co_copied.device_type == ExecutorDeviceType::GPU) {
+  const bool initialized_cuda_allocator =
+      co_copied.device_type == ExecutorDeviceType::GPU;
+  if (initialized_cuda_allocator) {
     executor_->initializeCudaAllocator();
   }
-  ScopeGuard resetCudaAllocator = [this, &co_copied]() {
-    if (co_copied.device_type == ExecutorDeviceType::GPU) {
+  ScopeGuard resetCudaAllocator = [this, initialized_cuda_allocator]() {
+    if (initialized_cuda_allocator) {
       executor_->clearCudaAllocator();
     }
   };
@@ -1265,7 +1663,8 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
                                     eo_copy,
                                     skip_device_id_selection,
                                     nullptr,
-                                    0),
+                                    0,
+                                    source_work_unit.exe_unit.sort_info),
                 merge_type(source),
                 source->getId(),
                 false};
@@ -1317,6 +1716,12 @@ void RelAlgExecutor::prepareLeafExecution(
   executor_->row_set_mem_owner_->setDictionaryGenerations(string_dictionary_generations);
   executor_->table_generations_ = table_generations;
   executor_->agg_col_range_cache_ = agg_col_range;
+  intra_query_result_cache_.clear();
+  projection_result_cache_.clear();
+  compound_projection_result_cache_.clear();
+  aggregate_prefix_result_cache_.clear();
+  column_cache_.clear();
+  result_set_column_cache_.clear();
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
@@ -1329,7 +1734,16 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
   auto timer = DEBUG_TIMER(__func__);
   if (!with_existing_temp_tables) {
     decltype(temporary_tables_)().swap(temporary_tables_);
+    temporary_table_source_nodes_.clear();
+    temporary_table_source_info_.clear();
+    intra_query_result_cache_.clear();
+    projection_result_cache_.clear();
+    compound_projection_result_cache_.clear();
+    aggregate_prefix_result_cache_.clear();
+    column_cache_.clear();
+    result_set_column_cache_.clear();
   }
+  ScopeGuard clear_result_set_column_cache = [this] { result_set_column_cache_.clear(); };
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
   executor_->temporary_tables_ = &temporary_tables_;
@@ -1386,7 +1800,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
                         eo_copied,
                         skip_device_id_selection,
                         (i == num_steps) ? render_info : nullptr,
-                        queue_time_ms);
+                        queue_time_ms,
+                        SortInfo());
     } catch (const QueryMustRunOnCpu&) {
       // Do not allow per-step retry unless the flag is enabled.
       CHECK(co.device_type == ExecutorDeviceType::GPU);
@@ -1407,7 +1822,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
                         eo_copied,
                         skip_device_id_selection_for_cpu_retry,
                         (i == num_steps) ? render_info : nullptr,
-                        queue_time_ms);
+                        queue_time_ms,
+                        SortInfo());
     } catch (const NativeExecutionError&) {
       if (!g_enable_interop) {
         throw;
@@ -1427,7 +1843,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
                         eo_extern,
                         skip_device_id_selection,
                         (i == num_steps) ? render_info : nullptr,
-                        queue_time_ms);
+                        queue_time_ms,
+                        SortInfo());
     }
   }
 
@@ -1441,12 +1858,16 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
     const ExecutionOptions& eo,
     const bool skip_device_id_selection,
     RenderInfo* render_info,
-    const int64_t queue_time_ms) {
+    const int64_t queue_time_ms,
+    const SortInfo& root_sort_info) {
   INJECT_TIMER(executeRelAlgSubSeq);
   executor_->temporary_tables_ = &temporary_tables_;
   decltype(left_deep_join_info_)().swap(left_deep_join_info_);
   time(&now_);
+  const SortInfo empty_sort_info;
   for (size_t i = interval.first; i < interval.second; i++) {
+    const SortInfo& step_sort_info =
+        i == interval.second - 1 ? root_sort_info : empty_sort_info;
     // only render on the last step
     try {
       executeRelAlgStep(seq,
@@ -1455,7 +1876,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
                         eo,
                         skip_device_id_selection,
                         (i == interval.second - 1) ? render_info : nullptr,
-                        queue_time_ms);
+                        queue_time_ms,
+                        step_sort_info);
     } catch (const QueryMustRunOnCpu&) {
       // Do not allow per-step retry unless the flag is enabled.
       CHECK(co.device_type == ExecutorDeviceType::GPU);
@@ -1474,7 +1896,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
                         eo,
                         skip_device_id_selection_for_cpu_retry,
                         (i == interval.second - 1) ? render_info : nullptr,
-                        queue_time_ms);
+                        queue_time_ms,
+                        step_sort_info);
     }
   }
 
@@ -1482,6 +1905,41 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
 }
 
 namespace {
+bool can_fuse_aggregate_input_project(const RelAggregate* aggregate,
+                                      const RelProject* project);
+std::optional<ResultSetEntryFilter> make_result_set_entry_filter(
+    const RelFilter* filter,
+    const RelAlgNode* source_node);
+std::optional<ResultSetEntryFilter> make_result_set_entry_filter_for_next_node(
+    const RelAlgNode* next_node,
+    const RelAlgNode* source_node);
+
+bool execution_unit_requires_materialized_temporary_result_columns(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const TemporaryTables& temporary_tables) {
+  for (const auto& input_desc : ra_exe_unit.input_descs) {
+    if (input_desc.getSourceType() != InputSourceType::RESULT) {
+      continue;
+    }
+    const auto input_table_id = input_desc.getTableKey().table_id;
+    const auto input_result_it = temporary_tables.find(input_table_id);
+    if (input_result_it == temporary_tables.end() || !input_result_it->second) {
+      continue;
+    }
+    const auto& input_result = input_result_it->second;
+    const auto& target_infos = input_result->getTargetInfos();
+    const auto all_targets_are_aggregates =
+        !target_infos.empty() &&
+        std::all_of(target_infos.begin(), target_infos.end(), [](const auto& target) {
+          return target.is_agg;
+        });
+    if (all_targets_are_aggregates) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void handle_query_hint(RegisteredQueryHint const& query_hints,
                        ExecutionOptions& eo,
                        CompilationOptions& co) {
@@ -1602,7 +2060,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
                                        const ExecutionOptions& eo,
                                        bool skip_device_id_selection,
                                        RenderInfo* render_info,
-                                       const int64_t queue_time_ms) {
+                                       const int64_t queue_time_ms,
+                                       const SortInfo& root_sort_info) {
   INJECT_TIMER(executeRelAlgStep);
   auto timer = DEBUG_TIMER(__func__);
   auto exec_desc_ptr = seq.getDescriptor(step_idx);
@@ -1615,6 +2074,18 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   }
   ExecutionOptions eo_copied = eo;
   CompilationOptions co_copied = co;
+  const bool materializes_for_later_step = step_idx + 1 < seq.size();
+  if (g_enable_result_reduction_pipeline && materializes_for_later_step &&
+      co_copied.device_type == ExecutorDeviceType::GPU && co_copied.allow_lazy_fetch &&
+      (g_enable_deferred_lazy_fetch || dynamic_cast<const RelCompound*>(body) ||
+       dynamic_cast<const RelProject*>(body))) {
+    co_copied.allow_lazy_fetch = false;
+  }
+  eo_copied.defer_gpu_result_cpu_materialization =
+      g_enable_result_reduction_pipeline && materializes_for_later_step &&
+      co_copied.device_type == ExecutorDeviceType::GPU &&
+      (dynamic_cast<const RelCompound*>(body) || dynamic_cast<const RelProject*>(body));
+  eo_copied.materializes_for_later_step = materializes_for_later_step;
   eo_copied.with_watchdog =
       eo.with_watchdog && (step_idx == 0 || dynamic_cast<const RelProject*>(body));
   eo_copied.outer_fragment_indices =
@@ -1622,7 +2093,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
 
   auto target_node = body;
   auto query_plan_dag_hash = body->getQueryPlanDagHash();
-  if (auto sort_body = dynamic_cast<const RelSort*>(body)) {
+  const auto sort_body = dynamic_cast<const RelSort*>(body);
+  if (sort_body) {
     target_node = sort_body->getInput(0);
     query_plan_dag_hash = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
         target_node->getQueryPlanDagHash(), SortInfo::createFromSortNode(sort_body));
@@ -1630,12 +2102,213 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     query_plan_dag_hash = QueryPlanDagExtractor::applyLimitClauseToCacheKey(
         target_node->getQueryPlanDagHash(), SortInfo());
   }
-  auto query_hints = getParsedQueryHint(target_node);
-  if (query_hints) {
-    handle_query_hint(*query_hints, eo_copied, co_copied);
+  auto query_hints = get_query_hint_for_work_unit(query_dag_.get(), target_node);
+  if (sort_body) {
+    const auto sort_hints = get_query_hint_for_work_unit(query_dag_.get(), sort_body);
+    if (sort_hints.isAnyQueryHintDelivered()) {
+      query_hints = query_hints.isAnyQueryHintDelivered() ? (query_hints || sort_hints)
+                                                          : sort_hints;
+    }
+  }
+  if (query_hints.isAnyQueryHintDelivered()) {
+    handle_query_hint(query_hints, eo_copied, co_copied);
   }
 
   setHasStepForUnion(seq.hasQueryStepForUnion());
+  const bool can_use_local_result_reuse = g_enable_result_reduction_pipeline &&
+                                          !eo.just_explain && !eo.just_validate &&
+                                          !render_info;
+  const bool can_use_intra_query_cache = can_use_local_result_reuse;
+  std::vector<QueryPlanHash> intra_query_cache_keys;
+  if (can_use_intra_query_cache) {
+    if (has_valid_query_plan_dag(body)) {
+      intra_query_cache_keys.push_back(query_plan_dag_hash);
+    }
+    const auto structural_cache_key = get_structural_query_step_cache_key(body);
+    if (structural_cache_key != query_plan_dag_hash) {
+      intra_query_cache_keys.push_back(structural_cache_key);
+    }
+  }
+  if (can_use_intra_query_cache) {
+    for (const auto cache_key : intra_query_cache_keys) {
+      const auto cached_result_it = intra_query_result_cache_.find(cache_key);
+      if (cached_result_it != intra_query_result_cache_.end() &&
+          cached_result_it->second.getDataPtr()) {
+        body->setOutputMetainfo(cached_result_it->second.getTargetsMeta());
+        exec_desc.setResult(cached_result_it->second);
+        addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr(), body);
+        return;
+      }
+    }
+  }
+  const auto remember_query_step_result = [&]() {
+    if (can_use_intra_query_cache && exec_desc.getResult().getDataPtr()) {
+      for (const auto cache_key : intra_query_cache_keys) {
+        intra_query_result_cache_.emplace(cache_key, exec_desc.getResult());
+      }
+    }
+  };
+  if (dynamic_cast<const RelFilter*>(body)) {
+    const auto prefiltered_it = prefiltered_filter_result_cache_.find(body->getId());
+    if (prefiltered_it != prefiltered_filter_result_cache_.end()) {
+      body->setOutputMetainfo(prefiltered_it->second.getTargetsMeta());
+      exec_desc.setResult(prefiltered_it->second);
+      prefiltered_filter_result_cache_.erase(prefiltered_it);
+      addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr(), body);
+      remember_query_step_result();
+      return;
+    }
+  }
+  const auto remember_simple_project_result = [&]() {
+    const auto project = dynamic_cast<const RelProject*>(body);
+    if (!can_use_intra_query_cache || !project || !project->isSimple() ||
+        !exec_desc.getResult().getDataPtr() || project->inputCount() != 1) {
+      return;
+    }
+    auto target_expr_hashes = get_simple_project_expr_hashes(project);
+    if (target_expr_hashes.empty() && project->size() > 0) {
+      return;
+    }
+    projection_result_cache_[project->getInput(0)->toHash()].push_back(
+        {std::move(target_expr_hashes),
+         exec_desc.getResult().getTargetsMeta(),
+         exec_desc.getResult()});
+  };
+  const auto find_prefix_project_result = [&]() -> std::optional<ExecutionResult> {
+    const auto project = dynamic_cast<const RelProject*>(body);
+    if (!can_use_intra_query_cache || !project || !project->isSimple() ||
+        project->inputCount() != 1) {
+      return std::nullopt;
+    }
+    const auto target_expr_hashes = get_simple_project_expr_hashes(project);
+    if (target_expr_hashes.empty() && project->size() > 0) {
+      return std::nullopt;
+    }
+    const auto cache_it = projection_result_cache_.find(project->getInput(0)->toHash());
+    if (cache_it == projection_result_cache_.end()) {
+      return std::nullopt;
+    }
+    const ProjectionResultCacheEntry* best_match = nullptr;
+    for (const auto& entry : cache_it->second) {
+      if (!entry.result.getDataPtr() ||
+          entry.target_expr_hashes.size() < target_expr_hashes.size() ||
+          entry.targets_meta.size() < entry.target_expr_hashes.size() ||
+          !std::equal(target_expr_hashes.begin(),
+                      target_expr_hashes.end(),
+                      entry.target_expr_hashes.begin())) {
+        continue;
+      }
+      if (!best_match ||
+          entry.target_expr_hashes.size() < best_match->target_expr_hashes.size()) {
+        best_match = &entry;
+      }
+    }
+    if (!best_match) {
+      return std::nullopt;
+    }
+    auto targets_meta =
+        get_project_prefix_targets_meta(project, best_match->targets_meta);
+    return ExecutionResult(best_match->result.getDataPtr(), targets_meta);
+  };
+  const auto remember_compound_projection_prefix_result =
+      [&](const RelCompound* compound, const ExecutionResult& result) {
+        if (!can_use_intra_query_cache || !compound || compound->isAggregate() ||
+            !result.getDataPtr()) {
+          return;
+        }
+        const auto cache_key = get_compound_projection_prefix_cache_key(compound);
+        if (!cache_key) {
+          return;
+        }
+        compound_projection_result_cache_[*cache_key].push_back(
+            {get_compound_target_expr_hashes(compound), result.getTargetsMeta(), result});
+      };
+  const auto find_compound_projection_prefix_result =
+      [&]() -> std::optional<ExecutionResult> {
+    const auto compound = dynamic_cast<const RelCompound*>(body);
+    if (!can_use_intra_query_cache || !compound || compound->isAggregate()) {
+      return std::nullopt;
+    }
+    const auto cache_key = get_compound_projection_prefix_cache_key(compound);
+    if (!cache_key) {
+      return std::nullopt;
+    }
+    const auto cache_it = compound_projection_result_cache_.find(*cache_key);
+    if (cache_it == compound_projection_result_cache_.end()) {
+      return std::nullopt;
+    }
+    const auto target_expr_hashes = get_compound_target_expr_hashes(compound);
+    const ProjectionResultCacheEntry* best_match = nullptr;
+    for (const auto& entry : cache_it->second) {
+      if (!entry.result.getDataPtr() ||
+          entry.target_expr_hashes.size() < target_expr_hashes.size() ||
+          entry.targets_meta.size() < entry.target_expr_hashes.size() ||
+          !std::equal(target_expr_hashes.begin(),
+                      target_expr_hashes.end(),
+                      entry.target_expr_hashes.begin())) {
+        continue;
+      }
+      if (!best_match ||
+          entry.target_expr_hashes.size() < best_match->target_expr_hashes.size()) {
+        best_match = &entry;
+      }
+    }
+    if (!best_match) {
+      return std::nullopt;
+    }
+    auto targets_meta =
+        get_compound_prefix_targets_meta(compound, best_match->targets_meta);
+    return ExecutionResult(best_match->result.getDataPtr(), targets_meta);
+  };
+  const auto remember_aggregate_prefix_result = [&](const RelCompound* compound,
+                                                    const ExecutionResult& result) {
+    if (!can_use_local_result_reuse || !compound || !compound->isAggregate() ||
+        !result.getDataPtr()) {
+      return;
+    }
+    const auto cache_key = get_compound_aggregate_prefix_cache_key(compound);
+    if (!cache_key) {
+      return;
+    }
+    aggregate_prefix_result_cache_[*cache_key].push_back(
+        {get_compound_target_expr_hashes(compound), result.getTargetsMeta(), result});
+  };
+  const auto find_aggregate_prefix_result = [&]() -> std::optional<ExecutionResult> {
+    const auto compound = dynamic_cast<const RelCompound*>(body);
+    if (!can_use_local_result_reuse || !compound || !compound->isAggregate()) {
+      return std::nullopt;
+    }
+    const auto cache_key = get_compound_aggregate_prefix_cache_key(compound);
+    if (!cache_key) {
+      return std::nullopt;
+    }
+    const auto cache_it = aggregate_prefix_result_cache_.find(*cache_key);
+    if (cache_it == aggregate_prefix_result_cache_.end()) {
+      return std::nullopt;
+    }
+    const auto target_expr_hashes = get_compound_target_expr_hashes(compound);
+    const AggregatePrefixResultCacheEntry* best_match = nullptr;
+    for (const auto& entry : cache_it->second) {
+      if (!entry.result.getDataPtr() ||
+          entry.target_expr_hashes.size() < target_expr_hashes.size() ||
+          entry.targets_meta.size() < entry.target_expr_hashes.size() ||
+          !std::equal(target_expr_hashes.begin(),
+                      target_expr_hashes.end(),
+                      entry.target_expr_hashes.begin())) {
+        continue;
+      }
+      if (!best_match ||
+          entry.target_expr_hashes.size() < best_match->target_expr_hashes.size()) {
+        best_match = &entry;
+      }
+    }
+    if (!best_match) {
+      return std::nullopt;
+    }
+    auto targets_meta =
+        get_compound_prefix_targets_meta(compound, best_match->targets_meta);
+    return ExecutionResult(best_match->result.getDataPtr(), targets_meta);
+  };
   // let's check whether we have a cached query resultset of the input query
   // note that the resultset recycling for a top sort node query will be handled
   // within executeSort(body) function
@@ -1658,7 +2331,40 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
             *render_info, copied_target_exprs, cached_resultset->getTargetMetaInfo());
       }
       exec_desc.setResult({cached_resultset, cached_resultset->getTargetMetaInfo()});
-      addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr());
+      addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr(), body);
+      return;
+    }
+  }
+  if (auto prefix_project_result = find_prefix_project_result()) {
+    body->setOutputMetainfo(prefix_project_result->getTargetsMeta());
+    exec_desc.setResult(*prefix_project_result);
+    addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr(), body);
+    remember_query_step_result();
+    return;
+  }
+  if (auto compound_projection_result = find_compound_projection_prefix_result()) {
+    body->setOutputMetainfo(compound_projection_result->getTargetsMeta());
+    exec_desc.setResult(*compound_projection_result);
+    addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr(), body);
+    remember_query_step_result();
+    return;
+  }
+  if (auto aggregate_prefix_result = find_aggregate_prefix_result()) {
+    body->setOutputMetainfo(aggregate_prefix_result->getTargetsMeta());
+    exec_desc.setResult(*aggregate_prefix_result);
+    addTemporaryTable(-body->getId(), exec_desc.getResult().getDataPtr(), body);
+    remember_query_step_result();
+    return;
+  }
+  if (const auto project_body = dynamic_cast<const RelProject*>(body)) {
+    const auto next_step_idx = step_idx + 1;
+    const auto next_aggregate = next_step_idx < seq.size()
+                                    ? dynamic_cast<const RelAggregate*>(
+                                          seq.getDescriptor(next_step_idx)->getBody())
+                                    : nullptr;
+    if (g_enable_result_reduction_pipeline &&
+        can_fuse_aggregate_input_project(next_aggregate, project_body)) {
+      createProjectWorkUnit(project_body, SortInfo(), eo_copied);
       return;
     }
   }
@@ -1667,7 +2373,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   // note that dist-mode determines device_ids before entering this function
   // i.e., RelAlgExecutor::executeRelAlgQuerySingleStep
   // in such case, `skip_device_id_selection` is set to true and we skip this process
-  if (is_update_or_delete_or_window_query_step(body)) {
+  if (should_force_cpu_for_query_step(body)) {
     co_copied.device_type = ExecutorDeviceType::CPU;
   }
   if (!skip_device_id_selection) {
@@ -1676,12 +2382,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     executor_->clearDevicesToUse();
     if (!(dynamic_cast<const RelLogicalValues*>(body) ||
           dynamic_cast<const RelModify*>(body))) {
-      auto body_for_metadata_gen = body;
-      if (dynamic_cast<const RelSort*>(body)) {
-        // RelSort is handled without executing kernel
-        // but we need to process its input node
-        body_for_metadata_gen = body->getInput(0);
-      }
+      auto body_for_metadata_gen = get_body_for_device_selection_metadata(body);
       CHECK(body_for_metadata_gen);
       auto input_to_nest_level = get_input_nest_levels(body_for_metadata_gen, {});
       std::tie(input_descs, input_col_descs, std::ignore) =
@@ -1697,12 +2398,182 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
 #endif
   }
 #if HAVE_CUDA
-  ScopeGuard resetCudaAllocator = [this, &skip_device_id_selection, &co_copied]() {
-    if (!skip_device_id_selection && co_copied.device_type == ExecutorDeviceType::GPU) {
+  const bool initialized_cuda_allocator =
+      !skip_device_id_selection && co_copied.device_type == ExecutorDeviceType::GPU;
+  ScopeGuard resetCudaAllocator = [this, initialized_cuda_allocator]() {
+    if (initialized_cuda_allocator) {
       executor_->clearCudaAllocator();
     }
   };
 #endif
+
+  const auto make_next_filter_for_aggregate = [&](const RelAlgNode* aggregate_node)
+      -> std::pair<const RelAlgNode*, std::optional<ResultSetEntryFilter>> {
+    const auto next_step_idx = step_idx + 1;
+    const auto next_node = next_step_idx < seq.size()
+                               ? seq.getDescriptor(next_step_idx)->getBody()
+                               : nullptr;
+    if (!g_enable_result_reduction_pipeline) {
+      return {next_node, std::nullopt};
+    }
+    auto entry_filter =
+        make_result_set_entry_filter_for_next_node(next_node, aggregate_node);
+    return {next_node, std::move(entry_filter)};
+  };
+  const auto next_node_consumes_source = [](const RelAlgNode* next_node,
+                                            const RelAlgNode* source_node) {
+    if (!next_node || !source_node) {
+      return false;
+    }
+    const auto same_node = [](const RelAlgNode* lhs, const RelAlgNode* rhs) {
+      return lhs && rhs && (lhs == rhs || lhs->getId() == rhs->getId());
+    };
+    std::vector<const RelAlgNode*> stack{next_node};
+    std::unordered_set<const RelAlgNode*> visited;
+    while (!stack.empty()) {
+      const auto current_node = stack.back();
+      stack.pop_back();
+      if (!current_node || !visited.insert(current_node).second) {
+        continue;
+      }
+      if (same_node(current_node, source_node)) {
+        return true;
+      }
+      for (size_t input_idx = 0; input_idx < current_node->inputCount(); ++input_idx) {
+        stack.push_back(current_node->getInput(input_idx));
+      }
+    }
+    return false;
+  };
+  std::function<bool(const RelAlgNode*, const RelAlgNode*)>
+      next_node_can_consume_device_resident_result =
+          [&](const RelAlgNode* next_node, const RelAlgNode* source_node) {
+            if (!next_node_consumes_source(next_node, source_node)) {
+              return false;
+            }
+            const auto sort = dynamic_cast<const RelSort*>(next_node);
+            if (sort) {
+              if (sort->getLimit().has_value()) {
+                return true;
+              }
+              CHECK_EQ(size_t(1), sort->inputCount());
+              return next_node_can_consume_device_resident_result(sort->getInput(0),
+                                                                  source_node);
+            }
+            return dynamic_cast<const RelFilter*>(next_node) ||
+                   dynamic_cast<const RelProject*>(next_node) ||
+                   dynamic_cast<const RelAggregate*>(next_node) ||
+                   dynamic_cast<const RelCompound*>(next_node) ||
+                   dynamic_cast<const RelJoin*>(next_node) ||
+                   dynamic_cast<const RelLeftDeepInnerJoin*>(next_node);
+          };
+  const auto downstream_node_can_consume_device_resident_result =
+      [&](const RelAlgNode* source_node) {
+        if (!g_enable_result_reduction_pipeline) {
+          return false;
+        }
+        for (auto future_step_idx = step_idx + 1; future_step_idx < seq.size();
+             ++future_step_idx) {
+          const auto future_node = seq.getDescriptor(future_step_idx)->getBody();
+          if (!next_node_consumes_source(future_node, source_node)) {
+            continue;
+          }
+          if (next_node_can_consume_device_resident_result(future_node, source_node)) {
+            return true;
+          }
+        }
+        return false;
+      };
+  const auto downstream_device_resident_output_columns =
+      [&](const RelAlgNode* source_node) {
+        std::vector<size_t> column_indices;
+        if (!g_enable_result_reduction_pipeline || !source_node) {
+          return column_indices;
+        }
+        const auto source_table_id = -static_cast<int32_t>(source_node->getId());
+        for (auto future_step_idx = step_idx + 1; future_step_idx < seq.size();
+             ++future_step_idx) {
+          const auto future_node = seq.getDescriptor(future_step_idx)->getBody();
+          if (!next_node_can_consume_device_resident_result(future_node, source_node) ||
+              should_force_cpu_for_query_step(future_node) ||
+              dynamic_cast<const RelLogicalValues*>(future_node) ||
+              dynamic_cast<const RelModify*>(future_node)) {
+            continue;
+          }
+          const auto metadata_node = get_body_for_device_selection_metadata(future_node);
+          if (!metadata_node) {
+            continue;
+          }
+          if (const auto aggregate = dynamic_cast<const RelAggregate*>(metadata_node)) {
+            CHECK_EQ(size_t(1), aggregate->inputCount());
+            const auto aggregate_input = aggregate->getInput(0);
+            const auto append_source_column = [&](const unsigned input_idx) {
+              const auto resolved_input =
+                  resolve_output_reference_for_descriptor(aggregate_input, input_idx);
+              const auto resolved_source = resolved_input.getSourceNode();
+              if (resolved_source && (resolved_source == source_node ||
+                                      resolved_source->getId() == source_node->getId())) {
+                column_indices.push_back(resolved_input.getIndex());
+              }
+            };
+            for (size_t group_idx = 0; group_idx < aggregate->getGroupByCount();
+                 ++group_idx) {
+              append_source_column(static_cast<unsigned>(group_idx));
+            }
+            for (const auto& agg_expr : aggregate->getAggExprs()) {
+              for (size_t operand_idx = 0; operand_idx < agg_expr->size();
+                   ++operand_idx) {
+                const auto input_idx = agg_expr->getOperand(operand_idx);
+                CHECK_GE(input_idx, 0);
+                append_source_column(static_cast<unsigned>(input_idx));
+              }
+            }
+            continue;
+          }
+          const auto input_to_nest_level = get_input_nest_levels(metadata_node, {});
+          std::list<std::shared_ptr<const InputColDescriptor>> input_columns;
+          std::tie(std::ignore, input_columns, std::ignore) =
+              get_input_desc(metadata_node, input_to_nest_level, {});
+          for (const auto& input_column : input_columns) {
+            CHECK(input_column);
+            if (input_column->getScanDesc().getTableKey().table_id == source_table_id &&
+                input_column->getColId() >= 0) {
+              column_indices.push_back(static_cast<size_t>(input_column->getColId()));
+            }
+          }
+        }
+        std::sort(column_indices.begin(), column_indices.end());
+        column_indices.erase(std::unique(column_indices.begin(), column_indices.end()),
+                             column_indices.end());
+        return column_indices;
+      };
+
+  const auto prefilter_aggregate_result_for_next_filter =
+      [&](const RelAlgNode* next_node,
+          const std::optional<ResultSetEntryFilter>& entry_filter,
+          ExecutionResult aggregate_result) -> ExecutionResult {
+    if (entry_filter) {
+      auto rows = aggregate_result.getDataPtr();
+      if (rows) {
+        if (rows->isEntryFilterApplied()) {
+          if (dynamic_cast<const RelFilter*>(next_node)) {
+            prefiltered_filter_result_cache_[next_node->getId()] = aggregate_result;
+          }
+        } else if (auto filtered_rows =
+                       rows->compactBaselineHashForReduction(0, &*entry_filter)) {
+          aggregate_result = ExecutionResult(std::move(filtered_rows),
+                                             aggregate_result.getTargetsMeta());
+          if (dynamic_cast<const RelFilter*>(next_node)) {
+            prefiltered_filter_result_cache_[next_node->getId()] = aggregate_result;
+          }
+        } else if (auto compacted_rows = rows->compactBaselineHashForReduction(0)) {
+          aggregate_result = ExecutionResult(std::move(compacted_rows),
+                                             aggregate_result.getTargetsMeta());
+        }
+      }
+    }
+    return aggregate_result;
+  };
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
@@ -1711,8 +2582,29 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     } else if (compound->isUpdateViaSelect()) {
       executeUpdate(compound, co_copied, eo_copied, queue_time_ms);
     } else {
-      exec_desc.setResult(
-          executeCompound(compound, co_copied, eo_copied, render_info, queue_time_ms));
+      const auto [next_filter_node, entry_filter] =
+          compound->isAggregate()
+              ? make_next_filter_for_aggregate(compound)
+              : std::pair<const RelAlgNode*, std::optional<ResultSetEntryFilter>>{
+                    nullptr, std::nullopt};
+      const auto defer_gpu_host_storage =
+          downstream_node_can_consume_device_resident_result(compound);
+      const auto device_resident_output_columns =
+          downstream_device_resident_output_columns(compound);
+      auto compound_result = executeCompound(compound,
+                                             co_copied,
+                                             eo_copied,
+                                             render_info,
+                                             queue_time_ms,
+                                             entry_filter ? &*entry_filter : nullptr,
+                                             defer_gpu_host_storage,
+                                             device_resident_output_columns,
+                                             root_sort_info);
+      if (!compound_result.isFilterPushDownEnabled() && compound->isAggregate()) {
+        compound_result = prefilter_aggregate_result_for_next_filter(
+            next_filter_node, entry_filter, std::move(compound_result));
+      }
+      exec_desc.setResult(compound_result);
       VLOG(3) << "Returned from executeCompound(), addTemporaryTable("
               << static_cast<int>(-compound->getId()) << ", ...)"
               << " exec_desc.getResult().getDataPtr()->rowCount()="
@@ -1720,7 +2612,12 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       if (exec_desc.getResult().isFilterPushDownEnabled()) {
         return;
       }
-      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr());
+      addTemporaryTable(-compound->getId(), exec_desc.getResult().getDataPtr(), compound);
+      remember_query_step_result();
+      if (!entry_filter.has_value()) {
+        remember_compound_projection_prefix_result(compound, exec_desc.getResult());
+        remember_aggregate_prefix_result(compound, exec_desc.getResult());
+      }
     }
     return;
   }
@@ -1754,8 +2651,15 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
           }
         }
       }
-      exec_desc.setResult(executeProject(
-          project, co_copied, eo_copied, render_info, queue_time_ms, prev_count));
+      const auto device_resident_output_columns =
+          downstream_device_resident_output_columns(project);
+      exec_desc.setResult(executeProject(project,
+                                         co_copied,
+                                         eo_copied,
+                                         render_info,
+                                         queue_time_ms,
+                                         prev_count,
+                                         device_resident_output_columns));
       VLOG(3) << "Returned from executeProject(), addTemporaryTable("
               << static_cast<int>(-project->getId()) << ", ...)"
               << " exec_desc.getResult().getDataPtr()->rowCount()="
@@ -1763,22 +2667,41 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       if (exec_desc.getResult().isFilterPushDownEnabled()) {
         return;
       }
-      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr());
+      addTemporaryTable(-project->getId(), exec_desc.getResult().getDataPtr(), project);
+      remember_query_step_result();
+      remember_simple_project_result();
     }
     return;
   }
   const auto aggregate = dynamic_cast<const RelAggregate*>(body);
   if (aggregate) {
-    exec_desc.setResult(
-        executeAggregate(aggregate, co_copied, eo_copied, render_info, queue_time_ms));
-    addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr());
+    const auto [next_filter_node, entry_filter] =
+        make_next_filter_for_aggregate(aggregate);
+    const auto defer_gpu_host_storage =
+        downstream_node_can_consume_device_resident_result(aggregate);
+    const auto device_resident_output_columns =
+        downstream_device_resident_output_columns(aggregate);
+    auto aggregate_result = executeAggregate(aggregate,
+                                             co_copied,
+                                             eo_copied,
+                                             render_info,
+                                             queue_time_ms,
+                                             entry_filter ? &*entry_filter : nullptr,
+                                             defer_gpu_host_storage,
+                                             device_resident_output_columns,
+                                             root_sort_info);
+    exec_desc.setResult(prefilter_aggregate_result_for_next_filter(
+        next_filter_node, entry_filter, std::move(aggregate_result)));
+    addTemporaryTable(-aggregate->getId(), exec_desc.getResult().getDataPtr(), aggregate);
+    remember_query_step_result();
     return;
   }
   const auto filter = dynamic_cast<const RelFilter*>(body);
   if (filter) {
     exec_desc.setResult(
         executeFilter(filter, co_copied, eo_copied, render_info, queue_time_ms));
-    addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr());
+    addTemporaryTable(-filter->getId(), exec_desc.getResult().getDataPtr(), filter);
+    remember_query_step_result();
     return;
   }
   const auto sort = dynamic_cast<const RelSort*>(body);
@@ -1788,13 +2711,16 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     if (exec_desc.getResult().isFilterPushDownEnabled()) {
       return;
     }
-    addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr());
+    addTemporaryTable(-sort->getId(), exec_desc.getResult().getDataPtr(), sort);
+    remember_query_step_result();
     return;
   }
   const auto logical_values = dynamic_cast<const RelLogicalValues*>(body);
   if (logical_values) {
     exec_desc.setResult(executeLogicalValues(logical_values, eo_copied));
-    addTemporaryTable(-logical_values->getId(), exec_desc.getResult().getDataPtr());
+    addTemporaryTable(
+        -logical_values->getId(), exec_desc.getResult().getDataPtr(), logical_values);
+    remember_query_step_result();
     return;
   }
   const auto modify = dynamic_cast<const RelModify*>(body);
@@ -1806,14 +2732,18 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   if (logical_union) {
     exec_desc.setResult(executeUnion(
         logical_union, seq, co_copied, eo_copied, render_info, queue_time_ms));
-    addTemporaryTable(-logical_union->getId(), exec_desc.getResult().getDataPtr());
+    addTemporaryTable(
+        -logical_union->getId(), exec_desc.getResult().getDataPtr(), logical_union);
+    remember_query_step_result();
     return;
   }
   const auto table_func = dynamic_cast<const RelTableFunction*>(body);
   if (table_func) {
     exec_desc.setResult(
         executeTableFunction(table_func, co_copied, eo_copied, queue_time_ms));
-    addTemporaryTable(-table_func->getId(), exec_desc.getResult().getDataPtr());
+    addTemporaryTable(
+        -table_func->getId(), exec_desc.getResult().getDataPtr(), table_func);
+    remember_query_step_result();
     return;
   }
   LOG(FATAL) << "Unhandled body type: "
@@ -1830,7 +2760,7 @@ void RelAlgExecutor::handleNop(RaExecutionDesc& ed) {
   const auto it = temporary_tables_.find(-input->getId());
   CHECK(it != temporary_tables_.end());
   // set up temp table as it could be used by the outer query or next step
-  addTemporaryTable(-body->getId(), it->second);
+  addTemporaryTable(-body->getId(), it->second, body);
 
   ed.setResult({it->second, input->getOutputMetainfo()});
 }
@@ -2178,7 +3108,6 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
           auto eo = eo_in;
           if (dml_transaction_parameters_->tableIsTemporary()) {
             eo.output_columnar_hint = true;
-            VLOG(1) << "Disable lazy fetch: temporary table update query detected";
             co_project.allow_lazy_fetch = false;
             co_project.filter_on_deleted_column =
                 false;  // project the entire delete column for columnar update
@@ -2399,13 +3328,27 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
   }
 }
 
-ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
-                                                const CompilationOptions& co,
-                                                const ExecutionOptions& eo,
-                                                RenderInfo* render_info,
-                                                const int64_t queue_time_ms) {
+ExecutionResult RelAlgExecutor::executeCompound(
+    const RelCompound* compound,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    RenderInfo* render_info,
+    const int64_t queue_time_ms,
+    const ResultSetEntryFilter* deferred_sparse_baseline_filter,
+    const bool defer_gpu_baseline_hash_host_storage_before_copy,
+    const std::vector<size_t>& device_resident_output_column_indices,
+    const SortInfo& root_sort_info) {
   auto timer = DEBUG_TIMER(__func__);
-  const auto work_unit = createCompoundWorkUnit(compound, SortInfo(), eo);
+  auto work_unit = createCompoundWorkUnit(compound, root_sort_info, eo);
+  work_unit.exe_unit.defer_sparse_baseline_append_compaction =
+      deferred_sparse_baseline_filter != nullptr;
+  work_unit.exe_unit.defer_gpu_baseline_hash_host_storage_before_copy =
+      defer_gpu_baseline_hash_host_storage_before_copy;
+  work_unit.exe_unit.device_resident_output_column_indices =
+      device_resident_output_column_indices;
+  if (deferred_sparse_baseline_filter) {
+    work_unit.exe_unit.deferred_sparse_baseline_filter = *deferred_sparse_baseline_filter;
+  }
   CompilationOptions co_compound = co;
   return executeWorkUnit(work_unit,
                          compound->getOutputMetainfo(),
@@ -2416,13 +3359,27 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                          queue_time_ms);
 }
 
-ExecutionResult RelAlgExecutor::executeAggregate(const RelAggregate* aggregate,
-                                                 const CompilationOptions& co,
-                                                 const ExecutionOptions& eo,
-                                                 RenderInfo* render_info,
-                                                 const int64_t queue_time_ms) {
+ExecutionResult RelAlgExecutor::executeAggregate(
+    const RelAggregate* aggregate,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    RenderInfo* render_info,
+    const int64_t queue_time_ms,
+    const ResultSetEntryFilter* deferred_sparse_baseline_filter,
+    const bool defer_gpu_baseline_hash_host_storage_before_copy,
+    const std::vector<size_t>& device_resident_output_column_indices,
+    const SortInfo& root_sort_info) {
   auto timer = DEBUG_TIMER(__func__);
-  const auto work_unit = createAggregateWorkUnit(aggregate, SortInfo(), eo.just_explain);
+  auto work_unit = createAggregateWorkUnit(aggregate, root_sort_info, eo.just_explain);
+  work_unit.exe_unit.defer_sparse_baseline_append_compaction =
+      deferred_sparse_baseline_filter != nullptr;
+  work_unit.exe_unit.defer_gpu_baseline_hash_host_storage_before_copy =
+      defer_gpu_baseline_hash_host_storage_before_copy;
+  work_unit.exe_unit.device_resident_output_column_indices =
+      device_resident_output_column_indices;
+  if (deferred_sparse_baseline_filter) {
+    work_unit.exe_unit.deferred_sparse_baseline_filter = *deferred_sparse_baseline_filter;
+  }
   return executeWorkUnit(work_unit,
                          aggregate->getOutputMetainfo(),
                          true,
@@ -2443,6 +3400,90 @@ bool is_window_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {
                      });
 }
 
+bool window_frame_covers_whole_partition(const Analyzer::WindowFunction* window_func) {
+  CHECK(window_func);
+  if (!window_func->hasFraming()) {
+    return true;
+  }
+  return window_func->getFrameStartBound()->getBoundType() ==
+             SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
+         window_func->getFrameEndBound()->getBoundType() ==
+             SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING;
+}
+
+bool window_partition_extrema_input_type_supported(const SQLTypeInfo& ti) {
+  if (ti.is_fp()) {
+    return ti.get_type() == kDOUBLE && ti.get_size() == 8;
+  }
+  return ti.get_size() == 8 &&
+         (ti.is_integer() || ti.is_decimal() || ti.is_time_or_date() || ti.is_boolean());
+}
+
+bool window_function_can_precompute_partition_extrema_on_gpu(
+    const Analyzer::WindowFunction* window_func) {
+  CHECK(window_func);
+  switch (window_func->getKind()) {
+    case SqlWindowFunctionKind::MIN:
+    case SqlWindowFunctionKind::MAX:
+      break;
+    default:
+      return false;
+  }
+  if (window_func->isMissingValueFillingFunction() ||
+      !window_func->getOrderKeys().empty() || !window_func->getCollation().empty() ||
+      !window_frame_covers_whole_partition(window_func) ||
+      window_func->getArgs().size() != 1) {
+    return false;
+  }
+  if (!dynamic_cast<const Analyzer::ColumnVar*>(window_func->getArgs().front().get())) {
+    return false;
+  }
+  return window_partition_extrema_input_type_supported(
+      window_func->getArgs().front()->get_type_info());
+}
+
+#ifdef HAVE_CUDA
+bool window_function_can_execute_on_gpu(const Analyzer::WindowFunction* window_func) {
+  CHECK(window_func);
+  if (window_function_can_precompute_partition_extrema_on_gpu(window_func)) {
+    return true;
+  }
+  if (!is_gpu_window_function_kind_supported(window_func->getKind())) {
+    return false;
+  }
+  return !window_func->hasFraming() && !window_func->isMissingValueFillingFunction();
+}
+#endif
+
+bool can_execute_window_unit_on_single_gpu(const RelAlgExecutionUnit& ra_exe_unit,
+                                           const Executor* executor) {
+#ifdef HAVE_CUDA
+  if (!executor->getDataMgr()->getCudaMgr()) {
+    return false;
+  }
+  if (!executor->isDevicesToUseInitialized() ||
+      executor->getAvailableDevicesToProcessQuery().size() != 1) {
+    return false;
+  }
+  bool saw_window = false;
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
+    if (!window_func) {
+      continue;
+    }
+    saw_window = true;
+    if (!window_function_can_execute_on_gpu(window_func)) {
+      return false;
+    }
+  }
+  return saw_window;
+#else
+  static_cast<void>(ra_exe_unit);
+  static_cast<void>(executor);
+  return false;
+#endif
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeProject(
@@ -2451,9 +3492,12 @@ ExecutionResult RelAlgExecutor::executeProject(
     const ExecutionOptions& eo,
     RenderInfo* render_info,
     const int64_t queue_time_ms,
-    const std::optional<size_t> previous_count) {
+    const std::optional<size_t> previous_count,
+    const std::vector<size_t>& device_resident_output_column_indices) {
   auto timer = DEBUG_TIMER(__func__);
   auto work_unit = createProjectWorkUnit(project, SortInfo(), eo);
+  work_unit.exe_unit.device_resident_output_column_indices =
+      device_resident_output_column_indices;
   CompilationOptions co_project = co;
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
@@ -2518,7 +3562,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
       VLOG(1) << "recycle table function's resultset of the root node "
               << table_func->getId() << " from resultset cache";
       result = {cached_resultset, cached_resultset->getTargetMetaInfo()};
-      addTemporaryTable(-body->getId(), result.getDataPtr());
+      addTemporaryTable(-body->getId(), result.getDataPtr(), body);
       return result;
     }
   }
@@ -2850,8 +3894,13 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
       }
     }
   }
-  if (context->getWindowFunction()->hasFraming() ||
-      context->getWindowFunction()->isMissingValueFillingFunction()) {
+  const bool needs_window_function_expression_columns =
+      context->getWindowFunction()->hasFraming() ||
+      context->getWindowFunction()->isMissingValueFillingFunction() ||
+      (co.device_type == ExecutorDeviceType::GPU &&
+       window_function_can_precompute_partition_extrema_on_gpu(
+           context->getWindowFunction()));
+  if (needs_window_function_expression_columns) {
     // todo (yoonmin) : if we try to support generic window function expression without
     // extra project node, we need to revisit here b/c the current logic assumes that
     // window function expression has a single input source
@@ -3470,7 +4519,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
         source_result =
             ExecutionResult{cached_resultset, cached_resultset->getTargetMetaInfo()};
         if (temporary_tables_.find(-source_node->getId()) == temporary_tables_.end()) {
-          addTemporaryTable(-source_node->getId(), cached_resultset);
+          addTemporaryTable(-source_node->getId(), cached_resultset, source_node);
         }
         use_speculative_top_n_sort = *cached_resultset->canUseSpeculativeTopNSort() &&
                                      co.device_type == ExecutorDeviceType::GPU;
@@ -3628,8 +4677,1073 @@ std::pair<size_t, shared::TableKey> groups_approx_upper_bound(
   return std::make_pair(std::max(max_num_groups, size_t(1)), table_key);
 }
 
+size_t groups_approx_fragment_upper_bound(
+    const std::vector<InputTableInfo>& table_infos) {
+  CHECK(!table_infos.empty());
+  constexpr size_t max_groups_buffer_entry_guess_cap = 100000000;
+  size_t max_num_groups = 1;
+  for (const auto& table_info : table_infos) {
+    const auto fragment_cardinality =
+        std::max(table_info.info.getFragmentNumTuplesUpperBound(), size_t(1));
+    if (max_num_groups > max_groups_buffer_entry_guess_cap / fragment_cardinality) {
+      return max_groups_buffer_entry_guess_cap;
+    }
+    max_num_groups *= fragment_cardinality;
+  }
+  return std::max(max_num_groups, size_t(1));
+}
+
+const Analyzer::ColumnVar* column_var_for_group_bound(const Analyzer::Expr* expr) {
+  if (const auto cast = dynamic_cast<const Analyzer::UOper*>(expr)) {
+    if (cast->get_optype() == kCAST &&
+        !cast->get_operand()->get_type_info().is_decimal()) {
+      expr = cast->get_operand();
+    }
+  }
+  return dynamic_cast<const Analyzer::ColumnVar*>(expr);
+}
+
+bool same_column_for_group_bound(const Analyzer::ColumnVar* lhs,
+                                 const Analyzer::ColumnVar* rhs) {
+  if (!lhs || !rhs) {
+    return false;
+  }
+  const auto lhs_key = lhs->getColumnKey();
+  const auto rhs_key = rhs->getColumnKey();
+  return lhs->get_rte_idx() == rhs->get_rte_idx() && lhs_key.db_id == rhs_key.db_id &&
+         lhs_key.table_id == rhs_key.table_id && lhs_key.column_id == rhs_key.column_id;
+}
+
+bool base_columns_contain_unique_key(
+    const std::vector<const Analyzer::ColumnVar*>& columns) {
+  if (columns.empty()) {
+    return false;
+  }
+  if (!columns.front()) {
+    return false;
+  }
+  const auto table_key = columns.front()->getTableKey();
+  if (table_key.table_id < 0) {
+    return false;
+  }
+  std::vector<const ColumnDescriptor*> column_descriptors;
+  column_descriptors.reserve(columns.size());
+  for (const auto column : columns) {
+    if (!column || column->getTableKey() != table_key ||
+        column->get_rte_idx() != columns.front()->get_rte_idx()) {
+      return false;
+    }
+    const auto column_descriptor =
+        Catalog_Namespace::get_metadata_for_column(column->getColumnKey());
+    if (!column_descriptor) {
+      return false;
+    }
+    column_descriptors.push_back(column_descriptor);
+  }
+
+  const auto catalog =
+      Catalog_Namespace::SysCatalog::instance().getCatalog(table_key.db_id);
+  const auto table_descriptor = Catalog_Namespace::get_metadata_for_table(table_key);
+  if (!catalog || !table_descriptor) {
+    return false;
+  }
+  for (const auto& constraint : catalog->getTableConstraints(table_descriptor)) {
+    if (!Catalog_Namespace::table_constraint_is_trusted(
+            constraint, g_trust_unenforced_table_constraints) ||
+        (constraint.type != Catalog_Namespace::TableConstraintType::PrimaryKey &&
+         constraint.type != Catalog_Namespace::TableConstraintType::Unique)) {
+      continue;
+    }
+    const auto contains_constraint_column = [&](const std::string& column_name) {
+      return std::any_of(column_descriptors.begin(),
+                         column_descriptors.end(),
+                         [&](const auto column_descriptor) {
+                           return boost::iequals(column_descriptor->columnName,
+                                                 column_name);
+                         });
+    };
+    if (!std::all_of(constraint.column_names.begin(),
+                     constraint.column_names.end(),
+                     contains_constraint_column)) {
+      continue;
+    }
+    if (constraint.type == Catalog_Namespace::TableConstraintType::PrimaryKey) {
+      return true;
+    }
+    const auto constraint_columns_are_not_null = std::all_of(
+        constraint.column_names.begin(),
+        constraint.column_names.end(),
+        [&](const std::string& column_name) {
+          const auto it = std::find_if(column_descriptors.begin(),
+                                       column_descriptors.end(),
+                                       [&](const auto column_descriptor) {
+                                         return boost::iequals(
+                                             column_descriptor->columnName, column_name);
+                                       });
+          return it != column_descriptors.end() && (*it)->columnType.get_notnull();
+        });
+    if (constraint_columns_are_not_null) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool rel_output_columns_contain_unique_key(const RelAlgNode* node,
+                                           const std::vector<size_t>& output_indices,
+                                           const size_t depth = 0) {
+  if (!node || output_indices.empty() || depth > 16 ||
+      std::any_of(output_indices.begin(), output_indices.end(), [&](const auto index) {
+        return index >= node->size();
+      })) {
+    return false;
+  }
+  if (const auto scan = dynamic_cast<const RelScan*>(node)) {
+    std::vector<const Analyzer::ColumnVar*> columns;
+    std::vector<std::shared_ptr<Analyzer::ColumnVar>> owned_columns;
+    owned_columns.reserve(output_indices.size());
+    columns.reserve(output_indices.size());
+    for (const auto output_idx : output_indices) {
+      const auto column_descriptor = scan->getCatalog().getMetadataForColumnBySpi(
+          scan->getTableDescriptor()->tableId, output_idx + 1);
+      if (!column_descriptor) {
+        return false;
+      }
+      owned_columns.emplace_back(makeExpr<Analyzer::ColumnVar>(
+          column_descriptor->columnType,
+          shared::ColumnKey{scan->getCatalog().getDatabaseId(),
+                            scan->getTableDescriptor()->tableId,
+                            column_descriptor->columnId},
+          0));
+      columns.push_back(owned_columns.back().get());
+    }
+    return base_columns_contain_unique_key(columns);
+  }
+  if (dynamic_cast<const RelFilter*>(node) || dynamic_cast<const RelSort*>(node)) {
+    CHECK_EQ(size_t(1), node->inputCount());
+    return rel_output_columns_contain_unique_key(
+        node->getInput(0), output_indices, depth + 1);
+  }
+  if (const auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+    if (!aggregate->getGroupByCount()) {
+      return false;
+    }
+    for (size_t group_idx = 0; group_idx < aggregate->getGroupByCount(); ++group_idx) {
+      if (std::find(output_indices.begin(), output_indices.end(), group_idx) ==
+          output_indices.end()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  const auto recurse_through_inputs = [&](const auto get_input) {
+    const RelAlgNode* source_node{nullptr};
+    std::vector<size_t> source_indices;
+    source_indices.reserve(output_indices.size());
+    for (const auto output_idx : output_indices) {
+      const auto input = get_input(output_idx);
+      if (!input || (source_node && input->getSourceNode() != source_node)) {
+        return false;
+      }
+      source_node = input->getSourceNode();
+      source_indices.push_back(input->getIndex());
+    }
+    return source_node &&
+           rel_output_columns_contain_unique_key(source_node, source_indices, depth + 1);
+  };
+
+  if (const auto compound = dynamic_cast<const RelCompound*>(node)) {
+    if (compound->isAggregate()) {
+      if (!compound->getGroupByCount()) {
+        return false;
+      }
+      for (size_t group_idx = 0; group_idx < compound->getGroupByCount(); ++group_idx) {
+        const auto contains_group_key = std::any_of(
+            output_indices.begin(), output_indices.end(), [&](const auto output_idx) {
+              const auto rex_ref =
+                  dynamic_cast<const RexRef*>(compound->getTargetExpr(output_idx));
+              return rex_ref && rex_ref->getIndex() == group_idx + 1;
+            });
+        if (!contains_group_key) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return recurse_through_inputs([&](const auto output_idx) {
+      return dynamic_cast<const RexInput*>(compound->getTargetExpr(output_idx));
+    });
+  }
+  if (const auto project = dynamic_cast<const RelProject*>(node)) {
+    return recurse_through_inputs([&](const auto output_idx) {
+      return dynamic_cast<const RexInput*>(project->getProjectAt(output_idx));
+    });
+  }
+  return false;
+}
+
+bool temporary_columns_contain_unique_key(
+    const std::vector<const Analyzer::ColumnVar*>& columns,
+    const TableIdToNodeMap& table_id_to_node_map) {
+  if (columns.empty()) {
+    return false;
+  }
+  if (!columns.front()) {
+    return false;
+  }
+  const auto table_key = columns.front()->getTableKey();
+  if (table_key.table_id >= 0) {
+    return false;
+  }
+  std::vector<size_t> output_indices;
+  output_indices.reserve(columns.size());
+  for (const auto column : columns) {
+    if (!column || column->getTableKey() != table_key ||
+        column->get_rte_idx() != columns.front()->get_rte_idx() ||
+        column->getColumnKey().column_id < 0) {
+      return false;
+    }
+    output_indices.push_back(static_cast<size_t>(column->getColumnKey().column_id));
+  }
+  const auto source_node =
+      get_temporary_table_source_node(table_key, table_id_to_node_map);
+  return source_node &&
+         rel_output_columns_contain_unique_key(source_node, output_indices);
+}
+
+bool joins_preserve_outer_row_count(const RelAlgExecutionUnit& ra_exe_unit) {
+  if (ra_exe_unit.input_descs.size() <= size_t(1) ||
+      ra_exe_unit.join_quals.size() + size_t(1) != ra_exe_unit.input_descs.size()) {
+    return false;
+  }
+  for (size_t join_idx = 0; join_idx < ra_exe_unit.join_quals.size(); ++join_idx) {
+    const auto& join_condition = ra_exe_unit.join_quals[join_idx];
+    if (join_condition.type != JoinType::INNER) {
+      return false;
+    }
+    const auto inner_rte_idx = static_cast<int>(join_idx + 1);
+    const auto inner_table_key = ra_exe_unit.input_descs[join_idx + 1].getTableKey();
+    std::vector<const Analyzer::ColumnVar*> inner_columns;
+    for (const auto& qual : join_condition.quals) {
+      const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual);
+      if (!bin_oper || bin_oper->get_optype() != kEQ) {
+        continue;
+      }
+      const auto lhs = column_var_for_group_bound(bin_oper->get_left_operand());
+      const auto rhs = column_var_for_group_bound(bin_oper->get_right_operand());
+      const auto append_inner_column = [&](const Analyzer::ColumnVar* inner,
+                                           const Analyzer::ColumnVar* outer) {
+        if (inner && outer && inner->get_rte_idx() == inner_rte_idx &&
+            outer->get_rte_idx() < inner_rte_idx &&
+            inner->getTableKey() == inner_table_key) {
+          inner_columns.push_back(inner);
+        }
+      };
+      append_inner_column(lhs, rhs);
+      append_inner_column(rhs, lhs);
+    }
+    if (!base_columns_contain_unique_key(inner_columns) &&
+        !temporary_columns_contain_unique_key(inner_columns,
+                                              ra_exe_unit.table_id_to_node_map)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::optional<size_t> input_table_row_upper_bound(
+    const std::vector<InputTableInfo>& table_infos,
+    const shared::TableKey& table_key) {
+  for (const auto& table_info : table_infos) {
+    if (table_info.table_key.table_id == table_key.table_id &&
+        (table_info.table_key.db_id == table_key.db_id || table_key.table_id < 0)) {
+      return std::max(table_info.info.getNumTuplesUpperBound(), size_t(1));
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<size_t> unique_temp_join_group_cardinality_upper_bound(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos) {
+  std::vector<const Analyzer::ColumnVar*> group_columns;
+  group_columns.reserve(ra_exe_unit.groupby_exprs.size());
+  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
+    const auto group_column =
+        groupby_expr ? column_var_for_group_bound(groupby_expr.get()) : nullptr;
+    if (!group_column) {
+      return std::nullopt;
+    }
+    group_columns.push_back(group_column);
+  }
+  if (group_columns.empty()) {
+    return std::nullopt;
+  }
+
+  std::optional<size_t> best_bound;
+  const auto consider_bound = [&best_bound](const std::optional<size_t> bound) {
+    if (!bound) {
+      return;
+    }
+    best_bound = best_bound ? std::min(*best_bound, *bound) : bound;
+  };
+  const auto consider_temporary_key = [&](const auto& temporary_columns) {
+    if (temporary_columns_contain_unique_key(temporary_columns,
+                                             ra_exe_unit.table_id_to_node_map)) {
+      consider_bound(input_table_row_upper_bound(
+          table_infos, temporary_columns.front()->getTableKey()));
+    }
+  };
+
+  consider_temporary_key(group_columns);
+
+  struct TemporaryGroupKeyCandidate {
+    shared::TableKey table_key;
+    int32_t rte_idx;
+    std::vector<const Analyzer::ColumnVar*> columns;
+    bool ambiguous{false};
+  };
+  std::vector<TemporaryGroupKeyCandidate> candidates;
+  const auto add_mapping = [&](const Analyzer::ColumnVar* group_column,
+                               const Analyzer::ColumnVar* temporary_column) {
+    if (!group_column || !temporary_column ||
+        temporary_column->getTableKey().table_id >= 0) {
+      return;
+    }
+    const auto group_it =
+        std::find_if(group_columns.begin(), group_columns.end(), [&](const auto column) {
+          return same_column_for_group_bound(column, group_column);
+        });
+    if (group_it == group_columns.end()) {
+      return;
+    }
+    const auto group_idx = static_cast<size_t>(group_it - group_columns.begin());
+    const auto candidate_it =
+        std::find_if(candidates.begin(), candidates.end(), [&](const auto& candidate) {
+          return candidate.table_key == temporary_column->getTableKey() &&
+                 candidate.rte_idx == temporary_column->get_rte_idx();
+        });
+    auto& candidate =
+        candidate_it == candidates.end()
+            ? candidates.emplace_back(TemporaryGroupKeyCandidate{
+                  temporary_column->getTableKey(),
+                  temporary_column->get_rte_idx(),
+                  std::vector<const Analyzer::ColumnVar*>(group_columns.size(), nullptr)})
+            : *candidate_it;
+    auto& mapped_column = candidate.columns[group_idx];
+    if (mapped_column && !same_column_for_group_bound(mapped_column, temporary_column)) {
+      candidate.ambiguous = true;
+      return;
+    }
+    mapped_column = temporary_column;
+  };
+
+  for (const auto& join_condition : ra_exe_unit.join_quals) {
+    if (join_condition.type != JoinType::INNER) {
+      continue;
+    }
+    for (const auto& qual : join_condition.quals) {
+      const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual);
+      if (!bin_oper || bin_oper->get_optype() != kEQ) {
+        continue;
+      }
+      const auto lhs_tuple =
+          dynamic_cast<const Analyzer::ExpressionTuple*>(bin_oper->get_left_operand());
+      const auto rhs_tuple =
+          dynamic_cast<const Analyzer::ExpressionTuple*>(bin_oper->get_right_operand());
+      if (lhs_tuple || rhs_tuple) {
+        if (!lhs_tuple || !rhs_tuple ||
+            lhs_tuple->getTuple().size() != rhs_tuple->getTuple().size()) {
+          continue;
+        }
+        for (size_t tuple_idx = 0; tuple_idx < lhs_tuple->getTuple().size();
+             ++tuple_idx) {
+          const auto lhs =
+              column_var_for_group_bound(lhs_tuple->getTuple()[tuple_idx].get());
+          const auto rhs =
+              column_var_for_group_bound(rhs_tuple->getTuple()[tuple_idx].get());
+          add_mapping(lhs, rhs);
+          add_mapping(rhs, lhs);
+        }
+        continue;
+      }
+      const auto lhs = column_var_for_group_bound(bin_oper->get_left_operand());
+      const auto rhs = column_var_for_group_bound(bin_oper->get_right_operand());
+      add_mapping(lhs, rhs);
+      add_mapping(rhs, lhs);
+    }
+  }
+  for (const auto& candidate : candidates) {
+    if (!candidate.ambiguous &&
+        std::all_of(candidate.columns.begin(),
+                    candidate.columns.end(),
+                    [](const auto column) { return column != nullptr; })) {
+      consider_temporary_key(candidate.columns);
+    }
+  }
+  return best_bound;
+}
+
+size_t estimated_groupby_output_row_width(const RelAlgExecutionUnit& ra_exe_unit) {
+  const size_t col_count = std::max(
+      ra_exe_unit.groupby_exprs.size() + ra_exe_unit.target_exprs.size(), size_t(1));
+  return col_count * sizeof(int64_t);
+}
+
+size_t clamp_group_entries_to_gpu_slab(const RelAlgExecutionUnit& ra_exe_unit,
+                                       const Executor* executor,
+                                       const size_t entry_count) {
+  if (!entry_count) {
+    return entry_count;
+  }
+  CHECK(executor);
+  const auto row_width = estimated_groupby_output_row_width(ra_exe_unit);
+  if (!row_width) {
+    return entry_count;
+  }
+  const auto max_gpu_slab_size = executor->maxGpuSlabSize();
+  if (!max_gpu_slab_size) {
+    return entry_count;
+  }
+  constexpr size_t kGpuSlabHeadroomDivisor = 16;
+  const auto usable_bytes =
+      max_gpu_slab_size - (max_gpu_slab_size / kGpuSlabHeadroomDivisor);
+  const auto slab_limited_entries = std::max(usable_bytes / row_width, size_t(1));
+  return std::min(entry_count, slab_limited_entries);
+}
+
+std::optional<size_t> slab_limited_speculative_groupby_entry_guess(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const Executor* executor,
+    const size_t proven_upper_bound) {
+  const auto slab_limited_bound =
+      clamp_group_entries_to_gpu_slab(ra_exe_unit, executor, proven_upper_bound);
+  return proven_upper_bound > slab_limited_bound
+             ? std::optional<size_t>(slab_limited_bound)
+             : std::nullopt;
+}
+
+size_t available_buffer_memory_bytes(const Buffer_Namespace::MemoryInfo& memory_info) {
+  return Buffer_Namespace::get_reclaimable_size_bytes(memory_info);
+}
+
+size_t min_available_gpu_buffer_memory_bytes(const Executor* executor) {
+  CHECK(executor);
+  const auto memory_info =
+      executor->getDataMgr()->getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL);
+  if (memory_info.empty()) {
+    return std::numeric_limits<size_t>::max();
+  }
+  size_t min_available_bytes = std::numeric_limits<size_t>::max();
+  for (const auto& info : memory_info) {
+    min_available_bytes =
+        std::min(min_available_bytes, available_buffer_memory_bytes(info));
+  }
+  return min_available_bytes;
+}
+
+size_t selected_or_available_gpu_device_count(const Executor* executor) {
+  CHECK(executor);
+  if (executor->isDevicesToUseInitialized()) {
+    return executor->getAvailableDevicesToProcessQuery().size();
+  }
+  const auto data_mgr = executor->getDataMgr();
+  if (!data_mgr || !data_mgr->gpusPresent()) {
+    return 0;
+  }
+  const auto cuda_mgr = data_mgr->getCudaMgr();
+  return cuda_mgr ? static_cast<size_t>(cuda_mgr->getDeviceCount()) : size_t(0);
+}
+
+std::optional<shared::TableKey> groupby_source_table_key(
+    const RelAlgExecutionUnit& ra_exe_unit) {
+  auto comparator = Analyzer::ColumnVar::colvar_comp;
+  std::optional<shared::TableKey> source_table_key;
+  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
+    if (!groupby_expr) {
+      continue;
+    }
+    std::set<const Analyzer::ColumnVar*,
+             bool (*)(const Analyzer::ColumnVar*, const Analyzer::ColumnVar*)>
+        colvar_set(comparator);
+    groupby_expr->collect_column_var(colvar_set, /*include_agg=*/false);
+    for (const auto column : colvar_set) {
+      CHECK(column);
+      if (!source_table_key) {
+        source_table_key = column->getTableKey();
+      } else if (*source_table_key != column->getTableKey()) {
+        return std::nullopt;
+      }
+    }
+  }
+  if (!source_table_key) {
+    return std::nullopt;
+  }
+  for (const auto& input_desc : ra_exe_unit.input_descs) {
+    if (input_desc.getSourceType() == InputSourceType::TABLE &&
+        input_desc.getTableKey() == *source_table_key) {
+      return source_table_key;
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<size_t> single_integer_groupby_range_cardinality(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const Executor* executor) {
+  if (ra_exe_unit.groupby_exprs.size() != size_t(1) ||
+      !groupby_source_table_key(ra_exe_unit) || !ra_exe_unit.groupby_exprs.front()) {
+    return std::nullopt;
+  }
+  const auto& groupby_expr = ra_exe_unit.groupby_exprs.front();
+  const auto& groupby_ti = groupby_expr->get_type_info();
+  const bool has_integer_range =
+      groupby_ti.is_number() || groupby_ti.is_boolean() || groupby_ti.is_time() ||
+      (groupby_ti.is_string() && groupby_ti.get_compression() == kENCODING_DICT);
+  if (!has_integer_range) {
+    return std::nullopt;
+  }
+  const auto expr_range =
+      getExpressionRange(groupby_expr.get(),
+                         table_infos,
+                         executor,
+                         boost::make_optional(ra_exe_unit.simple_quals));
+  if (expr_range.getType() != ExpressionRangeType::Integer ||
+      expr_range.getIntMin() > expr_range.getIntMax()) {
+    return std::nullopt;
+  }
+  try {
+    checked_int64_t cardinality = checked_int64_t(expr_range.getIntMax()) -
+                                  checked_int64_t(expr_range.getIntMin()) +
+                                  checked_int64_t(1);
+    if (expr_range.hasNulls()) {
+      ++cardinality;
+    }
+    if (cardinality <= 0) {
+      return std::nullopt;
+    }
+    return static_cast<size_t>(static_cast<int64_t>(cardinality));
+  } catch (...) {
+    return std::nullopt;
+  }
+}
+
+bool dense_single_integer_groupby_fits_global_gpu_buffer(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::optional<size_t> range_cardinality,
+    const size_t max_groups_buffer_entry_guess,
+    const Executor* executor) {
+  if (!range_cardinality || max_groups_buffer_entry_guess == 0) {
+    return false;
+  }
+  constexpr size_t kMaxPerfectHashRangeToEstimatedGroupsRatio = 2;
+  if (max_groups_buffer_entry_guess <=
+      std::numeric_limits<size_t>::max() / kMaxPerfectHashRangeToEstimatedGroupsRatio) {
+    if (*range_cardinality >
+        max_groups_buffer_entry_guess * kMaxPerfectHashRangeToEstimatedGroupsRatio) {
+      return false;
+    }
+  }
+
+  const size_t estimated_row_width = estimated_groupby_output_row_width(ra_exe_unit);
+  constexpr size_t kGroupByMemoryHeadroomDivisor = 5;
+  const auto available_bytes = min_available_gpu_buffer_memory_bytes(executor);
+  const auto budget_bytes =
+      available_bytes - (available_bytes / kGroupByMemoryHeadroomDivisor);
+  if (*range_cardinality > std::numeric_limits<size_t>::max() / estimated_row_width) {
+    return false;
+  }
+  return *range_cardinality * estimated_row_width <= budget_bytes;
+}
+
+bool small_groupby_global_buffer_should_stay_multifrag(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const size_t max_groups_buffer_entry_guess,
+    const Executor* executor) {
+  CHECK(executor);
+  if (max_groups_buffer_entry_guess == 0) {
+    return false;
+  }
+  const auto row_width = estimated_groupby_output_row_width(ra_exe_unit);
+  if (!row_width ||
+      max_groups_buffer_entry_guess > std::numeric_limits<size_t>::max() / row_width) {
+    return false;
+  }
+  const auto max_gpu_slab_size = executor->maxGpuSlabSize();
+  if (!max_gpu_slab_size) {
+    return false;
+  }
+  constexpr size_t kSmallGroupByBufferSlabFraction = 64;
+  const auto small_buffer_threshold =
+      std::max(max_gpu_slab_size / kSmallGroupByBufferSlabFraction, row_width);
+  return max_groups_buffer_entry_guess * row_width <= small_buffer_threshold;
+}
+
 bool is_projection(const RelAlgExecutionUnit& ra_exe_unit) {
   return ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front();
+}
+
+bool is_groupby_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {
+  return !ra_exe_unit.groupby_exprs.empty() && !is_projection(ra_exe_unit);
+}
+
+bool groupby_keys_reference_only_table(const RelAlgExecutionUnit& ra_exe_unit,
+                                       const shared::TableKey& table_key) {
+  const auto source_table_key = groupby_source_table_key(ra_exe_unit);
+  return source_table_key && *source_table_key == table_key;
+}
+
+bool groupby_has_nonconstant_expr(const RelAlgExecutionUnit& ra_exe_unit) {
+  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
+    if (groupby_expr && !dynamic_cast<const Analyzer::Constant*>(groupby_expr.get())) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::optional<size_t> groupby_kernel_batch_row_upper_bound(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const Executor* executor) {
+  if (!executor || ra_exe_unit.input_descs.size() != size_t(1) ||
+      table_infos.size() != size_t(1) || !is_groupby_execution_unit(ra_exe_unit) ||
+      ra_exe_unit.union_all) {
+    return std::nullopt;
+  }
+  const auto source_type = ra_exe_unit.input_descs.front().getSourceType();
+  if (source_type != InputSourceType::TABLE && source_type != InputSourceType::RESULT) {
+    return std::nullopt;
+  }
+  const auto device_count = selected_or_available_gpu_device_count(executor);
+  if (!device_count) {
+    return std::nullopt;
+  }
+  const auto total_rows =
+      std::max(table_infos.front().info.getNumTuplesUpperBound(), size_t(1));
+  const auto fragment_rows =
+      std::max(table_infos.front().info.getFragmentNumTuplesUpperBound(), size_t(1));
+  if (total_rows <= fragment_rows) {
+    return std::nullopt;
+  }
+  const auto per_device_rows = (total_rows + device_count - 1) / device_count;
+  return std::max(fragment_rows, per_device_rows);
+}
+
+std::optional<size_t> outer_only_join_groupby_fragment_upper_bound(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const Executor* executor) {
+  if (!executor || ra_exe_unit.input_descs.size() <= size_t(1) ||
+      table_infos.size() != ra_exe_unit.input_descs.size() ||
+      !is_groupby_execution_unit(ra_exe_unit) || ra_exe_unit.union_all) {
+    return std::nullopt;
+  }
+  if (selected_or_available_gpu_device_count(executor) != size_t(1)) {
+    return std::nullopt;
+  }
+  const auto& outer_desc = ra_exe_unit.input_descs.front();
+  if (outer_desc.getSourceType() != InputSourceType::TABLE) {
+    return std::nullopt;
+  }
+  const auto outer_table_key = outer_desc.getTableKey();
+  if (table_infos.front().table_key != outer_table_key ||
+      !groupby_keys_reference_only_table(ra_exe_unit, outer_table_key)) {
+    return std::nullopt;
+  }
+  const auto total_rows =
+      std::max(table_infos.front().info.getNumTuplesUpperBound(), size_t(1));
+  const auto fragment_rows =
+      std::max(table_infos.front().info.getFragmentNumTuplesUpperBound(), size_t(1));
+  if (total_rows <= fragment_rows) {
+    return std::nullopt;
+  }
+  return fragment_rows;
+}
+
+std::optional<size_t> non_amplifying_join_groupby_initial_guess(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos) {
+  if (ra_exe_unit.input_descs.size() <= size_t(1) ||
+      table_infos.size() != ra_exe_unit.input_descs.size() ||
+      !is_groupby_execution_unit(ra_exe_unit) || ra_exe_unit.union_all ||
+      groupby_source_table_key(ra_exe_unit) ||
+      !joins_preserve_outer_row_count(ra_exe_unit)) {
+    return std::nullopt;
+  }
+  const auto& outer_desc = ra_exe_unit.input_descs.front();
+  if (outer_desc.getSourceType() != InputSourceType::TABLE ||
+      table_infos.front().table_key != outer_desc.getTableKey()) {
+    return std::nullopt;
+  }
+  const auto fragment_rows = table_infos.front().info.getFragmentNumTuplesUpperBound();
+  return fragment_rows ? std::make_optional(std::max(fragment_rows, size_t(1)))
+                       : std::nullopt;
+}
+
+std::optional<size_t> temporary_result_groupby_kernel_upper_bound(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const Executor* executor) {
+  if (ra_exe_unit.input_descs.empty() ||
+      ra_exe_unit.input_descs.front().getSourceType() != InputSourceType::RESULT) {
+    return std::nullopt;
+  }
+  return groupby_kernel_batch_row_upper_bound(ra_exe_unit, table_infos, executor);
+}
+
+size_t kernel_per_fragment_groupby_entry_guess(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const Executor* executor) {
+  const auto fragment_upper_bound =
+      outer_only_join_groupby_fragment_upper_bound(ra_exe_unit, table_infos, executor)
+          .value_or(groups_approx_fragment_upper_bound(table_infos));
+  const auto fragment_groups_buffer_entry_guess =
+      clamp_group_entries_to_gpu_slab(ra_exe_unit, executor, fragment_upper_bound);
+  const auto batch_kernel_upper_bound =
+      groupby_kernel_batch_row_upper_bound(ra_exe_unit, table_infos, executor);
+  if (!batch_kernel_upper_bound) {
+    return fragment_groups_buffer_entry_guess;
+  }
+  const auto batch_groups_buffer_entry_guess =
+      clamp_group_entries_to_gpu_slab(ra_exe_unit, executor, *batch_kernel_upper_bound);
+  return std::max(fragment_groups_buffer_entry_guess, batch_groups_buffer_entry_guess);
+}
+
+std::optional<size_t> temporary_result_groupby_entry_floor(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const Executor* executor) {
+  const auto temporary_kernel_upper_bound =
+      temporary_result_groupby_kernel_upper_bound(ra_exe_unit, table_infos, executor);
+  if (!temporary_kernel_upper_bound) {
+    return std::nullopt;
+  }
+  return kernel_per_fragment_groupby_entry_guess(ra_exe_unit, table_infos, executor);
+}
+
+bool should_raise_gpu_groupby_entry_guess(const RelAlgExecutionUnit& ra_exe_unit,
+                                          const std::vector<InputTableInfo>& table_infos,
+                                          const size_t current_groups_buffer_entry_guess,
+                                          const size_t groups_buffer_entry_floor,
+                                          const Executor* executor) {
+  if (groups_buffer_entry_floor <= current_groups_buffer_entry_guess) {
+    return false;
+  }
+  if (temporary_result_groupby_entry_floor(ra_exe_unit, table_infos, executor)) {
+    return true;
+  }
+  return current_groups_buffer_entry_guess <= size_t(1) &&
+         groupby_has_nonconstant_expr(ra_exe_unit);
+}
+
+bool should_prefer_kernel_per_fragment_groupby(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const size_t max_groups_buffer_entry_guess,
+    const Executor* executor) {
+  if (ra_exe_unit.input_descs.empty() ||
+      table_infos.size() != ra_exe_unit.input_descs.size() ||
+      !is_groupby_execution_unit(ra_exe_unit)) {
+    return false;
+  }
+  const auto range_cardinality =
+      single_integer_groupby_range_cardinality(ra_exe_unit, table_infos, executor);
+  if (dense_single_integer_groupby_fits_global_gpu_buffer(
+          ra_exe_unit, range_cardinality, max_groups_buffer_entry_guess, executor)) {
+    return false;
+  }
+  const auto outer_fragment_upper_bound =
+      outer_only_join_groupby_fragment_upper_bound(ra_exe_unit, table_infos, executor);
+  auto effective_global_groups_buffer_entry_guess = max_groups_buffer_entry_guess;
+  if (outer_fragment_upper_bound) {
+    const auto outer_row_upper_bound =
+        std::max(table_infos.front().info.getNumTuplesUpperBound(), size_t(1));
+    // A known integer domain is an exact upper bound on the number of groups, even
+    // when a temporary RHS makes the outer table's row count look like the only safe
+    // bound. Use it before deciding to pay for one kernel launch per fragment.
+    effective_global_groups_buffer_entry_guess =
+        range_cardinality
+            ? std::min(outer_row_upper_bound, *range_cardinality)
+            : std::max(max_groups_buffer_entry_guess, outer_row_upper_bound);
+  }
+  if (small_groupby_global_buffer_should_stay_multifrag(
+          ra_exe_unit, effective_global_groups_buffer_entry_guess, executor)) {
+    return false;
+  }
+  const auto raw_fragment_upper_bound = outer_fragment_upper_bound.value_or(
+      groups_approx_fragment_upper_bound(table_infos));
+  const auto raw_fragment_groups_buffer_entry_guess =
+      clamp_group_entries_to_gpu_slab(ra_exe_unit, executor, raw_fragment_upper_bound);
+  const auto fragment_groups_buffer_entry_guess =
+      kernel_per_fragment_groupby_entry_guess(ra_exe_unit, table_infos, executor);
+  if (fragment_groups_buffer_entry_guess >= effective_global_groups_buffer_entry_guess) {
+    return false;
+  }
+  constexpr size_t kMinGlobalToFragmentGroupRatio = 8;
+  return effective_global_groups_buffer_entry_guess /
+             std::max(raw_fragment_groups_buffer_entry_guess, size_t(1)) >=
+         kMinGlobalToFragmentGroupRatio;
+}
+
+std::optional<size_t> projection_fragment_output_upper_bound(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos) {
+  if (!is_projection(ra_exe_unit) || ra_exe_unit.input_descs.size() != size_t(1) ||
+      table_infos.size() != size_t(1) || ra_exe_unit.union_all) {
+    return std::nullopt;
+  }
+  const auto fragment_tuple_bound =
+      table_infos.front().info.getFragmentNumTuplesUpperBound();
+  if (!fragment_tuple_bound) {
+    return std::nullopt;
+  }
+  return std::max(fragment_tuple_bound, size_t(1));
+}
+
+bool should_prefer_kernel_per_fragment_projection(
+    const size_t global_output_upper_bound,
+    const size_t device_count,
+    const size_t fragment_output_upper_bound) {
+  if (!device_count) {
+    return false;
+  }
+  const auto per_device_scan_limit =
+      (global_output_upper_bound + device_count - 1) / device_count;
+  if (per_device_scan_limit <= fragment_output_upper_bound) {
+    return false;
+  }
+  constexpr size_t kMinMultifragToFragmentProjectionRatio = 8;
+  return per_device_scan_limit / std::max(fragment_output_upper_bound, size_t(1)) >=
+         kMinMultifragToFragmentProjectionRatio;
+}
+
+std::optional<size_t> projection_output_row_width_upper_bound(
+    const RelAlgExecutionUnit& ra_exe_unit) {
+  if (!is_projection(ra_exe_unit) || ra_exe_unit.target_exprs.empty()) {
+    return std::nullopt;
+  }
+  // Projection buffers prepend an int64 row-index column before the target columns.
+  size_t row_width = sizeof(int64_t);
+  for (const auto& target_expr : ra_exe_unit.target_exprs) {
+    const auto logical_ti = get_logical_type_info(target_expr->get_type_info());
+    if (logical_ti.is_varlen()) {
+      return std::nullopt;
+    }
+    const auto elem_size = logical_ti.get_size();
+    if (elem_size <= 0) {
+      return std::nullopt;
+    }
+    const auto elem_width =
+        std::max<size_t>(static_cast<size_t>(elem_size), sizeof(int64_t));
+    if (row_width > std::numeric_limits<size_t>::max() - elem_width) {
+      return std::nullopt;
+    }
+    row_width += elem_width;
+  }
+  return std::max(row_width, sizeof(int64_t));
+}
+
+std::optional<size_t> projection_batched_fragment_output_upper_bound(
+    const std::vector<InputTableInfo>& table_infos,
+    const size_t max_rows_per_batch) {
+  if (table_infos.size() != size_t(1) || max_rows_per_batch == 0) {
+    return std::nullopt;
+  }
+  const auto& fragments = table_infos.front().info.fragments;
+  if (fragments.empty()) {
+    return std::nullopt;
+  }
+
+  std::map<int, std::vector<size_t>> fragment_rows_by_device;
+  size_t largest_fragment_rows = 0;
+  for (const auto& fragment : fragments) {
+    if (fragment.deviceIds.size() <= static_cast<size_t>(Data_Namespace::GPU_LEVEL)) {
+      return std::nullopt;
+    }
+    const auto device_id = fragment.deviceIds[Data_Namespace::GPU_LEVEL];
+    if (device_id < 0) {
+      return std::nullopt;
+    }
+    const auto fragment_rows = fragment.getNumTuples();
+    if (fragment_rows == 0) {
+      continue;
+    }
+    if (fragment_rows > max_rows_per_batch) {
+      return std::nullopt;
+    }
+    largest_fragment_rows = std::max(largest_fragment_rows, fragment_rows);
+    fragment_rows_by_device[device_id].push_back(fragment_rows);
+  }
+
+  if (fragment_rows_by_device.empty()) {
+    return std::nullopt;
+  }
+
+  auto batching_stats = [](const std::vector<size_t>& fragment_rows,
+                           const size_t row_limit) {
+    std::pair<size_t, size_t> stats{0, 0};
+    size_t current_batch_rows = 0;
+    for (const auto rows : fragment_rows) {
+      if (current_batch_rows > 0 && current_batch_rows > row_limit - rows) {
+        ++stats.first;
+        stats.second = std::max(stats.second, current_batch_rows);
+        current_batch_rows = 0;
+      }
+      current_batch_rows += rows;
+    }
+    if (current_batch_rows > 0) {
+      ++stats.first;
+      stats.second = std::max(stats.second, current_batch_rows);
+    }
+    return stats;
+  };
+
+  std::map<int, size_t> target_batch_count_by_device;
+  for (const auto& [device_id, fragment_rows] : fragment_rows_by_device) {
+    target_batch_count_by_device[device_id] =
+        batching_stats(fragment_rows, max_rows_per_batch).first;
+  }
+
+  auto preserves_target_batch_counts = [&](const size_t row_limit) {
+    for (const auto& [device_id, fragment_rows] : fragment_rows_by_device) {
+      if (batching_stats(fragment_rows, row_limit).first >
+          target_batch_count_by_device.at(device_id)) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  size_t lower_bound = largest_fragment_rows;
+  size_t upper_bound = max_rows_per_batch;
+  while (lower_bound < upper_bound) {
+    const auto midpoint = lower_bound + (upper_bound - lower_bound) / size_t(2);
+    if (preserves_target_batch_counts(midpoint)) {
+      upper_bound = midpoint;
+    } else {
+      lower_bound = midpoint + size_t(1);
+    }
+  }
+
+  size_t max_batch_rows = 0;
+  for (const auto& [device_id, fragment_rows] : fragment_rows_by_device) {
+    (void)device_id;
+    max_batch_rows =
+        std::max(max_batch_rows, batching_stats(fragment_rows, lower_bound).second);
+  }
+  return max_batch_rows == 0 ? std::nullopt : std::optional<size_t>(max_batch_rows);
+}
+
+std::optional<size_t> projection_fragment_output_bound_for_preflight_bypass(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const Executor* executor) {
+  if (ra_exe_unit.scan_limit != 0 || !ra_exe_unit.sort_info.order_entries.empty()) {
+    return std::nullopt;
+  }
+  const auto fragment_output_upper_bound =
+      projection_fragment_output_upper_bound(ra_exe_unit, table_infos);
+  if (!fragment_output_upper_bound) {
+    return std::nullopt;
+  }
+  const auto device_count = selected_or_available_gpu_device_count(executor);
+  const auto global_output_upper_bound = groups_approx_upper_bound(table_infos).first;
+  if (!should_prefer_kernel_per_fragment_projection(
+          global_output_upper_bound, device_count, *fragment_output_upper_bound)) {
+    return std::nullopt;
+  }
+  const auto row_width = projection_output_row_width_upper_bound(ra_exe_unit);
+  if (!row_width) {
+    return fragment_output_upper_bound;
+  }
+  const auto available_bytes = min_available_gpu_buffer_memory_bytes(executor);
+  const auto projection_buffer_budget =
+      std::min(g_max_memory_allocation_size, available_bytes / size_t(4));
+  const auto max_rows_by_budget = projection_buffer_budget / *row_width;
+  if (max_rows_by_budget <= *fragment_output_upper_bound) {
+    return fragment_output_upper_bound;
+  }
+  if (const auto batched_fragment_output_upper_bound =
+          projection_batched_fragment_output_upper_bound(table_infos,
+                                                         max_rows_by_budget)) {
+    return std::max(*fragment_output_upper_bound, *batched_fragment_output_upper_bound);
+  }
+  const auto per_device_output_upper_bound =
+      (global_output_upper_bound + device_count - 1) / device_count;
+  const auto output_upper_bound =
+      std::min(per_device_output_upper_bound, max_rows_by_budget);
+  return std::max(*fragment_output_upper_bound, output_upper_bound);
+}
+
+std::optional<size_t> exact_per_device_projection_output_bound(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos) {
+  if (table_infos.size() != size_t(1) || ra_exe_unit.per_device_cardinality.empty()) {
+    return std::nullopt;
+  }
+
+  const auto& fragments = table_infos.front().info.fragments;
+  if (fragments.empty()) {
+    return std::nullopt;
+  }
+
+  std::unordered_map<size_t, int> fragment_devices;
+  fragment_devices.reserve(fragments.size());
+  for (const auto& fragment : fragments) {
+    if (fragment.fragmentId < 0 ||
+        fragment.deviceIds.size() <= static_cast<size_t>(Data_Namespace::GPU_LEVEL)) {
+      return std::nullopt;
+    }
+    fragment_devices.emplace(static_cast<size_t>(fragment.fragmentId),
+                             fragment.deviceIds[Data_Namespace::GPU_LEVEL]);
+  }
+  if (fragment_devices.size() != fragments.size()) {
+    return std::nullopt;
+  }
+
+  std::unordered_set<size_t> covered_fragments;
+  covered_fragments.reserve(fragments.size());
+  std::unordered_set<int> covered_devices;
+  size_t max_cardinality = 0;
+  for (const auto& [fragment_ids, cardinality] : ra_exe_unit.per_device_cardinality) {
+    if (fragment_ids.empty()) {
+      return std::nullopt;
+    }
+    std::optional<int> group_device;
+    for (const auto fragment_id : fragment_ids) {
+      const auto device_it = fragment_devices.find(fragment_id);
+      if (device_it == fragment_devices.end() ||
+          !covered_fragments.insert(fragment_id).second) {
+        return std::nullopt;
+      }
+      if (!group_device) {
+        group_device = device_it->second;
+      } else if (*group_device != device_it->second) {
+        return std::nullopt;
+      }
+    }
+    CHECK(group_device);
+    if (!covered_devices.insert(*group_device).second) {
+      return std::nullopt;
+    }
+    max_cardinality = std::max(max_cardinality, cardinality);
+  }
+  if (covered_fragments.size() != fragment_devices.size()) {
+    return std::nullopt;
+  }
+  return std::max(max_cardinality, size_t(1));
+}
+
+bool should_use_exact_projection_output_bound(const RelAlgExecutionUnit& ra_exe_unit,
+                                              const ExecutionOptions& eo) {
+  return eo.materializes_for_later_step && ra_exe_unit.input_descs.size() == size_t(1) &&
+         ra_exe_unit.join_quals.empty() &&
+         !(ra_exe_unit.simple_quals.empty() && ra_exe_unit.quals.empty()) &&
+         projection_output_row_width_upper_bound(ra_exe_unit).has_value();
 }
 
 bool can_output_columnar(const RelAlgExecutionUnit& ra_exe_unit,
@@ -3805,22 +5919,22 @@ void disable_lazy_fetch_if_necessary(CompilationOptions& co,
                                      RenderInfo* render_info,
                                      const RelAlgExecutionUnit& ra_exe_unit) {
   if (co.allow_lazy_fetch) {
+    if (ra_exe_unit.union_all) {
+      co.allow_lazy_fetch = false;
+      return;
+    }
     if (render_info && render_info->isInSitu()) {
-      VLOG(1) << "Disable lazy fetch: render in-situ query detected";
       co.allow_lazy_fetch = false;
       return;
     }
     for (auto* expr : ra_exe_unit.target_exprs) {
       if (StringFunctionDetector::hasStringFunction(expr)) {
-        VLOG(1) << "Disable lazy fetch: detect string function from target expression(s)";
         co.allow_lazy_fetch = false;
         return;
       }
     }
     for (auto& expr : ra_exe_unit.groupby_exprs) {
       if (StringFunctionDetector::hasStringFunction(expr.get())) {
-        VLOG(1)
-            << "Disable lazy fetch: detect string function from group-by expression(s)";
         co.allow_lazy_fetch = false;
         return;
       }
@@ -3829,6 +5943,47 @@ void disable_lazy_fetch_if_necessary(CompilationOptions& co,
 }
 
 }  // namespace
+
+bool should_prefer_kernel_per_fragment_groupby_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const size_t max_groups_buffer_entry_guess,
+    const Executor* executor) {
+  return should_prefer_kernel_per_fragment_groupby(
+      ra_exe_unit, table_infos, max_groups_buffer_entry_guess, executor);
+}
+
+std::optional<size_t> non_amplifying_join_groupby_initial_guess_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos) {
+  return non_amplifying_join_groupby_initial_guess(ra_exe_unit, table_infos);
+}
+
+std::optional<size_t> unique_temp_join_group_cardinality_upper_bound_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos) {
+  return unique_temp_join_group_cardinality_upper_bound(ra_exe_unit, table_infos);
+}
+
+std::optional<size_t> slab_limited_speculative_groupby_entry_guess_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const Executor* executor,
+    const size_t proven_upper_bound) {
+  return slab_limited_speculative_groupby_entry_guess(
+      ra_exe_unit, executor, proven_upper_bound);
+}
+
+std::optional<size_t> projection_batched_fragment_output_upper_bound_for_test(
+    const std::vector<InputTableInfo>& table_infos,
+    const size_t max_rows_per_batch) {
+  return projection_batched_fragment_output_upper_bound(table_infos, max_rows_per_batch);
+}
+
+std::optional<size_t> exact_per_device_projection_output_bound_for_test(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& table_infos) {
+  return exact_per_device_projection_output_bound(ra_exe_unit, table_infos);
+}
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(
     const RelAlgExecutor::WorkUnit& work_unit,
@@ -3848,7 +6003,12 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   auto co = co_in;
   auto eo = eo_in;
-  ColumnCacheMap column_cache;
+  if (co.allow_lazy_fetch && work_unit.exe_unit.input_descs.size() == size_t(1) &&
+      execution_unit_requires_materialized_temporary_result_columns(work_unit.exe_unit,
+                                                                    temporary_tables_)) {
+    co.allow_lazy_fetch = false;
+  }
+  ColumnCacheMap& column_cache = column_cache_;
   ScopeGuard clearWindowContextIfNecessary = [&]() {
     if (is_window_execution_unit(work_unit.exe_unit)) {
       WindowProjectNodeContext::reset(executor_);
@@ -3859,12 +6019,13 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       throw std::runtime_error("Window functions support is disabled");
     }
     if (co.device_type == ExecutorDeviceType::GPU) {
-      // window function is currently only supported by CPU
-      // todo: relax this after landing window function on GPU
-      executor_->fixupAvailableDevicesToProcessForCpuQuery();
+      if (!can_execute_window_unit_on_single_gpu(work_unit.exe_unit, executor_)) {
+        executor_->fixupAvailableDevicesToProcessForCpuQuery();
+        co.device_type = ExecutorDeviceType::CPU;
+      }
+    } else {
+      co.device_type = ExecutorDeviceType::CPU;
     }
-    co.device_type = ExecutorDeviceType::CPU;
-    VLOG(1) << "Disable lazy fetch: window function detected";
     co.allow_lazy_fetch = false;
     computeWindow(work_unit, co, eo, column_cache, queue_time_ms);
   }
@@ -3891,14 +6052,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   auto ra_exe_unit = decide_approx_count_distinct_implementation(
       work_unit.exe_unit, table_infos, executor_, co.device_type, target_exprs_owned_);
 
-  // register query hint if query_dag_ is valid
-  ra_exe_unit.query_hint = RegisteredQueryHint::defaults();
-  if (query_dag_) {
-    auto candidate = query_dag_->getQueryHint(body);
-    if (candidate) {
-      ra_exe_unit.query_hint = *candidate;
-    }
-  }
+  // Register query hints after any execution-unit rewrites so join-input hints
+  // participate in hash table construction.
+  ra_exe_unit.query_hint = get_query_hint_for_work_unit(query_dag_.get(), body);
 
   const auto& query_hints = ra_exe_unit.query_hint;
   ScopeGuard reset_cuda_block_grid_sizes = [&,
@@ -3962,6 +6118,21 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   }
 
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
+  const bool use_exact_projection_output_bound =
+      g_enable_result_reduction_pipeline && co.device_type == ExecutorDeviceType::GPU &&
+      eo.allow_multifrag && !render_info && !eo.just_explain &&
+      !eo.estimate_output_cardinality && is_projection(ra_exe_unit) &&
+      should_use_exact_projection_output_bound(ra_exe_unit, eo);
+  const auto fragment_projection_preflight_bypass_scan_limit =
+      g_enable_result_reduction_pipeline && co.device_type == ExecutorDeviceType::GPU &&
+              eo.allow_multifrag && !render_info && !eo.just_explain &&
+              !eo.estimate_output_cardinality && is_projection(ra_exe_unit) &&
+              !use_exact_projection_output_bound
+          ? projection_fragment_output_bound_for_preflight_bypass(
+                ra_exe_unit, table_infos, executor_)
+          : std::nullopt;
+  const bool force_kernel_per_fragment_projection =
+      fragment_projection_preflight_bypass_scan_limit.has_value();
   if (is_window_execution_unit(ra_exe_unit)) {
     CHECK_EQ(table_infos.size(), size_t(1));
     CHECK_EQ(table_infos.front().info.fragments.size(), size_t(1));
@@ -3971,6 +6142,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   } else if (compute_output_buffer_size(ra_exe_unit) && !isRowidLookup(work_unit)) {
     if (previous_count && !exe_unit_has_quals(ra_exe_unit)) {
       ra_exe_unit.scan_limit = *previous_count;
+    } else if (fragment_projection_preflight_bypass_scan_limit) {
+      ra_exe_unit.scan_limit = *fragment_projection_preflight_bypass_scan_limit;
+      ra_exe_unit.use_bump_allocator = false;
     } else {
       // TODO(adb): enable bump allocator path for render queries
       if (can_use_bump_allocator(ra_exe_unit, co, eo) && !render_info) {
@@ -3982,6 +6156,10 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
         const auto filter_count_all = getFilteredCountAll(ra_exe_unit, true, co, eo);
         if (filter_count_all) {
           ra_exe_unit.scan_limit = std::max(*filter_count_all, size_t(1));
+          if (use_exact_projection_output_bound) {
+            ra_exe_unit.output_buffer_entry_count_hint =
+                exact_per_device_projection_output_bound(ra_exe_unit, table_infos);
+          }
           VLOG(1) << "Set a new scan limit from filtered_count_all: "
                   << ra_exe_unit.scan_limit;
           auto const has_limit_value = ra_exe_unit.sort_info.limit.has_value();
@@ -4029,17 +6207,68 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     // Create a local copy so we can track those changes if we need to attempt a retry
     // due to OOM
     auto local_groups_buffer_entry_guess = max_groups_buffer_entry_guess_in;
+    auto local_ra_exe_unit = ra_exe_unit;
+    auto local_eo = eo;
+    if (has_ndv_estimation) {
+      // An exact projection allocation hint belongs to the preflight execution that
+      // produced it. If that allocation still overflowed, allow the retry to use the
+      // ordinary scan-limit/cardinality sizing instead of pinning it to the same hint.
+      local_ra_exe_unit.output_buffer_entry_count_hint.reset();
+    }
+    if (g_enable_result_reduction_pipeline && !local_eo.just_explain &&
+        co.device_type == ExecutorDeviceType::GPU && local_eo.allow_multifrag &&
+        is_groupby_execution_unit(local_ra_exe_unit)) {
+      const auto groupby_entry_floor = kernel_per_fragment_groupby_entry_guess(
+          local_ra_exe_unit, table_infos, executor_);
+      if (should_prefer_kernel_per_fragment_groupby(local_ra_exe_unit,
+                                                    table_infos,
+                                                    local_groups_buffer_entry_guess,
+                                                    executor_)) {
+        local_groups_buffer_entry_guess = groupby_entry_floor;
+        local_ra_exe_unit.use_bump_allocator = false;
+        local_eo.allow_multifrag = false;
+      } else if (should_raise_gpu_groupby_entry_guess(local_ra_exe_unit,
+                                                      table_infos,
+                                                      local_groups_buffer_entry_guess,
+                                                      groupby_entry_floor,
+                                                      executor_)) {
+        local_groups_buffer_entry_guess = groupby_entry_floor;
+        local_ra_exe_unit.use_bump_allocator = false;
+      }
+    }
+    if (g_enable_result_reduction_pipeline && !local_eo.just_explain &&
+        !local_eo.estimate_output_cardinality &&
+        co.device_type == ExecutorDeviceType::GPU && local_eo.allow_multifrag &&
+        is_projection(local_ra_exe_unit)) {
+      const auto fragment_output_upper_bound =
+          projection_fragment_output_upper_bound(local_ra_exe_unit, table_infos);
+      if (fragment_output_upper_bound &&
+          (force_kernel_per_fragment_projection ||
+           should_prefer_kernel_per_fragment_projection(
+               local_ra_exe_unit.scan_limit,
+               executor_->getAvailableDevicesToProcessQuery().size(),
+               *fragment_output_upper_bound))) {
+        if (!force_kernel_per_fragment_projection) {
+          local_ra_exe_unit.scan_limit = *fragment_output_upper_bound;
+        }
+        local_ra_exe_unit.use_bump_allocator = false;
+        local_eo.allow_multifrag = false;
+      }
+    }
     try {
-      return {executor_->executeWorkUnit(local_groups_buffer_entry_guess,
-                                         is_agg,
-                                         table_infos,
-                                         ra_exe_unit,
-                                         co,
-                                         eo,
-                                         render_info,
-                                         has_cardinality_estimation,
-                                         column_cache),
-              targets_meta};
+      return {
+          executor_->executeWorkUnit(
+              local_groups_buffer_entry_guess,
+              is_agg,
+              table_infos,
+              local_ra_exe_unit,
+              co,
+              local_eo,
+              render_info,
+              has_cardinality_estimation,
+              column_cache,
+              g_enable_result_reduction_pipeline ? &result_set_column_cache_ : nullptr),
+          targets_meta};
     } catch (const QueryExecutionError& e) {
       if (!has_ndv_estimation && e.getErrorCode() < 0) {
         throw CardinalityEstimationRequired(/*range=*/0);
@@ -4048,14 +6277,30 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
         LOG(INFO) << err << ": " << to_description(err);
         throw QueryMustRunOnCpu(to_string(err));
       }
+      if (e.hasErrorCode(ErrorCode::OUT_OF_GPU_MEM) && e.wasMultifragKernelLaunch()) {
+        return handleOutOfMemoryRetry(
+            {local_ra_exe_unit, work_unit.body, local_groups_buffer_entry_guess},
+            column_cache,
+            targets_meta,
+            is_agg,
+            co,
+            local_eo,
+            render_info,
+            e,
+            queue_time_ms);
+      }
+      if (e.hasErrorCode(ErrorCode::OUT_OF_GPU_MEM) &&
+          co.device_type == ExecutorDeviceType::GPU && g_allow_query_step_cpu_retry) {
+        throw QueryMustRunOnCpu(e.what());
+      }
       handlePersistentError(e.getErrorCode());
       return handleOutOfMemoryRetry(
-          {ra_exe_unit, work_unit.body, local_groups_buffer_entry_guess},
+          {local_ra_exe_unit, work_unit.body, local_groups_buffer_entry_guess},
           column_cache,
           targets_meta,
           is_agg,
           co,
-          eo,
+          local_eo,
           render_info,
           e,
           queue_time_ms);
@@ -4076,20 +6321,33 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       }
     }
   }
-  CardinalityCacheKey cache_key{ra_exe_unit};
+  CardinalityCacheKey cache_key{
+      ra_exe_unit, estimator_cache_context(co, executor_), &temporary_table_source_info_};
   try {
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
     auto card = cached_cardinality.second;
     if (cached_cardinality.first && card >= 0) {
       VLOG(1) << "Use cached cardinality for max_groups_buffer_entry_guess: " << card;
-      result = execute_and_handle_errors(
-          card, /*has_cardinality_estimation=*/true, /*has_ndv_estimation=*/false);
+      result = execute_and_handle_errors(card,
+                                         /*has_cardinality_estimation=*/true,
+                                         /*has_ndv_estimation=*/false);
     } else {
-      VLOG(1) << "Use default cardinality for max_groups_buffer_entry_guess: "
-              << max_groups_buffer_entry_guess;
+      auto non_amplifying_join_guess =
+          g_enable_result_reduction_pipeline && co.device_type == ExecutorDeviceType::GPU
+              ? non_amplifying_join_groupby_initial_guess(ra_exe_unit, table_infos)
+              : std::nullopt;
+      if (non_amplifying_join_guess &&
+          *non_amplifying_join_guess >
+              clamp_group_entries_to_gpu_slab(
+                  ra_exe_unit, executor_, *non_amplifying_join_guess)) {
+        non_amplifying_join_guess.reset();
+      }
+      const auto initial_groups_buffer_entry_guess =
+          non_amplifying_join_guess.value_or(max_groups_buffer_entry_guess);
       result = execute_and_handle_errors(
-          max_groups_buffer_entry_guess,
-          groups_approx_upper_bound(table_infos).first <= g_big_group_threshold,
+          initial_groups_buffer_entry_guess,
+          non_amplifying_join_guess.has_value() ||
+              groups_approx_upper_bound(table_infos).first <= g_big_group_threshold,
           /*has_ndv_estimation=*/false);
     }
   } catch (const CardinalityEstimationRequired& e) {
@@ -4102,8 +6360,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
               << card;
       result = execute_and_handle_errors(card, true, /*has_ndv_estimation=*/true);
     } else {
-      const auto ndv_groups_estimation =
-          getNDVEstimation(work_unit, e.range(), is_agg, co, eo);
       auto ndv_groups_estimator_multiplier = g_ndv_groups_estimator_multiplier;
       if (query_hints.isHintRegistered(QueryHint::kNDVGroupsEstimatorMultiplier)) {
         ndv_groups_estimator_multiplier = query_hints.ndv_groups_estimator_multiplier;
@@ -4111,21 +6367,54 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                 << g_ndv_groups_estimator_multiplier << " -> "
                 << ndv_groups_estimator_multiplier;
       }
-      const auto estimated_groups_buffer_entry_guess =
-          ndv_groups_estimation > 0
-              ? static_cast<size_t>(static_cast<double>(ndv_groups_estimation) *
-                                    ndv_groups_estimator_multiplier)
-              : std::min(groups_approx_upper_bound(table_infos).first,
-                         g_estimator_failure_max_groupby_size);
-      CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
-      VLOG(1) << "CardinalityEstimationRequired, Use ndv_estimation: "
-              << ndv_groups_estimation
-              << ", cardinality for estimated_groups_buffer_entry_guess: "
-              << estimated_groups_buffer_entry_guess;
-      result = execute_and_handle_errors(
-          estimated_groups_buffer_entry_guess, true, /*has_ndv_estimation=*/true);
-      if (!(eo.just_validate || eo.just_explain)) {
-        executor_->addToCardinalityCache(cache_key, estimated_groups_buffer_entry_guess);
+      size_t ndv_groups_estimation{0};
+      std::optional<size_t> unique_temp_group_bound =
+          g_enable_result_reduction_pipeline
+              ? unique_temp_join_group_cardinality_upper_bound(ra_exe_unit, table_infos)
+              : std::nullopt;
+      const auto speculative_group_bound =
+          unique_temp_group_bound ? slab_limited_speculative_groupby_entry_guess(
+                                        ra_exe_unit, executor_, *unique_temp_group_bound)
+                                  : std::nullopt;
+      const bool use_unique_temp_group_bound =
+          unique_temp_group_bound && !speculative_group_bound;
+      bool speculative_group_bound_succeeded{false};
+      if (co.device_type == ExecutorDeviceType::GPU && speculative_group_bound &&
+          !(eo.just_validate || eo.just_explain)) {
+        try {
+          result = execute_and_handle_errors(*speculative_group_bound,
+                                             /*has_cardinality_estimation=*/true,
+                                             /*has_ndv_estimation=*/false);
+          speculative_group_bound_succeeded = true;
+          executor_->addToCardinalityCache(cache_key, *speculative_group_bound);
+        } catch (const CardinalityEstimationRequired&) {
+          // The largest slab-safe table was insufficient. Preserve the existing HLL
+          // sizing and retry path rather than treating the speculative miss as fatal.
+        }
+      }
+      if (!speculative_group_bound_succeeded) {
+        if (!use_unique_temp_group_bound) {
+          ndv_groups_estimation = getNDVEstimation(work_unit, e.range(), is_agg, co, eo);
+        }
+        const auto estimated_groups_buffer_entry_guess =
+            use_unique_temp_group_bound
+                ? *unique_temp_group_bound
+                : (ndv_groups_estimation > 0
+                       ? static_cast<size_t>(static_cast<double>(ndv_groups_estimation) *
+                                             ndv_groups_estimator_multiplier)
+                       : std::min(groups_approx_upper_bound(table_infos).first,
+                                  g_estimator_failure_max_groupby_size));
+        CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
+        VLOG(1) << "CardinalityEstimationRequired, Use ndv_estimation: "
+                << ndv_groups_estimation
+                << ", cardinality for estimated_groups_buffer_entry_guess: "
+                << estimated_groups_buffer_entry_guess;
+        result = execute_and_handle_errors(
+            estimated_groups_buffer_entry_guess, true, /*has_ndv_estimation=*/true);
+        if (!(eo.just_validate || eo.just_explain)) {
+          executor_->addToCardinalityCache(cache_key,
+                                           estimated_groups_buffer_entry_guess);
+        }
       }
     }
   }
@@ -4236,6 +6525,7 @@ std::string get_table_name_from_table_key(shared::TableKey const& table_key) {
   }
   return table_name;
 }
+
 }  // namespace
 
 std::optional<size_t> RelAlgExecutor::getFilteredCountAll(
@@ -4244,7 +6534,12 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(
     const CompilationOptions& co,
     const ExecutionOptions& eo) {
   auto const input_tables_info = get_table_infos(ra_exe_unit, executor_);
-  if (is_projection(ra_exe_unit) && ra_exe_unit.simple_quals.empty() &&
+  const bool has_ephemeral_input_distribution = std::any_of(
+      input_tables_info.begin(), input_tables_info.end(), [](const auto& table_info) {
+        return table_info.table_key.table_id < 0;
+      });
+  if (is_projection(ra_exe_unit) && ra_exe_unit.input_descs.size() == size_t(1) &&
+      input_tables_info.size() == size_t(1) && ra_exe_unit.simple_quals.empty() &&
       ra_exe_unit.quals.empty() && ra_exe_unit.join_quals.empty() &&
       !hasDeletedRowInQuery(input_tables_info)) {
     auto const max_row_info = groups_approx_upper_bound(input_tables_info);
@@ -4262,6 +6557,26 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(
                                   false,
                                   nullptr);
   const auto count_all_exe_unit = ra_exe_unit.createCountAllExecutionUnit(count.get());
+  const CardinalityCacheKey filtered_count_cache_key{
+      count_all_exe_unit,
+      estimator_cache_context(co, executor_),
+      &temporary_table_source_info_};
+  if (!(eo.just_validate || eo.just_explain)) {
+    const auto cached_filtered_count =
+        executor_->getCachedFilteredCount(filtered_count_cache_key);
+    if (cached_filtered_count.first) {
+      if (has_ephemeral_input_distribution) {
+        // A temporary result can have the same logical count while its fragments are
+        // assigned differently on a later execution. Reuse the source-aware total,
+        // but never size a device allocation from a prior execution's distribution.
+        ra_exe_unit.per_device_cardinality.clear();
+      } else {
+        ra_exe_unit.per_device_cardinality =
+            cached_filtered_count.second.per_device_cardinality;
+      }
+      return std::max(cached_filtered_count.second.count, size_t(1));
+    }
+  }
   size_t one{1};
   ResultSetPtr count_all_result;
   try {
@@ -4297,7 +6612,17 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(
   CHECK(count_ptr);
   CHECK_GE(*count_ptr, 0);
   auto count_upper_bound = static_cast<size_t>(*count_ptr);
-  return std::max(count_upper_bound, size_t(1));
+  count_upper_bound = std::max(count_upper_bound, size_t(1));
+  if (!(eo.just_validate || eo.just_explain)) {
+    executor_->addToFilteredCountCache(
+        filtered_count_cache_key,
+        Executor::FilteredCountCacheValue{
+            count_upper_bound,
+            has_ephemeral_input_distribution
+                ? Executor::PerDeviceCardinality{}
+                : count_all_exe_unit.per_device_cardinality});
+  }
+  return count_upper_bound;
 }
 
 bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
@@ -4346,12 +6671,15 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
     RenderInfo* render_info,
     const QueryExecutionError& e,
     const int64_t queue_time_ms) {
-  // Disable the bump allocator
-  // Note that this will have basically the same affect as using the bump allocator for
-  // the kernel per fragment path. Need to unify the max_groups_buffer_entry_guess = 0
-  // path and the bump allocator path for kernel per fragment execution.
   auto ra_exe_unit_in = work_unit.exe_unit;
-  ra_exe_unit_in.use_bump_allocator = false;
+  const bool preserve_projection_bump_allocator =
+      ra_exe_unit_in.use_bump_allocator && compute_output_buffer_size(ra_exe_unit_in);
+  if (is_agg && !preserve_projection_bump_allocator) {
+    // Disable the bump allocator for true aggregate retries. Projection-shaped aggregate
+    // nodes can still use the kernel-per-fragment bump path to size output buffers from
+    // fragment-local input.
+    ra_exe_unit_in.use_bump_allocator = false;
+  }
 
   auto result = ExecutionResult{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                             co.device_type,
@@ -4367,29 +6695,105 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   eo_no_multifrag.setNoExplainExecutionOptions(true);
   eo_no_multifrag.allow_multifrag = false;
   eo_no_multifrag.find_push_down_candidates = false;
+  const bool can_use_projection_bump_allocator_retry =
+      co.device_type == ExecutorDeviceType::GPU &&
+      eo.executor_type != ::ExecutorType::Extern && !render_info &&
+      ra_exe_unit_in.sort_info.order_entries.empty() &&
+      compute_output_buffer_size(ra_exe_unit_in);
   if (e.wasMultifragKernelLaunch()) {
-    try {
-      // Attempt to retry using the kernel per fragment path. The smaller input size
-      // required may allow the entire kernel to execute in GPU memory.
-      LOG(WARNING) << "Multifrag query ran out of memory, retrying with multifragment "
-                      "kernels disabled.";
-      const auto ra_exe_unit = decide_approx_count_distinct_implementation(
-          ra_exe_unit_in, table_infos, executor_, co.device_type, target_exprs_owned_);
-      result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
-                                           is_agg,
-                                           table_infos,
-                                           ra_exe_unit,
-                                           co,
-                                           eo_no_multifrag,
-                                           nullptr,
-                                           true,
-                                           column_cache),
-                targets_meta};
-      result.setQueueTime(queue_time_ms);
-    } catch (const QueryExecutionError& new_e) {
-      handlePersistentError(new_e.getErrorCode());
-      LOG(WARNING) << "Kernel per fragment query ran out of memory, retrying on CPU.";
+    if (co.device_type == ExecutorDeviceType::GPU) {
+      LOG(WARNING) << "Releasing transient GPU query buffers before "
+                      "kernel-per-fragment OOM retry.";
+      eo_no_multifrag.max_gpu_kernel_concurrency = 1;
+      result_set_column_cache_.clear();
+#ifdef HAVE_CUDA
+      executor_->clearCudaAllocator();
+      executor_->initializeCudaAllocator();
+#endif
     }
+    const auto fragment_groups_buffer_entry_guess =
+        kernel_per_fragment_groupby_entry_guess(ra_exe_unit_in, table_infos, executor_);
+    if (fragment_groups_buffer_entry_guess < max_groups_buffer_entry_guess) {
+      LOG(WARNING) << "Lowering max groups buffer entry guess from "
+                   << max_groups_buffer_entry_guess << " to "
+                   << fragment_groups_buffer_entry_guess
+                   << " for kernel-per-fragment GPU retry.";
+      max_groups_buffer_entry_guess = fragment_groups_buffer_entry_guess;
+    } else if (temporary_result_groupby_entry_floor(
+                   ra_exe_unit_in, table_infos, executor_) &&
+               fragment_groups_buffer_entry_guess > max_groups_buffer_entry_guess) {
+      LOG(WARNING) << "Raising max groups buffer entry guess from "
+                   << max_groups_buffer_entry_guess << " to "
+                   << fragment_groups_buffer_entry_guess
+                   << " for temporary-result kernel-per-fragment GPU retry.";
+      max_groups_buffer_entry_guess = fragment_groups_buffer_entry_guess;
+    }
+    constexpr size_t max_kernel_per_fragment_gpu_retry_shrinks = 8;
+    size_t kernel_per_fragment_gpu_retry_shrinks = 0;
+    while (true) {
+      try {
+        // Attempt to retry using the kernel per fragment path. The smaller input size
+        // required may allow the entire kernel to execute in GPU memory.
+        LOG(WARNING) << "Multifrag query ran out of memory, retrying with multifragment "
+                        "kernels disabled.";
+        auto ra_exe_unit = decide_approx_count_distinct_implementation(
+            ra_exe_unit_in, table_infos, executor_, co.device_type, target_exprs_owned_);
+        if (can_use_projection_bump_allocator_retry) {
+          LOG(WARNING) << "Using GPU projection bump allocator for kernel-per-fragment "
+                          "OOM retry.";
+          ra_exe_unit.scan_limit = 0;
+          ra_exe_unit.use_bump_allocator = true;
+          eo_no_multifrag.output_columnar_hint = false;
+        }
+        result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
+                                             is_agg,
+                                             table_infos,
+                                             ra_exe_unit,
+                                             co,
+                                             eo_no_multifrag,
+                                             nullptr,
+                                             true,
+                                             column_cache),
+                  targets_meta};
+        result.setQueueTime(queue_time_ms);
+        return result;
+      } catch (const QueryExecutionError& new_e) {
+        const bool retry_memory_exhausted =
+            new_e.hasErrorCode(ErrorCode::OUT_OF_GPU_MEM) ||
+            new_e.hasErrorCode(ErrorCode::OUT_OF_CPU_MEM);
+        if (co.device_type == ExecutorDeviceType::GPU && retry_memory_exhausted &&
+            kernel_per_fragment_gpu_retry_shrinks <
+                max_kernel_per_fragment_gpu_retry_shrinks &&
+            max_groups_buffer_entry_guess > size_t(1)) {
+          const auto next_groups_buffer_entry_guess =
+              std::max(max_groups_buffer_entry_guess / 2, size_t(1));
+          if (next_groups_buffer_entry_guess < max_groups_buffer_entry_guess) {
+            LOG(WARNING) << "Kernel-per-fragment GPU retry exhausted memory; lowering "
+                            "max groups buffer entry guess from "
+                         << max_groups_buffer_entry_guess << " to "
+                         << next_groups_buffer_entry_guess << " and retrying on GPU.";
+            max_groups_buffer_entry_guess = next_groups_buffer_entry_guess;
+            ++kernel_per_fragment_gpu_retry_shrinks;
+            result_set_column_cache_.clear();
+#ifdef HAVE_CUDA
+            executor_->clearCudaAllocator();
+            executor_->initializeCudaAllocator();
+#endif
+            continue;
+          }
+        }
+        if (co.device_type == ExecutorDeviceType::GPU && retry_memory_exhausted &&
+            g_allow_query_step_cpu_retry) {
+          throw QueryMustRunOnCpu(new_e.what());
+        }
+        handlePersistentError(new_e.getErrorCode());
+        LOG(WARNING) << "Kernel per fragment query ran out of memory, retrying on CPU: "
+                     << new_e.what();
+      }
+      break;
+    }
+  } else {
+    handlePersistentError(e.getErrorCode());
   }
 
   if (render_info) {
@@ -4623,6 +7027,225 @@ std::vector<JoinType> left_deep_join_types(const RelLeftDeepInnerJoin* left_deep
   return join_types;
 }
 
+bool only_inner_joins(const std::vector<JoinType>& join_types) {
+  return std::all_of(join_types.begin(), join_types.end(), [](const auto join_type) {
+    return join_type == JoinType::INNER;
+  });
+}
+
+bool is_join_hint_source(const RelAlgNode* node) {
+  return dynamic_cast<const RelLeftDeepInnerJoin*>(node) ||
+         dynamic_cast<const RelJoin*>(node);
+}
+
+void merge_query_hint(RegisteredQueryHint& merged_hint,
+                      bool& has_hint,
+                      const RegisteredQueryHint& hint) {
+  merged_hint = has_hint ? (merged_hint || hint) : hint;
+  has_hint = true;
+}
+
+std::optional<RegisteredQueryHint> get_local_query_hint(const RelAlgDag* query_dag,
+                                                        const RelAlgNode* node) {
+  if (!query_dag || !node) {
+    return std::nullopt;
+  }
+  const auto& query_hints = query_dag->getQueryHints();
+  const auto node_it = query_hints.find(node);
+  if (node_it == query_hints.end()) {
+    return std::nullopt;
+  }
+  const auto hint_it = node_it->second.find(node->getId());
+  if (hint_it == node_it->second.end()) {
+    return std::nullopt;
+  }
+  return hint_it->second;
+}
+
+RegisteredQueryHint extract_hash_table_query_hints(const RegisteredQueryHint& hint) {
+  RegisteredQueryHint hash_table_hint = RegisteredQueryHint::defaults();
+  if (hint.isHintRegistered(QueryHint::kBBoxIntersectBucketThreshold)) {
+    hash_table_hint.registerHint(QueryHint::kBBoxIntersectBucketThreshold);
+    hash_table_hint.bbox_intersect_bucket_threshold =
+        hint.bbox_intersect_bucket_threshold;
+  }
+  if (hint.isHintRegistered(QueryHint::kBBoxIntersectMaxSize)) {
+    hash_table_hint.registerHint(QueryHint::kBBoxIntersectMaxSize);
+    hash_table_hint.bbox_intersect_max_size = hint.bbox_intersect_max_size;
+  }
+  if (hint.isHintRegistered(QueryHint::kBBoxIntersectAllowGpuBuild)) {
+    hash_table_hint.registerHint(QueryHint::kBBoxIntersectAllowGpuBuild);
+    hash_table_hint.bbox_intersect_allow_gpu_build = hint.bbox_intersect_allow_gpu_build;
+  }
+  if (hint.isHintRegistered(QueryHint::kBBoxIntersectNoCache)) {
+    hash_table_hint.registerHint(QueryHint::kBBoxIntersectNoCache);
+    hash_table_hint.bbox_intersect_no_cache = hint.bbox_intersect_no_cache;
+  }
+  if (hint.isHintRegistered(QueryHint::kBBoxIntersectKeysPerBin)) {
+    hash_table_hint.registerHint(QueryHint::kBBoxIntersectKeysPerBin);
+    hash_table_hint.bbox_intersect_keys_per_bin = hint.bbox_intersect_keys_per_bin;
+  }
+  if (hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
+    hash_table_hint.registerHint(QueryHint::kMaxJoinHashTableSize);
+    hash_table_hint.max_join_hash_table_size = hint.max_join_hash_table_size;
+  }
+  if (hint.isHintRegistered(QueryHint::kforceBaselineHashJoin)) {
+    hash_table_hint.registerHint(QueryHint::kforceBaselineHashJoin);
+    hash_table_hint.force_baseline_hash_join = hint.force_baseline_hash_join;
+  }
+  if (hint.isHintRegistered(QueryHint::kforceOneToManyHashJoin)) {
+    hash_table_hint.registerHint(QueryHint::kforceOneToManyHashJoin);
+    hash_table_hint.force_one_to_many_hash_join = hint.force_one_to_many_hash_join;
+  }
+  return hash_table_hint;
+}
+
+void clear_query_hint(RegisteredQueryHint& hint, const QueryHint query_hint) {
+  hint.registered_hint.at(static_cast<int>(query_hint)) = false;
+}
+
+RegisteredQueryHint extract_work_unit_query_hints(const RegisteredQueryHint& hint) {
+  auto work_unit_hint = hint;
+  clear_query_hint(work_unit_hint, QueryHint::kBBoxIntersectBucketThreshold);
+  clear_query_hint(work_unit_hint, QueryHint::kBBoxIntersectMaxSize);
+  clear_query_hint(work_unit_hint, QueryHint::kBBoxIntersectAllowGpuBuild);
+  clear_query_hint(work_unit_hint, QueryHint::kBBoxIntersectNoCache);
+  clear_query_hint(work_unit_hint, QueryHint::kBBoxIntersectKeysPerBin);
+  return work_unit_hint;
+}
+
+RegisteredQueryHint get_query_hint_for_work_unit(const RelAlgDag* query_dag,
+                                                 const RelAlgNode* body) {
+  RegisteredQueryHint query_hint = RegisteredQueryHint::defaults();
+  if (!query_dag || !body) {
+    return query_hint;
+  }
+
+  bool has_hint = query_hint.isAnyQueryHintDelivered();
+  if (auto candidate = query_dag->getQueryHint(body)) {
+    query_hint = *candidate;
+    has_hint = true;
+  }
+  for (size_t input_idx = 0; input_idx < body->inputCount(); ++input_idx) {
+    const auto input = body->getInput(input_idx);
+    if (!is_join_hint_source(input)) {
+      continue;
+    }
+    if (auto candidate = get_local_query_hint(query_dag, input)) {
+      auto work_unit_hint = extract_work_unit_query_hints(*candidate);
+      if (work_unit_hint.isAnyQueryHintDelivered()) {
+        merge_query_hint(query_hint, has_hint, work_unit_hint);
+      }
+    }
+  }
+  return query_hint;
+}
+
+bool matches_left_deep_join_prefix(const RelAlgNode* candidate,
+                                   const RelLeftDeepInnerJoin* join,
+                                   size_t& level_idx) {
+  if (!candidate || !join || !is_join_hint_source(candidate)) {
+    return false;
+  }
+  const auto candidate_input_count = candidate->inputCount();
+  if (candidate_input_count < size_t(2) || candidate_input_count > join->inputCount()) {
+    return false;
+  }
+  for (size_t input_idx = 0; input_idx < candidate_input_count; ++input_idx) {
+    if (candidate->getInput(input_idx) != join->getInput(input_idx)) {
+      return false;
+    }
+  }
+  level_idx = candidate_input_count - 2;
+  return true;
+}
+
+using JoinHintQualTranslator =
+    std::function<std::list<std::shared_ptr<Analyzer::Expr>>(const RelAlgNode*)>;
+
+bool contains_join_hint_qual(
+    const JoinCondition& join_condition,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& candidate_quals) {
+  for (const auto& candidate_qual : candidate_quals) {
+    for (const auto& level_qual : join_condition.quals) {
+      if (*level_qual == *candidate_qual) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+std::optional<size_t> find_join_hint_level_by_qual(
+    const RelAlgNode* candidate,
+    const JoinQualsPerNestingLevel& join_quals,
+    const JoinHintQualTranslator& translate_hint_quals) {
+  const auto candidate_quals = translate_hint_quals(candidate);
+  if (candidate_quals.empty()) {
+    return std::nullopt;
+  }
+  for (size_t level_idx = 0; level_idx < join_quals.size(); ++level_idx) {
+    if (contains_join_hint_qual(join_quals[level_idx], candidate_quals)) {
+      return level_idx;
+    }
+  }
+  return std::nullopt;
+}
+
+std::unordered_set<const RelAlgNode*> get_live_query_dag_nodes(
+    const RelAlgDag* query_dag) {
+  std::unordered_set<const RelAlgNode*> live_nodes;
+  if (!query_dag) {
+    return live_nodes;
+  }
+  query_dag->eachNode([&live_nodes](const RelAlgNode* node) { live_nodes.insert(node); });
+  return live_nodes;
+}
+
+void apply_hash_table_query_hints_to_join_levels(
+    const RelAlgDag* query_dag,
+    const RelLeftDeepInnerJoin* join,
+    JoinQualsPerNestingLevel& join_quals,
+    const JoinHintQualTranslator& translate_hint_quals) {
+  if (!query_dag || !join || join_quals.empty()) {
+    return;
+  }
+  const auto live_nodes = get_live_query_dag_nodes(query_dag);
+  for (const auto& hint_entry : query_dag->getQueryHints()) {
+    if (hint_entry.first != join && !live_nodes.count(hint_entry.first)) {
+      continue;
+    }
+    const auto matched_level_idx =
+        find_join_hint_level_by_qual(hint_entry.first, join_quals, translate_hint_quals);
+    size_t level_idx = 0;
+    if (matched_level_idx) {
+      level_idx = *matched_level_idx;
+    } else if (!matches_left_deep_join_prefix(hint_entry.first, join, level_idx) ||
+               level_idx >= join_quals.size()) {
+      continue;
+    }
+    for (const auto& node_hint : hint_entry.second) {
+      auto hash_table_hint = extract_hash_table_query_hints(node_hint.second);
+      if (hash_table_hint.isAnyQueryHintDelivered()) {
+        bool has_hint = join_quals[level_idx].query_hint.isAnyQueryHintDelivered();
+        merge_query_hint(join_quals[level_idx].query_hint, has_hint, hash_table_hint);
+      }
+    }
+  }
+}
+
+void apply_hash_table_query_hint_to_join_level(const RelAlgDag* query_dag,
+                                               const RelJoin* join,
+                                               JoinCondition& join_condition) {
+  if (auto candidate = get_local_query_hint(query_dag, join)) {
+    auto hash_table_hint = extract_hash_table_query_hints(*candidate);
+    if (hash_table_hint.isAnyQueryHintDelivered()) {
+      bool has_hint = join_condition.query_hint.isAnyQueryHintDelivered();
+      merge_query_hint(join_condition.query_hint, has_hint, hash_table_hint);
+    }
+  }
+}
+
 template <class RA>
 std::vector<size_t> do_table_reordering(
     std::vector<InputDescriptor>& input_descs,
@@ -4693,9 +7316,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
-    if (eo.table_reordering &&
-        std::find(join_types.begin(), join_types.end(), JoinType::LEFT) ==
-            join_types.end()) {
+    if (eo.table_reordering && only_inner_joins(join_types)) {
       input_permutation = do_table_reordering(input_descs,
                                               input_col_descs,
                                               left_deep_join_quals,
@@ -4703,11 +7324,22 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                               compound,
                                               query_infos,
                                               executor_);
+      query_infos = get_table_infos(input_descs, executor_);
       input_to_nest_level = get_input_nest_levels(compound, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(compound, input_to_nest_level, input_permutation);
       left_deep_join_quals = translateLeftDeepJoinFilter(
           left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
+    }
+  } else if (const auto join = dynamic_cast<const RelJoin*>(compound->getInput(0))) {
+    CHECK_GE(input_descs.size(), size_t(2));
+    left_deep_join_quals.resize(input_descs.size() - 1);
+    left_deep_join_quals.front().type = join->getJoinType();
+    apply_hash_table_query_hint_to_join_level(
+        query_dag_.get(), join, left_deep_join_quals.front());
+    if (join->getCondition()) {
+      left_deep_join_quals.front().quals = makeJoinQuals(
+          join->getCondition(), join_types, input_to_nest_level, eo.just_explain);
     }
   }
   auto const bbox_intersect_qual_info = convert_bbox_intersect_join(left_deep_join_quals,
@@ -4738,13 +7370,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                               translator,
                                               eo.executor_type);
 
-  auto query_hint = RegisteredQueryHint::defaults();
-  if (query_dag_) {
-    auto candidate = query_dag_->getQueryHint(compound);
-    if (candidate) {
-      query_hint = *candidate;
-    }
-  }
+  auto query_hint = get_query_hint_for_work_unit(query_dag_.get(), compound);
   CHECK_EQ(compound->size(), target_exprs.size());
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         input_col_descs,
@@ -4778,6 +7404,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
         compound, left_deep_tree_id, left_deep_trees_info, executor_);
     rewritten_exe_unit.hash_table_build_plan_dag = join_info.hash_table_plan_dag;
     rewritten_exe_unit.table_id_to_node_map = join_info.table_id_to_node_map;
+    addTemporaryTableSourceNodes(rewritten_exe_unit.table_id_to_node_map);
   }
   return {rewritten_exe_unit,
           compound,
@@ -4960,6 +7587,44 @@ JoinQualsPerNestingLevel RelAlgExecutor::translateLeftDeepJoinFilter(
           join_types[rte_idx - 1] == JoinType::ANTI);
     result[rte_idx - 1].type = join_types[rte_idx - 1];
   }
+  const auto translate_hint_quals =
+      [this, &join_types, &input_to_nest_level, just_explain](const RelAlgNode* node) {
+        const auto all_inputs_are_in_current_work_unit =
+            [&input_to_nest_level](const RelAlgNode* node) {
+              if (!node) {
+                return false;
+              }
+              for (size_t input_idx = 0; input_idx < node->inputCount(); ++input_idx) {
+                if (input_to_nest_level.find(node->getInput(input_idx)) ==
+                    input_to_nest_level.end()) {
+                  return false;
+                }
+              }
+              return true;
+            };
+        if (const auto rel_join = dynamic_cast<const RelJoin*>(node)) {
+          if (!all_inputs_are_in_current_work_unit(rel_join)) {
+            return std::list<std::shared_ptr<Analyzer::Expr>>{};
+          }
+          if (!rel_join->getCondition()) {
+            return std::list<std::shared_ptr<Analyzer::Expr>>{};
+          }
+          return makeJoinQuals(
+              rel_join->getCondition(), join_types, input_to_nest_level, just_explain);
+        }
+        if (const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(node)) {
+          if (!all_inputs_are_in_current_work_unit(left_deep_join)) {
+            return std::list<std::shared_ptr<Analyzer::Expr>>{};
+          }
+          return makeJoinQuals(left_deep_join->getInnerCondition(),
+                               join_types,
+                               input_to_nest_level,
+                               just_explain);
+        }
+        return std::list<std::shared_ptr<Analyzer::Expr>>{};
+      };
+  apply_hash_table_query_hints_to_join_levels(
+      query_dag_.get(), join, result, translate_hint_quals);
   return result;
 }
 
@@ -4974,7 +7639,10 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
   CHECK_GE(size_t(2), ra_node->inputCount());
   const auto input = ra_node->getInput(nest_level);
   const auto it_rte_idx = input_to_nest_level.find(input);
-  CHECK(it_rte_idx != input_to_nest_level.end());
+  CHECK(it_rte_idx != input_to_nest_level.end())
+      << "Missing nest level for aggregate input "
+      << input->toString(RelRexToStringConfig::defaults()) << " while translating "
+      << ra_node->toString(RelRexToStringConfig::defaults());
   const int rte_idx = it_rte_idx->second;
   const auto table_key = table_key_from_ra(input);
   std::vector<std::shared_ptr<Analyzer::Expr>> inputs;
@@ -4988,6 +7656,199 @@ std::vector<std::shared_ptr<Analyzer::Expr>> synthesize_inputs(
     ++input_idx;
   }
   return inputs;
+}
+
+bool can_fuse_aggregate_input_project(const RelAggregate* aggregate,
+                                      const RelProject* project) {
+  if (!aggregate || !project || aggregate->inputCount() != size_t(1) ||
+      project->inputCount() != size_t(1) || aggregate->getInput(0) != project ||
+      !project->isSimple() || project->hasWindowFunctionExpr() ||
+      project->isUpdateViaSelect() || project->isDeleteViaSelect()) {
+    return false;
+  }
+
+  const auto project_source = project->getInput(0);
+  if (dynamic_cast<const RelSort*>(project_source)) {
+    // A sort may also enforce LIMIT/OFFSET. Do not bypass that materialization
+    // boundary unless it has been represented in the fused work unit.
+    return false;
+  }
+  if (dynamic_cast<const RelJoin*>(project_source) ||
+      dynamic_cast<const RelLeftDeepInnerJoin*>(project_source)) {
+    // The aggregate translator can consume the materialized project output, but it
+    // cannot currently codegen a multi-source project directly inside the aggregate
+    // work unit.
+    return false;
+  }
+  const auto used_project_inputs = get_used_inputs(project);
+  for (const auto rex_input : std::get<0>(used_project_inputs)) {
+    const auto source_node = rex_input->getSourceNode();
+    if (!source_node) {
+      return false;
+    }
+    const auto resolved_input =
+        resolve_output_reference_for_descriptor(source_node, rex_input->getIndex());
+    if (!dynamic_cast<const RelScan*>(resolved_input.getSourceNode())) {
+      return false;
+    }
+  }
+
+  const auto project_size = project->size();
+  if (aggregate->getGroupByCount() > project_size) {
+    return false;
+  }
+  for (const auto& agg_expr : aggregate->getAggExprs()) {
+    for (size_t i = 0; i < agg_expr->size(); ++i) {
+      if (static_cast<size_t>(agg_expr->getOperand(i)) >= project_size) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+std::optional<ResultSetEntryLiteral> make_result_set_entry_literal(
+    const RexLiteral* literal) {
+  if (!literal) {
+    return std::nullopt;
+  }
+  ResultSetEntryLiteral result;
+  result.type_info = SQLTypeInfo(
+      literal->getType(), literal->getPrecision(), literal->getScale(), false);
+  result.is_null = literal->getType() == kNULLT;
+  switch (literal->getType()) {
+    case kINT:
+    case kBIGINT:
+    case kDECIMAL:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      result.int_val = literal->getVal<int64_t>();
+      return result;
+    case kDOUBLE:
+      result.double_val = literal->getVal<double>();
+      return result;
+    case kBOOLEAN:
+      result.bool_val = literal->getVal<bool>();
+      return result;
+    case kNULLT:
+      return result;
+    default:
+      return std::nullopt;
+  }
+}
+
+bool same_rel_alg_node(const RelAlgNode* lhs, const RelAlgNode* rhs) {
+  return lhs && rhs && (lhs == rhs || lhs->getId() == rhs->getId());
+}
+
+std::optional<ResultSetEntryComparison> make_result_set_entry_comparison(
+    const RexScalar* rex,
+    const RelAlgNode* source_node) {
+  const auto oper = dynamic_cast<const RexOperator*>(rex);
+  if (!oper || !IS_COMPARISON(oper->getOperator()) || oper->size() != size_t(2)) {
+    return std::nullopt;
+  }
+
+  const auto lhs_input = dynamic_cast<const RexInput*>(oper->getOperand(0));
+  const auto rhs_input = dynamic_cast<const RexInput*>(oper->getOperand(1));
+  const auto lhs_literal = dynamic_cast<const RexLiteral*>(oper->getOperand(0));
+  const auto rhs_literal = dynamic_cast<const RexLiteral*>(oper->getOperand(1));
+
+  const RexInput* input{nullptr};
+  const RexLiteral* literal{nullptr};
+  auto comparison_op = oper->getOperator();
+  if (lhs_input && same_rel_alg_node(lhs_input->getSourceNode(), source_node) &&
+      rhs_literal) {
+    input = lhs_input;
+    literal = rhs_literal;
+  } else if (rhs_input && same_rel_alg_node(rhs_input->getSourceNode(), source_node) &&
+             lhs_literal) {
+    input = rhs_input;
+    literal = lhs_literal;
+    comparison_op = COMMUTE_COMPARISON(comparison_op);
+  } else {
+    return std::nullopt;
+  }
+
+  auto entry_literal = make_result_set_entry_literal(literal);
+  // ResultSet entry compaction intentionally handles ordinary scalar comparisons
+  // only. NULL predicates require SQL three-valued and null-safe comparison semantics,
+  // so leave them for the relational filter.
+  if (!entry_literal || entry_literal->is_null) {
+    return std::nullopt;
+  }
+  ResultSetEntryComparison comparison;
+  comparison.target_idx = input->getIndex();
+  comparison.op = comparison_op;
+  comparison.literal = *entry_literal;
+  return comparison;
+}
+
+bool append_result_set_entry_filter(const RexScalar* rex,
+                                    const RelAlgNode* source_node,
+                                    ResultSetEntryFilter& entry_filter) {
+  const auto oper = dynamic_cast<const RexOperator*>(rex);
+  if (oper && oper->getOperator() == kAND) {
+    for (size_t operand_idx = 0; operand_idx < oper->size(); ++operand_idx) {
+      if (!append_result_set_entry_filter(
+              oper->getOperand(operand_idx), source_node, entry_filter)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  auto comparison = make_result_set_entry_comparison(rex, source_node);
+  if (!comparison) {
+    return false;
+  }
+  entry_filter.push_back(*comparison);
+  return true;
+}
+
+std::optional<ResultSetEntryFilter> make_result_set_entry_filter(
+    const RexScalar* condition,
+    const RelAlgNode* source_node) {
+  if (!condition || !source_node) {
+    return std::nullopt;
+  }
+  ResultSetEntryFilter entry_filter;
+  if (!append_result_set_entry_filter(condition, source_node, entry_filter) ||
+      entry_filter.empty()) {
+    return std::nullopt;
+  }
+  return entry_filter;
+}
+
+std::optional<ResultSetEntryFilter> make_result_set_entry_filter(
+    const RelFilter* filter,
+    const RelAlgNode* source_node) {
+  if (!filter || !source_node || filter->inputCount() != size_t(1) ||
+      !same_rel_alg_node(filter->getInput(0), source_node)) {
+    return std::nullopt;
+  }
+  return make_result_set_entry_filter(filter->getCondition(), source_node);
+}
+
+std::optional<ResultSetEntryFilter> make_result_set_entry_filter_for_next_node(
+    const RelAlgNode* next_node,
+    const RelAlgNode* source_node) {
+  if (!next_node || !source_node || next_node->inputCount() != size_t(1) ||
+      !same_rel_alg_node(next_node->getInput(0), source_node)) {
+    return std::nullopt;
+  }
+  if (const auto filter = dynamic_cast<const RelFilter*>(next_node)) {
+    return make_result_set_entry_filter(filter, source_node);
+  }
+  if (const auto compound = dynamic_cast<const RelCompound*>(next_node)) {
+    if (const auto filter_expr = compound->getFilterExpr()) {
+      return make_result_set_entry_filter(filter_expr, source_node);
+    }
+  }
+  return std::nullopt;
 }
 
 std::vector<Analyzer::Expr*> get_raw_pointers(
@@ -5007,18 +7868,34 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned;
-  const auto input_to_nest_level = get_input_nest_levels(aggregate, {});
+  CHECK_EQ(size_t(1), aggregate->inputCount());
+  const auto input_project = dynamic_cast<const RelProject*>(aggregate->getInput(0));
+  const auto fuse_input_project =
+      can_fuse_aggregate_input_project(aggregate, input_project);
+  const auto input_ra = fuse_input_project ? static_cast<const RelAlgNode*>(input_project)
+                                           : static_cast<const RelAlgNode*>(aggregate);
+  const auto input_to_nest_level = get_input_nest_levels(input_ra, {});
   std::tie(input_descs, input_col_descs, used_inputs_owned) =
-      get_input_desc(aggregate, input_to_nest_level, {});
-  const auto join_type = get_join_type(aggregate);
+      fuse_input_project ? get_input_desc(input_project, input_to_nest_level, {})
+                         : get_input_desc(aggregate, input_to_nest_level, {});
+  const auto join_type = get_join_type(input_ra);
 
   RelAlgTranslator translator(
       query_state_, executor_, input_to_nest_level, {join_type}, now_, just_explain);
-  CHECK_EQ(size_t(1), aggregate->inputCount());
   const auto source = aggregate->getInput(0);
-  const auto& in_metainfo = source->getOutputMetainfo();
-  const auto scalar_sources =
-      synthesize_inputs(aggregate, size_t(0), in_metainfo, input_to_nest_level);
+  std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
+  if (fuse_input_project) {
+    CHECK(input_project);
+    auto project_scalar_sources =
+        translate_scalar_sources(input_project, translator, ExecutorType::Native);
+    input_project->setOutputMetainfo(
+        get_targets_meta(input_project, get_raw_pointers(project_scalar_sources)));
+    scalar_sources = std::move(project_scalar_sources);
+  } else {
+    const auto& in_metainfo = source->getOutputMetainfo();
+    scalar_sources =
+        synthesize_inputs(aggregate, size_t(0), in_metainfo, input_to_nest_level);
+  }
   const auto groupby_exprs = translate_groupby_exprs(aggregate, scalar_sources);
   const auto target_exprs = translate_targets(
       target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
@@ -5027,15 +7904,11 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
 
   const auto targets_meta = get_targets_meta(aggregate, target_exprs);
   aggregate->setOutputMetainfo(targets_meta);
-  auto query_hint = RegisteredQueryHint::defaults();
-  if (query_dag_) {
-    auto candidate = query_dag_->getQueryHint(aggregate);
-    if (candidate) {
-      query_hint = *candidate;
-    }
-  }
+  auto query_hint = get_query_hint_for_work_unit(query_dag_.get(), aggregate);
   auto join_info = QueryPlanDagExtractor::extractJoinInfo(
       aggregate, std::nullopt, getLeftDeepJoinTreesInfo(), executor_);
+  auto table_id_to_node_map = join_info.table_id_to_node_map;
+  addTemporaryTableSourceNodes(table_id_to_node_map);
   return {RelAlgExecutionUnit{input_descs,
                               input_col_descs,
                               {},
@@ -5050,7 +7923,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
                               QueryPlanDagExtractor::applyLimitClauseToCacheKey(
                                   aggregate->getQueryPlanDagHash(), sort_info),
                               join_info.hash_table_plan_dag,
-                              join_info.table_id_to_node_map,
+                              table_id_to_node_map,
                               false,
                               std::nullopt,
                               query_state_},
@@ -5084,7 +7957,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     left_deep_join_quals = translateLeftDeepJoinFilter(
         left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
-    if (eo.table_reordering) {
+    if (eo.table_reordering && only_inner_joins(join_types)) {
       input_permutation = do_table_reordering(input_descs,
                                               input_col_descs,
                                               left_deep_join_quals,
@@ -5092,11 +7965,22 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
                                               project,
                                               query_infos,
                                               executor_);
+      query_infos = get_table_infos(input_descs, executor_);
       input_to_nest_level = get_input_nest_levels(project, input_permutation);
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(project, input_to_nest_level, input_permutation);
       left_deep_join_quals = translateLeftDeepJoinFilter(
           left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
+    }
+  } else if (const auto join = dynamic_cast<const RelJoin*>(project->getInput(0))) {
+    CHECK_GE(input_descs.size(), size_t(2));
+    left_deep_join_quals.resize(input_descs.size() - 1);
+    left_deep_join_quals.front().type = join->getJoinType();
+    apply_hash_table_query_hint_to_join_level(
+        query_dag_.get(), join, left_deep_join_quals.front());
+    if (join->getCondition()) {
+      left_deep_join_quals.front().quals = makeJoinQuals(
+          join->getCondition(), join_types, input_to_nest_level, eo.just_explain);
     }
   }
   auto const bbox_intersect_qual_info = convert_bbox_intersect_join(left_deep_join_quals,
@@ -5121,13 +8005,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_raw_pointers(target_exprs_owned);
-  auto query_hint = RegisteredQueryHint::defaults();
-  if (query_dag_) {
-    auto candidate = query_dag_->getQueryHint(project);
-    if (candidate) {
-      query_hint = *candidate;
-    }
-  }
+  auto query_hint = get_query_hint_for_work_unit(query_dag_.get(), project);
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         input_col_descs,
                                         {},
@@ -5160,6 +8038,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
         project, left_deep_tree_id, left_deep_trees_info, executor_);
     rewritten_exe_unit.hash_table_build_plan_dag = join_info.hash_table_plan_dag;
     rewritten_exe_unit.table_id_to_node_map = join_info.table_id_to_node_map;
+    addTemporaryTableSourceNodes(rewritten_exe_unit.table_id_to_node_map);
   }
   return {rewritten_exe_unit,
           project,
@@ -5571,15 +8450,11 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
   const auto target_exprs = get_raw_pointers(target_exprs_owned);
   filter->setOutputMetainfo(in_metainfo);
   const auto rewritten_qual = rewrite_expr(qual.get());
-  auto query_hint = RegisteredQueryHint::defaults();
-  if (query_dag_) {
-    auto candidate = query_dag_->getQueryHint(filter);
-    if (candidate) {
-      query_hint = *candidate;
-    }
-  }
+  auto query_hint = get_query_hint_for_work_unit(query_dag_.get(), filter);
   auto join_info = QueryPlanDagExtractor::extractJoinInfo(
       filter, std::nullopt, getLeftDeepJoinTreesInfo(), executor_);
+  auto table_id_to_node_map = join_info.table_id_to_node_map;
+  addTemporaryTableSourceNodes(table_id_to_node_map);
   return {{input_descs,
            input_col_descs,
            {},
@@ -5594,7 +8469,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createFilterWorkUnit(const RelFilter* f
            QueryPlanDagExtractor::applyLimitClauseToCacheKey(
                filter->getQueryPlanDagHash(), sort_info),
            join_info.hash_table_plan_dag,
-           join_info.table_id_to_node_map},
+           table_id_to_node_map},
           filter,
           g_default_max_groups_buffer_entry_guess,
           nullptr};
