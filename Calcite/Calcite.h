@@ -87,7 +87,9 @@ class Calcite {
   TOptimizationOption getCalciteOptimizationOption(
       bool is_view_optimize,
       bool enable_watchdog,
-      const std::vector<TFilterPushDownInfo>& filter_push_down_info);
+      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+      bool enable_experimental_query_rewrites = false,
+      bool trust_unenforced_table_constraints = false);
 
  private:
   void init(const int db_port,
