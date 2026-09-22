@@ -18,16 +18,13 @@
 #include "Catalog/SessionsStore.h"
 #include "Catalog/SysCatalog.h"
 #include "CudaMgr/CudaMgr.h"
+#include "QueryRunner/TestEnvironment.h"
 #include "Shared/StringTransform.h"
 #include "Tests/DBHandlerTestHelpers.h"
 #include "Tests/TestHelpers.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
-#endif
-
-#ifndef CALCITEPORT
-#define CALCITEPORT 3279
 #endif
 
 using namespace Catalog_Namespace;
@@ -391,7 +388,7 @@ int main(int argc, char** argv) {
   auto dummy =
       std::make_shared<Data_Namespace::DataMgr>(data_path, sys_parms, nullptr, false, 0);
   auto calcite = std::make_shared<Calcite>(
-      -1, CALCITEPORT, std::string(BASE_PATH), 1024, 5000, true, "");
+      -1, QueryRunner::calcite_port(), std::string(BASE_PATH), 1024, 5000, true, "");
   sys_cat.init(BASE_PATH, dummy, {}, calcite, false, {});
   try {
     err = RUN_ALL_TESTS();
