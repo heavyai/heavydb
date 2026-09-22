@@ -5,10 +5,13 @@
 
 #pragma once
 
+#include <atomic>
 #include <cstring>
 #include <functional>
 #include <future>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -23,6 +26,8 @@
 #include "Shared/heavyai_fs.h"
 
 extern bool g_enable_stringdict_parallel;
+extern bool g_enable_stringdict_parallel_sort;
+extern bool g_enable_lazy_string_dictionary_hash_recovery;
 
 namespace StringOps_Namespace {
 class StringOps;
@@ -80,6 +85,8 @@ class DictPayloadUnavailable : public std::runtime_error {
 using string_dict_hash_t = uint32_t;
 
 using StringLookupCallback = std::function<bool(std::string_view, int32_t string_id)>;
+using StringAddCallback = std::function<void(std::string_view)>;
+using StringIdLookupCallback = std::function<int32_t(std::string_view)>;
 
 namespace string_dictionary {
 // The canary buffer is a block of memory (4MB on most systems by default) which is used
@@ -154,6 +161,7 @@ class StringDictionary {
   std::string_view getStringView(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
   size_t storageEntryCount() const;
+  bool isSortedPermutationCacheComplete() const;
 
   SortedStringPermutation getSortedPermutation(
       const std::vector<std::pair<std::string, int32_t>>& transient_string_to_ids,
@@ -171,6 +179,13 @@ class StringDictionary {
                          const bool is_simple,
                          const char escape,
                          const size_t generation) const;
+
+  template <typename T>
+  std::shared_ptr<const std::vector<T>> getLikeShared(const std::string& pattern,
+                                                      const bool icase,
+                                                      const bool is_simple,
+                                                      const char escape,
+                                                      const size_t generation) const;
 
   template <typename T>
   std::vector<T> getLikeImpl(const std::string& pattern,
@@ -262,10 +277,25 @@ class StringDictionary {
       const StringOps_Namespace::StringOps& string_ops,
       const std::function<bool(int32_t)>& mask_functor) const;
 
+  void fillStringOpUnionTranslationMap(
+      int32_t* translated_ids,
+      int64_t source_generation,
+      const StringOps_Namespace::StringOps& string_ops,
+      const std::function<bool(int32_t)>& mask_functor,
+      const StringAddCallback& add_transient_callback,
+      const StringIdLookupCallback& lookup_transient_callback) const;
+
  private:
+  friend class StringDictionaryProxy;
+
   struct StringIdxEntry {
     uint64_t off : 48;
     uint64_t size : 16;
+  };
+
+  struct ScanLookupCacheEntry {
+    int64_t generation;
+    int32_t string_id;
   };
 
   // In the compare_cache_value_t index represents the index of the sorted cache.
@@ -286,6 +316,20 @@ class StringDictionary {
   void processDictionaryFutures(
       std::vector<std::future<std::vector<std::pair<string_dict_hash_t, unsigned int>>>>&
           dictionary_futures);
+  void recoverHashTableFromStorageUnlocked();
+  void ensureHashTableRecovered() const;
+  bool isHashTableRecovered() const noexcept;
+  size_t lookupStringsByScanWithoutHash(
+      const std::vector<std::string_view>& lookup_strings,
+      int32_t* string_ids,
+      int64_t generation) const;
+  bool tryBuildSelfStringOpUnionTranslationMapWithoutHash(
+      int32_t* translated_ids,
+      int64_t generation,
+      const StringOps_Namespace::StringOps& string_ops,
+      const StringAddCallback& add_transient_callback,
+      const StringIdLookupCallback& lookup_transient_callback,
+      size_t& num_untranslated_strings) const;
   size_t getNumStringsFromStorage(const size_t storage_slots) const noexcept;
   bool fillRateIsHigh(const size_t num_strings) const noexcept;
   void increaseHashTableCapacity() noexcept;
@@ -363,6 +407,10 @@ class StringDictionary {
   size_t collisions_;
   std::vector<int32_t> string_id_string_dict_hash_table_;
   std::vector<string_dict_hash_t> hash_cache_;
+  mutable std::atomic<bool> hash_table_recovered_{true};
+  mutable std::mutex scan_lookup_cache_mutex_;
+  mutable std::map<std::string, ScanLookupCacheEntry, std::less<>> scan_lookup_cache_;
+  mutable size_t scan_lookup_cache_size_{0};
   std::vector<int32_t> sorted_cache_;
   std::vector<int32_t> sorted_permutation_cache_;
   bool isTemp_;
@@ -376,9 +424,10 @@ class StringDictionary {
   size_t payload_file_size_;
   size_t payload_file_off_;
   mutable std::shared_mutex rw_mutex_;
-  mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int32_t>>
+  using LikeCacheKey = std::tuple<std::string, bool, bool, char, size_t>;
+  mutable std::map<LikeCacheKey, std::shared_ptr<const std::vector<int32_t>>>
       like_i32_cache_;
-  mutable std::map<std::tuple<std::string, bool, bool, char>, std::vector<int64_t>>
+  mutable std::map<LikeCacheKey, std::shared_ptr<const std::vector<int64_t>>>
       like_i64_cache_;
   mutable size_t like_cache_size_;
   mutable std::map<std::pair<std::string, char>, std::vector<int32_t>> regex_cache_;

@@ -73,6 +73,7 @@ class StringDictionaryProxy {
   std::string getString(int32_t string_id) const;
   std::vector<std::string> getStrings(const std::vector<int32_t>& string_ids) const;
   std::pair<const char*, size_t> getStringBytes(int32_t string_id) const noexcept;
+  bool canDecodeStringId(int32_t string_id) const;
 
   template <typename T>
   class TranslationMap {
@@ -202,9 +203,16 @@ class StringDictionaryProxy {
                          const bool is_simple,
                          const char escape) const;
 
+  template <typename T>
+  std::shared_ptr<const std::vector<T>> getLikeShared(const std::string& pattern,
+                                                      const bool icase,
+                                                      const bool is_simple,
+                                                      const char escape) const;
+
   std::vector<int32_t> getCompare(const std::string& pattern,
                                   const std::string& comp_operator) const;
 
+  bool isSortedPermutationCacheComplete() const;
   SortedStringPermutation getSortedPermutation(const bool should_sort_descending);
 
   std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape) const;
