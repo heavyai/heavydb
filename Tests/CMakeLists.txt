@@ -118,8 +118,7 @@ if(ENABLE_CUDA)
   add_dependencies(BufferMgrTest QueryEngineCudaTargets)
   target_link_libraries(BufferMgrTest CudaMgr)
 endif()
-target_link_libraries(BufferMgrTest gtest DataMgr QueryEngine Geospatial LockMgr ${Parquet_LIBRARIES}
-    ImportExport Parser)
+target_link_libraries(BufferMgrTest DataMgr ${EXECUTE_TEST_LIBS})
 if(ENABLE_RENDERING)
   target_link_libraries(BufferMgrTest QueryRenderer GfxDriver GfxInterop)
 endif()
@@ -332,6 +331,12 @@ list(LENGTH SANITY_TESTS _P2_START_T)
 
 add_executable(ExecuteTest ExecuteTest.cpp)
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
+if(ENABLE_CUDA AND nvcomp_cpu_INCLUDE_DIR AND nvcomp_cpu_LIBRARY)
+  target_compile_definitions(ExecuteTest PRIVATE HAVE_NVCOMP_GDEFLATE)
+endif()
+if(ENABLE_CUDA AND nvcomp_BITCOMP_FOUND)
+  target_compile_definitions(ExecuteTest PRIVATE HAVE_NVCOMP_BITCOMP)
+endif()
 if(ENABLE_TSAN)
   set(_EXECUTE_TEST_TSAN_SHARDS 4)
   math(EXPR _EXECUTE_TEST_TSAN_LAST_SHARD "${_EXECUTE_TEST_TSAN_SHARDS} - 1")
@@ -398,6 +403,12 @@ list(APPEND SANITY_TEST_PROGRAMS ExplainTest)
 
 add_executable(FileMgrTest FileMgrTest.cpp)
 target_link_libraries(FileMgrTest DataMgr ${EXECUTE_TEST_LIBS})
+if(nvcomp_cpu_INCLUDE_DIR AND nvcomp_cpu_LIBRARY)
+  target_compile_definitions(FileMgrTest PRIVATE HAVE_NVCOMP_GDEFLATE)
+endif()
+if(ENABLE_CUDA AND nvcomp_BITCOMP_FOUND)
+  target_compile_definitions(FileMgrTest PRIVATE HAVE_NVCOMP_BITCOMP)
+endif()
 add_test(FileMgrTest FileMgrTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS FileMgrTest)
 
@@ -874,8 +885,13 @@ endif()  # Partition 4
 find_library(URIPARSER_LIBRARY uriparser REQUIRED)
 add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
 target_link_libraries(ArrowIpcIntegrationTest gtest absl::str_format ThriftClient mapd_thrift Logger Shared ${Arrow_LIBRARIES} ${CUDA_LIBRARIES} ${URIPARSER_LIBRARY})
-add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
-list(APPEND INSANITY_TEST_PROGRAMS ArrowIpcIntegrationTest)
+add_test(
+  NAME ArrowIpcIntegrationTest
+  COMMAND ${CMAKE_COMMAND} -E env
+          BUILD_DIR=${CMAKE_BINARY_DIR}
+          DATA=Tests/tmp
+          BINARY=Tests/ArrowIpcIntegrationTest
+          ${CMAKE_SOURCE_DIR}/scripts/ci/run_server.sh)
 
 ##########
 
@@ -925,7 +941,8 @@ target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES} ${ZLIB_LIBRARIES})
 
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} rg3_bcrypt)
-# RunQueryLoop is a dev tool requiring --path and --query args; not a ctest test.
+# RunQueryLoop is a benchmark/helper binary requiring a storage path and SQL query;
+# it is built by all_tests, but it is not a self-contained CTest test.
 
 
 ##########
@@ -1028,12 +1045,25 @@ add_custom_target(insanity_tests
 
 endif()  # Partition 1
 
+set(ALL_TEST_EXTRA_PROGRAMS
+    ArrowIpcIntegrationTest
+    UtilTest
+    RunQueryLoop
+    StringTransformTest
+    StoragePerfTest)
+foreach(_all_test_optional_target StringDictionaryTest MultiInstanceTest)
+  if(TARGET ${_all_test_optional_target})
+    list(APPEND ALL_TEST_EXTRA_PROGRAMS ${_all_test_optional_target})
+  endif()
+endforeach()
+list(APPEND ALL_TEST_EXTRA_PROGRAMS ${CUDA_BENCHMARK_PROGRAMS})
+
 add_custom_target(all_tests
     COMMAND env AWS_REGION=${AWS_REGION}
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS init_test_dir ${SANITY_TEST_BUILD_TARGETS} ${INSANITY_TEST_PROGRAMS} UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest ${CUDA_BENCHMARK_PROGRAMS}
+    DEPENDS init_test_dir ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS} ${ALL_TEST_EXTRA_PROGRAMS}
     USES_TERMINAL)
 
 add_custom_target(storage_perf_tests
