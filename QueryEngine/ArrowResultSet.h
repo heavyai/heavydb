@@ -321,10 +321,15 @@ class ArrowResultSetConverter {
   SerializedArrowOutput getSerializedArrowOutput(
       arrow::ipc::DictionaryFieldMapper* mapper) const;
 
+  bool shouldUseBulkDictionaryFetch(const size_t result_row_count,
+                                    const size_t dictionary_entry_count) const;
+
   void initializeColumnBuilder(ColumnBuilder& column_builder,
                                const SQLTypeInfo& col_type,
                                const size_t result_col_idx,
-                               const std::shared_ptr<arrow::Field>& field) const;
+                               const std::shared_ptr<arrow::Field>& field,
+                               const ResultSet::UniqueStringsForDictEncodedTargetCol*
+                                   sparse_dictionary_values = nullptr) const;
 
   void append(ColumnBuilder& column_builder,
               const ValueArray& values,
