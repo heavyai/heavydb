@@ -98,10 +98,7 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
       get_inner_query_info(HashJoin::getInnerTableId(inner_outer_pairs), query_infos)
           .info;
 
-  const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
-  if (total_entries > HashJoin::MAX_NUM_HASH_ENTRIES) {
-    throw TooManyHashEntries();
-  }
+  get_hash_join_table_slot_count(query_info, memory_level);
 
   auto join_hash_table = std::make_shared<RangeJoinHashTable>(condition,
                                                               join_type,

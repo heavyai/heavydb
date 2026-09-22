@@ -17,6 +17,9 @@
 #include "QueryEngine/JoinHashTable/Runtime/JoinHashTableGpuUtils.h"
 #include "QueryEngine/enums.h"
 
+#include <algorithm>
+#include <limits>
+
 std::unique_ptr<HashtableRecycler> BoundingBoxIntersectJoinHashTable::hash_table_cache_ =
     std::make_unique<HashtableRecycler>(CacheItemType::BBOX_INTERSECT_HT,
                                         DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
@@ -94,8 +97,8 @@ BoundingBoxIntersectJoinHashTable::getInstance(
     ts1 = std::chrono::steady_clock::now();
   }
 
-  const auto qi_0 = query_infos[0].info.getNumTuplesUpperBound();
-  const auto qi_1 = query_infos[1].info.getNumTuplesUpperBound();
+  const auto qi_0 = get_hash_join_table_num_tuples(query_infos[0].info);
+  const auto qi_1 = get_hash_join_table_num_tuples(query_infos[1].info);
 
   VLOG(1) << "table_key = " << query_infos[0].table_key << " has " << qi_0 << " tuples.";
   VLOG(1) << "table_key = " << query_infos[1].table_key << " has " << qi_1 << " tuples.";
@@ -103,10 +106,7 @@ BoundingBoxIntersectJoinHashTable::getInstance(
   const auto& query_info =
       get_inner_query_info(HashJoin::getInnerTableId(inner_outer_pairs), query_infos)
           .info;
-  const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
-  if (total_entries > HashJoin::MAX_NUM_HASH_ENTRIES) {
-    throw TooManyHashEntries();
-  }
+  get_hash_join_table_slot_count(query_info, memory_level);
 
   auto join_hash_table =
       std::make_shared<BoundingBoxIntersectJoinHashTable>(condition,
@@ -561,7 +561,12 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
     return;
   }
 
-  auto bbox_intersect_max_table_size_bytes = g_bbox_intersect_max_table_size_bytes;
+  const auto generic_max_join_hash_table_size =
+      query_hints_.isHintRegistered(QueryHint::kMaxJoinHashTableSize)
+          ? query_hints_.max_join_hash_table_size
+          : std::numeric_limits<size_t>::max();
+  auto bbox_intersect_max_table_size_bytes =
+      std::min(g_bbox_intersect_max_table_size_bytes, generic_max_join_hash_table_size);
   std::optional<double> bbox_intersect_threshold_override;
   double bbox_intersect_target_entries_per_bin = g_bbox_intersect_target_entries_per_bin;
   auto skip_hashtable_caching = false;
@@ -580,7 +585,8 @@ void BoundingBoxIntersectJoinHashTable::reifyWithLayout(const HashType layout) {
     if (!bbox_intersect_threshold_override.has_value()) {
       oss << ": " << bbox_intersect_max_table_size_bytes << " -> "
           << query_hints_.bbox_intersect_max_size;
-      bbox_intersect_max_table_size_bytes = query_hints_.bbox_intersect_max_size;
+      bbox_intersect_max_table_size_bytes = std::min(query_hints_.bbox_intersect_max_size,
+                                                     generic_max_join_hash_table_size);
     } else {
       oss << ", but is skipped since the query hint also changes the threshold "
              "\'bbox_intersect_bucket_threshold\'";
@@ -1235,8 +1241,8 @@ void BoundingBoxIntersectJoinHashTable::reifyImpl(
   std::vector<std::future<void>> init_threads;
   chosen_bbox_intersect_bucket_threshold_ = chosen_bucket_threshold;
   chosen_bbox_intersect_max_table_size_bytes_ = chosen_max_hashtable_size;
-  setBoundingBoxIntersectionMetaInfo(chosen_bbox_intersect_bucket_threshold_,
-                                     chosen_bbox_intersect_max_table_size_bytes_,
+  setBoundingBoxIntersectionMetaInfo(chosen_bbox_intersect_max_table_size_bytes_,
+                                     chosen_bbox_intersect_bucket_threshold_,
                                      inverse_bucket_sizes_for_dimension_);
   for (auto device_id : device_ids_) {
     init_threads.push_back(std::async(std::launch::async,

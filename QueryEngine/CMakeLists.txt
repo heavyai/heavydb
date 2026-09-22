@@ -74,6 +74,8 @@ set(query_engine_source_files
   InValuesBitmap.cpp
   InputMetadata.cpp
   JoinFilterPushDown.cpp
+  JoinHashTable/BitmapJoinHashTable.cpp
+  JoinHashTable/RankedBitmapJoinHashTable.cpp
   JoinHashTable/BaselineJoinHashTable.cpp
   JoinHashTable/HashJoin.cpp
   JoinHashTable/HashTable.cpp
