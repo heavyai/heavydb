@@ -6,6 +6,7 @@
 #include "TableOptimizer.h"
 
 #include "Analyzer/Analyzer.h"
+#include "DataMgr/FileMgr/FileBuffer.h"
 #include "LockMgr/LockMgr.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/Execute.h"
@@ -443,6 +444,48 @@ void TableOptimizer::vacuumDeletedRows() const {
     cat_.getDataMgr().getGlobalFileMgr()->compactDataFiles(cat_.getDatabaseId(),
                                                            shard->tableId);
   }
+}
+
+void TableOptimizer::rewriteStoragePayloads(
+    const File_Namespace::NativeStorageCompressionConfig& compression_config) const {
+  auto timer = DEBUG_TIMER(__func__);
+  const auto db_id = cat_.getDatabaseId();
+  auto& data_mgr = cat_.getDataMgr();
+  auto* global_file_mgr = data_mgr.getGlobalFileMgr();
+
+  const auto table_lock =
+      lockmgr::TableDataLockMgr::getWriteLockForTable({db_id, td_->tableId});
+  const auto table_descriptors = td_->nShards > 0
+                                     ? cat_.getPhysicalTablesDescriptors(td_)
+                                     : std::vector<const TableDescriptor*>{td_};
+
+  File_Namespace::StorageRewriteStats total;
+  for (const auto td : table_descriptors) {
+    const ChunkKey table_prefix{db_id, td->tableId};
+    const auto stats = global_file_mgr->rewriteStoragePayloadsWithPrefix(
+        table_prefix, compression_config);
+    total.chunks_seen += stats.chunks_seen;
+    total.chunks_rewritten += stats.chunks_rewritten;
+    total.chunks_already_compressed += stats.chunks_already_compressed;
+    total.logical_bytes += stats.logical_bytes;
+    total.old_physical_bytes += stats.old_physical_bytes;
+    total.new_physical_bytes += stats.new_physical_bytes;
+    data_mgr.checkpoint(db_id, td->tableId, Data_Namespace::DISK_LEVEL);
+  }
+
+  Executor::clearExternalCaches(true, td_, db_id);
+  data_mgr.clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
+  if (data_mgr.gpusPresent()) {
+    data_mgr.clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL);
+  }
+
+  LOG(INFO) << "Rewrote native storage payloads for " << td_->tableName
+            << " chunks_seen=" << total.chunks_seen
+            << " chunks_rewritten=" << total.chunks_rewritten
+            << " chunks_already_compressed=" << total.chunks_already_compressed
+            << " logical_bytes=" << total.logical_bytes
+            << " old_physical_bytes=" << total.old_physical_bytes
+            << " new_physical_bytes=" << total.new_physical_bytes;
 }
 
 namespace {

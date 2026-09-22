@@ -10,6 +10,7 @@
 
 #include "Logger/Logger.h"
 
+#include <stdexcept>
 #include <string>
 
 inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
@@ -68,7 +69,8 @@ inline TDatumType::type type_to_thrift(const SQLTypeInfo& type_info) {
     default:
       break;
   }
-  abort();
+  throw std::invalid_argument("Invalid serialized SQL type: " +
+                              std::to_string(static_cast<int>(type)));
 }
 
 inline SQLTypes thrift_to_type(const TDatumType::type& type) {
@@ -118,9 +120,9 @@ inline SQLTypes thrift_to_type(const TDatumType::type& type) {
     case TDatumType::GEOGRAPHY:
       return kGEOGRAPHY;
     default:
-      break;
+      throw std::invalid_argument("Invalid serialized datum type: " +
+                                  std::to_string(static_cast<int>(type)));
   }
-  abort();
 }
 
 #define THRIFT_ENCODING_CASE(encoding) \
@@ -160,9 +162,9 @@ inline EncodingType thrift_to_encoding(const TEncodingType::type tEncodingType) 
     UNTHRIFT_ENCODING_CASE(GEOINT)
     UNTHRIFT_ENCODING_CASE(DATE_IN_DAYS)
     default:
-      CHECK(false);
+      throw std::invalid_argument("Invalid serialized encoding type: " +
+                                  std::to_string(static_cast<int>(tEncodingType)));
   }
-  abort();
 }
 
 inline std::string thrift_to_name(const TTypeInfo& ti) {
@@ -209,7 +211,10 @@ inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti,
   const auto ti = thrift_to_type(thrift_ti.type);
   if (IS_GEO(ti)) {
     const auto base_type = static_cast<SQLTypes>(thrift_ti.precision);
-    CHECK_LT(base_type, kSQLTYPE_LAST);
+    if (base_type != kGEOMETRY && base_type != kGEOGRAPHY) {
+      throw std::invalid_argument("Invalid serialized geospatial subtype: " +
+                                  std::to_string(thrift_ti.precision));
+    }
     type_info = SQLTypeInfo(
         ti,
         thrift_ti.scale,
@@ -237,6 +242,10 @@ inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti,
                             kNULLT);
   }
   if (type_info.is_dict_encoded_string() || type_info.is_subtype_dict_encoded_string()) {
+    if (!thrift_ti.__isset.dict_key) {
+      throw std::invalid_argument(
+          "Serialized dictionary-encoded type is missing its dictionary key");
+    }
     const auto& dict_key = thrift_ti.dict_key;
     type_info.setStringDictKey({dict_key.db_id, dict_key.dict_id});
   }

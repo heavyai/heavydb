@@ -10,7 +10,9 @@
  */
 
 #include "DynamicWatchdog.h"
+#include "ErrorHandling.h"
 #include "Execute.h"
+#include "MurmurHash.h"
 #include "ResultSet.h"
 #include "ResultSetReductionInterpreter.h"
 #include "ResultSetReductionJIT.h"
@@ -31,6 +33,15 @@ namespace {
 
 bool use_multithreaded_reduction(const size_t entry_count) {
   return entry_count > 100000;
+}
+
+size_t baseline_reduction_entry_count(const size_t source_entry_count) {
+  CHECK_GT(source_entry_count, size_t(0));
+  constexpr size_t baseline_reduction_load_factor_denominator = 2;
+  CHECK_LE(
+      source_entry_count,
+      std::numeric_limits<size_t>::max() / baseline_reduction_load_factor_denominator);
+  return source_entry_count * baseline_reduction_load_factor_denominator;
 }
 
 size_t get_row_qw_count(const QueryMemoryDescriptor& query_mem_desc) {
@@ -122,9 +133,9 @@ void run_reduction_code(const size_t executor_id,
                         const ReductionCode& reduction_code,
                         int8_t* this_buff,
                         const int8_t* that_buff,
-                        const int32_t start_entry_index,
-                        const int32_t end_entry_index,
-                        const int32_t that_entry_count,
+                        const size_t start_entry_index,
+                        const size_t end_entry_index,
+                        const size_t that_entry_count,
                         const void* this_qmd,
                         const void* that_qmd,
                         const void* serialized_varlen_buffer) {
@@ -132,9 +143,9 @@ void run_reduction_code(const size_t executor_id,
   if (reduction_code.func_ptr) {
     err = reduction_code.func_ptr(this_buff,
                                   that_buff,
-                                  start_entry_index,
-                                  end_entry_index,
-                                  that_entry_count,
+                                  static_cast<int64_t>(start_entry_index),
+                                  static_cast<int64_t>(end_entry_index),
+                                  static_cast<int64_t>(that_entry_count),
                                   this_qmd,
                                   that_qmd,
                                   serialized_varlen_buffer);
@@ -406,9 +417,13 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
   auto that_crt_col_ptr = get_cols_ptr(that_buff, query_mem_desc_);
   auto executor = Executor::getExecutor(executor_id);
   CHECK(executor);
+  size_t init_agg_val_idx = 0;
   for (size_t target_idx = 0; target_idx < targets_.size(); ++target_idx) {
     const auto& agg_info = targets_[target_idx];
     const auto& slots_for_col = col_slot_context.getSlotsForCol(target_idx);
+    const bool target_is_groupby = query_mem_desc_.targetGroupbyIndicesSize() > 0 &&
+                                   query_mem_desc_.getTargetGroupbyIndex(target_idx) >= 0;
+    const auto target_init_base_idx = init_agg_val_idx;
 
     bool two_slot_target{false};
     if (agg_info.is_agg &&
@@ -465,7 +480,7 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
                       agg_info,
                       target_idx,
                       target_slot_idx,
-                      target_slot_idx,
+                      target_init_base_idx + target_slot_idx - slots_for_col.front(),
                       that,
                       slots_for_col.front(),
                       serialized_varlen_buffer);
@@ -479,6 +494,9 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
         that_crt_col_ptr = advance_to_next_columnar_target_buff(
             that_crt_col_ptr, query_mem_desc_, target_slot_idx + 1);
       }
+    }
+    if (!target_is_groupby) {
+      init_agg_val_idx = advance_slot(init_agg_val_idx, agg_info, false);
     }
   }
 }
@@ -568,7 +586,16 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
               slot_idx += 2;
               length_to_elems = 4;
             }
-            CHECK_LT(static_cast<size_t>(offset), serialized_varlen_buffer.size());
+            if (offset == -1) {
+              *reinterpret_cast<int64_t*>(ptr1) = 0;
+              *reinterpret_cast<int64_t*>(ptr2) = 0;
+              continue;
+            }
+            if (offset < 0 ||
+                static_cast<uint64_t>(offset) >= serialized_varlen_buffer.size()) {
+              throw std::runtime_error(
+                  "Serialized ResultSet aggregate varlen index is out of range");
+            }
             const auto& varlen_bytes_str = serialized_varlen_buffer[offset++];
             const auto str_ptr =
                 reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
@@ -579,14 +606,24 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
                 static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
           }
         } else {
-          CHECK_LT(static_cast<size_t>(offset), serialized_varlen_buffer.size());
-          const auto& varlen_bytes_str = serialized_varlen_buffer[offset];
-          const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
-          CHECK(ptr1);
-          *reinterpret_cast<int64_t*>(ptr1) = reinterpret_cast<const int64_t>(str_ptr);
-          CHECK(ptr2);
-          *reinterpret_cast<int64_t*>(ptr2) =
-              static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
+          if (offset == -1) {
+            *reinterpret_cast<int64_t*>(ptr1) = 0;
+            *reinterpret_cast<int64_t*>(ptr2) = 0;
+          } else {
+            if (offset < 0 ||
+                static_cast<uint64_t>(offset) >= serialized_varlen_buffer.size()) {
+              throw std::runtime_error(
+                  "Serialized ResultSet aggregate varlen index is out of range");
+            }
+            const auto& varlen_bytes_str = serialized_varlen_buffer[offset];
+            const auto str_ptr =
+                reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
+            CHECK(ptr1);
+            *reinterpret_cast<int64_t*>(ptr1) = reinterpret_cast<const int64_t>(str_ptr);
+            CHECK(ptr2);
+            *reinterpret_cast<int64_t*>(ptr2) =
+                static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
+          }
         }
       }
 
@@ -604,7 +641,7 @@ namespace {
 #define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
 
 GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffer,
-                                                           const uint32_t h,
+                                                           const size_t h,
                                                            const int64_t* key,
                                                            const uint32_t key_qw_count,
                                                            const size_t entry_count) {
@@ -630,18 +667,18 @@ GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffe
 #undef mapd_cas
 
 // TODO(alex): fix synchronization when we enable it
-GroupValueInfo get_group_value_columnar_reduction(
-    int64_t* groups_buffer,
-    const uint32_t groups_buffer_entry_count,
-    const int64_t* key,
-    const uint32_t key_qw_count) {
-  uint32_t h = key_hash(key, key_qw_count, sizeof(int64_t)) % groups_buffer_entry_count;
+GroupValueInfo get_group_value_columnar_reduction(int64_t* groups_buffer,
+                                                  const size_t groups_buffer_entry_count,
+                                                  const int64_t* key,
+                                                  const uint32_t key_qw_count) {
+  size_t h =
+      MurmurHash64A(key, key_qw_count * sizeof(int64_t), 0) % groups_buffer_entry_count;
   auto matching_gvi = get_matching_group_value_columnar_reduction(
       groups_buffer, h, key, key_qw_count, groups_buffer_entry_count);
   if (matching_gvi.first) {
     return matching_gvi;
   }
-  uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
+  size_t h_probe = (h + 1) % groups_buffer_entry_count;
   while (h_probe != h) {
     matching_gvi = get_matching_group_value_columnar_reduction(
         groups_buffer, h_probe, key, key_qw_count, groups_buffer_entry_count);
@@ -655,21 +692,21 @@ GroupValueInfo get_group_value_columnar_reduction(
 
 #define cas_cst(ptr, expected, desired) \
   __atomic_compare_exchange_n(          \
-      ptr, expected, desired, false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
-#define store_cst(ptr, val) __atomic_store_n(ptr, val, __ATOMIC_SEQ_CST)
-#define load_cst(ptr) __atomic_load_n(ptr, __ATOMIC_SEQ_CST)
+      ptr, expected, desired, false, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE)
+#define store_cst(ptr, val) __atomic_store_n(ptr, val, __ATOMIC_RELEASE)
+#define load_cst(ptr) __atomic_load_n(ptr, __ATOMIC_ACQUIRE)
 
 template <typename T = int64_t>
 GroupValueInfo get_matching_group_value_reduction(
     int64_t* groups_buffer,
-    const uint32_t h,
+    const size_t h,
     const T* key,
     const uint32_t key_count,
     const QueryMemoryDescriptor& query_mem_desc,
     const int64_t* that_buff_i64,
     const size_t that_entry_idx,
     const size_t that_entry_count,
-    const uint32_t row_size_quad) {
+    const size_t row_size_quad) {
   auto off = h * row_size_quad;
   T empty_key = get_empty_key<T>();
   T write_pending = get_empty_key<T>() - 1;
@@ -690,6 +727,9 @@ GroupValueInfo get_matching_group_value_reduction(
     return {groups_buffer + off + slot_off_quad, true};
   }
   while (load_cst(row_ptr) == write_pending) {
+    if (UNLIKELY(check_interrupt())) {
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
+    }
     // spin until the winning thread has finished writing the entire key and the init
     // value
   }
@@ -707,7 +747,7 @@ GroupValueInfo get_matching_group_value_reduction(
 
 inline GroupValueInfo get_matching_group_value_reduction(
     int64_t* groups_buffer,
-    const uint32_t h,
+    const size_t h,
     const int64_t* key,
     const uint32_t key_count,
     const size_t key_width,
@@ -715,7 +755,7 @@ inline GroupValueInfo get_matching_group_value_reduction(
     const int64_t* that_buff_i64,
     const size_t that_entry_idx,
     const size_t that_entry_count,
-    const uint32_t row_size_quad) {
+    const size_t row_size_quad) {
   switch (key_width) {
     case 4:
       return get_matching_group_value_reduction(groups_buffer,
@@ -747,7 +787,7 @@ inline GroupValueInfo get_matching_group_value_reduction(
 
 GroupValueInfo result_set::get_group_value_reduction(
     int64_t* groups_buffer,
-    const uint32_t groups_buffer_entry_count,
+    const size_t groups_buffer_entry_count,
     const int64_t* key,
     const uint32_t key_count,
     const size_t key_width,
@@ -755,8 +795,8 @@ GroupValueInfo result_set::get_group_value_reduction(
     const int64_t* that_buff_i64,
     const size_t that_entry_idx,
     const size_t that_entry_count,
-    const uint32_t row_size_quad) {
-  uint32_t h = key_hash(key, key_count, key_width) % groups_buffer_entry_count;
+    const size_t row_size_quad) {
+  size_t h = MurmurHash64A(key, key_count * key_width, 0) % groups_buffer_entry_count;
   auto matching_gvi = get_matching_group_value_reduction(groups_buffer,
                                                          h,
                                                          key,
@@ -770,8 +810,12 @@ GroupValueInfo result_set::get_group_value_reduction(
   if (matching_gvi.first) {
     return matching_gvi;
   }
-  uint32_t h_probe = (h + 1) % groups_buffer_entry_count;
+  size_t h_probe = (h + 1) % groups_buffer_entry_count;
+  size_t probe_count = 1;
   while (h_probe != h) {
+    if (UNLIKELY((++probe_count & 0xFFFF) == 0 && check_interrupt())) {
+      throw QueryExecutionError(ErrorCode::INTERRUPTED);
+    }
     matching_gvi = get_matching_group_value_reduction(groups_buffer,
                                                       h_probe,
                                                       key,
@@ -1021,15 +1065,21 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
                                     const size_t executor_id) {
   CHECK(!result_sets.empty());
   auto result_rs = result_sets.front();
+  // A GPU result may deliberately defer its host copy. CPU reduction must never use
+  // the placeholder storage as its destination.
+  result_rs->materializeDeviceColumnarCpuStorageIfNeeded();
   CHECK(result_rs->storage_);
   auto& first_result = *result_rs->storage_;
   auto result = &first_result;
   const auto row_set_mem_owner = result_rs->row_set_mem_owner_;
+  size_t first_result_set_to_reduce = 1;
   for (const auto result_set : result_sets) {
     CHECK_EQ(row_set_mem_owner, result_set->row_set_mem_owner_);
   }
   if (first_result.query_mem_desc_.getQueryDescriptionType() ==
       QueryDescriptionType::GroupByBaselineHash) {
+    // Compacted baseline sources can still contain duplicate keys across fragments,
+    // so reduce the first source through the same insertion path as the rest.
     const auto total_entry_count =
         std::accumulate(result_sets.begin(),
                         result_sets.end(),
@@ -1039,33 +1089,23 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
                         });
     CHECK(total_entry_count);
     auto query_mem_desc = first_result.query_mem_desc_;
-    query_mem_desc.setEntryCount(total_entry_count);
+    query_mem_desc.setEntryCount(baseline_reduction_entry_count(total_entry_count));
     rs_.reset(new ResultSet(first_result.targets_,
                             ExecutorDeviceType::CPU,
                             query_mem_desc,
                             row_set_mem_owner,
                             0,
                             0));
-    auto result_storage = rs_->allocateStorage(first_result.target_init_vals_);
+    rs_->allocateStorage(first_result.target_init_vals_);
     rs_->initializeStorage();
-    switch (query_mem_desc.getEffectiveKeyWidth()) {
-      case 4:
-        first_result.moveEntriesToBuffer<int32_t>(result_storage->getUnderlyingBuffer(),
-                                                  query_mem_desc.getEntryCount());
-        break;
-      case 8:
-        first_result.moveEntriesToBuffer<int64_t>(result_storage->getUnderlyingBuffer(),
-                                                  query_mem_desc.getEntryCount());
-        break;
-      default:
-        CHECK(false);
-    }
     result = rs_->storage_.get();
     result_rs = rs_.get();
+    first_result_set_to_reduce = 0;
   }
 
   auto& serialized_varlen_buffer = result_sets.front()->serialized_varlen_buffer_;
   if (!serialized_varlen_buffer.empty()) {
+    CHECK_EQ(first_result_set_to_reduce, size_t(1));
     result->rewriteAggregateBufferOffsets(serialized_varlen_buffer.front());
     for (auto result_it = result_sets.begin() + 1; result_it != result_sets.end();
          ++result_it) {
@@ -1081,18 +1121,24 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets,
                                       result_rs->getTargetInitVals(),
                                       executor_id);
   auto reduction_code = reduction_jit.codegen();
-  size_t ctr = 1;
-  for (auto result_it = result_sets.begin() + 1; result_it != result_sets.end();
+  size_t ctr = first_result_set_to_reduce;
+  for (auto result_it = result_sets.begin() + first_result_set_to_reduce;
+       result_it != result_sets.end();
        ++result_it) {
+    const auto* source_storage = (*result_it)->getStorage();
+    CHECK(source_storage);
     if (!serialized_varlen_buffer.empty()) {
-      result->reduce(*((*result_it)->storage_),
-                     serialized_varlen_buffer[ctr++],
-                     reduction_code,
-                     executor_id);
+      result->reduce(
+          *source_storage, serialized_varlen_buffer[ctr++], reduction_code, executor_id);
     } else {
-      result->reduce(*((*result_it)->storage_), {}, reduction_code, executor_id);
+      result->reduce(*source_storage, {}, reduction_code, executor_id);
     }
   }
+  // CPU reduction mutates the returned storage. Any retained device representation
+  // describes the pre-reduction rows and must not be exposed to a downstream GPU step.
+  result_rs->clearDeviceColumnarBufferFragments();
+  result_rs->clearDeviceRowwiseBufferFragments();
+  result_rs->markDeviceColumnarCpuStorageValid();
   return result_rs;
 }
 
@@ -1569,6 +1615,14 @@ void ResultSetStorage::reduceOneSlot(
         auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
         if ((target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) &&
             !serialized_varlen_buffer.empty()) {
+          if (rhs_proj_col == -1) {
+            break;
+          }
+          if (rhs_proj_col < 0 ||
+              static_cast<uint64_t>(rhs_proj_col) >= serialized_varlen_buffer.size()) {
+            throw std::runtime_error(
+                "Serialized ResultSet aggregate varlen index is out of range");
+          }
           size_t length_to_elems{0};
           if (target_info.sql_type.is_geometry()) {
             // TODO: Assumes hard-coded sizes for geometry targets
@@ -1577,8 +1631,6 @@ void ResultSetStorage::reduceOneSlot(
             const auto& elem_ti = target_info.sql_type.get_elem_type();
             length_to_elems = target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
           }
-
-          CHECK_LT(static_cast<size_t>(rhs_proj_col), serialized_varlen_buffer.size());
           const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col];
           const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
           *reinterpret_cast<int64_t*>(this_ptr1) =

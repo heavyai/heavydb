@@ -8,6 +8,7 @@
 #include "Analyzer/Analyzer.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/Descriptors/InputDescriptors.h"
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
@@ -117,6 +118,10 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   std::vector<int64_t> col_sizes;
   std::vector<const int8_t*> input_str_dict_proxy_ptrs;
   std::optional<size_t> input_num_rows;
+  std::map<shared::TableKey, const TableFragments*> all_tables_fragments;
+  for (const auto& table_info : table_infos) {
+    all_tables_fragments.emplace(table_info.table_key, &table_info.info.fragments);
+  }
 
   int col_index = -1;
   // TODO: col_list_bufs are allocated on CPU memory, so UDTFs with column_list
@@ -137,23 +142,43 @@ ResultSetPtr TableFunctionExecutionContext::execute(
             return table_info.table_key == table_key;
           });
       CHECK(table_info_it != table_infos.end());
-      auto [col_buf, buf_elem_count] = ColumnFetcher::getOneColumnFragment(
-          executor,
-          *col_var,
-          table_info_it->info.fragments.front(),
-          device_type == ExecutorDeviceType::CPU ? Data_Namespace::MemoryLevel::CPU_LEVEL
-                                                 : Data_Namespace::MemoryLevel::GPU_LEVEL,
-          device_id,
-          device_allocator,
-          /*thread_idx=*/0,
-          chunks_owner,
-          column_fetcher.columnarized_table_cache_);
+      const auto memory_level = device_type == ExecutorDeviceType::CPU
+                                    ? Data_Namespace::MemoryLevel::CPU_LEVEL
+                                    : Data_Namespace::MemoryLevel::GPU_LEVEL;
+      const auto& column_key = col_var->getColumnKey();
+      const int8_t* col_buf{nullptr};
+      size_t buf_elem_count{0};
+      if (get_column_descriptor_maybe(column_key)) {
+        col_buf = column_fetcher.getAllTableColumnFragments(table_key,
+                                                            column_key.column_id,
+                                                            all_tables_fragments,
+                                                            memory_level,
+                                                            device_id,
+                                                            device_allocator,
+                                                            /*thread_idx=*/0);
+        for (const auto& fragment : table_info_it->info.fragments) {
+          buf_elem_count += fragment.getNumTuples();
+        }
+      } else {
+        const InputColDescriptor col_desc(column_key.column_id,
+                                          column_key.table_id,
+                                          column_key.db_id,
+                                          /*nest_level=*/0);
+        col_buf = column_fetcher.getResultSetColumn(&col_desc,
+                                                    memory_level,
+                                                    device_id,
+                                                    device_allocator,
+                                                    /*thread_idx=*/0,
+                                                    /*frag_id=*/-1);
+        for (const auto& fragment : table_info_it->info.fragments) {
+          buf_elem_count += fragment.getNumTuples();
+        }
+      }
       // We use the number of entries in the first column to be the number of rows to base
       // the output off of (optionally depending on the sizing parameter)
       if (!input_num_rows) {
         input_num_rows = (buf_elem_count > 0 ? buf_elem_count : 1);
       }
-
       int8_t* input_str_dict_proxy_ptr = nullptr;
       if (ti.is_subtype_dict_encoded_string()) {
         const auto input_string_dictionary_proxy = executor->getStringDictionaryProxy(
@@ -725,6 +750,8 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       ExecutorDeviceType::GPU,
       (allocated_output_row_count == 0 ? 1 : allocated_output_row_count),
       std::vector<std::vector<const int8_t*>>{col_buf_ptrs},
+      ColumnBufferLayouts{std::vector<ColumnBufferLayout>(col_buf_ptrs.size(),
+                                                          ColumnBufferLayout::Fragment)},
       std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
       row_set_mem_owner_,
       device_allocator,

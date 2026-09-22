@@ -62,17 +62,25 @@ class QueryExecutionContext : boost::noncopyable {
                         const shared::TableKey& outer_table_key,
                         const int64_t num_rows,
                         const std::vector<std::vector<const int8_t*>>& col_buffers,
+                        const ColumnBufferLayouts& col_buffer_layouts,
+                        const std::vector<std::vector<const int64_t*>>& selected_rowids,
                         const std::vector<std::vector<uint64_t>>& frag_offsets,
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                         const bool output_columnar,
                         const bool sort_on_gpu,
                         const size_t thread_idx,
-                        RenderInfo*);
+                        RenderInfo*,
+                        const bool defer_gpu_result_cpu_materialization);
 
   ResultSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
                          const QueryMemoryDescriptor& query_mem_desc) const;
 
   ResultSetPtr groupBufferToResults(const size_t i) const;
+
+  void setDeferredLazyFetchChunks(
+      const DeferredLazyFetchChunks& deferred_lazy_fetch_chunks);
+  void setLazyFetchSourceMetadata(
+      const LazyFetchSourceMetadata& lazy_fetch_source_metadata);
 
   std::vector<int64_t*> launchGpuCode(const RelAlgExecutionUnit& ra_exe_unit,
                                       const CompilationResult& compilation_result,
@@ -87,6 +95,8 @@ class QueryExecutionContext : boost::noncopyable {
                                       const int device_id,
                                       int32_t* error_code,
                                       const uint32_t num_tables,
+                                      const bool with_dynamic_watchdog,
+                                      const unsigned dynamic_watchdog_time_limit,
                                       const bool allow_runtime_interrupt,
                                       const std::vector<int8_t*>& join_hash_tables,
                                       RenderAllocatorMap* render_allocator_map,
@@ -116,6 +126,11 @@ class QueryExecutionContext : boost::noncopyable {
   void copyColBuffersToDevice(
       int8_t* device_ptr,
       std::vector<std::vector<int8_t const*>> const& col_buffers) const;
+  size_t sizeofSelectedRowids(
+      std::vector<std::vector<int64_t const*>> const& selected_rowids) const;
+  void copySelectedRowidsToDevice(
+      int8_t* device_ptr,
+      std::vector<std::vector<int64_t const*>> const& selected_rowids) const;
 
   template <typename T>
   size_t sizeofFlattened2dVec(uint32_t const expected_subvector_size,
@@ -175,8 +190,10 @@ class QueryExecutionContext : boost::noncopyable {
   const ExecutorDispatchMode dispatch_mode_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const bool output_columnar_;
+  const bool defer_gpu_result_cpu_materialization_;
   std::unique_ptr<QueryMemoryInitializer> query_buffers_;
   mutable std::unique_ptr<ResultSet> estimator_result_set_;
+  std::vector<std::vector<const int64_t*>> selected_rowids_;
 
   friend class Executor;
   friend std::ostream& operator<<(std::ostream&, KernelParamsLog const&);
