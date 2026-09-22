@@ -19,6 +19,10 @@ size_t file_size(const int fd);
 
 void* checked_mmap(const int fd, const size_t sz);
 
+#ifdef __linux__
+void* checked_mremap(void* old_address, size_t old_size, size_t new_size);
+#endif
+
 void checked_munmap(void* addr, size_t length);
 
 int msync(void* addr, size_t length, bool async);
