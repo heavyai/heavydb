@@ -20,19 +20,25 @@ public final class HeavyDBParserOptions {
   private boolean isExplainDetail;
   private boolean isViewOptimizeEnabled;
   private boolean isWatchdogEnabled;
+  private boolean experimentalQueryRewritesEnabled;
+  private boolean trustUnenforcedTableConstraints;
 
   public HeavyDBParserOptions(List<FilterPushDownInfo> inFilterPushDownInfo,
           boolean inLegacySyntax,
           boolean inIsExplain,
           boolean inIsExplainDetail,
           boolean inIsViewOptimzeEnabled,
-          boolean inWatchdogEnabled) {
+          boolean inWatchdogEnabled,
+          boolean inExperimentalQueryRewritesEnabled,
+          boolean inTrustUnenforcedTableConstraints) {
     filterPushDownInfo = inFilterPushDownInfo;
     legacySyntax = inLegacySyntax;
     isExplain = inIsExplain;
     isExplainDetail = inIsExplainDetail;
     isViewOptimizeEnabled = inIsViewOptimzeEnabled;
     isWatchdogEnabled = inWatchdogEnabled;
+    experimentalQueryRewritesEnabled = inExperimentalQueryRewritesEnabled;
+    trustUnenforcedTableConstraints = inTrustUnenforcedTableConstraints;
   }
 
   public HeavyDBParserOptions() {
@@ -42,6 +48,8 @@ public final class HeavyDBParserOptions {
     isExplainDetail = false;
     isViewOptimizeEnabled = false;
     isWatchdogEnabled = false;
+    experimentalQueryRewritesEnabled = false;
+    trustUnenforcedTableConstraints = false;
   }
 
   /**
@@ -123,5 +131,23 @@ public final class HeavyDBParserOptions {
 
   public void setWatchdogEnabled(boolean isWatchdogEnabled) {
     this.isWatchdogEnabled = isWatchdogEnabled;
+  }
+
+  public boolean isExperimentalQueryRewritesEnabled() {
+    return experimentalQueryRewritesEnabled;
+  }
+
+  public void setExperimentalQueryRewritesEnabled(
+          boolean experimentalQueryRewritesEnabled) {
+    this.experimentalQueryRewritesEnabled = experimentalQueryRewritesEnabled;
+  }
+
+  public boolean trustUnenforcedTableConstraints() {
+    return trustUnenforcedTableConstraints;
+  }
+
+  public void setTrustUnenforcedTableConstraints(
+          boolean trustUnenforcedTableConstraints) {
+    this.trustUnenforcedTableConstraints = trustUnenforcedTableConstraints;
   }
 }
