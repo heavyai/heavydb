@@ -3933,6 +3933,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          g_from_table_reordering,
                          false,
                          std::numeric_limits<size_t>::max(),
+                         0,
                          ExecutorType::Native,
                          outer_fragment_indices};
 
@@ -5017,6 +5018,41 @@ OptimizeTableStmt::OptimizeTableStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_);
 }
 
+std::string OptimizeTableStmt::storageCompressionRewriteOption() const {
+  for (const auto& e : options_) {
+    if (!boost::iequals(*(e->get_name()), "STORAGE_COMPRESSION") &&
+        !boost::iequals(*(e->get_name()), "NATIVE_STORAGE_COMPRESSION")) {
+      continue;
+    }
+    const auto literal = dynamic_cast<const StringLiteral*>(e->get_value());
+    if (!literal) {
+      throw std::runtime_error("STORAGE_COMPRESSION must be a string parameter.");
+    }
+    const auto storage_compression = literal->get_stringval();
+    CHECK(storage_compression);
+    const auto value = boost::to_lower_copy<std::string>(*storage_compression);
+    if (value == "rewrite" || value == "current") {
+      return "current";
+    }
+    if (value == "true" || value == "1") {
+      return "enabled";
+    }
+    if (value == "lz4" || value == "snappy" || value == "gdeflate" ||
+        value == "bitcomp" || value == "bitcomp-sparse" || value == "bitcomp-default" ||
+        value == "adaptive" || value == "auto" || value == "none") {
+      return value;
+    }
+    if (value == "false" || value == "0") {
+      return {};
+    }
+    throw std::runtime_error(
+        "STORAGE_COMPRESSION must be REWRITE, CURRENT, LZ4, SNAPPY, GDEFLATE, "
+        "BITCOMP, BITCOMP-SPARSE, BITCOMP-DEFAULT, ADAPTIVE, AUTO, TRUE, FALSE, "
+        "or NONE.");
+  }
+  return {};
+}
+
 namespace {
 bool user_can_access_table(const Catalog_Namespace::SessionInfo& session_info,
                            const TableDescriptor* td,
@@ -5060,10 +5096,55 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   const TableOptimizer optimizer(td, executor, catalog);
-  if (shouldVacuumDeletedRows()) {
+  const bool vacuum_deleted_rows = shouldVacuumDeletedRows();
+  const auto storage_compression_option = storageCompressionRewriteOption();
+  const bool rewrite_storage_payloads = !storage_compression_option.empty();
+  auto compression_config = File_Namespace::configured_native_storage_compression();
+  if (storage_compression_option == "none") {
+    compression_config = {false, "none", 0};
+  } else if (storage_compression_option == "enabled") {
+    if (!compression_config.enabled || boost::iequals(compression_config.codec, "none")) {
+      throw std::runtime_error(
+          "OPTIMIZE TABLE STORAGE_COMPRESSION=TRUE requires enabled native storage "
+          "compression with a configured codec.");
+    }
+  } else if (storage_compression_option == "lz4" ||
+             storage_compression_option == "snappy" ||
+             storage_compression_option == "gdeflate" ||
+             storage_compression_option == "bitcomp" ||
+             storage_compression_option == "bitcomp-sparse" ||
+             storage_compression_option == "bitcomp-default" ||
+             storage_compression_option == "adaptive" ||
+             storage_compression_option == "auto") {
+    compression_config = {true,
+                          storage_compression_option,
+                          File_Namespace::g_native_storage_compression_frame_size,
+                          File_Namespace::g_native_storage_compression_gdeflate_level};
+  }
+  if ((storage_compression_option == "lz4" || storage_compression_option == "snappy" ||
+       storage_compression_option == "gdeflate" ||
+       storage_compression_option == "bitcomp" ||
+       storage_compression_option == "bitcomp-sparse" ||
+       storage_compression_option == "bitcomp-default" ||
+       storage_compression_option == "adaptive" ||
+       storage_compression_option == "auto") &&
+      !File_Namespace::g_enable_native_storage_compression) {
+    throw std::runtime_error(
+        "OPTIMIZE TABLE with compressed STORAGE_COMPRESSION requires "
+        "--enable-native-storage-compression=true.");
+  }
+  if (rewrite_storage_payloads) {
+    File_Namespace::validate_native_storage_compression_config(compression_config);
+  }
+  if (vacuum_deleted_rows) {
     optimizer.vacuumDeletedRows();
   }
-  optimizer.recomputeMetadata();
+  if (!rewrite_storage_payloads || vacuum_deleted_rows) {
+    optimizer.recomputeMetadata();
+  }
+  if (rewrite_storage_payloads) {
+    optimizer.rewriteStoragePayloads(compression_config);
+  }
 }
 
 bool repair_type(std::list<std::unique_ptr<NameValueAssign>>& options) {
