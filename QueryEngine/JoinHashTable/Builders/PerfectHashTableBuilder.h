@@ -122,6 +122,7 @@ class PerfectJoinHashTableBuilder {
           type_info,
           nullptr,
           -1,
+          -1,
           hash_entry_info.bucket_normalization};
       if (shard_count) {
         const size_t entries_per_shard = get_entries_per_shard(
@@ -148,6 +149,7 @@ class PerfectJoinHashTableBuilder {
           join_column,
           type_info,
           nullptr,
+          -1,
           -1,
           hash_entry_info.bucket_normalization,
           join_type == JoinType::WINDOW_FUNCTION_FRAMING};
@@ -202,10 +204,6 @@ class PerfectJoinHashTableBuilder {
                                                      executor->maxCpuSlabSize(),
                                                      hash_entry_info,
                                                      join_column.num_elems);
-    if (hash_table_entry_info.getNumKeys() == 0) {
-      VLOG(1) << "Stop building a hash table based on a column: an input table is empty";
-      return;
-    }
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
     const int thread_count = cpu_threads();
     {
@@ -235,6 +233,9 @@ class PerfectJoinHashTableBuilder {
       init_cpu_buff_threads.clear();
 #endif  // !HAVE_TBB
     }
+    if (hash_table_entry_info.getNumKeys() == 0) {
+      return;
+    }
     auto const for_semi_join = for_semi_anti_join(join_type);
     auto const use_bucketization = inner_col->get_type_info().get_type() == kDATE;
     auto translated_null_val = col_range.getIntMax() + 1;
@@ -258,6 +259,8 @@ class PerfectJoinHashTableBuilder {
         type_info,
         str_proxy_translation_map ? str_proxy_translation_map->data() : nullptr,
         str_proxy_translation_map ? str_proxy_translation_map->domainStart()
+                                  : 0,  // 0 is dummy value
+        str_proxy_translation_map ? str_proxy_translation_map->domainEnd()
                                   : 0,  // 0 is dummy value
         hash_entry_info.bucket_normalization};
     decltype(&fill_hash_join_buff) const hash_table_fill_func =
@@ -303,10 +306,6 @@ class PerfectJoinHashTableBuilder {
                                                      executor->maxCpuSlabSize(),
                                                      hash_entry_info,
                                                      join_column.num_elems);
-    if (hash_table_entry_info.getNumKeys() == 0) {
-      VLOG(1) << "Stop building a hash table based on a column: an input table is empty";
-      return;
-    }
     auto cpu_hash_table_buff = reinterpret_cast<int32_t*>(hash_table_->getCpuBuffer());
     int thread_count = cpu_threads();
     {
@@ -335,6 +334,9 @@ class PerfectJoinHashTableBuilder {
       }
 #endif  // !HAVE_TBB
     }
+    if (hash_table_entry_info.getNumKeys() == 0) {
+      return;
+    }
     auto timer_build = DEBUG_TIMER("Fill CPU One-To-Many Perfect Hash Table");
     auto const use_bucketization = inner_col->get_type_info().get_type() == kDATE;
     auto translated_null_val = col_range.getIntMax() + 1;
@@ -356,6 +358,7 @@ class PerfectJoinHashTableBuilder {
         str_proxy_translation_map ? str_proxy_translation_map->data() : nullptr,
         str_proxy_translation_map ? str_proxy_translation_map->domainStart()
                                   : 0 /*dummy*/,
+        str_proxy_translation_map ? str_proxy_translation_map->domainEnd() : 0 /*dummy*/,
         hash_entry_info.bucket_normalization,
         join_type == JoinType::WINDOW_FUNCTION_FRAMING};
     decltype(&fill_one_to_many_hash_table) const hash_table_fill_func =
