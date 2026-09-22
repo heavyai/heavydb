@@ -4,14 +4,19 @@
  */
 
 #include "RelAlgOptimizer.h"
+#include "Catalog/TableConstraints.h"
 #include "Logger/Logger.h"
 #include "RelAlgDag.h"
 #include "RexVisitor.h"
 #include "Visitors/RexSubQueryIdCollector.h"
 
 #include <numeric>
+#include <optional>
 #include <string>
 #include <unordered_map>
+
+bool g_enable_experimental_query_rewrites{false};
+bool g_trust_unenforced_table_constraints{false};
 
 namespace {
 
@@ -970,6 +975,525 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>> mark_live_colu
   return live_outs;
 }
 
+struct BaseColumnRef {
+  const RelScan* scan;
+  std::string column_name;
+  bool not_null;
+};
+
+std::optional<BaseColumnRef> resolve_base_column(const RelAlgNode* node,
+                                                 const size_t index) {
+  CHECK(node);
+  CHECK_LT(index, node->size());
+  if (auto scan = dynamic_cast<const RelScan*>(node)) {
+    const auto& catalog = scan->getCatalog();
+    const auto td = scan->getTableDescriptor();
+    const auto column_name = scan->getFieldName(index);
+    const auto cd = catalog.getMetadataForColumn(td->tableId, column_name);
+    if (!cd) {
+      return std::nullopt;
+    }
+    return BaseColumnRef{scan, column_name, cd->columnType.get_notnull()};
+  }
+  if (dynamic_cast<const RelFilter*>(node) || dynamic_cast<const RelSort*>(node)) {
+    return resolve_base_column(node->getInput(0), index);
+  }
+  if (auto project = dynamic_cast<const RelProject*>(node)) {
+    auto input = dynamic_cast<const RexInput*>(project->getProjectAt(index));
+    if (!input) {
+      return std::nullopt;
+    }
+    return resolve_base_column(input->getSourceNode(), input->getIndex());
+  }
+  if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+    if (index >= aggregate->getGroupByCount()) {
+      return std::nullopt;
+    }
+    return resolve_base_column(aggregate->getInput(0), index);
+  }
+  if (auto join = dynamic_cast<const RelJoin*>(node)) {
+    const auto lhs_size = join->getInput(0)->size();
+    if (index < lhs_size) {
+      return resolve_base_column(join->getInput(0), index);
+    }
+    return resolve_base_column(join->getInput(1), index - lhs_size);
+  }
+  return std::nullopt;
+}
+
+bool is_unfiltered_key_domain(const RelAlgNode* node) {
+  CHECK(node);
+  if (dynamic_cast<const RelScan*>(node)) {
+    return true;
+  }
+  if (dynamic_cast<const RelSort*>(node)) {
+    return is_unfiltered_key_domain(node->getInput(0));
+  }
+  if (auto project = dynamic_cast<const RelProject*>(node)) {
+    CHECK_EQ(size_t(1), project->inputCount());
+    for (size_t i = 0; i < project->size(); ++i) {
+      auto input = dynamic_cast<const RexInput*>(project->getProjectAt(i));
+      if (!input || input->getSourceNode() != project->getInput(0)) {
+        return false;
+      }
+    }
+    return is_unfiltered_key_domain(project->getInput(0));
+  }
+  if (auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+    return aggregate->getAggExprsCount() == 0 &&
+           aggregate->getGroupByCount() == aggregate->size() &&
+           is_unfiltered_key_domain(aggregate->getInput(0));
+  }
+  return false;
+}
+
+bool subtree_contains(const RelAlgNode* root, const RelAlgNode* needle) {
+  if (root == needle) {
+    return true;
+  }
+  for (size_t i = 0; i < root->inputCount(); ++i) {
+    if (subtree_contains(root->getInput(i), needle)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool collect_equi_input_pairs(
+    const RexScalar* condition,
+    std::vector<std::pair<const RexInput*, const RexInput*>>& pairs) {
+  const auto rex_op = dynamic_cast<const RexOperator*>(condition);
+  if (!rex_op) {
+    return false;
+  }
+  if (rex_op->getOperator() == kAND) {
+    for (size_t i = 0; i < rex_op->size(); ++i) {
+      if (!collect_equi_input_pairs(rex_op->getOperand(i), pairs)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (rex_op->getOperator() != kEQ || rex_op->size() != 2) {
+    return false;
+  }
+  const auto lhs = dynamic_cast<const RexInput*>(rex_op->getOperand(0));
+  const auto rhs = dynamic_cast<const RexInput*>(rex_op->getOperand(1));
+  if (!lhs || !rhs) {
+    return false;
+  }
+  pairs.emplace_back(lhs, rhs);
+  return true;
+}
+
+using ColumnRefPair = std::pair<BaseColumnRef, BaseColumnRef>;
+
+bool matches_foreign_key(const std::vector<ColumnRefPair>& fk_to_ref_pairs) {
+  if (fk_to_ref_pairs.empty()) {
+    return false;
+  }
+  const auto fk_scan = fk_to_ref_pairs.front().first.scan;
+  const auto ref_scan = fk_to_ref_pairs.front().second.scan;
+  for (const auto& [fk_col, ref_col] : fk_to_ref_pairs) {
+    if (fk_col.scan != fk_scan || ref_col.scan != ref_scan || !fk_col.not_null) {
+      return false;
+    }
+  }
+
+  const auto fk_td = fk_scan->getTableDescriptor();
+  const auto ref_td = ref_scan->getTableDescriptor();
+  const auto& catalog = fk_scan->getCatalog();
+  for (const auto& constraint : catalog.getTableConstraints(fk_td)) {
+    if (constraint.type != Catalog_Namespace::TableConstraintType::ForeignKey ||
+        !Catalog_Namespace::table_constraint_is_trusted(
+            constraint, g_trust_unenforced_table_constraints) ||
+        !constraint.foreign_key_reference ||
+        constraint.column_names.size() != fk_to_ref_pairs.size()) {
+      continue;
+    }
+    const auto& reference = *constraint.foreign_key_reference;
+    if (reference.table_name != ref_td->tableName ||
+        reference.column_names.size() != fk_to_ref_pairs.size()) {
+      continue;
+    }
+    bool all_columns_match = true;
+    for (size_t i = 0; i < constraint.column_names.size(); ++i) {
+      const auto pair_it = std::find_if(
+          fk_to_ref_pairs.begin(), fk_to_ref_pairs.end(), [&](const auto& pair) {
+            return pair.first.column_name == constraint.column_names[i] &&
+                   pair.second.column_name == reference.column_names[i];
+          });
+      if (pair_it == fk_to_ref_pairs.end()) {
+        all_columns_match = false;
+        break;
+      }
+    }
+    if (all_columns_match) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool right_side_outputs_are_dead(
+    const RelJoin* join,
+    const std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>>& live_outs) {
+  const auto live_it = live_outs.find(join);
+  if (live_it == live_outs.end()) {
+    return false;
+  }
+  const auto lhs_size = join->getInput(0)->size();
+  for (const auto live_idx : live_it->second) {
+    if (live_idx >= lhs_size) {
+      return false;
+    }
+  }
+  return true;
+}
+
+using IndexMap = std::unordered_map<size_t, size_t>;
+using NodeIndexMap = std::unordered_map<const RelAlgNode*, IndexMap>;
+
+std::unordered_map<const RelAlgNode*, size_t> collect_node_sizes(
+    const std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  std::unordered_map<const RelAlgNode*, size_t> node_sizes;
+  for (const auto& node : nodes) {
+    node_sizes.emplace(node.get(), node->size());
+  }
+  return node_sizes;
+}
+
+IndexMap make_preserved_prefix_map(const size_t old_size, const size_t new_size) {
+  CHECK_LE(new_size, old_size);
+  IndexMap map;
+  for (size_t i = 0; i < new_size; ++i) {
+    map.emplace(i, i);
+  }
+  return map;
+}
+
+size_t mapped_size(const IndexMap& map) {
+  size_t size = 0;
+  for (const auto& [_, new_idx] : map) {
+    size = std::max(size, new_idx + 1);
+  }
+  return size;
+}
+
+bool is_identity_map(const IndexMap& map, const size_t old_size) {
+  if (map.size() != old_size) {
+    return false;
+  }
+  for (size_t i = 0; i < old_size; ++i) {
+    auto it = map.find(i);
+    if (it == map.end() || it->second != i) {
+      return false;
+    }
+  }
+  return true;
+}
+
+void add_input_output_mapping(
+    IndexMap& node_map,
+    const RelAlgNode* input,
+    const size_t old_base,
+    const size_t new_base,
+    const std::unordered_map<const RelAlgNode*, size_t>& old_node_sizes,
+    const NodeIndexMap& input_maps) {
+  auto input_map_it = input_maps.find(input);
+  if (input_map_it != input_maps.end()) {
+    for (const auto& [old_idx, new_idx] : input_map_it->second) {
+      node_map.emplace(old_base + old_idx, new_base + new_idx);
+    }
+    return;
+  }
+
+  auto old_size_it = old_node_sizes.find(input);
+  CHECK(old_size_it != old_node_sizes.end());
+  for (size_t i = 0; i < old_size_it->second; ++i) {
+    node_map.emplace(old_base + i, new_base + i);
+  }
+}
+
+IndexMap compute_shape_preserving_output_map(
+    const RelAlgNode* node,
+    const std::unordered_map<const RelAlgNode*, size_t>& old_node_sizes,
+    const NodeIndexMap& input_maps) {
+  CHECK(node);
+  CHECK(!does_redef_cols(node));
+  CHECK(!dynamic_cast<const RelScan*>(node));
+
+  IndexMap node_map;
+  size_t old_base = 0;
+  size_t new_base = 0;
+  for (size_t i = 0; i < node->inputCount(); ++i) {
+    auto input = node->getInput(i);
+    add_input_output_mapping(
+        node_map, input, old_base, new_base, old_node_sizes, input_maps);
+
+    auto old_size_it = old_node_sizes.find(input);
+    CHECK(old_size_it != old_node_sizes.end());
+    old_base += old_size_it->second;
+
+    auto input_map_it = input_maps.find(input);
+    new_base += input_map_it == input_maps.end() ? input->size()
+                                                 : mapped_size(input_map_it->second);
+  }
+  return node_map;
+}
+
+IndexMap compute_output_map_after_input_replacement(
+    const RelAlgNode* node,
+    const RelAlgNode* old_input,
+    const size_t new_input_size,
+    const std::unordered_map<const RelAlgNode*, size_t>& old_node_sizes) {
+  if (does_redef_cols(node) || dynamic_cast<const RelCompound*>(node)) {
+    auto node_size_it = old_node_sizes.find(node);
+    CHECK(node_size_it != old_node_sizes.end());
+    return make_preserved_prefix_map(node_size_it->second, node_size_it->second);
+  }
+
+  NodeIndexMap input_maps;
+  auto old_input_size_it = old_node_sizes.find(old_input);
+  CHECK(old_input_size_it != old_node_sizes.end());
+  input_maps.emplace(
+      old_input, make_preserved_prefix_map(old_input_size_it->second, new_input_size));
+  return compute_shape_preserving_output_map(node, old_node_sizes, input_maps);
+}
+
+class RexInputRebindRenumberVisitor : public RexVisitor<void*> {
+ public:
+  RexInputRebindRenumberVisitor(const RelAlgNode* old_input,
+                                const RelAlgNode* new_input,
+                                const IndexMap& old_to_new_index)
+      : old_input_(old_input)
+      , new_input_(new_input)
+      , old_to_new_index_(old_to_new_index) {}
+
+  void* visitInput(const RexInput* rex_input) const override {
+    if (rex_input->getSourceNode() == old_input_) {
+      auto index_it = old_to_new_index_.find(rex_input->getIndex());
+      CHECK(index_it != old_to_new_index_.end());
+      rex_input->setSourceNode(new_input_);
+      rex_input->setIndex(index_it->second);
+    }
+    return nullptr;
+  }
+
+ private:
+  const RelAlgNode* old_input_;
+  const RelAlgNode* new_input_;
+  const IndexMap& old_to_new_index_;
+};
+
+void visit_rex_scalars(RelAlgNode* node, const RexVisitor<void*>& visitor) {
+  if (auto project = dynamic_cast<RelProject*>(node)) {
+    for (size_t i = 0; i < project->size(); ++i) {
+      visitor.visit(project->getProjectAt(i));
+    }
+    return;
+  }
+  if (auto filter = dynamic_cast<RelFilter*>(node)) {
+    visitor.visit(filter->getCondition());
+    return;
+  }
+  if (auto join = dynamic_cast<RelJoin*>(node)) {
+    if (auto condition = join->getCondition()) {
+      visitor.visit(condition);
+    }
+    return;
+  }
+  if (auto compound = dynamic_cast<RelCompound*>(node)) {
+    if (auto filter_expr = compound->getFilterExpr()) {
+      visitor.visit(filter_expr);
+    }
+    for (size_t i = 0; i < compound->getScalarSourcesSize(); ++i) {
+      visitor.visit(compound->getScalarSource(i));
+    }
+    return;
+  }
+}
+
+std::unordered_map<size_t, size_t> strict_input_map_for_node(
+    const RelAlgNode* input,
+    const NodeIndexMap& node_maps) {
+  auto map_it = node_maps.find(input);
+  CHECK(map_it != node_maps.end());
+  return map_it->second;
+}
+
+void renumber_sort_input(RelSort* sort, const IndexMap& input_map) {
+  std::vector<SortField> new_collations;
+  for (size_t i = 0; i < sort->collationCount(); ++i) {
+    const auto old_field = sort->getCollation(i);
+    auto field_it = input_map.find(old_field.getField());
+    CHECK(field_it != input_map.end());
+    new_collations.emplace_back(
+        field_it->second, old_field.getSortDir(), old_field.getNullsPosition());
+  }
+  sort->setCollation(std::move(new_collations));
+}
+
+void renumber_aggregate_input(RelAggregate* aggregate, const IndexMap& input_map) {
+  for (size_t i = 0; i < aggregate->getGroupByCount(); ++i) {
+    auto group_it = input_map.find(i);
+    CHECK(group_it != input_map.end());
+    CHECK_EQ(i, group_it->second);
+  }
+  for (const auto& agg_expr : aggregate->getAggExprs()) {
+    for (size_t i = 0; i < agg_expr->size(); ++i) {
+      CHECK(input_map.count(agg_expr->getOperand(i)));
+    }
+  }
+  auto old_exprs = aggregate->getAggExprsAndRelease();
+  auto new_exprs = renumber_rex_aggs(old_exprs, input_map);
+  aggregate->setAggExprs(new_exprs);
+}
+
+void rebind_node_input_with_map(RelAlgNode* node,
+                                std::shared_ptr<const RelAlgNode> old_input,
+                                std::shared_ptr<const RelAlgNode> new_input,
+                                const IndexMap& old_to_new_index) {
+  if (auto sort = dynamic_cast<RelSort*>(node)) {
+    renumber_sort_input(sort, old_to_new_index);
+  } else if (auto aggregate = dynamic_cast<RelAggregate*>(node)) {
+    renumber_aggregate_input(aggregate, old_to_new_index);
+  } else {
+    RexInputRebindRenumberVisitor visitor(
+        old_input.get(), new_input.get(), old_to_new_index);
+    visit_rex_scalars(node, visitor);
+  }
+  node->RelAlgNode::replaceInput(std::move(old_input), std::move(new_input));
+}
+
+void renumber_node_inputs(RelAlgNode* node, const NodeIndexMap& node_maps) {
+  RexInputRenumberVisitor renumberer(node_maps);
+  if (auto project = dynamic_cast<RelProject*>(node)) {
+    auto old_exprs = project->getExpressionsAndRelease();
+    std::vector<std::unique_ptr<const RexScalar>> new_exprs;
+    for (auto& expr : old_exprs) {
+      new_exprs.push_back(renumberer.visit(expr.get()));
+    }
+    project->setExpressions(new_exprs);
+    return;
+  }
+  if (auto filter = dynamic_cast<RelFilter*>(node)) {
+    auto new_condition = renumberer.visit(filter->getCondition());
+    filter->setCondition(new_condition);
+    return;
+  }
+  if (auto join = dynamic_cast<RelJoin*>(node)) {
+    if (join->getCondition()) {
+      auto new_condition = renumberer.visit(join->getCondition());
+      join->setCondition(new_condition);
+    }
+    return;
+  }
+  if (auto sort = dynamic_cast<RelSort*>(node)) {
+    renumber_sort_input(sort, strict_input_map_for_node(sort->getInput(0), node_maps));
+    return;
+  }
+  if (auto aggregate = dynamic_cast<RelAggregate*>(node)) {
+    renumber_aggregate_input(
+        aggregate, strict_input_map_for_node(aggregate->getInput(0), node_maps));
+    return;
+  }
+  if (auto compound = dynamic_cast<RelCompound*>(node)) {
+    if (compound->getFilterExpr()) {
+      auto new_filter = renumberer.visit(compound->getFilterExpr());
+      compound->setFilterExpr(new_filter);
+    }
+    std::vector<std::unique_ptr<const RexScalar>> new_sources;
+    for (size_t i = 0; i < compound->getScalarSourcesSize(); ++i) {
+      new_sources.push_back(renumberer.visit(compound->getScalarSource(i)));
+    }
+    compound->setScalarSources(new_sources);
+  }
+}
+
+void propagate_output_renumbering(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes,
+    const std::unordered_map<const RelAlgNode*, size_t>& old_node_sizes,
+    NodeIndexMap node_maps,
+    const std::unordered_set<const RelAlgNode*>& already_rewritten) {
+  std::unordered_set<const RelAlgNode*> rewritten = already_rewritten;
+  bool changed = false;
+  do {
+    changed = false;
+    for (auto& node_owner : nodes) {
+      auto node = node_owner.get();
+      if (!node || node_maps.count(node) || rewritten.count(node)) {
+        continue;
+      }
+
+      bool has_renumbered_input = false;
+      for (size_t i = 0; i < node->inputCount(); ++i) {
+        has_renumbered_input |= node_maps.count(node->getInput(i)) > 0;
+      }
+      if (!has_renumbered_input) {
+        continue;
+      }
+
+      renumber_node_inputs(node, node_maps);
+      rewritten.insert(node);
+      if (!does_redef_cols(node) && !dynamic_cast<const RelCompound*>(node)) {
+        auto node_map =
+            compute_shape_preserving_output_map(node, old_node_sizes, node_maps);
+        auto old_size_it = old_node_sizes.find(node);
+        CHECK(old_size_it != old_node_sizes.end());
+        if (!is_identity_map(node_map, old_size_it->second)) {
+          node_maps.emplace(node, std::move(node_map));
+          changed = true;
+        }
+      }
+    }
+  } while (changed);
+}
+
+bool can_eliminate_right_fk_join(
+    const RelJoin* join,
+    const std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>>& live_outs) {
+  if (join->getJoinType() != JoinType::INNER || !join->getCondition() ||
+      !right_side_outputs_are_dead(join, live_outs)) {
+    return false;
+  }
+  const auto lhs = join->getInput(0);
+  const auto rhs = join->getInput(1);
+  if (!is_unfiltered_key_domain(rhs)) {
+    return false;
+  }
+
+  std::vector<std::pair<const RexInput*, const RexInput*>> input_pairs;
+  if (!collect_equi_input_pairs(join->getCondition(), input_pairs)) {
+    return false;
+  }
+
+  std::vector<ColumnRefPair> fk_to_ref_pairs;
+  for (const auto& [left_input, right_input] : input_pairs) {
+    const RexInput* fk_input = nullptr;
+    const RexInput* ref_input = nullptr;
+    if (subtree_contains(lhs, left_input->getSourceNode()) &&
+        subtree_contains(rhs, right_input->getSourceNode())) {
+      fk_input = left_input;
+      ref_input = right_input;
+    } else if (subtree_contains(lhs, right_input->getSourceNode()) &&
+               subtree_contains(rhs, left_input->getSourceNode())) {
+      fk_input = right_input;
+      ref_input = left_input;
+    } else {
+      return false;
+    }
+
+    auto fk_col = resolve_base_column(fk_input->getSourceNode(), fk_input->getIndex());
+    auto ref_col = resolve_base_column(ref_input->getSourceNode(), ref_input->getIndex());
+    if (!fk_col || !ref_col) {
+      return false;
+    }
+    fk_to_ref_pairs.emplace_back(std::move(*fk_col), std::move(*ref_col));
+  }
+  return matches_foreign_key(fk_to_ref_pairs);
+}
+
 std::string get_field_name(const RelAlgNode* node, size_t index) {
   CHECK_LT(index, node->size());
   if (auto scan = dynamic_cast<const RelScan*>(node)) {
@@ -1146,8 +1670,10 @@ void propagate_input_renumbering(
       auto new_exprs = renumber_rex_aggs(old_exprs, src_it->second);
       aggregate->setAggExprs(new_exprs);
     } else if (auto join = dynamic_cast<RelJoin*>(node)) {
-      auto new_condition = renumberer.visit(join->getCondition());
-      join->setCondition(new_condition);
+      if (join->getCondition()) {
+        auto new_condition = renumberer.visit(join->getCondition());
+        join->setCondition(new_condition);
+      }
     } else if (auto filter = dynamic_cast<RelFilter*>(node)) {
       auto new_condition = renumberer.visit(filter->getCondition());
       filter->setCondition(new_condition);
@@ -1185,6 +1711,56 @@ void propagate_input_renumbering(
 }
 
 }  // namespace
+
+void eliminate_lossless_fk_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  if (nodes.empty()) {
+    return;
+  }
+
+  auto sink = nodes.back();
+  bool changed = false;
+  do {
+    changed = false;
+    auto live_outs = mark_live_columns(nodes);
+    auto web = build_du_web(nodes);
+    auto old_node_sizes = collect_node_sizes(nodes);
+    for (auto& node : nodes) {
+      auto join = std::dynamic_pointer_cast<RelJoin>(node);
+      if (!join || !can_eliminate_right_fk_join(join.get(), live_outs)) {
+        continue;
+      }
+      auto users_it = web.find(join.get());
+      if (users_it == web.end() || users_it->second.empty()) {
+        continue;
+      }
+
+      auto kept_input = join->getAndOwnInput(0);
+      const auto removed_to_kept_map =
+          make_preserved_prefix_map(join->size(), kept_input->size());
+      NodeIndexMap changed_node_maps;
+      std::unordered_set<const RelAlgNode*> rewritten_users;
+      for (auto user : users_it->second) {
+        auto user_map = compute_output_map_after_input_replacement(
+            user, join.get(), kept_input->size(), old_node_sizes);
+        rebind_node_input_with_map(
+            const_cast<RelAlgNode*>(user), node, kept_input, removed_to_kept_map);
+        auto old_size_it = old_node_sizes.find(user);
+        CHECK(old_size_it != old_node_sizes.end());
+        if (!is_identity_map(user_map, old_size_it->second)) {
+          changed_node_maps.emplace(user, std::move(user_map));
+        }
+        rewritten_users.insert(user);
+      }
+      propagate_output_renumbering(
+          nodes, old_node_sizes, std::move(changed_node_maps), rewritten_users);
+      changed = true;
+      break;
+    }
+    if (changed) {
+      cleanup_dead_nodes(nodes);
+    }
+  } while (changed);
+}
 
 void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   if (nodes.empty()) {
