@@ -54,6 +54,8 @@ struct TOptimizationOption {
   1: bool is_view_optimize;
   2: bool enable_watchdog;
   3: list<TFilterPushDownInfo> filter_push_down_info;
+  4: bool enable_experimental_query_rewrites;
+  5: bool trust_unenforced_table_constraints;
 }
 
 service CalciteServer {
