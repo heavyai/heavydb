@@ -18,6 +18,7 @@
 #include <llvm/IR/Value.h>
 
 #include <cstdint>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -34,7 +35,9 @@ class InValuesBitmap {
                  const int64_t null_val,
                  const Data_Namespace::MemoryLevel memory_level,
                  Executor* executor,
-                 CompilationOptions const& co);
+                 CompilationOptions const& co,
+                 std::optional<int64_t> alternate_null_val = std::nullopt,
+                 std::optional<int64_t> dict_entry_count = std::nullopt);
   ~InValuesBitmap();
 
   llvm::Value* codegen(llvm::Value* needle, Executor* executor) const;
@@ -58,6 +61,8 @@ class InValuesBitmap {
  private:
   std::unordered_map<int, int8_t*> bitsets_per_devices_;
   bool rhs_has_null_;
+  const std::optional<int64_t> alternate_null_val_;
+  const std::optional<int64_t> dict_entry_count_;
   int64_t min_val_;
   int64_t max_val_;
   const int64_t null_val_;
