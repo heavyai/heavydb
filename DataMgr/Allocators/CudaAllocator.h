@@ -12,11 +12,15 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <memory>
+#include <vector>
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
+using CudaReadyEventHandle = CUevent;
 #else
 #include <Shared/nocuda.h>
+using CudaReadyEventHandle = void*;
 #endif
 
 #include "DataMgr/Allocators/DeviceAllocator.h"
@@ -27,6 +31,26 @@ class DataMgr;
 }  // namespace Data_Namespace
 
 class RenderAllocator;
+class CudaReadyEventPool;
+
+class CudaStreamReadyEvent {
+ public:
+  CudaStreamReadyEvent(std::shared_ptr<CudaReadyEventPool> event_pool, int device_id);
+  ~CudaStreamReadyEvent();
+
+  CudaStreamReadyEvent(const CudaStreamReadyEvent&) = delete;
+  CudaStreamReadyEvent& operator=(const CudaStreamReadyEvent&) = delete;
+  CudaStreamReadyEvent(CudaStreamReadyEvent&&) = delete;
+  CudaStreamReadyEvent& operator=(CudaStreamReadyEvent&&) = delete;
+
+  CudaReadyEventHandle event() const { return event_; }
+  int deviceId() const { return device_id_; }
+
+ private:
+  std::shared_ptr<CudaReadyEventPool> event_pool_;
+  int device_id_;
+  CudaReadyEventHandle event_;
+};
 
 class CudaAllocator : public DeviceAllocator {
  public:
@@ -35,6 +59,11 @@ class CudaAllocator : public DeviceAllocator {
                 CUstream cuda_stream);
 
   ~CudaAllocator() override;
+
+  CudaAllocator(const CudaAllocator&) = delete;
+  CudaAllocator& operator=(const CudaAllocator&) = delete;
+  CudaAllocator(CudaAllocator&&) = delete;
+  CudaAllocator& operator=(CudaAllocator&&) = delete;
 
   static Data_Namespace::AbstractBuffer* allocGpuAbstractBuffer(
       Data_Namespace::DataMgr* data_mgr,
@@ -68,10 +97,20 @@ class CudaAllocator : public DeviceAllocator {
 
   Data_Namespace::DataMgr* getDataMgr() const { return data_mgr_; }
 
+  CUstream getCudaStream() const { return cuda_stream_; }
+
+  std::shared_ptr<CudaStreamReadyEvent> recordReadyEvent() const;
+
+  void waitForReadyEvent(std::shared_ptr<CudaStreamReadyEvent> ready_event) const;
+
+  size_t allocationCheckpoint() const { return owned_buffers_.size(); }
+  void rollbackAllocationsTo(size_t checkpoint) noexcept;
+
  private:
   std::vector<Data_Namespace::AbstractBuffer*> owned_buffers_;
 
   Data_Namespace::DataMgr* data_mgr_;
   int device_id_;
   CUstream cuda_stream_;
+  std::shared_ptr<CudaReadyEventPool> ready_event_pool_;
 };

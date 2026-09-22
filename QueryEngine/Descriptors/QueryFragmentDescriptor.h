@@ -24,6 +24,7 @@
 #include "DataMgr/ChunkMetadata.h"
 #include "Logger/Logger.h"
 #include "QueryEngine/CompilationOptions.h"
+#include "QueryEngine/enums.h"
 #include "Shared/DbObjectKeys.h"
 
 namespace Fragmenter_Namespace {
@@ -71,6 +72,9 @@ class QueryFragmentDescriptor {
                               const std::vector<uint64_t>& frag_offsets,
                               const std::set<int>& device_ids,
                               const ExecutorDeviceType& device_type,
+                              const heavyai::QueryDescriptionType query_description_type,
+                              const size_t max_kernel_input_rows,
+                              const bool uses_lazy_fetch,
                               const bool enable_multifrag_kernels,
                               const bool enable_inner_join_fragment_skipping,
                               Executor* executor);
@@ -128,6 +132,9 @@ class QueryFragmentDescriptor {
     }
   }
 
+  std::optional<size_t> getMaxKernelOutputRowCountEstimate(
+      const RelAlgExecutionUnit& ra_exe_unit) const;
+
   bool shouldCheckWorkUnitWatchdog() const {
     return rowid_lookup_key_ < 0 && !execution_kernels_per_device_.empty();
   }
@@ -145,25 +152,33 @@ class QueryFragmentDescriptor {
   std::map<size_t, size_t> tuple_count_per_device_;
   std::map<size_t, size_t> available_gpu_mem_bytes_;
 
-  void buildFragmentPerKernelMapForUnion(const RelAlgExecutionUnit& ra_exe_unit,
-                                         const std::vector<uint64_t>& frag_offsets,
-                                         const std::set<int>& device_ids,
-                                         const size_t num_bytes_for_row,
-                                         const ExecutorDeviceType& device_type,
-                                         Executor* executor);
+  void buildFragmentPerKernelMapForUnion(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::vector<uint64_t>& frag_offsets,
+      const std::set<int>& device_ids,
+      const size_t num_bytes_for_row,
+      const ExecutorDeviceType& device_type,
+      const heavyai::QueryDescriptionType query_description_type,
+      const size_t max_kernel_input_rows,
+      Executor* executor);
 
-  void buildFragmentPerKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
-                                 const std::vector<uint64_t>& frag_offsets,
-                                 const std::set<int>& device_ids,
-                                 const size_t num_bytes_for_row,
-                                 const ExecutorDeviceType& device_type,
-                                 Executor* executor);
+  void buildFragmentPerKernelMap(
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::vector<uint64_t>& frag_offsets,
+      const std::set<int>& device_ids,
+      const size_t num_bytes_for_row,
+      const ExecutorDeviceType& device_type,
+      const heavyai::QueryDescriptionType query_description_type,
+      const size_t max_kernel_input_rows,
+      const bool uses_lazy_fetch,
+      Executor* executor);
 
   void buildMultifragKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                                const std::vector<uint64_t>& frag_offsets,
                                const std::set<int>& device_ids,
                                const size_t num_bytes_for_row,
                                const ExecutorDeviceType& device_type,
+                               const heavyai::QueryDescriptionType query_description_type,
                                const bool enable_inner_join_fragment_skipping,
                                Executor* executor);
 
@@ -178,6 +193,9 @@ class QueryFragmentDescriptor {
       const ChunkMetadataVector& deleted_chunk_metadata_vec,
       const std::optional<size_t> table_desc_offset,
       const ExecutorDeviceType& device_type,
+      const heavyai::QueryDescriptionType query_description_type,
+      const size_t max_kernel_input_rows,
+      const bool uses_lazy_fetch,
       Executor* executor);
 
   bool terminateDispatchMaybe(size_t& tuple_count,
@@ -186,7 +204,9 @@ class QueryFragmentDescriptor {
 
   void checkDeviceMemoryUsage(const Fragmenter_Namespace::FragmentInfo& fragment,
                               const int device_id,
-                              const size_t num_cols);
+                              const size_t num_bytes_for_row,
+                              const heavyai::QueryDescriptionType query_description_type,
+                              const bool is_multifrag_kernel);
 };
 
 std::ostream& operator<<(std::ostream&, FragmentsPerTable const&);

@@ -4,6 +4,7 @@
  */
 
 #include "QueryMemoryInitializer.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "Logger/Logger.h"
@@ -26,29 +27,68 @@ struct AddNbytes {
   }
 };
 
-inline void check_total_bitmap_memory(const QueryMemoryDescriptor& query_mem_desc) {
-  const size_t groups_buffer_entry_count = query_mem_desc.getEntryCount();
-  checked_int64_t total_bytes_per_group = 0;
-  const size_t num_count_distinct_descs =
-      query_mem_desc.getCountDistinctDescriptorsSize();
-  for (size_t i = 0; i < num_count_distinct_descs; i++) {
-    const auto count_distinct_desc = query_mem_desc.getCountDistinctDescriptor(i);
-    if (count_distinct_desc.impl_type_ != CountDistinctImplType::Bitmap) {
+size_t available_buffer_memory_bytes(const Buffer_Namespace::MemoryInfo& memory_info) {
+  return Buffer_Namespace::get_reclaimable_size_bytes(memory_info);
+}
+
+size_t min_available_buffer_memory_bytes(const Executor* executor,
+                                         const ExecutorDeviceType device_type) {
+  CHECK(executor);
+  const auto memory_level = device_type == ExecutorDeviceType::GPU
+                                ? Data_Namespace::MemoryLevel::GPU_LEVEL
+                                : Data_Namespace::MemoryLevel::CPU_LEVEL;
+  const auto memory_info = executor->getDataMgr()->getMemoryInfo(memory_level);
+  if (memory_info.empty()) {
+    return std::numeric_limits<size_t>::max();
+  }
+
+  size_t min_available_bytes = std::numeric_limits<size_t>::max();
+  for (const auto& info : memory_info) {
+    min_available_bytes =
+        std::min(min_available_bytes, available_buffer_memory_bytes(info));
+  }
+  return min_available_bytes;
+}
+
+size_t count_distinct_bitmap_memory_budget_bytes(const Executor* executor,
+                                                 const ExecutorDeviceType device_type) {
+  if (!g_enable_result_reduction_pipeline || device_type != ExecutorDeviceType::GPU) {
+    return static_cast<size_t>(g_bitmap_memory_limit);
+  }
+  constexpr size_t kCountDistinctMemoryHeadroomDivisor{5};
+  const auto available_bytes = min_available_buffer_memory_bytes(executor, device_type);
+  return available_bytes - (available_bytes / kCountDistinctMemoryHeadroomDivisor);
+}
+
+size_t count_distinct_bitmap_memory_bytes(const QueryMemoryDescriptor& query_mem_desc) {
+  size_t bytes_per_entry{0};
+  const auto descriptor_count = query_mem_desc.getCountDistinctDescriptorsSize();
+  for (size_t descriptor_idx = 0; descriptor_idx < descriptor_count; ++descriptor_idx) {
+    const auto descriptor = query_mem_desc.getCountDistinctDescriptor(descriptor_idx);
+    if (descriptor.impl_type_ != CountDistinctImplType::Bitmap) {
       continue;
     }
-    total_bytes_per_group += count_distinct_desc.bitmapPaddedSizeBytes();
+    const auto bitmap_bytes = descriptor.bitmapPaddedSizeBytes();
+    if (__builtin_add_overflow(bytes_per_entry, bitmap_bytes, &bytes_per_entry)) {
+      throw OutOfHostMemory(std::numeric_limits<size_t>::max());
+    }
   }
-  int64_t total_bytes{0};
-  // Using OutOfHostMemory until we can verify that SlabTooBig would also be properly
-  // caught
-  try {
-    total_bytes = static_cast<int64_t>(total_bytes_per_group * groups_buffer_entry_count);
-  } catch (...) {
-    // Absurd amount of memory, merely computing the number of bits overflows int64_t.
-    // Don't bother to report the real amount, this is unlikely to ever happen.
-    throw OutOfHostMemory(std::numeric_limits<int64_t>::max() / 8);
+
+  size_t total_bytes{0};
+  if (__builtin_mul_overflow(
+          bytes_per_entry, query_mem_desc.getEntryCount(), &total_bytes)) {
+    throw OutOfHostMemory(std::numeric_limits<size_t>::max());
   }
-  if (total_bytes >= g_bitmap_memory_limit) {
+  return total_bytes;
+}
+
+inline void check_total_bitmap_memory(const QueryMemoryDescriptor& query_mem_desc,
+                                      const ExecutorDeviceType device_type,
+                                      const Executor* executor) {
+  const auto total_bytes = count_distinct_bitmap_memory_bytes(query_mem_desc);
+  const auto bitmap_memory_budget =
+      count_distinct_bitmap_memory_budget_bytes(executor, device_type);
+  if (total_bytes >= bitmap_memory_budget) {
     throw OutOfHostMemory(total_bytes);
   }
 }
@@ -72,6 +112,236 @@ std::pair<int64_t*, bool> alloc_group_by_buffer(
   }
   return std::make_pair(
       reinterpret_cast<int64_t*>(mem_owner->allocate(numBytes, thread_idx)), false);
+}
+
+bool baseline_gpu_reduction_target_supported(const TargetInfo& target_info) {
+  if (target_info.is_distinct || target_info.sql_type.is_array() ||
+      target_info.sql_type.is_geometry() || target_info.sql_type.is_varlen()) {
+    return false;
+  }
+  if (!target_info.is_agg) {
+    return false;
+  }
+  switch (target_info.agg_kind) {
+    case kCOUNT:
+    case kCOUNT_IF:
+    case kSUM:
+    case kSUM_IF:
+    case kAVG:
+      return true;
+    case kMIN:
+    case kMAX:
+      return !target_info.sql_type.is_fp() && !takes_float_argument(target_info);
+    default:
+      return false;
+  }
+}
+
+std::optional<size_t> target_init_val_index_for_slot(
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t slot_idx) {
+  if (slot_idx >= query_mem_desc.getSlotCount() ||
+      query_mem_desc.getPaddedSlotWidthBytes(slot_idx) <= 0) {
+    return std::nullopt;
+  }
+  size_t init_val_idx = 0;
+  for (size_t previous_slot_idx = 0; previous_slot_idx < slot_idx; ++previous_slot_idx) {
+    if (query_mem_desc.getPaddedSlotWidthBytes(previous_slot_idx) > 0) {
+      ++init_val_idx;
+    }
+  }
+  return init_val_idx;
+}
+
+size_t rowwise_agg_payload_width(const TargetInfo& target_info,
+                                 const size_t padded_slot_width) {
+  CHECK_GT(padded_slot_width, size_t(0));
+  if (takes_float_argument(target_info) && target_info.agg_kind != kAVG) {
+    CHECK_GE(padded_slot_width, sizeof(float));
+    return sizeof(float);
+  }
+  return padded_slot_width;
+}
+
+bool baseline_gpu_reduction_targets_supported(const RelAlgExecutionUnit& ra_exe_unit,
+                                              const QueryMemoryDescriptor& query_mem_desc,
+                                              const std::vector<int64_t>& init_vals) {
+  const auto targets = target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc);
+  for (size_t target_idx = 0; target_idx < targets.size(); ++target_idx) {
+    if (query_mem_desc.targetGroupbyIndicesSize() > 0) {
+      if (target_idx >= query_mem_desc.targetGroupbyIndicesSize()) {
+        return false;
+      }
+      if (query_mem_desc.getTargetGroupbyIndex(target_idx) >= 0) {
+        continue;
+      }
+    }
+    const auto& target_info = targets[target_idx];
+    if (!baseline_gpu_reduction_target_supported(target_info)) {
+      return false;
+    }
+    const auto& col_slots = query_mem_desc.getColSlotContext().getSlotsForCol(target_idx);
+    const auto expected_slot_count = target_info.agg_kind == kAVG ? size_t(2) : size_t(1);
+    if (col_slots.size() != expected_slot_count) {
+      return false;
+    }
+    for (const auto slot_idx : col_slots) {
+      if (query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx)) {
+        return false;
+      }
+      const auto slot_width = query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
+      if (slot_width != sizeof(int32_t) && slot_width != sizeof(int64_t)) {
+        return false;
+      }
+      const auto payload_width =
+          rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+      if (payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
+        return false;
+      }
+      const auto init_val_idx = target_init_val_index_for_slot(query_mem_desc, slot_idx);
+      if (!init_val_idx || *init_val_idx >= init_vals.size()) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool all_targets_are_group_keys(const QueryMemoryDescriptor& query_mem_desc) {
+  const auto target_count = query_mem_desc.targetGroupbyIndicesSize();
+  if (target_count == 0) {
+    return false;
+  }
+  for (size_t target_idx = 0; target_idx < target_count; ++target_idx) {
+    if (query_mem_desc.getTargetGroupbyIndex(target_idx) < 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool can_retain_perfect_hash_rowwise_for_gpu_reduction(
+    const QueryMemoryDescriptor& query_mem_desc,
+    const std::vector<TargetInfo>& targets,
+    const std::vector<int64_t>& init_vals,
+    const size_t entry_count) {
+  if (query_mem_desc.getQueryDescriptionType() !=
+          QueryDescriptionType::GroupByPerfectHash ||
+      query_mem_desc.didOutputColumnar() || query_mem_desc.hasVarlenOutput() ||
+      query_mem_desc.getNumModeTargets() > 0 ||
+      (!query_mem_desc.countDistinctDescriptorsLogicallyEmpty() &&
+       !all_targets_are_group_keys(query_mem_desc)) ||
+      (query_mem_desc.getEffectiveKeyWidth() != size_t(4) &&
+       query_mem_desc.getEffectiveKeyWidth() != size_t(8)) ||
+      query_mem_desc.getRowSize() == 0 ||
+      query_mem_desc.getRowSize() % sizeof(int64_t) != 0 ||
+      entry_count > std::numeric_limits<size_t>::max() / query_mem_desc.getRowSize() ||
+      entry_count * query_mem_desc.getRowSize() < kMinGpuPerfectHashReductionInputBytes) {
+    return false;
+  }
+
+  for (size_t target_idx = 0; target_idx < targets.size(); ++target_idx) {
+    if (query_mem_desc.targetGroupbyIndicesSize() > 0) {
+      if (target_idx >= query_mem_desc.targetGroupbyIndicesSize()) {
+        return false;
+      }
+      if (query_mem_desc.getTargetGroupbyIndex(target_idx) >= 0) {
+        continue;
+      }
+    }
+    const auto& target_info = targets[target_idx];
+    // Non-aggregate targets of a perfect-hash group-by are group-key projections.
+    // Equal bins have equal values, so merging the physical keys needs no payload op.
+    if (!target_info.is_agg) {
+      continue;
+    }
+    if (!baseline_gpu_reduction_target_supported(target_info)) {
+      return false;
+    }
+    const auto& col_slots = query_mem_desc.getColSlotContext().getSlotsForCol(target_idx);
+    const auto expected_slot_count = target_info.agg_kind == kAVG ? size_t(2) : size_t(1);
+    if (col_slots.size() != expected_slot_count) {
+      return false;
+    }
+    for (const auto slot_idx : col_slots) {
+      if (query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx)) {
+        return false;
+      }
+      const auto slot_width = query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
+      if (slot_width != sizeof(int32_t) && slot_width != sizeof(int64_t)) {
+        return false;
+      }
+      const auto payload_width =
+          rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+      if (payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
+        return false;
+      }
+      const auto init_val_idx = target_init_val_index_for_slot(query_mem_desc, slot_idx);
+      if (!init_val_idx || *init_val_idx >= init_vals.size() ||
+          query_mem_desc.getColOffInBytes(slot_idx) >
+              std::numeric_limits<uint32_t>::max()) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool can_defer_gpu_group_by_host_storage(const RelAlgExecutionUnit& ra_exe_unit,
+                                         const QueryMemoryDescriptor& query_mem_desc,
+                                         const ExecutorDeviceType device_type,
+                                         const bool output_columnar,
+                                         const std::vector<int64_t>& init_vals) {
+  if (!g_enable_result_reduction_pipeline) {
+    return false;
+  }
+  const bool has_device_resident_consumer =
+      !ra_exe_unit.deferred_sparse_baseline_preserved_keys.empty() ||
+      ra_exe_unit.defer_gpu_baseline_hash_host_storage_before_copy ||
+      ra_exe_unit.sort_info.limit.has_value();
+  const bool is_gpu = device_type == ExecutorDeviceType::GPU;
+  const bool is_group_by_baseline_hash = query_mem_desc.getQueryDescriptionType() ==
+                                         QueryDescriptionType::GroupByBaselineHash;
+  const bool is_group_by_perfect_hash = query_mem_desc.getQueryDescriptionType() ==
+                                        QueryDescriptionType::GroupByPerfectHash;
+  const bool targets_supported =
+      baseline_gpu_reduction_targets_supported(ra_exe_unit, query_mem_desc, init_vals);
+  const bool count_distinct_descriptors_safe =
+      query_mem_desc.countDistinctDescriptorsLogicallyEmpty() ||
+      all_targets_are_group_keys(query_mem_desc);
+  const bool can_defer =
+      is_gpu && !output_columnar && has_device_resident_consumer &&
+      is_group_by_baseline_hash && !query_mem_desc.didOutputColumnar() &&
+      !query_mem_desc.hasKeylessHash() && !query_mem_desc.hasVarlenOutput() &&
+      count_distinct_descriptors_safe && query_mem_desc.getNumModeTargets() == 0 &&
+      targets_supported;
+  const bool can_defer_keyless_perfect_for_consumer =
+      is_gpu && !output_columnar && has_device_resident_consumer &&
+      is_group_by_perfect_hash && query_mem_desc.hasKeylessHash() &&
+      !query_mem_desc.didOutputColumnar() && !query_mem_desc.hasVarlenOutput() &&
+      count_distinct_descriptors_safe && query_mem_desc.getNumModeTargets() == 0 &&
+      targets_supported;
+  // Multi-device reduction is itself a device-resident consumer. A CPU reduction
+  // fallback or final host boundary materializes these retained rows through ResultSet.
+  const bool can_defer_keyless_perfect_for_reduction =
+      is_gpu && !output_columnar && is_group_by_perfect_hash &&
+      query_mem_desc.hasKeylessHash() && query_mem_desc.blocksShareMemory() &&
+      can_retain_perfect_hash_rowwise_for_gpu_reduction(
+          query_mem_desc,
+          target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc),
+          init_vals,
+          query_mem_desc.getEntryCount());
+  const bool can_defer_keyed_perfect =
+      is_gpu && !output_columnar && has_device_resident_consumer &&
+      is_group_by_perfect_hash && !query_mem_desc.hasKeylessHash() &&
+      query_mem_desc.blocksShareMemory() &&
+      can_retain_perfect_hash_rowwise_for_gpu_reduction(
+          query_mem_desc,
+          target_exprs_to_infos(ra_exe_unit.target_exprs, query_mem_desc),
+          init_vals,
+          query_mem_desc.getEntryCount());
+  return can_defer || can_defer_keyless_perfect_for_consumer ||
+         can_defer_keyless_perfect_for_reduction || can_defer_keyed_perfect;
 }
 
 inline int64_t get_consistent_frag_size(const std::vector<uint64_t>& frag_offsets) {
@@ -221,6 +491,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const shared::TableKey& outer_table_key,
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
+    const ColumnBufferLayouts& col_buffer_layouts,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     RenderAllocatorMap* render_allocator_map,
     RenderInfo* render_info,
@@ -254,19 +525,13 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   if (agg_op_metadata.has_count_distinct) {
     check_count_distinct_expr_metadata(query_mem_desc, ra_exe_unit);
     if (!ra_exe_unit.use_bump_allocator) {
-      check_total_bitmap_memory(query_mem_desc);
+      check_total_bitmap_memory(query_mem_desc, device_type, executor);
     }
     agg_op_metadata.count_distinct_buf_size =
         calculateCountDistinctBufferSize(query_mem_desc, ra_exe_unit);
-    size_t total_buffer_size{0};
-    for (auto buffer_size : agg_op_metadata.count_distinct_buf_size) {
-      if (buffer_size > 0) {
-        total_buffer_size += buffer_size;
-      }
-    }
-    total_buffer_size *= query_mem_desc.getEntryCount();
+    const auto total_buffer_size = count_distinct_bitmap_memory_bytes(query_mem_desc);
     if (device_type == ExecutorDeviceType::GPU) {
-      allocateCountDistinctGpuMem(query_mem_desc);
+      allocateCountDistinctGpuMem(query_mem_desc, total_buffer_size);
       row_set_mem_owner_->initCountDistinctBufferForFastAllocation(
           count_distinct_bitmap_host_crt_ptr_, total_buffer_size, thread_idx_);
     } else {
@@ -327,7 +592,9 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     // For kernel per fragment execution, just allocate a buffer equivalent to the size of
     // the fragment
     if (dispatch_mode == ExecutorDispatchMode::KernelPerFragment) {
-      group_buffer_size = num_rows * query_mem_desc.getRowSize();
+      group_buffer_size = query_mem_desc.didOutputColumnar()
+                              ? query_mem_desc.getBufferSizeBytes(device_type, num_rows)
+                              : num_rows * query_mem_desc.getRowSize();
     } else {
       // otherwise, allocate a GPU buffer equivalent to the maximum GPU allocation size
       group_buffer_size = g_max_memory_allocation_size / query_mem_desc.getRowSize();
@@ -338,10 +605,19 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   }
   CHECK_GE(group_buffer_size, size_t(0));
 
+  // In-situ rendering owns the host output allocation and expects it to be populated by
+  // the execution path. Device-only deferred storage is valid only for ordinary query
+  // ResultSets, which can materialize through ResultSet on demand.
+  defer_gpu_baseline_hash_host_storage_ =
+      !render_allocator_map && !render_info &&
+      can_defer_gpu_group_by_host_storage(
+          ra_exe_unit, query_mem_desc, device_type, output_columnar, init_agg_vals_);
+
   const auto group_buffers_count = !query_mem_desc.isGroupBy() ? 1 : num_buffers_;
   int64_t* group_by_buffer_template{nullptr};
 
-  if (!query_mem_desc.lazyInitGroups(device_type) && group_buffers_count > 1) {
+  if (!defer_gpu_baseline_hash_host_storage_ &&
+      !query_mem_desc.lazyInitGroups(device_type) && group_buffers_count > 1) {
     group_by_buffer_template = reinterpret_cast<int64_t*>(
         row_set_mem_owner_->allocate(group_buffer_size, thread_idx_));
     initGroupByBuffer(group_by_buffer_template,
@@ -369,6 +645,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   const auto actual_group_buffer_size =
       group_buffer_size + index_buffer_qw * sizeof(int64_t);
   CHECK_GE(actual_group_buffer_size, group_buffer_size);
+  const auto host_group_buffer_size =
+      defer_gpu_baseline_hash_host_storage_ ? sizeof(int64_t) : actual_group_buffer_size;
 
   if (query_mem_desc.hasVarlenOutput()) {
     const auto varlen_buffer_elem_size_opt = query_mem_desc.varlenOutputBufferElemSize();
@@ -377,6 +655,13 @@ QueryMemoryInitializer::QueryMemoryInitializer(
         query_mem_desc.getEntryCount() * varlen_buffer_elem_size_opt.value();
     auto varlen_output_buffer =
         reinterpret_cast<int64_t*>(row_set_mem_owner_->allocate(varlen_buffer_sz));
+    varlen_output_buffer_host_ptr_ = reinterpret_cast<int8_t*>(varlen_output_buffer);
+    varlen_output_buffer_ =
+        static_cast<CUdeviceptr>(reinterpret_cast<uintptr_t>(varlen_output_buffer));
+    auto varlen_output_info = getVarlenOutputInfo();
+    varlen_output_info->gpu_start_address = static_cast<int64_t>(varlen_output_buffer_);
+    varlen_output_info->cpu_buffer_ptr = varlen_output_buffer_host_ptr_;
+    varlen_output_info->buffer_size_bytes = varlen_buffer_sz;
     num_buffers_ += 1;
     group_by_buffers_.push_back(varlen_output_buffer);
   }
@@ -397,7 +682,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   CHECK(group_buffers_count <= 1 || !query_mem_desc.threadsCanReuseGroupByBuffers());
   for (size_t i = 0; i < group_buffers_count; i += step) {
     auto group_by_info =
-        alloc_group_by_buffer(actual_group_buffer_size,
+        alloc_group_by_buffer(host_group_buffer_size,
                               render_allocator_map,
                               thread_idx_,
                               row_set_mem_owner_.get(),
@@ -406,7 +691,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     auto group_by_buffer = group_by_info.first;
     const bool was_cached = group_by_info.second;
     if (!was_cached) {
-      if (!query_mem_desc.lazyInitGroups(device_type)) {
+      if (!defer_gpu_baseline_hash_host_storage_ &&
+          !query_mem_desc.lazyInitGroups(device_type)) {
         if (group_by_buffer_template) {
           memcpy(group_by_buffer + index_buffer_qw,
                  group_by_buffer_template,
@@ -437,26 +723,53 @@ QueryMemoryInitializer::QueryMemoryInitializer(
 
     old_size = result_sets_.size();
     result_sets_.resize(old_size + std::max(size_t(1), step));
-    result_sets_[old_size] =
-        std::make_unique<ResultSet>(target_exprs_to_infos(target_exprs, query_mem_desc),
-                                    executor->getColLazyFetchInfo(target_exprs),
-                                    col_buffers,
-                                    column_frag_offsets,
-                                    column_frag_sizes,
-                                    device_type,
-                                    device_id,
-                                    thread_idx,
-                                    ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
-                                    row_set_mem_owner_,
-                                    executor->blockSize(),
-                                    executor->gridSize());
+    result_sets_[old_size] = std::make_unique<ResultSet>(
+        target_exprs_to_infos(target_exprs, query_mem_desc),
+        executor->getColLazyFetchInfo(
+            target_exprs, may_use_storage_local_lazy_fetch_rowid(ra_exe_unit)),
+        col_buffers,
+        col_buffer_layouts,
+        column_frag_offsets,
+        column_frag_sizes,
+        device_type,
+        device_id,
+        thread_idx,
+        ResultSet::fixupQueryMemoryDescriptor(query_mem_desc),
+        row_set_mem_owner_,
+        executor->blockSize(),
+        executor->gridSize());
     if (device_type == ExecutorDeviceType::GPU) {
       result_sets_[old_size]->setCudaAllocator(executor, device_id);
       result_sets_[old_size]->setCudaStream(executor, device_id);
     }
     result_sets_[old_size]->allocateStorage(reinterpret_cast<int8_t*>(group_by_buffer),
                                             executor->plan_state_->init_agg_vals_,
-                                            getVarlenOutputInfo());
+                                            getVarlenOutputInfo(),
+                                            host_group_buffer_size);
+  }
+}
+
+void QueryMemoryInitializer::setDeferredLazyFetchChunks(
+    const DeferredLazyFetchChunks& deferred_lazy_fetch_chunks) {
+  if (deferred_lazy_fetch_chunks.empty()) {
+    return;
+  }
+  for (auto& result_set : result_sets_) {
+    if (result_set) {
+      result_set->setDeferredLazyFetchChunks(deferred_lazy_fetch_chunks);
+    }
+  }
+}
+
+void QueryMemoryInitializer::setLazyFetchSourceMetadata(
+    const LazyFetchSourceMetadata& lazy_fetch_source_metadata) {
+  if (lazy_fetch_source_metadata.empty()) {
+    return;
+  }
+  for (auto& result_set : result_sets_) {
+    if (result_set) {
+      result_set->setLazyFetchSourceMetadata(lazy_fetch_source_metadata);
+    }
   }
 }
 
@@ -468,6 +781,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const ExecutorDeviceType device_type,
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
+    const ColumnBufferLayouts& col_buffer_layouts,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     DeviceAllocator* device_allocator,
@@ -550,6 +864,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
       new ResultSet(target_exprs_to_infos(exe_unit.target_exprs, query_mem_desc),
                     /*col_lazy_fetch_info=*/{},
                     col_buffers,
+                    col_buffer_layouts,
                     column_frag_offsets,
                     column_frag_sizes,
                     device_type,
@@ -854,26 +1169,19 @@ void QueryMemoryInitializer::allocateModeMem(ExecutorDeviceType const device_typ
 }
 
 void QueryMemoryInitializer::allocateCountDistinctGpuMem(
-    const QueryMemoryDescriptor& query_mem_desc) {
-  if (query_mem_desc.countDistinctDescriptorsLogicallyEmpty()) {
+    const QueryMemoryDescriptor& query_mem_desc,
+    const size_t total_bytes) {
+  const auto descriptor_count = query_mem_desc.getCountDistinctDescriptorsSize();
+  for (size_t descriptor_idx = 0; descriptor_idx < descriptor_count; ++descriptor_idx) {
+    const auto descriptor = query_mem_desc.getCountDistinctDescriptor(descriptor_idx);
+    CHECK(descriptor.impl_type_ == CountDistinctImplType::Invalid ||
+          descriptor.impl_type_ == CountDistinctImplType::Bitmap);
+  }
+  if (total_bytes == 0) {
     return;
   }
   CHECK(device_allocator_);
-
-  size_t total_bytes_per_entry{0};
-  const size_t num_count_distinct_descs =
-      query_mem_desc.getCountDistinctDescriptorsSize();
-  for (size_t i = 0; i < num_count_distinct_descs; i++) {
-    const auto count_distinct_desc = query_mem_desc.getCountDistinctDescriptor(i);
-    if (count_distinct_desc.impl_type_ == CountDistinctImplType::Invalid) {
-      continue;
-    }
-    CHECK(count_distinct_desc.impl_type_ == CountDistinctImplType::Bitmap);
-    total_bytes_per_entry += count_distinct_desc.bitmapPaddedSizeBytes();
-  }
-
-  count_distinct_bitmap_mem_size_ =
-      total_bytes_per_entry * query_mem_desc.getEntryCount();
+  count_distinct_bitmap_mem_size_ = total_bytes;
   auto cuda_allocator = dynamic_cast<CudaAllocator*>(device_allocator_);
   CHECK(cuda_allocator);
   VLOG(1) << "Allocate count distinct buffer on GPU " << cuda_allocator->getDeviceId()
@@ -1187,6 +1495,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     CHECK(varlen_output_info_);
     varlen_output_info_->gpu_start_address = static_cast<int64_t>(varlen_output_buffer_);
     varlen_output_info_->cpu_buffer_ptr = varlen_output_buffer_host_ptr_;
+    varlen_output_info_->buffer_size_bytes = varlen_output_buf_bytes;
   }
   if (render_allocator) {
     CHECK_EQ(size_t(0), render_allocator->getAllocatedSize() % 8);
@@ -1374,6 +1683,335 @@ void compact_projection_buffer_for_cpu_columnar(
   }
 }
 
+#ifdef HAVE_CUDA
+struct RowwiseColumnPublishSpec {
+  size_t column_idx{0};
+  size_t source_offset{0};
+  size_t source_width{0};
+  size_t output_width{0};
+  std::optional<int64_t> dict_entry_count;
+  int64_t source_null_val{QueryMemoryDescriptor::noTranslatedGroupbyNull()};
+  int64_t normalized_null_val{0};
+};
+
+bool is_supported_int_publish_width(const size_t width) {
+  return width == sizeof(int8_t) || width == sizeof(int16_t) ||
+         width == sizeof(int32_t) || width == sizeof(int64_t);
+}
+
+bool can_publish_width_conversion(const SQLTypeInfo& logical_ti,
+                                  const size_t source_width,
+                                  const size_t output_width,
+                                  const bool allow_width_conversion) {
+  if (source_width == output_width) {
+    return true;
+  }
+  if (!allow_width_conversion) {
+    return false;
+  }
+  if (!is_supported_int_publish_width(source_width) ||
+      !is_supported_int_publish_width(output_width)) {
+    return false;
+  }
+  return logical_ti.is_integer() || logical_ti.is_boolean() || logical_ti.is_time() ||
+         logical_ti.is_timeinterval() || logical_ti.is_dict_encoded_string();
+}
+
+bool all_output_columns_are_group_keys(const QueryMemoryDescriptor& query_mem_desc,
+                                       const size_t column_count) {
+  if (query_mem_desc.targetGroupbyIndicesSize() != column_count) {
+    return false;
+  }
+  for (size_t column_idx = 0; column_idx < column_count; ++column_idx) {
+    if (query_mem_desc.getTargetGroupbyIndex(column_idx) < 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool publish_group_by_device_columns_from_rowwise(
+    ResultSet& result_set,
+    DeviceAllocator& device_allocator,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const int8_t* rowwise_device_buffer,
+    const size_t row_count,
+    const std::vector<int64_t>* excluded_keys,
+    const std::vector<size_t>* selected_column_indices,
+    const int device_id,
+    CUstream cuda_stream) {
+  const auto& layout_query_mem_desc = result_set.getQueryMemDesc();
+  CHECK_EQ(query_mem_desc.getQueryDescriptionType(),
+           layout_query_mem_desc.getQueryDescriptionType());
+  const auto query_type = layout_query_mem_desc.getQueryDescriptionType();
+  const bool publish_selected_columns =
+      selected_column_indices && !selected_column_indices->empty();
+  const bool publish_selected_projection_columns =
+      publish_selected_columns && query_type == QueryDescriptionType::Projection;
+  const bool supported_query_type =
+      query_type == QueryDescriptionType::GroupByBaselineHash ||
+      query_type == QueryDescriptionType::GroupByPerfectHash ||
+      publish_selected_projection_columns;
+  const bool count_distinct_descriptors_safe =
+      query_type == QueryDescriptionType::Projection ||
+      layout_query_mem_desc.countDistinctDescriptorsLogicallyEmpty() ||
+      all_output_columns_are_group_keys(layout_query_mem_desc, result_set.colCount());
+  if (!rowwise_device_buffer || row_count == 0 || !supported_query_type ||
+      layout_query_mem_desc.didOutputColumnar() ||
+      (layout_query_mem_desc.hasKeylessHash() &&
+       query_type != QueryDescriptionType::GroupByPerfectHash) ||
+      (layout_query_mem_desc.hasVarlenOutput() && !publish_selected_projection_columns) ||
+      !count_distinct_descriptors_safe || layout_query_mem_desc.getNumModeTargets() > 0) {
+    return false;
+  }
+
+  const auto row_size = layout_query_mem_desc.getRowSize();
+  const auto key_width = layout_query_mem_desc.getEffectiveKeyWidth();
+  const auto& col_slot_context = layout_query_mem_desc.getColSlotContext();
+  std::vector<bool> selected_columns(result_set.colCount(), false);
+  size_t selected_column_count{0};
+  if (publish_selected_columns) {
+    for (const auto column_idx : *selected_column_indices) {
+      if (column_idx >= result_set.colCount()) {
+        return false;
+      }
+      if (!selected_columns[column_idx]) {
+        selected_columns[column_idx] = true;
+        ++selected_column_count;
+      }
+    }
+  }
+  const bool allow_width_conversion =
+      all_output_columns_are_group_keys(layout_query_mem_desc, result_set.colCount());
+  const bool require_all_columns = !publish_selected_columns && allow_width_conversion;
+  const auto& lazy_fetch_info = result_set.getLazyFetchInfo();
+  std::vector<RowwiseColumnPublishSpec> specs;
+  specs.reserve(publish_selected_columns ? selected_column_indices->size()
+                                         : result_set.colCount());
+  for (size_t column_idx = 0; column_idx < result_set.colCount(); ++column_idx) {
+    if (publish_selected_columns && !selected_columns[column_idx]) {
+      continue;
+    }
+    if (!lazy_fetch_info.empty()) {
+      CHECK_LT(column_idx, lazy_fetch_info.size());
+      if (lazy_fetch_info[column_idx].is_lazily_fetched) {
+        if (require_all_columns) {
+          return false;
+        }
+        continue;
+      }
+    }
+
+    const auto logical_ti = get_logical_type_info(result_set.getColType(column_idx));
+    if (logical_ti.is_varlen() ||
+        (logical_ti.is_string() && !logical_ti.is_dict_encoded_string())) {
+      if (require_all_columns) {
+        return false;
+      }
+      continue;
+    }
+    const auto elem_size = logical_ti.get_size();
+    if (elem_size <= 0) {
+      if (require_all_columns) {
+        return false;
+      }
+      continue;
+    }
+    const auto& slots = col_slot_context.getSlotsForCol(column_idx);
+    if (slots.size() != 1) {
+      if (require_all_columns) {
+        return false;
+      }
+      continue;
+    }
+
+    const auto slot_idx = slots.front();
+    size_t source_offset{0};
+    size_t source_width{0};
+    int64_t target_groupby_idx{-1};
+    const auto& target_info = result_set.getTargetInfos()[column_idx];
+    if (!target_info.is_agg && layout_query_mem_desc.targetGroupbyIndicesSize() > 0) {
+      CHECK_LT(column_idx, layout_query_mem_desc.targetGroupbyIndicesSize());
+      target_groupby_idx = layout_query_mem_desc.getTargetGroupbyIndex(column_idx);
+    }
+    if (target_groupby_idx >= 0) {
+      if (layout_query_mem_desc.usesGetGroupValueFast() &&
+          !layout_query_mem_desc.mustUseBaselineSort()) {
+        if (require_all_columns) {
+          return false;
+        }
+        continue;
+      }
+      if (layout_query_mem_desc.hasKeylessHash()) {
+        if (require_all_columns) {
+          return false;
+        }
+        continue;
+      }
+      if (layout_query_mem_desc.getPaddedSlotWidthBytes(slot_idx) != 0) {
+        if (require_all_columns) {
+          return false;
+        }
+        continue;
+      }
+      if (key_width == 0 || static_cast<size_t>(target_groupby_idx) >
+                                std::numeric_limits<size_t>::max() / key_width) {
+        return false;
+      }
+      source_offset = static_cast<size_t>(target_groupby_idx) * key_width;
+      source_width = key_width;
+    } else {
+      if (layout_query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx)) {
+        if (require_all_columns) {
+          return false;
+        }
+        continue;
+      }
+      const auto padded_slot_width =
+          layout_query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
+      if (padded_slot_width <= 0) {
+        if (require_all_columns) {
+          return false;
+        }
+        continue;
+      }
+      source_offset = layout_query_mem_desc.getColOffInBytes(slot_idx);
+      source_width =
+          rowwise_agg_payload_width(target_info, static_cast<size_t>(padded_slot_width));
+    }
+    const auto output_width = static_cast<size_t>(elem_size);
+    const auto allow_column_width_conversion =
+        allow_width_conversion || target_groupby_idx >= 0 || target_info.is_agg;
+    const auto publish_width_supported = can_publish_width_conversion(
+        logical_ti, source_width, output_width, allow_column_width_conversion);
+    if (source_offset > row_size || source_width > row_size - source_offset ||
+        !publish_width_supported) {
+      if (require_all_columns) {
+        return false;
+      }
+      continue;
+    }
+    std::optional<int64_t> dict_entry_count;
+    int64_t source_null_val{QueryMemoryDescriptor::noTranslatedGroupbyNull()};
+    int64_t normalized_null_val{0};
+    if (!target_info.is_agg) {
+      const auto translated_null_key =
+          layout_query_mem_desc.getTranslatedGroupbyNullForTarget(column_idx);
+      if (translated_null_key) {
+        source_null_val = *translated_null_key;
+        normalized_null_val = inline_fixed_encoding_null_val(logical_ti);
+      }
+    }
+    if (logical_ti.is_dict_encoded_string()) {
+      auto* const string_dict_proxy =
+          result_set.getStringDictionaryProxy(logical_ti.getStringDictKey());
+      CHECK(string_dict_proxy);
+      dict_entry_count = static_cast<int64_t>(string_dict_proxy->storageEntryCount());
+      normalized_null_val = inline_fixed_encoding_null_val(logical_ti);
+    }
+    specs.push_back(RowwiseColumnPublishSpec{column_idx,
+                                             source_offset,
+                                             source_width,
+                                             output_width,
+                                             dict_entry_count,
+                                             source_null_val,
+                                             normalized_null_val});
+  }
+
+  std::vector<int64_t> sorted_excluded_keys;
+  const int64_t* device_excluded_keys{nullptr};
+  size_t publish_row_count = row_count;
+  const int8_t* publish_device_buffer = rowwise_device_buffer;
+  if (excluded_keys && !excluded_keys->empty()) {
+    if (layout_query_mem_desc.hasKeylessHash()) {
+      return false;
+    }
+    sorted_excluded_keys = *excluded_keys;
+    std::sort(sorted_excluded_keys.begin(), sorted_excluded_keys.end());
+    sorted_excluded_keys.erase(
+        std::unique(sorted_excluded_keys.begin(), sorted_excluded_keys.end()),
+        sorted_excluded_keys.end());
+    if (sorted_excluded_keys.size() >
+        std::numeric_limits<size_t>::max() / sizeof(int64_t)) {
+      return false;
+    }
+    const auto excluded_keys_bytes = sorted_excluded_keys.size() * sizeof(int64_t);
+    auto* mutable_device_excluded_keys =
+        reinterpret_cast<int64_t*>(device_allocator.alloc(excluded_keys_bytes));
+    device_allocator.copyToDevice(
+        reinterpret_cast<int8_t*>(mutable_device_excluded_keys),
+        reinterpret_cast<const int8_t*>(sorted_excluded_keys.data()),
+        excluded_keys_bytes,
+        "Compacted baseline hash excluded keys");
+    device_excluded_keys = mutable_device_excluded_keys;
+    auto* row_count_device =
+        reinterpret_cast<uint64_t*>(device_allocator.alloc(sizeof(uint64_t)));
+    publish_row_count =
+        count_baseline_hash_rows_excluding_keys_on_device(rowwise_device_buffer,
+                                                          row_count,
+                                                          row_size,
+                                                          key_width,
+                                                          device_excluded_keys,
+                                                          sorted_excluded_keys.size(),
+                                                          row_count_device,
+                                                          device_id,
+                                                          cuda_stream);
+    if (publish_row_count == 0 || publish_row_count > row_count ||
+        publish_row_count > std::numeric_limits<size_t>::max() / row_size) {
+      return false;
+    }
+    auto* filtered_device_buffer = device_allocator.alloc(publish_row_count * row_size);
+    auto* filtered_row_count =
+        reinterpret_cast<uint64_t*>(device_allocator.alloc(sizeof(uint64_t)));
+    compact_baseline_hash_rows_excluding_keys_on_device(rowwise_device_buffer,
+                                                        filtered_device_buffer,
+                                                        filtered_row_count,
+                                                        row_count,
+                                                        row_size,
+                                                        key_width,
+                                                        device_excluded_keys,
+                                                        sorted_excluded_keys.size(),
+                                                        device_id,
+                                                        cuda_stream);
+    uint64_t verified_row_count{0};
+    device_allocator.copyFromDevice(&verified_row_count,
+                                    filtered_row_count,
+                                    sizeof(verified_row_count),
+                                    "Compacted baseline hash excluded row count");
+    CHECK_EQ(publish_row_count, static_cast<size_t>(verified_row_count));
+    publish_device_buffer = filtered_device_buffer;
+  }
+
+  size_t published_columns{0};
+
+  for (const auto& spec : specs) {
+    if (publish_row_count > std::numeric_limits<size_t>::max() / spec.output_width) {
+      return false;
+    }
+    const auto column_bytes = publish_row_count * spec.output_width;
+    auto* column_buffer = device_allocator.alloc(column_bytes);
+    extract_fixed_width_column_from_rows_on_device(publish_device_buffer,
+                                                   column_buffer,
+                                                   publish_row_count,
+                                                   row_size,
+                                                   spec.source_offset,
+                                                   spec.source_width,
+                                                   spec.output_width,
+                                                   spec.dict_entry_count.value_or(-1),
+                                                   spec.source_null_val,
+                                                   spec.normalized_null_val,
+                                                   device_id,
+                                                   cuda_stream);
+    result_set.addDeviceColumnarBufferFragment(
+        spec.column_idx, device_id, column_buffer, publish_row_count);
+    ++published_columns;
+  }
+
+  return published_columns > 0 &&
+         (!publish_selected_columns || published_columns == selected_column_count);
+}
+#endif
+
 }  // namespace
 
 void QueryMemoryInitializer::compactProjectionBuffersCpu(
@@ -1399,13 +2037,57 @@ void QueryMemoryInitializer::compactProjectionBuffersGpu(
     DeviceAllocator* device_allocator,
     const GpuGroupByBuffers& gpu_group_by_buffers,
     const size_t projection_count,
-    const int device_id) {
+    const int device_id,
+    const bool defer_cpu_materialization) {
   // store total number of allocated rows:
   const auto num_allocated_rows =
       std::min(projection_count, query_mem_desc.getEntryCount());
 
-  // copy the results from the main buffer into projection_buffer
   const size_t buffer_start_idx = query_mem_desc.hasVarlenOutput() ? 1 : 0;
+
+  CHECK(!result_sets_.empty());
+  auto* const result_set = result_sets_.front().get();
+  result_set->updateStorageEntryCount(num_allocated_rows);
+  result_set->setCachedRowCount(num_allocated_rows);
+  if (defer_cpu_materialization && num_allocated_rows > 0) {
+    const auto col_slot_context = query_mem_desc.getColSlotContext();
+    for (size_t column_idx = 0; column_idx < result_set->colCount(); ++column_idx) {
+      const auto logical_ti = get_logical_type_info(result_set->getColType(column_idx));
+      if (logical_ti.is_varlen()) {
+        continue;
+      }
+      const auto elem_size = logical_ti.get_size();
+      if (elem_size <= 0) {
+        continue;
+      }
+      const auto& slots = col_slot_context.getSlotsForCol(column_idx);
+      if (slots.size() != 1) {
+        continue;
+      }
+      const auto slot_idx = slots.front();
+      if (query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx)) {
+        continue;
+      }
+      if (query_mem_desc.getPaddedSlotWidthBytes(slot_idx) != elem_size) {
+        continue;
+      }
+      result_set->addDeviceColumnarBufferFragment(
+          column_idx,
+          device_id,
+          gpu_group_by_buffers.data + query_mem_desc.getColOffInBytes(slot_idx),
+          num_allocated_rows);
+    }
+  }
+
+  const bool can_defer_cpu_materialization =
+      defer_cpu_materialization && result_set->canDeferDeviceColumnarCpuMaterialization();
+  if (can_defer_cpu_materialization) {
+    result_set->markDeviceColumnarCpuStorageInvalid();
+    return;
+  }
+  result_set->clearDeviceColumnarBufferFragments();
+
+  // copy the results from the main buffer into projection_buffer
   copy_projection_buffer_from_gpu_columnar(
       device_allocator,
       gpu_group_by_buffers,
@@ -1413,10 +2095,6 @@ void QueryMemoryInitializer::compactProjectionBuffersGpu(
       reinterpret_cast<int8_t*>(group_by_buffers_[buffer_start_idx]),
       num_allocated_rows,
       device_id);
-
-  // update the entry count for the result set, and its underlying storage
-  CHECK(!result_sets_.empty());
-  result_sets_.front()->updateStorageEntryCount(num_allocated_rows);
 }
 
 void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
@@ -1428,8 +2106,55 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
     const unsigned block_size_x,
     const unsigned grid_size_x,
     const int device_id,
-    const bool prepend_index_buffer) const {
+    CUstream cuda_stream,
+    const bool prepend_index_buffer,
+    const bool defer_cpu_materialization) {
+#ifdef HAVE_CUDA
   const auto thread_count = block_size_x * grid_size_x;
+
+  const bool has_exact_projection_row_count =
+      ra_exe_unit &&
+      (ra_exe_unit->use_bump_allocator ||
+       (ra_exe_unit->per_device_cardinality.size() == size_t(1) &&
+        ra_exe_unit->per_device_cardinality.front().second == entry_count));
+  const bool can_defer_dense_rowwise_projection =
+      defer_cpu_materialization && g_enable_result_reduction_pipeline && ra_exe_unit &&
+      has_exact_projection_row_count && entry_count > 0 &&
+      entry_count <= query_mem_desc.getEntryCount() &&
+      query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
+      !query_mem_desc.didOutputColumnar() && !query_mem_desc.hasVarlenOutput() &&
+      !prepend_index_buffer && (query_mem_desc.blocksShareMemory() || grid_size_x == 1) &&
+      !ra_exe_unit->device_resident_output_column_indices.empty() &&
+      !result_sets_.empty();
+  if (can_defer_dense_rowwise_projection) {
+    auto& result_set = *result_sets_.front();
+    result_set.updateStorageEntryCount(entry_count);
+    result_set.setCachedRowCount(entry_count);
+    result_set.clearDeviceColumnarBufferFragments();
+    result_set.clearDeviceRowwiseBufferFragments();
+    const auto published = publish_group_by_device_columns_from_rowwise(
+        result_set,
+        device_allocator,
+        query_mem_desc,
+        gpu_group_by_buffers.data,
+        entry_count,
+        nullptr,
+        &ra_exe_unit->device_resident_output_column_indices,
+        device_id,
+        cuda_stream);
+    if (published) {
+      result_set.markDeviceColumnarFragmentsCoverLogicalRows();
+      result_set.addDeviceRowwiseBufferFragment(
+          device_id, gpu_group_by_buffers.data, entry_count);
+      if (result_set.canDeferDeviceColumnarCpuMaterialization()) {
+        result_set.markDeviceColumnarCpuStorageInvalid();
+        return;
+      }
+      result_set.clearDeviceRowwiseBufferFragments();
+      result_set.markDeviceColumnarCpuStorageValid();
+    }
+    result_set.clearDeviceColumnarBufferFragments();
+  }
 
   size_t total_buff_size{0};
   if (ra_exe_unit && query_mem_desc.useStreamingTopN()) {
@@ -1441,16 +2166,169 @@ void QueryMemoryInitializer::copyGroupByBuffersFromGpu(
     total_buff_size =
         query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU, entry_count);
   }
-  copy_group_by_buffers_from_gpu(device_allocator,
-                                 group_by_buffers_,
-                                 total_buff_size,
-                                 gpu_group_by_buffers.data,
-                                 query_mem_desc,
-                                 block_size_x,
-                                 grid_size_x,
-                                 device_id,
-                                 prepend_index_buffer,
-                                 query_mem_desc.hasVarlenOutput());
+  const ResultSetEntryFilter* entry_filter{nullptr};
+  const std::vector<int64_t>* preserved_keys{nullptr};
+  const std::vector<TargetInfo>* target_infos{nullptr};
+  if (!result_sets_.empty()) {
+    target_infos = &result_sets_.front()->getTargetInfos();
+  }
+  if (ra_exe_unit && !ra_exe_unit->deferred_sparse_baseline_preserved_keys.empty()) {
+    preserved_keys = &ra_exe_unit->deferred_sparse_baseline_preserved_keys;
+  }
+  if (ra_exe_unit && ra_exe_unit->apply_deferred_sparse_baseline_filter_before_copy &&
+      ra_exe_unit->deferred_sparse_baseline_filter) {
+    entry_filter = &*ra_exe_unit->deferred_sparse_baseline_filter;
+  }
+  // A completed host copy and its device rows are equivalent immutable views. Retain
+  // the device view for a downstream GPU reducer; CPU reducers clear it before
+  // mutating the host storage.
+  const bool reducer_compatible_perfect_hash =
+      g_enable_result_reduction_pipeline && ra_exe_unit && target_infos &&
+      can_retain_perfect_hash_rowwise_for_gpu_reduction(
+          query_mem_desc, *target_infos, init_agg_vals_, entry_count);
+  const bool can_retain_perfect_hash_rowwise =
+      query_mem_desc.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByPerfectHash &&
+      !query_mem_desc.didOutputColumnar() && !query_mem_desc.hasVarlenOutput() &&
+      (query_mem_desc.blocksShareMemory() || grid_size_x == 1) && !prepend_index_buffer &&
+      !result_sets_.empty() &&
+      (can_defer_keyless_perfect_hash_rowwise_result(query_mem_desc, entry_count) ||
+       reducer_compatible_perfect_hash);
+  const bool skip_perfect_hash_host_copy =
+      defer_gpu_baseline_hash_host_storage_ && can_retain_perfect_hash_rowwise;
+  int8_t* compacted_device_buffer{nullptr};
+  bool host_copy_performed{false};
+  bool entry_filter_applied{false};
+  const auto compacted_row_count =
+      copy_group_by_buffers_from_gpu(device_allocator,
+                                     group_by_buffers_,
+                                     total_buff_size,
+                                     gpu_group_by_buffers.data,
+                                     query_mem_desc,
+                                     block_size_x,
+                                     grid_size_x,
+                                     device_id,
+                                     cuda_stream,
+                                     prepend_index_buffer,
+                                     query_mem_desc.hasVarlenOutput(),
+                                     target_infos,
+                                     &init_agg_vals_,
+                                     &compacted_device_buffer,
+                                     defer_gpu_baseline_hash_host_storage_,
+                                     skip_perfect_hash_host_copy,
+                                     &host_copy_performed,
+                                     entry_filter,
+                                     preserved_keys,
+                                     &entry_filter_applied);
+  if (entry_filter_applied) {
+    CHECK(!result_sets_.empty());
+    result_sets_.front()->markSparseBaselineEntryFilterAppliedBeforeCopy();
+  }
+  if (host_copy_performed && entry_count > 0 && ra_exe_unit &&
+      query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
+      !ra_exe_unit->device_resident_output_column_indices.empty()) {
+    CHECK(!result_sets_.empty());
+    auto& result_set = *result_sets_.front();
+    // Rowwise projection storage is a dense prefix. Publish only that exact prefix;
+    // per-device allocation tails must never become visible to downstream consumers.
+    const auto logical_row_count = result_set.rowCount();
+    result_set.clearDeviceColumnarBufferFragments();
+    const auto published =
+        logical_row_count > 0 && publish_group_by_device_columns_from_rowwise(
+                                     result_set,
+                                     device_allocator,
+                                     query_mem_desc,
+                                     gpu_group_by_buffers.data,
+                                     logical_row_count,
+                                     nullptr,
+                                     &ra_exe_unit->device_resident_output_column_indices,
+                                     device_id,
+                                     cuda_stream);
+    if (published) {
+      result_set.markDeviceColumnarFragmentsCoverLogicalRows();
+    }
+  }
+  if (!compacted_row_count && defer_gpu_baseline_hash_host_storage_ &&
+      !can_retain_perfect_hash_rowwise && !host_copy_performed) {
+    throw OutOfHostMemory(total_buff_size);
+  }
+  if (compacted_row_count) {
+    const auto row_count = *compacted_row_count;
+    CHECK(!result_sets_.empty());
+    result_sets_.front()->updateStorageEntryCount(row_count);
+    result_sets_.front()->setCachedRowCount(row_count);
+    result_sets_.front()->markBaselineHashDenseForReduction(row_count);
+    result_sets_.front()->clearDeviceColumnarBufferFragments();
+    result_sets_.front()->clearDeviceRowwiseBufferFragments();
+    bool published_column_fragments = false;
+    if (row_count > 0 && defer_gpu_baseline_hash_host_storage_) {
+      CHECK(compacted_device_buffer);
+      result_sets_.front()->addDeviceRowwiseBufferFragment(
+          device_id, compacted_device_buffer, row_count);
+      published_column_fragments =
+          publish_group_by_device_columns_from_rowwise(*result_sets_.front(),
+                                                       device_allocator,
+                                                       query_mem_desc,
+                                                       compacted_device_buffer,
+                                                       row_count,
+                                                       preserved_keys,
+                                                       nullptr,
+                                                       device_id,
+                                                       cuda_stream);
+      if (published_column_fragments && preserved_keys && !preserved_keys->empty()) {
+        result_sets_.front()->markDeviceColumnarFragmentsExcludeBaselineBoundaryKeys();
+      }
+      if (published_column_fragments) {
+        result_sets_.front()->markDeviceColumnarFragmentsCoverLogicalRows();
+      }
+    }
+    if (row_count > 0 && defer_gpu_baseline_hash_host_storage_) {
+      if (!result_sets_.front()->canDeferDeviceColumnarCpuMaterialization()) {
+        throw OutOfHostMemory(total_buff_size);
+      }
+      result_sets_.front()->markDeviceColumnarCpuStorageInvalid();
+    }
+  } else if (can_retain_perfect_hash_rowwise) {
+    result_sets_.front()->addDeviceRowwiseBufferFragment(
+        device_id, gpu_group_by_buffers.data, entry_count);
+    if (host_copy_performed && !defer_gpu_baseline_hash_host_storage_) {
+      result_sets_.front()->markDeviceColumnarCpuStorageValid();
+    }
+    result_sets_.front()->setCachedRowCount(entry_count);
+    bool published_column_fragments = false;
+    if (entry_count > 0 && defer_gpu_baseline_hash_host_storage_) {
+      published_column_fragments =
+          publish_group_by_device_columns_from_rowwise(*result_sets_.front(),
+                                                       device_allocator,
+                                                       query_mem_desc,
+                                                       gpu_group_by_buffers.data,
+                                                       entry_count,
+                                                       nullptr,
+                                                       nullptr,
+                                                       device_id,
+                                                       cuda_stream);
+    }
+    if (published_column_fragments && defer_gpu_baseline_hash_host_storage_) {
+      if (!result_sets_.front()->canDeferDeviceColumnarCpuMaterialization()) {
+        throw OutOfHostMemory(total_buff_size);
+      }
+      result_sets_.front()->markDeviceColumnarCpuStorageInvalid();
+    }
+  }
+#else
+  static_cast<void>(device_allocator);
+  static_cast<void>(query_mem_desc);
+  static_cast<void>(entry_count);
+  static_cast<void>(gpu_group_by_buffers);
+  static_cast<void>(ra_exe_unit);
+  static_cast<void>(block_size_x);
+  static_cast<void>(grid_size_x);
+  static_cast<void>(device_id);
+  static_cast<void>(cuda_stream);
+  static_cast<void>(prepend_index_buffer);
+  static_cast<void>(defer_cpu_materialization);
+  UNREACHABLE();
+#endif
 }
 
 void QueryMemoryInitializer::copyFromDeviceForAggMode() {
@@ -1534,6 +2412,6 @@ std::shared_ptr<VarlenOutputInfo> QueryMemoryInitializer::getVarlenOutputInfo() 
   // shared_ptr so that both the ResultSet and QMI can hold on to the varlen info object
   // and update it as needed
   varlen_output_info_ = std::make_shared<VarlenOutputInfo>(VarlenOutputInfo{
-      static_cast<int64_t>(varlen_output_buffer_), varlen_output_buffer_host_ptr_});
+      static_cast<int64_t>(varlen_output_buffer_), varlen_output_buffer_host_ptr_, 0});
   return varlen_output_info_;
 }

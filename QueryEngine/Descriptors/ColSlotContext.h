@@ -96,11 +96,7 @@ class ColSlotContext {
   int64_t getFlatBufferSize(const size_t slot_idx) const;
 
   bool operator==(const ColSlotContext& that) const {
-    return std::equal(
-               slot_sizes_.cbegin(), slot_sizes_.cend(), that.slot_sizes_.cbegin()) &&
-           std::equal(col_to_slot_map_.cbegin(),
-                      col_to_slot_map_.cend(),
-                      that.col_to_slot_map_.cbegin());
+    return slot_sizes_ == that.slot_sizes_ && col_to_slot_map_ == that.col_to_slot_map_;
   }
 
   bool operator!=(const ColSlotContext& that) const { return !(*this == that); }
