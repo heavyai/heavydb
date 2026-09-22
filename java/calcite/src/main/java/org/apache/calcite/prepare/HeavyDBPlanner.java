@@ -8,7 +8,29 @@ import com.google.common.collect.ImmutableSet;
 import com.mapd.calcite.parser.HeavyDBParserOptions;
 import com.mapd.calcite.parser.HeavyDBSchema;
 import com.mapd.calcite.parser.ProjectProjectRemoveRule;
+import com.mapd.calcite.rel.rules.HeavyDBAggregateOuterJoinStrengthReductionRule;
 import com.mapd.calcite.rel.rules.FilterTableFunctionMultiInputTransposeRule;
+import com.mapd.calcite.rel.rules.HeavyDBFilteredUniqueKeysetJoinRule;
+import com.mapd.calcite.rel.rules.HeavyDBAggregateJoinPayloadDeferralRule;
+import com.mapd.calcite.rel.rules.HeavyDBAggregateJoinPayloadKeysetRule;
+import com.mapd.calcite.rel.rules.HeavyDBAggregateJoinReductionRule;
+import com.mapd.calcite.rel.rules.HeavyDBAggregateJoinWindowExtremaRule;
+import com.mapd.calcite.rel.rules.HeavyDBConnectedJoinOptimizeRule;
+import com.mapd.calcite.rel.rules.HeavyDBDifferentValueAggregateJoinRule;
+import com.mapd.calcite.rel.rules.HeavyDBDistinctAggregateJoinPruneRule;
+import com.mapd.calcite.rel.rules.HeavyDBExistenceCountToGroupByRule;
+import com.mapd.calcite.rel.rules.HeavyDBJoinTreeKeysetReductionRule;
+import com.mapd.calcite.rel.rules.HeavyDBJoinFilterSplitRule;
+import com.mapd.calcite.rel.rules.HeavyDBKeyPreservingAggregateRule;
+import com.mapd.calcite.rel.rules.HeavyDBLargeFilteredTableJoinRule;
+import com.mapd.calcite.rel.rules.HeavyDBLeftJoinAntiSemiJoinRule;
+import com.mapd.calcite.rel.rules.HeavyDBLeftJoinCountDistributionRule;
+import com.mapd.calcite.rel.rules.HeavyDBNotInToAntiJoinRule;
+import com.mapd.calcite.rel.rules.HeavyDBOuterJoinMultiJoinDecomposeRule;
+import com.mapd.calcite.rel.rules.HeavyDBPairedDifferentValueStatsRule;
+import com.mapd.calcite.rel.rules.HeavyDBRedundantSemiJoinPruneRule;
+import com.mapd.calcite.rel.rules.HeavyDBScalarExtremaJoinToTopNRule;
+import com.mapd.calcite.rel.rules.HeavyDBSingleCountDistinctToGroupByRule;
 
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
@@ -208,14 +230,23 @@ public class HeavyDBPlanner extends PlannerImpl {
     return super.rel(sqlNode);
   }
 
-  public RelNode optimizeRATree(
-          RelNode rootNode, boolean viewOptimizationEnabled, boolean foundView) {
+  public RelNode optimizeRATree(RelNode rootNode,
+          boolean viewOptimizationEnabled,
+          boolean foundView,
+          boolean enableExperimentalQueryRewrites) {
     HepProgramBuilder firstOptPhaseProgram = HepProgram.builder();
     firstOptPhaseProgram.addRuleInstance(CoreRules.AGGREGATE_MERGE)
             .addRuleInstance(
-                    new OuterJoinOptViaNullRejectionRule(RelFactories.LOGICAL_BUILDER))
+                    new OuterJoinOptViaNullRejectionRule(RelFactories.LOGICAL_BUILDER));
+    if (enableExperimentalQueryRewrites) {
+      firstOptPhaseProgram.addRuleInstance(HeavyDBNotInToAntiJoinRule.INSTANCE);
+    }
+    firstOptPhaseProgram
             .addRuleInstance(CoreRules.AGGREGATE_UNION_TRANSPOSE)
             .addRuleInstance(CoreRules.JOIN_PUSH_EXPRESSIONS);
+    if (enableExperimentalQueryRewrites) {
+      addExperimentalFirstPhaseRules(firstOptPhaseProgram);
+    }
     if (!viewOptimizationEnabled) {
       firstOptPhaseProgram.addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE)
               .addRuleInstance(
@@ -240,6 +271,9 @@ public class HeavyDBPlanner extends PlannerImpl {
     HepPlanner firstPlanner = HeavyDBPlanner.getHepPlanner(firstOptPhase, true);
     firstPlanner.setRoot(rootNode);
     final RelNode firstOptimizedPlanRoot = firstPlanner.findBestExp();
+    final RelNode optimizedPlanRoot = enableExperimentalQueryRewrites
+            ? cleanupUnsupportedMultiJoins(firstOptimizedPlanRoot)
+            : firstOptimizedPlanRoot;
 
     boolean hasRLSFilter = null != restrictions && !restrictions.isEmpty();
     boolean needsSecondOptPhase = hasRLSFilter || !filterPushDownInfo.isEmpty();
@@ -261,15 +295,177 @@ public class HeavyDBPlanner extends PlannerImpl {
 
       HepProgram secondOptPhase = secondOptPhaseProgram.build();
       HepPlanner secondPlanner = HeavyDBPlanner.getHepPlanner(secondOptPhase, true);
-      secondPlanner.setRoot(firstOptimizedPlanRoot);
+      secondPlanner.setRoot(optimizedPlanRoot);
       final RelNode secondOptimizedPlanRoot = secondPlanner.findBestExp();
       if (!filterPushDownInfo.isEmpty()) {
         filterPushDownInfo.clear();
       }
       return secondOptimizedPlanRoot;
     } else {
-      return firstOptimizedPlanRoot;
+      return optimizedPlanRoot;
     }
+  }
+
+  private static void addExperimentalFirstPhaseRules(HepProgramBuilder program) {
+    program.addRuleInstance(CoreRules.FILTER_INTO_JOIN)
+            .addRuleInstance(CoreRules.JOIN_TO_MULTI_JOIN)
+            .addRuleInstance(CoreRules.FILTER_MULTI_JOIN_MERGE)
+            .addRuleInstance(CoreRules.PROJECT_MULTI_JOIN_MERGE)
+            .addRuleInstance(HeavyDBDifferentValueAggregateJoinRule.INSTANCE)
+            .addRuleInstance(HeavyDBDifferentValueAggregateJoinRule.MULTI_JOIN_INSTANCE)
+            .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.INSTANCE)
+            .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.MULTI_JOIN_INSTANCE)
+            .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.PROJECT_JOIN_INSTANCE)
+            .addRuleInstance(
+                    HeavyDBPairedDifferentValueStatsRule.PROJECT_MULTI_JOIN_INSTANCE)
+            .addRuleInstance(
+                    HeavyDBPairedDifferentValueStatsRule
+                            .MERGED_FILTER_MULTI_JOIN_INSTANCE)
+            .addRuleInstance(HeavyDBConnectedJoinOptimizeRule.INSTANCE)
+            .addRuleInstance(HeavyDBAggregateJoinReductionRule.INSTANCE)
+            .addRuleInstance(HeavyDBKeyPreservingAggregateRule.INSTANCE)
+            .addRuleInstance(HeavyDBExistenceCountToGroupByRule.INSTANCE)
+            .addRuleInstance(HeavyDBDifferentValueAggregateJoinRule.INSTANCE)
+            .addRuleInstance(HeavyDBDifferentValueAggregateJoinRule.MULTI_JOIN_INSTANCE)
+            .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.INSTANCE)
+            .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.MULTI_JOIN_INSTANCE)
+            .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.PROJECT_JOIN_INSTANCE)
+            .addRuleInstance(
+                    HeavyDBPairedDifferentValueStatsRule.PROJECT_MULTI_JOIN_INSTANCE)
+            .addRuleInstance(
+                    HeavyDBPairedDifferentValueStatsRule
+                            .MERGED_FILTER_MULTI_JOIN_INSTANCE)
+            .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.PROJECT_INSTANCE)
+            .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.INSTANCE)
+            .addRuleInstance(HeavyDBAggregateJoinReductionRule.INSTANCE)
+            .addRuleInstance(CoreRules.FILTER_INTO_JOIN)
+            .addRuleInstance(CoreRules.JOIN_TO_MULTI_JOIN)
+            .addRuleInstance(CoreRules.FILTER_MULTI_JOIN_MERGE)
+            .addRuleInstance(CoreRules.PROJECT_MULTI_JOIN_MERGE)
+            .addRuleInstance(HeavyDBConnectedJoinOptimizeRule.INSTANCE)
+            .addRuleInstance(HeavyDBJoinFilterSplitRule.INSTANCE);
+  }
+
+  private RelNode cleanupUnsupportedMultiJoins(RelNode rootNode) {
+    final HepProgram cleanupProgram =
+            HepProgram.builder()
+                    .addRuleInstance(HeavyDBDifferentValueAggregateJoinRule.INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBDifferentValueAggregateJoinRule.MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule.MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule.PROJECT_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule
+                                    .PROJECT_MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule
+                                    .MERGED_FILTER_MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(HeavyDBOuterJoinMultiJoinDecomposeRule.INSTANCE)
+                    .addRuleInstance(CoreRules.FILTER_INTO_JOIN)
+                    .addRuleInstance(CoreRules.FILTER_PROJECT_TRANSPOSE)
+                    .addRuleInstance(CoreRules.FILTER_INTO_JOIN)
+                    .addRuleInstance(CoreRules.JOIN_TO_MULTI_JOIN)
+                    .addRuleInstance(CoreRules.FILTER_MULTI_JOIN_MERGE)
+                    .addRuleInstance(CoreRules.PROJECT_MULTI_JOIN_MERGE)
+                    .addRuleInstance(HeavyDBDifferentValueAggregateJoinRule.INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBDifferentValueAggregateJoinRule.MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule.MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule.PROJECT_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule
+                                    .PROJECT_MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule
+                                    .MERGED_FILTER_MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(HeavyDBConnectedJoinOptimizeRule.INSTANCE)
+                    .addRuleInstance(HeavyDBOuterJoinMultiJoinDecomposeRule.INSTANCE)
+                    .addRuleInstance(CoreRules.PROJECT_MERGE)
+                    .addRuleInstance(HeavyDBDistinctAggregateJoinPruneRule.INSTANCE)
+                    .addRuleInstance(HeavyDBAggregateJoinReductionRule.INSTANCE)
+                    .addRuleInstance(HeavyDBKeyPreservingAggregateRule.INSTANCE)
+                    .addRuleInstance(HeavyDBExistenceCountToGroupByRule.INSTANCE)
+                    .addRuleInstance(HeavyDBDifferentValueAggregateJoinRule.INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBDifferentValueAggregateJoinRule.MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule.MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule.PROJECT_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule
+                                    .PROJECT_MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule
+                                    .MERGED_FILTER_MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.PROJECT_INSTANCE)
+                    .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.INSTANCE)
+                    .addRuleInstance(HeavyDBAggregateJoinReductionRule.INSTANCE)
+                    .addRuleInstance(CoreRules.FILTER_INTO_JOIN)
+                    .addRuleInstance(HeavyDBLargeFilteredTableJoinRule.INSTANCE)
+                    .addRuleInstance(HeavyDBNotInToAntiJoinRule.INSTANCE)
+                    .addRuleInstance(CoreRules.JOIN_TO_MULTI_JOIN)
+                    .addRuleInstance(CoreRules.FILTER_MULTI_JOIN_MERGE)
+                    .addRuleInstance(CoreRules.PROJECT_MULTI_JOIN_MERGE)
+                    .addRuleInstance(HeavyDBConnectedJoinOptimizeRule.INSTANCE)
+                    .addRuleInstance(HeavyDBDifferentValueAggregateJoinRule.INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBDifferentValueAggregateJoinRule.MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(HeavyDBPairedDifferentValueStatsRule.INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule.MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule.PROJECT_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule
+                                    .PROJECT_MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(
+                            HeavyDBPairedDifferentValueStatsRule
+                                    .MERGED_FILTER_MULTI_JOIN_INSTANCE)
+                    .addRuleInstance(HeavyDBConnectedJoinOptimizeRule.INSTANCE)
+                    .addRuleInstance(HeavyDBRedundantSemiJoinPruneRule.INSTANCE)
+                    .addRuleInstance(HeavyDBJoinTreeKeysetReductionRule.PROJECT_INSTANCE)
+                    .addRuleInstance(HeavyDBJoinTreeKeysetReductionRule.INSTANCE)
+                    .addRuleInstance(HeavyDBRedundantSemiJoinPruneRule.INSTANCE)
+                    .addRuleInstance(HeavyDBOuterJoinMultiJoinDecomposeRule.INSTANCE)
+                    .addRuleInstance(HeavyDBJoinFilterSplitRule.INSTANCE)
+                    .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.PROJECT_INSTANCE)
+                    .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.INSTANCE)
+                    .addRuleInstance(CoreRules.PROJECT_MERGE)
+                    .addRuleInstance(HeavyDBLeftJoinCountDistributionRule.INSTANCE)
+                    .addRuleInstance(HeavyDBSingleCountDistinctToGroupByRule.INSTANCE)
+                    .addRuleInstance(HeavyDBAggregateOuterJoinStrengthReductionRule.INSTANCE)
+                    .build();
+    HepPlanner cleanupPlanner = HeavyDBPlanner.getHepPlanner(cleanupProgram, true);
+    cleanupPlanner.setRoot(rootNode);
+    final RelNode cleanedRoot = cleanupPlanner.findBestExp();
+
+    final HepProgram aggregateFinalizeProgram =
+            HepProgram.builder()
+                    .addRuleInstance(HeavyDBKeyPreservingAggregateRule.INSTANCE)
+                    .addRuleInstance(HeavyDBAggregateJoinReductionRule.INSTANCE)
+                    .addRuleInstance(CoreRules.FILTER_INTO_JOIN)
+                    .addRuleInstance(HeavyDBLargeFilteredTableJoinRule.BUILD_SIDE_INSTANCE)
+                    .addRuleInstance(CoreRules.PROJECT_MERGE)
+                    .addRuleInstance(HeavyDBAggregateJoinPayloadDeferralRule.PROJECT_INSTANCE)
+                    .addRuleInstance(HeavyDBAggregateJoinPayloadDeferralRule.INSTANCE)
+                    .addRuleInstance(HeavyDBAggregateJoinPayloadKeysetRule.INSTANCE)
+                    .addRuleInstance(HeavyDBAggregateJoinWindowExtremaRule.PROJECT_INSTANCE)
+                    .addRuleInstance(HeavyDBAggregateJoinWindowExtremaRule.INSTANCE)
+                    .addRuleInstance(HeavyDBScalarExtremaJoinToTopNRule.INSTANCE)
+                    .addRuleInstance(HeavyDBFilteredUniqueKeysetJoinRule.INSTANCE)
+                    .build();
+    HepPlanner aggregateFinalizePlanner =
+            HeavyDBPlanner.getHepPlanner(aggregateFinalizeProgram, true);
+    aggregateFinalizePlanner.setRoot(cleanedRoot);
+    return aggregateFinalizePlanner.findBestExp();
   }
 
   private RelRoot applyInjectFilterRule(RelRoot root, List<Restriction> restrictions) {
