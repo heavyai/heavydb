@@ -492,6 +492,74 @@ const rapidjson::Value* extractFilters(const rapidjson::Value& payload) {
   }
   return filters;
 }
+
+std::vector<std::string> json_string_vector(const rapidjson::Value& value) {
+  if (!value.IsArray()) {
+    throw std::runtime_error("Table constraint columns must be an array.");
+  }
+  std::vector<std::string> strings;
+  strings.reserve(value.Size());
+  for (const auto& element : value.GetArray()) {
+    if (!element.IsString()) {
+      throw std::runtime_error(
+          "Table constraint columns must contain only column names.");
+    }
+    strings.emplace_back(json_str(element));
+  }
+  return strings;
+}
+
+Catalog_Namespace::TableConstraint table_constraint_from_json(
+    const rapidjson::Value& constraint_json) {
+  if (!constraint_json.IsObject()) {
+    throw std::runtime_error("Table constraint payload must be an object.");
+  }
+  if (!constraint_json.HasMember("constraintType") ||
+      !constraint_json["constraintType"].IsString()) {
+    throw std::runtime_error(
+        "Table constraint payload is missing a string constraintType.");
+  }
+  if (!constraint_json.HasMember("columns")) {
+    throw std::runtime_error("Table constraint payload is missing columns.");
+  }
+
+  Catalog_Namespace::TableConstraint constraint;
+  const auto constraint_type = Catalog_Namespace::table_constraint_type_from_string(
+      json_str(constraint_json["constraintType"]));
+  if (!constraint_type) {
+    throw std::runtime_error("Unsupported table constraint type: " +
+                             json_str(constraint_json["constraintType"]));
+  }
+  constraint.type = *constraint_type;
+  if (constraint_json.HasMember("name") && !constraint_json["name"].IsNull()) {
+    if (!constraint_json["name"].IsString()) {
+      throw std::runtime_error("Table constraint name must be a string or null.");
+    }
+    constraint.name = json_str(constraint_json["name"]);
+  }
+  constraint.column_names = json_string_vector(constraint_json["columns"]);
+
+  if (constraint.type == Catalog_Namespace::TableConstraintType::ForeignKey) {
+    if (!constraint_json.HasMember("references") ||
+        !constraint_json["references"].IsObject()) {
+      throw std::runtime_error("FOREIGN KEY constraint is missing a references object.");
+    }
+    const auto& references = constraint_json["references"].GetObject();
+    if (!references.HasMember("table") || !references["table"].IsString()) {
+      throw std::runtime_error(
+          "FOREIGN KEY references must include a string table name.");
+    }
+    if (!references.HasMember("columns")) {
+      throw std::runtime_error("FOREIGN KEY references must include columns.");
+    }
+
+    Catalog_Namespace::ForeignKeyReference reference;
+    reference.table_name = json_str(references["table"]);
+    reference.column_names = json_string_vector(references["columns"]);
+    constraint.foreign_key_reference = reference;
+  }
+  return constraint;
+}
 }  // namespace
 
 DdlCommandExecutor::DdlCommandExecutor(
@@ -3330,6 +3398,56 @@ ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
 
   } else if (type == "ALTER_COLUMN") {
     return AlterTableAlterColumnCommand{ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (type == "ADD_CONSTRAINT") {
+    if (!ddl_payload.HasMember("constraintData") ||
+        !ddl_payload["constraintData"].IsArray()) {
+      throw std::runtime_error("ALTER TABLE ADD CONSTRAINT is missing constraint data.");
+    }
+    if (ddl_payload["constraintData"].GetArray().Size() != size_t(1)) {
+      throw std::runtime_error(
+          "ALTER TABLE ADD supports one table constraint at a time.");
+    }
+
+    const auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+    auto& catalog = session_ptr_->getCatalog();
+    const auto td_with_lock =
+        lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+            catalog, tableName, false);
+    const auto td = td_with_lock();
+    if (!td) {
+      throw std::runtime_error("Table " + tableName + " does not exist.");
+    }
+    if (!session_ptr_->checkDBAccessPrivileges(
+            DBObjectType::TableDBObjectType, AccessPrivileges::ALTER_TABLE, tableName)) {
+      throw std::runtime_error(
+          "Current user does not have the privilege to alter table: " + tableName);
+    }
+    catalog.addTableConstraint(
+        td, table_constraint_from_json(*ddl_payload["constraintData"].Begin()));
+    return {};
+  } else if (type == "DROP_CONSTRAINT") {
+    if (!ddl_payload.HasMember("constraintName") ||
+        !ddl_payload["constraintName"].IsString()) {
+      throw std::runtime_error(
+          "ALTER TABLE DROP CONSTRAINT is missing a constraint name.");
+    }
+
+    const auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+    auto& catalog = session_ptr_->getCatalog();
+    const auto td_with_lock =
+        lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+            catalog, tableName, false);
+    const auto td = td_with_lock();
+    if (!td) {
+      throw std::runtime_error("Table " + tableName + " does not exist.");
+    }
+    if (!session_ptr_->checkDBAccessPrivileges(
+            DBObjectType::TableDBObjectType, AccessPrivileges::ALTER_TABLE, tableName)) {
+      throw std::runtime_error(
+          "Current user does not have the privilege to alter table: " + tableName);
+    }
+    catalog.dropTableConstraint(td, json_str(ddl_payload["constraintName"]));
+    return {};
   } else if (type == "ADD_COLUMN") {
     CHECK(ddl_payload.HasMember("columnData"));
     CHECK(ddl_payload["columnData"].IsArray());
