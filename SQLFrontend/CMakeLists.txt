@@ -10,4 +10,16 @@ include_directories(${CMAKE_SOURCE_DIR}/ThirdParty/linenoise)
 add_executable(heavysql heavysql.cpp)
 target_link_libraries(heavysql mapd_thrift Logger Shared ThriftClient linenoise ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${PROFILER_LIBS} ${Thrift_LIBRARIES})
 
+add_executable(heavydb-query-stream QueryStreamDriver.cpp)
+target_link_libraries(heavydb-query-stream
+                      mapd_thrift
+                      Logger
+                      Shared
+                      ThriftClient
+                      ${Boost_LIBRARIES}
+                      ${CMAKE_DL_LIBS}
+                      ${PROFILER_LIBS}
+                      ${Thrift_LIBRARIES})
+
 install(TARGETS heavysql DESTINATION bin COMPONENT "exe")
+install(TARGETS heavydb-query-stream DESTINATION bin COMPONENT "exe")
