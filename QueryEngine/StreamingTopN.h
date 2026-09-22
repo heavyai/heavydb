@@ -30,6 +30,7 @@ std::vector<int8_t> get_rows_copy_from_heaps(const int64_t* heaps,
 }  // namespace streaming_top_n
 
 struct RelAlgExecutionUnit;
+class QueryMemoryDescriptor;
 
 namespace Analyzer {
 class Expr;
@@ -40,6 +41,10 @@ class Expr;
 size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
                                const size_t target_idx);
 
+size_t get_heap_key_slot_index(const QueryMemoryDescriptor& query_mem_desc,
+                               const std::vector<Analyzer::Expr*>& target_exprs,
+                               const size_t target_idx);
+
 #ifdef HAVE_CUDA
 namespace Data_Namespace {
 
@@ -47,8 +52,8 @@ class DataMgr;
 
 }  // namespace Data_Namespace
 
-class QueryMemoryDescriptor;
 class CudaAllocator;
+
 std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
     Data_Namespace::DataMgr* data_mgr,
     CudaAllocator* cuda_allocator,
