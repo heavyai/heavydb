@@ -30,6 +30,7 @@ import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.RelShuttleImpl;
 import org.apache.calcite.rel.RelVisitor;
 import org.apache.calcite.rel.RelWriter;
+import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.TableModify.Operation;
 import org.apache.calcite.rel.externalize.HeavyDBRelWriterImpl;
@@ -37,6 +38,8 @@ import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.mapping.MappingType;
+import org.apache.calcite.util.mapping.Mappings;
 import com.google.common.collect.ImmutableSet;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -628,10 +631,8 @@ public final class HeavyDBParser {
   //
   // Aggregate cases:
   //   * prefix group (with/without aggs) -> already valid; left untouched
-  //   * non-prefix, no agg calls         -> decorrelator DISTINCT-key aggs; normalized here
-  //   * non-prefix, with agg calls       -> not emitted by 1.41.0; throw if ever hit
-  //                                         (would also need agg-operand index remapping)
-  private static RelNode normalizeAggregateGroupKeys(RelNode root) {
+  //   * non-prefix group                 -> reorder the input and remap aggregate calls
+  static RelNode normalizeAggregateGroupKeys(RelNode root) {
     // Skip plans with nothing to rewrite (read-only scan).
     if (!hasNonPrefixGroupAggregate(root)) {
       return root;
@@ -656,41 +657,59 @@ public final class HeavyDBParser {
         final ImmutableBitSet groupSet = aggregate.getGroupSet();
         final int groupCount = groupSet.cardinality();
         final boolean isPrefix = groupSet.equals(ImmutableBitSet.range(groupCount));
-        // Already prefix, or GROUPING SETS (rejected by HeavyDB elsewhere): leave as-is,
-        // rebuilding only when a descendant actually changed.
-        if (isPrefix || aggregate.getGroupSets().size() != 1) {
+        // Already prefix: leave as-is, rebuilding only when a descendant changed.
+        if (isPrefix) {
           return input == aggregate.getInput()
                   ? aggregate
                   : aggregate.copy(aggregate.getTraitSet(), ImmutableList.of(input));
         }
-        if (!aggregate.getAggCallList().isEmpty()) {
-          throw new RuntimeException(
-                  "non-prefix aggregate group with agg calls is not handled");
-        }
         // Project the group columns to the front (ascending group-set order preserves
-        // the aggregate's output column order), then re-group on [0..N).
+        // the aggregate's output column order), followed by every non-group column.
+        // Keeping a full input permutation lets AggregateCall.transform remap arguments,
+        // FILTER columns, DISTINCT keys, and ordered-aggregate collations uniformly.
         final RexBuilder rexBuilder = aggregate.getCluster().getRexBuilder();
         final List<String> inNames = input.getRowType().getFieldNames();
         final List<RexNode> projExprs = new ArrayList<>();
         final List<String> projNames = new ArrayList<>();
+        final Mappings.TargetMapping inputMapping = Mappings.create(
+                MappingType.BIJECTION,
+                input.getRowType().getFieldCount(),
+                input.getRowType().getFieldCount());
         for (int col : groupSet) {
+          inputMapping.set(col, projExprs.size());
+          projExprs.add(rexBuilder.makeInputRef(input, col));
+          projNames.add(inNames.get(col));
+        }
+        for (int col = 0; col < input.getRowType().getFieldCount(); ++col) {
+          if (groupSet.get(col)) {
+            continue;
+          }
+          inputMapping.set(col, projExprs.size());
           projExprs.add(rexBuilder.makeInputRef(input, col));
           projNames.add(inNames.get(col));
         }
         final RelNode project = LogicalProject.create(
                 input, ImmutableList.of(), projExprs, projNames, ImmutableSet.of());
         final ImmutableBitSet newGroupSet = ImmutableBitSet.range(groupCount);
-        return LogicalAggregate.create(project,
-                ImmutableList.of(),
+        final List<ImmutableBitSet> remappedGroupSets = new ArrayList<>();
+        for (ImmutableBitSet aggregateGroupSet : aggregate.getGroupSets()) {
+          remappedGroupSets.add(aggregateGroupSet.permute(inputMapping));
+        }
+        final List<AggregateCall> remappedCalls = new ArrayList<>();
+        for (AggregateCall aggregateCall : aggregate.getAggCallList()) {
+          remappedCalls.add(aggregateCall.transform(inputMapping));
+        }
+        return aggregate.copy(aggregate.getTraitSet(),
+                project,
                 newGroupSet,
-                ImmutableList.of(newGroupSet),
-                ImmutableList.of());
+                remappedGroupSets,
+                remappedCalls);
       }
     });
   }
 
-  // Returns true iff the plan holds an aggregate whose single group set is not the
-  // leading [0..N) prefix
+  // Returns true iff the plan holds an aggregate whose group keys are not the leading
+  // [0..N) prefix.
   private static boolean hasNonPrefixGroupAggregate(RelNode root) {
     final boolean[] found = {false};
     new RelVisitor() {
@@ -698,8 +717,7 @@ public final class HeavyDBParser {
       public void visit(RelNode node, int ordinal, RelNode parent) {
         if (node instanceof LogicalAggregate) {
           final ImmutableBitSet g = ((LogicalAggregate) node).getGroupSet();
-          if (((LogicalAggregate) node).getGroupSets().size() == 1
-                  && !g.equals(ImmutableBitSet.range(g.cardinality()))) {
+          if (!g.equals(ImmutableBitSet.range(g.cardinality()))) {
             found[0] = true;
           }
         }
