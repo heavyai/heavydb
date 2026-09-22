@@ -34,6 +34,7 @@
 #include "Geospatial/Types.h"
 #include "ImportExport/DelimitedParserUtils.h"
 #include "ImportExport/Importer.h"
+#include "ImportExport/ParquetImportThreadPlanner.h"
 #include "QueryEngine/ResultSet.h"
 #include "Shared/Encryption.h"
 #include "Shared/SysDefinitions.h"
@@ -77,6 +78,7 @@ extern bool g_enable_fsi_odbc_import;
 extern bool g_enable_fsi_regex_import;
 
 extern bool g_export_timestamps_in_iso_format;
+extern size_t g_max_import_num_fragment_buffered;
 
 namespace {
 #ifdef HAVE_AWS_S3
@@ -166,6 +168,57 @@ void d(const SQLTypes expected_type, const std::string& str) {
 
 std::string get_import_id(const std::string& copy_from_source) {
   return boost::filesystem::path(copy_from_source).filename().string();
+}
+
+TEST(ParquetImportThreadPlannerTest, BalancesBudgetAcrossFragments) {
+  const auto plan = import_export::plan_parquet_import_threads(72, 16, 9);
+
+  EXPECT_EQ(plan.threads_per_fragment, 8U);
+  EXPECT_EQ(plan.concurrent_fragments, 9U);
+}
+
+TEST(ParquetImportThreadPlannerTest, ReturnsUnusedFragmentBudgetToColumns) {
+  const auto plan = import_export::plan_parquet_import_threads(72, 16, 2);
+
+  EXPECT_EQ(plan.threads_per_fragment, 16U);
+  EXPECT_EQ(plan.concurrent_fragments, 2U);
+}
+
+TEST(ParquetImportThreadPlannerTest, RespectsNarrowSchemas) {
+  const auto plan = import_export::plan_parquet_import_threads(72, 2, 9);
+
+  EXPECT_EQ(plan.threads_per_fragment, 2U);
+  EXPECT_EQ(plan.concurrent_fragments, 9U);
+}
+
+TEST(ParquetImportThreadPlannerTest, RejectsInvalidLimits) {
+  EXPECT_THROW(import_export::plan_parquet_import_threads(0, 16, 1),
+               std::invalid_argument);
+  EXPECT_THROW(import_export::plan_parquet_import_threads(72, 0, 1),
+               std::invalid_argument);
+  EXPECT_THROW(import_export::plan_parquet_import_threads(72, 16, 0),
+               std::invalid_argument);
+}
+
+TEST(ParquetImportThreadPlannerTest, RespectsThreadAndWorkLimits) {
+  for (const size_t max_threads : {1, 2, 7, 32, 72}) {
+    for (const size_t max_threads_per_fragment : {1, 2, 16, 31}) {
+      for (const size_t max_concurrent_fragments : {1, 2, 9, 37}) {
+        SCOPED_TRACE(testing::Message()
+                     << "max_threads=" << max_threads
+                     << " max_threads_per_fragment=" << max_threads_per_fragment
+                     << " max_concurrent_fragments=" << max_concurrent_fragments);
+        const auto plan = import_export::plan_parquet_import_threads(
+            max_threads, max_threads_per_fragment, max_concurrent_fragments);
+
+        EXPECT_GE(plan.threads_per_fragment, 1U);
+        EXPECT_LE(plan.threads_per_fragment, max_threads_per_fragment);
+        EXPECT_GE(plan.concurrent_fragments, 1U);
+        EXPECT_LE(plan.concurrent_fragments, max_concurrent_fragments);
+        EXPECT_LE(plan.threads_per_fragment * plan.concurrent_fragments, max_threads);
+      }
+    }
+  }
 }
 
 TEST(Detect, DateTime) {
@@ -2744,6 +2797,9 @@ class ParquetSpecificS3PublicImportAndSelectTest : public ImportAndSelectTestBas
 };
 
 TEST_F(ParquetSpecificS3PublicImportAndSelectTest, WithDebugTimersEnabled) {
+#ifndef HAVE_AWS_S3
+  GTEST_SKIP() << "S3 import requires AWS S3 support enabled at build time.";
+#endif
   g_enable_debug_timer = true;
   std::string schema =
       "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, dc "
@@ -3348,6 +3404,72 @@ TEST_F(ImportTest, OneParquetFileWithUniqueRowGroups) {
       "Conversion from Parquet type \"INT64\" to HeavyDB type \"FLOAT\" is not allowed. "
       "Please use an appropriate column type. Parquet column: a, HeavyDB column: a, "
       "Parquet file: ../../Tests/Import/datafiles/unique_rowgroups.parquet.");
+}
+
+TEST_F(ImportTest, ExplicitThreadsPopulateParquetFragmentsConcurrently) {
+  const auto saved_legacy_parquet_import = g_enable_legacy_parquet_import;
+  const auto saved_proxy_fragment_size =
+      import_export::ForeignDataImporter::proxy_foreign_table_fragment_size_;
+  const auto saved_max_fragments_buffered = g_max_import_num_fragment_buffered;
+  g_enable_legacy_parquet_import = false;
+  import_export::ForeignDataImporter::proxy_foreign_table_fragment_size_ = 1;
+  g_max_import_num_fragment_buffered = 4;
+  ScopeGuard restore_import_settings = [&] {
+    g_enable_legacy_parquet_import = saved_legacy_parquet_import;
+    import_export::ForeignDataImporter::proxy_foreign_table_fragment_size_ =
+        saved_proxy_fragment_size;
+    g_max_import_num_fragment_buffered = saved_max_fragments_buffered;
+  };
+
+  sql("DROP TABLE IF EXISTS concurrent_parquet_fragments;");
+  sql("CREATE TABLE concurrent_parquet_fragments "
+      "(a BIGINT, b BIGINT, c TEXT ENCODING NONE, d DOUBLE);");
+  sql("COPY concurrent_parquet_fragments FROM "
+      "'../../Tests/Import/datafiles/unique_rowgroups.parquet' "
+      "WITH (source_type='parquet_file', threads=8);");
+
+  sqlAndCompareResult("SELECT a, b, c, d FROM concurrent_parquet_fragments ORDER BY a;",
+                      {{1L, 3L, "6", 7.1},
+                       {2L, 4L, "7", 0.000591},
+                       {3L, 5L, "8", 1.1},
+                       {4L, 6L, "9", 0.022123},
+                       {5L, 7L, "10", -1.0},
+                       {6L, 8L, "1", -100.0}});
+  sql("DROP TABLE concurrent_parquet_fragments;");
+}
+
+TEST_F(ImportTest, LegacyParquetReadsAllRowGroupsOnce) {
+  const auto saved_legacy_parquet_import = g_enable_legacy_parquet_import;
+  g_enable_legacy_parquet_import = true;
+  ScopeGuard restore_legacy_parquet_import = [&] {
+    g_enable_legacy_parquet_import = saved_legacy_parquet_import;
+  };
+
+  TCopyParams copy_params;
+  copy_params.source_type = TSourceType::PARQUET_FILE;
+  TDetectResult detect_result;
+  const auto [db_handler, session_id] = getDbHandlerAndSessionId();
+  const auto parquet_path = boost::filesystem::canonical(
+      "../../Tests/Import/datafiles/unique_rowgroups.parquet");
+  db_handler->detect_column_types(
+      detect_result, session_id, parquet_path.string(), copy_params);
+  ASSERT_EQ(detect_result.row_set.rows.size(), size_t{6});
+
+  sql("DROP TABLE IF EXISTS legacy_unique_rowgroups;");
+  sql("CREATE TABLE legacy_unique_rowgroups "
+      "(a BIGINT, b BIGINT, c TEXT ENCODING NONE, d DOUBLE);");
+  sql("COPY legacy_unique_rowgroups FROM "
+      "'../../Tests/Import/datafiles/unique_rowgroups.parquet' "
+      "WITH (source_type='parquet_file', threads=4);");
+
+  sqlAndCompareResult("SELECT a, b, c, d FROM legacy_unique_rowgroups ORDER BY a;",
+                      {{1L, 3L, "6", 7.1},
+                       {2L, 4L, "7", 0.000591},
+                       {3L, 5L, "8", 1.1},
+                       {4L, 6L, "9", 0.022123},
+                       {5L, 7L, "10", -1.0},
+                       {6L, 8L, "1", -100.0}});
+  sql("DROP TABLE legacy_unique_rowgroups;");
 }
 #ifdef HAVE_AWS_S3
 // s3 parquet test cases
