@@ -19,6 +19,7 @@
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryEngine/RelAlgExecutor.h"
+#include "QueryEngine/RelAlgOptimizer.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "ThriftHandler/QueryParsing.h"
@@ -51,6 +52,18 @@ using namespace Catalog_Namespace;
 namespace {
 
 std::shared_ptr<Calcite> g_calcite = nullptr;
+
+TOptimizationOption get_query_runner_calcite_optimization_option(
+    const std::shared_ptr<Calcite>& calcite_mgr,
+    const bool enable_view_optimize,
+    const bool enable_watchdog,
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info = {}) {
+  return calcite_mgr->getCalciteOptimizationOption(enable_view_optimize,
+                                                   enable_watchdog,
+                                                   filter_push_down_info,
+                                                   g_enable_experimental_query_rewrites,
+                                                   g_trust_unenforced_table_constraints);
+}
 
 void calcite_shutdown_handler() noexcept {
   if (g_calcite) {
@@ -346,7 +359,7 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      get_query_runner_calcite_optimization_option(calcite_mgr, false, g_enable_watchdog);
   const auto query_ra = query_parsing::process_and_check_access_privileges(
                             calcite_mgr.get(),
                             query_state->createQueryStateProxy(),
@@ -373,7 +386,7 @@ std::shared_ptr<const RelAlgNode> QueryRunner::getRootNodeFromParsedQuery(
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      get_query_runner_calcite_optimization_option(calcite_mgr, false, g_enable_watchdog);
   const auto query_ra = query_parsing::process_and_check_access_privileges(
                             calcite_mgr.get(),
                             query_state->createQueryStateProxy(),
@@ -397,7 +410,7 @@ QueryRunner::getParsedQueryHints(const std::string& query_str) {
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      get_query_runner_calcite_optimization_option(calcite_mgr, false, g_enable_watchdog);
   const auto query_ra = query_parsing::process_and_check_access_privileges(
                             calcite_mgr.get(),
                             query_state->createQueryStateProxy(),
@@ -420,7 +433,7 @@ std::optional<RegisteredQueryHint> QueryRunner::getParsedGlobalQueryHints(
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      get_query_runner_calcite_optimization_option(calcite_mgr, false, g_enable_watchdog);
   const auto query_ra = query_parsing::process_and_check_access_privileges(
                             calcite_mgr.get(),
                             query_state->createQueryStateProxy(),
@@ -442,7 +455,7 @@ RaExecutionSequence QueryRunner::getRaExecutionSequence(const std::string& query
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      get_query_runner_calcite_optimization_option(calcite_mgr, false, g_enable_watchdog);
   const auto query_ra = query_parsing::process_and_check_access_privileges(
                             calcite_mgr.get(),
                             query_state->createQueryStateProxy(),
@@ -474,7 +487,7 @@ void QueryRunner::validateDDLStatement(const std::string& stmt_str_in) {
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      get_query_runner_calcite_optimization_option(calcite_mgr, false, g_enable_watchdog);
   query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
                                                      query_state->createQueryStateProxy(),
                                                      pg_shim(stmt_str),
@@ -492,7 +505,7 @@ std::shared_ptr<RelAlgTranslator> QueryRunner::getRelAlgTranslator(
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      get_query_runner_calcite_optimization_option(calcite_mgr, false, g_enable_watchdog);
   const auto query_ra = query_parsing::process_and_check_access_privileges(
                             calcite_mgr.get(),
                             query_state->createQueryStateProxy(),
@@ -515,7 +528,7 @@ QueryPlanDagInfo QueryRunner::getQueryInfoForDataRecyclerTest(
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      get_query_runner_calcite_optimization_option(calcite_mgr, false, g_enable_watchdog);
   const auto query_ra = query_parsing::process_and_check_access_privileges(
                             calcite_mgr.get(),
                             query_state->createQueryStateProxy(),
@@ -553,8 +566,8 @@ std::unique_ptr<Parser::Stmt> QueryRunner::createStatement(
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-    const auto calciteOptimizationOption =
-        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+    const auto calciteOptimizationOption = get_query_runner_calcite_optimization_option(
+        calcite_mgr, false, g_enable_watchdog);
     const auto query_json = query_parsing::process_and_check_access_privileges(
                                 calcite_mgr.get(),
                                 query_state->createQueryStateProxy(),
@@ -589,8 +602,8 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
     auto calcite_mgr = cat.getCalciteMgr();
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-    const auto calciteOptimizationOption =
-        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+    const auto calciteOptimizationOption = get_query_runner_calcite_optimization_option(
+        calcite_mgr, false, g_enable_watchdog);
     const auto query_ra = query_parsing::process_and_check_access_privileges(
                               calcite_mgr.get(),
                               query_state->createQueryStateProxy(),
@@ -728,7 +741,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
               const auto calciteQueryParsingOption =
                   calcite_mgr->getCalciteQueryParsingOption(true, false, false);
               const auto calciteOptimizationOption =
-                  calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+                  get_query_runner_calcite_optimization_option(
+                      calcite_mgr, false, g_enable_watchdog);
               query_ra = query_parsing::process_and_check_access_privileges(
                              calcite_mgr.get(),
                              query_state->createQueryStateProxy(),
@@ -819,7 +833,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+      get_query_runner_calcite_optimization_option(calcite_mgr, false, g_enable_watchdog);
   const auto query_ra = query_parsing::process_and_check_access_privileges(
                             calcite_mgr.get(),
                             query_state_proxy,
@@ -894,8 +908,8 @@ std::shared_ptr<ResultSet> QueryRunner::getCalcitePlan(const std::string& query_
                 calcite_mgr->getCalciteQueryParsingOption(
                     true, !is_explain_as_json_str, is_explain_detailed);
             const auto calciteOptimizationOption =
-                calcite_mgr->getCalciteOptimizationOption(
-                    g_enable_calcite_view_optimize, enable_watchdog, {});
+                get_query_runner_calcite_optimization_option(
+                    calcite_mgr, g_enable_calcite_view_optimize, enable_watchdog);
             const auto query_ra = query_parsing::process_and_check_access_privileges(
                                       calcite_mgr.get(),
                                       query_state->createQueryStateProxy(),
@@ -961,8 +975,8 @@ std::shared_ptr<ExecutionResult> QueryRunner::runSelectQuery(const std::string& 
             const auto calciteQueryParsingOption =
                 calcite_mgr->getCalciteQueryParsingOption(true, false, false);
             const auto calciteOptimizationOption =
-                calcite_mgr->getCalciteOptimizationOption(
-                    g_enable_calcite_view_optimize, g_enable_watchdog, {});
+                get_query_runner_calcite_optimization_option(
+                    calcite_mgr, g_enable_calcite_view_optimize, g_enable_watchdog);
             const auto query_ra = query_parsing::process_and_check_access_privileges(
                                       calcite_mgr.get(),
                                       query_state->createQueryStateProxy(),
@@ -1043,8 +1057,8 @@ bool QueryRunner::runSQLThrowingException(const std::string& query_str,
             const auto calciteQueryParsingOption =
                 calcite_mgr->getCalciteQueryParsingOption(true, false, false);
             const auto calciteOptimizationOption =
-                calcite_mgr->getCalciteOptimizationOption(
-                    g_enable_calcite_view_optimize, g_enable_watchdog, {});
+                get_query_runner_calcite_optimization_option(
+                    calcite_mgr, g_enable_calcite_view_optimize, g_enable_watchdog);
             const auto query_ra = query_parsing::process_and_check_access_privileges(
                                       calcite_mgr.get(),
                                       query_state->createQueryStateProxy(),
@@ -1106,8 +1120,8 @@ std::unique_ptr<RelAlgDag> QueryRunner::getRelAlgDag(const std::string& query_st
             const auto calciteQueryParsingOption =
                 calcite_mgr->getCalciteQueryParsingOption(true, false, false);
             const auto calciteOptimizationOption =
-                calcite_mgr->getCalciteOptimizationOption(
-                    g_enable_calcite_view_optimize, g_enable_watchdog, {});
+                get_query_runner_calcite_optimization_option(
+                    calcite_mgr, g_enable_calcite_view_optimize, g_enable_watchdog);
             const auto query_ra = query_parsing::process_and_check_access_privileges(
                                       calcite_mgr.get(),
                                       query_state->createQueryStateProxy(),
