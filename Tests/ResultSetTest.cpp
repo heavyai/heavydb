@@ -11,7 +11,9 @@
 
 #include "Tests/ResultSetTestUtils.h"
 
+#include "DataMgr/Allocators/CudaAllocator.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
+#include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSet.h"
@@ -19,12 +21,15 @@
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/scope.h"
+#include "Shared/thread_count.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Tests/DataMgrTestHelpers.h"
 #include "Tests/TestHelpers.h"
 
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <array>
 #include <queue>
 #include <random>
 
@@ -35,6 +40,10 @@
 using QR = QueryRunner::QueryRunner;
 
 extern bool g_is_test_env;
+extern bool g_enable_watchdog;
+extern size_t g_parallel_top_min;
+extern size_t g_parallel_top_max;
+extern size_t g_watchdog_baseline_sort_max;
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -60,6 +69,706 @@ TEST(Construct, Allocate) {
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   result_set.allocateStorage();
 }
+
+TEST(ColSlotContext, EqualityRequiresMatchingVectorShapes) {
+  ColSlotContext empty;
+  ColSlotContext one_slot;
+  one_slot.addColumn({std::make_tuple(int8_t{8}, int8_t{8})});
+
+  EXPECT_NE(empty, one_slot);
+  EXPECT_NE(one_slot, empty);
+}
+
+TEST(ColumnarResults, RejectsMergedColumnSizeOverflow) {
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+  EXPECT_THROW(
+      ColumnarResults::mergeColumnBuffers(row_set_mem_owner,
+                                          {nullptr, nullptr},
+                                          {std::numeric_limits<size_t>::max(), size_t(1)},
+                                          SQLTypeInfo{kBIGINT},
+                                          0),
+      std::overflow_error);
+}
+
+namespace {
+
+QueryMemoryDescriptor make_dense_baseline_append_test_descriptor(
+    const size_t entry_count) {
+  QueryMemoryDescriptor query_mem_desc(
+      QueryDescriptionType::GroupByBaselineHash, 0, 0, false, {8});
+  query_mem_desc.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+  query_mem_desc.setAllTargetGroupbyIndices({0});
+  query_mem_desc.setEntryCount(entry_count);
+  return query_mem_desc;
+}
+
+std::vector<TargetInfo> make_dense_baseline_append_test_targets() {
+  return generate_custom_agg_target_infos({8}, {}, {}, {});
+}
+
+class TestQueryMemoryDescriptor : public QueryMemoryDescriptor {
+ public:
+  using QueryMemoryDescriptor::QueryMemoryDescriptor;
+
+  void setGroupColWidths(const std::vector<int8_t>& group_col_widths) {
+    resetGroupColWidths(group_col_widths);
+  }
+};
+
+}  // namespace
+
+TEST(Append, DenseBaselineHashPreservesExactRowCount) {
+  const auto target_infos = make_dense_baseline_append_test_targets();
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+  ResultSet target(target_infos,
+                   ExecutorDeviceType::CPU,
+                   make_dense_baseline_append_test_descriptor(2),
+                   row_set_mem_owner,
+                   0,
+                   0);
+  ResultSet source(target_infos,
+                   ExecutorDeviceType::CPU,
+                   make_dense_baseline_append_test_descriptor(3),
+                   row_set_mem_owner,
+                   0,
+                   0);
+  target.allocateStorage({0});
+  source.allocateStorage({0});
+  target.markBaselineHashDenseForReduction(2);
+  source.markBaselineHashDenseForReduction(3);
+
+  target.append(source);
+
+  EXPECT_TRUE(target.isBaselineHashDenseForReduction());
+  EXPECT_EQ(target.entryCount(), size_t(5));
+  EXPECT_EQ(target.rowCount(), size_t(5));
+}
+
+TEST(Append, BaselineHashDensityRequiresDenseSource) {
+  const auto target_infos = make_dense_baseline_append_test_targets();
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+  ResultSet target(target_infos,
+                   ExecutorDeviceType::CPU,
+                   make_dense_baseline_append_test_descriptor(2),
+                   row_set_mem_owner,
+                   0,
+                   0);
+  ResultSet sparse_source(target_infos,
+                          ExecutorDeviceType::CPU,
+                          make_dense_baseline_append_test_descriptor(3),
+                          row_set_mem_owner,
+                          0,
+                          0);
+  target.allocateStorage({0});
+  sparse_source.allocateStorage({0});
+  target.markBaselineHashDenseForReduction(2);
+
+  target.append(sparse_source);
+
+  EXPECT_FALSE(target.isBaselineHashDenseForReduction());
+  EXPECT_EQ(target.entryCount(), size_t(5));
+}
+
+TEST(Sort, WatchdogUsesLiveRowsWhenCapacityExceedsLimit) {
+  ScopeGuard restore = [watchdog = g_enable_watchdog,
+                        parallel_min = g_parallel_top_min,
+                        parallel_max = g_parallel_top_max,
+                        baseline_max = g_watchdog_baseline_sort_max] {
+    g_enable_watchdog = watchdog;
+    g_parallel_top_min = parallel_min;
+    g_parallel_top_max = parallel_max;
+    g_watchdog_baseline_sort_max = baseline_max;
+  };
+  constexpr size_t row_limit = 5;
+  g_parallel_top_max = row_limit;
+  g_watchdog_baseline_sort_max = row_limit;
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  ASSERT_TRUE(executor);
+  const auto target_infos =
+      generate_custom_agg_target_infos({8}, {kSUM}, {kBIGINT}, {kBIGINT});
+  // Multiple keys select the permutation sorter, where these watchdogs apply.
+  const std::list<Analyzer::OrderEntry> order_entries{{1, true, false},
+                                                      {2, false, false}};
+
+  for (const bool watchdog : {false, true}) {
+    g_enable_watchdog = watchdog;
+    // Exercise full sort, serial Top-N, and parallel Top-N independently.
+    for (const int sort_mode : {0, 1, 2}) {
+      const size_t top_n = sort_mode == 0 ? 0 : 3;
+      g_parallel_top_min = sort_mode == 2 ? 0 : 100;
+      for (const bool appended : {false, true}) {
+        for (const auto& shape : {std::pair<size_t, size_t>{4, 4},
+                                  {5, 5},
+                                  {6, 6},
+                                  {12, 0},
+                                  {12, 4},
+                                  {12, 5},
+                                  {12, 6}}) {
+          const auto capacity = shape.first;
+          const auto live_rows = shape.second;
+          SCOPED_TRACE(::testing::Message()
+                       << "watchdog=" << watchdog << " sort_mode=" << sort_mode
+                       << " appended=" << appended << " capacity=" << capacity
+                       << " live_rows=" << live_rows);
+          auto owner = std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(),
+                                                           Executor::UNITARY_EXECUTOR_ID);
+          const auto make_result = [&](size_t entries, size_t rows, size_t offset) {
+            QueryMemoryDescriptor descriptor(
+                QueryDescriptionType::GroupByPerfectHash, 0, capacity, false, {8});
+            descriptor.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+            descriptor.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+            descriptor.setAllTargetGroupbyIndices({0, -1});
+            descriptor.setEntryCount(entries);
+            auto result = std::make_unique<ResultSet>(
+                target_infos, ExecutorDeviceType::CPU, descriptor, owner, 0, 0);
+            auto* buffer = result->allocateStorage()->getUnderlyingBuffer();
+            for (size_t i = 0; i < entries; ++i) {
+              auto* row = buffer + i * descriptor.getRowSize();
+              write_key(
+                  i < rows ? static_cast<int64_t>(offset + i) : EMPTY_KEY_64, row, 8);
+              write_int(row + 8, 0, 8);
+              write_int(row + 16, 0, 8);
+            }
+            return result;
+          };
+          const size_t first_capacity = appended ? capacity / 2 : capacity;
+          const size_t first_rows = appended ? live_rows / 2 : live_rows;
+          auto result = make_result(first_capacity, first_rows, 0);
+          if (appended) {
+            auto second = make_result(
+                capacity - first_capacity, live_rows - first_rows, first_rows);
+            result->append(*second);
+          }
+          ASSERT_EQ(result->entryCount(), capacity);
+          const auto sort = [&] {
+            result->sort(
+                order_entries, top_n, ExecutorDeviceType::CPU, executor.get(), true);
+          };
+          if (watchdog && live_rows > row_limit) {
+            EXPECT_THROW(sort(), WatchdogException);
+            continue;
+          }
+          ASSERT_NO_THROW(sort());
+          const auto expected_rows = top_n ? std::min(top_n, live_rows) : live_rows;
+          ASSERT_EQ(result->rowCount(), expected_rows);
+          for (size_t i = 0; i < expected_rows; ++i) {
+            const auto row = result->getNextRow(false, false);
+            ASSERT_EQ(row.size(), size_t(2));
+            EXPECT_EQ(v<int64_t>(row.front()), static_cast<int64_t>(live_rows - i - 1));
+            EXPECT_EQ(v<int64_t>(row.back()), int64_t(0));
+          }
+          EXPECT_TRUE(result->getNextRow(false, false).empty());
+        }
+      }
+    }
+  }
+}
+
+TEST(Sort, ParallelTopMergesSortedRanges) {
+  ScopeGuard restore = [parallel_min = g_parallel_top_min,
+                        cpu_threads = g_cpu_threads_override] {
+    g_parallel_top_min = parallel_min;
+    g_cpu_threads_override = cpu_threads;
+  };
+  g_parallel_top_min = 0;
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  ASSERT_TRUE(executor);
+  const auto targets =
+      generate_custom_agg_target_infos({8}, {kSUM}, {kBIGINT}, {kBIGINT});
+  const auto value_for_key = [](int64_t key) {
+    return key % 11 ? (key * 37) % 19 : inline_int_null_value<int64_t>();
+  };
+  for (const bool columnar : {false, true}) {
+    for (const size_t capacity : {size_t{7}, size_t{257}}) {
+      for (const unsigned workers : {1U, 3U, 64U}) {
+        g_cpu_threads_override = workers;
+        for (const bool appended : {false, true}) {
+          // Sparse inputs include empty worker ranges, not just holes within a range.
+          for (const int shape : {0, 1, 2}) {
+            const auto populated = [&](size_t key) {
+              return shape == 0 || (shape == 1 && key % 17 == 0);
+            };
+            for (const bool descending : {false, true}) {
+              for (const size_t top_n : {size_t{1}, size_t{7}, size_t{64}, size_t{300}}) {
+                SCOPED_TRACE(::testing::Message()
+                             << "capacity=" << capacity << " workers=" << workers
+                             << " appended=" << appended << " shape=" << shape
+                             << " descending=" << descending << " top_n=" << top_n
+                             << " columnar=" << columnar);
+                auto owner = std::make_shared<RowSetMemoryOwner>(
+                    Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+                const auto make_result = [&](size_t entries, size_t offset) {
+                  QueryMemoryDescriptor descriptor(
+                      QueryDescriptionType::GroupByPerfectHash, 0, capacity, false, {8});
+                  descriptor.addColSlotInfo({std::make_tuple(int8_t{8}, int8_t{8})});
+                  descriptor.addColSlotInfo({std::make_tuple(int8_t{8}, int8_t{8})});
+                  descriptor.setAllTargetGroupbyIndices({0, -1});
+                  descriptor.setEntryCount(entries);
+                  descriptor.setOutputColumnar(columnar);
+                  auto result = std::make_unique<ResultSet>(
+                      targets, ExecutorDeviceType::CPU, descriptor, owner, 0, 0);
+                  auto* buffer = result->allocateStorage()->getUnderlyingBuffer();
+                  for (size_t i = 0; i < entries; ++i) {
+                    const auto key = offset + i;
+                    auto* row = buffer + i * (columnar ? 8 : descriptor.getRowSize());
+                    write_key(populated(key) ? static_cast<int64_t>(key) : EMPTY_KEY_64,
+                              row,
+                              8);
+                    auto* first = columnar
+                                      ? buffer + descriptor.getColOffInBytes(0) + i * 8
+                                      : row + 8;
+                    auto* second = columnar
+                                       ? buffer + descriptor.getColOffInBytes(1) + i * 8
+                                       : row + 16;
+                    write_int(first, 0, 8);
+                    write_int(second, value_for_key(key), 8);
+                  }
+                  return result;
+                };
+                const auto first_capacity = appended ? capacity / 2 : capacity;
+                auto result = make_result(first_capacity, 0);
+                if (appended) {
+                  auto second = make_result(capacity - first_capacity, first_capacity);
+                  result->append(*second);
+                }
+                std::vector<int64_t> expected;
+                for (size_t key = 0; key < capacity; ++key) {
+                  if (populated(key)) {
+                    expected.push_back(key);
+                  }
+                }
+                // The NULL sentinel sorts first ascending and last descending.
+                std::sort(expected.begin(), expected.end(), [&](int64_t a, int64_t b) {
+                  const auto va = value_for_key(a);
+                  const auto vb = value_for_key(b);
+                  return va == vb ? a < b : (descending ? va > vb : va < vb);
+                });
+                expected.resize(std::min(top_n, expected.size()));
+                result->sort({{2, descending, !descending}, {1, false, false}},
+                             top_n,
+                             ExecutorDeviceType::CPU,
+                             executor.get(),
+                             true);
+                ASSERT_EQ(result->rowCount(), expected.size());
+                for (const auto key : expected) {
+                  const auto row = result->getNextRow(false, false);
+                  ASSERT_EQ(row.size(), size_t{2});
+                  EXPECT_EQ(v<int64_t>(row[0]), key);
+                  EXPECT_EQ(v<int64_t>(row[1]), value_for_key(key));
+                }
+                EXPECT_TRUE(result->getNextRow(false, false).empty());
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST(LazyFetch, GlobalRowIdsDoNotAliasAppendedStorageLocalRows) {
+  const SQLTypeInfo bigint_ti(kBIGINT, false);
+  const SQLTypeInfo null_ti(kNULLT, false);
+  const std::vector<TargetInfo> target_infos{
+      TargetInfo{false, kMIN, bigint_ti, null_ti, true, false}};
+  const std::vector<ColumnLazyFetchInfo> lazy_fetch_info{
+      ColumnLazyFetchInfo{true, 0, bigint_ti, false}};
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  ASSERT_TRUE(executor);
+  QueryMemoryDescriptor query_mem_desc(
+      executor.get(), 1, QueryDescriptionType::Projection);
+  query_mem_desc.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+
+  const std::array<int64_t, 2> first_storage_values{{100, 101}};
+  const std::array<int64_t, 2> second_storage_values{{200, 201}};
+  const auto make_result = [&](const std::array<int64_t, 2>& values,
+                               const int64_t first_fragment_offset) {
+    auto result = std::make_unique<ResultSet>(
+        target_infos,
+        lazy_fetch_info,
+        std::vector<std::vector<const int8_t*>>{
+            {reinterpret_cast<const int8_t*>(values.data())}},
+        ColumnBufferLayouts{},
+        std::vector<std::vector<int64_t>>{{first_fragment_offset}},
+        std::vector<int64_t>{static_cast<int64_t>(values.size())},
+        ExecutorDeviceType::CPU,
+        0,
+        -1,
+        query_mem_desc,
+        row_set_mem_owner,
+        0,
+        0);
+    auto* storage = const_cast<ResultSetStorage*>(result->allocateStorage({0}));
+    reinterpret_cast<int64_t*>(storage->getUnderlyingBuffer())[0] = 0;
+    return result;
+  };
+
+  auto first = make_result(first_storage_values, 0);
+  auto second = make_result(second_storage_values, 2);
+  first->append(*second);
+  first->moveToBegin();
+
+  const auto first_row = first->getNextRow(true, true);
+  ASSERT_EQ(first_row.size(), size_t(1));
+  EXPECT_EQ(v<int64_t>(first_row.front()), int64_t(100));
+  const auto second_row = first->getNextRow(true, true);
+  ASSERT_EQ(second_row.size(), size_t(1));
+  EXPECT_EQ(v<int64_t>(second_row.front()), int64_t(100));
+}
+
+#ifdef HAVE_CUDA
+TEST(DeviceColumnarFragments, ExactGroupByCoverageSuppliesRowCountMetadata) {
+  if (!QR::get()->gpusPresent()) {
+    GTEST_SKIP() << "GPU not available";
+  }
+
+  constexpr size_t entry_count = 2;
+  const auto target_infos = make_dense_baseline_append_test_targets();
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+  ResultSet result(target_infos,
+                   std::vector<ColumnLazyFetchInfo>{},
+                   std::vector<std::vector<const int8_t*>>{},
+                   ColumnBufferLayouts{},
+                   std::vector<std::vector<int64_t>>{},
+                   std::vector<int64_t>{},
+                   ExecutorDeviceType::GPU,
+                   0,
+                   -1,
+                   make_dense_baseline_append_test_descriptor(entry_count),
+                   row_set_mem_owner,
+                   0,
+                   0);
+  result.allocateStorage({0});
+  result.markBaselineHashDenseForReduction(entry_count);
+
+  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
+  auto gpu_allocator = std::make_shared<CudaAllocator>(&data_mgr, 0, nullptr);
+  result.setCudaAllocator(gpu_allocator);
+  const std::array<int64_t, entry_count> device_values{{10, 20}};
+  auto* device_column = gpu_allocator->alloc(sizeof(device_values));
+  gpu_allocator->copyToDevice(device_column,
+                              device_values.data(),
+                              sizeof(device_values),
+                              "Device fragment metadata row-count test");
+  result.addDeviceColumnarBufferFragment(0, 0, device_column, entry_count);
+  result.markDeviceColumnarFragmentsCoverLogicalRows();
+  result.markDeviceColumnarCpuStorageInvalid();
+
+  // The host hash storage is intentionally not materialized. Complete device-fragment
+  // coverage is the authoritative row-count invariant for downstream metadata.
+  result.invalidateCachedRowCount();
+  std::vector<ResultSet::DeviceColumnarFragmentInfo> fragment_info;
+  ASSERT_TRUE(result.getDeviceColumnarFragmentInfo(fragment_info));
+  ASSERT_EQ(fragment_info.size(), size_t(1));
+  EXPECT_EQ(fragment_info.front().entry_count, entry_count);
+  EXPECT_EQ(result.rowCount(), entry_count);
+}
+
+TEST(DeviceRowwiseFragments, ProjectionMaterializesExactDensePrefixOnCpuDemand) {
+  if (!QR::get()->gpusPresent()) {
+    GTEST_SKIP() << "GPU not available";
+  }
+
+  constexpr size_t entry_count = 3;
+  const SQLTypeInfo bigint_ti(kBIGINT, false);
+  const SQLTypeInfo null_ti(kNULLT, false);
+  const std::vector<TargetInfo> target_infos{
+      TargetInfo{false, kMIN, bigint_ti, null_ti, true, false},
+      TargetInfo{false, kMIN, bigint_ti, null_ti, true, false}};
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  ASSERT_TRUE(executor);
+  QueryMemoryDescriptor query_mem_desc(
+      executor.get(), entry_count, QueryDescriptionType::Projection);
+  query_mem_desc.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+  query_mem_desc.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+  ASSERT_FALSE(query_mem_desc.didOutputColumnar());
+  ASSERT_EQ(query_mem_desc.getRowSize(), size_t(2 * sizeof(int64_t)));
+
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+  ResultSet result(target_infos,
+                   std::vector<ColumnLazyFetchInfo>{},
+                   std::vector<std::vector<const int8_t*>>{},
+                   ColumnBufferLayouts{},
+                   std::vector<std::vector<int64_t>>{},
+                   std::vector<int64_t>{},
+                   ExecutorDeviceType::GPU,
+                   0,
+                   -1,
+                   query_mem_desc,
+                   row_set_mem_owner,
+                   0,
+                   0);
+  result.allocateStorage({0, 0});
+
+  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
+  auto gpu_allocator = std::make_shared<CudaAllocator>(&data_mgr, 0, nullptr);
+  result.setCudaAllocator(gpu_allocator);
+  const std::array<int64_t, entry_count * 2> device_rows{{10, 100, 20, 200, 30, 300}};
+  auto* device_buffer = gpu_allocator->alloc(sizeof(device_rows));
+  gpu_allocator->copyToDevice(device_buffer,
+                              device_rows.data(),
+                              sizeof(device_rows),
+                              "Deferred rowwise projection materialization test");
+  result.setCachedRowCount(entry_count);
+  result.addDeviceRowwiseBufferFragment(0, device_buffer, entry_count);
+  ASSERT_TRUE(result.canDeferDeviceColumnarCpuMaterialization());
+  result.markDeviceColumnarCpuStorageInvalid();
+
+  result.moveToBegin();
+  for (const auto& expected : std::array<std::array<int64_t, 2>, entry_count>{
+           {{{10, 100}}, {{20, 200}}, {{30, 300}}}}) {
+    const auto row = result.getNextRow(true, true);
+    ASSERT_EQ(row.size(), size_t(2));
+    EXPECT_EQ(v<int64_t>(row[0]), expected[0]);
+    EXPECT_EQ(v<int64_t>(row[1]), expected[1]);
+  }
+}
+
+TEST(Append, MixedCpuGpuProjectionDoesNotExposePartialDeviceRows) {
+  if (!QR::get()->gpusPresent()) {
+    GTEST_SKIP() << "GPU not available";
+  }
+
+  const SQLTypeInfo bigint_ti(kBIGINT, false);
+  const SQLTypeInfo null_ti(kNULLT, false);
+  const std::vector<TargetInfo> target_infos{
+      TargetInfo{false, kMIN, bigint_ti, null_ti, true, false}};
+  constexpr size_t rows_per_result = 2;
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  ASSERT_TRUE(executor);
+  QueryMemoryDescriptor query_mem_desc(
+      executor.get(), rows_per_result, QueryDescriptionType::Projection);
+  query_mem_desc.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+  query_mem_desc.setOutputColumnar(true);
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+
+  ResultSet gpu_result(target_infos,
+                       std::vector<ColumnLazyFetchInfo>{},
+                       std::vector<std::vector<const int8_t*>>{},
+                       ColumnBufferLayouts{},
+                       std::vector<std::vector<int64_t>>{},
+                       std::vector<int64_t>{},
+                       ExecutorDeviceType::GPU,
+                       0,
+                       -1,
+                       query_mem_desc,
+                       row_set_mem_owner,
+                       0,
+                       0);
+  gpu_result.allocateStorage({0});
+  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
+  auto gpu_allocator = std::make_shared<CudaAllocator>(&data_mgr, 0, nullptr);
+  gpu_result.setCudaAllocator(gpu_allocator);
+  const std::array<int64_t, rows_per_result> gpu_values{{10, 20}};
+  auto* gpu_buffer = gpu_allocator->alloc(sizeof(gpu_values));
+  gpu_allocator->copyToDevice(
+      gpu_buffer, gpu_values.data(), sizeof(gpu_values), "ResultSet append test");
+  gpu_result.addDeviceColumnarBufferFragment(0, 0, gpu_buffer, rows_per_result);
+  gpu_result.markDeviceColumnarCpuStorageInvalid();
+
+  std::vector<ResultSet::DeviceColumnarFragmentInfo> fragment_info;
+  ASSERT_TRUE(gpu_result.getDeviceColumnarFragmentInfo(fragment_info));
+
+  ResultSet cpu_result(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
+  auto* cpu_storage = const_cast<ResultSetStorage*>(cpu_result.allocateStorage({0}));
+  auto* cpu_buffer = cpu_storage->getUnderlyingBuffer();
+  auto* row_indices = reinterpret_cast<int64_t*>(cpu_buffer);
+  row_indices[0] = 0;
+  row_indices[1] = 1;
+  auto* cpu_values =
+      reinterpret_cast<int64_t*>(cpu_buffer + query_mem_desc.getColOffInBytes(0));
+  cpu_values[0] = 30;
+  cpu_values[1] = 40;
+  cpu_result.setCachedRowCount(rows_per_result);
+
+  gpu_result.append(cpu_result);
+  fragment_info.clear();
+  EXPECT_FALSE(gpu_result.getDeviceColumnarFragmentInfo(fragment_info));
+  ASSERT_EQ(gpu_result.rowCount(), size_t(4));
+  gpu_result.moveToBegin();
+  for (const auto expected : {int64_t(10), int64_t(20), int64_t(30), int64_t(40)}) {
+    const auto row = gpu_result.getNextRow(true, true);
+    ASSERT_EQ(row.size(), size_t(1));
+    EXPECT_EQ(v<int64_t>(row.front()), expected);
+  }
+}
+
+TEST(Append, BaselineBoundaryRowsCompletePartialDeviceRepresentations) {
+  if (!QR::get()->gpusPresent()) {
+    GTEST_SKIP() << "GPU not available";
+  }
+
+  const auto target_infos = make_dense_baseline_append_test_targets();
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+  ResultSet target(target_infos,
+                   std::vector<ColumnLazyFetchInfo>{},
+                   std::vector<std::vector<const int8_t*>>{},
+                   ColumnBufferLayouts{},
+                   std::vector<std::vector<int64_t>>{},
+                   std::vector<int64_t>{},
+                   ExecutorDeviceType::GPU,
+                   0,
+                   -1,
+                   make_dense_baseline_append_test_descriptor(2),
+                   row_set_mem_owner,
+                   0,
+                   0);
+  target.allocateStorage({0});
+  target.markBaselineHashDenseForReduction(2);
+
+  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
+  auto gpu_allocator = std::make_shared<CudaAllocator>(&data_mgr, 0, nullptr);
+  target.setCudaAllocator(gpu_allocator);
+  const std::array<int64_t, 2> device_values{{10, 20}};
+  auto* device_column = gpu_allocator->alloc(sizeof(device_values));
+  gpu_allocator->copyToDevice(device_column,
+                              device_values.data(),
+                              sizeof(device_values),
+                              "Baseline boundary append test column");
+  target.addDeviceColumnarBufferFragment(0, 0, device_column, device_values.size());
+  target.markDeviceColumnarFragmentsCoverLogicalRows();
+
+  const std::array<int64_t, 2> partial_row{{10, 10}};
+  auto* device_row = gpu_allocator->alloc(sizeof(partial_row));
+  gpu_allocator->copyToDevice(device_row,
+                              partial_row.data(),
+                              sizeof(partial_row),
+                              "Baseline boundary append test row");
+  target.addDeviceRowwiseBufferFragment(0, device_row, 1);
+  target.markDeviceColumnarCpuStorageInvalid();
+
+  ResultSet boundary(
+      target_infos,
+      ExecutorDeviceType::CPU,
+      [] {
+        auto descriptor = make_dense_baseline_append_test_descriptor(1);
+        descriptor.setGroupColCompactWidth(sizeof(int32_t));
+        return descriptor;
+      }(),
+      row_set_mem_owner,
+      0,
+      0);
+  auto* boundary_storage = const_cast<ResultSetStorage*>(boundary.allocateStorage({0}));
+  auto* boundary_row =
+      reinterpret_cast<int32_t*>(boundary_storage->getUnderlyingBuffer());
+  boundary_row[0] = 30;
+  boundary.markBaselineHashDenseForReduction(1);
+
+  ASSERT_TRUE(
+      target.appendDeviceOnlyColumnarFragmentsFromCpuBaselineHashResult(boundary));
+  EXPECT_TRUE(target.isBaselineHashDenseForReduction());
+  EXPECT_EQ(target.entryCount(), size_t(3));
+  EXPECT_EQ(target.rowCount(), size_t(3));
+
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> rowwise_fragments;
+  EXPECT_FALSE(target.getDeviceRowwiseBufferFragments(rowwise_fragments));
+
+  std::vector<ResultSet::DeviceColumnarFragmentInfo> fragment_info;
+  ASSERT_TRUE(target.getDeviceColumnarFragmentInfo(fragment_info));
+  ASSERT_EQ(fragment_info.size(), size_t(2));
+  EXPECT_EQ(fragment_info[0].entry_count, size_t(2));
+  EXPECT_EQ(fragment_info[1].entry_count, size_t(1));
+
+  std::vector<ResultSet::DeviceColumnarBufferFragment> column_fragments;
+  ASSERT_TRUE(
+      target.getDeviceColumnarBufferFragments(0, sizeof(int64_t), column_fragments));
+  ASSERT_EQ(column_fragments.size(), size_t(2));
+  int64_t appended_value{0};
+  column_fragments.back().owner->copyFromDevice(
+      &appended_value,
+      column_fragments.back().buffer,
+      sizeof(appended_value),
+      "Baseline boundary append test verification");
+  EXPECT_EQ(appended_value, int64_t(30));
+}
+
+TEST(ResultSetCache, MaterializesGpuBuffersWithoutRetainingQueryAllocator) {
+  if (!QR::get()->gpusPresent()) {
+    GTEST_SKIP() << "GPU not available";
+  }
+
+  constexpr size_t entry_count = 2;
+  const auto target_infos = make_dense_baseline_append_test_targets();
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  ASSERT_TRUE(executor);
+  TestQueryMemoryDescriptor query_mem_desc(
+      executor.get(), entry_count, QueryDescriptionType::GroupByBaselineHash);
+  query_mem_desc.setGroupColWidths({8});
+  query_mem_desc.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+  const auto row_size = query_mem_desc.getRowSize();
+  ASSERT_EQ(row_size, size_t(2 * sizeof(int64_t)));
+  auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>(
+      Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+  auto& data_mgr = Catalog_Namespace::SysCatalog::instance().getDataMgr();
+  const std::array<int64_t, entry_count * 2> rows{{1, 10, 2, 20}};
+
+  ResultSetPtr cached_result;
+  std::weak_ptr<CudaAllocator> query_allocator_lifetime;
+  {
+    auto query_result =
+        std::make_shared<ResultSet>(target_infos,
+                                    std::vector<ColumnLazyFetchInfo>{},
+                                    std::vector<std::vector<const int8_t*>>{},
+                                    ColumnBufferLayouts{},
+                                    std::vector<std::vector<int64_t>>{},
+                                    std::vector<int64_t>{},
+                                    ExecutorDeviceType::GPU,
+                                    0,
+                                    -1,
+                                    query_mem_desc,
+                                    row_set_mem_owner,
+                                    0,
+                                    0);
+    query_result->allocateStorage({0});
+    query_result->markBaselineHashDenseForReduction(entry_count);
+
+    auto query_allocator = std::make_shared<CudaAllocator>(&data_mgr, 0, nullptr);
+    query_allocator_lifetime = query_allocator;
+    query_result->setCudaAllocator(query_allocator);
+    auto* query_buffer = query_allocator->alloc(sizeof(rows));
+    query_allocator->copyToDevice(
+        query_buffer, rows.data(), sizeof(rows), "ResultSet cache query buffer");
+    query_result->addDeviceRowwiseBufferFragment(0, query_buffer, entry_count);
+    query_result->markDeviceColumnarCpuStorageInvalid();
+
+    cached_result = query_result->copyForCacheInsertion();
+    ASSERT_TRUE(cached_result);
+    std::vector<ResultSet::DeviceRowwiseBufferFragment> cached_fragments;
+    EXPECT_FALSE(cached_result->getDeviceRowwiseBufferFragments(cached_fragments));
+
+    std::array<int64_t, entry_count * 2> cached_rows{};
+    const auto* cached_storage = cached_result->getStorage();
+    ASSERT_TRUE(cached_storage);
+    memcpy(
+        cached_rows.data(), cached_storage->getUnderlyingBuffer(), sizeof(cached_rows));
+    EXPECT_EQ(cached_rows, rows);
+  }
+
+  EXPECT_TRUE(query_allocator_lifetime.expired());
+  ASSERT_TRUE(cached_result);
+  auto recycled_result = cached_result->copyForCacheRetrieval();
+  ASSERT_TRUE(recycled_result);
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> recycled_fragments;
+  EXPECT_FALSE(recycled_result->getDeviceRowwiseBufferFragments(recycled_fragments));
+  std::array<int64_t, entry_count * 2> recycled_rows{};
+  const auto* recycled_storage = recycled_result->getStorage();
+  ASSERT_TRUE(recycled_storage);
+  memcpy(recycled_rows.data(),
+         recycled_storage->getUnderlyingBuffer(),
+         sizeof(recycled_rows));
+  EXPECT_EQ(recycled_rows, rows);
+}
+#endif
 
 namespace {
 
@@ -2020,7 +2729,7 @@ TEST(MoreReduce, OffsetRewrite) {
     buff1[0 * 4 + 1] = 7;
     buff1[1 * 4 + 1] = 8;
     buff1[2 * 4 + 1] = 9;
-    buff1[0 * 4 + 2] = 0;
+    buff1[0 * 4 + 2] = -1;
     buff1[1 * 4 + 2] = 0;
     buff1[2 * 4 + 2] = 1;
     buff1[0 * 4 + 3] = 0;
@@ -2035,7 +2744,7 @@ TEST(MoreReduce, OffsetRewrite) {
     buff2[0 * 4 + 1] = 7;
     buff2[1 * 4 + 1] = 8;
     buff2[2 * 4 + 1] = 9;
-    buff2[0 * 4 + 2] = 0;
+    buff2[0 * 4 + 2] = -1;
     buff2[1 * 4 + 2] = 2;
     buff2[2 * 4 + 2] = 1;
     buff2[0 * 4 + 3] = 0;
@@ -2056,7 +2765,9 @@ TEST(MoreReduce, OffsetRewrite) {
     const auto row = rs1->getNextRow(false, false);
     CHECK_EQ(size_t(2), row.size());
     ASSERT_EQ(7, v<int64_t>(row[0]));
-    ASSERT_EQ("foo", boost::get<std::string>(v<NullableString>(row[1])));
+    const auto nullable_str = v<NullableString>(row[1]);
+    const auto null_ptr = boost::get<void*>(&nullable_str);
+    ASSERT_TRUE(null_ptr && !*null_ptr);
   }
   {
     const auto row = rs1->getNextRow(false, false);

@@ -6,6 +6,7 @@
 #include "OutputBufferInitialization.h"
 #include "BufferCompaction.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
+#include "ResultSetBufferAccessors.h"
 #include "TypePunning.h"
 
 #include "../Analyzer/Analyzer.h"
@@ -17,11 +18,17 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
   std::vector<int64_t> agg_init_vals;
   agg_init_vals.reserve(query_mem_desc.getSlotCount());
   const bool is_group_by{query_mem_desc.isGroupBy()};
+  const bool separate_varlen_storage{query_mem_desc.hasVarlenOutput()};
   for (size_t target_idx = 0, agg_col_idx = 0; target_idx < targets.size();
-       ++target_idx, ++agg_col_idx) {
+       ++target_idx) {
     CHECK_LT(agg_col_idx, query_mem_desc.getSlotCount());
     const auto agg_info = targets[target_idx];
+    const auto next_agg_col_idx =
+        advance_slot(agg_col_idx, agg_info, separate_varlen_storage);
     const auto& agg_ti = agg_info.sql_type;
+    const bool has_separate_varlen_output_slot =
+        separate_varlen_storage && !agg_info.is_agg &&
+        query_mem_desc.slotIsVarlenOutput(agg_col_idx);
     if (!agg_info.is_agg || agg_info.agg_kind == kSAMPLE) {
       if (agg_info.agg_kind == kSAMPLE && agg_ti.is_string() &&
           agg_ti.get_compression() != kENCODING_NONE) {
@@ -30,25 +37,29 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
                                 agg_ti,
                                 is_group_by,
                                 query_mem_desc.getCompactByteWidth()));
+        agg_col_idx = next_agg_col_idx;
         continue;
       }
       if (query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx) > 0) {
         agg_init_vals.push_back(0);
       }
       if (agg_info.is_varlen_projection) {
+        agg_col_idx = next_agg_col_idx;
         continue;
       }
-      if (agg_ti.is_array() ||
-          (agg_ti.is_string() && agg_ti.get_compression() == kENCODING_NONE)) {
+      if (!has_separate_varlen_output_slot &&
+          (agg_ti.is_array() ||
+           (agg_ti.is_string() && agg_ti.get_compression() == kENCODING_NONE))) {
         agg_init_vals.push_back(0);
       }
-      if (agg_ti.is_geometry()) {
+      if (agg_ti.is_geometry() && !has_separate_varlen_output_slot) {
         agg_init_vals.push_back(0);
         for (auto i = 1; i < agg_ti.get_physical_coord_cols(); ++i) {
           agg_init_vals.push_back(0);
           agg_init_vals.push_back(0);
         }
       }
+      agg_col_idx = next_agg_col_idx;
       continue;
     }
     CHECK_GT(query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx), 0);
@@ -66,9 +77,9 @@ std::vector<int64_t> init_agg_val_vec(const std::vector<TargetInfo>& targets,
                             is_group_by || float_argument_input,
                             (float_argument_input ? sizeof(float) : chosen_bytes)));
     if (kAVG == agg_info.agg_kind) {
-      ++agg_col_idx;
       agg_init_vals.push_back(0);
     }
+    agg_col_idx = next_agg_col_idx;
   }
   return agg_init_vals;
 }
@@ -259,11 +270,7 @@ std::vector<int64_t> init_agg_val_vec(
     const QueryMemoryDescriptor& query_mem_desc) {
   std::vector<TargetInfo> target_infos;
   target_infos.reserve(targets.size());
-  const auto agg_col_count = query_mem_desc.getSlotCount();
-  for (size_t target_idx = 0, agg_col_idx = 0;
-       target_idx < targets.size() && agg_col_idx < agg_col_count;
-       ++target_idx, ++agg_col_idx) {
-    const auto target_expr = targets[target_idx];
+  for (const auto target_expr : targets) {
     auto target = get_target_info(target_expr, g_bigint_count);
     auto arg_expr = agg_arg(target_expr);
     if (arg_expr) {

@@ -4,6 +4,7 @@
  */
 
 #include "QueryTemplateGenerator.h"
+#include "GpuSharedMemoryUtils.h"
 #include "IRCodegenUtils.h"
 #include "Logger/Logger.h"
 
@@ -98,6 +99,7 @@ Params<NTYPES> make_params(llvm::Module const* const mod, bool const hoist_liter
     constexpr llvm::Attribute::AttrKind UWTable = llvm::Attribute::UWTable;
     params.pushBack(pi32_type, "row_index_resume", NoCapture, ReadOnly);
     params.pushBack(ppi8_type, "byte_stream", NoCapture, ReadOnly);
+    params.pushBack(pi64_type, "selected_rowids", NoCapture, ReadOnly);
     if (hoist_literals) {
       params.pushBack(pi8_type, "literals", NoCapture, ReadOnly);
     }
@@ -115,6 +117,7 @@ Params<NTYPES> make_params(llvm::Module const* const mod, bool const hoist_liter
     // but kept them for query_group_by_template().
     params.pushBack(pi32_type, "row_index_resume", NoCapture);  // start_rowid
     params.pushBack(ppi8_type, "byte_stream", NoCapture);       // col_buffers
+    params.pushBack(pi64_type, "selected_rowids", NoCapture);
     if (hoist_literals) {
       params.pushBack(pi8_type, "literals", NoCapture);
     }
@@ -194,7 +197,8 @@ llvm::Function* pos_step(llvm::Module* mod) {
 
 llvm::Function* row_process(llvm::Module* mod,
                             const size_t aggr_col_count,
-                            const bool hoist_literals) {
+                            const bool hoist_literals,
+                            const bool use_dense_pos) {
   using namespace llvm;
 
   std::vector<Type*> func_args;
@@ -219,7 +223,10 @@ llvm::Function* row_process(llvm::Module* mod,
 
   func_args.push_back(pi64_type);  // aggregate init values
 
-  func_args.push_back(i64_type);   // pos
+  func_args.push_back(i64_type);  // pos
+  if (use_dense_pos) {
+    func_args.push_back(i64_type);  // dense_pos
+  }
   func_args.push_back(pi64_type);  // frag_row_off_ptr
   func_args.push_back(pi32_type);  // frag_id_ptr
   func_args.push_back(pi64_type);  // row_count_ptr
@@ -256,7 +263,9 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
     const size_t aggr_col_count,
     const bool hoist_literals,
     const bool is_estimate_query,
-    const GpuSharedMemoryContext& gpu_smem_context) {
+    const bool use_selected_rowids,
+    const GpuSharedMemoryContext& gpu_smem_context,
+    const std::vector<TargetInfo>& target_infos) {
   using namespace llvm;
 
   auto* const i32_type = llvm::IntegerType::get(mod->getContext(), 32);
@@ -268,8 +277,8 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
   CHECK(func_pos_step);
   llvm::Function* const func_group_buff_idx = group_buff_idx(mod);
   CHECK(func_group_buff_idx);
-  llvm::Function* const func_row_process =
-      row_process(mod, is_estimate_query ? 1 : aggr_col_count, hoist_literals);
+  llvm::Function* const func_row_process = row_process(
+      mod, is_estimate_query ? 1 : aggr_col_count, hoist_literals, use_selected_rowids);
   CHECK(func_row_process);
 
   constexpr bool IS_GROUP_BY = false;
@@ -398,7 +407,26 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
         new LoadInst(get_pointer_element_type(out), out, "", false, bb_forbody));
   }
   row_process_params.push_back(agg_init_val);
-  row_process_params.push_back(pos);
+  llvm::Value* row_pos = pos;
+  if (use_selected_rowids) {
+    auto* const selected_rowids = get_arg_by_name(query_func_ptr, "selected_rowids");
+    auto* const selected_rowid_ptr = GetElementPtrInst::CreateInBounds(
+        selected_rowids->getType()->getPointerElementType(),
+        selected_rowids,
+        pos,
+        "selected_rowid_ptr",
+        bb_forbody);
+    row_pos = new LoadInst(get_pointer_element_type(selected_rowid_ptr),
+                           selected_rowid_ptr,
+                           "selected_rowid",
+                           false,
+                           bb_forbody);
+    row_pos->setName("selected_rowid");
+  }
+  row_process_params.push_back(row_pos);
+  if (use_selected_rowids) {
+    row_process_params.push_back(pos);
+  }
   row_process_params.push_back(get_arg_by_name(query_func_ptr, "frag_row_off_ptr"));
   row_process_params.push_back(get_arg_by_name(query_func_ptr, "frag_id_ptr"));
   row_process_params.push_back(row_count_ptr);
@@ -447,6 +475,9 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
    * runtime depending on the target expressions.
    */
   if (!is_estimate_query) {
+    if (gpu_smem_context.isSharedMemoryUsed()) {
+      CHECK_EQ(target_infos.size(), aggr_col_count);
+    }
     std::vector<PHINode*> result_vec;
     for (int64_t i = aggr_col_count - 1; i >= 0; --i) {
       auto result =
@@ -466,12 +497,25 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
             col_idx,
             "",
             bb_exit);
-        // TODO: generalize this once we want to support other types of aggregate
-        // functions besides COUNT.
-        auto agg_func = mod->getFunction("agg_sum_shared");
-        CHECK(agg_func);
-        CallInst::Create(
-            agg_func, std::vector<llvm::Value*>{target_addr, result_vec[i]}, "", bb_exit);
+        const auto& target_info = target_infos[i];
+        if (shared::is_any<kCOUNT, kCOUNT_IF>(target_info.agg_kind)) {
+          auto agg_func = mod->getFunction("agg_sum_shared");
+          CHECK(agg_func);
+          CallInst::Create(agg_func,
+                           std::vector<llvm::Value*>{target_addr, result_vec[i]},
+                           "",
+                           bb_exit);
+        } else if (gpu_shared_memory::supports_non_grouped_sum(target_info)) {
+          auto agg_func = mod->getFunction("agg_sum_skip_val_shared");
+          CHECK(agg_func);
+          CallInst::Create(
+              agg_func,
+              std::vector<llvm::Value*>{target_addr, result_vec[i], agg_init_val_vec[i]},
+              "",
+              bb_exit);
+        } else {
+          UNREACHABLE();
+        }
       } else {
         auto out_gep = GetElementPtrInst::CreateInBounds(
             out->getType()->getPointerElementType(), out, col_idx, "", bb_exit);
@@ -498,12 +542,11 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
       auto sync_thread_func = mod->getFunction("sync_threadblock");
       CHECK(sync_thread_func);
       CallInst::Create(sync_thread_func, std::vector<llvm::Value*>{}, "", bb_exit);
-      auto reduce_smem_to_gmem_func = mod->getFunction("write_back_non_grouped_agg");
-      CHECK(reduce_smem_to_gmem_func);
       // each thread reduce the aggregate target corresponding to its own thread ID.
       // If there are more targets than threads we do not currently use shared memory
       // optimization. This can be relaxed if necessary
       for (size_t i = 0; i < aggr_col_count; i++) {
+        const auto& target_info = target_infos[i];
         auto out_gep =
             GetElementPtrInst::CreateInBounds(out->getType()->getPointerElementType(),
                                               out,
@@ -515,12 +558,29 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_template(
                                                "gmem_output_buffer_" + std::to_string(i),
                                                false,
                                                bb_exit);
-        CallInst::Create(
-            reduce_smem_to_gmem_func,
-            std::vector<llvm::Value*>{
-                smem_output_buffer, gmem_output_buffer, ConstantInt::get(i32_type, i)},
-            "",
-            bb_exit);
+        if (shared::is_any<kCOUNT, kCOUNT_IF>(target_info.agg_kind)) {
+          auto reduce_smem_to_gmem_func = mod->getFunction("write_back_non_grouped_agg");
+          CHECK(reduce_smem_to_gmem_func);
+          CallInst::Create(
+              reduce_smem_to_gmem_func,
+              std::vector<llvm::Value*>{
+                  smem_output_buffer, gmem_output_buffer, ConstantInt::get(i32_type, i)},
+              "",
+              bb_exit);
+        } else if (gpu_shared_memory::supports_non_grouped_sum(target_info)) {
+          auto reduce_smem_to_gmem_func =
+              mod->getFunction("write_back_non_grouped_agg_sum_skip_val");
+          CHECK(reduce_smem_to_gmem_func);
+          CallInst::Create(reduce_smem_to_gmem_func,
+                           std::vector<llvm::Value*>{smem_output_buffer,
+                                                     gmem_output_buffer,
+                                                     ConstantInt::get(i32_type, i),
+                                                     agg_init_val_vec[i]},
+                           "",
+                           bb_exit);
+        } else {
+          UNREACHABLE();
+        }
       }
     }
   }
@@ -560,7 +620,7 @@ std::tuple<llvm::Function*, llvm::CallInst*> query_group_by_template(
   CHECK(func_pos_step);
   llvm::Function* const func_group_buff_idx = group_buff_idx(mod);
   CHECK(func_group_buff_idx);
-  llvm::Function* const func_row_process = row_process(mod, 0, hoist_literals);
+  llvm::Function* const func_row_process = row_process(mod, 0, hoist_literals, false);
   CHECK(func_row_process);
   llvm::Function* const func_init_shared_mem =
       gpu_smem_context.isSharedMemoryUsed() ? mod->getFunction("init_shared_mem")

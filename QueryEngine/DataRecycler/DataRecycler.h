@@ -28,6 +28,8 @@ enum CacheItemType {
   PERFECT_HT = 0,                   // Perfect hashtable
   BASELINE_HT,                      // Baseline hashtable
   BBOX_INTERSECT_HT,                // Bounding box intersect hashtable
+  BITMAP_HT,                        // Exact bitmap membership hashtable
+  RANKED_BITMAP_HT,                 // Ranked bitmap hashtable
   HT_HASHING_SCHEME,                // Hashtable layout
   BASELINE_HT_APPROX_CARD,          // Approximated cardinality for baseline hashtable
   BBOX_INTERSECT_AUTO_TUNER_PARAM,  // Bounding box intersect auto tuner's params
@@ -45,6 +47,8 @@ inline std::ostream& operator<<(std::ostream& os, CacheItemType const item_type)
       "Perfect Join Hashtable",
       "Baseline Join Hashtable",
       "Bounding Box Intersect Join Hashtable",
+      "Bitmap Join Hashtable",
+      "Ranked Bitmap Join Hashtable",
       "Hashing Scheme for Join Hashtable",
       "Baseline Join Hashtable's Approximated Cardinality",
       "Bounding Box Intersect Join Hashtable's Auto Tuner's Parameters",
@@ -123,6 +127,7 @@ using CacheMetricInfoMap =
 class DataRecyclerUtil {
  public:
   static constexpr DeviceIdentifier CPU_DEVICE_IDENTIFIER = 0;
+  static constexpr int MAX_GPU_CACHE_DEVICE_COUNT = 16;
 
   static std::string getDeviceIdentifierString(DeviceIdentifier device_identifier) {
     std::string device_type = device_identifier == CPU_DEVICE_IDENTIFIER ? "CPU" : "GPU-";
@@ -288,8 +293,9 @@ class CacheMetricTracker {
     }
   }
 
-  void removeMetricFromBeginning(DeviceIdentifier device_identifier, int offset) {
-    auto metrics = getCacheItemMetrics(device_identifier);
+  void removeMetricFromBeginning(DeviceIdentifier device_identifier, size_t offset) {
+    auto& metrics = getCacheItemMetrics(device_identifier);
+    CHECK_LE(offset, metrics.size());
     metrics.erase(metrics.begin(), metrics.begin() + offset);
   }
 
@@ -562,18 +568,22 @@ class DataRecycler {
                                        DeviceIdentifier device_identifier) const {
     std::lock_guard<std::mutex> lock(cache_lock_);
     auto container = getCachedItemContainer(item_type, device_identifier);
-    return std::count_if(container->begin(),
-                         container->end(),
-                         [](const auto& cached_item) { return cached_item.isDirty(); });
+    return container ? std::count_if(
+                           container->begin(),
+                           container->end(),
+                           [](const auto& cached_item) { return cached_item.isDirty(); })
+                     : 0;
   }
 
   size_t getCurrentNumCleanCachedItems(CacheItemType item_type,
                                        DeviceIdentifier device_identifier) const {
     std::lock_guard<std::mutex> lock(cache_lock_);
     auto container = getCachedItemContainer(item_type, device_identifier);
-    return std::count_if(container->begin(),
-                         container->end(),
-                         [](const auto& cached_item) { return !cached_item.isDirty(); });
+    return container ? std::count_if(
+                           container->begin(),
+                           container->end(),
+                           [](const auto& cached_item) { return !cached_item.isDirty(); })
+                     : 0;
   }
 
   size_t getCurrentCacheSizeForDevice(CacheItemType item_type,
@@ -609,12 +619,13 @@ class DataRecycler {
  protected:
   void removeCachedItemFromBeginning(CacheItemType item_type,
                                      DeviceIdentifier device_identifier,
-                                     int offset) {
+                                     size_t offset) {
     // it removes cached items located from `idx 0` to `offset`
     // so, call this function after sorting the cached items container vec
     // and we should call this function under the proper locking scheme
     auto container = getCachedItemContainer(item_type, device_identifier);
     CHECK(container);
+    CHECK_LE(offset, container->size());
     container->erase(container->begin(), container->begin() + offset);
   }
 

@@ -1493,6 +1493,7 @@ TEST_F(MultiFragArrayParallelLinearizationTest, IndexedArrayJoin) {
 class ArrayConditionalExpressionTest : public ExecutorDeviceParameterizedTest {
  public:
   static void SetUpTestSuite() {
+    run_ddl_statement("DROP TABLE IF EXISTS array_test;");
     run_ddl_statement(
         "CREATE TABLE array_test (id INTEGER, i1 INTEGER[], i2 INTEGER[]);");
     run_multiple_agg(

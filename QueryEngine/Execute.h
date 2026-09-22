@@ -14,12 +14,14 @@
 #include <deque>
 #include <functional>
 #include <limits>
+#include <list>
 #include <map>
 #include <mutex>
 #include <queue>
 #include <stack>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Value.h>
@@ -148,6 +150,7 @@ using QuerySessionMap =
     std::map<const QuerySessionId, std::map<std::string, QuerySessionStatus>>;
 
 class ColumnFetcher;
+class ResultSetColumnCache;
 
 class WatchdogException : public std::runtime_error {
  public:
@@ -229,7 +232,9 @@ inline std::string numeric_type_name(const SQLTypeInfo& ti) {
 
 inline const ColumnDescriptor* get_column_descriptor_maybe(
     const shared::ColumnKey& column_key) {
-  return column_key.table_id > 0 ? get_column_descriptor(column_key) : nullptr;
+  return column_key.db_id > 0 && column_key.table_id > 0
+             ? get_column_descriptor(column_key)
+             : nullptr;
 }
 
 inline const ResultSetPtr& get_temporary_table(const TemporaryTables* temporary_tables,
@@ -251,6 +256,11 @@ inline const SQLTypeInfo get_column_type(const int col_id,
     return cd->columnType;
   }
   const auto& temp = get_temporary_table(temporary_tables, table_id);
+  const auto target_meta = temp->getTargetMetaInfo();
+  if (!target_meta.empty() && col_id >= 0 &&
+      static_cast<size_t>(col_id) < target_meta.size()) {
+    return target_meta[col_id].get_physical_type_info();
+  }
   return temp->getColType(col_id);
 }
 
@@ -376,8 +386,18 @@ struct ChunkRequestInfo;
 struct ResourcePoolInfo;
 };  // namespace ExecutorResourceMgr_Namespace
 
+struct TemporaryTableSourceInfo {
+  QueryPlanHash rel_alg_hash{EMPTY_HASHED_PLAN_DAG_KEY};
+  QueryPlanHash query_plan_dag_hash{EMPTY_HASHED_PLAN_DAG_KEY};
+  std::unordered_set<shared::TableKey> physical_table_keys;
+};
+
+using TemporaryTableSourceInfoMap = std::unordered_map<int32_t, TemporaryTableSourceInfo>;
+
 struct CardinalityCacheKey {
-  CardinalityCacheKey(const RelAlgExecutionUnit& ra_exe_unit);
+  CardinalityCacheKey(const RelAlgExecutionUnit& ra_exe_unit,
+                      const std::string& cache_context = {},
+                      const TemporaryTableSourceInfoMap* temporary_source_info = nullptr);
 
   bool operator==(const CardinalityCacheKey& other) const;
 
@@ -385,10 +405,13 @@ struct CardinalityCacheKey {
 
   bool containsTableKey(const shared::TableKey& table_key) const;
 
+  bool isCacheable() const { return cacheable; }
+
  private:
   std::string key;
   size_t query_plan_dag_hash;
   std::unordered_set<shared::TableKey> table_keys;
+  bool cacheable{true};
 };
 
 namespace std {
@@ -494,6 +517,7 @@ class Executor {
         execute_mutex_);  // don't want native code to vanish while executing
     heavyai::unique_lock<heavyai::shared_mutex> lock(executors_cache_mutex_);
     executors_.clear();
+    clearStringProxyUnionTranslationCache();
   }
 
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
@@ -668,7 +692,8 @@ class Executor {
 
   bool hasLazyFetchColumns(const std::vector<Analyzer::Expr*>& target_exprs) const;
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
-      const std::vector<Analyzer::Expr*>& target_exprs) const;
+      const std::vector<Analyzer::Expr*>& target_exprs,
+      bool may_use_storage_local_rowid) const;
 
   void unregisterActiveModule(int device_id) const;
   void interrupt(const QuerySessionId& query_session = "",
@@ -701,6 +726,9 @@ class Executor {
   void resetBlockSize();
   size_t maxGpuSlabSize() const;
   size_t maxCpuSlabSize() const;
+  ResultSetColumnCache* activeResultSetColumnCache() const {
+    return active_result_set_column_cache_;
+  }
 
   ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                const bool is_agg,
@@ -710,7 +738,8 @@ class Executor {
                                const ExecutionOptions& options,
                                RenderInfo* render_info,
                                const bool has_cardinality_estimation,
-                               ColumnCacheMap& column_cache);
+                               ColumnCacheMap& column_cache,
+                               ResultSetColumnCache* result_set_column_cache = nullptr);
 
   TableUpdateMetadata executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
                                     const std::vector<InputTableInfo>& table_infos,
@@ -763,6 +792,11 @@ class Executor {
   // Generate code for an aggregate window function target.
   llvm::Value* codegenWindowFunctionAggregate(CodeGenerator* code_generator,
                                               const CompilationOptions& co);
+
+  llvm::Value* codegenPrecomputedWindowOutput(
+      const WindowFunctionContext* window_func_context,
+      const CompilationOptions& co,
+      llvm::Value* pos_arg);
 
   // The aggregate state requires a state reset when starting a new partition. Generate
   // the new partition check and return the continuation basic block.
@@ -888,13 +922,16 @@ class Executor {
 
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
                              const RelAlgExecutionUnit& ra_exe_unit,
-                             const FragmentsList& selected_fragments) const;
+                             const FragmentsList& selected_fragments,
+                             const std::map<shared::TableKey, const TableFragments*>&
+                                 all_tables_fragments) const;
 
   bool needLinearizeAllFragments(const ColumnDescriptor* cd,
                                  const InputColDescriptor& inner_col_desc,
                                  const RelAlgExecutionUnit& ra_exe_unit,
                                  const FragmentsList& selected_fragments,
-                                 const Data_Namespace::MemoryLevel memory_level) const;
+                                 const Data_Namespace::MemoryLevel memory_level,
+                                 const size_t physical_fragment_count) const;
 
   using PerFragmentCallBack =
       std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
@@ -1003,6 +1040,7 @@ class Executor {
       const ExecutorDeviceType device_type,
       const std::vector<InputDescriptor>& input_descs,
       const QueryMemoryDescriptor& query_mem_desc,
+      const ExecutionOptions& eo,
       const size_t available_cpus);
 
   std::vector<size_t> getTableFragmentIndices(
@@ -1033,7 +1071,8 @@ class Executor {
                           std::list<std::shared_ptr<Chunk_NS::Chunk>>&,
                           DeviceAllocator* device_allocator,
                           const size_t thread_idx,
-                          const bool allow_runtime_interrupt);
+                          const bool allow_runtime_interrupt,
+                          const bool materializes_for_later_step);
 
   FetchResult fetchUnionChunks(const ColumnFetcher&,
                                const RelAlgExecutionUnit& ra_exe_unit,
@@ -1051,6 +1090,7 @@ class Executor {
       const RelAlgExecutionUnit& ra_exe_unit,
       const CartesianProduct<std::vector<std::vector<size_t>>>& frag_ids_crossjoin,
       const std::vector<InputDescriptor>& input_descs,
+      const FragmentsList& selected_fragments,
       const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments);
 
   void buildSelectedFragsMapping(
@@ -1058,16 +1098,19 @@ class Executor {
       std::vector<size_t>& local_col_to_frag_pos,
       const std::list<std::shared_ptr<const InputColDescriptor>>& col_global_ids,
       const FragmentsList& selected_fragments,
-      const RelAlgExecutionUnit& ra_exe_unit);
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments);
 
   void buildSelectedFragsMappingForUnion(
       std::vector<std::vector<size_t>>& selected_fragments_crossjoin,
       const FragmentsList& selected_fragments,
       const RelAlgExecutionUnit& ra_exe_unit);
 
-  std::vector<size_t> getFragmentCount(const FragmentsList& selected_fragments,
-                                       const size_t scan_idx,
-                                       const RelAlgExecutionUnit& ra_exe_unit);
+  std::vector<size_t> getFragmentCount(
+      const FragmentsList& selected_fragments,
+      const size_t scan_idx,
+      const RelAlgExecutionUnit& ra_exe_unit,
+      const std::map<shared::TableKey, const TableFragments*>& all_tables_fragments);
 
   // pass nullptr to results if it shouldn't be extracted from the execution context
   int32_t executePlanWithGroupBy(const RelAlgExecutionUnit& ra_exe_unit,
@@ -1085,6 +1128,8 @@ class Executor {
                                  const int64_t limit,
                                  const uint32_t start_rowid,
                                  const uint32_t num_tables,
+                                 const bool with_dynamic_watchdog,
+                                 const unsigned dynamic_watchdog_time_limit,
                                  const bool allow_runtime_interrupt,
                                  RenderInfo* render_info,
                                  const bool optimize_cuda_block_and_grid_sizes,
@@ -1103,6 +1148,8 @@ class Executor {
                                     const int device_id,
                                     const uint32_t start_rowid,
                                     const uint32_t num_tables,
+                                    const bool with_dynamic_watchdog,
+                                    const unsigned dynamic_watchdog_time_limit,
                                     const bool allow_runtime_interrupt,
                                     RenderInfo* render_info,
                                     const bool optimize_cuda_block_and_grid_sizes,
@@ -1127,7 +1174,8 @@ class Executor {
       const RelAlgExecutionUnit&,
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
-      const QueryMemoryDescriptor&) const;
+      const QueryMemoryDescriptor&,
+      const std::vector<InputTableInfo>&) const;
   std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>
   getUniqueThreadSharedResultSets(
       const std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device)
@@ -1135,7 +1183,9 @@ class Executor {
   ResultSetPtr reduceMultiDeviceResultSets(
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
-      const QueryMemoryDescriptor&) const;
+      const QueryMemoryDescriptor&,
+      const RelAlgExecutionUnit&,
+      const std::vector<InputTableInfo>&) const;
   ResultSetPtr reduceSpeculativeTopN(
       const RelAlgExecutionUnit&,
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
@@ -1152,7 +1202,8 @@ class Executor {
                                    std::shared_ptr<RowSetMemoryOwner>,
                                    RenderInfo* render_info,
                                    const bool has_cardinality_estimation,
-                                   ColumnCacheMap& column_cache);
+                                   ColumnCacheMap& column_cache,
+                                   ResultSetColumnCache* result_set_column_cache);
 
   std::vector<llvm::Value*> inlineHoistedLiterals();
 
@@ -1251,7 +1302,9 @@ class Executor {
       ColumnCacheMap& column_cache,
       const HashTableBuildDagMap& hashtable_build_dag_map,
       const RegisteredQueryHint& query_hint,
-      const TableIdToNodeMap& table_id_to_node_map);
+      const TableIdToNodeMap& table_id_to_node_map,
+      const std::list<std::shared_ptr<Analyzer::Expr>>& build_side_quals = {},
+      bool payload_free_unique_probe = false);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
                     const PlanState::DeletedColumnsMap& deleted_cols_map,
@@ -1408,9 +1461,33 @@ class Executor {
 
   // true when we have matched cardinality, and false otherwise
   using CachedCardinality = std::pair<bool, size_t>;
+  using PerDeviceCardinality = std::vector<std::pair<std::vector<size_t>, size_t>>;
+  struct FilteredCountCacheValue {
+    FilteredCountCacheValue() = default;
+
+    FilteredCountCacheValue(size_t count, PerDeviceCardinality per_device_cardinality)
+        : count(count), per_device_cardinality(std::move(per_device_cardinality)) {
+      for (auto& [fragment_ids, cardinality] : this->per_device_cardinality) {
+        (void)cardinality;
+        std::sort(fragment_ids.begin(), fragment_ids.end());
+      }
+      std::sort(this->per_device_cardinality.begin(), this->per_device_cardinality.end());
+    }
+
+    size_t count{0};
+    PerDeviceCardinality per_device_cardinality;
+
+    bool operator==(const FilteredCountCacheValue& that) const {
+      return count == that.count && per_device_cardinality == that.per_device_cardinality;
+    }
+  };
+  using CachedFilteredCount = std::pair<bool, FilteredCountCacheValue>;
   void addToCardinalityCache(const CardinalityCacheKey& cache_key,
                              const size_t cache_value);
   CachedCardinality getCachedCardinality(const CardinalityCacheKey& cache_key);
+  void addToFilteredCountCache(const CardinalityCacheKey& cache_key,
+                               const FilteredCountCacheValue& cache_value);
+  CachedFilteredCount getCachedFilteredCount(const CardinalityCacheKey& cache_key);
   static void clearCardinalityCache();
   static void invalidateCardinalityCacheForTable(const shared::TableKey& table_key);
   size_t getNumCachedCardinality() const;
@@ -1472,6 +1549,7 @@ class Executor {
   std::shared_ptr<CudaAllocator> getCudaAllocatorShared(int device_id) const;
   CUstream getCudaStream(int device_id) const;
   void clearCudaAllocator();
+  size_t getCudaAllocatorCount() const;
 
  private:
   std::vector<int8_t> serializeLiterals(
@@ -1555,6 +1633,17 @@ class Executor {
   std::atomic<bool> interrupted_{false};
 
   mutable std::mutex str_dict_mutex_;
+  struct CachedStringProxyUnionTranslationMap {
+    const void* source_dictionary;
+    int64_t source_generation;
+    StringDictionaryProxy::IdMap id_map;
+    std::vector<std::string> dest_transient_strings;
+  };
+  static void clearStringProxyUnionTranslationCache();
+  static std::mutex cached_string_proxy_union_translation_maps_mutex_;
+  static std::map<std::string,
+                  std::shared_ptr<const CachedStringProxyUnionTranslationMap>>
+      cached_string_proxy_union_translation_maps_;
 
   mutable std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 
@@ -1577,6 +1666,7 @@ class Executor {
   static std::mutex last_selected_device_id_mutex_;
   const TemporaryTables* temporary_tables_;
   TableIdToNodeMap table_id_to_node_map_;
+  ResultSetColumnCache* active_result_set_column_cache_{nullptr};
 
   int64_t kernel_queue_time_ms_ = 0;
   int64_t compilation_queue_time_ms_ = 0;
@@ -1624,6 +1714,8 @@ class Executor {
   static heavyai::shared_mutex recycler_mutex_;
 
   static std::unordered_map<CardinalityCacheKey, size_t> cardinality_cache_;
+  static std::unordered_map<CardinalityCacheKey, FilteredCountCacheValue>
+      filtered_count_cache_;
   static ResultSetRecyclerHolder resultset_recycler_holder_;
 
   // a variable used for testing query plan DAG extractor when a query has a table
@@ -1705,6 +1797,8 @@ inline bool is_constructed_point(const Analyzer::Expr* expr) {
 
 size_t get_loop_join_size(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit);
+
+bool may_use_storage_local_lazy_fetch_rowid(const RelAlgExecutionUnit& ra_exe_unit);
 
 extern "C" RUNTIME_EXPORT void register_buffer_with_executor_rsm(int64_t exec,
                                                                  int8_t* buffer);
