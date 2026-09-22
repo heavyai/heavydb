@@ -69,6 +69,11 @@ struct StringOp {
 
   virtual NullableStrType operator()(std::string const&) const = 0;
 
+  virtual std::optional<std::string_view> tryStringViewEval(
+      const std::string_view) const {
+    return std::nullopt;
+  }
+
   virtual NullableStrType operator()(const std::string& str1,
                                      const std::string& str2) const {
     UNREACHABLE() << "operator(str1, str2) not allowed for this method";
@@ -416,7 +421,9 @@ struct Substring : public StringOp {
 
   NullableStrType operator()(const std::string& str) const override;
 
-  // Make string_view version?
+  std::optional<std::string_view> tryStringViewEval(
+      const std::string_view str) const override;
+
   const int64_t start_;
   const size_t length_;
 };
@@ -804,6 +811,9 @@ class StringOps {
                                const std::string_view str2) const;
 
   std::string_view operator()(const std::string_view sv, std::string& sv_storage) const;
+
+  std::string_view evalViewOrCopy(const std::string_view sv,
+                                  std::string& sv_storage) const;
 
   Datum numericEval(const std::string_view str) const;
   Datum numericEval(const std::string_view str1, const std::string_view str2) const;

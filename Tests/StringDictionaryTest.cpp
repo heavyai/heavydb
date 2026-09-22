@@ -7,6 +7,7 @@
 
 #include "Shared/funcannotations.h"
 #include "Shared/scope.h"
+#include "Shared/thread_count.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
 #include <boost/lexical_cast.hpp>
@@ -26,6 +27,7 @@
 #include <vector>
 
 #include "StringOps/StringOps.h"
+#include "Utils/StringLike.h"
 
 #ifndef BASE_PATH1
 #define BASE_PATH1 "./tmp/dict1"
@@ -99,6 +101,151 @@ TEST_F(StringDictionaryTest, HandleEmpty) {
   ASSERT_EQ(std::numeric_limits<int32_t>::min(), id1);
 }
 
+TEST_F(StringDictionaryTest, LikeCacheSharesResultsPerGeneration) {
+  const DictRef dict_ref(-1, 100);
+  StringDictionary string_dict(dict_ref, "", true, false, g_cache_string_hash);
+  EXPECT_EQ(0, string_dict.getOrAdd("alpha"));
+  EXPECT_EQ(1, string_dict.getOrAdd("beta"));
+
+  const auto generation_one =
+      string_dict.getLikeShared<int64_t>("%a%", false, false, '\\', 1);
+  ASSERT_EQ(1u, generation_one->size());
+  EXPECT_EQ(0, generation_one->front());
+
+  const auto generation_two =
+      string_dict.getLikeShared<int64_t>("%a%", false, false, '\\', 2);
+  ASSERT_EQ(2u, generation_two->size());
+  EXPECT_EQ((std::vector<int64_t>{0, 1}), *generation_two);
+  EXPECT_EQ(generation_two,
+            string_dict.getLikeShared<int64_t>("%a%", false, false, '\\', 2));
+}
+
+TEST_F(StringDictionaryTest, PercentLiteralLikeMatchesCanonicalMatcher) {
+  ScopeGuard restore_test_state = [original_flag =
+                                       g_enable_lazy_string_dictionary_hash_recovery,
+                                   original_thread_override = g_cpu_threads_override] {
+    g_enable_lazy_string_dictionary_hash_recovery = original_flag;
+    g_cpu_threads_override = original_thread_override;
+  };
+  // This test checks matcher equivalence, not host-wide scaling. Keep the scan
+  // parallel without creating hundreds of workers for each tiny test dictionary.
+  g_cpu_threads_override = 8;
+  const DictRef baseline_dict_ref(-1, 103);
+  const DictRef optimized_dict_ref(-1, 104);
+  StringDictionary baseline_dict(baseline_dict_ref, "", true, false, g_cache_string_hash);
+  StringDictionary optimized_dict(
+      optimized_dict_ref, "", true, false, g_cache_string_hash);
+  std::vector<std::string> strings{"special requests",
+                                   "special pending requests",
+                                   "SPECIAL PENDING REQUESTS",
+                                   "xxspecialyyrequestszz",
+                                   "specialrequests",
+                                   "requests special",
+                                   "special",
+                                   "requests",
+                                   "abcabc",
+                                   "ababa",
+                                   "100% done",
+                                   "[abc]"};
+  const auto append_words = [](std::vector<std::string>& words,
+                               const std::string_view alphabet,
+                               const size_t max_length,
+                               const bool include_empty) {
+    if (include_empty) {
+      words.emplace_back();
+    }
+    size_t word_count = 1;
+    for (size_t length = 1; length <= max_length; ++length) {
+      word_count *= alphabet.size();
+      for (size_t encoded_word = 0; encoded_word < word_count; ++encoded_word) {
+        std::string word(length, alphabet.front());
+        auto remainder = encoded_word;
+        for (auto& character : word) {
+          character = alphabet[remainder % alphabet.size()];
+          remainder /= alphabet.size();
+        }
+        words.emplace_back(std::move(word));
+      }
+    }
+  };
+  append_words(strings, "ab%", 4, false);
+  for (const auto& str : strings) {
+    baseline_dict.getOrAdd(str);
+    optimized_dict.getOrAdd(str);
+  }
+
+  std::vector<std::string> patterns{"",
+                                    "%",
+                                    "%%",
+                                    "special",
+                                    "special%",
+                                    "%requests",
+                                    "%special%requests%",
+                                    "abc%abc",
+                                    "%aba%aba",
+                                    "%100\\%%",
+                                    "%x_z%",
+                                    "%[ab]%"};
+  append_words(patterns, "ab%", 5, true);
+  for (const bool icase : {false, true}) {
+    for (const bool is_simple : {false, true}) {
+      const auto canonical_matcher = icase
+                                         ? is_simple ? string_ilike_simple : string_ilike
+                                     : is_simple ? string_like_simple
+                                                 : string_like;
+      for (const auto& pattern : patterns) {
+        std::vector<int32_t> expected_ids;
+        for (size_t string_id = 0; string_id < strings.size(); ++string_id) {
+          const auto& str = strings[string_id];
+          if (canonical_matcher(str.data(),
+                                static_cast<int32_t>(str.size()),
+                                pattern.data(),
+                                static_cast<int32_t>(pattern.size()),
+                                '\\')) {
+            expected_ids.push_back(static_cast<int32_t>(string_id));
+          }
+        }
+        g_enable_lazy_string_dictionary_hash_recovery = false;
+        EXPECT_EQ(expected_ids,
+                  baseline_dict.getLike<int32_t>(
+                      pattern, icase, is_simple, '\\', strings.size()))
+            << "baseline pattern: " << pattern << ", icase: " << icase
+            << ", simple: " << is_simple;
+        g_enable_lazy_string_dictionary_hash_recovery = true;
+        EXPECT_EQ(expected_ids,
+                  optimized_dict.getLike<int32_t>(
+                      pattern, icase, is_simple, '\\', strings.size()))
+            << "optimized pattern: " << pattern << ", icase: " << icase
+            << ", simple: " << is_simple;
+      }
+    }
+  }
+}
+
+TEST_F(StringDictionaryTest, SubstringViewEvaluationMatchesOwnedEvaluation) {
+  struct SubstringCase {
+    int64_t start;
+    int64_t length;
+  };
+  const std::string input{"abcdef"};
+  for (const auto [start_value, length_value] :
+       std::vector<SubstringCase>{{1, 2}, {0, 2}, {-2, 2}, {10, 2}, {-10, 2}, {3, 0}}) {
+    Datum start;
+    start.bigintval = start_value;
+    Datum length;
+    length.bigintval = length_value;
+    const StringOps_Namespace::StringOps substring_op({StringOps_Namespace::StringOpInfo(
+        SqlStringOpKind::SUBSTRING,
+        SQLTypeInfo(kTEXT),
+        {{1, {kBIGINT, start}}, {2, {kBIGINT, length}}})});
+
+    std::string view_storage;
+    const auto view_result = substring_op.evalViewOrCopy(input, view_storage);
+    EXPECT_EQ(substring_op(input), std::string(view_result))
+        << "start: " << start_value << ", length: " << length_value;
+  }
+}
+
 TEST_F(StringDictionaryTest, RecoverZero) {
   const DictRef dict_ref(-1, 1);
   {
@@ -109,6 +256,286 @@ TEST_F(StringDictionaryTest, RecoverZero) {
   StringDictionary string_dict(dict_ref, BASE_PATH1, false, true, g_cache_string_hash);
   size_t num_strings = string_dict.storageEntryCount();
   ASSERT_EQ(static_cast<size_t>(0), num_strings);
+}
+
+TEST_F(StringDictionaryTest, RecoverAfterPersistentMappingGrowth) {
+  const auto dictionary_path = std::string(BASE_PATH1) + "_mapping_growth";
+  std::filesystem::remove_all(dictionary_path);
+  std::filesystem::create_directories(dictionary_path);
+  ScopeGuard remove_dictionary = [&dictionary_path] {
+    std::filesystem::remove_all(dictionary_path);
+  };
+
+  constexpr size_t string_count{550000};
+  constexpr size_t batch_size{16384};
+  std::vector<std::string> strings;
+  strings.reserve(string_count);
+  for (size_t string_id = 0; string_id < string_count; ++string_id) {
+    strings.emplace_back("mapping-growth-value-" + std::to_string(string_id));
+  }
+
+  const auto initial_mmap_size = StringDictionary::getTotalMmapSize();
+  const DictRef dict_ref(-1, 106);
+  {
+    StringDictionary dictionary(
+        dict_ref, dictionary_path, false, false, g_cache_string_hash);
+    std::vector<int32_t> string_ids(string_count);
+    for (size_t batch_begin = 0; batch_begin < strings.size();
+         batch_begin += batch_size) {
+      const auto batch_end = std::min(batch_begin + batch_size, strings.size());
+      std::vector<std::string> batch_strings(strings.begin() + batch_begin,
+                                             strings.begin() + batch_end);
+      dictionary.getOrAddBulk(batch_strings, string_ids.data() + batch_begin);
+    }
+    EXPECT_EQ(0, string_ids.front());
+    EXPECT_EQ(static_cast<int32_t>(string_count - 1), string_ids.back());
+    EXPECT_EQ(strings.back(), dictionary.getString(string_ids.back()));
+    ASSERT_TRUE(dictionary.checkpoint());
+    EXPECT_GT(StringDictionary::getTotalMmapSize(), initial_mmap_size);
+  }
+  EXPECT_EQ(initial_mmap_size, StringDictionary::getTotalMmapSize());
+
+  {
+    StringDictionary recovered_dictionary(
+        dict_ref, dictionary_path, false, true, g_cache_string_hash);
+    EXPECT_EQ(string_count, recovered_dictionary.storageEntryCount());
+    EXPECT_EQ(strings.front(), recovered_dictionary.getString(0));
+    EXPECT_EQ(strings.back(),
+              recovered_dictionary.getString(static_cast<int32_t>(string_count - 1)));
+  }
+  EXPECT_EQ(initial_mmap_size, StringDictionary::getTotalMmapSize());
+}
+
+TEST_F(StringDictionaryTest, LazyHashRecoveryDefersLookupIndex) {
+  ScopeGuard restore_flag = [original = g_enable_lazy_string_dictionary_hash_recovery] {
+    g_enable_lazy_string_dictionary_hash_recovery = original;
+  };
+  const auto dictionary_path = std::string(BASE_PATH1) + "_lazy_hash_recovery";
+  std::filesystem::remove_all(dictionary_path);
+  std::filesystem::create_directories(dictionary_path);
+  ScopeGuard remove_dictionary = [&dictionary_path] {
+    std::filesystem::remove_all(dictionary_path);
+  };
+
+  constexpr size_t string_count{4096};
+  std::vector<std::string> strings;
+  strings.reserve(string_count);
+  for (size_t string_id = 0; string_id < string_count; ++string_id) {
+    strings.emplace_back("value-" + std::to_string(string_id));
+  }
+
+  const DictRef dict_ref(-1, 101);
+  g_enable_lazy_string_dictionary_hash_recovery = false;
+  {
+    StringDictionary dictionary(
+        dict_ref, dictionary_path, false, false, g_cache_string_hash);
+    std::vector<int32_t> string_ids(string_count);
+    dictionary.getOrAddBulk(strings, string_ids.data());
+    ASSERT_TRUE(dictionary.checkpoint());
+  }
+
+  g_enable_lazy_string_dictionary_hash_recovery = true;
+  StringDictionary recovered_dictionary(
+      dict_ref, dictionary_path, false, true, g_cache_string_hash);
+  EXPECT_EQ(string_count, recovered_dictionary.storageEntryCount());
+  EXPECT_EQ("value-1024", recovered_dictionary.getString(1024));
+
+  const auto deferred_cache_size = recovered_dictionary.computeCacheSize();
+  const auto matching_ids = recovered_dictionary.getLike<int32_t>(
+      "value-12%", false, false, '\\', string_count);
+  EXPECT_FALSE(matching_ids.empty());
+  EXPECT_LT(recovered_dictionary.computeCacheSize(), size_t(16 * 1024));
+
+  EXPECT_EQ(1024, recovered_dictionary.getIdOfString(std::string_view("value-1024")));
+  EXPECT_GT(recovered_dictionary.computeCacheSize(), deferred_cache_size);
+  EXPECT_EQ(static_cast<int32_t>(string_count),
+            recovered_dictionary.getOrAdd("new-value"));
+  EXPECT_EQ(static_cast<int32_t>(string_count),
+            recovered_dictionary.getIdOfString(std::string_view("new-value")));
+
+  auto lazy_union_dictionary = std::make_shared<StringDictionary>(
+      dict_ref, dictionary_path, false, true, g_cache_string_hash);
+  const auto lazy_union_cache_size = lazy_union_dictionary->computeCacheSize();
+  const DictRef union_source_ref(-1, 102);
+  auto union_source_dictionary = std::make_shared<StringDictionary>(
+      union_source_ref, "", true, false, g_cache_string_hash);
+  union_source_dictionary->getOrAdd("value-1024");
+  union_source_dictionary->getOrAdd("union-transient");
+
+  StringDictionaryProxy lazy_union_proxy(
+      lazy_union_dictionary, dict_ref, lazy_union_dictionary->storageEntryCount());
+  StringDictionaryProxy union_source_proxy(union_source_dictionary,
+                                           union_source_ref,
+                                           union_source_dictionary->storageEntryCount());
+  const auto union_id_map = lazy_union_proxy.transientUnion(union_source_proxy);
+  EXPECT_EQ(1024, union_id_map[0]);
+  EXPECT_LE(union_id_map[1], -2);
+  EXPECT_GT(lazy_union_dictionary->computeCacheSize(), lazy_union_cache_size);
+}
+
+TEST_F(StringDictionaryProxyTest, LazySelfStringOpUnionPreservesCanonicalPersistedIds) {
+  ScopeGuard restore_flag = [original = g_enable_lazy_string_dictionary_hash_recovery] {
+    g_enable_lazy_string_dictionary_hash_recovery = original;
+  };
+  const auto dictionary_path = std::string(BASE_PATH1) + "_lazy_self_union";
+  std::filesystem::remove_all(dictionary_path);
+  std::filesystem::create_directories(dictionary_path);
+  ScopeGuard remove_dictionary = [&dictionary_path] {
+    std::filesystem::remove_all(dictionary_path);
+  };
+
+  const DictRef dict_ref(-1, 103);
+  const std::vector<std::string> strings{"abc", "cba", "xyz", "foo"};
+  g_enable_lazy_string_dictionary_hash_recovery = false;
+  {
+    StringDictionary dictionary(
+        dict_ref, dictionary_path, false, false, g_cache_string_hash);
+    std::vector<int32_t> string_ids(strings.size());
+    dictionary.getOrAddBulk(strings, string_ids.data());
+    ASSERT_TRUE(dictionary.checkpoint());
+  }
+
+  g_enable_lazy_string_dictionary_hash_recovery = true;
+  auto dictionary = std::make_shared<StringDictionary>(
+      dict_ref, dictionary_path, false, true, g_cache_string_hash);
+  const auto deferred_cache_size = dictionary->computeCacheSize();
+  StringDictionaryProxy proxy(dictionary, dict_ref, dictionary->storageEntryCount());
+  const auto literal_ids = proxy.getOrAddTransientBulk({"abc", "zyx"});
+  ASSERT_EQ(0, literal_ids[0]);
+  ASSERT_LT(literal_ids[1], StringDictionary::INVALID_STR_ID);
+  EXPECT_LT(dictionary->computeCacheSize() - deferred_cache_size, size_t{16 * 1024});
+  const auto lookup_ids = proxy.getTransientBulk({"abc", "zyx", "missing"});
+  ASSERT_EQ(0, lookup_ids[0]);
+  ASSERT_EQ(literal_ids[1], lookup_ids[1]);
+  ASSERT_EQ(StringDictionary::INVALID_STR_ID, lookup_ids[2]);
+  const auto memoized_cache_size = dictionary->computeCacheSize();
+  EXPECT_LT(memoized_cache_size - deferred_cache_size, size_t{16 * 1024});
+  EXPECT_EQ(lookup_ids, proxy.getTransientBulk({"abc", "zyx", "missing"}));
+  EXPECT_EQ(memoized_cache_size, dictionary->computeCacheSize());
+  const StringOps_Namespace::StringOps reverse_op({StringOps_Namespace::StringOpInfo(
+      SqlStringOpKind::REVERSE, SQLTypeInfo(kTEXT), {})});
+
+  const auto id_map = proxy.buildUnionTranslationMapToOtherProxy(&proxy, reverse_op);
+  ASSERT_EQ(1, id_map[0]);
+  ASSERT_EQ(0, id_map[1]);
+  ASSERT_EQ(literal_ids[1], id_map[2]);
+  EXPECT_EQ("zyx", proxy.getString(id_map[2]));
+  ASSERT_LT(id_map[3], StringDictionary::INVALID_STR_ID);
+  EXPECT_EQ("oof", proxy.getString(id_map[3]));
+  EXPECT_EQ(2, id_map[literal_ids[1]]);
+  EXPECT_EQ(size_t{1}, id_map.numUntranslatedStrings());
+  EXPECT_LT(dictionary->computeCacheSize() - deferred_cache_size, size_t{16 * 1024});
+}
+
+TEST_F(StringDictionaryProxyTest, LazySelfSubstringUnionHandlesAbsentSourceLengths) {
+  ScopeGuard restore_flag = [original = g_enable_lazy_string_dictionary_hash_recovery] {
+    g_enable_lazy_string_dictionary_hash_recovery = original;
+  };
+  const auto dictionary_path = std::string(BASE_PATH1) + "_lazy_self_substring_union";
+  std::filesystem::remove_all(dictionary_path);
+  std::filesystem::create_directories(dictionary_path);
+  ScopeGuard remove_dictionary = [&dictionary_path] {
+    std::filesystem::remove_all(dictionary_path);
+  };
+
+  const DictRef dict_ref(-1, 105);
+  const std::vector<std::string> strings{"13-555", "31-555", "13-777"};
+  g_enable_lazy_string_dictionary_hash_recovery = false;
+  {
+    StringDictionary dictionary(
+        dict_ref, dictionary_path, false, false, g_cache_string_hash);
+    std::vector<int32_t> string_ids(strings.size());
+    dictionary.getOrAddBulk(strings, string_ids.data());
+    ASSERT_TRUE(dictionary.checkpoint());
+  }
+
+  Datum start;
+  start.bigintval = 1;
+  Datum length;
+  length.bigintval = 2;
+  const StringOps_Namespace::StringOps substring_op({StringOps_Namespace::StringOpInfo(
+      SqlStringOpKind::SUBSTRING,
+      SQLTypeInfo(kTEXT),
+      {{1, {kBIGINT, start}}, {2, {kBIGINT, length}}})});
+
+  g_enable_lazy_string_dictionary_hash_recovery = true;
+  auto dictionary = std::make_shared<StringDictionary>(
+      dict_ref, dictionary_path, false, true, g_cache_string_hash);
+  const auto deferred_cache_size = dictionary->computeCacheSize();
+  StringDictionaryProxy proxy(dictionary, dict_ref, dictionary->storageEntryCount());
+  const auto id_map = proxy.buildUnionTranslationMapToOtherProxy(&proxy, substring_op);
+
+  ASSERT_LT(id_map[0], StringDictionary::INVALID_STR_ID);
+  ASSERT_LT(id_map[1], StringDictionary::INVALID_STR_ID);
+  EXPECT_EQ(id_map[0], id_map[2]);
+  EXPECT_NE(id_map[0], id_map[1]);
+  EXPECT_EQ("13", proxy.getString(id_map[0]));
+  EXPECT_EQ("31", proxy.getString(id_map[1]));
+  EXPECT_EQ(strings.size(), id_map.numUntranslatedStrings());
+  EXPECT_LT(dictionary->computeCacheSize() - deferred_cache_size, size_t{16 * 1024});
+}
+
+TEST_F(StringDictionaryProxyTest, LazySelfStringOpUnionCoalescesParallelCandidates) {
+  ScopeGuard restore_flag = [original = g_enable_lazy_string_dictionary_hash_recovery] {
+    g_enable_lazy_string_dictionary_hash_recovery = original;
+  };
+  const auto dictionary_path = std::string(BASE_PATH1) + "_lazy_self_union_parallel";
+  std::filesystem::remove_all(dictionary_path);
+  std::filesystem::create_directories(dictionary_path);
+  ScopeGuard remove_dictionary = [&dictionary_path] {
+    std::filesystem::remove_all(dictionary_path);
+  };
+
+  constexpr size_t case_variant_count{4096};
+  const std::string persisted_canonical{"abcdefghijkl"};
+  const std::string transient_canonical{"mnopqrstuvwx"};
+  const auto case_variant = [](const std::string& canonical, const size_t mask) {
+    auto variant = canonical;
+    for (size_t char_idx = 0; char_idx < variant.size(); ++char_idx) {
+      if (mask & (size_t{1} << char_idx)) {
+        variant[char_idx] -= 'a' - 'A';
+      }
+    }
+    return variant;
+  };
+
+  std::vector<std::string> strings;
+  strings.reserve(case_variant_count * 2 - 1);
+  for (size_t mask = 0; mask < case_variant_count; ++mask) {
+    strings.emplace_back(case_variant(persisted_canonical, mask));
+  }
+  for (size_t mask = 1; mask < case_variant_count; ++mask) {
+    strings.emplace_back(case_variant(transient_canonical, mask));
+  }
+
+  const DictRef dict_ref(-1, 104);
+  g_enable_lazy_string_dictionary_hash_recovery = false;
+  {
+    StringDictionary dictionary(
+        dict_ref, dictionary_path, false, false, g_cache_string_hash);
+    std::vector<int32_t> string_ids(strings.size());
+    dictionary.getOrAddBulk(strings, string_ids.data());
+    ASSERT_TRUE(dictionary.checkpoint());
+  }
+
+  g_enable_lazy_string_dictionary_hash_recovery = true;
+  auto dictionary = std::make_shared<StringDictionary>(
+      dict_ref, dictionary_path, false, true, g_cache_string_hash);
+  StringDictionaryProxy proxy(dictionary, dict_ref, dictionary->storageEntryCount());
+  const StringOps_Namespace::StringOps lower_op({StringOps_Namespace::StringOpInfo(
+      SqlStringOpKind::LOWER, SQLTypeInfo(kTEXT), {})});
+
+  const auto id_map = proxy.buildUnionTranslationMapToOtherProxy(&proxy, lower_op);
+  for (size_t string_id = 0; string_id < case_variant_count; ++string_id) {
+    EXPECT_EQ(0, id_map[string_id]);
+  }
+  const auto transient_id = id_map[case_variant_count];
+  ASSERT_LT(transient_id, StringDictionary::INVALID_STR_ID);
+  EXPECT_EQ(transient_canonical, proxy.getString(transient_id));
+  for (size_t string_id = case_variant_count; string_id < strings.size(); ++string_id) {
+    EXPECT_EQ(transient_id, id_map[string_id]);
+  }
+  EXPECT_EQ(case_variant_count - 1, id_map.numUntranslatedStrings());
 }
 
 TEST_F(StringDictionaryTest, ManyAddsAndGets) {
@@ -208,6 +635,25 @@ TEST_F(StringDictionaryTest, GetOrAddBulk) {
       }
     }
   }
+}
+
+TEST_F(StringDictionaryTest, ParallelGetOrAddBulkDeduplicatesInitialString) {
+  ScopeGuard restore_parallel_mode = [original = g_enable_stringdict_parallel] {
+    g_enable_stringdict_parallel = original;
+  };
+  g_enable_stringdict_parallel = true;
+
+  const DictRef dict_ref(-1, 106);
+  StringDictionary string_dict(dict_ref, "", true, false, g_cache_string_hash);
+  const std::vector<std::string> strings{"A", "A", "B", "A", "B"};
+  std::vector<int32_t> string_ids(strings.size());
+
+  string_dict.getOrAddBulk(strings, string_ids.data());
+
+  EXPECT_EQ((std::vector<int32_t>{0, 0, 1, 0, 1}), string_ids);
+  EXPECT_EQ(size_t{2}, string_dict.storageEntryCount());
+  EXPECT_EQ("A", string_dict.getString(0));
+  EXPECT_EQ("B", string_dict.getString(1));
 }
 
 TEST_F(StringDictionaryTest, GetBulk) {
@@ -957,9 +1403,11 @@ TEST_F(StringDictionaryProxyTest, SortedPermutation) {
   //// now get the string ids for the shuffled strings
   auto shuffled_string_ids = string_dict_proxy.getTransientBulk(strings);
   CHECK_EQ(shuffled_string_ids.size(), static_cast<size_t>(reduced_op_count));
+  EXPECT_FALSE(string_dict_proxy.isSortedPermutationCacheComplete());
 
   SortedStringPermutation sorted_string_permutation =
       string_dict_proxy.getSortedPermutation(false);  // false is for sort descending
+  EXPECT_TRUE(string_dict_proxy.isSortedPermutationCacheComplete());
 
   std::sort(
       shuffled_string_ids.begin(), shuffled_string_ids.end(), sorted_string_permutation);
@@ -967,6 +1415,58 @@ TEST_F(StringDictionaryProxyTest, SortedPermutation) {
   for (int i = 0; i < reduced_op_count; ++i) {
     CHECK_EQ(i, shuffled_string_ids[i]);
   }
+}
+
+TEST_F(StringDictionaryProxyTest, ParallelSortedPermutationMatchesSerialUtf8) {
+  ScopeGuard reset_parallel_mode = [original = g_enable_stringdict_parallel_sort] {
+    g_enable_stringdict_parallel_sort = original;
+  };
+
+  constexpr size_t string_count{16384};
+  const auto num_digits = get_num_digits(string_count);
+  std::vector<std::string> strings;
+  strings.reserve(string_count);
+  for (size_t i = 0; i < string_count; ++i) {
+    const auto suffix = left_zero_pad(i, num_digits);
+    switch (i % 4) {
+      case 0:
+        strings.emplace_back("ascii-" + suffix);
+        break;
+      case 1:
+        strings.emplace_back(std::string{u8"\u00e9clair-"} + suffix);
+        break;
+      case 2:
+        strings.emplace_back(std::string{u8"\u6771\u4eac-"} + suffix);
+        break;
+      default:
+        strings.emplace_back(std::string{u8"\u03a9mega-"} + suffix);
+        break;
+    }
+  }
+
+  const auto sorted_strings = [&](const std::string& path, const bool parallel) {
+    g_enable_stringdict_parallel_sort = parallel;
+    const DictRef dict_ref(-1, parallel ? 3 : 2);
+    auto string_dict = std::make_shared<StringDictionary>(
+        dict_ref, path, false, false, g_cache_string_hash);
+    std::vector<int32_t> string_ids(strings.size());
+    string_dict->getOrAddBulk(strings, string_ids.data());
+    StringDictionaryProxy string_dict_proxy(
+        string_dict, test_source_dict_key, string_dict->storageEntryCount());
+    const auto permutation = string_dict_proxy.getSortedPermutation(false);
+    std::sort(string_ids.begin(), string_ids.end(), permutation);
+
+    std::vector<std::string> result;
+    result.reserve(string_ids.size());
+    for (const auto string_id : string_ids) {
+      result.push_back(string_dict_proxy.getString(string_id));
+    }
+    return result;
+  };
+
+  const auto serial_strings = sorted_strings(BASE_PATH1, false);
+  const auto parallel_strings = sorted_strings(BASE_PATH2, true);
+  EXPECT_EQ(serial_strings, parallel_strings);
 }
 
 void create_directory_if_not_exists(const std::string& path) {
