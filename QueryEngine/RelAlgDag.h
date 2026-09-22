@@ -1921,7 +1921,15 @@ class RelJoin : public RelAlgNode {
     }
   }
 
-  size_t size() const override { return inputs_[0]->size() + inputs_[1]->size(); }
+  size_t size() const override {
+    switch (join_type_) {
+      case JoinType::SEMI:
+      case JoinType::ANTI:
+        return inputs_[0]->size();
+      default:
+        return inputs_[0]->size() + inputs_[1]->size();
+    }
+  }
 
   std::shared_ptr<RelAlgNode> deepCopy() const override {
     return std::make_shared<RelJoin>(*this);
@@ -2234,6 +2242,11 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
                        RelAlgInputs inputs,
                        std::vector<std::shared_ptr<const RelJoin>>& original_joins);
 
+  RelLeftDeepInnerJoin(RelAlgInputs inputs,
+                       std::vector<std::shared_ptr<const RelJoin>> original_joins,
+                       std::unique_ptr<const RexScalar> condition,
+                       std::vector<std::unique_ptr<const RexScalar>> outer_conditions);
+
   virtual void acceptChildren(Visitor& v) const override {
     if (getInnerCondition()) {
       getInnerCondition()->accept(v, "inner condition");
@@ -2266,6 +2279,9 @@ class RelLeftDeepInnerJoin : public RelAlgNode {
 
   size_t size() const override;
   virtual size_t getOuterConditionsSize() const;
+
+  void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
+                    std::shared_ptr<const RelAlgNode> input) override;
 
   std::shared_ptr<RelAlgNode> deepCopy() const override;
 
@@ -2413,7 +2429,19 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
 
   void setScalarSources(std::vector<std::unique_ptr<const RexScalar>>& new_sources) {
     CHECK_EQ(new_sources.size(), scalar_sources_.size());
+    std::unordered_map<const Rex*, const Rex*> old_to_new_scalar_source;
+    old_to_new_scalar_source.reserve(scalar_sources_.size());
+    for (size_t source_idx = 0; source_idx < scalar_sources_.size(); ++source_idx) {
+      old_to_new_scalar_source.emplace(scalar_sources_[source_idx].get(),
+                                       new_sources[source_idx].get());
+    }
     scalar_sources_ = std::move(new_sources);
+    for (auto& target_expr : target_exprs_) {
+      const auto remapped_target_it = old_to_new_scalar_source.find(target_expr);
+      if (remapped_target_it != old_to_new_scalar_source.end()) {
+        target_expr = remapped_target_it->second;
+      }
+    }
   }
 
   const size_t getGroupByCount() const { return groupby_count_; }
@@ -3148,6 +3176,13 @@ class RelLogicalValues : public RelAlgNode {
         boost::hash_combine(hash_value, target_meta_info.get_resname());
         boost::hash_combine(hash_value, target_meta_info.get_type_info().get_type_name());
       }
+      boost::hash_combine(hash_value, values_.size());
+      for (const auto& row : values_) {
+        boost::hash_combine(hash_value, row.size());
+        for (const auto& value : row) {
+          boost::hash_combine(hash_value, value ? value->toHash() : size_t(0));
+        }
+      }
       cache.emplace(this, hash_value);
       return hash_value;
     }
@@ -3274,12 +3309,17 @@ class RelAlgDag : public boost::noncopyable {
   // todo(yoonmin): simplify and improve query register logic
   void registerQueryHints(std::shared_ptr<RelAlgNode> node,
                           Hints* hints_delivered,
-                          RegisteredQueryHint& global_query_hint) {
+                          RegisteredQueryHint& global_query_hint,
+                          const bool allow_inherited_local_hints = false) {
     std::optional<bool> has_global_columnar_output_hint = std::nullopt;
     std::optional<bool> has_global_rowwise_output_hint = std::nullopt;
     RegisteredQueryHint query_hint;
     for (auto it = hints_delivered->begin(); it != hints_delivered->end(); it++) {
       auto target = it->second;
+      if (!target.getInteritPath().empty() &&
+          (!allow_inherited_local_hints || target.isGlobalHint())) {
+        continue;
+      }
       auto hint_type = it->first;
       switch (hint_type) {
         case QueryHint::kCpuMode: {
@@ -3797,6 +3837,12 @@ class RelAlgDag : public boost::noncopyable {
   std::unordered_map<const RelAlgNode*,
                      std::unordered_map<unsigned, RegisteredQueryHint>>&
   getQueryHints() {
+    return query_hint_;
+  }
+
+  const std::unordered_map<const RelAlgNode*,
+                           std::unordered_map<unsigned, RegisteredQueryHint>>&
+  getQueryHints() const {
     return query_hint_;
   }
 
