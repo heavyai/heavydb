@@ -50,9 +50,13 @@ public class SqlKeyConstraint extends SqlCall {
   protected static final SqlSpecialOperator PRIMARY =
           new SqlSpecialOperator("PRIMARY KEY", SqlKind.PRIMARY_KEY);
 
+  protected static final SqlSpecialOperator FOREIGN =
+          new SqlSpecialOperator("FOREIGN KEY", SqlKind.FOREIGN_KEY);
+
   private final SqlIdentifier name;
   private final SqlNodeList columnList;
-  private final SqlIdentifier referencesCol;
+  private final SqlIdentifier referencesTable;
+  private final SqlNodeList referencesColumnList;
 
   /** Creates a SqlKeyConstraint. */
   SqlKeyConstraint(SqlParserPos pos, SqlIdentifier name, SqlNodeList columnList) {
@@ -64,10 +68,28 @@ public class SqlKeyConstraint extends SqlCall {
           SqlIdentifier name,
           SqlNodeList columnList,
           SqlIdentifier referencesCol) {
+    this(pos,
+            name,
+            columnList,
+            referencesCol != null && !referencesCol.isSimple()
+                    ? referencesCol.getComponent(0)
+                    : null,
+            referencesCol == null ? null
+                    : SqlNodeList.of(referencesCol.isSimple()
+                                    ? referencesCol
+                                    : referencesCol.getComponent(1)));
+  }
+
+  SqlKeyConstraint(SqlParserPos pos,
+          SqlIdentifier name,
+          SqlNodeList columnList,
+          SqlIdentifier referencesTable,
+          SqlNodeList referencesColumnList) {
     super(pos);
     this.name = name;
     this.columnList = columnList;
-    this.referencesCol = referencesCol;
+    this.referencesTable = referencesTable;
+    this.referencesColumnList = referencesColumnList;
   }
 
   /** Creates a UNIQUE constraint. */
@@ -83,6 +105,20 @@ public class SqlKeyConstraint extends SqlCall {
       @Override
       public SqlOperator getOperator() {
         return PRIMARY;
+      }
+    };
+  }
+
+  /** Creates a FOREIGN KEY constraint. */
+  public static SqlKeyConstraint foreign(SqlParserPos pos,
+          SqlIdentifier name,
+          SqlNodeList columnList,
+          SqlIdentifier referencesTable,
+          SqlNodeList referencesColumnList) {
+    return new SqlKeyConstraint(pos, name, columnList, referencesTable, referencesColumnList) {
+      @Override
+      public SqlOperator getOperator() {
+        return FOREIGN;
       }
     };
   }
@@ -119,6 +155,13 @@ public class SqlKeyConstraint extends SqlCall {
     }
     writer.keyword(getOperator().getName()); // "UNIQUE" or "PRIMARY KEY"
     columnList.unparse(writer, 1, 1);
+    if (referencesTable != null) {
+      writer.keyword("REFERENCES");
+      referencesTable.unparse(writer, 0, 0);
+      if (referencesColumnList != null) {
+        referencesColumnList.unparse(writer, 1, 1);
+      }
+    }
   }
 
   @Override
@@ -129,6 +172,7 @@ public class SqlKeyConstraint extends SqlCall {
     jsonBuilder.put(map, "type", "SQL_COLUMN_CONSTRAINT");
 
     jsonBuilder.put(map, "name", this.name == null ? null : this.name.toString());
+    jsonBuilder.put(map, "constraintType", getOperator().getName());
 
     List<String> colNamesList = new ArrayList<String>();
     for (int i = 0; i < columnList.size(); i++) {
@@ -138,13 +182,18 @@ public class SqlKeyConstraint extends SqlCall {
     jsonBuilder.put(map, "columns", colNamesList);
 
     Map<String, Object> referencesMap = jsonBuilder.map();
-    if (referencesCol != null) {
-      if (referencesCol.isSimple()) {
-        jsonBuilder.put(referencesMap, "column", referencesCol.toString());
-      } else {
-        jsonBuilder.put(referencesMap, "table", referencesCol.getComponent(0).toString());
-        jsonBuilder.put(
-                referencesMap, "column", referencesCol.getComponent(1).toString());
+    if (referencesTable != null) {
+      jsonBuilder.put(referencesMap, "table", referencesTable.toString());
+    }
+    if (referencesColumnList != null) {
+      List<String> referenceColNamesList = new ArrayList<String>();
+      for (int i = 0; i < referencesColumnList.size(); i++) {
+        SqlNode colNode = referencesColumnList.get(i);
+        referenceColNamesList.add(colNode.toString());
+      }
+      jsonBuilder.put(referencesMap, "columns", referenceColNamesList);
+      if (referenceColNamesList.size() == 1) {
+        jsonBuilder.put(referencesMap, "column", referenceColNamesList.get(0));
       }
     }
     jsonBuilder.put(map, "references", referencesMap);

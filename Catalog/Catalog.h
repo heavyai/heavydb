@@ -38,6 +38,7 @@
 #include "Catalog/LinkDescriptor.h"
 #include "Catalog/SessionInfo.h"
 #include "Catalog/SysCatalog.h"
+#include "Catalog/TableConstraints.h"
 #include "Catalog/TableDescriptor.h"
 #include "Catalog/TableMetadata.h"
 #include "Catalog/Types.h"
@@ -177,6 +178,15 @@ class Catalog final {
   void dropColumnPolicies(const TableDescriptor& td, const ColumnDescriptor& cd);
   void invalidateCachesForTable(const int table_id);
   void removeFragmenterForTable(const int table_id) const;
+  std::vector<TableConstraint> getTableConstraints(const TableDescriptor* td) const;
+  TableConstraint normalizeTableConstraint(const TableDescriptor* td,
+                                           const TableConstraint& constraint) const;
+  std::vector<TableConstraint> normalizeTableConstraintsForCreate(
+      const TableDescriptor* td,
+      const std::list<ColumnDescriptor>& columns,
+      const std::vector<TableConstraint>& constraints) const;
+  void addTableConstraint(const TableDescriptor* td, const TableConstraint& constraint);
+  void dropTableConstraint(const TableDescriptor* td, const std::string& constraint_name);
 
   const std::map<int, const ColumnDescriptor*> getDictionaryToColumnMapping();
 
