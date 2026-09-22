@@ -25,8 +25,10 @@
 #include <boost/process/search_path.hpp>
 #endif
 #include <cctype>
+#include <cstdlib>
 #include <iterator>
 #include <locale>
+#include <mutex>
 #include "clang/Basic/Version.h"
 
 #if LLVM_VERSION_MAJOR >= 17
@@ -45,6 +47,35 @@ using namespace clang::tooling;
 static llvm::cl::OptionCategory ToolingSampleCategory("UDF Tooling");
 
 namespace {
+
+std::mutex& compiler_child_env_mutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
+class ScopedUnsetEnv {
+ public:
+  explicit ScopedUnsetEnv(const char* name)
+      : lock_(compiler_child_env_mutex()), name_(name) {
+    if (const auto value = std::getenv(name_.c_str())) {
+      had_value_ = true;
+      old_value_ = value;
+      unsetenv(name_.c_str());
+    }
+  }
+
+  ~ScopedUnsetEnv() {
+    if (had_value_) {
+      setenv(name_.c_str(), old_value_.c_str(), 1);
+    }
+  }
+
+ private:
+  std::unique_lock<std::mutex> lock_;
+  std::string name_;
+  bool had_value_{false};
+  std::string old_value_;
+};
 
 // By implementing RecursiveASTVisitor, we can specify which AST nodes
 // we're interested in by overriding relevant methods.
@@ -162,6 +193,7 @@ const char* convert(const std::string& s) {
 std::string exec_output(std::string cmd) {
   std::array<char, 128> buffer;
   std::string result;
+  ScopedUnsetEnv clear_ld_library_path("LD_LIBRARY_PATH");
   std::unique_ptr<FILE, decltype(&heavyai::pclose)> pipe(heavyai::popen(cmd.c_str(), "r"),
                                                          heavyai::pclose);
   if (!pipe) {
@@ -275,14 +307,27 @@ UdfClangDriver::UdfClangDriver(
                     clang::SourceLocation());
 }
 
+std::string findProgramByName(const std::string& program_name) {
+  const auto program_path = llvm::sys::findProgramByName(program_name);
+  return program_path ? program_path.get() : "";
+}
+
 std::string get_clang_path(const std::string& clang_path_override) {
   if (clang_path_override.empty()) {
-    const auto clang_path = (llvm::sys::findProgramByName("clang++").get());
-    if (clang_path.empty()) {
-      throw std::runtime_error(
-          "Unable to find clang++ to compile user defined functions");
+    const auto clang_path = findProgramByName("clang++");
+    if (!clang_path.empty()) {
+      return clang_path;
     }
-    return clang_path;
+
+    const auto versioned_clang_path =
+        findProgramByName("clang++-" + std::to_string(CLANG_VERSION_MAJOR));
+    if (!versioned_clang_path.empty()) {
+      return versioned_clang_path;
+    }
+
+    throw std::runtime_error("Unable to find clang++ or clang++-" +
+                             std::to_string(CLANG_VERSION_MAJOR) +
+                             " to compile user defined functions");
   } else {
     if (!boost::filesystem::exists(clang_path_override)) {
       throw std::runtime_error("Path provided for udf compiler " + clang_path_override +
@@ -298,6 +343,10 @@ std::string get_clang_path(const std::string& clang_path_override) {
 }
 
 }  // namespace
+
+std::string UdfCompiler::findClangPath(const std::string& clang_path_override) {
+  return get_clang_path(clang_path_override);
+}
 
 UdfCompiler::UdfCompiler(CudaMgr_Namespace::NvidiaDeviceArch target_arch,
                          const std::string& clang_path_override)
@@ -540,6 +589,7 @@ int UdfCompiler::compileFromCommandLine(
   }
 
   llvm::SmallVector<std::pair<int, const driver::Command*>, 10> failing_commands;
+  ScopedUnsetEnv clear_ld_library_path("LD_LIBRARY_PATH");
   int res = the_driver->ExecuteCompilation(*compilation, failing_commands);
   if (res < 0) {
     for (const std::pair<int, const driver::Command*>& p : failing_commands) {
