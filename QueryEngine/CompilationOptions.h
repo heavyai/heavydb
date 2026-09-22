@@ -78,8 +78,11 @@ struct ExecutionOptions {
   bool table_reordering{g_from_table_reordering};
   bool estimate_output_cardinality{false};
   size_t max_join_hash_table_size = std::numeric_limits<size_t>::max();
+  size_t max_gpu_kernel_concurrency = 0;
   ExecutorType executor_type = ExecutorType::Native;
   std::vector<size_t> outer_fragment_indices{};
+  bool defer_gpu_result_cpu_materialization{false};
+  bool materializes_for_later_step{false};
 
   static ExecutionOptions defaults() {
     return ExecutionOptions{/*output_columnar_hint=*/false,

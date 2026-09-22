@@ -16,11 +16,31 @@
 
 #include <boost/algorithm/cxx11/any_of.hpp>
 
+#include <limits>
 bool g_enable_smem_group_by{true};
 extern bool g_enable_columnar_output;
+extern bool g_enable_result_reduction_pipeline;
 extern size_t g_streaming_topn_max;
 
 namespace {
+
+size_t checked_size_add(const size_t lhs,
+                        const size_t rhs,
+                        const char* const description) {
+  if (rhs > std::numeric_limits<size_t>::max() - lhs) {
+    throw std::overflow_error(description);
+  }
+  return lhs + rhs;
+}
+
+size_t checked_size_multiply(const size_t lhs,
+                             const size_t rhs,
+                             const char* const description) {
+  if (lhs != 0 && rhs > std::numeric_limits<size_t>::max() / lhs) {
+    throw std::overflow_error(description);
+  }
+  return lhs * rhs;
+}
 
 bool is_int_and_no_bigger_than(const SQLTypeInfo& ti, const size_t byte_width) {
   if (!ti.is_integer()) {
@@ -47,8 +67,91 @@ std::vector<int64_t> target_expr_group_by_indices(
       indices[target_idx] = var_expr->get_varno() - 1;
       continue;
     }
+    if (g_enable_result_reduction_pipeline) {
+      size_t groupby_idx = 0;
+      for (const auto& groupby_expr : groupby_exprs) {
+        if (groupby_expr && *groupby_expr == *target_expr) {
+          indices[target_idx] = groupby_idx;
+          break;
+        }
+        ++groupby_idx;
+      }
+    }
   }
   return indices;
+}
+
+ColRangeInfo get_groupby_expr_range_info(const RelAlgExecutionUnit& ra_exe_unit,
+                                         const std::vector<InputTableInfo>& query_infos,
+                                         const Analyzer::Expr* expr,
+                                         const Executor* executor) {
+  if (!expr) {
+    return {QueryDescriptionType::Projection, 0, 0, 0, false};
+  }
+
+  const auto expr_range = getExpressionRange(
+      expr, query_infos, executor, boost::make_optional(ra_exe_unit.simple_quals));
+  switch (expr_range.getType()) {
+    case ExpressionRangeType::Integer:
+      if (expr_range.getIntMin() > expr_range.getIntMax()) {
+        return {
+            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
+      }
+      return {QueryDescriptionType::GroupByPerfectHash,
+              expr_range.getIntMin(),
+              expr_range.getIntMax(),
+              expr_range.getBucket(),
+              expr_range.hasNulls()};
+    case ExpressionRangeType::Float:
+    case ExpressionRangeType::Double:
+      if (expr_range.getFpMin() > expr_range.getFpMax()) {
+        return {
+            QueryDescriptionType::GroupByBaselineHash, 0, -1, 0, expr_range.hasNulls()};
+      }
+      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+    case ExpressionRangeType::Invalid:
+      return {QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
+    default:
+      CHECK(false);
+  }
+  CHECK(false);
+  return {QueryDescriptionType::NonGroupedAggregate, 0, 0, 0, false};
+}
+
+int64_t translated_null_key_for_range(const ColRangeInfo& col_range_info) {
+  CHECK(col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash);
+  return static_cast<int64_t>(checked_int64_t(col_range_info.max) +
+                              (col_range_info.bucket ? col_range_info.bucket : 1));
+}
+
+std::vector<int64_t> translated_groupby_nulls(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const std::vector<InputTableInfo>& query_infos,
+    const ColRangeInfo& col_range_info,
+    const std::vector<int8_t>& group_col_widths,
+    const Executor* executor) {
+  std::vector<int64_t> translated_nulls(group_col_widths.size(),
+                                        QueryMemoryDescriptor::noTranslatedGroupbyNull());
+  if (group_col_widths.empty()) {
+    return translated_nulls;
+  }
+
+  CHECK_EQ(group_col_widths.size(), ra_exe_unit.groupby_exprs.size());
+  size_t group_idx = 0;
+  for (const auto& groupby_expr : ra_exe_unit.groupby_exprs) {
+    const auto group_col_range_info =
+        group_col_widths.size() == 1 &&
+                col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash
+            ? col_range_info
+            : get_groupby_expr_range_info(
+                  ra_exe_unit, query_infos, groupby_expr.get(), executor);
+    if (group_col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
+        group_col_range_info.has_nulls) {
+      translated_nulls[group_idx] = translated_null_key_for_range(group_col_range_info);
+    }
+    ++group_idx;
+  }
+  return translated_nulls;
 }
 
 std::vector<int64_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit) {
@@ -276,6 +379,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         std::vector<int8_t>{},
         /*group_col_compact_width=*/0,
         std::vector<int64_t>{},
+        std::vector<int64_t>{},
         /*entry_count=*/1,
         approx_quantile_descriptors,
         nmode_targets,
@@ -305,6 +409,41 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         // NonInsituQueryClassifier code, but keeping it just in case
         render_info->setNonInSitu();
       }
+      if (g_enable_result_reduction_pipeline) {
+        const auto projected_groupby_indices = target_expr_group_by_indices(
+            ra_exe_unit.groupby_exprs, ra_exe_unit.target_exprs);
+        bool projects_dictionary_group_keys = false;
+        bool projects_padded_group_keys = false;
+        for (size_t target_idx = 0; target_idx < projected_groupby_indices.size();
+             ++target_idx) {
+          if (projected_groupby_indices[target_idx] >= 0) {
+            if (ra_exe_unit.target_exprs[target_idx]
+                    ->get_type_info()
+                    .is_dict_encoded_string()) {
+              projects_dictionary_group_keys = true;
+            }
+            const auto& target_slots = col_slot_context.getSlotsForCol(target_idx);
+            if (!target_slots.empty()) {
+              const auto& target_slot =
+                  col_slot_context.getSlotInfo(target_slots.front());
+              if (target_slot.logical_size > 0 &&
+                  target_slot.logical_size != target_slot.padded_size) {
+                projects_padded_group_keys = true;
+              }
+            }
+          }
+        }
+        if (group_col_widths.size() > 1 || projects_dictionary_group_keys ||
+            projects_padded_group_keys || must_use_baseline_sort) {
+          target_groupby_indices = projected_groupby_indices;
+          col_slot_context =
+              ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
+        }
+      }
+      const bool projects_group_keys =
+          std::any_of(target_groupby_indices.begin(),
+                      target_groupby_indices.end(),
+                      [](const int64_t group_idx) { return group_idx >= 0; });
       // keyless hash: whether or not group columns are stored at the beginning of the
       // output buffer
       keyless_hash = (!sort_on_gpu_hint || !many_entries(col_range_info.max,
@@ -312,7 +451,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                                                          col_range_info.bucket,
                                                          kLargeGroupbyEntryCount)) &&
                      !col_range_info.bucket && !must_use_baseline_sort &&
-                     keyless_info.keyless;
+                     !projects_group_keys && keyless_info.keyless;
 
       // if keyless, then this target index indicates wheter an entry is empty or not
       // (acts as a key)
@@ -328,7 +467,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
             GroupByAndAggregate::getBucketedCardinality(col_range_info), int64_t(1));
         const size_t interleaved_max_threshold{512};
 
-        if (must_use_baseline_sort) {
+        if (!g_enable_result_reduction_pipeline && must_use_baseline_sort) {
           target_groupby_indices = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
                                                                 ra_exe_unit.target_exprs);
           col_slot_context =
@@ -390,15 +529,35 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
           output_columnar = false;
           entry_count = 0;
         } else {
-          entry_count = ra_exe_unit.scan_limit
-                            ? static_cast<size_t>(ra_exe_unit.scan_limit)
-                            : max_groups_buffer_entry_count;
+          entry_count = ra_exe_unit.output_buffer_entry_count_hint.value_or(
+              ra_exe_unit.scan_limit ? static_cast<size_t>(ra_exe_unit.scan_limit)
+                                     : max_groups_buffer_entry_count);
         }
       }
 
-      target_groupby_indices = executor->plan_state_->allow_lazy_fetch_
-                                   ? target_expr_proj_indices(ra_exe_unit)
-                                   : std::vector<int64_t>{};
+      if (!g_enable_result_reduction_pipeline || group_col_widths.empty()) {
+        target_groupby_indices = executor->plan_state_->allow_lazy_fetch_
+                                     ? target_expr_proj_indices(ra_exe_unit)
+                                     : std::vector<int64_t>{};
+      } else {
+        const auto has_real_groupby_expr =
+            std::any_of(ra_exe_unit.groupby_exprs.begin(),
+                        ra_exe_unit.groupby_exprs.end(),
+                        [](const auto& groupby_expr) { return groupby_expr != nullptr; });
+        if (has_real_groupby_expr) {
+          target_groupby_indices = target_expr_group_by_indices(ra_exe_unit.groupby_exprs,
+                                                                ra_exe_unit.target_exprs);
+          if (std::none_of(target_groupby_indices.begin(),
+                           target_groupby_indices.end(),
+                           [](const int64_t group_idx) { return group_idx >= 0; })) {
+            target_groupby_indices.clear();
+          }
+        } else {
+          target_groupby_indices = executor->plan_state_->allow_lazy_fetch_
+                                       ? target_expr_proj_indices(ra_exe_unit)
+                                       : std::vector<int64_t>{};
+        }
+      }
 
       col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
       break;
@@ -407,28 +566,33 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       UNREACHABLE() << "Unknown query type";
   }
 
-  return std::make_unique<QueryMemoryDescriptor>(executor,
-                                                 ra_exe_unit,
-                                                 query_infos,
-                                                 allow_multifrag,
-                                                 keyless_hash,
-                                                 interleaved_bins_on_gpu,
-                                                 idx_target_as_key,
-                                                 actual_col_range_info,
-                                                 col_slot_context,
-                                                 group_col_widths,
-                                                 group_col_compact_width,
-                                                 target_groupby_indices,
-                                                 entry_count,
-                                                 approx_quantile_descriptors,
-                                                 nmode_targets,
-                                                 count_distinct_descriptors,
-                                                 sort_on_gpu_hint,
-                                                 output_columnar,
-                                                 render_info && render_info->isInSitu(),
-                                                 must_use_baseline_sort,
-                                                 streaming_top_n,
-                                                 threads_can_reuse_group_by_buffers);
+  return std::make_unique<QueryMemoryDescriptor>(
+      executor,
+      ra_exe_unit,
+      query_infos,
+      allow_multifrag,
+      keyless_hash,
+      interleaved_bins_on_gpu,
+      idx_target_as_key,
+      actual_col_range_info,
+      col_slot_context,
+      group_col_widths,
+      group_col_compact_width,
+      target_groupby_indices,
+      g_enable_result_reduction_pipeline
+          ? translated_groupby_nulls(
+                ra_exe_unit, query_infos, col_range_info, group_col_widths, executor)
+          : std::vector<int64_t>{},
+      entry_count,
+      approx_quantile_descriptors,
+      nmode_targets,
+      count_distinct_descriptors,
+      sort_on_gpu_hint,
+      output_columnar,
+      render_info && render_info->isInSitu(),
+      must_use_baseline_sort,
+      streaming_top_n,
+      threads_can_reuse_group_by_buffers);
 }
 
 namespace {
@@ -454,6 +618,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const std::vector<int8_t>& group_col_widths,
     const int8_t group_col_compact_width,
     const std::vector<int64_t>& target_groupby_indices,
+    const std::vector<int64_t>& group_col_translated_nulls,
     const size_t entry_count,
     const ApproxQuantileDescriptors& approx_quantile_descriptors,
     const size_t nmode_targets,
@@ -473,6 +638,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , group_col_widths_(group_col_widths)
     , group_col_compact_width_(group_col_compact_width)
     , target_groupby_indices_(target_groupby_indices)
+    , group_col_translated_nulls_(group_col_translated_nulls)
     , entry_count_(entry_count)
     , min_val_(col_range_info.min)
     , max_val_(col_range_info.max)
@@ -738,6 +904,9 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
   if (target_groupby_indices_ != other.target_groupby_indices_) {
     return false;
   }
+  if (group_col_translated_nulls_ != other.group_col_translated_nulls_) {
+    return false;
+  }
   if (min_val_ != other.min_val_) {
     return false;
   }
@@ -787,12 +956,15 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const shared::TableKey& outer_table_key,
     const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
+    const ColumnBufferLayouts& col_buffer_layouts,
+    const std::vector<std::vector<const int64_t*>>& selected_rowids,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const bool output_columnar,
     const bool sort_on_gpu,
     const size_t thread_idx,
-    RenderInfo* render_info) const {
+    RenderInfo* render_info,
+    const bool defer_gpu_result_cpu_materialization) const {
   auto timer = DEBUG_TIMER(__func__);
   if (frag_offsets.empty()) {
     return nullptr;
@@ -807,12 +979,15 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                 outer_table_key,
                                 num_rows,
                                 col_buffers,
+                                col_buffer_layouts,
+                                selected_rowids,
                                 frag_offsets,
                                 row_set_mem_owner,
                                 output_columnar,
                                 sort_on_gpu,
                                 thread_idx,
-                                render_info));
+                                render_info,
+                                defer_gpu_result_cpu_materialization));
 }
 
 int8_t QueryMemoryDescriptor::pick_target_compact_width(
@@ -1155,27 +1330,44 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(const ExecutorDeviceType device
                                                  const size_t entry_count) const {
   if (keyless_hash_ && !output_columnar_) {
     CHECK_GE(group_col_widths_.size(), size_t(1));
-    auto row_bytes = align_to_int64(getColsSize());
-    return (interleavedBins(device_type) ? executor_->warpSize() : 1) * entry_count *
-           row_bytes;
+    const auto row_bytes = align_to_int64(getColsSize());
+    const auto bin_count =
+        interleavedBins(device_type) ? static_cast<size_t>(executor_->warpSize()) : 1;
+    return checked_size_multiply(
+        checked_size_multiply(
+            bin_count, entry_count, "Keyless ResultSet entry count overflow"),
+        row_bytes,
+        "Keyless ResultSet buffer size overflow");
   }
   constexpr size_t row_index_width = sizeof(int64_t);
   size_t total_bytes{0};
   if (output_columnar_) {
     switch (query_desc_type_) {
       case QueryDescriptionType::Projection:
-        total_bytes = row_index_width * entry_count + getTotalBytesOfColumnarBuffers();
+        total_bytes = checked_size_add(
+            checked_size_multiply(
+                row_index_width, entry_count, "Projection ResultSet index size overflow"),
+            getTotalBytesOfColumnarBuffers(entry_count),
+            "Projection ResultSet buffer size overflow");
         break;
       case QueryDescriptionType::TableFunction:
-        total_bytes = getTotalBytesOfColumnarBuffers();
+        total_bytes = getTotalBytesOfColumnarBuffers(entry_count);
         break;
       default:
-        total_bytes = sizeof(int64_t) * group_col_widths_.size() * entry_count +
-                      getTotalBytesOfColumnarBuffers();
+        total_bytes = checked_size_add(
+            checked_size_multiply(
+                checked_size_multiply(sizeof(int64_t),
+                                      group_col_widths_.size(),
+                                      "Columnar ResultSet group key size overflow"),
+                entry_count,
+                "Columnar ResultSet group key buffer overflow"),
+            getTotalBytesOfColumnarBuffers(entry_count),
+            "Columnar ResultSet buffer size overflow");
         break;
     }
   } else {
-    total_bytes = getRowSize() * entry_count;
+    total_bytes = checked_size_multiply(
+        getRowSize(), entry_count, "Row-wise ResultSet buffer size overflow");
   }
   return total_bytes;
 }
@@ -1410,6 +1602,14 @@ std::string QueryMemoryDescriptor::reductionKey() const {
     str += "\tTarget group by indices: " +
            boost::algorithm::join(group_indices_strings, ",") + "\n";
   }
+  if (!group_col_translated_nulls_.empty()) {
+    std::vector<std::string> translated_null_strings;
+    for (const auto translated_null : group_col_translated_nulls_) {
+      translated_null_strings.push_back(std::to_string(translated_null));
+    }
+    str += "\tTranslated group by nulls: " +
+           boost::algorithm::join(translated_null_strings, ",") + "\n";
+  }
   str += "\t" + col_slot_context_.toString();
   return str;
 }
@@ -1485,6 +1685,28 @@ bool QueryMemoryDescriptor::canUsePerDeviceCardinality(
   // union-query needs to consider the "SUM" of each subquery's result
   if (query_desc_type_ != QueryDescriptionType::Projection ||
       !ra_exe_unit.target_exprs_union.empty()) {
+    return false;
+  }
+  // Per-device cardinality is currently applied by retrying compilation with a
+  // smaller scan_limit. That is only semantic-preserving when scan_limit came
+  // from a real SQL LIMIT, not when it was synthesized from filtered-count
+  // preflight as an output-buffer sizing hint for a full projection.
+  if (!ra_exe_unit.sort_info.limit) {
+    return false;
+  }
+  if (!ra_exe_unit.sort_info.order_entries.empty()) {
+    return false;
+  }
+  const bool output_bounded_by_outer_table =
+      ra_exe_unit.input_descs.size() == size_t(1) ||
+      (!ra_exe_unit.join_quals.empty() &&
+       std::all_of(ra_exe_unit.join_quals.begin(),
+                   ra_exe_unit.join_quals.end(),
+                   [](const auto& join_qual) {
+                     return join_qual.type == JoinType::SEMI ||
+                            join_qual.type == JoinType::ANTI;
+                   }));
+  if (!output_bounded_by_outer_table) {
     return false;
   }
   auto is_left_join = [](auto& join_qual) { return join_qual.type == JoinType::LEFT; };
