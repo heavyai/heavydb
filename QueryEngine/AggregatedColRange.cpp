@@ -6,8 +6,17 @@
 #include "AggregatedColRange.h"
 
 ExpressionRange AggregatedColRange::getColRange(const PhysicalInput& phys_input) const {
+  auto col_range = getOptionalColRange(phys_input);
+  CHECK(col_range);
+  return *col_range;
+}
+
+std::optional<ExpressionRange> AggregatedColRange::getOptionalColRange(
+    const PhysicalInput& phys_input) const {
   const auto it = cache_.find(phys_input);
-  CHECK(it != cache_.end());
+  if (it == cache_.end()) {
+    return std::nullopt;
+  }
   return it->second;
 }
 

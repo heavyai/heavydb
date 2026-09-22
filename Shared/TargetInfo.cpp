@@ -55,15 +55,16 @@ TargetInfo get_target_info_impl(const Analyzer::Expr* target_expr,
             false};
   }
 
-  return {
-      true,
-      agg_expr->get_aggtype(),
-      shared::is_any<kCOUNT, kCOUNT_IF>(agg_type)
-          ? SQLTypeInfo((is_distinct || bigint_count) ? kBIGINT : kINT, notnull)
-          : agg_expr->get_type_info(),
-      agg_arg_ti,
-      agg_type == kCOUNT && agg_arg_ti.is_varlen() ? false : !agg_arg_ti.get_notnull(),
-      is_distinct,
-      false};
+  const bool count_varlen_without_distinct =
+      agg_type == kCOUNT && !is_distinct && agg_arg_ti.is_varlen();
+  return {true,
+          agg_expr->get_aggtype(),
+          shared::is_any<kCOUNT, kCOUNT_IF>(agg_type)
+              ? SQLTypeInfo((is_distinct || bigint_count) ? kBIGINT : kINT, notnull)
+              : agg_expr->get_type_info(),
+          agg_arg_ti,
+          count_varlen_without_distinct ? false : !agg_arg_ti.get_notnull(),
+          is_distinct,
+          false};
 }
 }  // namespace target_info

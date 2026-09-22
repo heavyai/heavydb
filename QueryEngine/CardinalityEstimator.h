@@ -48,10 +48,16 @@ class Estimator : public Analyzer::Expr {
   // The name for the estimator runtime function which is called for every row.
   // The runtime function will receive four arguments:
   //   uint8_t* the pointer to the beginning of the estimator buffer
-  //   uint32_t the size of the estimator buffer, in bytes
+  //   uint32_t an estimator-specific runtime parameter
   //   uint8_t* the concatenated bytes for the argument tuple
   //   uint32_t the size of the argument tuple, in bytes
   virtual std::string getRuntimeFunctionName() const = 0;
+
+  // Linear estimators use the buffer size. Other estimators may override this with
+  // the parameter expected by their runtime function.
+  virtual uint32_t getRuntimeFunctionParameter() const {
+    return static_cast<uint32_t>(getBufferSize());
+  }
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override {
     CHECK(false);
@@ -102,10 +108,28 @@ class LargeNDVEstimator : public NDVEstimator {
   size_t getBufferSize() const final;
 };
 
+class HllNDVEstimator : public NDVEstimator {
+ public:
+  static constexpr uint32_t kPrecisionBits{14};
+
+  HllNDVEstimator(const std::list<std::shared_ptr<Analyzer::Expr>>& expr_tuple)
+      : NDVEstimator(expr_tuple) {}
+
+  size_t getBufferSize() const final {
+    // GPU HLL registers use int32_t so they can be updated with atomicMax.
+    return (size_t{1} << kPrecisionBits) * sizeof(int32_t);
+  }
+
+  std::string getRuntimeFunctionName() const final { return "hll_probabilistic_count"; }
+
+  uint32_t getRuntimeFunctionParameter() const final { return kPrecisionBits; }
+};
+
 }  // namespace Analyzer
 
 ResultSetPtr reduce_estimator_results(
     const RelAlgExecutionUnit& ra_exe_unit,
-    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device);
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
+    const size_t executor_id);
 
 #endif  // QUERYENGINE_CARDINALITYESTIMATOR_H

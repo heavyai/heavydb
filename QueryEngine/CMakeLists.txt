@@ -189,6 +189,7 @@ set(query_engine_cuda_source_files
   InPlaceSortImpl.cu
   ResultSetSortImpl.cu
   GpuInitGroups.cu
+  WindowGpu.cu
   JoinHashTable/Runtime/HashJoinRuntimeGpu.cu)
 
 list(APPEND query_engine_source_files

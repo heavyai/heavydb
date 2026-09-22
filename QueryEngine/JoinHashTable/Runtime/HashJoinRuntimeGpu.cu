@@ -46,6 +46,515 @@ void fill_hash_join_buff_on_device(CUstream cuda_stream,
   cuda_kernel_launch_wrapper(fill_hash_join_buff_wrapper, cuda_stream, args);
 }
 
+__global__ void fill_join_bitmap_wrapper(uint32_t* bitmap,
+                                         const JoinColumn join_column,
+                                         const JoinColumnTypeInfo type_info,
+                                         const JoinColumnFilter filter,
+                                         const int64_t min_val,
+                                         const int64_t max_val) {
+  SUFFIX(fill_join_bitmap)
+  (bitmap, join_column, type_info, filter, min_val, max_val, -1, -1);
+}
+
+void fill_join_bitmap_on_device(uint32_t* bitmap,
+                                const JoinColumn join_column,
+                                const JoinColumnTypeInfo type_info,
+                                const JoinColumnFilter filter,
+                                const int64_t min_val,
+                                const int64_t max_val,
+                                CUstream cuda_stream) {
+  cuda_kernel_launch_wrapper(fill_join_bitmap_wrapper,
+                             cuda_stream,
+                             bitmap,
+                             join_column,
+                             type_info,
+                             filter,
+                             min_val,
+                             max_val);
+}
+
+__global__ void fill_join_bitmap_segmented_wrapper(uint64_t* bitmap_chunks,
+                                                   const int64_t bitmap_chunk_word_count,
+                                                   const JoinColumn join_column,
+                                                   const JoinColumnTypeInfo type_info,
+                                                   const JoinColumnFilter filter,
+                                                   const int64_t min_val,
+                                                   const int64_t max_val) {
+  SUFFIX(fill_join_bitmap_segmented)
+  (bitmap_chunks,
+   bitmap_chunk_word_count,
+   join_column,
+   type_info,
+   filter,
+   min_val,
+   max_val,
+   -1,
+   -1);
+}
+
+void fill_join_bitmap_segmented_on_device(uint64_t* bitmap_chunks,
+                                          const int64_t bitmap_chunk_word_count,
+                                          const JoinColumn join_column,
+                                          const JoinColumnTypeInfo type_info,
+                                          const JoinColumnFilter filter,
+                                          const int64_t min_val,
+                                          const int64_t max_val,
+                                          CUstream cuda_stream) {
+  cuda_kernel_launch_wrapper(fill_join_bitmap_segmented_wrapper,
+                             cuda_stream,
+                             bitmap_chunks,
+                             bitmap_chunk_word_count,
+                             join_column,
+                             type_info,
+                             filter,
+                             min_val,
+                             max_val);
+}
+
+__global__ void build_ranked_bitmap_index_wrapper(uint32_t* rank_blocks,
+                                                  const uint32_t* bitmap,
+                                                  const int64_t bitmap_word_count,
+                                                  const int64_t rank_block_word_count) {
+  SUFFIX(build_ranked_bitmap_index)
+  (rank_blocks, bitmap, bitmap_word_count, rank_block_word_count, -1, -1);
+}
+
+void build_ranked_bitmap_index_on_device(uint32_t* rank_blocks,
+                                         const uint32_t* bitmap,
+                                         const int64_t bitmap_word_count,
+                                         const int64_t rank_block_word_count,
+                                         CUstream cuda_stream) {
+  const int64_t rank_block_count =
+      bitmap_word_count == 0 ? 0 : ((bitmap_word_count - 1) / rank_block_word_count + 1);
+  cuda_kernel_launch_wrapper(build_ranked_bitmap_index_wrapper,
+                             cuda_stream,
+                             rank_blocks,
+                             bitmap,
+                             bitmap_word_count,
+                             rank_block_word_count);
+  auto rank_blocks_dev_ptr = thrust::device_pointer_cast(rank_blocks);
+  thrust::exclusive_scan(thrust::cuda::par.on(cuda_stream),
+                         rank_blocks_dev_ptr,
+                         rank_blocks_dev_ptr + rank_block_count,
+                         rank_blocks_dev_ptr);
+}
+
+__global__ void bitwise_or_uint32_wrapper(uint32_t* destination,
+                                          const uint32_t* source,
+                                          const int64_t count) {
+  for (int64_t index = blockIdx.x * blockDim.x + threadIdx.x; index < count;
+       index += blockDim.x * gridDim.x) {
+    destination[index] |= source[index];
+  }
+}
+
+void bitwise_or_uint32_on_device(uint32_t* destination,
+                                 const uint32_t* source,
+                                 const int64_t count,
+                                 CUstream cuda_stream) {
+  if (count <= 0) {
+    return;
+  }
+  cuda_kernel_launch_wrapper(
+      bitwise_or_uint32_wrapper, cuda_stream, destination, source, count);
+}
+
+__global__ void fill_ranked_bitmap_payload_wrapper(uint32_t* payload,
+                                                   const uint32_t* bitmap,
+                                                   const uint32_t* rank_blocks,
+                                                   const JoinColumn join_column,
+                                                   const JoinColumnTypeInfo type_info,
+                                                   const JoinColumnFilter filter,
+                                                   const int64_t min_val,
+                                                   const int64_t max_val,
+                                                   const int64_t rank_block_word_count,
+                                                   const int64_t payload_count,
+                                                   int* dev_err_buff) {
+  const int partial_err = SUFFIX(fill_ranked_bitmap_payload)(payload,
+                                                             bitmap,
+                                                             rank_blocks,
+                                                             join_column,
+                                                             type_info,
+                                                             filter,
+                                                             min_val,
+                                                             max_val,
+                                                             rank_block_word_count,
+                                                             payload_count,
+                                                             -1,
+                                                             -1);
+  atomicCAS(dev_err_buff, 0, partial_err);
+}
+
+void fill_ranked_bitmap_payload_on_device(uint32_t* payload,
+                                          const uint32_t* bitmap,
+                                          const uint32_t* rank_blocks,
+                                          const JoinColumn join_column,
+                                          const JoinColumnTypeInfo type_info,
+                                          const JoinColumnFilter filter,
+                                          const int64_t min_val,
+                                          const int64_t max_val,
+                                          const int64_t rank_block_word_count,
+                                          const int64_t payload_count,
+                                          int* dev_err_buff,
+                                          CUstream cuda_stream) {
+  cuda_kernel_launch_wrapper(fill_ranked_bitmap_payload_wrapper,
+                             cuda_stream,
+                             payload,
+                             bitmap,
+                             rank_blocks,
+                             join_column,
+                             type_info,
+                             filter,
+                             min_val,
+                             max_val,
+                             rank_block_word_count,
+                             payload_count,
+                             dev_err_buff);
+}
+
+__global__ void fill_ranked_bitmap_payload_unique_wrapper(
+    uint32_t* payload,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff) {
+  const int partial_err = SUFFIX(fill_ranked_bitmap_payload_unique)(payload,
+                                                                    bitmap,
+                                                                    rank_blocks,
+                                                                    join_column,
+                                                                    type_info,
+                                                                    min_val,
+                                                                    max_val,
+                                                                    rank_block_word_count,
+                                                                    payload_count,
+                                                                    -1,
+                                                                    -1);
+  atomicCAS(dev_err_buff, 0, partial_err);
+}
+
+void fill_ranked_bitmap_payload_unique_on_device(uint32_t* payload,
+                                                 const uint32_t* bitmap,
+                                                 const uint32_t* rank_blocks,
+                                                 const JoinColumn join_column,
+                                                 const JoinColumnTypeInfo type_info,
+                                                 const int64_t min_val,
+                                                 const int64_t max_val,
+                                                 const int64_t rank_block_word_count,
+                                                 const int64_t payload_count,
+                                                 int* dev_err_buff,
+                                                 CUstream cuda_stream) {
+  cuda_kernel_launch_wrapper(fill_ranked_bitmap_payload_unique_wrapper,
+                             cuda_stream,
+                             payload,
+                             bitmap,
+                             rank_blocks,
+                             join_column,
+                             type_info,
+                             min_val,
+                             max_val,
+                             rank_block_word_count,
+                             payload_count,
+                             dev_err_buff);
+}
+
+__global__ void fill_ranked_bitmap_payload_segmented_wrapper(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const JoinColumnFilter filter,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff) {
+  const int partial_err =
+      SUFFIX(fill_ranked_bitmap_payload_segmented)(payload_chunks,
+                                                   payload_chunk_word_count,
+                                                   bitmap,
+                                                   rank_blocks,
+                                                   join_column,
+                                                   type_info,
+                                                   filter,
+                                                   min_val,
+                                                   max_val,
+                                                   rank_block_word_count,
+                                                   payload_count,
+                                                   -1,
+                                                   -1);
+  atomicCAS(dev_err_buff, 0, partial_err);
+}
+
+void fill_ranked_bitmap_payload_segmented_on_device(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const JoinColumnFilter filter,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff,
+    CUstream cuda_stream) {
+  cuda_kernel_launch_wrapper(fill_ranked_bitmap_payload_segmented_wrapper,
+                             cuda_stream,
+                             payload_chunks,
+                             payload_chunk_word_count,
+                             bitmap,
+                             rank_blocks,
+                             join_column,
+                             type_info,
+                             filter,
+                             min_val,
+                             max_val,
+                             rank_block_word_count,
+                             payload_count,
+                             dev_err_buff);
+}
+
+__global__ void fill_ranked_bitmap_payload_unique_segmented_wrapper(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff) {
+  const int partial_err =
+      SUFFIX(fill_ranked_bitmap_payload_unique_segmented)(payload_chunks,
+                                                          payload_chunk_word_count,
+                                                          bitmap,
+                                                          rank_blocks,
+                                                          join_column,
+                                                          type_info,
+                                                          min_val,
+                                                          max_val,
+                                                          rank_block_word_count,
+                                                          payload_count,
+                                                          -1,
+                                                          -1);
+  atomicCAS(dev_err_buff, 0, partial_err);
+}
+
+void fill_ranked_bitmap_payload_unique_segmented_on_device(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff,
+    CUstream cuda_stream) {
+  cuda_kernel_launch_wrapper(fill_ranked_bitmap_payload_unique_segmented_wrapper,
+                             cuda_stream,
+                             payload_chunks,
+                             payload_chunk_word_count,
+                             bitmap,
+                             rank_blocks,
+                             join_column,
+                             type_info,
+                             min_val,
+                             max_val,
+                             rank_block_word_count,
+                             payload_count,
+                             dev_err_buff);
+}
+
+__global__ void count_ranked_bitmap_matches_wrapper(uint32_t* counts,
+                                                    const uint32_t* bitmap,
+                                                    const uint32_t* rank_blocks,
+                                                    const JoinColumn join_column,
+                                                    const JoinColumnTypeInfo type_info,
+                                                    const int64_t min_val,
+                                                    const int64_t max_val,
+                                                    const int64_t rank_block_word_count) {
+  SUFFIX(count_ranked_bitmap_matches)
+  (counts,
+   bitmap,
+   rank_blocks,
+   join_column,
+   type_info,
+   min_val,
+   max_val,
+   rank_block_word_count,
+   -1,
+   -1);
+}
+
+void count_ranked_bitmap_matches_on_device(uint32_t* counts,
+                                           const uint32_t* bitmap,
+                                           const uint32_t* rank_blocks,
+                                           const JoinColumn join_column,
+                                           const JoinColumnTypeInfo type_info,
+                                           const int64_t min_val,
+                                           const int64_t max_val,
+                                           const int64_t rank_block_word_count,
+                                           CUstream cuda_stream) {
+  cuda_kernel_launch_wrapper(count_ranked_bitmap_matches_wrapper,
+                             cuda_stream,
+                             counts,
+                             bitmap,
+                             rank_blocks,
+                             join_column,
+                             type_info,
+                             min_val,
+                             max_val,
+                             rank_block_word_count);
+}
+
+__global__ void fill_ranked_bitmap_payload_one_to_many_wrapper(
+    uint32_t* payload,
+    uint32_t* counts,
+    const uint32_t* offsets,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff) {
+  const int partial_err =
+      SUFFIX(fill_ranked_bitmap_payload_one_to_many)(payload,
+                                                     counts,
+                                                     offsets,
+                                                     bitmap,
+                                                     rank_blocks,
+                                                     join_column,
+                                                     type_info,
+                                                     min_val,
+                                                     max_val,
+                                                     rank_block_word_count,
+                                                     payload_count,
+                                                     -1,
+                                                     -1);
+  atomicCAS(dev_err_buff, 0, partial_err);
+}
+
+void fill_ranked_bitmap_payload_one_to_many_on_device(uint32_t* payload,
+                                                      uint32_t* counts,
+                                                      const uint32_t* offsets,
+                                                      const uint32_t* bitmap,
+                                                      const uint32_t* rank_blocks,
+                                                      const JoinColumn join_column,
+                                                      const JoinColumnTypeInfo type_info,
+                                                      const int64_t min_val,
+                                                      const int64_t max_val,
+                                                      const int64_t rank_block_word_count,
+                                                      const int64_t payload_count,
+                                                      int* dev_err_buff,
+                                                      CUstream cuda_stream) {
+  cuda_kernel_launch_wrapper(fill_ranked_bitmap_payload_one_to_many_wrapper,
+                             cuda_stream,
+                             payload,
+                             counts,
+                             offsets,
+                             bitmap,
+                             rank_blocks,
+                             join_column,
+                             type_info,
+                             min_val,
+                             max_val,
+                             rank_block_word_count,
+                             payload_count,
+                             dev_err_buff);
+}
+
+__global__ void fill_ranked_bitmap_payload_one_to_many_segmented_wrapper(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    uint32_t* counts,
+    const uint32_t* offsets,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff) {
+  const int partial_err =
+      SUFFIX(fill_ranked_bitmap_payload_one_to_many_segmented)(payload_chunks,
+                                                               payload_chunk_word_count,
+                                                               counts,
+                                                               offsets,
+                                                               bitmap,
+                                                               rank_blocks,
+                                                               join_column,
+                                                               type_info,
+                                                               min_val,
+                                                               max_val,
+                                                               rank_block_word_count,
+                                                               payload_count,
+                                                               -1,
+                                                               -1);
+  atomicCAS(dev_err_buff, 0, partial_err);
+}
+
+void fill_ranked_bitmap_payload_one_to_many_segmented_on_device(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    uint32_t* counts,
+    const uint32_t* offsets,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    int* dev_err_buff,
+    CUstream cuda_stream) {
+  cuda_kernel_launch_wrapper(fill_ranked_bitmap_payload_one_to_many_segmented_wrapper,
+                             cuda_stream,
+                             payload_chunks,
+                             payload_chunk_word_count,
+                             counts,
+                             offsets,
+                             bitmap,
+                             rank_blocks,
+                             join_column,
+                             type_info,
+                             min_val,
+                             max_val,
+                             rank_block_word_count,
+                             payload_count,
+                             dev_err_buff);
+}
+
+void exclusive_scan_uint32_on_device(const uint32_t* input,
+                                     uint32_t* output,
+                                     const int64_t count,
+                                     CUstream cuda_stream) {
+  auto input_dev_ptr = thrust::device_pointer_cast(input);
+  auto output_dev_ptr = thrust::device_pointer_cast(output);
+  thrust::exclusive_scan(thrust::cuda::par.on(cuda_stream),
+                         input_dev_ptr,
+                         input_dev_ptr + count,
+                         output_dev_ptr);
+}
+
 __global__ void fill_hash_join_buff_wrapper_sharded_bucketized(
     OneToOnePerfectJoinHashTableFillFuncArgs const args,
     ShardInfo const shard_info) {
@@ -58,6 +567,7 @@ __global__ void fill_hash_join_buff_wrapper_sharded_bucketized(
                                                      shard_info,
                                                      NULL,
                                                      NULL,
+                                                     -1,
                                                      -1,
                                                      -1,
                                                      args.bucket_normalization);
@@ -75,6 +585,7 @@ __global__ void fill_hash_join_buff_wrapper_sharded(
                                                         shard_info,
                                                         NULL,
                                                         NULL,
+                                                        -1,
                                                         -1,
                                                         -1);
   atomicCAS(args.dev_err_buff, 0, partial_err);

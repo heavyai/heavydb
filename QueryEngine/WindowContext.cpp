@@ -5,6 +5,8 @@
 
 #include "QueryEngine/WindowContext.h"
 
+#include <algorithm>
+#include <limits>
 #include <numeric>
 
 #include "QueryEngine/Descriptors/CountDistinctDescriptor.h"
@@ -14,6 +16,8 @@
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/TypePunning.h"
 #include "QueryEngine/Utils/SegmentTree.h"
+#include "QueryEngine/WindowGpu.h"
+#include "Shared/InlineNullValues.h"
 #include "Shared/Intervals.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/funcannotations.h"
@@ -27,6 +31,8 @@
 #endif
 
 #ifdef HAVE_CUDA
+#include "DataMgr/Allocators/ThrustAllocator.h"
+
 CUstream getQueryEngineCudaStreamForDevice(int device_num);
 #endif
 
@@ -117,14 +123,22 @@ void WindowFunctionContext::addOrderColumn(
     const SQLTypeInfo& ti,
     const std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
     ExecutorDeviceType device_type) {
+  size_t order_column_count = 0;
   if (device_type == ExecutorDeviceType::CPU) {
     column_chunk_owned_.order_columns_owner_.push_back(chunks_owner);
     column_chunk_owned_.order_columns_.push_back(column);
+    order_column_count = column_chunk_owned_.order_columns_.size();
   } else {
     column_chunk_owned_.order_columns_for_gpu_owner_.push_back(chunks_owner);
     column_chunk_owned_.order_columns_for_gpu_.push_back(column);
+    order_column_count = column_chunk_owned_.order_columns_for_gpu_.size();
   }
-  column_chunk_owned_.order_columns_ti_.push_back(ti);
+  CHECK_GT(order_column_count, size_t(0));
+  if (column_chunk_owned_.order_columns_ti_.size() < order_column_count) {
+    column_chunk_owned_.order_columns_ti_.push_back(ti);
+  } else {
+    CHECK_EQ(column_chunk_owned_.order_columns_ti_[order_column_count - 1], ti);
+  }
 }
 
 void WindowFunctionContext::addColumnBufferForWindowFunctionExpression(
@@ -161,6 +175,198 @@ const std::vector<SQLTypeInfo>& WindowFunctionContext::getOrderKeyColumnBufferTy
 
 void WindowFunctionContext::setSortedPartitionCacheKey(QueryPlanHash cache_key) {
   sorted_partition_cache_key_ = cache_key;
+}
+
+namespace {
+
+bool window_frame_covers_whole_partition(const Analyzer::WindowFunction* window_func) {
+  CHECK(window_func);
+  if (!window_func->hasFraming()) {
+    return true;
+  }
+  return window_func->getFrameStartBound()->getBoundType() ==
+             SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
+         window_func->getFrameEndBound()->getBoundType() ==
+             SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING;
+}
+
+bool window_partition_extrema_input_type_supported(const SQLTypeInfo& ti) {
+  if (ti.is_fp()) {
+    return ti.get_type() == kDOUBLE && ti.get_size() == 8;
+  }
+  return ti.get_size() == 8 &&
+         (ti.is_integer() || ti.is_decimal() || ti.is_time_or_date() || ti.is_boolean());
+}
+
+}  // namespace
+
+bool WindowFunctionContext::canComputeRankingOnGpu() const {
+  if (!g_enable_result_reduction_pipeline || !forGpuExecution() || elem_count_ == 0 ||
+      window_func_->hasFraming() || window_func_->isMissingValueFillingFunction()) {
+    return false;
+  }
+  switch (window_func_->getKind()) {
+    case SqlWindowFunctionKind::RANK:
+    case SqlWindowFunctionKind::DENSE_RANK:
+      break;
+    default:
+      return false;
+  }
+  if (window_func_->getOrderKeys().size() != 1 ||
+      window_func_->getCollation().size() != 1 ||
+      column_chunk_owned_.order_columns_for_gpu_.size() != 1 ||
+      column_chunk_owned_.order_columns_ti_.size() != 1) {
+    return false;
+  }
+  const auto& order_ti = column_chunk_owned_.order_columns_ti_.front();
+  // Native floating-point comparisons do not provide a strict weak ordering in the
+  // presence of NaN. Falling back preserves legacy behavior until Heavy defines a
+  // shared total order for CPU and GPU window ranking.
+  if (order_ti.is_fp()) {
+    return false;
+  }
+  if (!(order_ti.is_integer() || order_ti.is_decimal() || order_ti.is_time_or_date() ||
+        order_ti.is_boolean())) {
+    return false;
+  }
+  switch (order_ti.get_size()) {
+    case 1:
+    case 2:
+    case 4:
+    case 8:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool WindowFunctionContext::canComputePartitionExtremaOnGpu() const {
+  if (!g_enable_result_reduction_pipeline || !forGpuExecution() || elem_count_ == 0 ||
+      window_func_->isMissingValueFillingFunction()) {
+    return false;
+  }
+  switch (window_func_->getKind()) {
+    case SqlWindowFunctionKind::MIN:
+    case SqlWindowFunctionKind::MAX:
+      break;
+    default:
+      return false;
+  }
+  if (!window_func_->getOrderKeys().empty() || !window_func_->getCollation().empty() ||
+      window_func_->getArgs().size() != 1 ||
+      !window_frame_covers_whole_partition(window_func_) ||
+      column_chunk_owned_.window_func_expr_columns_for_gpu_.size() != 1) {
+    return false;
+  }
+  return window_partition_extrema_input_type_supported(
+      window_func_->getArgs().front()->get_type_info());
+}
+
+void WindowFunctionContext::copyPartitionBuffersToGpu() {
+#ifdef HAVE_CUDA
+  if (!partitions_ || gpu_exec_ctx_.partitions_buf_gpu_holder_) {
+    return;
+  }
+  const auto cpu_hash_buffer =
+      partitions_->getJoinHashBuffer(ExecutorDeviceType::CPU, /*device_id=*/0);
+  CHECK(cpu_hash_buffer);
+  const auto hash_buffer_size =
+      partitions_->getJoinHashBufferSize(ExecutorDeviceType::CPU, /*device_id=*/0);
+  CHECK_GT(hash_buffer_size, size_t(0));
+  gpu_exec_ctx_.partitions_buf_gpu_holder_ =
+      data_mgr_->alloc(MemoryLevel::GPU_LEVEL, device_id_, hash_buffer_size);
+  device_allocator_->copyToDevice(
+      gpu_exec_ctx_.partitions_buf_gpu_holder_->getMemoryPtr(),
+      cpu_hash_buffer,
+      hash_buffer_size,
+      "WindowFunc_Partitions");
+#endif
+}
+
+bool WindowFunctionContext::computePartitionExtremaOnGpu() {
+#ifdef HAVE_CUDA
+  copyPartitionBuffersToGpu();
+  const auto output_buf_sz = elem_count_ * sizeof(int64_t);
+  CHECK(!gpu_exec_ctx_.precomputed_output_gpu_);
+  gpu_exec_ctx_.precomputed_output_gpu_ =
+      data_mgr_->alloc(MemoryLevel::GPU_LEVEL, device_id_, output_buf_sz);
+  CHECK_LE(getNumWindowPartition(),
+           static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+  CHECK_LE(elem_count_, static_cast<size_t>(std::numeric_limits<int64_t>::max()));
+  const auto partition_count = static_cast<int32_t>(getNumWindowPartition());
+  const auto& input_ti = window_func_->getArgs().front()->get_type_info();
+  const auto extrema_kind = window_func_->getKind() == SqlWindowFunctionKind::MIN
+                                ? GpuWindowExtremaKind::Min
+                                : GpuWindowExtremaKind::Max;
+  const auto input_null_pattern =
+      input_ti.is_fp() ? null_val_bit_pattern(input_ti, input_ti.get_type() == kFLOAT)
+                       : inline_fixed_encoding_null_val(input_ti);
+  if (!compute_window_partition_extrema_on_gpu(
+          getPayloadBuf(ExecutorDeviceType::GPU),
+          getOffsetBuf(ExecutorDeviceType::GPU),
+          getCountBuf(ExecutorDeviceType::GPU),
+          static_cast<int64_t>(elem_count_),
+          partition_count,
+          column_chunk_owned_.window_func_expr_columns_for_gpu_.front(),
+          input_ti.get_type(),
+          input_ti.get_size(),
+          !input_ti.get_notnull(),
+          input_null_pattern,
+          extrema_kind,
+          gpu_exec_ctx_.precomputed_output_gpu_->getMemoryPtr(),
+          reinterpret_cast<int64_t*>(gpu_exec_ctx_.output_gpu_->getMemoryPtr()),
+          getQueryEngineCudaStreamForDevice(device_id_))) {
+    return false;
+  }
+  precomputed_output_ = true;
+  return true;
+#else
+  return false;
+#endif
+}
+
+bool WindowFunctionContext::computeRankingOnGpu() {
+#ifdef HAVE_CUDA
+  copyPartitionBuffersToGpu();
+  ThrustAllocator thrust_allocator(data_mgr_, device_id_);
+  CHECK_LE(getNumWindowPartition(),
+           static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+  CHECK_LE(elem_count_, static_cast<size_t>(std::numeric_limits<int64_t>::max()));
+  const auto partition_count = static_cast<int32_t>(getNumWindowPartition());
+  const auto count_buf = getCountBuf(ExecutorDeviceType::CPU);
+  const auto max_partition_count =
+      partition_count > 0 ? *std::max_element(count_buf, count_buf + partition_count)
+                          : int32_t(0);
+  CHECK_GE(max_partition_count, 0);
+  const auto& order_ti = column_chunk_owned_.order_columns_ti_.front();
+  const auto& collation = window_func_->getCollation().front();
+  const auto rank_kind = window_func_->getKind() == SqlWindowFunctionKind::RANK
+                             ? GpuWindowRankKind::Rank
+                             : GpuWindowRankKind::DenseRank;
+  const auto order_null_pattern =
+      order_ti.is_fp() ? null_val_bit_pattern(order_ti, order_ti.get_type() == kFLOAT)
+                       : inline_fixed_encoding_null_val(order_ti);
+  return compute_window_rank_on_gpu(
+      getPayloadBuf(ExecutorDeviceType::GPU),
+      getOffsetBuf(ExecutorDeviceType::GPU),
+      getCountBuf(ExecutorDeviceType::GPU),
+      static_cast<int64_t>(elem_count_),
+      partition_count,
+      max_partition_count,
+      column_chunk_owned_.order_columns_for_gpu_.front(),
+      order_ti.get_type(),
+      order_ti.get_size(),
+      !order_ti.get_notnull(),
+      order_null_pattern,
+      collation.is_desc,
+      collation.nulls_first,
+      rank_kind,
+      reinterpret_cast<int64_t*>(gpu_exec_ctx_.output_gpu_->getMemoryPtr()),
+      thrust_allocator,
+      getQueryEngineCudaStreamForDevice(device_id_));
+#else
+  return false;
+#endif
 }
 
 namespace {
@@ -537,6 +743,27 @@ void WindowFunctionContext::compute(
   cpu_exec_ctx_.output_ =
       static_cast<int8_t*>(row_set_mem_owner_->allocate(output_buf_sz,
                                                         /*thread_idx=*/0));
+  if (device_type_ == ExecutorDeviceType::GPU) {
+    CHECK(data_mgr_);
+    CHECK(device_allocator_);
+    CHECK(!gpu_exec_ctx_.output_gpu_);
+    gpu_exec_ctx_.output_gpu_ =
+        data_mgr_->alloc(MemoryLevel::GPU_LEVEL, device_id_, output_buf_sz);
+  }
+  const auto copy_output_to_gpu = [this, output_buf_sz] {
+    if (device_type_ == ExecutorDeviceType::GPU) {
+      device_allocator_->copyToDevice(gpu_exec_ctx_.output_gpu_->getMemoryPtr(),
+                                      cpu_exec_ctx_.output_,
+                                      output_buf_sz,
+                                      "WindowFunc_Output");
+    }
+  };
+  if (canComputePartitionExtremaOnGpu() && computePartitionExtremaOnGpu()) {
+    return;
+  }
+  if (canComputeRankingOnGpu() && computeRankingOnGpu()) {
+    return;
+  }
   // 3. determine window function's characteristics
   bool const is_agg_func = window_function_is_aggregate(window_func_->getKind());
   bool const use_aggregation_tree =
@@ -1023,6 +1250,7 @@ void WindowFunctionContext::compute(
   if (is_agg_func || use_aggregation_tree) {
     // If window function is aggregate we were able to write to the final output buffer
     // directly in computePartition and we are done.
+    copy_output_to_gpu();
     return;
   }
 
@@ -1061,6 +1289,7 @@ void WindowFunctionContext::compute(
         DEBUG_TIMER("Window Function Non-Aggregate Payload Copy Non-Parallelized");
     payload_copy(0, elem_count_);
   }
+  copy_output_to_gpu();
 }
 
 namespace {
@@ -1269,6 +1498,17 @@ const int8_t* WindowFunctionContext::output() const {
   } else {
     return gpu_exec_ctx_.output_gpu_->getMemoryPtr();
   }
+}
+
+bool WindowFunctionContext::hasPrecomputedOutput() const {
+  return precomputed_output_;
+}
+
+const int8_t* WindowFunctionContext::precomputedOutput() const {
+  CHECK(precomputed_output_);
+  CHECK_EQ(device_type_, ExecutorDeviceType::GPU);
+  CHECK(gpu_exec_ctx_.precomputed_output_gpu_);
+  return gpu_exec_ctx_.precomputed_output_gpu_->getMemoryPtr();
 }
 
 const int64_t* WindowFunctionContext::sortedPartition() const {
@@ -2121,6 +2361,9 @@ void WindowFunctionContext::fillPartitionEnd() {
 
 const int8_t* WindowFunctionContext::getPartitionBuf(ExecutorDeviceType const dt) const {
   CHECK(partitions_);
+  if (dt == ExecutorDeviceType::GPU && gpu_exec_ctx_.partitions_buf_gpu_holder_) {
+    return gpu_exec_ctx_.partitions_buf_gpu_holder_->getMemoryPtr();
+  }
   return partitions_->getJoinHashBuffer(dt, device_id_);
 }
 
