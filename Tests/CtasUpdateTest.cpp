@@ -10,6 +10,7 @@
 #include "DBHandlerTestHelpers.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/ErrorHandling.h"
+#include "Shared/scope.h"
 #include "TestHelpers.h"
 
 // uncomment to run full test suite
@@ -2535,6 +2536,46 @@ class Select : public DBHandlerTestFixture {
 
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
 };
+
+TEST_F(Select, RowWiseThriftPreservesNumericNullability) {
+  constexpr auto table_name = "rowwise_thrift_numeric_nullability";
+  sql("DROP TABLE IF EXISTS " + std::string(table_name) + ";");
+  ScopeGuard cleanup = [table_name]() {
+    sql("DROP TABLE IF EXISTS " + std::string(table_name) + ";");
+  };
+
+  sql("CREATE TABLE " + std::string(table_name) +
+      " (i INTEGER NOT NULL, f FLOAT NOT NULL, d DOUBLE NOT NULL, "
+      "nullable_i INTEGER, nullable_f FLOAT, nullable_d DOUBLE, "
+      "nullable_decimal DECIMAL(10, 2));");
+  sql("INSERT INTO " + std::string(table_name) +
+      " VALUES (-2147483648, 1.1754943508222875e-38, "
+      "2.2250738585072014e-308, NULL, NULL, NULL, NULL);");
+
+  TQueryResult result;
+  const auto [handler, session_id] = getDbHandlerAndSessionId();
+  handler->sql_execute(result,
+                       session_id,
+                       "SELECT * FROM " + std::string(table_name) + ";",
+                       false,
+                       "",
+                       -1,
+                       -1);
+
+  ASSERT_EQ(size_t{1}, result.row_set.rows.size());
+  const auto& columns = result.row_set.rows.front().cols;
+  ASSERT_EQ(size_t{7}, columns.size());
+  EXPECT_FALSE(columns[0].is_null);
+  EXPECT_EQ(int64_t{NULL_INT}, columns[0].val.int_val);
+  EXPECT_FALSE(columns[1].is_null);
+  EXPECT_FLOAT_EQ(NULL_FLOAT, static_cast<float>(columns[1].val.real_val));
+  EXPECT_FALSE(columns[2].is_null);
+  EXPECT_DOUBLE_EQ(NULL_DOUBLE, columns[2].val.real_val);
+  EXPECT_TRUE(columns[3].is_null);
+  EXPECT_TRUE(columns[4].is_null);
+  EXPECT_TRUE(columns[5].is_null);
+  EXPECT_TRUE(columns[6].is_null);
+}
 
 TEST_F(Select, CtasItasValidation) {
   auto drop_table = []() {
