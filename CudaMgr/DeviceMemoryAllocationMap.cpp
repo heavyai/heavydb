@@ -53,6 +53,19 @@ DeviceMemoryAllocationMap::getAllocation(const DevicePtr device_ptr) {
   return std::make_pair(itr->first, itr->second);
 }
 
+bool DeviceMemoryAllocationMap::containsAllocation(const DevicePtr device_ptr,
+                                                   const uint64_t size) const {
+  auto itr = map_.upper_bound(device_ptr);
+  if (itr == map_.begin()) {
+    return false;
+  }
+  --itr;
+  const auto allocation_base = itr->first;
+  const auto& allocation = itr->second;
+  const auto offset = device_ptr - allocation_base;
+  return offset <= allocation.size && size <= allocation.size - offset;
+}
+
 const DeviceMemoryAllocationMap::MapChangedCBID
 DeviceMemoryAllocationMap::registerMapChangedCB(MapChangedCB cb) {
   auto const cbid = ++last_map_changed_cbid_;
