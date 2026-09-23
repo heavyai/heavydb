@@ -25,7 +25,7 @@ git clone https://github.com/heavyai/heavydb.git
 cd heavydb
 
 # Build a local build/dependencies container
-./dev-tools/dev.sh build deps
+dev-tools/dev.sh build deps
 
 # If doing a full build (including front-end) and you have
 # these, set them in the env before the build
@@ -38,15 +38,15 @@ export GOOGLE_API_KEY=AIzaXXX
 #   GEOS bundle
 #   Sphinx docs
 # This creates a tarball for bare-metal deployment
-./dev-tools/dev.sh build
+dev-tools/dev.sh build
 
 # Alternatively, to do a full build as above but then
 # create a Docker image for container deployment
-./dev-tools/dev.sh build --docker
+dev-tools/dev.sh build --docker
 
 # Alternatively, to just build back-end (HeavyDB server
 # and renderer only) as a tarball
-./dev-tools/dev.sh build heavydb
+dev-tools/dev.sh build heavydb
 ```
 
 ---
@@ -92,7 +92,6 @@ dev-tools/dev.sh build [target] [options]
 **Environment variables for Immerse:**
 
 ```bash
-PRIVATE_PACKAGES_TOKEN=$(gh auth token) \  # required for private npm packages
 MAPBOX_TOKEN=pk.xxx \                       # for Mapbox maps to work
 GOOGLE_API_KEY=AIzaXXX \                   # for Google Maps / Street View to work
   dev-tools/dev.sh build immerse
@@ -195,7 +194,7 @@ dev-tools/dev.sh test pyheavydb --unit
 dev-tools/dev.sh test immerse
 dev-tools/dev.sh test heavyiq --unit
 dev-tools/dev.sh test integration-encrypted-jdbc --build-dir build
-PRIVATE_PACKAGES_TOKEN=$(gh auth token) dev-tools/dev.sh test immerse
+dev-tools/dev.sh test immerse
 ```
 
 See `dev-tools/integration-tests/README.md` for integration test build dependencies and options.
