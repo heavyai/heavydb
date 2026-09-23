@@ -10,26 +10,40 @@ optional Doxygen on the host.
 ## Prerequisites
 
 - Docker installed and running
-- `gh` CLI authenticated (`gh auth login`)
-- For component builds that use private npm packages: a GitHub token with
-  `read:packages` + `repo` scopes (your `gh auth token` usually works)
 - For GPU access inside containers: `nvidia-container-toolkit` (auto-detected
   via `nvidia-smi`; containers run CPU-only if absent)
 
 ## Quick start
 
 ```bash
-# Build all components + heavydb in one step
-PRIVATE_PACKAGES_TOKEN=$(gh auth token) dev-tools/dev.sh build
+# Create a working area
+mkdir $WORKSPACE/heavyai
+cd $WORKSPACE/heavyai
 
-# Build everything including HeavyIQ
-PRIVATE_PACKAGES_TOKEN=$(gh auth token) dev-tools/dev.sh build all
+# Clone the repo
+git clone https://github.com/heavyai/heavydb.git
+cd heavydb
 
-# Build a Docker image too
-MAPBOX_TOKEN=pk.xxx \
-GOOGLE_API_KEY=AIzaXXX \
-PRIVATE_PACKAGES_TOKEN=$(gh auth token) \
-  dev-tools/dev.sh build --docker
+# Build a local build/dependencies container
+./dev-tools/dev.sh build deps
+
+# If doing a full build (including front-end) and you have
+# these, set them in the env before the build
+export MAPBOX_TOKEN=pk.xxx
+export GOOGLE_API_KEY=AIzaXXX
+
+# Default full build:
+#   Back-end (HeavyDB server and renderer)
+#   Front-end (Immerse and Webserver)
+#   GEOS bundle
+#   Sphinx docs
+# This will create a tarball package
+# To create a Docker container, add the --docker option
+./dev-tools/dev.sh build [--docker]
+
+# Alternative:
+#   Just build back-end (HeavyDB server and renderer only) as a tarball
+./dev-tools/dev.sh build heavydb
 ```
 
 ---
