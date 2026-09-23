@@ -83,10 +83,7 @@ if [ -z "$REGISTRY_USER" ] || [ -z "$REGISTRY_PASSWORD" ]; then
   exit 1
 fi
 
-# Newer deps images (post-Thrift-0.24.0) don't ship the docker CLI; the older
-# rc.v9.0.0 did. Install on the fly when missing so a base-image bump doesn't
-# silently break the pack step. The docker daemon comes from the host via
-# the /var/run/docker.sock mount — we only need the client binary here.
+# Install Docker client if not already present
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker CLI not on PATH in this image — installing docker.io"
   apt-get update -qq
