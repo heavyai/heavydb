@@ -16,5 +16,5 @@ export CMAKE_FLAGS="-DENABLE_CUDA=ON \
 export MAKE_TARGETS="mapd_java_components heavydb sanity_tests_build_only"
 
 export IMAGE_NAME="pr-build/multi-cuda-gcc"
-export BASE_IMAGE="ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.2.2-x86_64:rc.v9.0.0"
+export BASE_IMAGE="ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
 export INCLUDE_PATHS="build Tests config scripts"
