@@ -80,9 +80,7 @@ function help_msg(){
        'mapd-deps-<ubuntu22.04|rockylinux8><|-tsan><-static|-shared><-x86_64|aarch64><-custom labels>.tar.xz'
        eg.
        mapd-deps-rockylinux8-static-x86_64-20251209-7e3387ba1.tar.xz
-       mapd-deps-ubuntu22.04-shared-x86_64-20251208-cc8302bb8.tar.xz
-       mapd-deps-ubuntu22.04-static-aarch64-rc.v9.0.0.tar.xz
-       mapd-deps-ubuntu22.04-tsan-static-x86_64-rc.v9.0.0.tar.xz]
+       mapd-deps-ubuntu22.04-shared-x86_64-20251208-cc8302bb8.tar.xz]
 _HELP
   exit
 }

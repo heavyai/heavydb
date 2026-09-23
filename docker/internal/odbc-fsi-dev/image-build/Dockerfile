@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM docker-internal.mapd.com/mapd/core-build-ubuntu22.04-shared-cuda12.2.2-x86_64:rc.v9.0.0
+FROM ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest
 
 # Manually rotate repository signing keys https://forums.developer.nvidia.com/t/notice-cuda-linux-repository-key-rotation/212772
 RUN wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb \

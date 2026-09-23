@@ -17,4 +17,4 @@ export CMAKE_FLAGS="-GNinja \
 -DENABLE_TESTS=OFF"
 export MAKE_TARGETS="mapd_java_components heavydb"
 
-export BASE_IMAGE="ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.2.2-x86_64:rc.v9.0.0"
+export BASE_IMAGE="ghcr.io/heavyai/heavydb/core-build-ubuntu22.04-static-cuda12.9.2-x86_64:latest"
