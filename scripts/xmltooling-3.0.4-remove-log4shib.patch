@@ -1,0 +1,318 @@
+diff -ruN xmltooling-3.0.4/configure.ac xmltooling-3.0.4-nologs/configure.ac
+--- xmltooling-3.0.4/configure.ac	2018-07-20 04:39:47.000000000 +0300
++++ xmltooling-3.0.4-nologs/configure.ac	2018-09-16 19:40:37.876954000 +0300
+@@ -124,14 +124,6 @@
+     [AC_LANG_PROGRAM([[#include <cstddef>]],[[const char* ptr = nullptr;]])],
+     [AC_DEFINE([HAVE_NULLPTR],[1],[Define to 1 if C++ compiler supports nullptr keyword.])])
+ 
+-AX_PKG_CHECK_MODULES([log4shib],,[log4shib],
+-    [AC_DEFINE([XMLTOOLING_LOG4SHIB],[1],[Define to 1 if log4shib library is used.])],
+-    [AX_PKG_CHECK_MODULES([log4cpp],,[log4cpp >= 1],
+-        [AC_DEFINE([XMLTOOLING_LOG4CPP],[1],[Define to 1 if log4cpp library is used.])
+-	 AC_MSG_WARN([using log4cpp, note that most non-Internet2 supplied versions are not thread-safe])],,
+-        [XMLTOOLING_LITE_REQUIRES],[XMLTOOLING_LITE_REQUIRES_PRIVATE])],,
+-    [XMLTOOLING_LITE_REQUIRES],[XMLTOOLING_LITE_REQUIRES_PRIVATE])
+-
+ AX_PKG_CHECK_MODULES([xerces],,[xerces-c >= 3.2],,,
+     [XMLTOOLING_LITE_REQUIRES],[XMLTOOLING_LITE_REQUIRES_PRIVATE])
+ 
+diff -ruN xmltooling-3.0.4/doc/Makefile.am xmltooling-3.0.4-nologs/doc/Makefile.am
+--- xmltooling-3.0.4/doc/Makefile.am	2018-07-10 04:00:14.000000000 +0300
++++ xmltooling-3.0.4-nologs/doc/Makefile.am	2018-09-16 18:32:14.318469000 +0300
+@@ -10,7 +10,6 @@
+ 	LICENSE.txt \
+ 	NOTICE.txt \
+ 	OPENSSL.LICENSE \
+-	LOG4CPP.LICENSE \
+ 	CURL.LICENSE
+ 
+ pkgdoc_DATA = $(docfiles)
+diff -ruN xmltooling-3.0.4/xmltooling/logging.h xmltooling-3.0.4-nologs/xmltooling/logging.h
+--- xmltooling-3.0.4/xmltooling/logging.h	2018-07-10 04:00:14.000000000 +0300
++++ xmltooling-3.0.4-nologs/xmltooling/logging.h	2018-09-16 19:37:31.976382000 +0300
+@@ -44,7 +44,10 @@
+     namespace logging = log4cpp;
+ };
+ #else
+-# error "Supported logging library not available."
++# include "LogStubs.h"
++namespace xmltooling {
++    namespace logging = logstubs;
++};
+ #endif
+ 
+ #endif /* __xmltooling_logging_h__ */
+diff -ruN xmltooling-3.0.4/xmltooling/LogStubs.h xmltooling-3.0.4-nologs/xmltooling/LogStubs.h
+--- xmltooling-3.0.4/xmltooling/LogStubs.h	1970-01-01 03:00:00.000000000 +0300
++++ xmltooling-3.0.4-nologs/xmltooling/LogStubs.h	2018-09-18 15:45:13.713601000 +0300
+@@ -0,0 +1,235 @@
++/*
++ * Copyright 2022 HEAVY.AI, Inc.
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++/**
++ * @file xmltooling/XMLObject.h
++ * 
++ * Abstract interface to objects that can be manipulated in and out of XML form. 
++ */
++
++#ifndef __log_stubs__
++#define __log_stubs__
++
++#include <string>
++#include <vector>
++#include <set>
++#include <sstream>
++#include <sys/stat.h>
++
++// Here are some minimal interfaces used by opensaml and xmltools w/o any functionality.
++// The goal is to turn off logging and get rid of lib4{shib,cpp} dependency (LGPL)
++
++namespace logstubs {
++    class NDC {
++        public: 
++        static void clear() { } 
++        static const std::string get() { return ""; } 
++        static int getDepth() { return 0; } 
++        static std::string pop() { return ""; } 
++        static void push(const std::string&/* message*/) { } 
++        static void setMaxDepth(int/* maxDepth*/) { } 
++        NDC() { }
++        virtual ~NDC() { }
++    };
++
++    class ConfigureFailure : public std::runtime_error {
++        public:
++        ConfigureFailure(const std::string& reason) : std::runtime_error(reason) { }
++    };
++
++    class PropertyConfigurator {
++        public:
++        static void configure(const std::string&/* initFileName*/) { }
++    };
++
++    class Priority {
++        public: 
++        typedef enum {
++            EMERG, 
++            FATAL,
++            ALERT,
++            CRIT,
++            ERROR,
++            WARN,
++            NOTICE,
++            INFO,
++            DEBUG,
++            NOTSET
++        } PriorityLevel;
++     };
++
++     class Appender {
++        public:         
++        static Appender* getAppender(const std::string& name) { return nullptr; }
++        static bool reopenAll() { return true; }
++        static void closeAll() { }
++
++        protected:
++        Appender(const std::string&/* name*/) { }
++
++        public:
++        ~Appender() { }
++        virtual bool reopen() { return true; }
++        virtual void close() { }
++        const std::string getName() const { return ""; }
++    }; 
++    typedef std::set<Appender* > AppenderSet;
++
++    class OstreamAppender : public Appender {
++        public:
++        OstreamAppender(const std::string& name, std::ostream*/* stream*/) : Appender::Appender(name) { }
++        virtual ~OstreamAppender() { }
++        
++        virtual bool reopen() { return true; }
++        virtual void close() { }
++    };
++
++    class CategoryStream {
++        public:
++        inline Priority::PriorityLevel getPriority() const { 
++            return Priority::NOTSET; 
++        };
++        void flush() { }
++        template<typename T> CategoryStream& operator<<(const T&/* t*/) {
++            return *this;
++        }
++    };
++    inline CategoryStream& eol (CategoryStream& os) { return os; }
++
++    class Category { 
++        public:
++        static Category& getRoot() {
++            static Category root;
++            return root;
++        }
++
++        static Category& getInstance(const std::string&/* name*/) {
++            static Category instance;
++            return instance;
++        }
++         
++        static Category* exists(const std::string& name) {
++           return nullptr; 
++        }
++
++        static std::vector<Category*>* getCurrentCategories() { return {}; } 
++        static void shutdown() { } 
++        virtual ~Category() { }         
++        virtual const std::string getName() const { return ""; }         
++        virtual void setPriority(Priority::PriorityLevel/* priority*/) { } 
++        virtual Priority::PriorityLevel getPriority() const { return Priority::NOTSET; }
++        virtual Priority::PriorityLevel getChainedPriority() const { return Priority::NOTSET; }
++        virtual bool isPriorityEnabled(Priority::PriorityLevel/* priority*/) const { return false; }
++        virtual void addAppender(Appender*/* appender*/) { }
++        virtual void addAppender(Appender&/* appender*/) { }
++        inline void setAppender(Appender*/* appender*/) { }
++        inline void setAppender(Appender&/* appender*/) { }
++        virtual Appender* getAppender() const { return nullptr; }
++        virtual Appender* getAppender(const std::string&/* name*/) const  { return nullptr; }
++        virtual AppenderSet getAllAppenders() const { return {}; }
++        virtual void removeAllAppenders() { }
++        virtual void removeAppender(Appender*/* appender*/) { }
++        inline bool ownsAppender() const { return false; }
++        virtual bool ownsAppender(Appender*/* appender*/) { return false; }
++        virtual void setAdditivity(bool/* additivity*/) { }
++        virtual bool getAdditivity() const { return false; }
++        virtual Category* getParent() { return nullptr; }
++        virtual const Category* getParent() const { return nullptr; }
++        virtual void log(Priority::PriorityLevel/* priority*/, const char*/* stringFormat*/,
++                      ...) { }
++        virtual void log(Priority::PriorityLevel/* priority*/, 
++                      const std::string&/* message*/) { }
++        virtual void logva(Priority::PriorityLevel/* priority*/, 
++                        const char*/* stringFormat*/,
++                        va_list va) { }
++
++        void debug(const char*/* stringFormat*/, ...) { }
++        void debug(const std::string&/* message*/) { }
++        inline bool isDebugEnabled() const { return false; }
++        inline CategoryStream debugStream() {
++         return getStream(Priority::DEBUG);
++        }
++
++        void info(const char*/* stringFormat*/, ...) { }
++        void info(const std::string&/* message*/) { }
++        inline bool isInfoEnabled() const { return false; }
++        inline CategoryStream infoStream() {
++         return getStream(Priority::INFO);
++        }
++
++        void notice(const char*/* stringFormat*/, ...) { }
++        void notice(const std::string&/* message*/) { }
++        inline bool isNoticeEnabled() const { return false; }
++        inline CategoryStream noticeStream() {
++         return getStream(Priority::NOTICE);
++        }
++
++        void warn(const char*/* stringFormat*/, ...) { }
++        void warn(const std::string&/* message*/) { }
++        inline bool isWarnEnabled() const { return false; }
++        inline CategoryStream warnStream() {
++         return getStream(Priority::WARN);
++        };
++
++        void error(const char*/* stringFormat*/, ...) { }
++        void error(const std::string&/* message*/) { }
++        inline bool isErrorEnabled() const { return false; }
++        inline CategoryStream errorStream() {
++         return getStream(Priority::ERROR);
++        };
++
++        void crit(const char*/* stringFormat*/, ...) { }
++        void crit(const std::string&/* message*/) { }
++        inline bool isCritEnabled() const { return false; }
++        inline CategoryStream critStream() {
++         return getStream(Priority::CRIT);
++        };
++
++        void alert(const char*/* stringFormat*/, ...) { }
++        void alert(const std::string&/* message*/) { }
++        inline bool isAlertEnabled() const { return false; }
++        inline CategoryStream alertStream() throw() {
++         return getStream(Priority::ALERT);
++        };
++
++        void emerg(const char*/* stringFormat*/, ...) { }
++        void emerg(const std::string&/* message*/) { }
++        inline bool isEmergEnabled() const { return false; }
++        inline CategoryStream emergStream() {
++         return getStream(Priority::EMERG);
++        };
++
++        void fatal(const char*/* stringFormat*/, ...) { }
++        void fatal(const std::string&/* message*/) { }
++        inline bool isFatalEnabled() const { return false; }
++        inline CategoryStream fatalStream() {
++         return getStream(Priority::FATAL);
++        };
++
++        virtual CategoryStream getStream(Priority::PriorityLevel/* priority*/) { return null_stream_; }
++        virtual CategoryStream operator<<(Priority::PriorityLevel/* priority*/) {
++            return null_stream_;
++        }
++
++        private:
++        Category() { }
++        Category(const Category&/* other*/) { }
++        Category& operator=(const Category&/* other*/) { return *this; }
++        CategoryStream null_stream_;
++     };
++}
++
++#endif /* __log_stubs__ */
+diff -ruN xmltooling-3.0.4/xmltooling/Makefile.am xmltooling-3.0.4-nologs/xmltooling/Makefile.am
+--- xmltooling-3.0.4/xmltooling/Makefile.am	2018-07-20 04:40:45.000000000 +0300
++++ xmltooling-3.0.4-nologs/xmltooling/Makefile.am	2018-09-17 19:51:41.946206000 +0300
+@@ -39,6 +39,7 @@
+ 	exceptions.h \
+ 	Lockable.h \
+ 	logging.h \
++    LogStubs.h \
+ 	Namespace.h \
+ 	PluginManager.h \
+ 	QName.h \
+diff -ruN xmltooling-3.0.4/xmltooling/util/ReloadableXMLFile.cpp xmltooling-3.0.4-nologs/xmltooling/util/ReloadableXMLFile.cpp
+--- xmltooling-3.0.4/xmltooling/util/ReloadableXMLFile.cpp	2018-07-18 22:59:55.000000000 +0300
++++ xmltooling-3.0.4-nologs/xmltooling/util/ReloadableXMLFile.cpp	2018-09-16 20:53:58.959598000 +0300
+@@ -45,6 +45,8 @@
+ # include <log4shib/NDC.hh>
+ #elif defined(XMLTOOLING_LOG4CPP)
+ # include <log4cpp/NDC.hh>
++#else
++# include "logging.h"
+ #endif
+ 
+ #include <memory>
+diff -ruN xmltooling-3.0.4/xmltooling/XMLToolingConfig.cpp xmltooling-3.0.4-nologs/xmltooling/XMLToolingConfig.cpp
+--- xmltooling-3.0.4/xmltooling/XMLToolingConfig.cpp	2018-07-10 04:00:14.000000000 +0300
++++ xmltooling-3.0.4-nologs/xmltooling/XMLToolingConfig.cpp	2018-09-16 19:37:38.468404000 +0300
+@@ -64,6 +64,8 @@
+ #elif defined(XMLTOOLING_LOG4CPP)
+ # include <log4cpp/PropertyConfigurator.hh>
+ # include <log4cpp/OstreamAppender.hh>
++#else
++# include "logging.h"
+ #endif
+ #include <xercesc/util/PlatformUtils.hpp>
+ #include <xercesc/util/XMLUniDefs.hpp>

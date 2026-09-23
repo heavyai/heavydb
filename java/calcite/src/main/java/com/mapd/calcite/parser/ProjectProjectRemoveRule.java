@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package com.mapd.calcite.parser;
@@ -44,12 +33,39 @@ public class ProjectProjectRemoveRule extends RelOptRule {
   private ProjectRemoveRule innerRule;
 
   /**
-   * Creates a ProjectRemoveRule.
+   * Creates a ProjectProjectRemoveRule, which wraps Calcite's {@link ProjectRemoveRule}
+   * and additionally fires it when the trivial Project has parents or a Project child
+   * (see {@link #onMatch}).
    *
    * @param relBuilderFactory Builder for relational expressions
    */
   public ProjectProjectRemoveRule(RelBuilderFactory relBuilderFactory) {
-    super(operandJ(Project.class, null, ProjectRemoveRule::isTrivial, any()),
+    /*
+     * Some AI generated notes on this code
+     *This is the rule registration call that tells Calcite's planner which rel-tree shapes should trigger this rule.
+     *
+     * operandJ(Project.class, null, ProjectRemoveRule::isTrivial, ...)
+     * - Matches a node of type Project
+     * - null = any relational trait (e.g. convention) is acceptable
+     * - ProjectRemoveRule::isTrivial = additional predicate - only match if the Project is trivial (its projections
+     * are identity, i.e. it's a no-op passthrough)
+     *
+     * some(operand(RelNode.class, any())) - the children clause:
+     * - operand(RelNode.class, any()) = match exactly one child of any RelNode type, with any grandchildren
+     * - some(...) = include that child in the matched nodes captured by the rule call
+     * The critical effect of some(...) is that the matched child gets stored in call.rels[1].
+     * Without it (using bare any() instead), only the Project itself is in call.rels (at index
+     * 0), and the child is invisible to the rule call.
+     *
+     * Why this matters...
+     * When innerRule.onMatch(call) is invoked, ProjectRemoveRule.onMatch calls:
+     *     a) Project project = call.rel(0);   // the trivial Project
+     *     b) RelNode stripped = call.rel(1);  // its child - REQUIRES index 1 to exist
+     * So call.rels must have at least 2 entries. The some(operand(...)) is what causes Calcite to populate index 1
+     * with the child node when the rule matches.  Otherwise, an index-out-of-bounds error is thrown
+     */
+    super(operandJ(Project.class, null, ProjectRemoveRule::isTrivial,
+                    some(operand(RelNode.class, any()))),
             relBuilderFactory,
             null);
     innerRule = new ProjectRemoveRule(relBuilderFactory);

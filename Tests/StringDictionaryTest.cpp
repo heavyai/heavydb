@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "TestHelpers.h"
@@ -841,13 +830,8 @@ TEST_F(StringDictionaryTest, TransientUnion) {
 
   std::string const sd_lhs_path = std::string(BASE_PATH) + "/sd_lhs";
   std::string const sd_rhs_path = std::string(BASE_PATH) + "/sd_rhs";
-#ifdef _WIN32
-  mkdir(sd_lhs_path.c_str());
-  mkdir(sd_rhs_path.c_str());
-#else
   mkdir(sd_lhs_path.c_str(), 0755);
   mkdir(sd_rhs_path.c_str(), 0755);
-#endif
 
   dict_ref_t const dict_ref_lhs(100, 10);
   auto sd_lhs = std::make_shared<StringDictionary>(
@@ -1003,12 +987,11 @@ int main(int argc, char** argv) {
   desc.add_options()("gtest_list_tests", "list all test");
   desc.add_options()("gtest_filter", "filters tests, use --help for details");
 
-  desc.add_options()(
-      "enable-string-dict-hash-cache",
-      po::value<bool>(&g_cache_string_hash)
-          ->default_value(g_cache_string_hash)
-          ->implicit_value(true),
-      "Cache string hash values in the string dictionary server during import.");
+  desc.add_options()("enable-string-dict-hash-cache",
+                     po::value<bool>(&g_cache_string_hash)
+                         ->default_value(g_cache_string_hash)
+                         ->implicit_value(true),
+                     "Cache string hash values in string dictionaries during import.");
 
   desc.add_options()("string-dictionary-size",
                      po::value<int>(&g_op_count)->default_value(g_op_count),

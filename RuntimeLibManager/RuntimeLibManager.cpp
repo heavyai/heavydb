@@ -1,10 +1,15 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifdef HAVE_TORCH_TFS
 #include <torch/version.h>
 #endif
 
 #include "Logger/Logger.h"
-#include "OSDependent/heavyai_path.h"
 #include "RuntimeLibManager.h"
+#include "Shared/heavyai_path.h"
 
 #include <boost/dll/shared_library.hpp>
 
@@ -86,8 +91,6 @@ void RuntimeLibManager::loadRuntimeLibs(const std::string& torch_lib_path) {
   // symbols local to the library before considering global ones. This makes sure the
   // TableFunctionsFactory::init() calls within the library call its own init() function
   // rather than the server's main one.
-  // TODO: This behavior may not be supported in Windows, we should test symbol
-  // resolution in Windows platforms to make sure this works.
   boost::dll::fs::path torch_tfs_lib_path(get_torch_table_functions_path());
   libTorchTFs = boost::dll::shared_library(
       torch_tfs_lib_path,

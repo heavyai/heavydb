@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Given a list of input files, scan for lines containing UDTF
 specification statements in the following form:
 
@@ -499,11 +502,7 @@ content = '''
 %s
 
 // volatile+noinline prevents compiler optimization
-#ifdef _WIN32
-__declspec(noinline)
-#else
  __attribute__((noinline))
-#endif
 
 #ifndef NO_OPT_ATTRIBUTE
 #if defined(__clang__)
@@ -511,9 +510,6 @@ __declspec(noinline)
 
 #elif defined(__GNUC__) || defined(__GNUG__)
 #define NO_OPT_ATTRIBUTE __attribute__((optimize("O0")))
-
-#elif defined(_MSC_VER)
-#define NO_OPT_ATTRIBUTE
 
 #endif
 #endif

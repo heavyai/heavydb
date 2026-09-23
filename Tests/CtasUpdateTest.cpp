@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <gtest/gtest.h>
@@ -1522,18 +1511,6 @@ TEST_P(Ctas, CreateTableFromSelectFragments) {
               ") WITH (FRAGMENT_SIZE=3)");
 }
 
-TEST_P(Ctas, CreateTableFromSelectReplicated) {
-  // execute CTAS
-  std::string create_ctas_sql = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
-  int num_rows = 25;
-  int num_rows_to_check = num_rows;
-  runCtasTest(columnDescriptors,
-              create_ctas_sql,
-              num_rows,
-              num_rows_to_check,
-              ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
-}
-
 TEST_P(Ctas, CreateTableFromSelectSharded) {
   // execute CTAS
   std::string create_ctas_sql = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
@@ -1736,11 +1713,7 @@ TEST_F(Itas, SelectStar) {
 
   sql("CREATE TABLE ITAS_SOURCE_1 (id int);");
 
-  if (isDistributedMode()) {
-    sql("CREATE TABLE ITAS_SOURCE_2 (id int, val int) with (partitions = 'REPLICATED');");
-  } else {
-    sql("CREATE TABLE ITAS_SOURCE_2 (id int, val int);");
-  }
+  sql("CREATE TABLE ITAS_SOURCE_2 (id int, val int);");
 
   sql("CREATE TABLE ITAS_TARGET (id int, val int);");
 
@@ -1855,20 +1828,11 @@ TEST_P(Itas_P, InsertIntoFragmentsTableFromSelectFragments) {
   itasTestBody(columnDescriptors, ") WITH (FRAGMENT_SIZE=3)", ") WITH (FRAGMENT_SIZE=3)");
 }
 
-TEST_P(Itas_P, InsertIntoTableFromSelectReplicated) {
-  itasTestBody(
-      columnDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')", ")");
-}
-
 TEST_P(Itas_P, InsertIntoTableFromSelectSharded) {
   itasTestBody(
       columnDescriptors,
       ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')",
       ")");
-}
-
-TEST_P(Itas_P, InsertIntoReplicatedTableFromSelect) {
-  itasTestBody(columnDescriptors, ")", ") WITH (partitions='REPLICATED')");
 }
 
 TEST_P(Itas_P, InsertIntoShardedTableFromSelect) {
@@ -1877,28 +1841,10 @@ TEST_P(Itas_P, InsertIntoShardedTableFromSelect) {
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
 }
 
-TEST_P(Itas_P, InsertIntoReplicatedTableFromSelectReplicated) {
-  itasTestBody(columnDescriptors,
-               ") WITH (partitions='REPLICATED')",
-               ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas_P, InsertIntoReplicatedTableFromSelectSharded) {
-  itasTestBody(columnDescriptors,
-               ") WITH (partitions='REPLICATED')",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
 TEST_P(Itas_P, InsertIntoShardedTableFromSelectSharded) {
   itasTestBody(columnDescriptors,
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
-TEST_P(Itas_P, InsertIntoShardedTableFromSelectReplicated) {
-  itasTestBody(columnDescriptors,
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
-               ") WITH (partitions='REPLICATED')");
 }
 
 TEST_P(Itas_P, OmitNotNullableColumn) {
@@ -2090,10 +2036,6 @@ TEST_F(Export, ExportFromSelectFragments) {
   exportTestBody(") WITH (FRAGMENT_SIZE=3)");
 }
 
-TEST_F(Export, ExportFromSelectReplicated) {
-  exportTestBody(") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')");
-}
-
 TEST_F(Export, ExportFromSelectSharded) {
   exportTestBody(
       ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, "
@@ -2117,9 +2059,6 @@ TEST_P(Update, InvalidTextArrayAssignment) {
 }
 
 TEST_P(Update, UpdateColumnByColumn) {
-  if (isDistributedMode()) {
-    GTEST_SKIP();
-  }
   sql("DROP TABLE IF EXISTS update_test;");
 
   std::string create_sql = "CREATE TABLE update_test(id int";
@@ -2566,20 +2505,11 @@ TEST_P(Itas_P, PartialInsertIntoFragmentsTableFromSelectFragments) {
       partialDescriptors, ") WITH (FRAGMENT_SIZE=3)", ") WITH (FRAGMENT_SIZE=3)");
 }
 
-TEST_P(Itas_P, PartialInsertIntoTableFromSelectReplicated) {
-  partial_itas_test_body(
-      partialDescriptors, ") WITH (FRAGMENT_SIZE=3, partitions='REPLICATED')", ")");
-}
-
 TEST_P(Itas_P, PartialInsertIntoTableFromSelectSharded) {
   partial_itas_test_body(
       partialDescriptors,
       ", SHARD KEY (id)) WITH (FRAGMENT_SIZE=3, shard_count = 4, partitions='SHARDED')",
       ")");
-}
-
-TEST_P(Itas_P, PartialInsertIntoReplicatedTableFromSelect) {
-  partial_itas_test_body(partialDescriptors, ")", ") WITH (partitions='REPLICATED')");
 }
 
 TEST_P(Itas_P, PartialInsertIntoShardedTableFromSelect) {
@@ -2589,29 +2519,11 @@ TEST_P(Itas_P, PartialInsertIntoShardedTableFromSelect) {
       ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
 }
 
-TEST_P(Itas_P, PartialInsertIntoReplicatedTableFromSelectReplicated) {
-  partial_itas_test_body(partialDescriptors,
-                         ") WITH (partitions='REPLICATED')",
-                         ") WITH (partitions='REPLICATED')");
-}
-
-TEST_P(Itas_P, PartialInsertIntoReplicatedTableFromSelectSharded) {
-  itasTestBody(partialDescriptors,
-               ") WITH (partitions='REPLICATED')",
-               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
 TEST_P(Itas_P, PartialInsertIntoShardedTableFromSelectSharded) {
   partial_itas_test_body(
       partialDescriptors,
       ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
       ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
-}
-
-TEST_P(Itas_P, PartialInsertIntoShardedTableFromSelectReplicated) {
-  partial_itas_test_body(partialDescriptors,
-                         ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')",
-                         ") WITH (partitions='REPLICATED')");
 }
 
 class Select : public DBHandlerTestFixture {
@@ -3084,9 +2996,7 @@ class Non_Kernel_Time_Interrupt : public DBHandlerTestFixture {
 
 TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
   // disable interrupt test on dist mode due to catalog inconsistency issue
-  if (isDistributedMode()) {
-    GTEST_SKIP();
-  }
+
   std::atomic<bool> catchInterruption(false);
   bool detect_time_out = false;
 
@@ -3199,9 +3109,7 @@ TEST_F(Non_Kernel_Time_Interrupt, Interrupt_ITAS) {
 
 TEST_F(Non_Kernel_Time_Interrupt, Interrupt_CTAS) {
   // disable interrupt test on dist mode due to catalog inconsistency issue
-  if (isDistributedMode()) {
-    GTEST_SKIP();
-  }
+
   std::atomic<bool> catchInterruption(false);
   bool detect_time_out = false;
 
@@ -3353,10 +3261,6 @@ class ItasStringTest : public DBHandlerTestFixture {
 };
 
 TEST_F(ItasStringTest, InsertIntoSelectLowercase_SameTable) {
-  if (isDistributedMode()) {
-    GTEST_SKIP();
-  }
-
   std::string insert_sql =
       "insert into lower_function_test_people "
       "(first_name, last_name, age, country_code) "
@@ -3383,10 +3287,6 @@ TEST_F(ItasStringTest, InsertIntoSelectLowercase_SameTable) {
 }
 
 TEST_F(ItasStringTest, InsertIntoSelectLowercase_DifferentTables) {
-  if (isDistributedMode()) {
-    GTEST_SKIP();
-  }
-
   std::string insert_sql =
       "insert into lower_function_test_people "
       "(first_name, last_name, age, country_code) "
@@ -3544,68 +3444,51 @@ TEST_P(CtasImportTestMiniSort, on_geo_point) {
   test_minisort_on_column("pt", {2, 3, 4, 5, 1});
 }
 
-#define SKIP_ALL_ON_AGGREGATOR() \
-  if (isDistributedMode()) {     \
-    GTEST_SKIP();                \
-  }
-
 TEST_P(CtasImportTestMiniSort, ctas_on_none) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("", {5, 3, 1, 2, 4});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_int) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("i", {1, 2, 3, 4, 5});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_float) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("f", {1, 2, 3, 4, 5});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_int_array) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("ia", {1, 2, 3, 4, 5});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_string_array) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("sa", {5, 3, 1, 2, 4});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_string_2b) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("s2", {5, 3, 1, 2, 4});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_date) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("dt", {1, 2, 3, 4, 5});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_date_2b) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("d2", {1, 2, 3, 4, 5});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_time) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("tm", {1, 2, 3, 4, 5});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_time_4b) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("t4", {1, 2, 3, 4, 5});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_varlen_array) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("va", {1, 2, 3, 4, 5});
 }
 
 TEST_P(CtasImportTestMiniSort, ctas_on_geo_point) {
-  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("pt", {2, 3, 4, 5, 1});
 }
 
@@ -3614,7 +3497,6 @@ class CtasTableTest : public DBHandlerTestFixture,
                           std::vector<std::shared_ptr<TestColumnDescriptor>>> {
  public:
   bool g_use_temporary_tables{false};
-  bool g_aggregator{false};
   const size_t g_num_rows{10};
 
   void SetUp() override {
@@ -3760,11 +3642,6 @@ class CtasTableTest : public DBHandlerTestFixture,
     return;                                                       \
   }
 
-#define SKIP_ON_AGGREGATOR(EXP) \
-  if (!g_aggregator) {          \
-    EXP;                        \
-  }
-
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   // return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
@@ -3782,7 +3659,6 @@ bool skip_tests(const ExecutorDeviceType device_type) {
   }
 
 TEST_F(CtasTableTest, CreateTableAsSelect) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
 
   createTestTable();
@@ -3793,13 +3669,13 @@ TEST_F(CtasTableTest, CreateTableAsSelect) {
 
   int err{0};
   if (!err && !g_use_temporary_tables) {
-    SKIP_ON_AGGREGATOR(err = create_as_select());
+    (err = create_as_select());
   }
   if (!err && !g_use_temporary_tables) {
-    SKIP_ON_AGGREGATOR(err = create_as_select_full());
+    (err = create_as_select_full());
   }
   if (!err && !g_use_temporary_tables) {
-    SKIP_ON_AGGREGATOR(err = create_as_select_empty());
+    (err = create_as_select_empty());
   }
 
   sql("SELECT fixed_str, COUNT(*) FROM ctas_test GROUP BY fixed_str;");

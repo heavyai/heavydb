@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 # -*- coding: utf-8 -*-
 #
 # Configuration file for the Sphinx documentation builder.
@@ -13,14 +16,12 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import os
-import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), "/ext/breathe/"))
 
 # -- Project information -----------------------------------------------------
 
-project = 'OmniSciDB'
-copyright = '2019, OmniSci, Inc'
-author = 'OmniSci, Inc'
+project = 'HeavyDB'
+copyright = '2019-2026, NVIDIA CORPORATION & AFFILIATES'
+author = 'NVIDIA CORPORATION & AFFILIATES'
 
 # The short X.Y version
 version = ''
@@ -65,12 +66,12 @@ master_doc = 'index'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ['page_index.rst']
+exclude_patterns = []
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
@@ -81,24 +82,31 @@ pygments_style = None
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'nvidia_sphinx_theme'
 
-# Theme options are theme-specific and customize the look and feel of a theme
-# further.  For a list of options available for each theme, see the
-# documentation.
-#
-html_theme_options = {'collapse_navigation': False}
+# Theme options (PyData / nvidia-sphinx-theme). See pydata-sphinx-theme docs.
+html_theme_options = {
+    'show_nav_level': 2,
+    'navigation_depth': 4,
+    'secondary_sidebar_items': ['page-toc'],
+    'icon_links': [
+        {
+            'name': 'GitHub',
+            'url': 'https://github.com/heavyai/heavydb',
+            'icon': 'fa-brands fa-github',
+        },
+    ],
+}
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
-html_context = {
-  'css_files': [
-    '_static/theme_overrides.css', # override wide tables in RTD theme
-  ],
-}
+html_css_files = [
+    'theme_overrides.css',  # wide tables and other site-specific overrides
+]
+
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
@@ -114,7 +122,7 @@ html_context = {
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'OmniSciDBdoc'
+htmlhelp_basename = 'HeavyDBdoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -141,8 +149,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'OmniSciDB.tex', 'OmniSciDB Documentation',
-     'OmniSci, Inc', 'manual'),
+    (master_doc, 'HeavyDB.tex', 'HeavyDB Documentation',
+     author, 'manual'),
 ]
 
 
@@ -151,7 +159,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'omniscidb', 'OmniSciDB Documentation',
+    (master_doc, 'heavydb', 'HeavyDB Documentation',
      [author], 1)
 ]
 
@@ -162,8 +170,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'OmniSciDB', 'OmniSciDB Documentation',
-     author, 'OmniSciDB', 'One line description of project.',
+    (master_doc, 'HeavyDB', 'HeavyDB Documentation',
+     author, 'HeavyDB', 'HeavyDB developer documentation.',
      'Miscellaneous'),
 ]
 
@@ -188,8 +196,10 @@ epub_exclude_files = ['search.html']
 
 # -- Extension configuration -------------------------------------------------
 
-breathe_projects = { "OmniSciDB": os.path.join(os.path.dirname(__file__) + "/../../build/doxygen/xml") }
-breathe_default_project = "OmniSciDB"
+breathe_projects = {
+    "HeavyDB": os.path.join(os.path.dirname(__file__), "../../build/doxygen/xml")
+}
+breathe_default_project = "HeavyDB"
 breathe_domain_by_extension = {"h" : "cpp"}
 
 # Tell sphinx what the primary language being documented is.
@@ -202,11 +212,6 @@ highlight_language = 'cpp'
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
-
-# Javascript files to include
-html_js_files=[
-#                'segment_analytics.js'
-              ]
 
 # Favicon
 html_favicon = "img/favicon.webp"

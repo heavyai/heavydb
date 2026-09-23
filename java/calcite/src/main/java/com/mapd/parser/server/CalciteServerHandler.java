@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2016-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package com.mapd.parser.server;
@@ -205,8 +194,7 @@ public class CalciteServerHandler implements CalciteServer.Iface {
               queryParsingOption.is_explain,
               queryParsingOption.is_explain_detail,
               optimizationOption.is_view_optimize,
-              optimizationOption.enable_watchdog,
-              optimizationOption.distributed_mode);
+              optimizationOption.enable_watchdog);
 
       if (!buildRATreeFromRAString) {
         HeavyDBParser.ProcessResult res;
@@ -257,6 +245,13 @@ public class CalciteServerHandler implements CalciteServer.Iface {
       String msg = "Failed to generate relational algebra for query " + ex.getMessage();
       HEAVYDBLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-5, msg);
+    } catch (IllegalArgumentException ex) {
+      // User-input validation errors surfaced as IllegalArgumentException by
+      // newer Calcite (e.g. RexBuilder.makeLiteral overflow checks). Log the
+      // message only, no stack trace, matching the ValidationException catch.
+      String msg = "SQL Error: " + ex.getMessage();
+      HEAVYDBLOGGER.error(msg);
+      throw new InvalidParseRequest(-8, msg);
     } catch (Throwable ex) {
       HEAVYDBLOGGER.error(ex.getClass().toString());
       String msg = ex.getMessage();

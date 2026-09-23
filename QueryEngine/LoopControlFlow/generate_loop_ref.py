@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 def generate(mask, cond_mask, upper_bounds):
   indent_level = 0
   start_iterator_ch = 'i'
@@ -19,8 +22,8 @@ def generate(mask, cond_mask, upper_bounds):
       iterators.append(iterator_ch)
       loops += for_loop + '\n'
     indent_level += 1
-  loops += (indent_level * '  ' + "print('" + ', '.join(['%s' for iterator in iterators])
-    + "' % (" + ', '.join([str(iterator) for iterator in iterators]) + '))')
+  loops += (indent_level * '  ' + "print '" + ', '.join(['%s' for iterator in iterators])
+    + "' % (" + ', '.join([str(iterator) for iterator in iterators]) + ')')
   return loops
 
 if __name__ == '__main__':

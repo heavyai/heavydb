@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../SQLFrontend/CommandFunctors.h"
@@ -42,7 +31,6 @@ struct CoreMockTransport {
 // clang-format off
 class CoreMockClient {
  public:
-  MockMethod(krb5_connect)
   MockMethod(connect)
   MockMethod(disconnect)
   MockMethod(switch_database)
@@ -71,8 +59,6 @@ class CoreMockClient {
   MockMethod(get_db_objects_for_grantee)
   MockMethod(get_db_object_privs)
   MockMethod(get_all_roles_for_user)
-  MockMethod(set_license_key)
-  MockMethod(get_license_claims)
   MockMethod(get_completion_hints)
   MockMethod(get_dashboards)
   MockMethod(get_session_info)
@@ -881,11 +867,7 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
   static const char* test_filename = "export_unlikely_file_to_ever_be_opened_1234.txt";
   std::string fake_input = std::string("\\export_dashboard simpledash ") + test_filename;
 
-#ifdef _WIN32
-  auto result = mkdir(test_filename);
-#else
   auto result = mkdir(test_filename, 0700);
-#endif
   EXPECT_EQ(result, 0);
 
   std::ostringstream test_capture_stream;

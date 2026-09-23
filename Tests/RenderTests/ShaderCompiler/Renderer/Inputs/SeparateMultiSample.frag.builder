@@ -1,0 +1,3 @@
+{
+  "baseTemplate": "Rendering/SeparateMultiSample.frag"
+}

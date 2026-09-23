@@ -1,0 +1,29 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#define WORKGROUP_SIZE 32
+
+#define EMPTY_KEY_64 0x7FFFFFFFFFFFFFFFl
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430) uniform CLEAR_QUERY_OUTPUT_BUFFER_UBO {
+  uint32_t num_values;
+};
+
+layout(std430, binding = 0) buffer query_output_buffer
+{
+  int64_t values[];
+};
+
+void main() {
+  uint workgroup_index = gl_WorkGroupID.x + (gl_WorkGroupID.y * gl_NumWorkGroups.x);
+  uint value_index = (workgroup_index * gl_WorkGroupSize.x * gl_WorkGroupSize.y) + gl_LocalInvocationIndex;
+  if (value_index >= num_values) {
+    return;
+  }
+
+  values[value_index] = EMPTY_KEY_64;
+}

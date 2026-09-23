@@ -1,17 +1,6 @@
 /*
- * Copyright 2023 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /** Notes:
@@ -1088,8 +1077,7 @@ class RelAlgNode : public RelAlgDagNode {
   static void resetRelAlgFirstId() noexcept;
 
   /**
-   * Clears the ptr to the result for this descriptor. Is only used for overriding step
-   * results in distributed mode.
+   * Clears the ptr to the result for this descriptor.
    */
   void clearContextData() const { context_data_ = nullptr; }
 
@@ -2516,15 +2504,23 @@ class RelCompound : public RelAlgNode, public ModifyManipulationTarget {
 class RelSort : public RelAlgNode {
  public:
   // default constructor used for deserialization only
-  RelSort() : limit_(std::nullopt), offset_(0) {}
+  RelSort() : limit_(std::nullopt), offset_(0), hint_applied_(false) {}
 
   RelSort(const std::vector<SortField>& collation,
           std::optional<size_t> limit,
           const size_t offset,
           std::shared_ptr<const RelAlgNode> input)
-      : collation_(collation), limit_(limit), offset_(offset) {
+      : collation_(collation)
+      , limit_(limit)
+      , offset_(offset)
+      , hint_applied_(false)
+      , hints_(std::make_unique<Hints>()) {
     inputs_.push_back(input);
   }
+
+  // RelSort carries Calcite-emitted top-sort hints. deepCopy uses this to
+  // preserve the unique_ptr-owned hint map.
+  RelSort(RelSort const&);
 
   virtual void acceptChildren(Visitor& v) const override {
     for (auto& n : getInputs()) {
@@ -2605,6 +2601,34 @@ class RelSort : public RelAlgNode {
     return result;
   }
 
+  void addHint(const ExplainedQueryHint& hint_explained) {
+    // Calcite 1.41 can serialize hints on LogicalSort for top-N resultset
+    // cache queries, so RelSort participates in the same delivered-hint flow
+    // as scans, projects, aggregates, and compounds.
+    if (!hint_applied_) {
+      hint_applied_ = true;
+    }
+    hints_->emplace(hint_explained.getHint(), hint_explained);
+  }
+
+  const bool hasHintEnabled(QueryHint candidate_hint) const {
+    if (hint_applied_ && !hints_->empty()) {
+      return hints_->find(candidate_hint) != hints_->end();
+    }
+    return false;
+  }
+
+  const ExplainedQueryHint& getHintInfo(QueryHint hint) const {
+    CHECK(hint_applied_);
+    CHECK(!hints_->empty());
+    CHECK(hasHintEnabled(hint));
+    return hints_->at(hint);
+  }
+
+  bool hasDeliveredHint() { return !hints_->empty(); }
+
+  Hints* getDeliveredHints() { return hints_.get(); }
+
  private:
   size_t toHashImpl(RelRexNodeHashCache& cache) const override {
     auto it = cache.find(this);
@@ -2629,6 +2653,8 @@ class RelSort : public RelAlgNode {
   std::vector<SortField> collation_;
   std::optional<size_t> limit_;
   size_t offset_;
+  bool hint_applied_;
+  std::unique_ptr<Hints> hints_;
 
   bool hasEquivCollationOf(const RelSort& that) const;
 

@@ -4,37 +4,38 @@
 DAG Builder / Optimizer
 ==================================
 
-The :cpp:class:`RelAlgDagBuilder` and ``RelAlgOptimizer`` are responsible for deserializing the relational algebra tree returned from Calcite (see :doc:`../calcite/calcite_parser`) and building a relational algebra DAG (Directed Acyclic Graph) using HeavyDB specific data structures. The HeavyDB RA DAG then passes through several optimization passes. The process of building the HeavyDB DAG and a description of the optimization passes currently employed follows. 
+The :cpp:class:`RelAlgDagBuilder` deserializes the relational algebra tree
+returned from Calcite (see :doc:`../calcite/calcite_parser`) and builds a
+relational algebra DAG (Directed Acyclic Graph) using HeavyDB-specific data
+structures. When optimization is enabled, ``RelAlgDagBuilder::optimizeDag()``
+runs the passes implemented in ``RelAlgOptimizer.cpp``. The process of building
+the HeavyDB DAG and a description of the optimization passes currently employed
+follows.
 
 DAG Builder
 ===========
 
 The class :cpp:class:`RelAlgDagBuilder` deserializes the JSON string containing the optimized relational algebra tree from Calcite. The interpreter file also includes a class hierarchy for defining relational algebra nodes (``RelAlgNode``) and relational algebra node expressions (``Rex``). The RelAlgDagBuilder constructor takes a JSON ra tree from calcite as an argument and calls a deserialization function for each node in the tree. The deserialization function returns a class derived from ``RelAlgNode`` -- the type of the class corresponds to the type of relational algebra node. A complete list of currently supported relational algebra nodes is available in the table below.
 
-=====================  =======================  ==================================================================
-Calcite Node Type      ``RelAlgNode`` Subclass    Calcite Description
-=====================  =======================  ==================================================================
-EnumerableTableScan    RelScan                  Returns the contents of a table through
-                                                sequential traversal.
-LogicalProject         RelProject               Computes a set of 'select expressions'
-                                                from its input relational :term:`expression`.
-LogicalFilter          RelFilter                Iterates over its input and returns
-                                                elements for which condition evaluates to true.
-LogicalAggregate       RelAggregate             Eliminates duplicates and computes
-                                                totals. It corresponds to the `GROUP BY` operator in a SQL query
-                                                statement, together with the aggregate functions in the `SELECT`
-                                                clause.
-LogicalJoin            RelJoin                  Combines two relational expressions
-                                                according to some condition. Each output row has columns from
-                                                the left and right inputs.
-LogicalSort            RelSort                  Imposes a particular sort order on
-                                                its input without otherwise changing its content. Also used to
-                                                represent a `LIMIT` or `OFFSET`.
-LogicalValues          RelLogicalValues         Relational expression whose value is a sequence of zero or more
-                                                literal row values.
-LogicalTableModify     RelModify                Modifies a table. Expression occurs
-                                                as a result of `DELETE`, or `UPDATE` SQL statements.
-=====================  =======================  ==================================================================
+* ``EnumerableTableScan`` and ``LogicalTableScan`` become ``RelScan`` and
+  sequentially traverse a table.
+* ``LogicalProject`` becomes ``RelProject`` and computes select expressions
+  from its input.
+* ``LogicalFilter`` becomes ``RelFilter`` and retains rows for which its
+  condition is true.
+* ``LogicalAggregate`` becomes ``RelAggregate`` and implements grouping and
+  aggregate functions.
+* ``LogicalJoin`` becomes ``RelJoin`` and combines two relational inputs
+  according to a condition.
+* ``LogicalSort`` becomes ``RelSort`` and implements ordering, ``LIMIT``, and
+  ``OFFSET``.
+* ``LogicalValues`` becomes ``RelLogicalValues`` and represents a sequence of
+  literal rows.
+* ``LogicalTableModify`` becomes ``RelModify`` for ``DELETE`` and ``UPDATE``.
+* ``LogicalTableFunctionScan`` becomes ``RelTableFunction`` and exposes a table
+  function's output as a relational input.
+* ``LogicalUnion`` becomes ``RelLogicalUnion`` and combines compatible rows
+  for ``UNION`` or ``UNION ALL``.
 
 ``RelAlgNode``
 --------------
@@ -86,7 +87,7 @@ Aggregate RA nodes represent group by operations. In the case where a group by o
   
 Calcite generates the following RA tree. 
   
-.. code-block::
+.. code-block:: text
 
   Explanation
   LogicalAggregate(group=[{0}])
@@ -117,7 +118,7 @@ Detects two identical filter nodes and folds the filters into a single filter no
 
 The generated RA from Calcite is:
 
-.. code-block:: 
+.. code-block:: text
   :linenos:
 
   LogicalSort(sort0=[$0], dir0=[ASC], fetch=[1])
@@ -144,7 +145,7 @@ Intermediate projection nodes may sometimes load more inputs than are actually r
 
 The Calcite generated plan is:
 
-.. code-block::
+.. code-block:: text
   :linenos:
 
   LogicalProject(x=[$0])
@@ -172,9 +173,12 @@ Consider the following example:
 
 .. code-block:: sql
 
-  SELECT A.x, COUNT(*) FROM test JOIN B ON A.x = B.x WHERE A.y > 41 GROUP BY A.x;
+  SELECT a.x, COUNT(*) FROM a JOIN b ON a.x = b.x WHERE a.y > 41 GROUP BY a.x;
 
-The RA tree before and after the coalesce nodes optimization is depicted before (nodes before optimization are drawn with dashed lines). The Compound node now contains all information needed to evaluate the filter and (potentially grouped) aggregates using just the memory buffer required for the final result.
+The diagram below shows the RA tree before and after coalesce-nodes optimization
+(nodes before optimization are drawn with dashed lines). The Compound node now
+contains all information needed to evaluate the filter and (potentially grouped)
+aggregates using just the memory buffer required for the final result.
 
 .. image:: ../img/dag_optimization.png
   :align: center
@@ -182,7 +186,9 @@ The RA tree before and after the coalesce nodes optimization is depicted before 
 Create Left Deep Join
 ---------------------
 
-The ``RelLeftDeepJoin`` node is another synthetic node, similar to ``RelCompound``, which allows multiple join loops to be nested in join loops to be nested in a single operator. Consider the following example:
+The ``RelLeftDeepInnerJoin`` node is another synthetic node, similar to
+``RelCompound``, which allows multiple join loops to be nested in a single
+operator. Consider the following example:
 
 .. code-block:: sql
   
@@ -190,7 +196,7 @@ The ``RelLeftDeepJoin`` node is another synthetic node, similar to ``RelCompound
 
 Calcite generates the following RA tree:
 
-.. code-block::
+.. code-block:: text
   :linenos:
 
   LogicalAggregate(group=[{}], EXPR$0=[COUNT()])
@@ -201,4 +207,7 @@ Calcite generates the following RA tree:
           EnumerableTableScan(table=[[heavyai, b]])
         EnumerableTableScan(table=[[heavyai, c]])
 
-The join nodes on lines 3 and 4 can be coalesced into a single join node, as long as the join condition on line 4 is checked before line 3. The ``RelLeftDeepJoin`` node coalesces multiple join conditions into a single node, and dictates the ordering of the join conditions during code generation.
+The join nodes on lines 3 and 4 can be coalesced into a single join node, as
+long as the join condition on line 4 is checked before line 3. The
+``RelLeftDeepInnerJoin`` node coalesces multiple join conditions into a single
+node and dictates the ordering of the join conditions during code generation.

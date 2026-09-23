@@ -4,7 +4,9 @@
 Data Types
 ==================================
 
-HeavyDB supports a variety of data types, including scalar types with an optional encoding and variable length types. The full list of data types is available on in HeavyDB `user facing documentation <https://docs.heavy.ai/latest/5_datatypes.html#fixed-encoding>`_.
+HeavyDB supports a variety of data types, including scalar types with optional
+encodings and variable-length types. The full list is available in the
+`user-facing datatype documentation <https://docs.nvidia.com/heavyai/sql/data-definition-ddl/datatypes-and-fixed-encoding>`_.
 
 Scalar Types
 ------------

@@ -1,0 +1,3 @@
+{
+  "baseTemplate": "Rendering/fullScreenTriangle.vert"
+}

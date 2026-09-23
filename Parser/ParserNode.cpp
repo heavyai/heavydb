@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -44,7 +33,6 @@
 
 #include "Analyzer/RangeTableEntry.h"
 #include "Catalog/Catalog.h"
-#include "Catalog/DataframeTableDescriptor.h"
 #include "Catalog/SharedDictionaryValidator.h"
 #include "DataMgr/FileMgr/FileBuffer.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
@@ -63,7 +51,7 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/RelAlgExecutor.h"
-#include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModel.h"
+#include "QueryEngine/TableFunctions/SystemFunctions/ML/MLModel.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/DbObjectKeys.h"
@@ -78,7 +66,8 @@
 
 #include "gen-cpp/CalciteServer.h"
 
-size_t g_leaf_count{0};
+#include "QueryEngine/Execute.h"
+
 bool g_test_drop_column_rollback{false};
 bool g_enable_legacy_raster_import{true};
 extern bool g_enable_string_functions;
@@ -87,6 +76,9 @@ extern bool g_enable_fsi;
 bool g_enable_legacy_delimited_import{true};
 #ifdef ENABLE_IMPORT_PARQUET
 bool g_enable_legacy_parquet_import{false};
+#endif
+#ifdef EE_FSI_ODBC
+bool g_enable_fsi_odbc_import{true};
 #endif
 bool g_enable_fsi_regex_import{true};
 
@@ -100,11 +92,6 @@ using namespace std::string_literals;
 using TableDefFuncPtr = boost::function<void(TableDescriptor&,
                                              const Parser::NameValueAssign*,
                                              const std::list<ColumnDescriptor>& columns)>;
-
-using DataframeDefFuncPtr =
-    boost::function<void(DataframeTableDescriptor&,
-                         const Parser::NameValueAssign*,
-                         const std::list<ColumnDescriptor>& columns)>;
 
 namespace Parser {
 bool check_session_interrupted(const QuerySessionId& query_session, Executor* executor) {
@@ -1102,8 +1089,7 @@ bool bool_from_string_literal(const Parser::StringLiteral* str_literal) {
 
 void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& options_,
                        import_export::CopyParams& copy_params,
-                       std::vector<std::string>& warnings,
-                       std::string& deferred_copy_from_partitions_) {
+                       std::vector<std::string>& warnings) {
   if (!options_.empty()) {
     for (auto& p : options_) {
       if (boost::iequals(*p->get_name(), "max_reject")) {
@@ -1338,6 +1324,10 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
 #endif
         } else if (boost::iequals(*s, "raster_file")) {
           copy_params.source_type = import_export::SourceType::kRasterFile;
+#if EE_FSI_ODBC
+        } else if (boost::iequals(*s, "odbc")) {
+          copy_params.source_type = import_export::SourceType::kOdbc;
+#endif
         } else if (boost::iequals(*s, "regex_parsed_file")) {
           copy_params.source_type = import_export::SourceType::kRegexParsedFile;
         } else {
@@ -1345,6 +1335,9 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
               "Invalid string for 'source_type' option (must be 'GEO_FILE', 'RASTER_FILE'"
 #if ENABLE_IMPORT_PARQUET
               ", 'PARQUET_FILE'"
+#endif
+#if EE_FSI_ODBC
+              ", 'ODBC'"
 #endif
               ", 'REGEX_PARSED_FILE'"
               " or 'DELIMITED_FILE'): " +
@@ -1512,16 +1505,6 @@ void parse_copy_params(const std::list<std::unique_ptr<NameValueAssign>>& option
         } else {
           throw std::runtime_error("Invalid value for 'geo_layer_name' option");
         }
-      } else if (boost::iequals(*p->get_name(), "partitions")) {
-        const auto partitions =
-            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-        CHECK(partitions);
-        const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
-        if (partitions_uc != "REPLICATED") {
-          throw std::runtime_error(
-              "Invalid value for 'partitions' option. Must be 'REPLICATED'.");
-        }
-        deferred_copy_from_partitions_ = partitions_uc;
       } else if (boost::iequals(*p->get_name(), "geo_explode_collections")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -2466,6 +2449,12 @@ Literal* parse_insert_literal(const rapidjson::Value& literal) {
   } else if (type == "DOUBLE") {
     auto dbl_val = std::stod(json_str(literal["literal"]));
     return new DoubleLiteral(dbl_val);
+  } else if (type == "UNKNOWN") {
+    // Calcite emits UNKNOWN for typed literals in INSERT VALUES (e.g. DATE '...',
+    // TIMESTAMP '...') that this path does not materialize as CHAR/DECIMAL/etc.
+    throw std::runtime_error(
+        "Unsupported typed literal in INSERT VALUES. Use a string literal or "
+        "CAST(... AS <type>) instead of DATE '...' or TIMESTAMP '...'.");
   } else {
     CHECK(false) << "Unexpected calcite data type: " << type;
   }
@@ -2781,15 +2770,15 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session,
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   RelAlgExecutor ra_executor(executor.get());
 
-  if (!leafs_connector_) {
-    leafs_connector_ = std::make_unique<Fragmenter_Namespace::LocalInsertConnector>();
+  if (!insert_connector_) {
+    insert_connector_ = std::make_unique<Fragmenter_Namespace::LocalInsertConnector>();
   }
-  Fragmenter_Namespace::InsertDataLoader insert_data_loader(*leafs_connector_);
+  Fragmenter_Namespace::InsertDataLoader insert_data_loader(*insert_connector_);
   try {
     ra_executor.executeSimpleInsert(query, insert_data_loader, session);
   } catch (...) {
     try {
-      leafs_connector_->rollback(session, td->tableId);
+      insert_connector_->rollback(session, td->tableId);
     } catch (std::exception& e) {
       LOG(ERROR) << "An error occurred during insert rollback attempt. Table id: "
                  << td->tableId << ", Error: " << e.what();
@@ -2797,7 +2786,7 @@ void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session,
     throw;
   }
   if (!td->isTemporaryTable()) {
-    leafs_connector_->checkpoint(session, td->tableId);
+    insert_connector_->checkpoint(session, td->tableId);
   }
 }
 
@@ -2924,51 +2913,11 @@ decltype(auto) get_frag_size_def(TableDescriptor& td,
   });
 }
 
-decltype(auto) get_frag_size_dataframe_def(DataframeTableDescriptor& df_td,
-                                           const NameValueAssign* p,
-                                           const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<IntLiteral>(
-      p, [&df_td](const auto val) { df_td.maxFragRows = val; });
-}
-
 decltype(auto) get_max_chunk_size_def(TableDescriptor& td,
                                       const NameValueAssign* p,
                                       const std::list<ColumnDescriptor>& columns) {
   return get_property_value<IntLiteral>(p,
                                         [&td](const auto val) { td.maxChunkSize = val; });
-}
-
-decltype(auto) get_max_chunk_size_dataframe_def(
-    DataframeTableDescriptor& df_td,
-    const NameValueAssign* p,
-    const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<IntLiteral>(
-      p, [&df_td](const auto val) { df_td.maxChunkSize = val; });
-}
-
-decltype(auto) get_delimiter_def(DataframeTableDescriptor& df_td,
-                                 const NameValueAssign* p,
-                                 const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<StringLiteral>(p, [&df_td](const auto val) {
-    if (val.size() != 1) {
-      throw std::runtime_error("Length of DELIMITER must be equal to 1.");
-    }
-    df_td.delimiter = val;
-  });
-}
-
-decltype(auto) get_header_def(DataframeTableDescriptor& df_td,
-                              const NameValueAssign* p,
-                              const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<StringLiteral>(p, [&df_td](const auto val) {
-    if (val == "FALSE") {
-      df_td.hasHeader = false;
-    } else if (val == "TRUE") {
-      df_td.hasHeader = true;
-    } else {
-      throw std::runtime_error("Option HEADER support only 'true' or 'false' values.");
-    }
-  });
 }
 
 decltype(auto) get_page_size_def(TableDescriptor& td,
@@ -2989,24 +2938,16 @@ decltype(auto) get_max_rows_def(TableDescriptor& td,
   return get_property_value<IntLiteral>(p, [&td](const auto val) { td.maxRows = val; });
 }
 
-decltype(auto) get_skip_rows_def(DataframeTableDescriptor& df_td,
-                                 const NameValueAssign* p,
-                                 const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<IntLiteral>(
-      p, [&df_td](const auto val) { df_td.skipRows = val; });
-}
-
 decltype(auto) get_partions_def(TableDescriptor& td,
                                 const NameValueAssign* p,
                                 const std::list<ColumnDescriptor>& columns) {
   return get_property_value<StringLiteral>(p, [&td](const auto partitions_uc) {
-    if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
-      throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
+    if (partitions_uc == "REPLICATED") {
+      throw std::runtime_error("PARTITIONS='REPLICATED' is not supported");
     }
-    if (td.shardedColumnId != 0 && partitions_uc == "REPLICATED") {
-      throw std::runtime_error(
-          "A table cannot be sharded and replicated at the same time");
-    };
+    if (partitions_uc != "SHARDED") {
+      throw std::runtime_error("PARTITIONS must be SHARDED");
+    }
     td.partitions = partitions_uc;
   });
 }
@@ -3017,11 +2958,7 @@ decltype(auto) get_shard_count_def(TableDescriptor& td,
     throw std::runtime_error("SHARD KEY must be defined.");
   }
   return get_property_value<IntLiteral>(p, [&td](const auto shard_count) {
-    if (g_leaf_count && shard_count % g_leaf_count) {
-      throw std::runtime_error(
-          "SHARD_COUNT must be a multiple of the number of leaves in the cluster.");
-    }
-    td.nShards = g_leaf_count ? shard_count / g_leaf_count : shard_count;
+    td.nShards = shard_count;
     if (!td.shardedColumnId && !td.nShards) {
       throw std::runtime_error(
           "Must specify the number of shards through the SHARD_COUNT option");
@@ -3103,26 +3040,6 @@ void get_table_definitions_for_ctas(TableDescriptor& td,
         "USE_SHARED_DICTIONARIES or FORCE_GEO_COMPRESSION.");
   }
   return it->second(td, p.get(), columns);
-}
-
-static const std::map<const std::string, const DataframeDefFuncPtr> dataframeDefFuncMap =
-    {{"fragment_size"s, get_frag_size_dataframe_def},
-     {"max_chunk_size"s, get_max_chunk_size_dataframe_def},
-     {"skip_rows"s, get_skip_rows_def},
-     {"delimiter"s, get_delimiter_def},
-     {"header"s, get_header_def}};
-
-void get_dataframe_definitions(DataframeTableDescriptor& df_td,
-                               const std::unique_ptr<NameValueAssign>& p,
-                               const std::list<ColumnDescriptor>& columns) {
-  const auto it =
-      dataframeDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
-  if (it == dataframeDefFuncMap.end()) {
-    throw std::runtime_error(
-        "Invalid CREATE DATAFRAME option " + *p->get_name() +
-        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, SKIP_ROWS, DELIMITER or HEADER.");
-  }
-  return it->second(df_td, p.get(), columns);
 }
 
 void parse_elements(const rapidjson::Value& payload,
@@ -3392,95 +3309,6 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   // privileges
   SysCatalog::instance().createDBObject(
       session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
-}
-
-CreateDataframeStmt::CreateDataframeStmt(const rapidjson::Value& payload) {
-  CHECK(payload.HasMember("name"));
-  table_ = std::make_unique<std::string>(json_str(payload["name"]));
-
-  CHECK(payload.HasMember("elementList"));
-  parse_elements(payload, "elementList", *table_, table_element_list_);
-
-  CHECK(payload.HasMember("filePath"));
-  std::string fs = json_str(payload["filePath"]);
-  // strip leading/trailing spaces/quotes/single quotes
-  boost::algorithm::trim_if(fs, boost::is_any_of(" \"'`"));
-  filename_ = std::make_unique<std::string>(fs);
-
-  parse_options(payload, storage_options_);
-}
-
-void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session,
-                                  bool read_only_mode) {
-  if (read_only_mode) {
-    throw std::runtime_error("CREATE DATAFRAME invalid in read only mode.");
-  }
-  auto& catalog = session.getCatalog();
-
-  const auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
-
-  // check access privileges
-  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
-                                       AccessPrivileges::CREATE_TABLE)) {
-    throw std::runtime_error("Table " + *table_ +
-                             " will not be created. User has no create privileges.");
-  }
-
-  if (catalog.getMetadataForTable(*table_) != nullptr) {
-    throw std::runtime_error("Table " + *table_ + " already exists.");
-  }
-  DataframeTableDescriptor df_td;
-  std::list<ColumnDescriptor> columns;
-  std::vector<SharedDictionaryDef> shared_dict_defs;
-
-  std::unordered_set<std::string> uc_col_names;
-  for (auto& e : table_element_list_) {
-    if (dynamic_cast<SharedDictionaryDef*>(e.get())) {
-      auto shared_dict_def = static_cast<SharedDictionaryDef*>(e.get());
-      validate_shared_dictionary(
-          this, shared_dict_def, columns, shared_dict_defs, catalog);
-      shared_dict_defs.push_back(*shared_dict_def);
-      continue;
-    }
-    if (!dynamic_cast<ColumnDef*>(e.get())) {
-      throw std::runtime_error("Table constraints are not supported yet.");
-    }
-    ColumnDef* coldef = static_cast<ColumnDef*>(e.get());
-    ColumnDescriptor cd;
-    cd.columnName = *coldef->get_column_name();
-    const auto uc_col_name = boost::to_upper_copy<std::string>(cd.columnName);
-    const auto it_ok = uc_col_names.insert(uc_col_name);
-    if (!it_ok.second) {
-      throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
-    }
-    setColumnDescriptor(cd, coldef);
-    columns.push_back(cd);
-  }
-
-  df_td.tableName = *table_;
-  df_td.nColumns = columns.size();
-  df_td.isView = false;
-  df_td.fragmenter = nullptr;
-  df_td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-  df_td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
-  df_td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
-  df_td.fragPageSize = DEFAULT_PAGE_SIZE;
-  df_td.maxRows = DEFAULT_MAX_ROWS;
-  df_td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
-  if (!storage_options_.empty()) {
-    for (auto& p : storage_options_) {
-      get_dataframe_definitions(df_td, p, columns);
-    }
-  }
-  df_td.keyMetainfo = serialize_key_metainfo(nullptr, shared_dict_defs);
-  df_td.userId = session.get_currentUser().userId;
-  df_td.storageType = *filename_;
-
-  catalog.createShardedTable(df_td, columns, shared_dict_defs);
-  // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o
-  // privileges
-  SysCatalog::instance().createDBObject(
-      session.get_currentUser(), df_td.tableName, TableDBObjectType, catalog);
 }
 
 CreateModelStmt::CreateModelStmt(const rapidjson::Value& payload) {
@@ -3922,11 +3750,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   // view optimization
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-      false,
-      g_enable_watchdog,
-      {},
-      Catalog_Namespace::SysCatalog::instance().isAggregator());
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
   const auto query_ra =
       query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
                                                          query_state_proxy,
@@ -3995,11 +3820,8 @@ size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_pr
   // view optimization
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-      false,
-      g_enable_watchdog,
-      {},
-      Catalog_Namespace::SysCatalog::instance().isAggregator());
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
   const auto query_ra =
       query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
                                                          query_state_proxy,
@@ -4142,13 +3964,11 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   foreign_storage::validate_non_foreign_table_write(td);
   bool populate_table = false;
 
-  if (leafs_connector_) {
+  if (insert_connector_) {
     populate_table = true;
   } else {
-    leafs_connector_ = std::make_unique<LocalQueryConnector>();
-    if (!g_cluster) {
-      populate_table = true;
-    }
+    insert_connector_ = std::make_unique<LocalQueryConnector>();
+    populate_table = true;
   }
 
   auto get_target_column_descriptors = [this, &catalog](const TableDescriptor* td) {
@@ -4308,10 +4128,10 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   int64_t total_target_value_translate_time_ms = 0;
   int64_t total_data_load_time_ms = 0;
 
-  Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
+  Fragmenter_Namespace::InsertDataLoader insertDataLoader(*insert_connector_);
   auto target_column_descriptors = get_target_column_descriptors(td);
   auto outer_frag_count =
-      leafs_connector_->getOuterFragmentCount(query_state_proxy, select_query_);
+      insert_connector_->getOuterFragmentCount(query_state_proxy, select_query_);
 
   size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
   auto query_session = session ? session->get_session_id() : "";
@@ -4327,10 +4147,10 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
       const auto query_clock_begin = timer_start();
       std::vector<AggregatedResult> query_results =
-          leafs_connector_->query(query_state_proxy,
-                                  select_query_,
-                                  allowed_outer_fragment_indices,
-                                  g_enable_non_kernel_time_query_interrupt);
+          insert_connector_->query(query_state_proxy,
+                                   select_query_,
+                                   allowed_outer_fragment_indices,
+                                   g_enable_non_kernel_time_query_interrupt);
       total_source_query_time_ms += timer_stop(query_clock_begin);
 
       auto start_time = query_state_proxy->getQuerySubmittedTime();
@@ -4369,11 +4189,11 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
         total_row_count += num_rows;
 
-        size_t leaf_count = leafs_connector_->leafCount();
+        size_t shard_count = insert_connector_->shardCount();
 
         // ensure that at least 1 row is processed per block up to a maximum of 65536 rows
         const size_t rows_per_block =
-            std::max(std::min(num_rows / leaf_count, size_t(64 * 1024)), size_t(1));
+            std::max(std::min(num_rows / shard_count, size_t(64 * 1024)), size_t(1));
 
         std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
 
@@ -4612,7 +4432,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     }
   } catch (...) {
     try {
-      leafs_connector_->rollback(*session, td->tableId);
+      insert_connector_->rollback(*session, td->tableId);
     } catch (std::exception& e) {
       LOG(ERROR) << "An error occurred during ITAS rollback attempt. Table id: "
                  << td->tableId << ", Error: " << e.what();
@@ -4631,7 +4451,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
           << "ms)\nquery: " << select_query_;
 
   if (!is_temporary) {
-    leafs_connector_->checkpoint(*session, td->tableId);
+    insert_connector_->checkpoint(*session, td->tableId);
   }
 }
 
@@ -4656,8 +4476,8 @@ lockmgr::LockedTableDescriptors acquire_query_table_locks(
   auto& calcite_mgr = sys_catalog.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr.getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption = calcite_mgr.getCalciteOptimizationOption(
-      false, g_enable_watchdog, {}, sys_catalog.isAggregator());
+  const auto calciteOptimizationOption =
+      calcite_mgr.getCalciteOptimizationOption(false, g_enable_watchdog, {});
   const auto result =
       query_parsing::process_and_check_access_privileges(&calcite_mgr,
                                                          query_state_proxy,
@@ -4763,7 +4583,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   auto stdlog = STDLOG(query_state);
   LocalQueryConnector local_connector;
   auto& catalog = session.getCatalog();
-  bool create_table = nullptr == leafs_connector_;
+  bool create_table = nullptr == insert_connector_;
 
   std::set<std::string> select_tables;
   if (create_table) {
@@ -4929,11 +4749,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   try {
     populateData(query_state->createQueryStateProxy(), td, false, true);
   } catch (...) {
-    if (!g_cluster) {
-      const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
-      if (created_td) {
-        catalog.dropTable(created_td);
-      }
+    const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
+    if (created_td) {
+      catalog.dropTable(created_td);
     }
     throw;
   }
@@ -5356,6 +5174,15 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
       }
 
       if (hasData(tableSubtituteMap, altNewTableName)) {
+        // A swap moves the occupied destination too, so authorize it before its
+        // catalog name is replaced with a generated temporary name.
+        const TableDescriptor* destination_td =
+            catalog.getMetadataForTable(altNewTableName);
+        if (destination_td) {
+          disable_foreign_tables(destination_td);
+          check_alter_table_privilege(session, destination_td);
+        }
+
         std::string tmpNewTableName = generateUniqueTableName(altNewTableName);
         // rename: newTableName to tmpNewTableName to get it out of the way
         //    because it was full
@@ -5864,7 +5691,7 @@ void CopyTableStmt::execute(
 
   import_export::CopyParams copy_params;
   std::vector<std::string> warnings;
-  parse_copy_params(options_, copy_params, warnings, deferred_copy_from_partitions_);
+  parse_copy_params(options_, copy_params, warnings);
 
   boost::regex non_local_file_regex{R"(^\s*(s3|http|https)://.+)",
                                     boost::regex::extended | boost::regex::icase};
@@ -5930,13 +5757,12 @@ void CopyTableStmt::execute(
                                      QuerySessionStatus::QueryStatus::RUNNING_IMPORTER);
       }
 
-      ScopeGuard clearInterruptStatus =
-          [executor, &query_str, &query_session, &start_time, &importer] {
-            // reset the runtime query interrupt status
-            if (g_enable_non_kernel_time_query_interrupt) {
-              executor->clearQuerySessionStatus(query_session, start_time);
-            }
-          };
+      ScopeGuard clearInterruptStatus = [executor, &query_session, &start_time] {
+        // reset the runtime query interrupt status
+        if (g_enable_non_kernel_time_query_interrupt) {
+          executor->clearQuerySessionStatus(query_session, start_time);
+        }
+      };
       import_export::ImportStatus import_result;
       auto ms =
           measure<>::execution([&]() { import_result = importer->import(&session); });
@@ -6634,8 +6460,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session,
   auto stdlog = STDLOG(query_state);
   auto query_state_proxy = query_state->createQueryStateProxy();
 
-  if (!leafs_connector_) {
-    leafs_connector_ = std::make_unique<LocalQueryConnector>();
+  if (!insert_connector_) {
+    insert_connector_ = std::make_unique<LocalQueryConnector>();
   }
 
   import_export::CopyParams copy_params;
@@ -6696,7 +6522,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   // how many fragments?
   size_t outer_frag_count =
-      leafs_connector_->getOuterFragmentCount(query_state_proxy, *select_stmt_);
+      insert_connector_->getOuterFragmentCount(query_state_proxy, *select_stmt_);
   size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
 
   // loop fragments
@@ -6708,7 +6534,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session,
     }
 
     // run the query
-    std::vector<AggregatedResult> query_results = leafs_connector_->query(
+    std::vector<AggregatedResult> query_results = insert_connector_->query(
         query_state_proxy, *select_stmt_, allowed_outer_fragment_indices, false);
 
     // export the results
@@ -6917,8 +6743,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
   // this now also ensures that access permissions are checked
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-      false, g_enable_watchdog, {}, SysCatalog::instance().isAggregator());
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
 
   query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
                                                      query_state->createQueryStateProxy(),
@@ -7436,11 +7262,8 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_query(
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-      false,
-      g_enable_watchdog,
-      {},
-      Catalog_Namespace::SysCatalog::instance().isAggregator());
+  const auto calciteOptimizationOption =
+      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
   const auto query_json = query_parsing::process_and_check_access_privileges(
                               calcite_mgr.get(),
                               query_state->createQueryStateProxy(),
@@ -7516,8 +7339,6 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_json(const std::string& query_json
     stmt = new Parser::GrantPrivilegesStmt(payload);
   } else if (ddl_command == "REVOKE_PRIVILEGE") {
     stmt = new Parser::RevokePrivilegesStmt(payload);
-  } else if (ddl_command == "CREATE_DATAFRAME") {
-    stmt = new Parser::CreateDataframeStmt(payload);
   } else if (ddl_command == "CREATE_MODEL") {
     stmt = new Parser::CreateModelStmt(payload);
   } else if (ddl_command == "DROP_MODEL") {

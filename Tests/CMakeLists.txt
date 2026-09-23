@@ -1,3 +1,8 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 ##########
 
 ########## Settings.
@@ -20,14 +25,16 @@ if(ENABLE_CUDA)
 endif()
 
 find_package(absl REQUIRED)
-#set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner fmt::fmt ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT} ${OS_SPECIFIC_LICENSING_LIBS})
 # If ENABLE_AWS_S3=off AwsS3_CURL_SUPPORT will be empty
 set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner absl::str_format ${MAPD_LIBRARIES}
-  ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES} ${AwsS3_CURL_SUPPORT})
-
+  ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES}
+  ${AwsS3_CURL_SUPPORT})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 
 set(TF_TEST_LIBS ${EXECUTE_TEST_LIBS})
+if(ENABLE_SYSTEM_TFS AND ENABLE_GFX_TFS AND ENABLE_RENDERING)
+  list(APPEND TF_TEST_LIBS QueryEngineShaderTemplates)
+endif()
 
 #parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)
@@ -42,6 +49,25 @@ if("${S3CLIENT_CONF}" MATCHES "AWS_REGION=([^\n]+)")
 endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
+# Keep unavailable public-S3 fixture tests named normally in source, but omit
+# them from CTest sanity runs until the fixture access issue is resolved.
+string(CONCAT IMPORT_EXPORT_UNAVAILABLE_S3_FILTER
+  "-ParquetSpecificS3PublicImportAndSelectTest.WithDebugTimersEnabled:"
+  "ImportTest.S3_Regex_path_filter_parquet_match:"
+  "ImportTest.S3_Regex_path_filter_parquet_no_match:"
+  "ImportTest.S3_One_csv_file:"
+  "ImportTest.S3_One_gz_file:"
+  "ImportTest.S3_One_bz2_file:"
+  "ImportTest.S3_One_tar_with_many_csv_files:"
+  "ImportTest.S3_One_tgz_with_many_csv_files:"
+  "ImportTest.S3_One_rar_with_many_csv_files:"
+  "ImportTest.S3_One_zip_with_many_csv_files:"
+  "ImportTest.S3_One_7z_with_many_csv_files:"
+  "ImportTest.S3_All_files:"
+  "ImportTest.S3_Regex_path_filter_match:"
+  "ImportTest.S3_Regex_path_filter_no_match:"
+  "*S3PublicImportAndSelectTest.OneInvalidSchema*")
+set(RASTER_TABLE_UNAVAILABLE_S3_FILTER "-S3IntegrationTest.Import")
 
 # Partition settings for the sanity_tests.
 set(HEAVYAI_PARTITION 0 CACHE STRING "Partition number to build or zero to disable partitioning.")
@@ -60,6 +86,8 @@ endif()
 ##########
 
 if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 1)  # Partition 1
+list(LENGTH SANITY_TEST_PROGRAMS _P1_START_P)
+list(LENGTH SANITY_TESTS _P1_START_T)
 
 ##########
 
@@ -84,13 +112,6 @@ list(APPEND SANITY_TEST_PROGRAMS ArrayTest)
 
 ##########
 
-add_executable(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest.cpp)
-target_link_libraries(ArrowCsvForeignStorageTest gtest ${EXECUTE_TEST_LIBS})
-add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS ArrowCsvForeignStorageTest)
-
-##########
-
 add_executable(BufferMgrTest BufferMgrTest.cpp)
 # CudaMgr constructor requires the dependency on QueryEngineCudaTargets and QueryEngine.
 if(ENABLE_CUDA)
@@ -100,7 +121,7 @@ endif()
 target_link_libraries(BufferMgrTest gtest DataMgr QueryEngine Geospatial LockMgr ${Parquet_LIBRARIES}
     ImportExport Parser)
 if(ENABLE_RENDERING)
-  target_link_libraries(BufferMgrTest GfxDriver GfxInterop)
+  target_link_libraries(BufferMgrTest QueryRenderer GfxDriver GfxInterop)
 endif()
 add_test(BufferMgrTest BufferMgrTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS BufferMgrTest)
@@ -150,14 +171,14 @@ list(APPEND SANITY_TEST_PROGRAMS CodeCacheTest)
 ##########
 
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
-target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
+target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS})
 add_test(CodeGeneratorTest CodeGeneratorTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS CodeGeneratorTest)
 
 ##########
 
 add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cpp)
-target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
+target_link_libraries(ColumnarResultsTest ${EXECUTE_TEST_LIBS})
 add_test(ColumnarResultsTest ColumnarResultsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ColumnarResultsTest)
 
@@ -205,12 +226,10 @@ list(APPEND SANITY_TEST_PROGRAMS CrossDatabaseQueryTest)
 
 ##########
 
-if(NOT MSVC)
-  add_executable(CtasUpdateTest CtasUpdateTest.cpp)
-  target_link_libraries(CtasUpdateTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-  add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS CtasUpdateTest)
-endif()
+add_executable(CtasUpdateTest CtasUpdateTest.cpp)
+target_link_libraries(CtasUpdateTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS CtasUpdateTest)
 
 ##########
 
@@ -218,7 +237,13 @@ if(ENABLE_CUDA)
   add_executable(CudaMgrTest CudaMgrTest.cpp)
 
   # CudaMgr constructor requires the dependency on QueryEngine.
-  target_link_libraries(CudaMgrTest CudaMgr gtest QueryEngine)
+  # Transitive deps must be listed explicitly for mold (used on aarch64) which
+  # does single-pass linking and does not re-scan archives like GNU ld does.
+  add_dependencies(CudaMgrTest QueryEngineCudaTargets)
+  target_link_libraries(CudaMgrTest CudaMgr gtest DataMgr QueryEngine Geospatial LockMgr ${Parquet_LIBRARIES} ImportExport Parser)
+  if(ENABLE_RENDERING)
+    target_link_libraries(CudaMgrTest QueryRenderer GfxDriver GfxInterop)
+  endif()
 
   add_test(CudaMgrTest CudaMgrTest ${TEST_ARGS})
   list(APPEND SANITY_TEST_PROGRAMS CudaMgrTest)
@@ -275,45 +300,84 @@ list(APPEND SANITY_TEST_PROGRAMS DumpRestoreTest)
 
 ##########
 
-if(NOT ENABLE_CUDA AND ENABLE_DBE)
-  add_executable(EmbeddedDatabaseTest EmbeddedDatabaseTest.cpp)
-  target_link_libraries(EmbeddedDatabaseTest gtest DBEngine)
-  add_test(EmbeddedDatabaseTest EmbeddedDatabaseTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS EmbeddedDatabaseTest)
-endif()
-
-##########
-
 add_executable(EncoderTest EncoderTest.cpp)
 target_link_libraries(EncoderTest gtest DataMgr Catalog Shared Logger Geospatial LockMgr ${Parquet_LIBRARIES}
     ImportExport Parser)
 if(ENABLE_RENDERING)
-  target_link_libraries(EncoderTest GfxDriver GfxInterop)
+  target_link_libraries(EncoderTest QueryRenderer GfxDriver GfxInterop)
 endif()
 add_test(EncoderTest EncoderTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS EncoderTest)
 
 ##########
 
+list(LENGTH SANITY_TEST_PROGRAMS _P1_END_P)
+list(LENGTH SANITY_TESTS _P1_END_T)
+math(EXPR _P1_COUNT_P "${_P1_END_P} - ${_P1_START_P}")
+math(EXPR _P1_COUNT_T "${_P1_END_T} - ${_P1_START_T}")
+if(_P1_COUNT_P GREATER 0)
+  list(SUBLIST SANITY_TEST_PROGRAMS ${_P1_START_P} ${_P1_COUNT_P} _P1_NEW_P)
+  list(APPEND PARTITION_1_TEST_PROGRAMS ${_P1_NEW_P})
+endif()
+if(_P1_COUNT_T GREATER 0)
+  list(SUBLIST SANITY_TESTS ${_P1_START_T} ${_P1_COUNT_T} _P1_NEW_T)
+  list(APPEND PARTITION_1_TEST_PROGRAMS ${_P1_NEW_T})
+endif()
 endif()  # Partition 1
 if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 2)  # Partition 2
+list(LENGTH SANITY_TEST_PROGRAMS _P2_START_P)
+list(LENGTH SANITY_TESTS _P2_START_T)
 
 ##########
 
-add_executable(ExecuteTest ExecuteTest.cpp ClusterTester.cpp)
+add_executable(ExecuteTest ExecuteTest.cpp)
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
-add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS ExecuteTest)
-add_test(NAME ExecuteTestTemporaryTables COMMAND ExecuteTest ${TEST_ARGS} "--use-temporary-tables")
-add_test(NAME ExecuteTestExecutorResourceMgr COMMAND ExecuteTest ${TEST_ARGS} "--enable-executor-resource-mgr")
+if(ENABLE_TSAN)
+  set(_EXECUTE_TEST_TSAN_SHARDS 4)
+  math(EXPR _EXECUTE_TEST_TSAN_LAST_SHARD "${_EXECUTE_TEST_TSAN_SHARDS} - 1")
+  foreach(_shard RANGE 0 ${_EXECUTE_TEST_TSAN_LAST_SHARD})
+    math(EXPR _shard_name_index "${_shard} + 1")
+    set(_test_name ExecuteTestTsanShard${_shard_name_index})
+    add_test(${_test_name} ExecuteTest ${TEST_ARGS})
+    set_tests_properties(${_test_name} PROPERTIES
+      ENVIRONMENT "GTEST_TOTAL_SHARDS=${_EXECUTE_TEST_TSAN_SHARDS};GTEST_SHARD_INDEX=${_shard}")
+    list(APPEND SANITY_TESTS ${_test_name})
+  endforeach()
+  list(APPEND SANITY_TEST_BUILD_TARGETS ExecuteTest)
+else()
+  add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
+  list(APPEND SANITY_TEST_PROGRAMS ExecuteTest)
+endif()
+# Positional add_test form: ctest looks up the binary relative to
+# WORKING_DIRECTORY at run time. The NAME ... COMMAND <target> ... form
+# resolves <target> to a TARGET_FILE absolute path at configure time,
+# which gets baked into CTestTestfile.cmake; that path no longer exists
+# once we run from a packed pr-build image (built at /__w/..., run at
+# /workspace/...), and ctest reports "Not Run" with an empty command.
+add_test(ExecuteTestTemporaryTables ExecuteTest ${TEST_ARGS} "--use-temporary-tables")
+add_test(ExecuteTestExecutorResourceMgr ExecuteTest ${TEST_ARGS} "--enable-executor-resource-mgr")
 list(APPEND INSANITY_TEST_PROGRAMS ExecuteTest)
 list(APPEND INSANITY_TESTS ExecuteTestTemporaryTables)
 list(APPEND INSANITY_TESTS ExecuteTestExecutorResourceMgr)
 
 ##########
 
+list(LENGTH SANITY_TEST_PROGRAMS _P2_END_P)
+list(LENGTH SANITY_TESTS _P2_END_T)
+math(EXPR _P2_COUNT_P "${_P2_END_P} - ${_P2_START_P}")
+math(EXPR _P2_COUNT_T "${_P2_END_T} - ${_P2_START_T}")
+if(_P2_COUNT_P GREATER 0)
+  list(SUBLIST SANITY_TEST_PROGRAMS ${_P2_START_P} ${_P2_COUNT_P} _P2_NEW_P)
+  list(APPEND PARTITION_2_TEST_PROGRAMS ${_P2_NEW_P})
+endif()
+if(_P2_COUNT_T GREATER 0)
+  list(SUBLIST SANITY_TESTS ${_P2_START_T} ${_P2_COUNT_T} _P2_NEW_T)
+  list(APPEND PARTITION_2_TEST_PROGRAMS ${_P2_NEW_T})
+endif()
 endif()  # Partition 2
 if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 3)  # Partition 3
+list(LENGTH SANITY_TEST_PROGRAMS _P3_START_P)
+list(LENGTH SANITY_TESTS _P3_START_T)
 
 ##########
 
@@ -354,7 +418,8 @@ list(APPEND SANITY_TEST_PROGRAMS ForeignServerDdlTest)
 ##########
 
 add_executable(ForeignStorageCacheTest ForeignStorageCacheTest.cpp)
-target_link_libraries(ForeignStorageCacheTest gtest ${MAPD_LIBRARIES} ${AwsS3_CURL_SUPPORT})
+target_link_libraries(ForeignStorageCacheTest gtest ${MAPD_LIBRARIES}
+  ${AwsS3_CURL_SUPPORT})
 add_test(ForeignStorageCacheTest ForeignStorageCacheTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ForeignStorageCacheTest)
 
@@ -375,7 +440,7 @@ list(APPEND SANITY_TEST_PROGRAMS ForeignDataWrapperUnitTest)
 ##########
 
 add_executable(FromTableReorderingTest FromTableReorderingTest.cpp)
-target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
+target_link_libraries(FromTableReorderingTest ${EXECUTE_TEST_LIBS})
 add_test(FromTableReorderingTest FromTableReorderingTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS FromTableReorderingTest)
 
@@ -388,16 +453,14 @@ list(APPEND SANITY_TEST_PROGRAMS GeospatialTest)
 
 ##########
 
-if(NOT MSVC)
-  add_executable(GeoTypesTest Geospatial/GeoTypesTest.cpp)
-  target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS} ${LibAwsS3_LIBRARIES})
-  if (NOT USE_ALTERNATE_LINKER STREQUAL "mold")
-    # Libraries are just out-of-order in the link.txt file which mold can handle.
-    target_link_libraries(GeoTypesTest ${GDAL_LIBRARIES})
-  endif()
-  add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS GeoTypesTest)
+add_executable(GeoTypesTest Geospatial/GeoTypesTest.cpp)
+target_link_libraries(GeoTypesTest gtest Logger Shared Geospatial ${OPENSSL_LIBRARIES})
+if (NOT USE_ALTERNATE_LINKER STREQUAL "mold")
+  # Libraries are just out-of-order in the link.txt file which mold can handle.
+  target_link_libraries(GeoTypesTest ${GDAL_LIBRARIES})
 endif()
+add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS GeoTypesTest)
 
 ##########
 
@@ -417,12 +480,13 @@ list(APPEND SANITY_TEST_PROGRAMS GroupByTest)
 
 ##########
 
-if(NOT MSVC)
-  add_executable(ImportExportTest ImportExportTest.cpp)
-  target_link_libraries(ImportExportTest gtest ${THRIFT_HANDLER_TEST_LIBRARIES})
-  add_test(ImportExportTest ImportExportTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS ImportExportTest)
-endif()
+add_executable(ImportExportTest ImportExportTest.cpp)
+target_link_libraries(ImportExportTest gtest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(ImportExportTest
+         ImportExportTest
+         ${TEST_ARGS}
+         "--gtest_filter=${IMPORT_EXPORT_UNAVAILABLE_S3_FILTER}")
+list(APPEND SANITY_TEST_PROGRAMS ImportExportTest)
 
 ##########
 
@@ -433,30 +497,34 @@ list(APPEND SANITY_TEST_PROGRAMS JoinHashTableTest)
 
 ##########
 
-if(NOT MSVC)
-  add_executable(JSONTest JSONTest.cpp)
-  target_link_libraries(JSONTest gtest Logger Shared)
-  add_test(JSONTest JSONTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS JSONTest)
-endif()
+add_executable(JSONTest JSONTest.cpp)
+add_dependencies(JSONTest system_dashboard_data)
+target_link_libraries(JSONTest gtest Logger Shared)
+add_test(JSONTest JSONTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS JSONTest)
+
+##########
 
 if(ENABLE_CUDA)
   add_executable(JumpBufferBenchmark JumpBufferBenchmark/JumpBufferBenchmark.cpp)
 
   # CudaMgr constructor requires the dependency on QueryEngine.
-  target_link_libraries(JumpBufferBenchmark CudaMgr benchmark::benchmark gtest QueryEngine)
+  # Explicit transitive deps required for mold linker (single-pass) on aarch64.
+  add_dependencies(JumpBufferBenchmark QueryEngineCudaTargets)
+  target_link_libraries(JumpBufferBenchmark benchmark::benchmark CudaMgr gtest DataMgr QueryEngine Geospatial LockMgr ${Parquet_LIBRARIES} ImportExport Parser)
+  if(ENABLE_RENDERING)
+    target_link_libraries(JumpBufferBenchmark QueryRenderer GfxDriver GfxInterop)
+  endif()
 
   target_include_directories(JumpBufferBenchmark INTERFACE ThirdParty/googlebenchmark/include)
+
+  list(APPEND CUDA_BENCHMARK_PROGRAMS JumpBufferBenchmark)
 endif()
 
 ##########
 
-##########
-
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  add_executable(LlmTransformIntegrationTest ee/LlmTransform/LlmTransformIntegrationTest.cpp)
-  target_link_libraries(LlmTransformIntegrationTest gtest Logger Shared mapd_thrift ThriftClient)
-endif()
+add_executable(LlmTransformIntegrationTest LlmTransform/LlmTransformIntegrationTest.cpp)
+target_link_libraries(LlmTransformIntegrationTest gtest Logger Shared mapd_thrift ThriftClient)
 
 ##########
 
@@ -498,29 +566,36 @@ endif()
 
 ##########
 
-if(NOT MSVC)
-  add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
-  target_link_libraries(OmniSQLCommandTest gtest Logger Shared ${Boost_LIBRARIES} mapd_thrift)
-  if(ENABLE_KRB5)
-    target_link_libraries(OmniSQLCommandTest krb5_gss Shared)
-  endif()
-  add_test(OmniSQLCommandTest OmniSQLCommandTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS OmniSQLCommandTest)
-endif()
+add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
+target_link_libraries(OmniSQLCommandTest gtest Logger Shared ${Boost_LIBRARIES} mapd_thrift)
+add_test(OmniSQLCommandTest OmniSQLCommandTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS OmniSQLCommandTest)
 
 ##########
 
-if(NOT MSVC)
-  add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
-  target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
-  add_test(OmniSQLUtilitiesTest OmniSQLUtilitiesTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS OmniSQLUtilitiesTest)
-endif()
+add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
+target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
+add_test(OmniSQLUtilitiesTest OmniSQLUtilitiesTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS OmniSQLUtilitiesTest)
 
 ##########
 
+list(LENGTH SANITY_TEST_PROGRAMS _P3_END_P)
+list(LENGTH SANITY_TESTS _P3_END_T)
+math(EXPR _P3_COUNT_P "${_P3_END_P} - ${_P3_START_P}")
+math(EXPR _P3_COUNT_T "${_P3_END_T} - ${_P3_START_T}")
+if(_P3_COUNT_P GREATER 0)
+  list(SUBLIST SANITY_TEST_PROGRAMS ${_P3_START_P} ${_P3_COUNT_P} _P3_NEW_P)
+  list(APPEND PARTITION_3_TEST_PROGRAMS ${_P3_NEW_P})
+endif()
+if(_P3_COUNT_T GREATER 0)
+  list(SUBLIST SANITY_TESTS ${_P3_START_T} ${_P3_COUNT_T} _P3_NEW_T)
+  list(APPEND PARTITION_3_TEST_PROGRAMS ${_P3_NEW_T})
+endif()
 endif()  # Partition 3
 if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 4)  # Partition 4
+list(LENGTH SANITY_TEST_PROGRAMS _P4_START_P)
+list(LENGTH SANITY_TESTS _P4_START_T)
 
 ##########
 
@@ -535,7 +610,7 @@ add_executable(ParallelExecutorsTest ParallelExecutorsTest.cpp)
 target_link_libraries(ParallelExecutorsTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(ParallelExecutorsTest ParallelExecutorsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ParallelExecutorsTest)
-add_test(NAME ParallelExecutorsResourceMgrTest COMMAND ParallelExecutorsTest ${TEST_ARGS} "--enable-executor-resource-mgr")
+add_test(ParallelExecutorsResourceMgrTest ParallelExecutorsTest ${TEST_ARGS} "--enable-executor-resource-mgr")
 list(APPEND SANITY_TESTS ParallelExecutorsResourceMgrTest)
 
 ##########
@@ -547,12 +622,10 @@ list(APPEND SANITY_TEST_PROGRAMS PersistentStorageTest)
 
 ##########
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  add_executable(PkiEncryptorTest ee/PkiEncryptorTest.cpp)
-  target_link_libraries(PkiEncryptorTest gtest Logger Shared)
-  add_test(PkiEncryptorTest PkiEncryptorTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS PkiEncryptorTest)
-endif()
+add_executable(PkiEncryptorTest PkiEncryptorTest.cpp)
+target_link_libraries(PkiEncryptorTest gtest Logger Shared)
+add_test(PkiEncryptorTest PkiEncryptorTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS PkiEncryptorTest)
 
 ##########
 
@@ -564,8 +637,7 @@ list(APPEND SANITY_TEST_PROGRAMS ReadOnlyTest)
 ##########
 
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
-target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS} ${LibAwsS3_LIBRARIES})
-#target_link_libraries(ResultSetBaselineRadixSortTest gtest ${MAPD_LIBRARIES} ${AwsS3_CURL_SUPPORT})
+target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS ResultSetBaselineRadixSortTest)
 
@@ -579,13 +651,11 @@ list(APPEND SANITY_TEST_PROGRAMS ResultSetTest)
 ##########
 
 if(ENABLE_SYSTEM_TFS)
-  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    if(ENABLE_RF_PROP_TFS)
-      add_executable(RFPropTableFunctionsTest ee/SystemTableFunctions/RFPropTableFunctionsTest.cpp)
-      target_link_libraries(RFPropTableFunctionsTest ${EXECUTE_TEST_LIBS})
-      add_test(RFPropTableFunctionsTest RFPropTableFunctionsTest ${TEST_ARGS})
-      list(APPEND SANITY_TEST_PROGRAMS RFPropTableFunctionsTest)
-    endif()
+  if(ENABLE_RF_PROP_TFS)
+    add_executable(RFPropTableFunctionsTest SystemTableFunctions/RFPropTableFunctionsTest.cpp)
+    target_link_libraries(RFPropTableFunctionsTest ${EXECUTE_TEST_LIBS})
+    add_test(RFPropTableFunctionsTest RFPropTableFunctionsTest ${TEST_ARGS})
+    list(APPEND SANITY_TEST_PROGRAMS RFPropTableFunctionsTest)
   endif()
 endif()
 
@@ -652,9 +722,9 @@ endif()
 list(APPEND SANITY_TEST_PROGRAMS StringDictionaryTest)
 
 if(ENABLE_TSAN)
-  add_test(NAME StringDictionaryHashTest COMMAND StringDictionaryTest ${TEST_ARGS} "--enable-string-dict-hash-cache" "--string-dictionary-size=10000")
+  add_test(StringDictionaryHashTest StringDictionaryTest ${TEST_ARGS} "--enable-string-dict-hash-cache" "--string-dictionary-size=10000")
 else()
-  add_test(NAME StringDictionaryHashTest COMMAND StringDictionaryTest ${TEST_ARGS} "--enable-string-dict-hash-cache")
+  add_test(StringDictionaryHashTest StringDictionaryTest ${TEST_ARGS} "--enable-string-dict-hash-cache")
 endif()
 list(APPEND SANITY_TESTS StringDictionaryHashTest)
 
@@ -717,12 +787,10 @@ list(APPEND SANITY_TEST_PROGRAMS TopKTest)
 
 ##########
 
-if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-  add_executable(UdfTest UdfTest.cpp)
-  target_link_libraries(UdfTest gtest UdfCompiler ${EXECUTE_TEST_LIBS})
-  add_test(UdfTest UdfTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS UdfTest)
-endif()
+add_executable(UdfTest UdfTest.cpp)
+target_link_libraries(UdfTest gtest UdfCompiler ${EXECUTE_TEST_LIBS})
+add_test(UdfTest UdfTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS UdfTest)
 
 ##########
 
@@ -740,17 +808,18 @@ list(APPEND SANITY_TEST_PROGRAMS UpdelStorageTest)
 
 ##########
 
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  add_executable(UserMappingDdlTest ee/UserMappingDdlTest.cpp)
-  target_link_libraries(UserMappingDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-  add_test(UserMappingDdlTest UserMappingDdlTest ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS UserMappingDdlTest)
+add_executable(UserMappingDdlTest UserMappingDdlTest.cpp)
+target_link_libraries(UserMappingDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(UserMappingDdlTest UserMappingDdlTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS UserMappingDdlTest)
 
-  add_executable(RasterTableTests ee/RasterTableTests.cpp)
-  target_link_libraries(RasterTableTests ${THRIFT_HANDLER_TEST_LIBRARIES})
-  add_test(RasterTableTests RasterTableTests ${TEST_ARGS})
-  list(APPEND SANITY_TEST_PROGRAMS RasterTableTests)
-endif()
+add_executable(RasterTableTests RasterTableTests.cpp)
+target_link_libraries(RasterTableTests ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(RasterTableTests
+         RasterTableTests
+         ${TEST_ARGS}
+         "--gtest_filter=${RASTER_TABLE_UNAVAILABLE_S3_FILTER}")
+list(APPEND SANITY_TEST_PROGRAMS RasterTableTests)
 
 ##########
 
@@ -761,7 +830,50 @@ list(APPEND SANITY_TEST_PROGRAMS SessionsStoreTest)
 
 ##########
 
+list(LENGTH SANITY_TEST_PROGRAMS _P4_END_P)
+list(LENGTH SANITY_TESTS _P4_END_T)
+math(EXPR _P4_COUNT_P "${_P4_END_P} - ${_P4_START_P}")
+math(EXPR _P4_COUNT_T "${_P4_END_T} - ${_P4_START_T}")
+if(_P4_COUNT_P GREATER 0)
+  list(SUBLIST SANITY_TEST_PROGRAMS ${_P4_START_P} ${_P4_COUNT_P} _P4_NEW_P)
+  list(APPEND PARTITION_4_TEST_PROGRAMS ${_P4_NEW_P})
+endif()
+if(_P4_COUNT_T GREATER 0)
+  list(SUBLIST SANITY_TESTS ${_P4_START_T} ${_P4_COUNT_T} _P4_NEW_T)
+  list(APPEND PARTITION_4_TEST_PROGRAMS ${_P4_NEW_T})
+endif()
 endif()  # Partition 4
+
+##########
+
+########## Other Insanity Tests
+
+##########
+
+find_library(URIPARSER_LIBRARY uriparser REQUIRED)
+add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
+target_link_libraries(ArrowIpcIntegrationTest gtest absl::str_format ThriftClient mapd_thrift Logger Shared ${Arrow_LIBRARIES} ${CUDA_LIBRARIES} ${URIPARSER_LIBRARY})
+add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
+list(APPEND INSANITY_TEST_PROGRAMS ArrowIpcIntegrationTest)
+
+##########
+
+add_executable(MultiInstanceTest MultiInstanceTest.cpp)
+target_link_libraries(MultiInstanceTest gtest ${MAPD_LIBRARIES} ${CURL_LIBRARIES})
+add_dependencies(MultiInstanceTest thrift_gen)
+add_dependencies(MultiInstanceTest heavydb) # test invokes heavydb bin directly
+add_dependencies(MultiInstanceTest mapd_java_components)
+add_test(MultiInstanceTest MultiInstanceTest ${TEST_ARGS})
+list(APPEND INSANITY_TEST_PROGRAMS MultiInstanceTest)
+
+##########
+
+if(ENABLE_AWS_S3)
+  add_executable(S3SelectClientTest S3SelectClientTest.cpp)
+  target_link_libraries(S3SelectClientTest ${EXECUTE_TEST_LIBS})
+  add_test(S3SelectClientTest S3SelectClientTest ${TEST_ARGS})
+  list(APPEND INSANITY_TEST_PROGRAMS S3SelectClientTest)
+endif()
 
 ##########
 
@@ -769,31 +881,9 @@ endif()  # Partition 4
 
 ##########
 
+add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
+target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
 
-if(NOT MSVC)
-  find_library(URIPARSER_LIBRARY uriparser REQUIRED)
-  add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
-  target_link_libraries(ArrowIpcIntegrationTest gtest absl::str_format ThriftClient mapd_thrift Logger Shared ${Arrow_LIBRARIES} ${CUDA_LIBRARIES} ${URIPARSER_LIBRARY})
-  add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
-endif()
-
-##########
-
-if(NOT MSVC)
-  add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
-  target_link_libraries(CtasIntegrationTest gtest Logger Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
-endif()
-
-##########
-
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  add_executable(MultiInstanceTest ee/MultiInstanceTest.cpp)
-  target_link_libraries(MultiInstanceTest gtest ${MAPD_LIBRARIES} ${CURL_LIBRARIES} ${OS_SPECIFIC_LICENSING_LIBS})
-  add_dependencies(MultiInstanceTest thrift_gen)
-  add_dependencies(MultiInstanceTest heavydb) # test invokes heavydb bin directly
-  add_dependencies(MultiInstanceTest mapd_java_components)
-  add_test(MultiInstanceTest, MultiInstanceTest ${TEST_ARGS})
-endif()
 
 ##########
 
@@ -807,24 +897,15 @@ target_link_libraries(GeospatialBenchmark benchmark ${EXECUTE_TEST_LIBS})
 
 ##########
 
-if(NOT MSVC)
-  add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
-  target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES} ${ZLIB_LIBRARIES})
-endif()
+add_executable(QuantileCpuTest Quantile/QuantileCpuTest.cpp)
+target_link_libraries(QuantileCpuTest gtest ${MAPD_LIBRARIES} ${ZLIB_LIBRARIES})
 
 ##########
 
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} rg3_bcrypt)
-add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
+# RunQueryLoop is a dev tool requiring --path and --query args; not a ctest test.
 
-##########
-
-if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND ENABLE_AWS_S3)
-  add_executable(S3SelectClientTest ee/S3SelectClientTest.cpp)
-  target_link_libraries(S3SelectClientTest ${EXECUTE_TEST_LIBS})
-  add_test(S3SelectClientTest S3SelectClientTest ${TEST_ARGS})
-endif()
 
 ##########
 
@@ -858,7 +939,7 @@ target_link_libraries(OneDALBenchmark benchmark ${EXECUTE_TEST_LIBS})
 ##########
 
 add_executable(UtilTest UtilTest.cpp)
-target_link_libraries(UtilTest Utils gtest Logger Shared ${Boost_LIBRARIES} OSDependent)
+target_link_libraries(UtilTest Utils gtest Logger Shared ${Boost_LIBRARIES})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 
 ##########
@@ -885,27 +966,35 @@ add_custom_target(init_test_dir
     USES_TERMINAL)
 
 if (ENABLE_INIT_DIR)
-  foreach(PROGRAM ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS})
+  foreach(PROGRAM ${SANITY_TEST_PROGRAMS} ${SANITY_TEST_BUILD_TARGETS} ${INSANITY_TEST_PROGRAMS})
     add_dependencies(${PROGRAM} init_test_dir)
   endforeach()
 endif()
 
 list(APPEND SANITY_TESTS ${SANITY_TEST_PROGRAMS})
+list(APPEND SANITY_TEST_BUILD_TARGETS ${SANITY_TEST_PROGRAMS})
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "_sanity_")
+# Also tag each test with its partition number so a HEAVYAI_PARTITION=0 build
+# (which compiles all four partitions' tests) can still be run partition-by-
+# partition at test time via ctest --label-regex "_partitionN_".
+foreach(_n RANGE 1 ${HEAVYAI_MAX_PARTITION})
+  if(PARTITION_${_n}_TEST_PROGRAMS)
+    set_property(TEST ${PARTITION_${_n}_TEST_PROGRAMS} APPEND PROPERTY LABELS "_partition${_n}_")
+  endif()
+endforeach()
 
-add_custom_target(sanity_tests_build_only DEPENDS init_test_dir ${SANITY_TEST_PROGRAMS})
+add_custom_target(sanity_tests_build_only DEPENDS init_test_dir ${SANITY_TEST_BUILD_TARGETS})
 
 add_custom_target(sanity_tests
     COMMAND env AWS_REGION=${AWS_REGION}
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose --label-regex "_sanity_"
-    DEPENDS init_test_dir ${SANITY_TEST_PROGRAMS}
+    DEPENDS init_test_dir ${SANITY_TEST_BUILD_TARGETS}
     USES_TERMINAL)
 
 if(${HEAVYAI_PARTITION} EQUAL 0 OR ${HEAVYAI_PARTITION} EQUAL 1)  # Partition 1
 
-# list(APPEND INSANITY_TESTS ${INSANITY_TEST_PROGRAMS})
 set_tests_properties(${INSANITY_TESTS} PROPERTIES LABELS "_insanity_")
 
 add_custom_target(insanity_tests
@@ -913,7 +1002,7 @@ add_custom_target(insanity_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose --label-regex "\"_sanity_|_insanity_\""
-    DEPENDS init_test_dir ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS}
+    DEPENDS init_test_dir ${SANITY_TEST_BUILD_TARGETS} ${INSANITY_TEST_PROGRAMS}
     USES_TERMINAL)
 
 endif()  # Partition 1
@@ -923,7 +1012,7 @@ add_custom_target(all_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS init_test_dir ${SANITY_TEST_PROGRAMS} ${INSANITY_TEST_PROGRAMS} UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
+    DEPENDS init_test_dir ${SANITY_TEST_BUILD_TARGETS} ${INSANITY_TEST_PROGRAMS} UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest ${CUDA_BENCHMARK_PROGRAMS}
     USES_TERMINAL)
 
 add_custom_target(storage_perf_tests
@@ -933,17 +1022,3 @@ add_custom_target(storage_perf_tests
 add_custom_target(topk_tests
     COMMAND ${CMAKE_CTEST_COMMAND} --verbose --tests-regex "\"(TopKTest)\""
     DEPENDS init_test_dir TopKTest)
-
-if(ENABLE_DBE)
-  set(DBE_TEST_PROGRAMS EmbeddedDatabaseTest)
-  set_tests_properties(${DBE_TEST_PROGRAMS} PROPERTIES LABELS "embedded")
-  add_custom_target(dbe_all_tests
-    COMMAND env AWS_REGION=${AWS_REGION}
-                AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                ${CMAKE_CTEST_COMMAND} --verbose --label-regex embedded
-    DEPENDS init_test_dir DBEngine ${DBE_TEST_PROGRAMS}
-    USES_TERMINAL)
-  add_dependencies(dbe_all_tests dbe4py-test)
-  add_dependencies(all_tests dbe4py-test)
-endif()

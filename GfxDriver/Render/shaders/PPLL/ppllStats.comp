@@ -1,0 +1,48 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_KHR_shader_subgroup_vote: enable
+#extension GL_KHR_shader_subgroup_arithmetic: enable
+//</extensions>
+
+//<includes>
+#include "PPLL/ppllCommon.h"
+//</includes>
+
+layout (local_size_x = <workgroupSize>, local_size_y = 1, local_size_z = 1) in;
+
+layout(r32ui) uniform restrict readonly uimage2D fragment_count_image;
+
+layout(std430) buffer PPLL_STAT_COUNTERS_SSBO {
+  PPLLFragmentStats stats;
+};
+
+layout(std430, binding = 0) uniform IMAGE_INFO_UBO {
+  ImageInfo image_info;
+};
+
+void main() {
+  if (gl_GlobalInvocationID.x >= image_info.width) {
+    return;
+  }
+
+  uint32_t fragment_count = imageLoad(fragment_count_image, ivec2(gl_GlobalInvocationID.xy)).r;
+  uint32_t deep_pixel_fragment_count = fragment_count > 1 ? fragment_count : 0;
+
+  bool have_fragments = fragment_count > 0;
+
+  if (subgroupAny(have_fragments)) {
+    uint32_t subgroup_sum = subgroupAdd(fragment_count);
+    uint32_t subgroup_max = subgroupMax(fragment_count);
+    uint32_t subgroup_deep_pixel_sum = subgroupAdd(deep_pixel_fragment_count);
+
+    if (subgroupElect()) {
+      atomicAdd(stats.total_fragment_count, subgroup_sum);
+      atomicAdd(stats.deep_pixel_fragment_count, subgroup_deep_pixel_sum);
+      atomicMax(stats.max_per_pixel_fragment_count, subgroup_max);
+    }
+  }
+}

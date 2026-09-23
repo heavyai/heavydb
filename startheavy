@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 set -e
 
@@ -7,7 +9,6 @@ function get_script_location()    # https://stackoverflow.com/a/246128
     SOURCE="${BASH_SOURCE[0]}"
     while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
       DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
-      # Note symlinks will fail on macOS due to missing readlink command
       SOURCE="$(readlink "$SOURCE")"
       [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
     done
@@ -41,6 +42,7 @@ if hash setsid 2>/dev/null; then
 else
     # setsid missing on macOS
     # this should still work but not quite as cleanly as with setsid
+    # @TODO now that we've deprecated macOS support, we could remove this fallback code and just require setsid
     PGID=$$
     export PGID
     if [ "$TTY" != "" ]; then

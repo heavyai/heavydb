@@ -1,0 +1,126 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_EXT_buffer_reference2 : require
+//</extensions>
+
+//<includes>
+#include "RaytracingTest/BlasMultiMesh_payload.glsl"
+#include "Shading/rtShadowsSimple.glsl"
+#include "Shading/shading.glsl"
+//</includes>
+
+layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
+
+hitAttributeEXT vec2 attribs;
+
+// Data layout for a Vertex
+struct Vertex {
+  vec3 pos;
+  vec3 normal;
+};
+
+// Device addresses for a Mesh object
+struct MeshObjectDesc {
+  uint64_t vbo_address;               // vertex buffer base address
+  uint64_t ibo_address;               // index buffer base address
+  uint64_t model_transform_address;   // 4x4 object to world address (BLAS component only)
+  uint64_t normal_transform_address;  // 3x3 normal object to world transform (BLAS
+                                      // component only)
+};
+
+// Declare buffer_reference layouts required for proper element strides
+layout(buffer_reference, scalar) buffer Vertices {
+  Vertex v[];
+};
+layout(buffer_reference, scalar) buffer Indices {
+  ivec3 i[];
+};
+layout(buffer_reference, scalar) buffer ModelTransforms {
+  mat4 mm[];
+};
+layout(buffer_reference, scalar) buffer NormalTransforms {
+  mat3 nm[];
+};
+layout(buffer_reference, scalar) buffer MeshObjectDescs {
+  MeshObjectDesc od[];
+};
+layout(buffer_reference, scalar) buffer Colors {
+  vec3 c[];
+};
+
+// MeshObjectDesc and Colors buffers addresses are passed using push constants for
+// more flexibility
+layout(push_constant) uniform CLOSEST_HIT_PUSH_CONSTANTS {
+  uint64_t obj_descs_address;
+  uint64_t colors_address;
+}
+pushConstants;
+
+void main() {
+  // "cast" the MeshObjectDescs and Colors BDAs to allow indexed based lookup
+  MeshObjectDescs obj_descs = MeshObjectDescs(pushConstants.obj_descs_address);
+  Colors colors = Colors(pushConstants.colors_address);
+  // gl_GeometryIndexEXT provides the index of the mesh added to BLASes and is the only
+  // way to look up the Mesh ID when adding multiple objects to a BLAS
+  MeshObjectDesc obj_desc = obj_descs.od[gl_GeometryIndexEXT];
+  vec3 color = colors.c[gl_GeometryIndexEXT];
+
+  // "cast" MeshObjectDesc device addresses for data lookup
+  Indices indices = Indices(obj_desc.ibo_address);
+  Vertices vertices = Vertices(obj_desc.vbo_address);
+  ModelTransforms model_transforms = ModelTransforms(obj_desc.model_transform_address);
+  NormalTransforms normal_transforms =
+      NormalTransforms(obj_desc.normal_transform_address);
+
+  // Get transforms from the BDA
+  // The base address stored in the MeshObjectDesc is the exact location of the transform
+  // in the Buffer so index is 0
+  mat4 model_transform = model_transforms.mm[0];
+  mat3 normal_transform = normal_transforms.nm[0];
+
+  // Get indices for the triangle
+  ivec3 index = indices.i[gl_PrimitiveID];
+
+  // Get vertex data for the triangle
+  Vertex v0 = vertices.v[index.x];
+  Vertex v1 = vertices.v[index.y];
+  Vertex v2 = vertices.v[index.z];
+
+  // Interpolate object space position and normal
+  const vec3 barycentric_coords =
+      vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
+  const vec3 pos = v0.pos * barycentric_coords.x + v1.pos * barycentric_coords.y +
+                   v2.pos * barycentric_coords.z;
+  const vec3 normal =
+      normalize(v0.normal * barycentric_coords.x + v1.normal * barycentric_coords.y +
+                v2.normal * barycentric_coords.z);
+
+  // Transform hit-point to world space
+  const vec3 world_pos = vec3(gl_ObjectToWorldEXT * model_transform * vec4(pos, 1.0));
+
+  // Transform normal to world space
+  // (multiply on right with world->obj = inverse transpose of obj->world)
+  const vec3 world_normal =
+      normalize(normal_transform * normal * mat3(gl_WorldToObjectEXT));
+
+  // Evaluate shading, getting color and reflectivity at the hit point
+  vec3 reflectivity = vec3(0);
+  MaterialProperties material = materials[0];
+  material.albedo = vec4(color, 1.0);
+  vec4 shaded_color = shade_point(material, world_pos, world_normal, -gl_WorldRayDirectionEXT, reflectivity);
+
+  // Write values to payload
+  rayPayload.color = shaded_color.rgb * rayPayload.reflectivity;
+  rayPayload.position = world_pos;
+  rayPayload.normal = world_normal;
+  rayPayload.face_normal = normal_transform *
+                           normalize(cross(v1.pos - v0.pos, v2.pos - v0.pos)) *
+                           mat3(gl_WorldToObjectEXT);
+  rayPayload.reflectivity = rayPayload.reflectivity * reflectivity;
+}

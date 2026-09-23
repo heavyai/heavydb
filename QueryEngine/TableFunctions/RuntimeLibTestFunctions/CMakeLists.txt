@@ -1,3 +1,8 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 if(ENABLE_RUNTIME_LIBS)
     set(RUNTIME_TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeLibTestTableFunctions.hpp)
     set(runtime_table_funcion_source_files ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp)

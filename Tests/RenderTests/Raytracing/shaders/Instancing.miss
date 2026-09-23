@@ -1,0 +1,28 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_ray_tracing : require
+//</extensions>
+
+struct RayPayload {
+  vec3 color;
+  vec3 reflectivity;
+	vec3 position;     // hit point in world space
+	vec3 normal;       // surface normal in world space
+  int depth;
+};
+
+layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
+
+void main() {
+	// View-independent background gradient to simulate a basic sky background
+	const vec3 gradient_start = vec3(0.2, 0.3, 1.0);
+	const vec3 gradient_end = vec3(0.8, 0.6, 0.3);
+
+  // Write required outputs to payload
+  rayPayload.color = mix(gradient_start, gradient_end, (gl_WorldRayDirectionEXT.y + 1.0) * 0.5);
+  rayPayload.reflectivity = vec3(0.0);
+}

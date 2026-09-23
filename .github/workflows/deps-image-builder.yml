@@ -3,12 +3,295 @@
 
 name: Deps Image Builder
 
+run-name: >-
+  Deps | ${{ inputs.distro }}${{ inputs.distro == 'ubuntu' && inputs.ubuntu_version || '' }} | ${{ inputs.lib_type }} | cuda${{ inputs.cuda_version }} | ${{ inputs.arch }} | ${{ inputs.pr_number != '' && format('#{0} | {1}', inputs.pr_number, inputs.pr_title) || inputs.image_tag || 'today' }}
+
 on:
   workflow_dispatch:
+    # The cuda_version / ubuntu_version / lib_type defaults below are the single
+    # source for the deps flavor: /test deps omits these so they apply, and
+    # pr-required-checks.yml's env block mirrors them for the images it pulls.
+    # Bump them together.
+    inputs:
+      scripts_ref:
+        description: 'Branch/ref to checkout for build scripts and Dockerfile'
+        type: string
+        default: 'master'
+      cuda_version:
+        description: 'CUDA version (e.g. 12.9.2)'
+        type: string
+        default: '12.9.2'
+      distro:
+        description: 'Target distro (all = ubuntu + rockylinux8)'
+        type: choice
+        options:
+          - ubuntu
+          - rockylinux8
+          - all
+        default: ubuntu
+      ubuntu_version:
+        description: 'Ubuntu version (ignored for rockylinux8)'
+        type: choice
+        options:
+          - '22.04'
+        default: '22.04'
+      lib_type:
+        description: 'Deps library type (rockylinux8 supports static only)'
+        type: choice
+        options:
+          - static
+          - shared
+        default: static
+      arch:
+        description: 'Target architecture'
+        type: choice
+        options:
+          - x86_64
+          - aarch64
+          - both
+        default: x86_64
+      image_tag:
+        description: 'Tag for the output GHCR image (defaults to current date YYYY-MM-DD)'
+        type: string
+        default: ''
+      tag_latest:
+        description: "Also tag and push the image as 'latest'. Tests are built using images tagged as 'latest'."
+        type: boolean
+        default: false
+      trigger_pr_checks:
+        description: 'After a successful build, dispatch PR Required Checks (deps-build mode) against the built images.'
+        type: boolean
+        default: false
+      pr_head_sha:
+        description: 'PR head SHA to test (required when trigger_pr_checks=true).'
+        type: string
+        default: ''
+      pr_number:
+        description: 'PR number (set by /test deps dispatcher).'
+        type: string
+        default: ''
+      pr_title:
+        description: 'PR title (set by /test deps dispatcher).'
+        type: string
+        default: ''
 
 jobs:
-  placeholder:
-    runs-on: linux-amd64-cpu16
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build-matrix.outputs.matrix }}
+      image_tag: ${{ steps.compute-tag.outputs.image_tag }}
     steps:
-      - name: placeholder
-        run: true
+      - name: Compute image tag
+        id: compute-tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          [ -z "$TAG" ] && TAG="$(date -u +%Y%m%d)"
+          echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build matrix
+        id: build-matrix
+        run: |
+          build_entry() {
+            local DISTRO="$1"
+            local ARCH="$2"
+            local RUNNER BASE OUTPUT PARAM_DIR DEPS_SCRIPT
+            if [ "$ARCH" = "aarch64" ]; then
+              RUNNER="linux-arm64-cpu16"
+            else
+              RUNNER="linux-amd64-cpu32"
+            fi
+            if [ "$DISTRO" = "rockylinux8" ]; then
+              BASE="nvcr.io/nvidia/cuda:${{ inputs.cuda_version }}-devel-rockylinux8"
+              OUTPUT="ghcr.io/${{ github.repository }}/core-build-rockylinux8-${{ inputs.lib_type }}-cuda${{ inputs.cuda_version }}-${ARCH}"
+              PARAM_DIR="docker/build/rockylinux8_param"
+              DEPS_SCRIPT="mapd-deps-rockylinux.sh"
+            else
+              BASE="nvcr.io/nvidia/cuda:${{ inputs.cuda_version }}-devel-ubuntu${{ inputs.ubuntu_version }}"
+              OUTPUT="ghcr.io/${{ github.repository }}/core-build-ubuntu${{ inputs.ubuntu_version }}-${{ inputs.lib_type }}-cuda${{ inputs.cuda_version }}-${ARCH}"
+              PARAM_DIR="docker/build/ubuntu_param"
+              DEPS_SCRIPT="mapd-deps-ubuntu.sh"
+            fi
+            printf '{"distro":"%s","arch":"%s","runner":"%s","base_image":"%s","output_image":"%s","param_dir":"%s","deps_script":"%s"}' \
+              "$DISTRO" "$ARCH" "$RUNNER" "$BASE" "$OUTPUT" "$PARAM_DIR" "$DEPS_SCRIPT"
+          }
+
+          # Expand the requested distro(s) × arch(es) into matrix entries.
+          # distro=all builds ubuntu + rockylinux8; arch=both builds x86_64 + aarch64.
+          case "${{ inputs.distro }}" in
+            all) DISTROS="ubuntu rockylinux8" ;;
+            *)   DISTROS="${{ inputs.distro }}" ;;
+          esac
+          case "${{ inputs.arch }}" in
+            both) ARCHES="x86_64 aarch64" ;;
+            *)    ARCHES="${{ inputs.arch }}" ;;
+          esac
+
+          ENTRIES=""
+          for D in $DISTROS; do
+            for A in $ARCHES; do
+              ENTRY=$(build_entry "$D" "$A")
+              if [ -z "$ENTRIES" ]; then ENTRIES="$ENTRY"; else ENTRIES="$ENTRIES,$ENTRY"; fi
+            done
+          done
+          MATRIX="{\"include\":[$ENTRIES]}"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: setup
+    strategy:
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    container:
+      # Run directly inside the target CUDA image so the mapd-deps build script
+      # executes in the right environment without Docker-in-Docker volume issues.
+      image: ${{ matrix.base_image }}
+      options: --volume /var/run/docker.sock:/var/run/docker.sock
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Install tools
+        run: |
+          if [ "${{ matrix.distro }}" = "rockylinux8" ]; then
+            dnf install -y git curl 'dnf-command(config-manager)'
+            dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo
+            dnf install -y gh
+            dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+            dnf install -y docker-ce-cli
+          else
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -q git curl ca-certificates gh
+            install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+            chmod a+r /etc/apt/keyrings/docker.asc
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu jammy stable" \
+              > /etc/apt/sources.list.d/docker.list
+            apt-get update -qq
+            apt-get install -y -q docker-ce-cli
+          fi
+
+      - name: Checkout scripts branch
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.scripts_ref }}
+          path: scripts-src
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build deps tarball
+        # The mapd-deps build script runs directly in this container (the CUDA
+        # base image), writing the output tarball into scripts-src/scripts/.
+        working-directory: scripts-src/scripts
+        run: |
+          echo '#!/bin/sh' > /usr/sbin/sudo
+          echo 'exec "$@"' >> /usr/sbin/sudo
+          chmod +x /usr/sbin/sudo
+          # Rocky's --update-packages runs a full dnf upgrade; the base's pinned
+          # CUDA packages (cuda-cccl/cudart) otherwise fail with "cannot install
+          # the best update candidate", so pass --nobest to let dnf proceed.
+          UPDATE_OPTS=""
+          [ "${{ matrix.distro }}" = "rockylinux8" ] && UPDATE_OPTS="--update-options=--nobest"
+          SUFFIX="${{ needs.setup.outputs.image_tag }}" ./${{ matrix.deps_script }} \
+            --${{ inputs.lib_type }} \
+            --update-packages \
+            $UPDATE_OPTS \
+            --savespace \
+            --compress \
+            --cache=/tmp/dep-cache
+        env:
+          USER: root
+
+      - name: Prepare Docker build context
+        run: |
+          TARBALL=$(find scripts-src/scripts -name 'mapd-deps-*.tar.xz' | head -1)
+          scripts-src/scripts/ci/prepare_deps_context.sh \
+            "scripts-src/${{ matrix.param_dir }}" \
+            "$TARBALL" \
+            --distro=${{ matrix.distro }}
+
+      - name: Build Docker image
+        # docker build sends context as a tar stream via the socket — the daemon
+        # never needs to access HOST filesystem paths, so this works from a container.
+        run: |
+          scripts-src/scripts/ci/build_deps_image.sh \
+            "scripts-src/${{ matrix.param_dir }}" \
+            "${{ matrix.base_image }}" \
+            "${{ matrix.output_image }}" \
+            "${{ needs.setup.outputs.image_tag }}" \
+            "${{ inputs.lib_type }}" \
+            --distro=${{ matrix.distro }}
+
+      - name: Push Docker image
+        run: docker push "${{ matrix.output_image }}:${{ needs.setup.outputs.image_tag }}"
+
+      - name: Tag and push as latest
+        if: inputs.tag_latest
+        run: |
+          docker tag "${{ matrix.output_image }}:${{ needs.setup.outputs.image_tag }}" "${{ matrix.output_image }}:latest"
+          docker push "${{ matrix.output_image }}:latest"
+
+      - name: Summary
+        run: |
+          echo "### Deps image pushed (${{ matrix.distro }} ${{ matrix.arch }})" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`${{ matrix.output_image }}:${{ needs.setup.outputs.image_tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ inputs.tag_latest }}" = "true" ]; then
+            echo "\`${{ matrix.output_image }}:latest\`" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # chain-pr-checks — when dispatched by `/test deps` (trigger_pr_checks=true),
+  # hand off to PR Required Checks in deps-build mode against the images just
+  # built (identified by the shared image_tag). On a build failure, post a
+  # failing `pr-required-checks` status directly so the dispatcher's pending
+  # status doesn't hang forever.
+  # ---------------------------------------------------------------------------
+  chain-pr-checks:
+    needs: [setup, build]
+    if: ${{ inputs.trigger_pr_checks && always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write     # dispatch pr-required-checks.yml
+      statuses: write    # post the failure status on a broken deps build
+    steps:
+      - name: Dispatch PR Required Checks (deps-build)
+        if: ${{ needs.build.result == 'success' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            await github.rest.actions.createWorkflowDispatch({
+              owner, repo,
+              workflow_id: 'pr-required-checks.yml',
+              ref: context.payload.repository.default_branch,
+              inputs: {
+                sha1: '${{ inputs.pr_head_sha }}',
+                jobs: 'deps-build',
+                deps_tag: '${{ needs.setup.outputs.image_tag }}',
+                pr_number: ${{ toJSON(inputs.pr_number) }},
+                pr_title: ${{ toJSON(inputs.pr_title) }},
+              } });
+            core.info('Dispatched pr-required-checks (deps-build) against tag ${{ needs.setup.outputs.image_tag }}.');
+
+      - name: Report deps build failure to the PR
+        if: ${{ needs.build.result != 'success' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = '${{ inputs.pr_head_sha }}';
+            if (!sha) { core.info('No pr_head_sha; nothing to report.'); return; }
+            const targetUrl =
+              '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}';
+            for (const ctx of ['deps-image-builder', 'pr-required-checks']) {
+              await github.rest.repos.createCommitStatus({
+                owner, repo, sha, state: 'failure',
+                context: ctx,
+                description: 'Deps image build failed — cannot run PR checks.',
+                target_url: targetUrl });
+            }
+            core.setFailed('Deps image build failed; PR checks not dispatched.');

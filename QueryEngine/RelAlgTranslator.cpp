@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2016-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "RelAlgTranslator.h"
@@ -306,13 +295,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
           arg1 = scalar_sources[rex->getOperand(1)];
         }
         break;
-      case kAPPROX_QUANTILE:
-        if (g_cluster) {
-          throw std::runtime_error(
-              "APPROX_PERCENTILE/MEDIAN is not supported in distributed mode at this "
-              "time.");
-        }
-        // If second parameter is not given then APPROX_MEDIAN is assumed.
+      case kAPPROX_QUANTILE:  // If second parameter is not given then APPROX_MEDIAN is
+                              // assumed.
         if (rex->size() == 2) {
           const auto quantile_constant = std::dynamic_pointer_cast<Analyzer::Constant>(
               scalar_sources[rex->getOperand(1)]);
@@ -330,20 +314,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
           }
           arg1 = quantile_constant;
         } else {
-#ifdef _WIN32
-          Datum median;
-          median.doubleval = 0.5;
-#else
           constexpr Datum median{.doubleval = 0.5};
-#endif
           arg1 = std::make_shared<Analyzer::Constant>(kDOUBLE, false, median);
         }
         break;
       case kMODE:
-        if (g_cluster) {
-          throw std::runtime_error(
-              "MODE is not supported in distributed mode at this time.");
-        }
         break;
       case kCOUNT_IF:
         if (arg_expr->get_type_info().is_geometry()) {
@@ -476,10 +451,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
     throw std::runtime_error("Scalar sub-query returned multiple rows");
   }
   auto ti = rex_subquery->getType();
-  if (g_cluster && ti.is_string()) {
-    throw std::runtime_error(
-        "Scalar sub-queries which return strings not supported in distributed mode");
-  }
   if (row_count == size_t(0)) {
     if (row_set->isValidationOnlyRes()) {
       Datum d{0};
@@ -596,6 +567,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       if (!operand_ti.is_string() && target_ti.is_string()) {
         return operand_expr->add_cast(target_ti);
       }
+      if (target_ti.is_decimal() && operand_ti.is_fp()) {
+        if (auto const_operand =
+                std::dynamic_pointer_cast<Analyzer::Constant>(operand_expr)) {
+          // Calcite 1.41 routes FP literal -> DECIMAL casts through Rex CAST
+          // nodes that reach this UOper path. Keep literal casts on the
+          // Analyzer constant path so safeScale/safeRound preserve the
+          // pre-upgrade overflow boundary. CastIR does not support FP -> DECIMAL.
+          return const_operand->add_cast(target_ti);
+        }
+      }
       return std::make_shared<Analyzer::UOper>(target_ti, false, sql_op, operand_expr);
     }
     case kENCODE_TEXT: {
@@ -619,10 +600,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       }
       if (operand_expr->get_num_column_vars(true) == 0UL) {
         return operand_expr;
-      }
-      if (g_cluster) {
-        throw std::runtime_error(
-            "ENCODE_TEXT is not currently supported in distributed mode at this time.");
       }
       SQLTypeInfo casted_target_ti = operand_ti;
       casted_target_ti.set_type(kTEXT);
@@ -883,112 +860,8 @@ void fill_integer_in_vals(std::vector<int64_t>& in_vals,
   }
 }
 
-// Multi-node counterpart of the other version. Saves round-trips, which is crucial
-// for a big right-hand side result. It only handles physical string dictionary ids,
-// therefore it won't be able to handle a right-hand side sub-query with a CASE
-// returning literals on some branches. That case isn't hard too handle either, but
-// it's not clear it's actually important in practice.
-// RelAlgTranslator::getInIntegerSetExpr makes sure, by checking the encodings, that
-// this function isn't called in such cases.
-void fill_dictionary_encoded_in_vals(
-    std::vector<int64_t>& in_vals,
-    std::atomic<size_t>& total_in_vals_count,
-    const ResultSet* values_rowset,
-    const std::pair<int64_t, int64_t> values_rowset_slice,
-    const std::vector<LeafHostInfo>& leaf_hosts,
-    const DictRef source_dict_ref,
-    const DictRef dest_dict_ref,
-    const int32_t dest_generation,
-    const int64_t needle_null_val) {
-  CHECK(in_vals.empty());
-  std::vector<int32_t> source_ids;
-  source_ids.reserve(values_rowset->entryCount());
-  bool has_nulls = false;
-  if (source_dict_ref == dest_dict_ref) {
-    in_vals.reserve(values_rowset_slice.second - values_rowset_slice.first +
-                    1);  // Add 1 to cover interval
-    for (auto index = values_rowset_slice.first; index < values_rowset_slice.second;
-         ++index) {
-      const auto row = values_rowset->getOneColRow(index);
-      if (!row.valid) {
-        continue;
-      }
-      if (row.value != needle_null_val) {
-        in_vals.push_back(row.value);
-        if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
-                     total_in_vals_count.fetch_add(1024) >=
-                         g_watchdog_in_clause_max_num_elem_bitmap)) {
-          std::ostringstream oss;
-          oss << "Unable to handle 'expr IN (subquery)' via bitmap, # unique "
-                 "encoded-string values ("
-              << total_in_vals_count.load()
-              << ") is larger than the threshold "
-                 "'g_watchdog_in_clause_max_num_elem_bitmap': "
-              << g_watchdog_in_clause_max_num_elem_bitmap;
-          throw std::runtime_error(oss.str());
-        }
-      } else {
-        has_nulls = true;
-      }
-    }
-    if (has_nulls) {
-      in_vals.push_back(
-          needle_null_val);  // we've deduped null values as an optimization, although
-                             // this is not required by consumer
-    }
-    return;
-  }
-  // Code path below is for when dictionaries are not shared
-  for (auto index = values_rowset_slice.first; index < values_rowset_slice.second;
-       ++index) {
-    const auto row = values_rowset->getOneColRow(index);
-    if (row.valid) {
-      if (row.value != needle_null_val) {
-        source_ids.push_back(row.value);
-      } else {
-        has_nulls = true;
-      }
-    }
-  }
-  std::vector<int32_t> dest_ids;
-  translate_string_ids(dest_ids,
-                       leaf_hosts.front(),
-                       dest_dict_ref,
-                       source_ids,
-                       source_dict_ref,
-                       dest_generation);
-  CHECK_EQ(dest_ids.size(), source_ids.size());
-  in_vals.reserve(dest_ids.size() + (has_nulls ? 1 : 0));
-  if (has_nulls) {
-    in_vals.push_back(needle_null_val);
-  }
-  for (const int32_t dest_id : dest_ids) {
-    if (dest_id != StringDictionary::INVALID_STR_ID) {
-      in_vals.push_back(dest_id);
-      if (UNLIKELY(g_enable_watchdog && (in_vals.size() & 1023) == 0 &&
-                   total_in_vals_count.fetch_add(1024) >=
-                       g_watchdog_in_clause_max_num_elem_bitmap)) {
-        std::ostringstream oss;
-        oss << "Unable to handle 'expr IN (subquery)' via bitmap, # unique "
-               "encoded-string values ("
-            << total_in_vals_count.load()
-            << ") is larger than the threshold "
-               "'g_watchdog_in_clause_max_num_elem_bitmap': "
-            << g_watchdog_in_clause_max_num_elem_bitmap;
-        throw std::runtime_error(oss.str());
-      }
-    }
-  }
-}
-
 }  // namespace
 
-// The typical IN subquery involves either dictionary-encoded strings or integers.
-// Analyzer::InValues is a very heavy representation of the right hand side of such
-// a query since we already know the right hand would be a list of Analyzer::Constant
-// shared pointers. We can avoid the big overhead of each Analyzer::Constant and the
-// refcounting associated with shared pointers by creating an abbreviated InIntegerSet
-// representation of the IN expression which takes advantage of the this information.
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
     std::shared_ptr<Analyzer::Expr> arg,
     const ResultSet& val_set) const {
@@ -1003,11 +876,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
   const auto entry_count = val_set.entryCount();
   CHECK_EQ(size_t(1), val_set.colCount());
   const auto& col_type = val_set.getColType(0);
-  if (g_cluster && arg_type.is_string() &&
-      (col_type.get_comp_param() <= 0 || arg_type.get_comp_param() <= 0)) {
-    // Skip this case for now, see comment for fill_dictionary_encoded_in_vals.
-    return nullptr;
-  }
   std::atomic<size_t> total_in_vals_count{0};
   for (size_t i = 0,
               start_entry = 0,
@@ -1018,8 +886,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
     const auto end_entry = std::min(start_entry + stride, entry_count);
     if (arg_type.is_string()) {
       CHECK_EQ(kENCODING_DICT, arg_type.get_compression());
-      const auto& dest_dict_key = arg_type.getStringDictKey();
-      const auto& source_dict_key = col_type.getStringDictKey();
       const auto dd = executor_->getStringDictionaryProxy(
           arg_type.getStringDictKey(), val_set.getRowSetMemOwner(), true);
       const auto sd = executor_->getStringDictionaryProxy(
@@ -1028,38 +894,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
       const auto needle_null_val = inline_int_null_val(arg_type);
       fetcher_threads.push_back(std::async(
           std::launch::async,
-          [&val_set,
-           &total_in_vals_count,
-           sd,
-           dd,
-           &source_dict_key,
-           &dest_dict_key,
-           needle_null_val](
+          [&val_set, &total_in_vals_count, sd, dd, needle_null_val](
               std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
-            if (g_cluster) {
-              const auto catalog = Catalog_Namespace::SysCatalog::instance().getCatalog(
-                  source_dict_key.db_id);
-              CHECK(catalog) << "db_id: " << source_dict_key.db_id;
-              CHECK_GE(dd->getGeneration(), 0);
-              fill_dictionary_encoded_in_vals(
-                  in_vals,
-                  total_in_vals_count,
-                  &val_set,
-                  {start, end},
-                  catalog->getStringDictionaryHosts(),
-                  {source_dict_key.db_id, source_dict_key.dict_id},
-                  {dest_dict_key.db_id, dest_dict_key.dict_id},
-                  dd->getGeneration(),
-                  needle_null_val);
-            } else {
-              fill_dictionary_encoded_in_vals(in_vals,
-                                              total_in_vals_count,
-                                              &val_set,
-                                              {start, end},
-                                              sd,
-                                              dd,
-                                              needle_null_val);
-            }
+            fill_dictionary_encoded_in_vals(in_vals,
+                                            total_in_vals_count,
+                                            &val_set,
+                                            {start, end},
+                                            sd,
+                                            dd,
+                                            needle_null_val);
           },
           std::ref(expr_set[i]),
           start_entry,
@@ -1150,16 +993,31 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBoundingBoxIntersectO
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
     const RexCase* rex_case) const {
+  const auto reject_unsupported_projection_type = [](const SQLTypeInfo& ti) {
+    if (ti.is_geometry()) {
+      throw std::runtime_error(
+          "Geospatial column projections are currently not supported in conditional "
+          "expressions.");
+    }
+    if (ti.is_array()) {
+      throw std::runtime_error(
+          "Array column projections are currently not supported in conditional "
+          "expressions.");
+    }
+  };
+
   std::shared_ptr<Analyzer::Expr> else_expr;
   std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
       expr_list;
   for (size_t i = 0; i < rex_case->branchCount(); ++i) {
     const auto when_expr = translateScalarRex(rex_case->getWhen(i));
     const auto then_expr = translateScalarRex(rex_case->getThen(i));
+    reject_unsupported_projection_type(then_expr->get_type_info());
     expr_list.emplace_back(when_expr, then_expr);
   }
   if (rex_case->getElse()) {
     else_expr = translateScalarRex(rex_case->getElse());
+    reject_unsupported_projection_type(else_expr->get_type_info());
   }
   return Parser::CaseExpr::normalize(expr_list, else_expr, executor_);
 }
@@ -1918,6 +1776,11 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     const RexFunctionOperator* rex_function) const {
+  if (rex_function->getName() == "CAST NOT NULL"sv) {
+    CHECK_EQ(size_t(1), rex_function->size());
+    auto operand_expr = translateScalarRex(rex_function->getOperand(0));
+    return operand_expr->add_cast(rex_function->getType());
+  }
   if (func_resolve(rex_function->getName(), "LIKE"sv, "PG_ILIKE"sv)) {
     return translateLike(rex_function);
   }
@@ -2284,18 +2147,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   ret_ti.set_notnull(arguments_not_null);
 
-  // disallow H3 string functions in distributed mode
-  if (g_cluster) {
-    if (rex_function->getName() == "H3_StringToCell" ||
-        rex_function->getName() == "H3_CellToString_TEXT" ||
-        rex_function->getName() == "H3_CellToString_TEXT_NONE" ||
-        rex_function->getName() == "H3_CellToBoundary_WKT") {
-      throw std::runtime_error(
-          rex_function->getName() +
-          " and other H3 string functions are not supported in distributed mode");
-    }
-  }
-
   return makeExpr<Analyzer::FunctionOper>(ret_ti, rex_function->getName(), arg_expr_list);
 }
 
@@ -2490,8 +2341,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
                         ? Analyzer::WindowFunction::FrameBoundType::ROW
                         : Analyzer::WindowFunction::FrameBoundType::RANGE;
   if (order_keys.empty()) {
-    if (frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
-        frame_end_bound_type == SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING) {
+    if (frame_mode == Analyzer::WindowFunction::FrameBoundType::ROW) {
+      // Calcite 1.41 preserves explicit ROWS frame bounds without ORDER BY.
+      // HeavyDB treats that case as a whole-partition window because row-relative
+      // bounds are not meaningful without an ordered row sequence.
+      has_framing_clause = false;
+    } else if (frame_start_bound_type == SqlWindowFrameBoundType::UNBOUNDED_PRECEDING &&
+               frame_end_bound_type == SqlWindowFrameBoundType::UNBOUNDED_FOLLOWING) {
       // Calcite sets UNBOUNDED PRECEDING ~ UNBOUNDED_FOLLOWING as its default frame
       // bound if the window context has no order by clause regardless of the existence
       // of user-given window frame bound but at this point we have no way to recognize

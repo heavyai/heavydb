@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -25,6 +14,7 @@
 
 #include "Catalog/Catalog.h"
 #include "DBHandlerTestHelpers.h"
+#include "DataMgr/DataMgr.h"
 #include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
 #include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
 #include "Shared/StringTransform.h"
@@ -39,6 +29,7 @@
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
 extern bool g_enable_system_tables;
+extern bool g_enable_logs_system_tables;
 
 namespace BF = boost::filesystem;
 using SC = Catalog_Namespace::SysCatalog;
@@ -70,7 +61,7 @@ class CatalogTest : public DBHandlerTestFixture {
   static void initSysCatalog() {
     auto db_handler = getDbHandlerAndSessionId().first;
     SC::instance().init(
-        BASE_PATH, db_handler->data_mgr_, {}, db_handler->calcite_, false, false, {}, {});
+        BASE_PATH, db_handler->data_mgr_, {}, db_handler->calcite_, false, {});
   }
 
   std::vector<std::string> getTables(SqliteConnector& conn) {
@@ -87,9 +78,17 @@ class CatalogTest : public DBHandlerTestFixture {
     Catalog_Namespace::DBMetadata db_metadata;
     db_metadata.dbName = db_name;
     db_metadata.dbId = 1;
-    std::vector<LeafHostInfo> leaves{};
+    auto users = Catalog_Namespace::SysCatalog::instance().getAllUserMetadata();
+    std::map<int32_t, std::string> user_name_by_user_id;
+    for (const auto& user : users) {
+      user_name_by_user_id[user.userId] = user.userName;
+    }
+    Catalog_Namespace::UserMetadata root_user;
+    CHECK(Catalog_Namespace::SysCatalog::instance().getMetadataForUserById(
+        shared::kRootUserId, root_user));
+
     return std::make_unique<Catalog_Namespace::Catalog>(
-        BASE_PATH, db_metadata, nullptr, leaves, nullptr, false);
+        BASE_PATH, db_metadata, nullptr, nullptr, false, user_name_by_user_id, root_user);
   }
 
   SqliteConnector cat_conn_;
@@ -125,7 +124,7 @@ class SysCatalogTest : public CatalogTest {
     syscat_conn_.query_with_text_params(
         "INSERT INTO mapd_users (name, passwd_hash, issuper, can_login) VALUES (?, ?, ?, "
         "?)",
-        {"test_user", "passwd", "true", "true"});
+        {"test_user", "passwd", "1", "1"});
   }
 
   static void reinitializeSystemCatalog() {
@@ -135,6 +134,22 @@ class SysCatalogTest : public CatalogTest {
 
   SqliteConnector syscat_conn_;
 };
+
+// This test will deadlock if the DateInDaysColumnMigration is executed as part of catalog
+// construction.
+TEST_F(SysCatalogTest, Deadlock) {
+  sql("DROP TABLE IF EXISTS t1;");
+  sql("CREATE TABLE t1(d DATE);");
+
+  cat_conn_.query(
+      "DELETE FROM mapd_version_history where migration_history = "
+      "'date_in_days_column';");
+
+  reinitializeSystemCatalog();
+  SC::instance().getCatalog(shared::kDefaultDbName);
+
+  sql("DROP TABLE t1;");
+}
 
 // Check that we migrate correctly from pre 4.0 catalog.
 TEST_F(SysCatalogTest, MigrateRoles) {
@@ -186,6 +201,40 @@ TEST_F(SysCatalogTest, FixIncorrectRolesMigration) {
 
   ASSERT_TRUE(hasResult("SELECT name FROM mapd_users WHERE name='test_user'"));
   ASSERT_FALSE(hasResult("SELECT roleName FROM mapd_roles WHERE roleName='test_user'"));
+}
+
+class LogsSystemTableTest : public SysCatalogTest {
+ public:
+  bool old_logs_flag;
+
+  void SetUp() override {
+    old_logs_flag = g_enable_logs_system_tables;
+    // Temporarily instantiate the logs system table in the catalog/syscat.
+    g_enable_logs_system_tables = true;
+    login(shared::kRootUsername, shared::kDefaultRootPasswd, "information_schema");
+    sql("SHOW TABLES;");
+  }
+
+  void TearDown() override {
+    Catalog_Namespace::DBMetadata temp_meta;
+    SC::instance().getMetadataForDB("tempdb", temp_meta);
+    SC::instance().dropDatabase(temp_meta);
+    g_enable_logs_system_tables = old_logs_flag;
+  }
+};
+
+TEST_F(LogsSystemTableTest, DISABLED_LogsSystemTableDeadlock) {
+  resetCatalog();
+  g_enable_logs_system_tables = false;
+  // With the catalog reset and the logs option disabled, the next instantiation of the
+  // info_schema catalog should attempt to drop the logs tables (assuming they were set up
+  // properly in SetUp()) which can cause deadlock (lock order inversion) if performed
+  // concurrently with SysCatalog::createDatabase().
+  Catalog_Namespace::DBMetadata info_schema_meta;
+  SC::instance().getMetadataForDB(shared::kInfoSchemaDbName, info_schema_meta);
+  auto future = std::async(std::launch::async,
+                           [&] { SC::instance().getCatalog(info_schema_meta, false); });
+  SC::instance().createDatabase("tempdb", shared::kRootUserId);
 }
 
 class FsiSchemaTest : public CatalogTest {
@@ -256,6 +305,10 @@ class FsiSchemaTest : public CatalogTest {
                  tables.end());
     ASSERT_FALSE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") ==
                  tables.end());
+#if defined(HAVE_AWS_S3)
+    ASSERT_FALSE(std::find(tables.begin(), tables.end(), "omnisci_user_mappings") ==
+                 tables.end());
+#endif  // defined(HAVE_AWS_S3)
   }
 
   void assertFsiTablesDoNotExist() {
@@ -264,12 +317,19 @@ class FsiSchemaTest : public CatalogTest {
                 tables.end());
     ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") ==
                 tables.end());
+#if defined(HAVE_AWS_S3)
+    ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_user_mappings") ==
+                tables.end());
+#endif  // defined(HAVE_AWS_S3)
   }
 
  private:
   void dropFsiTables() {
     cat_conn_.query("DROP TABLE IF EXISTS omnisci_foreign_servers;");
     cat_conn_.query("DROP TABLE IF EXISTS omnisci_foreign_tables;");
+#if defined(HAVE_AWS_S3)
+    cat_conn_.query("DROP TABLE IF EXISTS omnisci_user_mappings;");
+#endif  // defined(HAVE_AWS_S3)
   }
 };
 
@@ -560,6 +620,11 @@ TEST_F(LegacyDataWrapperMigrationTest, LegacyDataWrappersAreRenamed) {
     LegacyDataWrapperMapping{"test_regex_server",
                              "OMNISCI_REGEX_PARSER",
                              DataWrapperType::REGEX_PARSER},
+#if defined(EE_FSI_ODBC)
+    LegacyDataWrapperMapping{"test_odbc_server",
+                             "OMNISCI_ODBC",
+                             DataWrapperType::ODBC},
+#endif
     LegacyDataWrapperMapping{"test_catalog_server",
                              "OMNISCI_INTERNAL_CATALOG",
                              DataWrapperType::INTERNAL_CATALOG},
@@ -864,6 +929,136 @@ TEST_F(ColumnLevelSecurityMigrationTest, MockMigration) {
   verifyUniqueConstraint();
 
   checkTableDoesNotExist("mapd_object_permissions_original");
+}
+
+class LegacyReplicatedPartitionsTest : public SystemCatalogMigrationTest {
+ protected:
+  void SetUp() override {
+    SystemCatalogMigrationTest::SetUp();
+    deleteRejectLegacyReplicatedPartitionsMigration();
+    SC::destroy();
+  }
+
+  void TearDown() override {
+    SC::destroy();
+    removeDatabaseCatalog(test_db_name_);
+    SystemCatalogMigrationTest::TearDown();
+  }
+
+  void deleteRejectLegacyReplicatedPartitionsMigration() {
+    if (has_result(*sys_catalog_sqlite_connector_,
+                   "SELECT name FROM sqlite_master WHERE type='table' AND "
+                   "name='mapd_version_history'")) {
+      sys_catalog_sqlite_connector_->query_with_text_param(
+          "DELETE FROM mapd_version_history WHERE migration_history = ?",
+          shared::kRejectLegacyReplicatedPartitionsMigrationName);
+    }
+  }
+
+  void removeDatabaseCatalog(const std::string& db_name) {
+    if (db_name.empty()) {
+      return;
+    }
+    const std::filesystem::path catalog_file = std::filesystem::path(dirname_) / db_name;
+    if (std::filesystem::exists(catalog_file)) {
+      std::filesystem::remove_all(catalog_file);
+    }
+  }
+
+  void createDatabaseCatalogWithPartitions(const std::string& db_name,
+                                           const std::string& table_name,
+                                           const std::string& partitions) {
+    removeDatabaseCatalog(db_name);
+    SqliteConnector db_conn(db_name, dirname_);
+    db_conn.query(
+        "CREATE TABLE mapd_tables (tableid integer primary key, name text unique, userid "
+        "integer, ncolumns integer, isview boolean, fragments text, frag_type integer, "
+        "max_frag_rows integer, max_chunk_size bigint, frag_page_size integer, "
+        "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
+        "sort_column_id integer default 0, storage_type text default '', "
+        "max_rollback_epochs integer default -1, is_system_table boolean default 0, "
+        "num_shards integer, key_metainfo TEXT, version_num BIGINT DEFAULT 1)");
+    db_conn.query_with_text_params(
+        "INSERT INTO mapd_tables (tableid, name, userid, ncolumns, isview, fragments, "
+        "frag_type, max_frag_rows, max_chunk_size, frag_page_size, max_rows, partitions, "
+        "shard_column_id, shard, num_shards, key_metainfo) "
+        "VALUES (1, ?, ?, 0, 0, '', 0, 0, 0, 0, 0, ?, 0, 0, 0, '')",
+        {table_name, std::to_string(shared::kRootUserId), partitions});
+    sys_catalog_sqlite_connector_->query_with_text_params(
+        "DELETE FROM mapd_databases WHERE name = ?", {db_name});
+    sys_catalog_sqlite_connector_->query_with_text_params(
+        "INSERT INTO mapd_databases (name, owner) VALUES (?, ?)",
+        {db_name, std::to_string(shared::kRootUserId)});
+    test_db_name_ = db_name;
+  }
+
+  void reinitializeSysCatalog() {
+    sys_catalog_sqlite_connector_.reset();
+    SC::destroy();
+    destroyDBHandler();
+    SystemParameters sys_parms;
+    const std::string data_path =
+        std::string(BASE_PATH) + "/" + shared::kDataDirectoryName;
+    auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(
+        data_path, sys_parms, nullptr, false, 0);
+    auto calcite = std::make_shared<Calcite>(
+        -1, 3280, std::string(BASE_PATH), 1024, 5000, true, "");
+    AuthMetadata auth_metadata;
+    SC::instance().init(BASE_PATH, data_mgr, auth_metadata, calcite, false, {});
+  }
+
+  void reconnectSysCatalogSqliteConnector() {
+    sys_catalog_sqlite_connector_ =
+        std::make_unique<SqliteConnector>(dbname_, dirname_);
+  }
+
+  bool isRejectLegacyReplicatedPartitionsMigrationRecorded() {
+    reconnectSysCatalogSqliteConnector();
+    return has_result(
+        *sys_catalog_sqlite_connector_,
+        "SELECT * FROM mapd_version_history WHERE migration_history = '" +
+            shared::kRejectLegacyReplicatedPartitionsMigrationName + "'");
+  }
+
+  std::string test_db_name_;
+};
+
+TEST_F(LegacyReplicatedPartitionsTest, ReplicatedPartitionsRejectedAtStartup) {
+  createDatabaseCatalogWithPartitions("legacy_replicated_db",
+                                      "replicated_table",
+                                      "REPLICATED");
+
+  try {
+    reinitializeSysCatalog();
+    FAIL() << "Expected SysCatalog init to reject legacy REPLICATED partitions";
+  } catch (const std::exception& e) {
+    const std::string error_message = e.what();
+    ASSERT_NE(error_message.find("PARTITIONS='REPLICATED'"), std::string::npos)
+        << "error message: " << error_message;
+    ASSERT_NE(error_message.find("legacy_replicated_db"), std::string::npos)
+        << "error message: " << error_message;
+    ASSERT_NE(error_message.find("replicated_table"), std::string::npos)
+        << "error message: " << error_message;
+  }
+  ASSERT_FALSE(isRejectLegacyReplicatedPartitionsMigrationRecorded());
+}
+
+TEST_F(LegacyReplicatedPartitionsTest, NonReplicatedPartitionsAllowedAtStartup) {
+  createDatabaseCatalogWithPartitions("legacy_sharded_db", "sharded_table", "SHARDED");
+  EXPECT_NO_THROW(reinitializeSysCatalog());
+  ASSERT_TRUE(isRejectLegacyReplicatedPartitionsMigrationRecorded());
+}
+
+TEST_F(LegacyReplicatedPartitionsTest, RejectLegacyReplicatedPartitionsRunsOnce) {
+  createDatabaseCatalogWithPartitions("legacy_sharded_db", "sharded_table", "SHARDED");
+  reinitializeSysCatalog();
+  ASSERT_TRUE(isRejectLegacyReplicatedPartitionsMigrationRecorded());
+
+  createDatabaseCatalogWithPartitions("legacy_replicated_db",
+                                      "replicated_table",
+                                      "REPLICATED");
+  EXPECT_NO_THROW(reinitializeSysCatalog());
+  ASSERT_TRUE(isRejectLegacyReplicatedPartitionsMigrationRecorded());
 }
 
 int main(int argc, char** argv) {

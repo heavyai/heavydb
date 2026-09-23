@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -31,8 +20,6 @@
 #include <utility>
 #include <vector>
 
-#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Shared/File.h"
 
 using namespace std;
@@ -40,13 +27,11 @@ using namespace std;
 namespace File_Namespace {
 
 GlobalFileMgr::GlobalFileMgr(const int32_t device_id,
-                             std::shared_ptr<ForeignStorageInterface> fsi,
                              std::string base_path,
                              const size_t num_reader_threads,
                              const size_t page_size,
                              const size_t metadata_page_size)
     : AbstractBufferMgr(device_id)
-    , fsi_(fsi)
     , basePath_(base_path)
     , num_reader_threads_(num_reader_threads)
     , epoch_(-1)  // set the default epoch for all tables corresponding to the time of
@@ -77,7 +62,7 @@ void GlobalFileMgr::init() {
 
 void GlobalFileMgr::checkpoint() {
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(fileMgrs_mutex_);
-  for (auto fileMgrsIt = allFileMgrs_.begin(); fileMgrsIt != allFileMgrs_.end();
+  for (auto fileMgrsIt = ownedFileMgrs_.begin(); fileMgrsIt != ownedFileMgrs_.end();
        ++fileMgrsIt) {
     fileMgrsIt->second->checkpoint();
   }
@@ -90,7 +75,7 @@ void GlobalFileMgr::checkpoint(const int32_t db_id, const int32_t tb_id) {
 size_t GlobalFileMgr::getNumChunks() {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(fileMgrs_mutex_);
   size_t num_chunks = 0;
-  for (auto fileMgrsIt = allFileMgrs_.begin(); fileMgrsIt != allFileMgrs_.end();
+  for (auto fileMgrsIt = ownedFileMgrs_.begin(); fileMgrsIt != ownedFileMgrs_.end();
        ++fileMgrsIt) {
     num_chunks += fileMgrsIt->second->getNumChunks();
   }
@@ -109,13 +94,12 @@ void GlobalFileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const boo
   }
 }
 
-AbstractBufferMgr* GlobalFileMgr::findFileMgrUnlocked(const int32_t db_id,
-                                                      const int32_t tb_id) {
+FileMgr* GlobalFileMgr::findFileMgrUnlocked(const int32_t db_id, const int32_t tb_id) {
   // NOTE: only call this private function after locking is already in place
-  AbstractBufferMgr* fm = nullptr;
+  FileMgr* fm = nullptr;
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
-  if (auto it = allFileMgrs_.find(file_mgr_key); it != allFileMgrs_.end()) {
-    fm = it->second;
+  if (auto it = ownedFileMgrs_.find(file_mgr_key); it != ownedFileMgrs_.end()) {
+    fm = it->second.get();
   }
   return fm;
 }
@@ -125,9 +109,6 @@ void GlobalFileMgr::deleteFileMgr(const int32_t db_id, const int32_t tb_id) {
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
   if (auto it = ownedFileMgrs_.find(file_mgr_key); it != ownedFileMgrs_.end()) {
     ownedFileMgrs_.erase(it);
-  }
-  if (auto it = allFileMgrs_.find(file_mgr_key); it != allFileMgrs_.end()) {
-    allFileMgrs_.erase(it);
   }
 }
 
@@ -153,7 +134,7 @@ bool GlobalFileMgr::existsDiffBetweenFileMgrParamsAndFileMgr(
 void GlobalFileMgr::setFileMgrParams(const int32_t db_id,
                                      const int32_t tb_id,
                                      const FileMgrParams& file_mgr_params) {
-  auto fm = dynamic_cast<File_Namespace::FileMgr*>(findFileMgr(db_id, tb_id));
+  auto fm = findFileMgr(db_id, tb_id);
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(fileMgrs_mutex_);
   if (fm) {
     deleteFileMgr(db_id, tb_id);
@@ -170,16 +151,15 @@ void GlobalFileMgr::setFileMgrParams(const int32_t db_id,
       num_reader_threads_,
       file_mgr_params.epoch != -1 ? file_mgr_params.epoch : epoch_);
   CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
-  CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, s.get())).second);
   max_rollback_epochs_per_table_[file_mgr_key] = max_rollback_epochs;
   lazy_initialized_stats_.erase(file_mgr_key);
   return;
 }
 
-AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int32_t db_id, const int32_t tb_id) {
+FileMgr* GlobalFileMgr::getFileMgr(const int32_t db_id, const int32_t tb_id) {
   {  // check if FileMgr already exists for (db_id, tb_id)
     heavyai::shared_lock<heavyai::shared_mutex> read_lock(fileMgrs_mutex_);
-    AbstractBufferMgr* fm = findFileMgrUnlocked(db_id, tb_id);
+    FileMgr* fm = findFileMgrUnlocked(db_id, tb_id);
     if (fm) {
       return fm;
     }
@@ -187,29 +167,21 @@ AbstractBufferMgr* GlobalFileMgr::getFileMgr(const int32_t db_id, const int32_t 
 
   {  // create new FileMgr for (db_id, tb_id)
     heavyai::unique_lock<heavyai::shared_mutex> write_lock(fileMgrs_mutex_);
-    AbstractBufferMgr* fm = findFileMgrUnlocked(db_id, tb_id);
+    FileMgr* fm = findFileMgrUnlocked(db_id, tb_id);
     if (fm) {
       return fm;  // mgr was added between the read lock and the write lock
     }
     const auto file_mgr_key = std::make_pair(db_id, tb_id);
-    const auto foreign_buffer_manager = fsi_->lookupBufferManager(db_id, tb_id);
-    if (foreign_buffer_manager) {
-      CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, foreign_buffer_manager))
-                .second);
-      return foreign_buffer_manager;
-    } else {
-      int32_t max_rollback_epochs{-1};
-      if (max_rollback_epochs_per_table_.find(file_mgr_key) !=
-          max_rollback_epochs_per_table_.end()) {
-        max_rollback_epochs = max_rollback_epochs_per_table_[file_mgr_key];
-      }
-      auto s = std::make_shared<FileMgr>(
-          0, this, file_mgr_key, max_rollback_epochs, num_reader_threads_, epoch_);
-      CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
-      CHECK(allFileMgrs_.insert(std::make_pair(file_mgr_key, s.get())).second);
-      lazy_initialized_stats_.erase(file_mgr_key);
-      return s.get();
+    int32_t max_rollback_epochs{-1};
+    if (max_rollback_epochs_per_table_.find(file_mgr_key) !=
+        max_rollback_epochs_per_table_.end()) {
+      max_rollback_epochs = max_rollback_epochs_per_table_[file_mgr_key];
     }
+    auto s = std::make_shared<FileMgr>(
+        0, this, file_mgr_key, max_rollback_epochs, num_reader_threads_, epoch_);
+    CHECK(ownedFileMgrs_.insert(std::make_pair(file_mgr_key, s)).second);
+    lazy_initialized_stats_.erase(file_mgr_key);
+    return s.get();
   }
 }
 
@@ -228,7 +200,6 @@ void GlobalFileMgr::setFileMgr(const int db_id,
                                const int table_id,
                                std::shared_ptr<FileMgr> file_mgr) {
   TablePair file_mgr_key{db_id, table_id};
-  allFileMgrs_[file_mgr_key] = file_mgr.get();
   ownedFileMgrs_[file_mgr_key] = file_mgr;
   lazy_initialized_stats_.erase(file_mgr_key);
 }
@@ -236,10 +207,9 @@ void GlobalFileMgr::setFileMgr(const int db_id,
 void GlobalFileMgr::writeFileMgrData(
     FileMgr* fileMgr) {  // this function is not used, keep it for now for future needs
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(fileMgrs_mutex_);
-  for (auto fileMgrIt = allFileMgrs_.begin(); fileMgrIt != allFileMgrs_.end();
+  for (auto fileMgrIt = ownedFileMgrs_.begin(); fileMgrIt != ownedFileMgrs_.end();
        fileMgrIt++) {
-    FileMgr* fm = dynamic_cast<FileMgr*>(fileMgrIt->second);
-    CHECK(fm);
+    FileMgr* fm = fileMgrIt->second.get();
     if ((fileMgr != 0) && (fileMgr != fm)) {
       continue;
     }
@@ -252,12 +222,8 @@ void GlobalFileMgr::writeFileMgrData(
 
 void GlobalFileMgr::removeTableRelatedDS(const int32_t db_id, const int32_t tb_id) {
   heavyai::unique_lock<heavyai::shared_mutex> write_lock(fileMgrs_mutex_);
-  auto abm = findFileMgrUnlocked(db_id, tb_id);
-  if (auto fm = dynamic_cast<File_Namespace::FileMgr*>(abm)) {
+  if (auto fm = findFileMgrUnlocked(db_id, tb_id)) {
     fm->closeRemovePhysical();
-  } else if (dynamic_cast<ForeignStorageBufferMgr*>(abm)) {
-    abm->removeTableRelatedDS(db_id, tb_id);
-    fsi_->dropBufferManager(db_id, tb_id);
   } else {
     // fileMgr has not been initialized so there is no need to
     // spend the time initializing
@@ -275,7 +241,7 @@ void GlobalFileMgr::removeTableRelatedDS(const int32_t db_id, const int32_t tb_i
 void GlobalFileMgr::setTableEpoch(const int32_t db_id,
                                   const int32_t tb_id,
                                   const int32_t start_epoch) {
-  AbstractBufferMgr* opened_fm = findFileMgr(db_id, tb_id);
+  auto opened_fm = findFileMgr(db_id, tb_id);
   if (opened_fm) {
     // Delete this FileMgr to ensure epoch change occurs in constructor with other
     // reads/writes locked out
@@ -295,9 +261,9 @@ size_t GlobalFileMgr::getTableEpoch(const int32_t db_id, const int32_t tb_id) {
   // UX change was made to this function Oct 2020 to return checkpointed epoch. In turn,
   // setTableEpoch was changed to set the epoch at the user's input, instead of input - 1
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(fileMgrs_mutex_);
-  AbstractBufferMgr* opened_fm = findFileMgr(db_id, tb_id);
+  auto opened_fm = findFileMgr(db_id, tb_id);
   if (opened_fm) {
-    return dynamic_cast<FileMgr*>(opened_fm)->lastCheckpointedEpoch();
+    return opened_fm->lastCheckpointedEpoch();
   }
   // Do not do full init of table just to get table epoch, just check file instead
   const auto file_mgr_key = std::make_pair(db_id, tb_id);
@@ -308,16 +274,16 @@ size_t GlobalFileMgr::getTableEpoch(const int32_t db_id, const int32_t tb_id) {
 }
 
 void GlobalFileMgr::resetTableEpochFloor(const int32_t db_id, const int32_t tb_id) {
-  AbstractBufferMgr* fm = getFileMgr(db_id, tb_id);
+  auto fm = getFileMgr(db_id, tb_id);
   CHECK(fm);
-  dynamic_cast<FileMgr*>(fm)->resetEpochFloor();
+  fm->resetEpochFloor();
 }
 
 StorageStats GlobalFileMgr::getStorageStats(const int32_t db_id, const int32_t tb_id) {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(fileMgrs_mutex_);
-  AbstractBufferMgr* opened_fm = findFileMgr(db_id, tb_id);
+  auto opened_fm = findFileMgr(db_id, tb_id);
   if (opened_fm) {
-    return dynamic_cast<FileMgr*>(opened_fm)->getStorageStats();
+    return opened_fm->getStorageStats();
   }
   TablePair file_mgr_key{db_id, tb_id};
   auto it = lazy_initialized_stats_.find(file_mgr_key);
@@ -333,7 +299,7 @@ StorageStats GlobalFileMgr::getStorageStats(const int32_t db_id, const int32_t t
 }
 
 void GlobalFileMgr::compactDataFiles(const int32_t db_id, const int32_t tb_id) {
-  auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(findFileMgr(db_id, tb_id));
+  auto file_mgr = findFileMgr(db_id, tb_id);
   {
     heavyai::unique_lock<heavyai::shared_mutex> write_lock(fileMgrs_mutex_);
     if (file_mgr) {

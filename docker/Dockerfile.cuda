@@ -1,60 +1,98 @@
-ARG BASE_CUDA_IMAGE=docker-internal.mapd.com/cudagl/ubuntu22.04-cuda12.2.2-x86_64-runtime:latest
+# SPDX-FileCopyrightText: Copyright (c) 2016-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+ARG BASE_IMAGE=nvcr.io/nvidia/cuda:12.9.2-runtime-ubuntu22.04
 
 # Copy and extract HEAVY.AI tarball. In own stage so that the temporary tarball
 # isn't included in a layer.
-FROM ubuntu:22.04 AS extract
+FROM ${BASE_IMAGE} AS extract
 
+# Name of the product tarball in the build context. Defaults to the legacy
+# x86_64 name; callers building other arches pass --build-arg TARBALL=<name>.
+ARG TARBALL=heavyai-latest-Linux-x86_64.tar.gz
 WORKDIR /opt/heavyai/
-COPY heavyai-latest-Linux-x86_64.tar.gz /opt/heavyai/
-RUN tar xvf heavyai-latest-Linux-x86_64.tar.gz --strip-components=1 && \
-    rm -rf heavyai-latest-Linux-x86_64.tar.gz
+COPY ${TARBALL} /opt/heavyai/
+RUN tar xvf ${TARBALL} --strip-components=1 && \
+    rm -rf ${TARBALL}
 
 # Bring ARG back into scope
-ARG BASE_CUDA_IMAGE
+ARG BASE_IMAGE
 # Build final stage
-FROM ${BASE_CUDA_IMAGE}
+FROM ${BASE_IMAGE}
 
 # Avoid display of additional CUDA information on server startup.
 ENTRYPOINT []
-LABEL maintainer "HEAVY.AI Support <support@heavy.ai>"
+#LABEL maintainer="TBD"
 
-ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
-
-# Update packages in the base cudagl container
-# This file may be an empty stub
-RUN USER=root bash ./cudagl_package_updater.sh
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 
 # Install additional required packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        bsdmainutils \
-        libopengl0 \
-        wget \
-        curl \
-        clang-14 \
-        liblz4-tool \
-        default-jre-headless \
-        software-properties-common \
-        zip && \
-    add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get install -y --no-install-recommends \
-        python3.10 \
-        python3.10-venv \
-        libpython3.10 && \
-    apt-get remove --purge -y && \
-    rm -rf /var/lib/apt/lists/*
+RUN if command -v apt-get >/dev/null; then \
+        export DEBIAN_FRONTEND=noninteractive && \
+        apt-get update -y && \
+        apt-get upgrade -y && \
+        apt-get install -y --no-install-recommends \
+            bsdmainutils \
+            libglx0 \
+            libegl1 \
+            wget \
+            curl \
+            clang-14 \
+            liblz4-tool \
+            default-jre-headless \
+            software-properties-common \
+            zip && \
+        add-apt-repository ppa:deadsnakes/ppa && \
+        apt-get install -y --no-install-recommends \
+            python3.10 \
+            python3.10-venv \
+            libpython3.10 && \
+        update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100 && \
+        mkdir -p /usr/local/include && \
+        ln -sfn /usr/lib/llvm-14/lib/clang/14.0.0/include /usr/local/include/clang-resource && \
+        apt-get remove --purge -y && \
+        rm -rf /var/lib/apt/lists/*; \
+    elif command -v dnf >/dev/null || command -v yum >/dev/null; then \
+        pkg_cmd="$(command -v dnf || command -v yum)" && \
+        "$pkg_cmd" install -y epel-release && \
+        "$pkg_cmd" --refresh upgrade -y --nobest && \
+        "$pkg_cmd" install -y \
+            clang \
+            curl \
+            java-21-openjdk-headless \
+            libglvnd-egl \
+            libglvnd-glx \
+            lz4 \
+            procps-ng \
+            python3.11 \
+            python3.11-pip \
+            tar \
+            util-linux \
+            wget \
+            which \
+            zip && \
+        ln -sf /usr/bin/python3.11 /usr/local/bin/python3 && \
+        clang_resource_dir="$(clang -print-resource-dir)" && \
+        mkdir -p /usr/local/include && \
+        ln -sfn "$clang_resource_dir/include" /usr/local/include/clang-resource && \
+        "$pkg_cmd" clean all && \
+        rm -rf /var/cache/dnf /var/cache/yum; \
+    else \
+        echo "Unsupported base image: expected apt-get, dnf, or yum" >&2; \
+        exit 1; \
+    fi
 
 # Copy tar file contents from extract stage
 COPY --from=extract /opt/heavyai /opt/heavyai
 
 # UDF support
-RUN update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100
-ENV CPLUS_INCLUDE_PATH=/usr/lib/llvm-14/lib/clang/14.0.0/include
+ENV CPLUS_INCLUDE_PATH=/usr/local/include/clang-resource
 
-RUN mkdir -p /etc/vulkan/icd.d && \
-    echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libGLX_nvidia.so.0", "api_version" : "1.1.99" } }' > /etc/vulkan/icd.d/nvidia_icd.json
+# Vulkan ICD + GLVND EGL vendor configs are injected at runtime by the NVIDIA
+# Container Toolkit (graphics capability), so they are not baked into the image.
 
 WORKDIR /opt/heavyai
 
 EXPOSE 6274 6273
 
-CMD /opt/heavyai/startheavy --non-interactive --data /var/lib/heavyai/storage --config /var/lib/heavyai/heavy.conf --libgeos-path /var/lib/heavyai/libgeos
+CMD ["/opt/heavyai/startheavy", "--non-interactive", "--data", "/var/lib/heavyai/storage", "--config", "/var/lib/heavyai/heavy.conf", "--libgeos-path", "/var/lib/heavyai/libgeos"]

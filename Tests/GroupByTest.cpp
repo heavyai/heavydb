@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "TestHelpers.h"
@@ -341,8 +330,6 @@ class LowCardinalityThresholdTest : public ::testing::Test {
   void SetUp() override {
     run_ddl_statement("DROP TABLE IF EXISTS low_cardinality;");
     run_ddl_statement("CREATE TABLE low_cardinality (fl text,ar text, dep text);");
-    // note - some boost::filesystem::path methods returns wchar strings on windows
-    // and char strings on linux.
 
     // write some data to a file
     boost::filesystem::path filename =
@@ -350,7 +337,6 @@ class LowCardinalityThresholdTest : public ::testing::Test {
 
     filename.replace_extension(boost::filesystem::path{".csv"});
 
-    // Note on win path::native() returns wchar, which is fine with fstream
     std::fstream f(filename.native(), std::ios::binary | std::ios::out | std::ios::trunc);
 
     CHECK(f.is_open());
@@ -385,8 +371,6 @@ class BigCardinalityThresholdTest : public ::testing::Test {
 
     run_ddl_statement("DROP TABLE IF EXISTS big_cardinality;");
     run_ddl_statement("CREATE TABLE big_cardinality (fl text,ar text, dep text);");
-    // note - some boost::filesystem::path methods returns wchar strings on windows
-    // and char strings on linux.
 
     // write some data to a file
     boost::filesystem::path filename =

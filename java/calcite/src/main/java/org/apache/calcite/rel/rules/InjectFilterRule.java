@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.apache.calcite.rel.rules;
@@ -20,6 +9,9 @@ import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelRule;
 import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.Filter;
+import org.apache.calcite.rel.core.TableFunctionScan;
+import org.apache.calcite.rel.core.TableScan;
 import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.rel.type.RelDataTypeField;
 import org.apache.calcite.rex.RexBuilder;
@@ -27,6 +19,8 @@ import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.tools.RelBuilder;
+import org.immutables.value.Value.Enclosing;
+import org.immutables.value.Value.Immutable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+@Enclosing
 public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
   // goal: customer entitlements first swipe
 
@@ -151,10 +146,10 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
   };
 
   /** Rule configuration. */
+  @Immutable
   public interface Config extends RelRule.Config {
-    Config DEFAULT =
-            EMPTY.withOperandSupplier(b0 -> b0.operand(LogicalTableScan.class).noInputs())
-                    .as(Config.class);
+    Config DEFAULT = ImmutableInjectFilterRule.Config.of()
+            .withOperandFor(TableScan.class);
 
     @Override
     default InjectFilterRule toRule() {
@@ -163,6 +158,11 @@ public class InjectFilterRule extends RelRule<InjectFilterRule.Config> {
 
     default InjectFilterRule toRule(List<Restriction> rests) {
       return new InjectFilterRule(this, rests);
+    }
+
+    default Config withOperandFor(Class<? extends TableScan> tableScanClass) {
+      return withOperandSupplier(b0 -> b0.operand(tableScanClass).noInputs())
+              .as(Config.class);
     }
   }
 }

@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package com.mapd.calcite.parser;
@@ -19,63 +8,58 @@ package com.mapd.calcite.parser;
 import static org.apache.calcite.sql.parser.SqlParserPos.ZERO;
 
 import com.google.common.collect.ImmutableList;
-import com.mapd.calcite.rel.rules.FilterTableFunctionMultiInputTransposeRule;
 import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
 import com.mapd.parser.extension.ddl.ExtendedSqlParser;
 import com.mapd.parser.extension.ddl.JsonSerializableDdl;
 import com.mapd.parser.hint.HeavyDBHintStrategyTable;
 
+import org.apache.calcite.DataContexts;
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
 import org.apache.calcite.config.CalciteConnectionProperty;
+import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.plan.RelOptUtil;
-import org.apache.calcite.plan.hep.HepPlanner;
-import org.apache.calcite.plan.hep.HepProgramBuilder;
 import org.apache.calcite.prepare.HeavyDBPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.RelShuttleImpl;
+import org.apache.calcite.rel.RelVisitor;
 import org.apache.calcite.rel.RelWriter;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.TableModify.Operation;
 import org.apache.calcite.rel.externalize.HeavyDBRelWriterImpl;
-import org.apache.calcite.rel.externalize.RelWriterImpl;
+import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
-import org.apache.calcite.rel.rules.CoreRules;
-import org.apache.calcite.rel.rules.Restriction;
+import org.apache.calcite.util.ImmutableBitSet;
+import com.google.common.collect.ImmutableSet;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rex.*;
 import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.schema.SchemaPlus;
-import org.apache.calcite.schema.Statistic;
-import org.apache.calcite.schema.Table;
 import org.apache.calcite.sql.*;
-import org.apache.calcite.sql.advise.SqlAdvisorValidator;
 import org.apache.calcite.sql.dialect.CalciteSqlDialect;
 import org.apache.calcite.sql.fun.SqlCase;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserPos;
-import org.apache.calcite.sql.type.OperandTypes;
-import org.apache.calcite.sql.type.ReturnTypes;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
+import org.apache.calcite.sql.type.SqlTypeCoercionRule;
 import org.apache.calcite.sql.util.SqlBasicVisitor;
 import org.apache.calcite.sql.util.SqlShuttle;
 import org.apache.calcite.sql.util.SqlVisitor;
 import org.apache.calcite.sql.validate.SqlConformanceEnum;
 import org.apache.calcite.sql.validate.SqlValidator;
-import org.apache.calcite.sql.validate.SqlValidatorImpl;
-import org.apache.calcite.sql2rel.SqlToRelConverter;
+import org.apache.calcite.sql2rel.HeavyDBSqlToRelConverter;
 import org.apache.calcite.tools.*;
 import org.apache.calcite.util.Pair;
 import org.apache.calcite.util.Util;
@@ -92,14 +76,13 @@ import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 import ai.heavy.thrift.server.TColumnType;
-import ai.heavy.thrift.server.TDatumType;
 import ai.heavy.thrift.server.TEncodingType;
 import ai.heavy.thrift.server.TTableDetails;
 
 public final class HeavyDBParser {
+
   public static final ThreadLocal<HeavyDBParser> CURRENT_PARSER = new ThreadLocal<>();
   private static final EnumSet<SqlKind> SCALAR =
           EnumSet.of(SqlKind.SCALAR_QUERY, SqlKind.SELECT);
@@ -173,7 +156,7 @@ public final class HeavyDBParser {
   };
 
   private HeavyDBPlanner getPlanner() {
-    return getPlanner(true, false, false);
+    return getPlanner(true, false);
   }
 
   private boolean isCorrelated(SqlNode expression) {
@@ -264,8 +247,7 @@ public final class HeavyDBParser {
   }
 
   private HeavyDBPlanner getPlanner(final boolean allowSubQueryExpansion,
-          final boolean isWatchdogEnabled,
-          final boolean isDistributedMode) {
+          final boolean isWatchdogEnabled) {
     HeavyDBUser user = new HeavyDBUser(dbUser.getUser(),
             dbUser.getSession(),
             dbUser.getDB(),
@@ -315,11 +297,6 @@ public final class HeavyDBParser {
                                 innerSelectCall.getWhere())) {
                       return true;
                     }
-                  }
-                  if (isDistributedMode) {
-                    // we temporarily disable IN-clause decorrelation in dist mode
-                    // todo (yoonmin) : relax this in dist mode when available
-                    return false;
                   }
                   boolean hasHashJoinableExpression = false;
                   // when watchdog is enabled, we try to selectively allow decorrelation
@@ -478,7 +455,14 @@ public final class HeavyDBParser {
 
     final HeavyDBSchema defaultSchema = new HeavyDBSchema(
             dataDir, this, dbPort, dbUser, sock_transport_properties, dbUser.getDB());
-    final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
+    // The second parameter in createRootSchema sets the caching to false.
+    // This forces calcite to query the back end (via MetaConnect) for table
+    // details for every call. Otherwise calcite attempts to build up a cache
+    // of table meta data values. If the  backend contains a 'view'this process
+    // causes the repeated and unnecessary calls from the backend to the main
+    // calcite entrypoint (CalciteServerHandler), resulting in connection times
+    // outs. TODO validate the backend processing of views
+    final SchemaPlus rootSchema = CalciteSchema.createRootSchema(true, false).plus();
     final SchemaPlus defaultSchemaPlus = rootSchema.add(dbUser.getDB(), defaultSchema);
     for (String db : mc.getDatabases()) {
       if (!db.equalsIgnoreCase(dbUser.getDB())) {
@@ -488,30 +472,34 @@ public final class HeavyDBParser {
       }
     }
 
-    final FrameworkConfig config =
-            Frameworks.newConfigBuilder()
+    SqlParser.Config parserConfig = SqlParser.configBuilder().setConformance(SqlConformanceEnum.LENIENT).setUnquotedCasing(Casing.UNCHANGED)
+                             .setCaseSensitive(false).setIdentifierMaxLength(512)
+                             .setParserFactory(ExtendedSqlParser.FACTORY).build();
+
+    // 1. Add a reference to expandPredicate, an instance of an anonymous subclass of
+    // BiPredicate<SqlNode, SqlNode>) declared earlier in this file.
+    // expandPredicate's test method is used in several HeavyAI modifications to the calcite file SqlToRelConverter.
+    // 2. simplifyValues=false: keep Project layer over one-row Values so a BIGINT literal of
+    // INT64_MAX in SELECT <literal> is not lost in the Values executor path, which collides
+    // with an INT64_MAX sentinel marker there (likely EMPTY_KEY_64; not the BIGINT NULL
+    // sentinel, which is INT64_MIN).
+    HeavyDBSqlToRelConverter.Config sqlToRelConfig = HeavyDBSqlToRelConverter.config()
+                                                      .withExpandPredicate(expandPredicate)
+                                                      .withInSubQueryThreshold(Integer.MAX_VALUE)
+                                                      .withHintStrategyTable(HeavyDBHintStrategyTable.HINT_STRATEGY_TABLE)
+                                                      .withRelBuilderConfigTransform(b -> b.withSimplifyValues(false));
+
+    SqlValidator.Config validatorConfig = SqlValidator.Config.DEFAULT
+      .withTypeCoercionRules(SqlTypeCoercionRule.lenientInstance());
+
+    final FrameworkConfig config = Frameworks.newConfigBuilder()
                     .defaultSchema(defaultSchemaPlus)
                     .operatorTable(dbSqlOperatorTable.get())
-                    .parserConfig(SqlParser.configBuilder()
-                                          .setConformance(SqlConformanceEnum.LENIENT)
-                                          .setUnquotedCasing(Casing.UNCHANGED)
-                                          .setCaseSensitive(false)
-                                          // allow identifiers of up to 512 chars
-                                          .setIdentifierMaxLength(512)
-                                          .setParserFactory(ExtendedSqlParser.FACTORY)
-                                          .build())
-                    .sqlToRelConverterConfig(
-                            SqlToRelConverter
-                                    .configBuilder()
-                                    // enable sub-query expansion (de-correlation)
-                                    .withExpandPredicate(expandPredicate)
-                                    // allow as many as possible IN operator values
-                                    .withInSubQueryThreshold(Integer.MAX_VALUE)
-                                    .withHintStrategyTable(
-                                            HeavyDBHintStrategyTable.HINT_STRATEGY_TABLE)
-                                    .build())
-
+                    .parserConfig(parserConfig)
+                    .sqlToRelConverterConfig(sqlToRelConfig)
+                    .sqlValidatorConfig(validatorConfig)
                     .typeSystem(createTypeSystem())
+                    .executor(new HeavyDBRexExecutor(DataContexts.EMPTY))
                     .context(DB_CONNECTION_CONTEXT)
                     .build();
     HeavyDBPlanner planner = new HeavyDBPlanner(config);
@@ -539,7 +527,7 @@ public final class HeavyDBParser {
   public ProcessResult process(String sql, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     final HeavyDBPlanner planner = getPlanner(
-            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
+            true, parserOptions.isWatchdogEnabled());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     Pair<String, Boolean> res = processSql(sqlNode, parserOptions);
     SqlIdentifierCapturer capture = captureIdentifiers(sqlNode);
@@ -551,7 +539,7 @@ public final class HeavyDBParser {
     HeavyDBSchema schema = new HeavyDBSchema(
             dataDir, this, dbPort, dbUser, sock_transport_properties, dbUser.getDB());
     HeavyDBPlanner planner = getPlanner(
-            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
+            true, parserOptions.isWatchdogEnabled());
 
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     RelRoot optRel = planner.buildRATreeAndPerformQueryOptimization(query, schema);
@@ -565,7 +553,7 @@ public final class HeavyDBParser {
     callCount++;
 
     final HeavyDBPlanner planner = getPlanner(
-            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
+            true, parserOptions.isWatchdogEnabled());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
 
     return processSql(sqlNode, parserOptions);
@@ -586,7 +574,7 @@ public final class HeavyDBParser {
     }
 
     final HeavyDBPlanner planner = getPlanner(
-            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
+            true, parserOptions.isWatchdogEnabled());
     planner.advanceToValidate();
 
     final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
@@ -594,6 +582,9 @@ public final class HeavyDBParser {
     if (project == null) {
       throw new RuntimeException("Cannot convert the sql to AST");
     }
+    // Normalize non-prefix Aggregate group keys (a Calcite 1.41.0 decorrelation shape
+    // HeavyDB can't execute) before explain/serialization. See normalizeAggregateGroupKeys.
+    project = normalizeAggregateGroupKeys(project);
     if (parserOptions.isExplainDetail()) {
       StringWriter sw = new StringWriter();
       RelWriter planWriter = new HeavyDBRelWriterImpl(
@@ -604,6 +595,97 @@ public final class HeavyDBParser {
       return new Pair<String, Boolean>(RelOptUtil.toString(sqlRel.project()), true);
     }
     return new Pair<String, Boolean>(HeavyDBSerializer.toString(project), true);
+  }
+
+  // Calcite 1.41.0 (unlike 1.25.0) can emit a LogicalAggregate whose group keys aren't
+  // the leading [0..N) input columns (e.g. group=[1]). RelAggregate stores only a
+  // group-key count and assumes the keys are the first N columns, so the C++ RA-DAG
+  // builder aborts (CHECK_EQ(i, group[i])).
+  //
+  // To fix this: project the group columns to the front and re-group on [0..N)
+  // , the normalizing Project that 1.25.0 always expected.
+  //
+  // Aggregate cases:
+  //   * prefix group (with/without aggs) -> already valid; left untouched
+  //   * non-prefix, no agg calls         -> decorrelator DISTINCT-key aggs; normalized here
+  //   * non-prefix, with agg calls       -> not emitted by 1.41.0; throw if ever hit
+  //                                         (would also need agg-operand index remapping)
+  private static RelNode normalizeAggregateGroupKeys(RelNode root) {
+    // Skip plans with nothing to rewrite (read-only scan).
+    if (!hasNonPrefixGroupAggregate(root)) {
+      return root;
+    }
+    // Rewriting an aggregate inside a DELETE/UPDATE makes RelShuttleImpl rebuild the root
+    // TableModify via copy(). HeavyDB builds a DELETE as an UPDATE then reflectively flips
+    // the op to DELETE (convertSqlToRelNode), leaving update/source lists set, a state
+    // TableModify's constructor rejects, so copy() throws. Repoint the input in place
+    // instead so its constructor never re-runs.
+    if (root instanceof TableModify) {
+      final TableModify modify = (TableModify) root;
+      final RelNode newInput = normalizeAggregateGroupKeys(modify.getInput());
+      if (newInput != modify.getInput()) {
+        modify.replaceInput(0, newInput);
+      }
+      return modify;
+    }
+    return root.accept(new RelShuttleImpl() {
+      @Override
+      public RelNode visit(LogicalAggregate aggregate) {
+        final RelNode input = aggregate.getInput().accept(this);
+        final ImmutableBitSet groupSet = aggregate.getGroupSet();
+        final int groupCount = groupSet.cardinality();
+        final boolean isPrefix = groupSet.equals(ImmutableBitSet.range(groupCount));
+        // Already prefix, or GROUPING SETS (rejected by HeavyDB elsewhere): leave as-is,
+        // rebuilding only when a descendant actually changed.
+        if (isPrefix || aggregate.getGroupSets().size() != 1) {
+          return input == aggregate.getInput()
+                  ? aggregate
+                  : aggregate.copy(aggregate.getTraitSet(), ImmutableList.of(input));
+        }
+        if (!aggregate.getAggCallList().isEmpty()) {
+          throw new RuntimeException(
+                  "non-prefix aggregate group with agg calls is not handled");
+        }
+        // Project the group columns to the front (ascending group-set order preserves
+        // the aggregate's output column order), then re-group on [0..N).
+        final RexBuilder rexBuilder = aggregate.getCluster().getRexBuilder();
+        final List<String> inNames = input.getRowType().getFieldNames();
+        final List<RexNode> projExprs = new ArrayList<>();
+        final List<String> projNames = new ArrayList<>();
+        for (int col : groupSet) {
+          projExprs.add(rexBuilder.makeInputRef(input, col));
+          projNames.add(inNames.get(col));
+        }
+        final RelNode project = LogicalProject.create(
+                input, ImmutableList.of(), projExprs, projNames, ImmutableSet.of());
+        final ImmutableBitSet newGroupSet = ImmutableBitSet.range(groupCount);
+        return LogicalAggregate.create(project,
+                ImmutableList.of(),
+                newGroupSet,
+                ImmutableList.of(newGroupSet),
+                ImmutableList.of());
+      }
+    });
+  }
+
+  // Returns true iff the plan holds an aggregate whose single group set is not the
+  // leading [0..N) prefix
+  private static boolean hasNonPrefixGroupAggregate(RelNode root) {
+    final boolean[] found = {false};
+    new RelVisitor() {
+      @Override
+      public void visit(RelNode node, int ordinal, RelNode parent) {
+        if (node instanceof LogicalAggregate) {
+          final ImmutableBitSet g = ((LogicalAggregate) node).getGroupSet();
+          if (((LogicalAggregate) node).getGroupSets().size() == 1
+                  && !g.equals(ImmutableBitSet.range(g.cardinality()))) {
+            found[0] = true;
+          }
+        }
+        super.visit(node, ordinal, parent);
+      }
+    }.go(root);
+    return found[0];
   }
 
   public HeavyDBPlanner.CompletionResult getCompletionHints(
@@ -645,6 +727,44 @@ public final class HeavyDBParser {
     return null;
   }
 
+  // Rewrites a correlated single-column UPDATE whose SET RHS is a scalar subquery
+  // into an equivalent SELECT that the rest of the planner can lower into the
+  // engine's UPDATE-via-projection path. For example:
+  //
+  //   UPDATE tble SET x = (SELECT X FROM inner_tble WHERE tble.x = inner_tble.x)
+  //
+  // becomes (conceptually) a SELECT that LEFT JOINs `inner_tble` against `tble`
+  // on the correlation predicate and projects SINGLE_VALUE(inner_tble.X) plus a
+  // synthetic rowid column. Downstream code in this file (see rewriteUpdateAsSelect)
+  // takes that SELECT and constructs the LogicalTableModify by hand, which is why
+  // this rewrite has to reach into the inner subquery: it needs the inner FROM,
+  // WHERE, and first projection in their raw SqlNode form.
+  //
+  // That dependency on a bare SqlSelect is fragile post-CALCITE-7220. With 1.41.0,
+  // SqlValidatorImpl.validateUpdate copies the (now-validated) entries from the
+  // source select's selectList back into update.getSourceExpressionList(). By the
+  // time we run, the entry for `(SELECT X FROM inner_tble WHERE ...)` may have
+  // picked up one or both of these wrappings:
+  //
+  //   1. SCALAR_QUERY(SqlSelect)
+  //      Added during sub-query expansion in validation, because the subquery
+  //      appears in scalar-expression position. Always present for this shape
+  //      after validation.
+  //
+  //   2. CAST(<inner> AS targetType)
+  //      Added by TypeCoercionImpl when the subquery's row type doesn't match
+  //      the target column's type (e.g. the encoded vs none-encoded string
+  //      updates: `SET str_col = (SELECT other_str FROM ...)` where the two
+  //      string columns have different dictionary encodings). Only present
+  //      when implicit coercion is needed.
+  //
+  // So the entry can be any of: SqlSelect, SCALAR_QUERY(SqlSelect),
+  // CAST(SqlSelect AS T), or CAST(SCALAR_QUERY(SqlSelect) AS T). We peel CAST
+  // first (remembering its type spec for re-application below), then SCALAR_QUERY,
+  // and bail out if what remains isn't an SqlSelect. If a CAST was peeled, it has
+  // to be put back around `select0` after the SINGLE_VALUE wrap — otherwise the
+  // rewritten SELECT silently drops the implicit conversion and we'd write the
+  // un-coerced source value into the target column.
   private SqlSelect rewriteSimpleUpdateAsSelect(final SqlUpdate update) {
     SqlNode where = update.getCondition();
 
@@ -652,11 +772,22 @@ public final class HeavyDBParser {
       return null;
     }
 
-    if (!(update.getSourceExpressionList().get(0) instanceof SqlSelect)) {
+    SqlNode entry = update.getSourceExpressionList().get(0);
+    SqlDataTypeSpec implicitCastType = null;
+    if (entry instanceof SqlBasicCall
+            && ((SqlBasicCall) entry).getOperator().getKind() == SqlKind.CAST
+            && ((SqlBasicCall) entry).operand(1) instanceof SqlDataTypeSpec) {
+      implicitCastType = (SqlDataTypeSpec) ((SqlBasicCall) entry).operand(1);
+      entry = ((SqlBasicCall) entry).operand(0);
+    }
+    if (entry instanceof SqlBasicCall
+            && ((SqlBasicCall) entry).getOperator().getKind() == SqlKind.SCALAR_QUERY) {
+      entry = ((SqlBasicCall) entry).operand(0);
+    }
+    if (!(entry instanceof SqlSelect)) {
       return null;
     }
-
-    final SqlSelect inner = (SqlSelect) update.getSourceExpressionList().get(0);
+    final SqlSelect inner = (SqlSelect) entry;
 
     if (null != inner.getGroup() || null != inner.getFetch() || null != inner.getOffset()
             || (null != inner.getOrderList() && inner.getOrderList().size() != 0)
@@ -709,6 +840,17 @@ public final class HeavyDBParser {
       }
       select0 = new SqlBasicCall(
               SqlStdOperatorTable.SINGLE_VALUE, new SqlNode[] {select0}, ZERO);
+    }
+
+    // Re-apply the CAST peeled off the source expression above so the implicit
+    // type coercion against the target column survives the rewrite. The cast
+    // wraps SINGLE_VALUE(...) (not the inner projection) so it applies to the
+    // collapsed scalar value the way the original CAST applied to the subquery
+    // result.
+    if (implicitCastType != null) {
+      select0 = new SqlBasicCall(SqlStdOperatorTable.CAST,
+              new SqlNode[] {select0, implicitCastType},
+              ZERO);
     }
 
     // get the fully qualified target table rowid column name
@@ -916,8 +1058,7 @@ public final class HeavyDBParser {
     }
 
     HeavyDBPlanner planner = getPlanner(allowSubqueryDecorrelation,
-            parserOptions.isWatchdogEnabled(),
-            parserOptions.isDistributedMode());
+            parserOptions.isWatchdogEnabled());
     SqlNode node = null;
     try {
       node = planner.parse(select.toSqlString(CalciteSqlDialect.DEFAULT).getSql());
@@ -933,7 +1074,7 @@ public final class HeavyDBParser {
 
     ArrayList<String> fields = new ArrayList<String>();
     ArrayList<RexNode> nodes = new ArrayList<RexNode>();
-    final RexBuilder builder = new RexBuilder(planner.getTypeFactory());
+    final RexBuilder builder = new HeavyDBRexBuilder(planner.getTypeFactory());
 
     for (SqlNode n : update.getTargetColumnList()) {
       if (n instanceof SqlIdentifier) {
@@ -993,7 +1134,7 @@ public final class HeavyDBParser {
   RelRoot queryToRelNode(final String sql, final HeavyDBParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     final HeavyDBPlanner planner = getPlanner(
-            true, parserOptions.isWatchdogEnabled(), parserOptions.isDistributedMode());
+            true, parserOptions.isWatchdogEnabled());
     final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
     return convertSqlToRelNode(sqlNode, planner, parserOptions);
   }
@@ -1044,8 +1185,7 @@ public final class HeavyDBParser {
       planner.close();
       // create a new one
       planner = getPlanner(allowCorrelatedSubQueryExpansion,
-              parserOptions.isWatchdogEnabled(),
-              parserOptions.isDistributedMode());
+              parserOptions.isWatchdogEnabled());
       node = parseSql(
               node.toSqlString(CalciteSqlDialect.DEFAULT).toString(), false, planner);
     }
@@ -1071,17 +1211,18 @@ public final class HeavyDBParser {
     RelNode rootNode = planner.optimizeRATree(
             relRootNode.project(), parserOptions.isViewOptimizeEnabled(), foundView);
     planner.close();
-    return new RelRoot(rootNode,
+    RelRoot rr = new RelRoot(rootNode,
             relRootNode.validatedRowType,
             relRootNode.kind,
             relRootNode.fields,
             relRootNode.collation,
             Collections.emptyList());
+    return rr;
   }
 
   private RelRoot replaceIsTrue(final RelDataTypeFactory typeFactory, RelRoot root) {
     final RexShuttle callShuttle = new RexShuttle() {
-      RexBuilder builder = new RexBuilder(typeFactory);
+      RexBuilder builder = new HeavyDBRexBuilder(typeFactory);
 
       public RexNode visitCall(RexCall call) {
         call = (RexCall) super.visitCall(call);
@@ -1241,8 +1382,8 @@ public final class HeavyDBParser {
       } else {
         assert proj instanceof SqlBasicCall;
         SqlBasicCall proj_call = (SqlBasicCall) proj;
-        if (proj_call.operands.length > 0) {
-          for (int i = 0; i < proj_call.operands.length; i++) {
+        if (proj_call.getOperandList().size() > 0) {
+          for (int i = 0; i < proj_call.getOperandList().size(); i++) {
             if (proj_call.operand(i) instanceof SqlCase) {
               SqlNode new_op = expandCase(proj_call.operand(i), typeFactory);
               proj_call.setOperand(i, new_op);
@@ -1286,7 +1427,7 @@ public final class HeavyDBParser {
       return;
     }
     SqlBasicCall basic_call = (SqlBasicCall) node;
-    for (SqlNode operator : basic_call.getOperands()) {
+    for (SqlNode operator : basic_call.getOperandList()) {
       if (operator instanceof SqlOrderBy) {
         desugarExpression(((SqlOrderBy) operator).query, typeFactory);
       } else {
@@ -1301,9 +1442,9 @@ public final class HeavyDBParser {
     HEAVYDBLOGGER.debug("expand: " + node.toString());
     if (node instanceof SqlBasicCall) {
       SqlBasicCall node_call = (SqlBasicCall) node;
-      SqlNode[] operands = node_call.getOperands();
-      for (int i = 0; i < operands.length; ++i) {
-        node_call.setOperand(i, expand(operands[i], id_to_expr, typeFactory));
+      List<SqlNode> operands = node_call.getOperandList();
+      for (int i = 0; i < operands.size(); ++i) {
+        node_call.setOperand(i, expand(operands.get(i), id_to_expr, typeFactory));
       }
       SqlNode expanded_variance = expandVariance(node_call, typeFactory);
       if (expanded_variance != null) {
@@ -1718,7 +1859,7 @@ public final class HeavyDBParser {
         SqlBasicCall basicCall = (SqlBasicCall) call;
         if (basicCall.getKind() == SqlKind.OR) {
           String targetString = targetExpression.toString();
-          for (SqlNode listedOperand : basicCall.operands) {
+          for (SqlNode listedOperand : basicCall.getOperandList()) {
             if (listedOperand.toString().contains(targetString)) {
               throw Util.FoundOne.NULL;
             }
@@ -1746,7 +1887,7 @@ public final class HeavyDBParser {
 
     public boolean isEqualityJoinOperator(SqlBasicCall basicCall) {
       if (null != basicCall) {
-        if (basicCall.operands.length == 2
+        if (basicCall.getOperandList().size() == 2
                 && (basicCall.getKind() == SqlKind.EQUALS
                         || basicCall.getKind() == SqlKind.NOT_EQUALS)
                 && basicCall.operand(0) instanceof SqlIdentifier

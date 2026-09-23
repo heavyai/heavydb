@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "Grantee.h"
@@ -71,6 +60,88 @@ bool Grantee::hasRole(Role* role, bool only_direct) const {
     }
     return false;
   }
+}
+
+Restrictions Grantee::getRestrictions(bool only_direct) {
+  if (only_direct) {
+    return restrictions_;
+  }
+  Restrictions merged;
+  std::stack<const Grantee*> roles;
+  roles.push(this);
+  while (!roles.empty()) {
+    auto role = roles.top();
+    roles.pop();
+    for (auto& [key, restriction] : role->restrictions_) {
+      auto p = merged.emplace(
+          std::make_tuple(restriction.dbId, restriction.tableId, restriction.columnId),
+          restriction);
+      if (!p.second) {
+        // Insert failed because the restriction key already exists so merge the values.
+        p.first->second.values.insert(restriction.values.begin(),
+                                      restriction.values.end());
+      }
+    }
+    for (auto granted_role : role->roles_) {
+      roles.push(granted_role);
+    }
+  }
+  return merged;
+}
+
+void Grantee::setLegacyRestrictionColumnName(const std::string& column_name) {
+  Restriction r;
+  auto key = r.getKey();
+  auto rit = restrictions_.find(key);
+  if (rit == restrictions_.end()) {
+    rit = restrictions_.emplace(key, std::move(r)).first;
+  }
+  rit->second.deprecatedSamlColumnName = column_name;
+}
+
+void Grantee::removeLegacyRestrictionColumnName() {
+  Restriction r;
+  auto key = r.getKey();
+  restrictions_.erase(key);
+}
+
+void Grantee::addRestrictionValue(Restriction::Key key, const std::string& value) {
+  auto rit = restrictions_.find(key);
+  if (rit == restrictions_.end()) {
+    rit = restrictions_.emplace(key, Restriction(key)).first;
+  }
+  rit->second.values.insert(value);
+}
+
+void Grantee::removeRestrictions(Restriction::Key key) {
+  restrictions_.erase(key);
+}
+
+void Grantee::removeTableRestrictions(int32_t db_id, int32_t table_id) {
+  for (auto it = restrictions_.begin(); it != restrictions_.end();) {
+    int32_t const& d = std::get<0>(it->first);
+    int32_t const& t = std::get<1>(it->first);
+    if (d == db_id && t == table_id) {
+      it = restrictions_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void Grantee::removeDatabaseRestrictions(int32_t db_id) {
+  for (auto it = restrictions_.begin(); it != restrictions_.end();) {
+    int32_t const& d = std::get<0>(it->first);
+    if (d == db_id) {
+      it = restrictions_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void Grantee::removeAllRestrictions() {
+  restrictions_.clear();
 }
 
 void Grantee::getPrivileges(DBObject& object, bool only_direct) {

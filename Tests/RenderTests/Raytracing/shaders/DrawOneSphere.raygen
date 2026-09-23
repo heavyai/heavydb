@@ -1,0 +1,52 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_ray_tracing : enable
+//</extensions>
+
+layout(binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(rgba8) uniform image2D outputImage;
+
+layout(std430) uniform RAYGEN_UBO_TYPE {
+	mat4 viewInverse;
+	mat4 projInverse;
+};
+
+// Define the ray payload
+// Multiple payloads may be declared with different location decorations
+// All shaders invoked must use the same payload for each location referenced
+layout(location = 0) rayPayloadEXT vec3 hitValue;
+
+void main()
+{
+	const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+	const vec2 uv = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+	vec2 d = uv * 2.0 - 1.0;
+
+  // Compute world space ray origin using the inverse view matrix
+	vec4 origin = viewInverse * vec4(0, 0, 0, 1);
+
+  // Compute the view space target point using the inverse projection matrix
+	vec4 target = projInverse * vec4(d.x, d.y, 1, 1) ;
+
+  // Compute the direction in world space
+	vec4 direction = viewInverse * vec4(normalize(target.xyz), 0);
+
+  // min and max traversal distances (arbitrary for the test)
+	float tmin = 0.001;
+	float tmax = 10000.0;
+
+  // initialize the hitValue payload to black
+  hitValue = vec3(0.0);
+
+  // ready, fire, aim!
+  // When traceRayEXT returns, hitValue will contain results from the hit or miss shaders invoked
+  // during the trace
+  traceRayEXT(topLevelAS, gl_RayFlagsOpaqueEXT, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
+
+  // Write the results to the output image
+	imageStore(outputImage, ivec2(gl_LaunchIDEXT.xy), vec4(hitValue, 1.0));
+}

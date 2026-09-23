@@ -1,18 +1,6 @@
-
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -30,11 +18,6 @@
 #include "FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
 #include "PersistentStorageMgr/PersistentStorageMgr.h"
-
-#ifdef __APPLE__
-#include <sys/sysctl.h>
-#include <sys/types.h>
-#endif
 
 #include <boost/container/small_vector.hpp>
 #include <boost/filesystem.hpp>
@@ -187,26 +170,9 @@ DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() {
 }
 
 size_t DataMgr::getTotalSystemMemory() {
-#ifdef __APPLE__
-  int mib[2];
-  size_t physical_memory;
-  size_t length;
-  // Get the Physical memory size
-  mib[0] = CTL_HW;
-  mib[1] = HW_MEMSIZE;
-  length = sizeof(size_t);
-  sysctl(mib, 2, &physical_memory, &length, NULL, 0);
-  return physical_memory;
-#elif defined(_MSC_VER)
-  MEMORYSTATUSEX status;
-  status.dwLength = sizeof(status);
-  GlobalMemoryStatusEx(&status);
-  return status.ullTotalPhys;
-#else  // Linux
   long pages = sysconf(_SC_PHYS_PAGES);
   long page_size = sysconf(_SC_PAGE_SIZE);
   return pages * page_size;
-#endif
 }
 
 void DataMgr::allocateCpuBufferMgr(int32_t device_id,
@@ -391,8 +357,8 @@ void DataMgr::createTopLevelMetadata()
   CHECK(gfm);
 
   auto fm_top = gfm->getFileMgr(chunkKey);
-  if (auto fm = dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
-    fm->createOrMigrateTopLevelMetadata();
+  if (fm_top) {
+    fm_top->createOrMigrateTopLevelMetadata();
   }
 }
 
@@ -582,7 +548,7 @@ void DataMgr::checkpoint(const int db_id, const int tb_id) {
       (*deviceIt)->checkpoint(db_id, tb_id);
     }
   }
-  // Validate licensing limitations
+  // Validate configured row limits
   Catalog_Namespace::SysCatalog::instance().getDataMgr().validateNumRows();
 }
 
@@ -595,7 +561,7 @@ void DataMgr::checkpoint(const int db_id,
   for (int device_id = 0; device_id < levelSizes_[memory_level]; device_id++) {
     bufferMgrs_[memory_level][device_id]->checkpoint(db_id, table_id);
   }
-  // Validate licensing limitations
+  // Validate configured row limits
   Catalog_Namespace::SysCatalog::instance().getDataMgr().validateNumRows();
 }
 
@@ -609,7 +575,7 @@ void DataMgr::checkpoint() {
       (*deviceIt)->checkpoint();
     }
   }
-  // Validate licensing limitations
+  // Validate configured row limits
   Catalog_Namespace::SysCatalog::instance().getDataMgr().validateNumRows();
 }
 
@@ -649,11 +615,6 @@ File_Namespace::GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
       dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
   CHECK(global_file_mgr);
   return global_file_mgr;
-}
-
-std::shared_ptr<ForeignStorageInterface> DataMgr::getForeignStorageInterface() const {
-  return dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])
-      ->getForeignStorageInterface();
 }
 
 std::ostream& operator<<(std::ostream& os, const DataMgr::SystemMemoryUsage& mem_info) {
@@ -851,7 +812,7 @@ void DataMgr::validateNumRows(const int64_t additional_row_count) const {
       num_rows > max_num_rows_) {
     std::stringstream ss;
     ss << "Operation failed because it would result in " << num_rows << ""
-       << " rows when the system license allows " << max_num_rows_.value() << ".";
+       << " rows when the configured limit is " << max_num_rows_.value() << ".";
     throw std::runtime_error(ss.str());
   }
 }
@@ -877,9 +838,8 @@ void DataMgr::setMaxNumRows(const std::optional<int64_t>& new_max_opt) {
     ss << "Cannot set max number of rows across all tables.  New limit on number of "
           "total number of rows "
        << new_max << " when system already has " << num_rows
-       << ".  Please temporarily use a license that allows for more total rows and drop "
-          "to "
-          "current license limits.";
+       << ".  Please raise the configured limit or drop existing rows to fit the "
+          "current limit.";
     throw std::runtime_error(ss.str());
   }
   max_num_rows_ = new_max;

@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "MigrationMgr/MigrationMgr.h"
@@ -37,8 +26,6 @@ extern bool g_multi_instance;
 namespace migrations {
 
 void MigrationMgr::takeMigrationLock(const std::string& base_path) {
-// TODO: support lock on Windows
-#ifndef _WIN32
   // Only used for --multi-instance clusters.
   if (!g_multi_instance) {
     migration_enabled_ = true;
@@ -68,14 +55,9 @@ void MigrationMgr::takeMigrationLock(const std::string& base_path) {
   if (!migration_enabled_) {
     migration_mutex_->lock_shared();
   }
-#else
-  migration_enabled_ = true;
-#endif  // _WIN32
 }
 
 void MigrationMgr::relaxMigrationLock() {
-// TODO: support lock on Windows
-#ifndef _WIN32
   // Only used for --multi-instance clusters.
   if (!g_multi_instance) {
     return;
@@ -85,7 +67,6 @@ void MigrationMgr::relaxMigrationLock() {
   if (migration_enabled_ && migration_mutex_) {
     migration_mutex_->convert_lock_shared();
   }
-#endif  // _WIN32
 }
 
 void MigrationMgr::migrateDateInDaysMetadata(
@@ -490,8 +471,6 @@ void MigrationMgr::executeRebrandMigration(const std::string& base_path) {
   }
 
   // Rename legacy files and create symlinks to them.
-  const auto license_updated = rename_and_symlink_file(
-      storage_base_path, "", "omnisci.license", shared::kDefaultLicenseFileName);
   const auto key_updated = rename_and_symlink_file(storage_base_path,
                                                    shared::kDefaultKeyStoreDirName,
                                                    "omnisci.pem",
@@ -500,7 +479,7 @@ void MigrationMgr::executeRebrandMigration(const std::string& base_path) {
                                                            shared::kCatalogDirectoryName,
                                                            "omnisci_system_catalog",
                                                            shared::kSystemCatalogName);
-  if (license_updated || key_updated || sys_catalog_updated) {
+  if (key_updated || sys_catalog_updated) {
     migration_occurred = true;
   }
 

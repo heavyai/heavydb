@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package com.mapd.calcite.parser;
 
 import static com.mapd.parser.server.ExtensionFunction.*;
@@ -32,7 +37,22 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
   public HeavyDBTypeCoercion(RelDataTypeFactory typeFactory, SqlValidator validator) {
     super(typeFactory, validator);
   }
-
+  @Override public RelDataType commonTypeForBinaryComparison(RelDataType type1, RelDataType type2) {
+    /* the 'super' calcite version of this method will return the more precise TIMESTAMP type
+     *  which leads to a CAST for that type being inserted into the RexNode.  For example,
+     * if t is TIMESTAMP(0) and t_3 is TIMESTAMP(3) the query "select t from x where t = t_3" will
+     * be converted to "select t from x where CAST(t AS TIMESTAMP(3)) = t_3".  Which will fail in
+     * heavy db.
+     */
+    SqlTypeName typeName1 = (type1 != null) ? type1.getSqlTypeName() : null;
+    if (typeName1 == null) {
+      return null;
+    }
+    if (SqlTypeUtil.sameNamedType(type1, type2) && typeName1 == SqlTypeName.TIMESTAMP) {
+      return null;
+    }
+    return super.commonTypeForBinaryComparison(type1, type2);
+  }
   /**
    * Calculates a type coercion score for a given call to a User-Defined Table Function,
    * assuming the call is bound to overload @udtf. This is used to perform overload
@@ -42,7 +62,10 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
   public int calculateTypeCoercionScore(
           SqlCallBinding callBinding, ExtTableFunction udtf) {
     final List<ExtArgumentType> paramTypes = udtf.getArgTypes();
-    SqlCall permutedCall = callBinding.permutedCall();
+    // Use our own DEFAULT-padded permutation rather than callBinding.permutedCall():
+    // in Calcite 1.41 the latter does not pad omitted arguments for our UDTFs
+    // (isFixedParameters()==false), which mis-positions named middle omissions.
+    SqlCall permutedCall = udtf.permuteOperandsWithDefaultMarkers(callBinding.getCall());
     assert paramTypes != null;
     int score = 0;
     for (int i = 0; i < permutedCall.operandCount(); i++) {
@@ -242,12 +265,14 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
     RelDataType returnType = super.getWiderTypeForTwo(type1, type2, stringPromotion);
     if (SqlTypeUtil.isTimestamp(type1) && SqlTypeUtil.isTimestamp(type2)) {
       returnType = (type1.getPrecision() > type2.getPrecision()) ? type1 : type2;
-    } else if ((SqlTypeUtil.isDouble(type1) || SqlTypeUtil.isDouble(type2))
-            && (SqlTypeUtil.isApproximateNumeric(type1)
-                    && SqlTypeUtil.isApproximateNumeric(type2))) {
-      returnType = factory.createTypeWithNullability(
-              factory.createSqlType(SqlTypeName.DOUBLE), true);
-    }
+    } else if ((SqlTypeName.DOUBLE.equals(type1.getSqlTypeName())
+                   || SqlTypeName.DOUBLE.equals(type2.getSqlTypeName()))
+               && (SqlTypeUtil.isApproximateNumeric(type1)
+                      && SqlTypeUtil.isApproximateNumeric(type2))) {
+        returnType = factory.createTypeWithNullability(
+                factory.createSqlType(SqlTypeName.DOUBLE), true);
+      }
+
     return returnType;
   }
 
@@ -259,7 +284,9 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
           SqlCallBinding callBinding, ExtTableFunction udtf) {
     boolean coerced = false;
     final List<ExtArgumentType> paramTypes = udtf.getArgTypes();
-    SqlCall permutedCall = callBinding.permutedCall();
+    // See calculateTypeCoercionScore: use our DEFAULT-padded permutation so named
+    // middle omissions are positioned correctly before coercion.
+    SqlCall permutedCall = udtf.permuteOperandsWithDefaultMarkers(callBinding.getCall());
     for (int i = 0; i < permutedCall.operandCount(); i++) {
       SqlNode operand = permutedCall.operand(i);
       if (operand.getKind() == SqlKind.DEFAULT) {
@@ -395,6 +422,8 @@ public class HeavyDBTypeCoercion extends TypeCoercionImpl {
   }
 
   /**
+   * Adapted from Apache Calcite's
+   * {@code org.apache.calcite.sql.validate.implicit.AbstractTypeCoercion#needToCast}.
    * We overload this specifically to REMOVE a rule Calcite uses: Calcite will not cast
    * types in the NUMERIC type family across each other. Therefore, with Calcite's default
    * rules, we would not cast INTEGER columns to BIGINT, or FLOAT to DOUBLE.

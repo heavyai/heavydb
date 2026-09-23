@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "Shared/DatumFetchers.h"
@@ -34,23 +23,15 @@
 #include <type_traits>
 
 // TODO(adb): fixup
-#ifdef _WIN32
-#include <fcntl.h>
-#include <io.h>
-#else
 #include <sys/fcntl.h>
-#endif
 
 #include "Logger/Logger.h"
-#include "OSDependent/heavyai_fs.h"
+#include "Shared/heavyai_fs.h"
+#include "Shared/measure.h"
 #include "Shared/sqltypes.h"
 #include "Shared/thread_count.h"
-#include "StringDictionaryClient.h"
 #include "Utils/Regexp.h"
 #include "Utils/StringLike.h"
-
-#include "LeafHostInfo.h"
-#include "Shared/measure.h"
 
 bool g_cache_string_hash{true};
 size_t g_max_concurrent_llm_transform_call{16};
@@ -292,56 +273,14 @@ StringDictionary::StringDictionary(const shared::StringDictKey& dict_key,
   }
 }
 
-namespace {
-class MapMaker : public StringDictionary::StringCallback {
-  std::unordered_map<std::string, int32_t> map_;
-
- public:
-  void operator()(std::string const& str, int32_t const string_id) override {
-    auto const emplaced = map_.emplace(str, string_id);
-    CHECK(emplaced.second) << "str(" << str << ") string_id(" << string_id << ')';
-  }
-  void operator()(std::string_view const, int32_t const string_id) override {
-    UNREACHABLE() << "MapMaker must be called with a std::string.";
-  }
-  std::unordered_map<std::string, int32_t> moveMap() { return std::move(map_); }
-};
-}  // namespace
-
-std::function<int32_t(std::string const&)> StringDictionary::makeLambdaStringToId()
-    const {
-  CHECK(isClient());
-  constexpr size_t big_gen = static_cast<size_t>(std::numeric_limits<size_t>::max());
-  MapMaker map_maker;
-  eachStringSerially(big_gen, map_maker);
-  return [map{map_maker.moveMap()}](std::string const& str) {
-    auto const itr = map.find(str);
-    return itr == map.cend() ? INVALID_STR_ID : itr->second;
-  };
-}
-
-// Call serial_callback for each (string/_view, string_id). Must be called serially.
+// Call serial_callback for each (string_view, string_id). Must be called serially.
 void StringDictionary::eachStringSerially(int64_t const generation,
                                           StringCallback& serial_callback) const {
-  if (isClient()) {
-    // copyStrings() is not supported when isClient().
-    std::string str;  // Import buffer. Placing outside of loop should reduce allocations.
-    size_t const n = std::min(static_cast<size_t>(generation), storageEntryCount());
-    CHECK_LE(n, static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1);
-    for (unsigned id = 0; id < n; ++id) {
-      {
-        std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
-        client_->get_string(str, id);
-      }
-      serial_callback(str, id);
-    }
-  } else {
-    size_t const n = std::min(static_cast<size_t>(generation), str_count_);
-    CHECK_LE(n, static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1);
-    std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
-    for (unsigned id = 0; id < n; ++id) {
-      serial_callback(getStringFromStorageFast(static_cast<int>(id)), id);
-    }
+  size_t const n = std::min(static_cast<size_t>(generation), str_count_);
+  CHECK_LE(n, static_cast<size_t>(std::numeric_limits<int32_t>::max()) + 1);
+  std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
+  for (unsigned id = 0; id < n; ++id) {
+    serial_callback(getStringFromStorageFast(static_cast<int>(id)), id);
   }
 }
 
@@ -399,20 +338,7 @@ size_t StringDictionary::getNumStringsFromStorage(
   return guess + (min_bound > guess ? 1 : 0);
 }
 
-StringDictionary::StringDictionary(const LeafHostInfo& host,
-                                   const shared::StringDictKey& dict_key)
-    : dict_key_(dict_key)
-    , folder_("DB_" + std::to_string(dict_key.db_id) + "_DICT_" +
-              std::to_string(dict_key.dict_id))
-    , strings_cache_(nullptr)
-    , client_(new StringDictionaryClient(host, {dict_key.db_id, dict_key.dict_id}, true))
-    , client_no_timeout_(
-          new StringDictionaryClient(host, {dict_key.db_id, dict_key.dict_id}, false)) {}
-
 StringDictionary::~StringDictionary() noexcept {
-  if (isClient()) {
-    return;
-  }
   if (payload_map_) {
     if (!isTemp_) {
       CHECK(offset_map_);
@@ -432,15 +358,7 @@ StringDictionary::~StringDictionary() noexcept {
   }
 }
 
-void StringDictionary::update_leaf(const LeafHostInfo& new_host) {}
-
 int32_t StringDictionary::getOrAdd(const std::string& str) noexcept {
-  if (isClient()) {
-    std::vector<int32_t> string_ids;
-    client_->get_or_add_bulk(string_ids, std::vector<std::string>{str});
-    CHECK_EQ(size_t(1), string_ids.size());
-    return string_ids.front();
-  }
   return getOrAddImpl(str);
 }
 
@@ -458,28 +376,6 @@ std::vector<std::string> StringDictionary::getStringsForRange(
 
   const bool has_string_ops = string_ops.size() > 0;
 
-  if (isClient()) {
-    // For distributed case, use the existing get_string method
-    tbb::parallel_for(tbb::blocked_range<int32_t>(start_id, end_id),
-                      [&](const tbb::blocked_range<int32_t>& range) {
-                        std::string str;  // Reuse buffer to reduce allocations
-                        for (int32_t id = range.begin(); id != range.end(); ++id) {
-                          if (mask_functor(id)) {
-                            {
-                              std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
-                              client_->get_string(str, id);
-                            }
-                            if (has_string_ops) {
-                              str = string_ops(str);
-                            }
-                            result[id - start_id] = std::move(str);
-                          }
-                        }
-                      });
-    return result;
-  }
-
-  // Local dictionary case remains the same
   std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
   tbb::parallel_for(tbb::blocked_range<int32_t>(start_id, end_id),
                     [&](const tbb::blocked_range<int32_t>& range) {
@@ -551,11 +447,6 @@ template <class String>
 void StringDictionary::getOrAddBulkArray(
     const std::vector<std::vector<String>>& string_array_vec,
     std::vector<std::vector<int32_t>>& ids_array_vec) {
-  if (client_no_timeout_) {
-    client_no_timeout_->get_or_add_bulk_array(ids_array_vec, string_array_vec);
-    return;
-  }
-
   ids_array_vec.resize(string_array_vec.size());
   for (size_t i = 0; i < string_array_vec.size(); i++) {
     auto& strings = string_array_vec[i];
@@ -855,13 +746,6 @@ template void StringDictionary::getOrAddBulk(
 template <class String>
 int32_t StringDictionary::getIdOfString(const String& str) const {
   std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
-  if (isClient()) {
-    if constexpr (std::is_same_v<std::string, std::decay_t<String>>) {
-      return client_->get(str);
-    } else {
-      return client_->get(std::string(str));
-    }
-  }
   return getUnlocked(str);
 }
 
@@ -877,17 +761,11 @@ int32_t StringDictionary::getUnlocked(const std::string_view sv) const noexcept 
 
 std::string StringDictionary::getString(int32_t string_id) const {
   std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
-  if (isClient()) {
-    std::string ret;
-    client_->get_string(ret, string_id);
-    return ret;
-  }
   return getStringUnlocked(string_id);
 }
 
 std::string_view StringDictionary::getStringView(int32_t string_id) const {
   std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
-  CHECK(!isClient()) << "use of this function is unsupported in distributed";
   return getStringViewUnlocked(string_id);
 }
 
@@ -905,16 +783,12 @@ std::string_view StringDictionary::getStringViewUnlocked(
 std::pair<char*, size_t> StringDictionary::getStringBytes(
     int32_t string_id) const noexcept {
   std::shared_lock<std::shared_mutex> read_lock(rw_mutex_);
-  CHECK(!isClient());
   CHECK_LE(0, string_id);
   CHECK_LT(string_id, static_cast<int32_t>(str_count_));
   return getStringBytesChecked(string_id);
 }
 
 size_t StringDictionary::storageEntryCountUnlocked() const {
-  if (isClient()) {
-    return client_->storage_entry_count();
-  }
   return str_count_;
 }
 
@@ -980,9 +854,6 @@ std::vector<int32_t> StringDictionary::getLike<int32_t>(const std::string& patte
                                                         const char escape,
                                                         const size_t generation) const {
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
-  if (isClient()) {
-    return client_->get_like_i32(pattern, icase, is_simple, escape, generation);
-  }
   const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape);
   const auto it = like_i32_cache_.find(cache_key);
   if (it != like_i32_cache_.end()) {
@@ -1006,9 +877,6 @@ std::vector<int64_t> StringDictionary::getLike<int64_t>(const std::string& patte
                                                         const char escape,
                                                         const size_t generation) const {
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
-  if (isClient()) {
-    return client_->get_like_i64(pattern, icase, is_simple, escape, generation);
-  }
   const auto cache_key = std::make_tuple(pattern, icase, is_simple, escape);
   const auto it = like_i64_cache_.find(cache_key);
   if (it != like_i64_cache_.end()) {
@@ -1156,12 +1024,8 @@ SortedStringPermutation StringDictionary::getSortedPermutation(
   SortedStringPermutation sorted_string_permutation(should_sort_descending);
   sorted_string_permutation.persisted_permutation = sorted_permutation_cache_;
   if (!transient_string_to_id_map.empty()) {
-    if (client_) {
-      UNREACHABLE();
-    } else {
-      sorted_string_permutation.transient_permutation =
-          getTransientSortPermutation(transient_string_to_id_map);
-    }
+    sorted_string_permutation.transient_permutation =
+        getTransientSortPermutation(transient_string_to_id_map);
   }
   return sorted_string_permutation;
 }
@@ -1170,9 +1034,6 @@ std::vector<int32_t> StringDictionary::getCompare(const std::string& pattern,
                                                   const std::string& comp_operator,
                                                   const size_t generation) {
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
-  if (isClient()) {
-    return client_->get_compare(pattern, comp_operator, generation);
-  }
   std::vector<int32_t> ret;
   if (str_count_ == 0) {
     return ret;
@@ -1332,9 +1193,6 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
                                                      const char escape,
                                                      const size_t generation) const {
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
-  if (isClient()) {
-    return client_->get_regexp_like(pattern, escape, generation);
-  }
   const auto cache_key = std::make_pair(pattern, escape);
   const auto it = regex_cache_.find(cache_key);
   if (it != regex_cache_.end()) {
@@ -1378,11 +1236,6 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
 
 std::vector<std::string> StringDictionary::copyStrings() const {
   std::lock_guard<std::shared_mutex> write_lock(rw_mutex_);
-  if (isClient()) {
-    // TODO(miyu): support remote string dictionary
-    throw std::runtime_error(
-        "copying dictionaries from remote server is not supported yet.");
-  }
 
   if (strings_cache_) {
     return *strings_cache_;
@@ -1856,13 +1709,6 @@ void StringDictionary::invalidateInvertedIndex() noexcept {
 // uncheckpointed data be written to disk. Only option is a table truncate, and thats
 // assuming not replicated dictionary
 bool StringDictionary::checkpoint() noexcept {
-  if (isClient()) {
-    try {
-      return client_->checkpoint();
-    } catch (...) {
-      return false;
-    }
-  }
   CHECK(!isTemp_);
   bool ret = true;
   ret = ret &&
@@ -1872,10 +1718,6 @@ bool StringDictionary::checkpoint() noexcept {
   ret = ret && (heavyai::fsync(offset_fd_) == 0);
   ret = ret && (heavyai::fsync(payload_fd_) == 0);
   return ret;
-}
-
-bool StringDictionary::isClient() const noexcept {
-  return static_cast<bool>(client_);
 }
 
 std::vector<int32_t> StringDictionary::fillIndexVector(const size_t start_idx,
@@ -2119,15 +1961,6 @@ size_t StringDictionary::buildDictionaryTranslationMap(
     return 0;
   }
 
-  // If here we should should have local dictionaries.
-  // Note case of transient source dictionaries that aren't
-  // seen as remote (they have no client_no_timeout_) is covered
-  // by early bail above on num_source_strings == 0
-  if (dest_dict->client_no_timeout_) {
-    throw std::runtime_error(
-        "Cannot translate between a local source and remote destination dictionary.");
-  }
-
   // Sort this/source dict and dest dict on folder_ so we can enforce
   // lock ordering and avoid deadlocks
   std::shared_lock<std::shared_mutex> source_read_lock(rw_mutex_, std::defer_lock);
@@ -2262,11 +2095,6 @@ void StringDictionary::buildDictionaryNumericTranslationMap(
     return;
   }
 
-  // If here we should should have a local dictionary
-  // Note case of transient source dictionaries that aren't
-  // seen as remote (they have no client_no_timeout_) is covered
-  // by early bail above on num_source_strings == 0
-
   std::shared_lock<std::shared_mutex> source_read_lock(rw_mutex_);
 
   // For source dictionary we cap the number of entries
@@ -2313,22 +2141,6 @@ void StringDictionary::buildDictionaryNumericTranslationMap(
           }
         });
   });
-}
-
-void translate_string_ids(std::vector<int32_t>& dest_ids,
-                          const LeafHostInfo& dict_server_host,
-                          const shared::StringDictKey& dest_dict_key,
-                          const std::vector<int32_t>& source_ids,
-                          const shared::StringDictKey& source_dict_key,
-                          const int32_t dest_generation) {
-  shared::StringDictKey temp_dict_key(-1, -1);
-  StringDictionaryClient string_client(
-      dict_server_host, {temp_dict_key.db_id, temp_dict_key.dict_id}, false);
-  string_client.translate_string_ids(dest_ids,
-                                     {dest_dict_key.db_id, dest_dict_key.dict_id},
-                                     source_ids,
-                                     {source_dict_key.db_id, source_dict_key.dict_id},
-                                     dest_generation);
 }
 
 size_t StringDictionary::computeCacheSize() const {

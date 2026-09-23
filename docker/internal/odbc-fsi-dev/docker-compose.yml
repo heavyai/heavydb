@@ -1,0 +1,45 @@
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+services:
+  odbc-fsi-dev:
+    build: ./image-build
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    volumes:
+      - type: bind
+        source: ${ODBC_FSI_SRC:-~/odbc-fsi-src}
+        target: /odbc-fsi-src
+    command: tail -f /dev/null # Prevents the container from exiting immediately
+    cap_add:
+      - SYS_PTRACE
+    depends_on:
+      - postgis
+      - omnisci
+      - hive
+
+  postgis:
+    image: postgis/postgis
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=HyperInteractive
+      - POSTGRES_DB=postgis
+      - POSTGRES_HOST_AUTH_METHOD=trust
+
+  omnisci:
+    image: docker-internal.mapd.com/mapd/mapd-render
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+
+  hive:
+    build: ./hive
+    command: hiveserver2
+    

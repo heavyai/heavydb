@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -47,7 +36,7 @@ extern int64_t g_llm_transform_max_num_unique_value;
  */
 class StringFunctionTest : public DBHandlerTestFixture,
                            public ::testing::WithParamInterface<TExecuteMode::type> {
-public:
+ public:
   static void SetUpTestSuite() {
     const std::vector<std::string> setup_commands{
         "drop table if exists string_function_test_people;",
@@ -464,6 +453,7 @@ TEST_P(StringFunctionTest, LeftTrimTwoArgsSyntax) {
 TEST_P(StringFunctionTest, LeftTrimLiteral) {
   // Trim with 'LEADING'
   sqlAndCompareResult("select trim(leading '$' from '$19.99$');", {{"19.99$"}});
+
   // LTrim
   sqlAndCompareResult("select ltrim('$19.99$', '$');", {{"19.99$"}});
 }
@@ -474,6 +464,7 @@ TEST_P(StringFunctionTest, RightTrim) {
       "select trim(trailing '<> ' from arrow_code) from "
       "string_function_test_countries order by id asc;",
       {{">>US"}, {">>CA"}, {">>GB"}, {">>DE"}});
+
   // RTrim
   sqlAndCompareResult(
       "select rtrim(arrow_code, '<> ') from string_function_test_countries order by "
@@ -494,11 +485,13 @@ TEST_P(StringFunctionTest, Substring) {
       "select substring(full_name, 1, 4) from string_function_test_people order by "
       "id asc;",
       {{"John"}, {"John"}, {"John"}, {"Sue "}});
+
   sqlAndCompareResult(
       "select substring(full_name from 1 for 4) from string_function_test_people "
       "order by "
       "id asc;",
       {{"John"}, {"John"}, {"John"}, {"Sue "}});
+
   // Test null inputs
   sqlAndCompareResult(
       "select substring(zip_plus_4, 1, 5) from string_function_test_people order by "
@@ -578,6 +571,7 @@ TEST_P(StringFunctionTest, Replace) {
 }
 
 TEST_P(StringFunctionTest, DISABLED_ReplaceEmptyReplacement) {
+  // Todo: Determine why Calcite is not accepting 2-parameter version
   sqlAndCompareResult(
       "select replace(us_phone_number, '555-') from "
       "string_function_test_people order by id asc;",
@@ -590,6 +584,7 @@ TEST_P(StringFunctionTest, ReplaceLiteral) {
 }
 
 TEST_P(StringFunctionTest, DISABLED_ReplaceLiteralEmptyReplacement) {
+  // Todo: Determine why Calcite is not accepting 2-parameter version
   sqlAndCompareResult("select replace('We all love big data.', 'big');",
                       {{"We all love data."}});
 }
@@ -653,6 +648,7 @@ TEST_P(StringFunctionTest, RegexpReplace3Args) {
       {{"The United States"}, {"Canada"}, {"The United Kingdom"}, {"Germany"}});
 }
 
+// 4th argument is position
 TEST_P(StringFunctionTest, RegexpReplace4Args) {
   sqlAndCompareResult(
       "select regexp_replace(personal_motto, '([Oo]ne)[[:space:]]', '$1..two ', "
@@ -677,7 +673,6 @@ TEST_P(StringFunctionTest, RegexpReplace4Args) {
 }
 
 // 5th argument is occurrence
-
 TEST_P(StringFunctionTest, RegexpReplace5Args) {
   // 0 for 5th (occurrence) arguments says to replace all matches
   sqlAndCompareResult(
@@ -862,7 +857,7 @@ TEST_P(StringFunctionTest, RegexpCount2Args) {
 }
 
 TEST_P(StringFunctionTest, RegexpCount3Args) {
-   // 3rd argument to RegexpCount is starting position to search for matches
+  // 3rd argument to RegexpCount is starting position to search for matches
   sqlAndCompareResult(
       "select regexp_count(json_data_none, 'in', 50) "
       "from string_function_test_countries order by id asc;",
@@ -870,8 +865,8 @@ TEST_P(StringFunctionTest, RegexpCount3Args) {
 }
 
 TEST_P(StringFunctionTest, RegexpCount4Args) {
-   // 4th argument to RegexpCount is for regex parameters.
-   // Notably 'c' specifies case sensitive, and 'i' specifies case insensitive
+  // 4th argument to RegexpCount is for regex parameters.
+  // Notably 'c' specifies case sensitive, and 'i' specifies case insensitive
 
   // Case-senstive default
   sqlAndCompareResult(
@@ -1013,7 +1008,7 @@ TEST_P(StringFunctionTest, Base64) {
 
   sqlAndCompareResult("select base64_decode('SEVBVlkuQUk=');", {{"HEAVY.AI"}});
 
- sqlAndCompareResult("select base64_decode(base64_encode('HEAVY.AI'));", {{"HEAVY.AI"}});
+  sqlAndCompareResult("select base64_decode(base64_encode('HEAVY.AI'));", {{"HEAVY.AI"}});
 
   // Invalid base64 characters, should throw
   EXPECT_ANY_THROW(sql("select base64_decode('HEAVY.AI');"));
@@ -1060,7 +1055,7 @@ TEST_P(StringFunctionTest, UrlEncodeAndDecodeInversesAndNull) {
 TEST_P(StringFunctionTest, TryCastIntegerTypes) {
   // INT projected
   sqlAndCompareResult(
-     "select try_cast(split_part(us_phone_number, '-', 2) as int) as digits "
+      "select try_cast(split_part(us_phone_number, '-', 2) as int) as digits "
       " from  string_function_test_people ORDER BY id ASC;",
       {{int64_t(803)}, {int64_t(803)}, {int64_t(614)}, {int64_t(614)}});
 
@@ -1546,6 +1541,7 @@ TEST_P(StringFunctionTest, CastTypesToString) {
                                         "ts_0",
                                         "ts_3",
                                         "tm"};
+
   // Explicit cast
   for (auto col_type : col_type_strings) {
     TQueryResult result_set;
@@ -1805,6 +1801,7 @@ TEST_P(StringFunctionTest, UpdateLowercase_EncodedColumnOnly) {
   sqlAndCompareResult("select country_code from string_function_test_people;",
                       {{"us"}, {"us"}, {"ca"}, {"ca"}});
 }
+
 /**
  * UPDATE statements with at least one non-encoded column follow a different code path
  * from those with only encoded columns (see StorageIOFacility::yieldUpdateCallback for
@@ -1817,6 +1814,7 @@ TEST_P(StringFunctionTest, UpdateLowercase_EncodedAndNonEncodedColumns) {
       "select last_name, country_code from string_function_test_people;",
       {{"SMITH", "us"}, {"Banks", "us"}, {"Wilson", "ca"}, {"Smith", "ca"}});
 }
+
 // TODO-BE-4206: Re-enable after clear definition around handling non-ASCII characters
 TEST_P(StringFunctionTest, DISABLED_LowercaseNonAscii) {
   sql("insert into string_function_test_people values('Ħ', 'Ħ', 25, 'GB')");
@@ -2022,7 +2020,7 @@ TEST_P(StringFunctionTest, SelectLowercase_StringFunctionsDisabled) {
   const auto previous_string_function_state = g_enable_string_functions;
   ScopeGuard reset_string_function_state = [&previous_string_function_state] {
     g_enable_string_functions = previous_string_function_state;
-   };
+  };
   g_enable_string_functions = false;
   queryAndAssertException("select lower(first_name) from string_function_test_people;",
                           "Function LOWER not supported.");
@@ -2040,6 +2038,7 @@ TEST_P(StringFunctionTest, SelectLowercaseNoneEncoded_MoreRowsThanWatchdogLimit)
   };
   g_enable_watchdog = true;
   g_watchdog_none_encoded_string_translation_limit = 3;
+
   std::ostringstream expected_error;
   expected_error
       << "Query requires one or more casts between none-encoded and "
@@ -2175,6 +2174,7 @@ TEST_P(StringFunctionTest, UDF_ExpandDefaults) {
 }
 
 // EXPANDED/REPLACED string operation tests
+
 TEST_P(StringFunctionTest, contains) {
   sqlAndCompareResult("select contains('abcdefghijklmn', 'def');", {{True}});
 
@@ -2258,6 +2258,7 @@ TEST_P(StringFunctionTest, len) {
   // LEN is an alias for LENGTH, just test the alias as
   //    LENGTH functionality should be covered by other tests
   sqlAndCompareResult("select len('abcdefghi');", {{int64_t(9)}});
+
   // Edge case: empty strings
   sqlAndCompareResult("select len('');", {{int64_t(0)}});
 
@@ -2355,6 +2356,7 @@ TEST_P(StringFunctionTest, space) {
   sqlAndCompareResult("select space(1);", {{" "}});
 
   sqlAndCompareResult("select space(8);", {{"        "}});
+
   // this will assert as the -1 is invalid
   queryAndAssertException("select space(-1);", "Number of repeats must be >= 0");
 
@@ -2463,16 +2465,18 @@ TEST_P(StringFunctionTest, StrtokToArrayTextEncodingDict) {
                        {array({"CA", "CAN"})},
                        {array({"GB", "GBR"})},
                        {array({"DE", "DEN"})}});
- }
+}
 
 TEST_P(StringFunctionTest, DISABLED_CardinalityStrtokToArrayTextEncodingDict) {
+  // this test is disabled because array functions don't work well with
+  // runtime function outputs
   sqlAndCompareResult(
       "select cardinality(strtok_to_array(code, '> <')) from text_enc_test;",
       {{int64_t(2)}, {int64_t(2)}, {int64_t(2)}, {int64_t(2)}});
 }
 
 TEST_P(StringFunctionTest, StrtokToArray_UDF) {
-   // Apply STRTOK_TO_ARRAY on the output of an UDF
+  // Apply STRTOK_TO_ARRAY on the output of an UDF
   sqlAndCompareResult(
       "select strtok_to_array(udf_identity(name), ' ') from text_enc_test;",
       {{array({"United", "States"})},
@@ -2490,17 +2494,21 @@ TEST_P(StringFunctionTest, UDFConcat) {
 }
 
 TEST_P(StringFunctionTest, AlterTable_RuntimeFunction) {
-  sql("drop table if exists alter_column_test;");
-  sql("create table alter_column_test (code TEXT ENCODING NONE);");
-  sql("insert into alter_column_test values ('US USA');");
-  sql("insert into alter_column_test values ('CA CAN');");
-  sql("insert into alter_column_test values ('GB GBR');");
-  sql("insert into alter_column_test values ('DE DEN');");
-  sql("alter table alter_column_test add column tokenized_text TEXT[] ENCODING "
-      "DICT(32);");
-  sql("update alter_column_test set tokenized_text = strtok_to_array(code, ' ');");
+  const std::string table_name{"string_function_alter_column_test"};
+  const auto drop_table = "drop table if exists " + table_name + ";";
+  sql(drop_table);
+  ScopeGuard cleanup = [&drop_table] { sql(drop_table); };
 
-  sqlAndCompareResult("select tokenized_text from alter_column_test;",
+  sql("create table " + table_name + " (code TEXT ENCODING NONE);");
+  sql("insert into " + table_name + " values ('US USA');");
+  sql("insert into " + table_name + " values ('CA CAN');");
+  sql("insert into " + table_name + " values ('GB GBR');");
+  sql("insert into " + table_name + " values ('DE DEN');");
+  sql("alter table " + table_name +
+      " add column tokenized_text TEXT[] ENCODING DICT(32);");
+  sql("update " + table_name + " set tokenized_text = strtok_to_array(code, ' ');");
+
+  sqlAndCompareResult("select tokenized_text from " + table_name + ";",
                       {{array({"US", "USA"})},
                        {array({"CA", "CAN"})},
                        {array({"GB", "GBR"})},

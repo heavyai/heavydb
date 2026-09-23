@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef QUERYENGINE_GROUPBYANDAGGREGATE_H
@@ -227,7 +216,7 @@ inline size_t get_count_distinct_sub_bitmap_count(const size_t bitmap_sz_bits,
   // the bitmap into multiple sub-bitmaps which are unified to get the full result.
   // The threshold value for bitmap_sz_bits works well on Kepler.
   return bitmap_sz_bits < 50000 && ra_exe_unit.groupby_exprs.empty() &&
-                 (device_type == ExecutorDeviceType::GPU || g_cluster)
+                 device_type == ExecutorDeviceType::GPU
              ? 64  // NB: must be a power of 2 to keep runtime offset computations cheap
              : 1;
 }

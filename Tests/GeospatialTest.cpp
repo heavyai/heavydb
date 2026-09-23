@@ -1,26 +1,16 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "TestHelpers.h"
 
+#include <boost/regex.hpp>
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/StringTransform.h"
-#include "Shared/clean_boost_regex.hpp"
 #include "Shared/scope.h"
+#include "gen-cpp/heavy_types.h"
 
 #include <boost/math/constants/constants.hpp>
 
@@ -38,11 +28,8 @@ const size_t g_num_rows{10};
 
 bool g_keep_data{false};
 bool g_all_utm_zones{false};
-bool g_aggregator{false};
 bool g_hoist_literals{true};
 
-extern size_t g_leaf_count;
-extern bool g_cluster;
 extern bool g_is_test_env;
 extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
@@ -70,24 +57,6 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     CHECK(dt == ExecutorDeviceType::GPU);                    \
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
     return;                                                  \
-  }
-
-#define SKIP_ALL_ON_AGGREGATOR()                         \
-  if (g_aggregator) {                                    \
-    LOG(ERROR) << "Tests not valid in distributed mode"; \
-    return;                                              \
-  }
-
-#define SKIP_ON_AGGREGATOR(EXP) \
-  if (!g_aggregator) {          \
-    EXP;                        \
-  }
-
-#define THROW_ON_AGGREGATOR(EXP) \
-  if (!g_aggregator) {           \
-    EXP;                         \
-  } else {                       \
-    EXPECT_ANY_THROW(EXP);       \
   }
 
 #define EXPECT_GPU_THROW(EXP) \
@@ -141,51 +110,49 @@ TargetValue get_first_target(const std::string& query_str,
 }
 
 void setup_all_geo_types() {
-  std::string const all_geo_types_ddl =
-      std::string(
-          "CREATE TABLE AllGeoTypes (\n"
-          "v int,\n"
-          "pt point,\n"
-          "gpt geometry(point),\n"
-          "gpt4 geometry(point, 4326),\n"
-          "gpt4e geometry(point, 4326) encoding compressed (32),\n"
-          "gpt4n geometry(point, 4326) encoding none,\n"
-          "gpt9 geometry(point, 900913),\n"
-          "mpt multipoint,\n"
-          "gmpt geometry(multipoint),\n"
-          "gmpt4 geometry(multipoint, 4326),\n"
-          "gmpt4e geometry(multipoint, 4326) encoding compressed (32),\n"
-          "gmpt4n geometry(multipoint, 4326) encoding none,\n"
-          "gmpt9 geometry(multipoint, 900913),\n"
-          "l linestring,\n"
-          "gl geometry(linestring),\n"
-          "gl4 geometry(linestring, 4326),\n"
-          "gl4e geometry(linestring, 4326) encoding compressed (32),\n"
-          "gl4n geometry(linestring, 4326) encoding none,\n"
-          "gl9 geometry(linestring, 900913),\n"
-          "gl9n geometry(linestring, 900913) encoding none,\n"
-          "ml multilinestring,\n"
-          "gml geometry(multilinestring),\n"
-          "gml4 geometry(multilinestring, 4326),\n"
-          "gml4e geometry(multilinestring, 4326) encoding compressed (32),\n"
-          "gml4n geometry(multilinestring, 4326) encoding none,\n"
-          "gml9 geometry(multilinestring, 900913),\n"
-          "gml9n geometry(multilinestring, 900913) encoding none,\n"
-          "p polygon,\n"
-          "gp geometry(polygon),\n"
-          "gp4 geometry(polygon, 4326),\n"
-          "gp4e geometry(polygon, 4326) encoding compressed (32),\n"
-          "gp4n geometry(polygon, 4326) encoding none,\n"
-          "gp9 geometry(polygon, 900913),\n"
-          "gp9n geometry(polygon, 900913) encoding none,\n"
-          "mp multipolygon,\n"
-          "gmp geometry(multipolygon),\n"
-          "gmp4 geometry(multipolygon, 4326),\n"
-          "gmp4e geometry(multipolygon, 4326) encoding compressed (32),\n"
-          "gmp4n geometry(multipolygon, 4326) encoding none,\n"
-          "gmp9 geometry(multipolygon, 900913),\n"
-          "gmp9n geometry(multipolygon, 900913) encoding none)") +
-      (g_cluster ? " WITH(PARTITIONS='REPLICATED')" : "");
+  std::string const all_geo_types_ddl = std::string(
+      "CREATE TABLE AllGeoTypes (\n"
+      "v int,\n"
+      "pt point,\n"
+      "gpt geometry(point),\n"
+      "gpt4 geometry(point, 4326),\n"
+      "gpt4e geometry(point, 4326) encoding compressed (32),\n"
+      "gpt4n geometry(point, 4326) encoding none,\n"
+      "gpt9 geometry(point, 900913),\n"
+      "mpt multipoint,\n"
+      "gmpt geometry(multipoint),\n"
+      "gmpt4 geometry(multipoint, 4326),\n"
+      "gmpt4e geometry(multipoint, 4326) encoding compressed (32),\n"
+      "gmpt4n geometry(multipoint, 4326) encoding none,\n"
+      "gmpt9 geometry(multipoint, 900913),\n"
+      "l linestring,\n"
+      "gl geometry(linestring),\n"
+      "gl4 geometry(linestring, 4326),\n"
+      "gl4e geometry(linestring, 4326) encoding compressed (32),\n"
+      "gl4n geometry(linestring, 4326) encoding none,\n"
+      "gl9 geometry(linestring, 900913),\n"
+      "gl9n geometry(linestring, 900913) encoding none,\n"
+      "ml multilinestring,\n"
+      "gml geometry(multilinestring),\n"
+      "gml4 geometry(multilinestring, 4326),\n"
+      "gml4e geometry(multilinestring, 4326) encoding compressed (32),\n"
+      "gml4n geometry(multilinestring, 4326) encoding none,\n"
+      "gml9 geometry(multilinestring, 900913),\n"
+      "gml9n geometry(multilinestring, 900913) encoding none,\n"
+      "p polygon,\n"
+      "gp geometry(polygon),\n"
+      "gp4 geometry(polygon, 4326),\n"
+      "gp4e geometry(polygon, 4326) encoding compressed (32),\n"
+      "gp4n geometry(polygon, 4326) encoding none,\n"
+      "gp9 geometry(polygon, 900913),\n"
+      "gp9n geometry(polygon, 900913) encoding none,\n"
+      "mp multipolygon,\n"
+      "gmp geometry(multipolygon),\n"
+      "gmp4 geometry(multipolygon, 4326),\n"
+      "gmp4e geometry(multipolygon, 4326) encoding compressed (32),\n"
+      "gmp4n geometry(multipolygon, 4326) encoding none,\n"
+      "gmp9 geometry(multipolygon, 900913),\n"
+      "gmp9n geometry(multipolygon, 900913) encoding none)");
   run_ddl_statement(all_geo_types_ddl);
   run_multiple_agg(
       "insert into AllGeoTypes values (\n"
@@ -223,8 +190,7 @@ void import_geospatial_test(const bool use_temporary_tables) {
       {},
       2,
       /*use_temporary_tables=*/use_temporary_tables,
-      /*deleted_support=*/true,
-      /*is_replicated=*/false);
+      /*deleted_support=*/true);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_test");
   for (size_t i = 0; i < g_num_rows; ++i) {
@@ -316,8 +282,7 @@ void import_geospatial_join_test(const bool use_temporary_tables) {
                                    {},
                                    20,
                                    /*use_temporary_tables=*/use_temporary_tables,
-                                   /*deleted_support=*/true,
-                                   g_aggregator);
+                                   /*deleted_support=*/true);
   run_ddl_statement(create_statement);
   TestHelpers::ValuesGenerator gen("geospatial_inner_join_test");
   for (size_t i = 0; i < g_num_rows; i += 2) {
@@ -353,8 +318,7 @@ void import_geospatial_null_test(const bool use_temporary_tables) {
       {},
       2,
       /*use_temporary_tables=*/use_temporary_tables,
-      /*deleted_support=*/true,
-      /*is_replicated=*/false);
+      /*deleted_support=*/true);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_null_test");
   for (size_t i = 0; i < g_num_rows; ++i) {
@@ -417,8 +381,7 @@ void import_geospatial_multi_frag_test(const bool use_temporary_tables) {
       {},
       2,
       /*use_temporary_tables=*/use_temporary_tables,
-      /*deleted_support=*/true,
-      /*is_replicated=*/false);
+      /*deleted_support=*/true);
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_multi_frag_test");
   for (size_t i = 0; i < 11; ++i) {
@@ -615,22 +578,22 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
         GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
 
     // Sample() version of above
-    THROW_ON_AGGREGATOR(compare_geo_target(
+    (compare_geo_target(
         run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1;", dt),
         GeoPointTargetValue({1., 1.})));
-    THROW_ON_AGGREGATOR(compare_geo_target(
+    (compare_geo_target(
         run_simple_agg("SELECT SAMPLE(mp) FROM geospatial_test WHERE id = 1;", dt),
         GeoMultiPointTargetValue({1., 0., 2., 2., 3., 3.})));
-    THROW_ON_AGGREGATOR(compare_geo_target(
+    (compare_geo_target(
         run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1;", dt),
         GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.})));
-    THROW_ON_AGGREGATOR(compare_geo_target(
+    (compare_geo_target(
         run_simple_agg("SELECT SAMPLE(ml) FROM geospatial_test WHERE id = 1;", dt),
         GeoMultiLineStringTargetValue({1., 0., 2., 2., 3., 3.}, {3})));
-    THROW_ON_AGGREGATOR(compare_geo_target(
+    (compare_geo_target(
         run_simple_agg("SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1;", dt),
         GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3})));
-    THROW_ON_AGGREGATOR(compare_geo_target(
+    (compare_geo_target(
         run_simple_agg("SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1;", dt),
         GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1})));
 
@@ -1052,16 +1015,15 @@ TEST_P(GeoSpatialTestTablesFixture, Basics) {
                                         dt)));
 
     // accessors
-    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
+    ASSERT_NEAR(
         static_cast<double>(5),
         v<double>(run_simple_agg(
             "SELECT ST_XMax(p) from geospatial_test order by id limit 1 offset 5;", dt)),
-        static_cast<double>(0.0)));
-    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
-        static_cast<double>(1.0),
-        v<double>(run_simple_agg(
-            "SELECT ST_YMin(gp4326) from geospatial_test limit 1 offset 1;", dt)),
-        static_cast<double>(0.001)));
+        static_cast<double>(0.0));
+    ASSERT_NEAR(static_cast<double>(1.0),
+                v<double>(run_simple_agg(
+                    "SELECT ST_YMin(gp4326) from geospatial_test limit 1 offset 1;", dt)),
+                static_cast<double>(0.001));
     ASSERT_NEAR(
         static_cast<double>(2 * 7 + 1),
         v<double>(run_simple_agg(
@@ -1511,7 +1473,7 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
                                          dt,
                                          false)),
                 10e-8);
-    SKIP_ON_AGGREGATOR({
+    ({
       // ensure transforms run on GPU. transforms use math functions which need to be
       // specialized for GPU
       if (dt == ExecutorDeviceType::GPU) {
@@ -1566,7 +1528,7 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
     expected = strtod(md[2].first, &end);   // Parse y-coordinate into a double value
     EXPECT_EQ(end, md[2].second) << point;  // Confirm no extra characters
     EXPECT_NEAR(expected, expected_y, expected * EPS) << point;
-    SKIP_ON_AGGREGATOR({
+    ({
       // ensure transforms run on GPU. transforms use math functions which need to be
       // specialized for GPU
       if (dt == ExecutorDeviceType::GPU) {
@@ -1591,8 +1553,6 @@ TEST_P(GeoSpatialTestTablesFixture, Constructors) {
 }
 
 TEST_P(GeoSpatialTestTablesFixture, LLVMOptimization) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   ScopeGuard reset_explain_type = [] {
     QR::get()->setExplainType(ExecutorExplainType::Default);
   };
@@ -1885,7 +1845,6 @@ TEST_P(GeoSpatialNullTablesFixture, Constructors) {
 
 TEST_P(GeoSpatialNullTablesFixture, LazyFetch) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_ALL_ON_AGGREGATOR();
     SKIP_NO_GPU();
     std::vector<std::string> col_names{"p", "l", "poly", "mpoly"};
     for (auto& col_name : col_names) {
@@ -2829,12 +2788,6 @@ class GeoSpatialTempTables : public ::testing::Test {
 TEST_F(GeoSpatialTempTables, Geos) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    // Currently not supporting cpu retry in distributed, just throwing in gpu mode
-    if (g_aggregator && dt == ExecutorDeviceType::GPU) {
-      LOG(WARNING) << "Skipping Geos tests on distributed GPU";
-      continue;
-    }
-
 #ifdef ENABLE_GEOS
     // geos-backed ST functions:
     // Measuring ST_Area of geometry generated by geos-backed function to disregard
@@ -3232,14 +3185,14 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
         true,     // geo_return_geo_tv
         false));  // allow_loop_joins
 
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+    ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
             "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2;",
             dt,
-            true,       // geo_return_geo_tv
-            false))));  // allow_loop_joins
+            true,      // geo_return_geo_tv
+            false)));  // allow_loop_joins
 
     const auto trivial_loop_join_state = g_trivial_loop_join_threshold;
     g_trivial_loop_join_threshold = 1;
@@ -3247,22 +3200,22 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
       g_trivial_loop_join_threshold = trivial_loop_join_state;
     };
 
-    SKIP_ON_AGGREGATOR(EXPECT_THROW(
+    EXPECT_THROW(
         run_multiple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
             "b ON ST_Contains(b.poly, a.p);",
             dt,
             false),
-        std::runtime_error));
+        std::runtime_error);
 
     // Geometry projection not supported for outer joins
-    SKIP_ON_AGGREGATOR(EXPECT_THROW(
+    EXPECT_THROW(
         run_multiple_agg(
             "SELECT b.poly FROM geospatial_test a LEFT JOIN geospatial_inner_join_test "
             "b ON ST_Contains(b.poly, a.p);",
             dt,
             false),
-        std::runtime_error));
+        std::runtime_error);
   }
 
   g_enable_bbox_intersect_hashjoin = true;
@@ -3298,11 +3251,11 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
             R"(SELECT a.id FROM geospatial_test a JOIN geospatial_inner_join_test b ON ST_Intersects(b.poly, a.poly) ORDER BY a.id;)",
             dt)));
 
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+    ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             R"(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 ORDER BY 1;)",
-            dt))));
+            dt)));
 
     ASSERT_EQ(
         static_cast<int64_t>(2),
@@ -3317,11 +3270,11 @@ TEST_P(GeoSpatialJoinTablesFixture, GeoJoins) {
             dt)));
 
     // with compression
-    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+    ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             R"(SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test b ON ST_Contains(ST_SetSRID(b.poly, 4326), a.gp4326) WHERE b.id = 2 ORDER BY 1;)",
-            dt))));
+            dt)));
 
     ASSERT_EQ(
         static_cast<int64_t>(2),
@@ -3390,8 +3343,6 @@ class GeoSpatialMultiFragTestTablesFixture : public ::testing::TestWithParam<boo
 };
 
 TEST_P(GeoSpatialMultiFragTestTablesFixture, LoopJoin) {
-  SKIP_ALL_ON_AGGREGATOR();  // TODO(adb): investigate different result in distributed
-
   const auto enable_bbox_intersect_state = g_enable_bbox_intersect_hashjoin;
   g_enable_bbox_intersect_hashjoin = false;
   ScopeGuard reset_state = [&enable_bbox_intersect_state] {
@@ -3745,10 +3696,6 @@ TEST(GeoSpatial, ProjectGeoColAfterLeftJoin) {
 }
 
 TEST_P(GeoSpatialTestTablesFixture, Cast) {
-  if (g_aggregator) {
-    GTEST_SKIP() << "TDBException(error_msg=Cast to dictionary-encoded string type "
-                    "not supported for distributed queries)";
-  }
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     char const* query =
@@ -4284,7 +4231,6 @@ INSTANTIATE_TEST_SUITE_P(GeoSpatial,
                          TextEncodingNoneProjection::printTestParams);
 
 TEST_F(TextEncodingNoneProjection, CompareGeoString) {
-  SKIP_ALL_ON_AGGREGATOR();
   std::vector<std::string> exprs = {"ST_AsText(l) IS NOT NULL",
                                     "SUBSTR(ST_AsText(l), 0, 10) LIKE \'LINESTRING%\'",
                                     "LENGTH(ST_AsText(l)) > 0",
@@ -4305,7 +4251,34 @@ TEST_F(TextEncodingNoneProjection, CompareGeoString) {
 // H3 tests
 //
 
-class GeoSpatialH3Test : public ::testing::Test {
+class SimpleH3Test : public ::testing::Test {
+ protected:
+  static constexpr double kTolerance = 0.00000000001;
+};
+
+TEST_F(SimpleH3Test, H3_CellToBoundary_POLYGON_h3runtime_vector_optimization_issue) {
+  std::vector<double> crash_poly_coords = {39.6100870441408,
+                                           24.4689174926577,
+                                           39.6097281405209,
+                                           24.4670282914894,
+                                           39.6112878715456,
+                                           24.4658263141804,
+                                           39.6132064887803,
+                                           24.4665135004165,
+                                           39.6135654420005,
+                                           24.4684026641035,
+                                           39.6120057283876,
+                                           24.469604679036};
+  std::vector<int32_t> crash_poly_ring_sizes = {6};
+  compare_geo_target(
+      run_simple_agg("SELECT H3_CellToBoundary_POLYGON(H3_LonLatToCell(39.6111, 24.4672, "
+                     "9)) AS geom;",
+                     ExecutorDeviceType::CPU),
+      GeoPolyTargetValue(crash_poly_coords, crash_poly_ring_sizes),
+      kTolerance);
+}
+
+class GeoSpatialH3Test : public SimpleH3Test {
  protected:
   void SetUp() override {
     run_ddl_statement("DROP TABLE IF EXISTS h3_tests;");
@@ -4453,7 +4426,6 @@ TEST_F(GeoSpatialH3Test, H3_CellToPoint_column) {
 }
 
 TEST_F(GeoSpatialH3Test, H3_CellToString_literal) {
-  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   ASSERT_EQ(kCellHexString,
             boost::get<std::string>(v<NullableString>(run_simple_agg(
                 "SELECT H3_CellToString_TEXT(" + std::string(kCellString) + ");",
@@ -4465,7 +4437,6 @@ TEST_F(GeoSpatialH3Test, H3_CellToString_literal) {
 }
 
 TEST_F(GeoSpatialH3Test, H3_CellToString_column) {
-  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   ASSERT_EQ(
       kCellHexString,
       boost::get<std::string>(v<NullableString>(run_simple_agg(
@@ -4477,7 +4448,6 @@ TEST_F(GeoSpatialH3Test, H3_CellToString_column) {
 }
 
 TEST_F(GeoSpatialH3Test, H3_StringToCell_literal) {
-  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   ASSERT_EQ(kCell,
             v<int64_t>(run_simple_agg(
                 "SELECT H3_StringToCell('" + std::string(kCellHexString) + "');",
@@ -4485,7 +4455,6 @@ TEST_F(GeoSpatialH3Test, H3_StringToCell_literal) {
 }
 
 TEST_F(GeoSpatialH3Test, H3_StringToCell_column) {
-  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   ASSERT_EQ(kCell,
             v<int64_t>(run_simple_agg("SELECT H3_StringToCell(text_none) FROM h3_tests;",
                                       ExecutorDeviceType::CPU)));
@@ -4524,14 +4493,12 @@ TEST_F(GeoSpatialH3Test, H3_CellToParent_column) {
 }
 
 TEST_F(GeoSpatialH3Test, H3_CellToBoundary_WKT_literal) {
-  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   ASSERT_NO_THROW(validateWKT(boost::get<std::string>(v<NullableString>(
       run_simple_agg("SELECT H3_CellToBoundary_WKT(" + std::string(kCellString) + ");",
                      ExecutorDeviceType::CPU)))));
 }
 
 TEST_F(GeoSpatialH3Test, H3_CellToBoundary_WKT_column) {
-  SKIP_ALL_ON_AGGREGATOR();  // some string dictionary ops not possible in distributed
   ASSERT_NO_THROW(validateWKT(boost::get<std::string>(v<NullableString>(run_simple_agg(
       "SELECT H3_CellToBoundary_WKT(cell) FROM h3_tests;", ExecutorDeviceType::CPU)))));
 }
@@ -4540,14 +4507,16 @@ TEST_F(GeoSpatialH3Test, H3_CellToBoundary_POLYGON_literal) {
   compare_geo_target(run_simple_agg("SELECT H3_CellToBoundary_POLYGON(" +
                                         std::string(kCellString) + ");",
                                     ExecutorDeviceType::CPU),
-                     GeoPolyTargetValue(poly_coords, poly_ring_sizes));
+                     GeoPolyTargetValue(poly_coords, poly_ring_sizes),
+                     kTolerance);
 }
 
 TEST_F(GeoSpatialH3Test, H3_CellToBoundary_POLYGON_column) {
   compare_geo_target(
       run_simple_agg("SELECT H3_CellToBoundary_POLYGON(cell) FROM h3_tests;",
                      ExecutorDeviceType::CPU),
-      GeoPolyTargetValue(poly_coords, poly_ring_sizes));
+      GeoPolyTargetValue(poly_coords, poly_ring_sizes),
+      kTolerance);
 }
 
 TEST_F(GeoSpatialH3Test, H3_CellToBoundary_POLYGON_nested) {
@@ -4555,7 +4524,8 @@ TEST_F(GeoSpatialH3Test, H3_CellToBoundary_POLYGON_nested) {
       run_simple_agg("SELECT H3_CellToBoundary_POLYGON(H3_LonLatToCell(lon, lat, 15)) "
                      "FROM h3_tests;",
                      ExecutorDeviceType::CPU),
-      GeoPolyTargetValue(poly_coords, poly_ring_sizes));
+      GeoPolyTargetValue(poly_coords, poly_ring_sizes),
+      kTolerance);
 }
 
 int main(int argc, char** argv) {

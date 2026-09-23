@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "Geospatial/Compression.h"
 #include "Geospatial/CompressionRuntime.h"
 #include "Geospatial/Types.h"

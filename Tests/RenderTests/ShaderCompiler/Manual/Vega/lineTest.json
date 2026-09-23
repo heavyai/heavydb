@@ -1,0 +1,124 @@
+{
+  "usermeta": {
+    "shortName": "ShaderCompilerTest-LineTest",
+    "shaderArtifacts": [
+      "builder", "spirv"
+    ]
+  },
+  "width": $width,
+  "height": $height,
+  "data": [
+    {
+      "name": "lines",
+      "format": {
+        "type": "lines",
+        "coords": {
+          "x": [
+            "x1",
+            "x2"
+          ],
+          "y": [
+            "y1",
+            "y2"
+          ]
+        }
+      },
+      "sql": "SELECT conv_4326_900913_x(origin_lon) as x1,conv_4326_900913_y(origin_lat) as y1,conv_4326_900913_x(dest_lon) as x2,conv_4326_900913_y(dest_lat) as y2,uniquecarrier as color,actualelapsedtime as size,flights.rowid FROM flights LIMIT 1000000"
+    }
+  ],
+  "scales": [
+    {
+      "name": "x",
+      "type": "linear",
+      "domain": [
+        $minXBounds,
+        $maxXBounds
+      ],
+      "range": "width"
+    },
+    {
+      "name": "y",
+      "type": "linear",
+      "domain": [
+        $minYBounds,
+        $maxYBounds
+      ],
+      "range": "height"
+    },
+    {
+      "name": "lines_strokeColor",
+      "type": "ordinal",
+      "domain": [
+        "YV",
+        "OH",
+        "OO",
+        "XE",
+        "WN",
+        "UA",
+        "DL",
+        "EV",
+        "F9",
+        "US",
+        "MQ",
+        "NW",
+        "HA",
+        "FL",
+        "9E",
+        "AA",
+        "AQ",
+        "AS",
+        "B6",
+        "CO"
+      ],
+      "range": [
+        "#27aeef",
+        "#ea5545",
+        "#87bc45",
+        "#b33dc6",
+        "#f46a9b",
+        "#ede15b",
+        "#bdcf32",
+        "#ef9b20",
+        "#4db6ac",
+        "#edbf33",
+        "#7c4dff",
+        "#27aeef",
+        "#ea5545",
+        "#87bc45",
+        "#b33dc6",
+        "#f46a9b",
+        "#ede15b",
+        "#bdcf32",
+        "#ef9b20",
+        "#4db6ac"
+      ],
+      "default": "#80DEEA",
+      "nullValue": "white"
+    }
+  ],
+  "marks": [
+    {
+      "type": "lines",
+      "from": {
+        "data": "lines"
+      },
+      "properties": {
+        "x": {
+          "scale": "x",
+          "field": "x"
+        },
+        "y": {
+          "scale": "y",
+          "field": "y"
+        },
+        "strokeColor": {
+          "scale": "lines_strokeColor",
+          "field": "color"
+        },
+        "strokeWidth": 1,
+        "lineJoin": "miter",
+        "miterLimit": 10
+      }
+    }
+  ]
+}

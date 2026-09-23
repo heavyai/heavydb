@@ -1,3 +1,6 @@
+# Derived from whoshuu/cpr (MIT license):
+# https://github.com/libcpr/cpr
+#
 # - C++ Requests, Curl for People
 # This module is a libcurl wrapper written in modern C++.
 # It provides an easy, intuitive, and efficient interface to

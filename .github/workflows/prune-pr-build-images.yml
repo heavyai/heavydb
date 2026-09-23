@@ -3,12 +3,57 @@
 
 name: Prune PR Build Images
 
+# Deletes per-run build-output images under the pr-build/* GHCR namespace
+# that are older than 14 days. The long-lived deps image
+# (core-build-ubuntu22.04-...) lives outside pr-build/* and is unaffected.
+# Logic lives in scripts/ci/prune_pr_build_images.sh so it can be exercised
+# locally with DRY_RUN=true.
+
 on:
+  schedule:
+    - cron: '0 6 * * *'      # daily 06:00 UTC
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'If true, log what would be deleted but do not delete'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read   # needed by actions/checkout
+  packages: write
 
 jobs:
-  placeholder:
-    runs-on: linux-amd64-cpu16
+  prune:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Full path under the org owner, including the repo name as the first
+        # segment (that's how GHCR addresses repo-linked container packages
+        # via the API).
+        package:
+          - heavydb/pr-build/debug-static
+          - heavydb/pr-build/tsan
+          - heavydb/pr-build/multi-cuda-gcc
+          - heavydb/pr-build/multi-render
+          # nightly / weekly / concurrency build images (same pr-build/* namespace)
+          - heavydb/pr-build/asan
+          - heavydb/pr-build/columnar-asan
+          - heavydb/pr-build/columnar-tsan
+          - heavydb/pr-build/gpu-release
+          - heavydb/pr-build/valgrind
+          - heavydb/pr-build/disk-cache-tsan
+          - heavydb/pr-build/minio
+          - heavydb/pr-build/sql-importer
+          - heavydb/pr-build/concurrency-tsan
+    env:
+      PACKAGE_NAME: ${{ matrix.package }}
+      MAX_AGE_DAYS: '14'
+      MIN_VERSIONS_TO_KEEP: '2'
+      DRY_RUN: ${{ inputs.dry_run || 'false' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: placeholder
-        run: true
+      - uses: actions/checkout@v7
+      - name: Prune
+        run: scripts/ci/prune_pr_build_images.sh

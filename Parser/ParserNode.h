@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -37,9 +26,9 @@
 
 #include "Analyzer/Analyzer.h"
 #include "Catalog/Catalog.h"
-#include "Distributed/AggregatedResult.h"
 #include "Fragmenter/InsertDataLoader.h"
-#include "QueryEngine/TableFunctions/SystemFunctions/os/ML/AbstractMLModel.h"
+#include "QueryEngine/AggregatedResult.h"
+#include "QueryEngine/TableFunctions/SystemFunctions/ML/AbstractMLModel.h"
 #include "Shared/sqldefs.h"
 #include "Shared/sqltypes.h"
 #include "TableArchiver/TableArchiver.h"
@@ -1059,19 +1048,19 @@ class LocalQueryConnector : public QueryConnector,
                                       bool allow_interrupt) override;
   std::list<ColumnDescriptor> getColumnDescriptors(AggregatedResult& result,
                                                    bool for_create);
-  size_t leafCount() override { return LocalInsertConnector::leafCount(); }
+  size_t shardCount() override { return LocalInsertConnector::shardCount(); }
   void insertChunksToLeaf(
       const Catalog_Namespace::SessionInfo& parent_session_info,
-      const size_t leaf_idx,
+      const size_t shard_idx,
       const Fragmenter_Namespace::InsertChunks& insert_chunks) override {
     return LocalInsertConnector::insertChunksToLeaf(
-        parent_session_info, leaf_idx, insert_chunks);
+        parent_session_info, shard_idx, insert_chunks);
   }
   void insertDataToLeaf(const Catalog_Namespace::SessionInfo& parent_session_info,
-                        const size_t leaf_idx,
+                        const size_t shard_idx,
                         Fragmenter_Namespace::InsertData& insert_data) override {
     return LocalInsertConnector::insertDataToLeaf(
-        parent_session_info, leaf_idx, insert_data);
+        parent_session_info, shard_idx, insert_data);
   }
   void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
                   int tableId) override {
@@ -1081,47 +1070,6 @@ class LocalQueryConnector : public QueryConnector,
                 int tableId) override {
     return LocalInsertConnector::rollback(parent_session_info, tableId);
   }
-};
-
-/*
- * @type CreateDataframeStmt
- * @brief CREATE DATAFRAME statement
- */
-class CreateDataframeStmt : public CreateTableBaseStmt {
- public:
-  CreateDataframeStmt(std::string* tab,
-                      std::list<TableElement*>* table_elems,
-                      std::string* filename,
-                      std::list<NameValueAssign*>* s)
-      : table_(tab), filename_(filename) {
-    CHECK(table_elems);
-    for (const auto e : *table_elems) {
-      table_element_list_.emplace_back(e);
-    }
-    delete table_elems;
-    if (s) {
-      for (const auto e : *s) {
-        storage_options_.emplace_back(e);
-      }
-      delete s;
-    }
-  }
-  CreateDataframeStmt(const rapidjson::Value& payload);
-
-  const std::string* get_table() const override { return table_.get(); }
-  const std::list<std::unique_ptr<TableElement>>& get_table_element_list()
-      const override {
-    return table_element_list_;
-  }
-
-  void execute(const Catalog_Namespace::SessionInfo& session,
-               bool read_only_mode) override;
-
- private:
-  std::unique_ptr<std::string> table_;
-  std::list<std::unique_ptr<TableElement>> table_element_list_;
-  std::unique_ptr<std::string> filename_;
-  std::list<std::unique_ptr<NameValueAssign>> storage_options_;
 };
 
 /*
@@ -1158,7 +1106,7 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
 
   std::string& get_select_query() { return select_query_; }
 
-  std::unique_ptr<QueryConnector> leafs_connector_;
+  std::unique_ptr<QueryConnector> insert_connector_;
 
  protected:
   std::vector<std::unique_ptr<std::string>> column_list_;
@@ -1488,12 +1436,10 @@ class CopyTableStmt : public DDLStmt {
 
   void get_deferred_copy_from_payload(std::string& table,
                                       std::string& file_name,
-                                      import_export::CopyParams& copy_params,
-                                      std::string& partitions) {
+                                      import_export::CopyParams& copy_params) {
     table = *table_;
     file_name = deferred_copy_from_file_name_;
     copy_params = deferred_copy_from_copy_params_;
-    partitions = deferred_copy_from_partitions_;
     was_deferred_copy_from_ = false;
   }
 
@@ -1506,7 +1452,6 @@ class CopyTableStmt : public DDLStmt {
   bool was_deferred_copy_from_ = false;
   std::string deferred_copy_from_file_name_;
   import_export::CopyParams deferred_copy_from_copy_params_;
-  std::string deferred_copy_from_partitions_;
 };
 
 /*
@@ -1839,7 +1784,7 @@ class ExportQueryStmt : public DDLStmt {
                bool read_only_mode) override;
   const std::string get_select_stmt() const { return *select_stmt_; }
 
-  std::unique_ptr<QueryConnector> leafs_connector_;
+  std::unique_ptr<QueryConnector> insert_connector_;
 
  private:
   std::unique_ptr<std::string> select_stmt_;
@@ -2126,7 +2071,7 @@ class InsertValuesStmt : public InsertStmt {
   void execute(const Catalog_Namespace::SessionInfo& session, bool read_only_mode);
 
   std::unique_ptr<Fragmenter_Namespace::InsertDataLoader::InsertConnector>
-      leafs_connector_;
+      insert_connector_;
 
  private:
   std::vector<std::unique_ptr<ValuesList>> values_lists_;

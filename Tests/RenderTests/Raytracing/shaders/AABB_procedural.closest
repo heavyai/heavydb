@@ -1,0 +1,42 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_ray_tracing : enable
+//</extensions>
+
+//<includes>
+#include "Shading/rtShadowsSimple.glsl"
+#include "Shading/shading.glsl"
+#include "Shading/rtIntersection.glsl"
+#include "RaytracingTest/AABB_payload.glsl"
+//</includes>
+
+layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
+layout(location = 1) callableDataEXT vec3 callableValue;
+
+layout (scalar, binding = 3) buffer Spheres { Sphere s[]; } spheres;
+
+void main() {
+  vec3 world_pos = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+  vec3 obj_pos = gl_WorldToObjectEXT * vec4(world_pos, 1.0);
+  Sphere s = spheres.s[gl_PrimitiveID];
+  vec3 normal = normalize(obj_pos - s.center);
+  const vec3 world_normal = normalize(vec3(normal * gl_WorldToObjectEXT));
+
+  // Get albedo from the callable shader
+  executeCallableEXT(0, 1);
+
+  vec3 reflectivity = vec3(0);
+  MaterialProperties material = materials[0];
+  material.albedo = vec4(callableValue, 1.0);
+  vec4 color = shade_point(material, world_pos, world_normal, -gl_WorldRayDirectionEXT, reflectivity);
+
+  // Write values to payload
+  rayPayload.color = color.rgb * rayPayload.reflectivity;
+  rayPayload.position = world_pos;
+  rayPayload.normal = normal;
+  rayPayload.reflectivity = rayPayload.reflectivity * reflectivity;
+}

@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "SystemValidator.h"
@@ -24,7 +13,7 @@ std::string SingleNodeValidator::validate() const {
     if (should_validate_epoch(table)) {
       const auto table_epochs =
           catalog_.getTableEpochs(catalog_.getDatabaseId(), table->tableId);
-      validation_result << validate_table_epochs(table_epochs, table->tableName, false);
+      validation_result << validate_table_epochs(table_epochs, table->tableName);
     }
   }
 
@@ -44,8 +33,7 @@ bool should_validate_epoch(const TableDescriptor* table_descriptor) {
 
 std::string validate_table_epochs(
     const std::vector<Catalog_Namespace::TableEpochInfo>& table_epochs,
-    const std::string& table_name,
-    const bool is_cluster_validation) {
+    const std::string& table_name) {
   std::ostringstream validation_result;
   CHECK(!table_epochs.empty());
   bool epochs_are_inconsistent{false};
@@ -60,24 +48,11 @@ std::string validate_table_epochs(
   if (epochs_are_inconsistent) {
     validation_result << "\nEpoch values for table \"" << table_name
                       << "\" are inconsistent:\n"
-                      << std::left;
-    // Only add "Node" header for cluster validation
-    if (is_cluster_validation) {
-      validation_result << std::setw(10) << "Node";
-    }
-    validation_result << std::setw(10) << "Table Id" << std::setw(10) << "Epoch"
-                      << "\n========= ========= ";
-    // Add separator for "Node" header if this is a cluster validation
-    if (is_cluster_validation) {
-      validation_result << "========= ";
-    }
+                      << std::left << std::setw(10) << "Table Id" << std::setw(10)
+                      << "Epoch"
+                      << "\n========= =========\n";
     for (const auto& table_epoch : table_epochs) {
       validation_result << "\n";
-      // Only add leaf index for cluster validation
-      if (is_cluster_validation) {
-        validation_result << std::setw(10)
-                          << ("Leaf " + std::to_string(table_epoch.leaf_index));
-      }
       validation_result << std::setw(10) << table_epoch.table_id << std::setw(10)
                         << table_epoch.table_epoch;
     }

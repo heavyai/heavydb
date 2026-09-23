@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "QueryMemoryDescriptor.h"
@@ -22,6 +11,8 @@
 #include "../StreamingTopN.h"
 #include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"
+
+#include "../ThriftSerializers.h"
 
 #include <boost/algorithm/cxx11/any_of.hpp>
 
@@ -147,10 +138,6 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
 
 bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
                          const bool output_columnar) {
-  if (g_cluster) {
-    return false;  // TODO(miyu)
-  }
-
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return false;
@@ -637,6 +624,89 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , force_4byte_float_(false)
     , gpu_shared_mem_used_(false)
     , num_available_threads_(cpu_threads()) {}
+
+QueryMemoryDescriptor::QueryMemoryDescriptor(
+    const TResultSetBufferDescriptor& thrift_query_mem_desc)
+    : executor_(nullptr)
+    , allow_multifrag_(false)
+    , interleaved_bins_on_gpu_(false)
+    , has_nulls_(false)
+    , sort_on_gpu_(false)
+    , output_columnar_(false)
+    , render_output_(false)
+    , must_use_baseline_sort_(false)
+    , use_streaming_top_n_(false)
+    , threads_can_reuse_group_by_buffers_(false)
+    , num_available_threads_(cpu_threads()) {
+  // TODO(adb): serialize use_streaming_top_n_ state
+  query_desc_type_ = ThriftSerializers::layout_from_thrift(thrift_query_mem_desc.layout);
+
+  keyless_hash_ = thrift_query_mem_desc.keyless;
+  entry_count_ = thrift_query_mem_desc.entry_count;
+  idx_target_as_key_ = thrift_query_mem_desc.idx_target_as_key;
+  min_val_ = thrift_query_mem_desc.min_val;
+  max_val_ = thrift_query_mem_desc.max_val;
+  bucket_ = thrift_query_mem_desc.bucket;
+  force_4byte_float_ = thrift_query_mem_desc.force_4byte_float;
+  // shared mem setting init. is based on the assumption that all nodes have same GPU
+  // architecture
+  gpu_shared_mem_used_ = thrift_query_mem_desc.gpu_shared_mem_used;
+
+  for (const auto group_col_width : thrift_query_mem_desc.group_col_widths) {
+    group_col_widths_.push_back(group_col_width);
+  }
+
+  group_col_compact_width_ = thrift_query_mem_desc.key_bytewidth;
+
+  col_slot_context_ = ColSlotContext(thrift_query_mem_desc.col_slot_context);
+
+  for (const auto target_groupby_index : thrift_query_mem_desc.target_groupby_indices) {
+    target_groupby_indices_.push_back(target_groupby_index);
+  }
+
+  for (const auto& thrift_count_distinct_descriptor :
+       thrift_query_mem_desc.count_distinct_descriptors) {
+    count_distinct_descriptors_.push_back(
+        ThriftSerializers::count_distinct_descriptor_from_thrift(
+            thrift_count_distinct_descriptor));
+  }
+}
+
+TResultSetBufferDescriptor QueryMemoryDescriptor::toThrift(
+    const QueryMemoryDescriptor& query_mem_desc) {
+  TResultSetBufferDescriptor thrift_query_mem_desc;
+  thrift_query_mem_desc.layout =
+      ThriftSerializers::layout_to_thrift(query_mem_desc.query_desc_type_);
+  thrift_query_mem_desc.keyless = query_mem_desc.keyless_hash_;
+  thrift_query_mem_desc.entry_count = query_mem_desc.entry_count_;
+  thrift_query_mem_desc.idx_target_as_key = query_mem_desc.getTargetIdxForKey();
+  thrift_query_mem_desc.min_val = query_mem_desc.min_val_;
+  thrift_query_mem_desc.max_val = query_mem_desc.max_val_;
+  thrift_query_mem_desc.bucket = query_mem_desc.bucket_;
+  thrift_query_mem_desc.force_4byte_float = query_mem_desc.forceFourByteFloat();
+  thrift_query_mem_desc.gpu_shared_mem_used = query_mem_desc.gpu_shared_mem_used_;
+
+  for (const auto group_col_width : query_mem_desc.group_col_widths_) {
+    thrift_query_mem_desc.group_col_widths.push_back(group_col_width);
+  }
+  thrift_query_mem_desc.key_bytewidth = query_mem_desc.group_col_compact_width_;
+
+  thrift_query_mem_desc.col_slot_context =
+      ColSlotContext::toThrift(query_mem_desc.col_slot_context_);
+
+  for (const auto target_groupby_index : query_mem_desc.target_groupby_indices_) {
+    thrift_query_mem_desc.target_groupby_indices.push_back(target_groupby_index);
+  }
+
+  for (const auto& count_distinct_descriptor :
+       query_mem_desc.count_distinct_descriptors_) {
+    thrift_query_mem_desc.count_distinct_descriptors.push_back(
+        ThriftSerializers::count_distinct_descriptor_to_thrift(
+            count_distinct_descriptor));
+  }
+
+  return thrift_query_mem_desc;
+}
 
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
   // Note that this method does not check ptr reference members (e.g. executor_) or
@@ -1127,11 +1197,10 @@ void QueryMemoryDescriptor::setOutputColumnar(const bool val) {
  * sized columns instead of padded sized ones.
  */
 bool QueryMemoryDescriptor::isLogicalSizedColumnsAllowed() const {
-  // In distributed mode, result sets are serialized using rowwise iterators, so we use
-  // consistent slot widths for now
-  return output_columnar_ && !g_cluster &&
-         (query_desc_type_ == QueryDescriptionType::Projection ||
-          query_desc_type_ == QueryDescriptionType::TableFunction);
+  // Result sets are serialized using rowwise iterators, so use consistent slot widths
+  // for now.
+  return output_columnar_ && (query_desc_type_ == QueryDescriptionType::Projection ||
+                              query_desc_type_ == QueryDescriptionType::TableFunction);
 }
 
 size_t QueryMemoryDescriptor::getBufferColSlotCount() const {
@@ -1162,7 +1231,7 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
   // logic
   auto const has_count_distinct_op =
       !countDescriptorsLogicallyEmpty(count_distinct_descriptors_);
-  if (g_cluster || executor_->isCPUOnly() || render_output_ || isGpuSharedMemoryUsed() ||
+  if (executor_->isCPUOnly() || render_output_ || isGpuSharedMemoryUsed() ||
       has_count_distinct_op) {
     return true;
   }

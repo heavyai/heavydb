@@ -1,0 +1,119 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# License-header enforcement, modeled on RAPIDS repos (cudf, velox-testing).
+#
+# Install locally with:
+#     pip install pre-commit && pre-commit install
+#
+# Enforcement is "going forward": CI runs these hooks only on files changed in a PR
+# (see the license-headers job in .github/workflows/pr-required-checks.yml), so the
+# existing tree is not rewritten en masse. When a covered file is touched, any legacy
+# HEAVY.AI/OmniSci/MapD header is replaced with the NVIDIA SPDX header below:
+#
+#     /*
+#      * SPDX-FileCopyrightText: Copyright (c) <year>, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#      * SPDX-License-Identifier: Apache-2.0
+#      */
+
+# Vendored or non-relicensable code keeps its upstream license and is never touched.
+# ThirdParty/ is excluded wholesale, other than ThirdParty/licenses/index-format.sh.
+# The remaining entries are either individual third-party files (in order of listing
+# below: upstream CMake find-modules, SMAA shader textures, Khronos glslang resource
+# header copies, PyTorch snippets, a public university schema, and derivatives of
+# Apache Calcite/Avatica source) living inside otherwise-NVIDIA trees, or
+# NVIDIA-owned files with manually-stamped SPDX headers excluded only because the
+# pre-commit hook's automated header insertion doesn't handle their comment syntax.
+#
+# The java/ entries are exactly those files carrying all three header blocks: the
+# ASF license, a "modified derivative of" line, and the NVIDIA SPDX header. That set
+# is what the hook must not rewrite, since stamping them would drop the ASF grant.
+# HeavyDB-original classes that merely live in an org.apache.calcite package or
+# subclass a Calcite type carry the SPDX header alone and are deliberately not
+# listed, so they keep getting their copyright year auto-bumped.
+exclude: |
+  (?x)
+    ^ThirdParty/(?!licenses/index-format\.sh$)|
+    ^cmake/Modules/FindBoost\.cmake$|
+    ^cmake/Modules/FindGDAL\.cmake$|
+    ^cmake/Modules/FindGEOS\.cmake$|
+    ^cmake/Modules/FindOpenGL\.cmake$|
+    ^cmake/Modules/FindTBB\.cmake$|
+    ^cmake/Modules/FindThrust\.cmake$|
+    ^cmake/Modules/FindCPR\.cmake$|
+    ^cmake/Modules/FindVulkan\.cmake$|
+    ^QueryRenderer/Rendering/textures/AreaTex\.h$|
+    ^QueryRenderer/Rendering/textures/SearchTex\.h$|
+    ^QueryRenderer/Rendering/shaders/SMAA.*\.frag$|
+    ^QueryRenderer/Rendering/shaders/SeparateMultiSample\.frag$|
+    ^GfxDriver/ShaderCompiler/ResourceLimits\.(h|cpp)$|
+    ^docs/source/_static/theme_overrides\.css$|
+    ^QueryEngine/invoke_example/kernel\.ll$|
+    ^QueryEngine/TableFunctions/SystemFunctions/Torch/TorchOps\.hpp$|
+    ^Tests/UniversityExample/create_tables\.sql$|
+    ^java/calcite/src/main/java/com/mapd/calcite/rel/rules/FilterTableFunctionMultiInputTransposeRule\.java$|
+    ^java/calcite/src/main/java/com/mapd/metadata/GeoRelDataType\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlAttributeDefinition\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlCheckConstraint\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlColumnDeclaration\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlCreateModel\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlCreateTable\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlCreateView\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlDdlNodes\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlDropTable\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlDropView\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlFirstLastValueInFrame\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlInsertIntoTable\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlKeyConstraint\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlLeadLag\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlNthValueInFrame\.java$|
+    ^java/calcite/src/main/java/com/mapd/parser/extension/ddl/SqlTruncateTable\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/avatica/util/DateTimeUtils\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/prepare/CalciteSqlValidator\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/prepare/HeavyDBSqlAdvisor\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/prepare/PlannerImpl\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/rel/externalize/HeavyDBRelJson\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/rel/externalize/HeavyDBRelJsonReader\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/rel/externalize/HeavyDBRelJsonWriter\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/rel/externalize/HeavyDBRelWriterImpl\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/rel/rules/DynamicFilterJoinRule\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/rex/RexSimplify\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/sql/fun/SqlArrayValueConstructor\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/sql/fun/SqlSingleValueAggFunction\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/sql/fun/SqlStdOperatorTable\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/sql/type/SqlTypeFactoryImpl\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/sql/validate/SqlValidatorImpl\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/sql/validate/implicit/TypeCoercions\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/sql2rel/SqlToRelConverter\.java$|
+    ^java/calcite/src/main/java/org/apache/calcite/sql2rel/StandardConvertletTable\.java$
+
+repos:
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v14.0.6
+    hooks:
+      - id: clang-format
+        types_or: [c, c++, cuda]
+
+
+  # Insert/maintain the NVIDIA SPDX header. --spdx emits the two-line
+  # SPDX-FileCopyrightText / SPDX-License-Identifier block; the year range is
+  # derived from git history and auto-bumped on edit.
+  - repo: https://github.com/rapidsai/pre-commit-hooks
+    rev: v1.5.1
+    hooks:
+      - id: verify-copyright
+        args: [--fix, --spdx]
+        files: |
+          (?x)
+            [.](call|closest|cmake|comp|cpp|cu|cuh|frag|geom|glsl|h|hpp|in|isect|java|mesh|miss|pl|py|raygen|rb|sh|sql|thrift|vert|yaml|yml)$|
+            (^|/)CMakeLists[.]txt$|
+            (^|/)CMakePackaging[.]txt$|
+            (^|/)Dockerfile(\.[^/]+)?$|
+            Makefile$|
+            (^|/)startheavy$|
+            (^|/)innerstartheavy$|
+            (^|/)nvidia-graphics-env[.]sh$|
+            (^|/)run_sanity_tests$|
+            (^|/)unittest_start_ha$|
+            (^|/)do-iwyu$
+

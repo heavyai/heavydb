@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -31,6 +20,8 @@
 #include <boost/filesystem.hpp>
 
 #include "Catalog/ForeignServer.h"
+
+#include "DataMgr/ForeignStorage/S3Utils.h"
 
 bool is_valid_aws_key(std::pair<std::string, std::string> key) {
   return (key.first.size() > 0) && (key.second.size() > 0);
@@ -92,6 +83,16 @@ Aws::STS::Model::Credentials generate_sts_credentials(
       .GetCredentials();
 }
 
+Aws::STS::Model::Credentials generate_sts_credentials(
+    const std::pair<std::string, std::string>& aws_keys,
+    const foreign_storage::ForeignServer* foreign_server,
+    int32_t session_token_duration_seconds = 900) {
+  CHECK(foreign_server) << "AWS STSClient requires a client configuration.";
+  return generate_sts_credentials(aws_keys,
+                                  foreign_storage::get_s3_client_config(foreign_server),
+                                  session_token_duration_seconds);
+}
+
 namespace {
 const std::set<std::string> AWS_ENV_KEYS_AND_PROFILE = {"AWS_ACCESS_KEY_ID",
                                                         "AWS_SECRET_ACCESS_KEY",
@@ -130,6 +131,17 @@ void restore_env_vars(const std::map<std::string, std::string>& env_vars,
       restore_pair(pair);
     }
   }
+}
+
+Aws::S3::S3Client create_s3_client_for_region(const std::string& aws_region) {
+  const auto [access_key, secret_key] = get_aws_keys_from_env();
+  Aws::S3::S3ClientConfiguration s3_client_config;
+  s3_client_config.region = aws_region;
+  auto endpoint_provider = foreign_storage::get_endpoint_provider(s3_client_config);
+  Aws::S3::S3Client s3_client(Aws::Auth::AWSCredentials(access_key, secret_key),
+                              std::move(endpoint_provider),
+                              s3_client_config);
+  return s3_client;
 }
 }  // namespace
 
@@ -185,4 +197,78 @@ void set_aws_profile(const std::string& aws_credentials_dir,
     credentials_file << "aws_session_token = " << aws_session_token << "\n";
   }
   credentials_file.close();
+}
+
+void upload_file_to_s3(const std::string& s3_bucket_name,
+                       const std::string& local_file_path,
+                       const std::string& s3_object_key,
+                       const std::string& aws_region) {
+  Aws::S3::Model::PutObjectRequest request;
+  request.SetBucket(s3_bucket_name);
+  request.SetKey(s3_object_key);
+
+  auto file_data = Aws::MakeShared<Aws::FStream>(
+      "S3UploadFile", local_file_path.c_str(), std::ios_base::in | std::ios_base::binary);
+  if (!file_data || !(*file_data)) {
+    throw std::runtime_error{"An error occurred when attempting to read file: " +
+                             local_file_path};
+  }
+  request.SetBody(file_data);
+
+  auto s3_client = create_s3_client_for_region(aws_region);
+  auto outcome = s3_client.PutObject(request);
+  if (!outcome.IsSuccess()) {
+    throw std::runtime_error{
+        "An error occurred when attempting to upload file to S3. Error message: " +
+        outcome.GetError().GetMessage() + ", S3 bucket name: " + s3_bucket_name +
+        ", local file path: " + local_file_path + ", S3 object key: " + s3_object_key +
+        ", aws region: " + aws_region};
+  }
+}
+
+void delete_object_keys_with_prefix(const std::string& s3_bucket_name,
+                                    const std::string& s3_object_keys_prefix,
+                                    const std::string& aws_region) {
+  auto s3_client = create_s3_client_for_region(aws_region);
+
+  Aws::S3::Model::ListObjectsRequest list_objects_request;
+  list_objects_request.WithBucket(s3_bucket_name);
+  list_objects_request.WithPrefix(s3_object_keys_prefix);
+
+  std::vector<std::string> object_keys;
+  auto list_outcome = s3_client.ListObjects(list_objects_request);
+  if (list_outcome.IsSuccess()) {
+    for (const auto& object : list_outcome.GetResult().GetContents()) {
+      object_keys.emplace_back(object.GetKey());
+    }
+  } else {
+    throw std::runtime_error{
+        "An error occurred when attempting to list S3 objects. Error message: " +
+        list_outcome.GetError().GetMessage() + ", S3 bucket name: " + s3_bucket_name +
+        ", S3 object key prefix: " + s3_object_keys_prefix +
+        ", aws region: " + aws_region};
+  }
+
+  Aws::S3::Model::DeleteObjectRequest delete_object_request;
+  delete_object_request.WithBucket(s3_bucket_name);
+  std::vector<std::pair<std::string, std::string>> object_keys_with_delete_errors;
+  for (const auto& object_key : object_keys) {
+    delete_object_request.WithKey(object_key);
+    auto delete_outcome = s3_client.DeleteObject(delete_object_request);
+    if (!delete_outcome.IsSuccess()) {
+      object_keys_with_delete_errors.emplace_back(object_key,
+                                                  delete_outcome.GetError().GetMessage());
+    }
+  }
+
+  if (!object_keys_with_delete_errors.empty()) {
+    std::string error_message{
+        "An error occurred when attempting to delete the following object keys:\n"};
+    for (const auto& [object_key, error] : object_keys_with_delete_errors) {
+      error_message += "{ object key: " + object_key + ", error: " + error + "}\n";
+    }
+    error_message +=
+        ", S3 bucket name: " + s3_bucket_name + ", aws region: " + aws_region;
+    throw std::runtime_error{error_message};
+  }
 }

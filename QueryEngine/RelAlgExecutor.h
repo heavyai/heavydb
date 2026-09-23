@@ -1,23 +1,12 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2016-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef QUERYENGINE_RELALGEXECUTOR_H
 #define QUERYENGINE_RELALGEXECUTOR_H
 
-#include "Distributed/AggregatedResult.h"
+#include "QueryEngine/AggregatedResult.h"
 #include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
@@ -139,11 +128,6 @@ class RelAlgExecutor : private StorageIOFacility {
                                                         const CompilationOptions& co,
                                                         const ExecutionOptions& eo,
                                                         RenderInfo* render_info);
-
-  void addLeafResult(const unsigned id, const AggregatedResult& result) {
-    const auto it_ok = leaf_results_.emplace(id, result);
-    CHECK(it_ok.second);
-  }
 
   std::unique_ptr<RelAlgDag> getOwnedRelAlgDag() {
     CHECK(query_dag_);
@@ -468,7 +452,6 @@ class RelAlgExecutor : private StorageIOFacility {
   time_t now_;
   std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_join_info_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
-  std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;
   bool has_step_for_union_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
@@ -477,8 +460,6 @@ class RelAlgExecutor : private StorageIOFacility {
   std::optional<std::function<void()>> post_execution_callback_;
 
   gfx::GfxContext* gfx_context_;
-
-  friend class PendingExecutionClosure;
 };
 
 #endif  // QUERYENGINE_RELALGEXECUTOR_H

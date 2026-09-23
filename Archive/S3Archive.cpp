@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "S3Archive.h"
@@ -20,6 +9,9 @@
 #include <aws/core/VersionConfig.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
+#ifdef HAVE_TSAN
+#include <aws/core/client/RetryStrategy.h>
+#endif
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <aws/s3/model/Object.h>
@@ -146,6 +138,12 @@ void S3Archive::init_for_read() {
     auto ssl_config = heavydb_aws_sdk::get_ssl_config();
     client_config.caPath = ssl_config.ca_path;
     client_config.caFile = ssl_config.ca_file;
+
+#ifdef HAVE_TSAN
+    // TSAN requires more retry attempts to succeed
+    client_config.retryStrategy =
+        std::make_shared<Aws::Client::StandardRetryStrategy>(20);
+#endif
 
     log_client_config(client_config, s3_config.use_virtual_addressing);
 

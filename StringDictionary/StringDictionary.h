@@ -1,21 +1,11 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cstring>
 #include <functional>
 #include <future>
 #include <map>
@@ -27,14 +17,12 @@
 
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
+#include "Logger/Logger.h"
 #include "Shared/Datum.h"
 #include "Shared/DbObjectKeys.h"
-
-#include "OSDependent/heavyai_fs.h"
+#include "Shared/heavyai_fs.h"
 
 extern bool g_enable_stringdict_parallel;
-
-class StringDictionaryClient;
 
 namespace StringOps_Namespace {
 class StringOps;
@@ -89,8 +77,6 @@ class DictPayloadUnavailable : public std::runtime_error {
   DictPayloadUnavailable(const std::string& err) : std::runtime_error(err) {}
 };
 
-class LeafHostInfo;
-
 using string_dict_hash_t = uint32_t;
 
 using StringLookupCallback = std::function<bool(std::string_view, int32_t string_id)>;
@@ -124,7 +110,6 @@ class StringDictionary {
                    const bool recover,
                    const bool materializeHashes = false,
                    size_t initial_capacity = 256);
-  StringDictionary(const LeafHostInfo& host, const shared::StringDictKey& dict_key);
   ~StringDictionary() noexcept;
 
   const shared::StringDictKey& getDictKey() const noexcept;
@@ -145,10 +130,8 @@ class StringDictionary {
   };
 
   // Functors passed to eachStringSerially() must derive from StringCallback.
-  // Each std::string const& (if isClient()) or std::string_view (if !isClient())
-  // plus string_id is passed to the callback functor.
+  // Each std::string_view plus string_id is passed to the callback functor.
   void eachStringSerially(int64_t const generation, StringCallback&) const;
-  std::function<int32_t(std::string const&)> makeLambdaStringToId() const;
   friend class StringLocalCallback;
 
   int32_t getOrAdd(const std::string& str) noexcept;
@@ -229,8 +212,6 @@ class StringDictionary {
 
   bool checkpoint() noexcept;
 
-  bool isClient() const noexcept;
-
   /**
    * @brief Populates provided \p dest_ids vector with string ids corresponding to given
    * source strings
@@ -273,7 +254,6 @@ class StringDictionary {
   static constexpr size_t MAX_STRLEN = (1 << 15) - 1;
   static constexpr size_t MAX_STRCOUNT = (1U << 31) - 1;
 
-  void update_leaf(const LeafHostInfo& host_info);
   size_t computeCacheSize() const;
 
   std::vector<std::string> getStringsForRange(
@@ -409,20 +389,11 @@ class StringDictionary {
   mutable size_t compare_cache_size_;
   mutable std::shared_ptr<std::vector<std::string>> strings_cache_;
   mutable size_t strings_cache_size_;
-  mutable std::unique_ptr<StringDictionaryClient> client_;
-  mutable std::unique_ptr<StringDictionaryClient> client_no_timeout_;
 
   static inline string_dictionary::CanaryBuffer canary_buffer;
 };
 
 int32_t truncate_to_generation(const int32_t id, const size_t generation);
-
-void translate_string_ids(std::vector<int32_t>& dest_ids,
-                          const LeafHostInfo& dict_server_host,
-                          const shared::StringDictKey& dest_dict_key,
-                          const std::vector<int32_t>& source_ids,
-                          const shared::StringDictKey& source_dict_key,
-                          const int32_t dest_generation);
 
 std::ostream& operator<<(std::ostream& os,
                          const StringDictionary::StringDictMemoryUsage&);

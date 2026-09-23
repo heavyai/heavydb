@@ -1,0 +1,91 @@
+#!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+set -e
+
+function usage {
+  echo "Usage $0 "
+  echo "  "
+  echo "  -i : initialise DBs"
+  echo "  -o : any additional options to pass to leaf/agg nodes"
+  exit 0
+}
+
+INITDB=false
+HELP=false
+
+optstring=":ioh:"
+
+while getopts ${optstring} arg; do
+  case ${arg} in
+    i) INITDB=true ;;
+    h)    usage ;;
+    n) RO_NODES="${OPTARG}" ;;
+    o) EXTRA_OPTIONS="${OPTARG}" ;;
+    ? ) echo "Invalid option: -${OPTARG}."
+        echo
+        usage ;;
+  esac
+done
+
+trap 'trap - SIGTERM && kill -- -$$' SIGINT SIGTERM EXIT
+
+
+if $INITDB ; then
+  echo "Initialising DBs...."
+  rm -rf Tests/tmp
+  mkdir Tests/tmp
+  ./bin/initheavy -f --skip-geo --data Tests/tmp
+fi
+
+rm -rf unittest_ha_data
+mkdir unittest_ha_data
+
+mkdir unittest_ha_data/RO1
+./bin/initheavy -f --skip-geo --data unittest_ha_data/RO1
+
+rm -rf unittest_ha_data/RO1/data
+rm -rf unittest_ha_data/RO1/catalogs
+
+ln -s  ../../Tests/tmp/catalogs unittest_ha_data/RO1/catalogs
+ln -s  ../../Tests/tmp/data unittest_ha_data/RO1/data
+
+mkdir unittest_ha_data/RO2
+./bin/initheavy -f --skip-geo --data unittest_ha_data/RO2
+
+rm -rf unittest_ha_data/RO2/data
+rm -rf unittest_ha_data/RO2/catalogs
+
+ln -s  ../../Tests/tmp/catalogs unittest_ha_data/RO2/catalogs
+ln -s  ../../Tests/tmp/data unittest_ha_data/RO2/data
+
+
+if [ "$EXTRA_OPTIONS" != "" ] ; then
+  echo "Adding extra options to startup params: "
+  echo "$EXTRA_OPTIONS"
+  echo
+fi
+
+./bin/heavydb Tests/tmp $EXTRA_OPTIONS --verbose --port 6274 --http-port 6278 --calcite-port 6279  2> >(sed 's/^/RW> /' | tee unittest_ha_data/RW.log) &
+OMNI_RW_PID=$!
+./bin/heavy_web_server --port 6273 --backend-url "http://localhost:6278" &
+OMNI_RW_WEB_PID=$!
+
+./bin/heavydb unittest_ha_data/RO1 $EXTRA_OPTIONS --read-only true --master-address localhost --verbose --port 16274 --http-port 16278 --calcite-port 16279 2> >(sed 's/^/RO1> /' | tee unittest_ha_data/RO1.log) &
+OMNI_RO1_PID=$!
+./bin/heavy_web_server --port 16273 --backend-url "http://localhost:16278" &
+OMNI_RO1_WEB_PID=$!
+
+./bin/heavydb unittest_ha_data/RO2 $EXTRA_OPTIONS --read-only true --master-address localhost --verbose --port 26274 --http-port 26278 --calcite-port 26279 2> >(sed 's/^/RO2> /' | tee unittest_ha_data/RO2.log) &
+OMNI_RO2_PID=$!
+./bin/heavy_web_server --port 26273 --backend-url "http://localhost:26278" &
+OMNI_RO2_WEB_PID=$!
+
+
+wait $OMNI_RW_PID
+wait $OMNI_RO1_PID
+wait $OMNI_RO2_PID
+wait $OMNI_RW_WEB_PID
+wait $OMNI_RO1_WEB_PID
+wait $OMNI_RO2_WEB_PID

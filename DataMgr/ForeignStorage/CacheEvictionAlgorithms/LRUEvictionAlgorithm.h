@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -20,9 +9,6 @@
  *
  * This file includes the class specification for the Least Recently Used cache eviction
  * algorithm used by the Foreign Storage Interface (FSI).
- *
- * // TODO(Misiu): A lot of the code here is replicated from Shared/LruCache.h
- * with some minor extensions for deletion and changed to use a set.  It should be merged.
  *
  * This algorithm tracks which chunks were the least recently used by relying on the
  * touch_chunk function being called when they are used.  It tracks the order of use

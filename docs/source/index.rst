@@ -42,16 +42,28 @@ internals and details the data model and query execution flow.
 
     execution/index
 
+    foreign_storage/index
+
+    table_functions/index
+
+    ml_models/index
+
+    security/row_level_security
+
+    runtime/index
+
+    configuration/index
+
 .. toctree::
     :caption: API Reference
-    :glob:
 
-    api/*
+    data_model/api
+    api/index
 
 .. toctree::
     :caption: Additional Resources
 
-    Doxygen <https://doxygen.heavy.ai>
+    Doxygen <https://docs.nvidia.com/heavyai/doxygen>
     GitHub Repository <https://github.com/heavyai/heavydb>
     glossary/index
 

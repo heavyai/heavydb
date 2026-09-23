@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "DdlCommandExecutor.h"
@@ -28,6 +17,11 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
+#include "Shared/Encryption.h"
+#if defined(EE_FSI_ODBC)
+#include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
+#include "DataMgr/ForeignStorage/ODBC/OdbcDataWrapper.h"
+#endif
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
@@ -40,7 +34,7 @@
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/ResultSetBuilder.h"
-#include "QueryEngine/TableFunctions/SystemFunctions/os/ML/MLModel.h"
+#include "QueryEngine/TableFunctions/SystemFunctions/ML/MLModel.h"
 #include "QueryEngine/TableOptimizer.h"
 
 extern bool g_enable_fsi;
@@ -625,10 +619,6 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
         Parser::RevokePrivilegesStmt(extractPayload(*ddl_data_));
     revoke_privileges_stmt.execute(*session_ptr_, read_only_mode);
     return result;
-  } else if (ddl_command_ == "CREATE_DATAFRAME") {
-    auto create_dataframe_stmt = Parser::CreateDataframeStmt(extractPayload(*ddl_data_));
-    create_dataframe_stmt.execute(*session_ptr_, read_only_mode);
-    return result;
   } else if (ddl_command_ == "CREATE_MODEL") {
     auto create_model_stmt = Parser::CreateModelStmt(extractPayload(*ddl_data_));
     create_model_stmt.execute(*session_ptr_, read_only_mode);
@@ -654,6 +644,10 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     result = CreateForeignTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "DROP_FOREIGN_TABLE") {
     result = DropForeignTableCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "CREATE_USER_MAPPING") {
+    result = CreateUserMappingCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "DROP_USER_MAPPING") {
+    result = DropUserMappingCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "SHOW_TABLES") {
     result = ShowTablesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "COMMENT") {
@@ -699,6 +693,14 @@ ExecutionResult DdlCommandExecutor::execute(bool read_only_mode) {
     result = ShowRolesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else if (ddl_command_ == "REASSIGN_OWNED") {
     result = ReassignOwnedCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "CREATE_POLICY") {
+    result = CreatePolicyCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "SHOW_POLICIES") {
+    result = ShowPoliciesCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "DROP_POLICY") {
+    result = DropPolicyCommand{*ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (ddl_command_ == "SHOW_SUPPORTED_DATA_SOURCES") {
+    result = ShowSupportedDataSources{*ddl_data_, session_ptr_}.execute(read_only_mode);
   } else {
     throw std::runtime_error("Unsupported DDL command");
   }
@@ -771,54 +773,6 @@ std::string DdlCommandExecutor::returnQueueAction() const {
   CHECK(ddl_payload.HasMember("queueAction"));
   CHECK(ddl_payload["queueAction"].IsString());
   return ddl_payload["queueAction"].GetString();
-}
-
-DistributedExecutionDetails DdlCommandExecutor::getDistributedExecutionDetails() const {
-  DistributedExecutionDetails execution_details;
-  if (ddl_command_ == "CREATE_DATAFRAME" || ddl_command_ == "RENAME_TABLE" ||
-      ddl_command_ == "ALTER_TABLE" || ddl_command_ == "CREATE_TABLE" ||
-      ddl_command_ == "DROP_TABLE" || ddl_command_ == "TRUNCATE_TABLE" ||
-      ddl_command_ == "DUMP_TABLE" || ddl_command_ == "RESTORE_TABLE" ||
-      ddl_command_ == "OPTIMIZE_TABLE" || ddl_command_ == "CREATE_VIEW" ||
-      ddl_command_ == "DROP_VIEW" || ddl_command_ == "CREATE_DB" ||
-      ddl_command_ == "DROP_DB" || ddl_command_ == "ALTER_DATABASE" ||
-      ddl_command_ == "CREATE_USER" || ddl_command_ == "DROP_USER" ||
-      ddl_command_ == "ALTER_USER" || ddl_command_ == "RENAME_USER" ||
-      ddl_command_ == "CREATE_ROLE" || ddl_command_ == "DROP_ROLE" ||
-      ddl_command_ == "GRANT_ROLE" || ddl_command_ == "REVOKE_ROLE" ||
-      ddl_command_ == "REASSIGN_OWNED" || ddl_command_ == "CREATE_POLICY" ||
-      ddl_command_ == "DROP_POLICY" || ddl_command_ == "CREATE_SERVER" ||
-      ddl_command_ == "DROP_SERVER" || ddl_command_ == "CREATE_FOREIGN_TABLE" ||
-      ddl_command_ == "DROP_FOREIGN_TABLE" || ddl_command_ == "CREATE_USER_MAPPING" ||
-      ddl_command_ == "DROP_USER_MAPPING" || ddl_command_ == "ALTER_FOREIGN_TABLE" ||
-      ddl_command_ == "ALTER_SERVER" || ddl_command_ == "REFRESH_FOREIGN_TABLES" ||
-      ddl_command_ == "ALTER_SYSTEM_CLEAR" || ddl_command_ == "COMMENT") {
-    // group user/role/db commands
-    execution_details.execution_location = ExecutionLocation::ALL_NODES;
-    execution_details.aggregation_type = AggregationType::NONE;
-  } else if (ddl_command_ == "GRANT_PRIVILEGE" || ddl_command_ == "REVOKE_PRIVILEGE") {
-    auto& ddl_payload = extractPayload(*ddl_data_);
-    CHECK(ddl_payload.HasMember("type"));
-    const std::string& targetType = ddl_payload["type"].GetString();
-    if (targetType == "DASHBOARD") {
-      // dashboard commands should run on Aggregator alone
-      execution_details.execution_location = ExecutionLocation::AGGREGATOR_ONLY;
-      execution_details.aggregation_type = AggregationType::NONE;
-    } else {
-      execution_details.execution_location = ExecutionLocation::ALL_NODES;
-      execution_details.aggregation_type = AggregationType::NONE;
-    }
-
-  } else if (ddl_command_ == "SHOW_TABLE_DETAILS" ||
-             ddl_command_ == "SHOW_DISK_CACHE_USAGE") {
-    execution_details.execution_location = ExecutionLocation::LEAVES_ONLY;
-    execution_details.aggregation_type = AggregationType::UNION;
-  } else {
-    // Commands that fall here : COPY_TABLE, EXPORT_QUERY, etc.
-    execution_details.execution_location = ExecutionLocation::AGGREGATOR_ONLY;
-    execution_details.aggregation_type = AggregationType::NONE;
-  }
-  return execution_details;
 }
 
 const std::string DdlCommandExecutor::getTargetQuerySessionToKill() const {
@@ -1890,11 +1844,8 @@ ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
     auto calcite_mgr = catalog.getCalciteMgr();
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-    const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
-        false,
-        g_enable_watchdog,
-        {},
-        Catalog_Namespace::SysCatalog::instance().isAggregator());
+    const auto calciteOptimizationOption =
+        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
     auto result = calcite_mgr->process(query_state_proxy,
                                        td->viewSQL,
                                        calciteQueryParsingOption,
@@ -2858,6 +2809,131 @@ ExecutionResult RefreshForeignTablesCommand::execute(bool read_only_mode) {
   return ExecutionResult();
 }
 
+CreateUserMappingCommand::CreateUserMappingCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : UserMappingDdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: CREATE USER MAPPING");
+  }
+  auto& ddl_payload = extractPayload(ddl_data_);
+  CHECK(ddl_payload.HasMember("serverName"));
+  CHECK(ddl_payload["serverName"].IsString());
+  CHECK(ddl_payload.HasMember("user"));
+  CHECK(ddl_payload["user"].IsString());
+  CHECK(ddl_payload.HasMember("options"));
+  CHECK(ddl_payload["options"].IsObject());
+  CHECK(ddl_payload.HasMember("ifNotExists"));
+  CHECK(ddl_payload["ifNotExists"].IsBool());
+}
+
+ExecutionResult CreateUserMappingCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE USER MAPPING invalid in read only mode.");
+  }
+
+  auto& ddl_payload = extractPayload(ddl_data_);
+  auto user_mapping = std::make_unique<foreign_storage::UserMapping>();
+
+  const auto& [user_id, user_mapping_type] = getUserIdAndUserMappingType();
+  user_mapping->user_id = user_id;
+  user_mapping->type = user_mapping_type;
+
+  rapidjson::StringBuffer buffer;
+  rapidjson::Writer<rapidjson::StringBuffer> writer{buffer};
+  ddl_payload["options"].Accept(writer);
+  const std::string options_str = buffer.GetString();
+  user_mapping->options = PkiEncryptor::publicKeyEncrypt(options_str);
+
+  auto foreign_server = getForeignServer();
+  user_mapping->foreign_server_id = foreign_server->id;
+  user_mapping->validate(foreign_server);
+  session_ptr_->getCatalog().createUserMapping(std::move(user_mapping),
+                                               ddl_payload["ifNotExists"].GetBool());
+
+  return ExecutionResult();
+}
+
+DropUserMappingCommand::DropUserMappingCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : UserMappingDdlCommand(ddl_data, session_ptr) {
+  if (!g_enable_fsi) {
+    throw std::runtime_error("Unsupported command: DROP USER MAPPING");
+  }
+  auto& ddl_payload = extractPayload(ddl_data_);
+  CHECK(ddl_payload.HasMember("serverName"));
+  CHECK(ddl_payload["serverName"].IsString());
+  CHECK(ddl_payload.HasMember("user"));
+  CHECK(ddl_payload["user"].IsString());
+  CHECK(ddl_payload.HasMember("ifExists"));
+  CHECK(ddl_payload["ifExists"].IsBool());
+}
+
+ExecutionResult DropUserMappingCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
+  if (read_only_mode) {
+    throw std::runtime_error("DROP USER MAPPING invalid in read only mode.");
+  }
+
+  auto foreign_server = getForeignServer();
+  auto user_id = getUserIdAndUserMappingType().first;
+  auto& ddl_payload = extractPayload(ddl_data_);
+  auto& catalog = session_ptr_->getCatalog();
+  // refresh foreign data wrappers so that the user mapping can no longer be used
+  auto foreign_tables = catalog.getAllForeignTablesForForeignServer(foreign_server->id);
+  for (const auto& td : foreign_tables) {
+    foreign_storage::refresh_foreign_table(
+        catalog, td->tableName, /*evict_cached_entries=*/true);
+    Executor::clearExternalCaches(true, td, catalog.getDatabaseId());
+  }
+
+  catalog.dropUserMapping(user_id, foreign_server->id, ddl_payload["ifExists"].GetBool());
+  return ExecutionResult();
+}
+
+const foreign_storage::ForeignServer* UserMappingDdlCommand::getForeignServer() {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string server_name = ddl_payload["serverName"].GetString();
+  auto foreign_server = session_ptr_->getCatalog().getForeignServer(server_name);
+  if (!foreign_server) {
+    throw std::runtime_error{"Foreign server with name \"" + server_name +
+                             "\" does not exist."};
+  }
+  return foreign_server;
+}
+
+std::pair<int32_t, std::string> UserMappingDdlCommand::getUserIdAndUserMappingType() {
+  auto& ddl_payload = extractPayload(ddl_data_);
+  std::string user = ddl_payload["user"].GetString();
+  std::string server_name = ddl_payload["serverName"].GetString();
+  const auto& current_user = session_ptr_->get_currentUser();
+  int32_t user_id;
+  std::string user_mapping_type;
+  if (boost::iequals(user, "PUBLIC")) {
+    if (!current_user.isSuper &&
+        !Catalog_Namespace::SysCatalog::instance().verifyDBObjectOwnership(
+            current_user,
+            DBObject(server_name, ServerDBObjectType),
+            session_ptr_->getCatalog())) {
+      throw std::runtime_error(
+          "Public user mappings can only be created or dropped by super user or "
+          "owner of the "
+          "server.");
+    }
+    user_id = shared::kRootUserId;
+    user_mapping_type = foreign_storage::UserMappingType::PUBLIC;
+  } else {
+    throw std::runtime_error{"Invalid user '" + user +
+                             "' specified for CREATE or DROP USER MAPPING command. Only "
+                             "PUBLIC user mappings are supported."};
+  }
+  return {user_id, user_mapping_type};
+}
+
 AlterTableCommand::AlterTableCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr)
@@ -3192,11 +3268,6 @@ void AlterTableAlterColumnCommand::alterColumn() {
 }
 
 ExecutionResult AlterTableAlterColumnCommand::execute(bool read_only_mode) {
-  if (g_cluster) {
-    throw std::runtime_error(
-        "ALTER TABLE ALTER COLUMN is unsupported in distributed mode.");
-  }
-
   // NOTE: read_only_mode is validated at a higher level in AlterTableCommand
 
   // TODO: Refactor this lock when refactoring other ALTER TABLE commands
@@ -3332,6 +3403,7 @@ ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
           throw std::runtime_error("Unable to handle literal for " + *option_name);
         }
         CHECK(literal_value);
+
         Parser::NameValueAssign* nv =
             new Parser::NameValueAssign(option_name, literal_value);
         std::unique_ptr<Parser::DDLStmt>(
@@ -3471,6 +3543,15 @@ void AlterForeignTableCommand::alterOptions(
   foreign_table.validateSupportedOptionKeys(new_options_map);
   foreign_table.validateAlterOptions(new_options_map);
   cat.setForeignTableOptions(table_name, new_options_map, false);
+#if defined(EE_FSI_ODBC)
+  // These options will invalidate any data in the cache.
+  if (new_options_map.find(foreign_storage::OdbcDataWrapper::ODBC_SELECT_KEY) !=
+          new_options_map.end() ||
+      new_options_map.find(foreign_storage::OdbcDataWrapper::ODBC_ORDER_BY_KEY) !=
+          new_options_map.end()) {
+    foreign_storage::refresh_foreign_table_unlocked(cat, foreign_table, true);
+  }
+#endif
 }
 
 ShowDiskCacheUsageCommand::ShowDiskCacheUsageCommand(
@@ -3732,6 +3813,206 @@ ExecutionResult ShowRolesCommand::execute(bool read_only_mode) {
   return ExecutionResult(rSet, label_infos);
 }
 
+CreatePolicyCommand::CreatePolicyCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
+
+  CHECK(ddl_payload.HasMember("columnName"));
+  CHECK(ddl_payload["columnName"].IsArray());
+  for (auto& s : ddl_payload["columnName"].GetArray()) {
+    CHECK(s.IsString()) << "unexpected SQL name formatting for table.column";
+    if (strlen(s.GetString()) == 0) {
+      throw std::runtime_error("blank table.column name not allowed");
+    }
+  }
+
+  CHECK(ddl_payload.HasMember("granteeName"));
+  CHECK(ddl_payload["granteeName"].IsString());
+
+  CHECK(ddl_payload.HasMember("valuesList"));
+  CHECK(ddl_payload["valuesList"].IsArray());
+  for (auto& s : ddl_payload["valuesList"].GetArray()) {
+    CHECK(s.IsString()) << "expected only string VALUES() for CREATE POLICY";
+    // NOTE: The JSON strings in ddl_payload["valuesList"] may be wrapped in single
+    // quotes for SQL strings or stored with no quotes for SQL numbers.
+  }
+}
+
+ExecutionResult CreatePolicyCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
+  auto& ddl_payload = extractPayload(ddl_data_);
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+
+  if (read_only_mode) {
+    throw std::runtime_error("CREATE POLICY invalid in read only mode.");
+  }
+  if (!session_ptr_->get_currentUser().isSuper) {
+    throw std::runtime_error("Only a super user can create security policies.");
+  }
+
+  std::vector<std::string> column_name_components;
+  for (auto& s : ddl_payload["columnName"].GetArray()) {
+    CHECK(s.IsString()) << "unexpected SQL name formatting for table.column";
+    column_name_components.emplace_back(s.GetString());
+    if (column_name_components.back().empty()) {
+      throw std::runtime_error("blank table.column name not allowed");
+    }
+  }
+  if (column_name_components.size() != 2) {
+    throw std::runtime_error("table.column name is required");
+  }
+
+  std::string grantee_name = ddl_payload["granteeName"].GetString();
+
+  std::vector<std::string> values_list;
+  for (auto& s : ddl_payload["valuesList"].GetArray()) {
+    CHECK(s.IsString()) << "expected only string VALUES() for CREATE POLICY";
+    // NOTE: The JSON strings in ddl_payload["valuesList"] may be wrapped in single
+    // quotes for SQL strings or stored with no quotes for SQL numbers.
+    values_list.emplace_back(s.GetString());
+  }
+
+  auto& catalog = session_ptr_->getCatalog();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          catalog, column_name_components.front(), true);
+  sys_cat.createPolicy(catalog, column_name_components, grantee_name, values_list);
+
+  return ExecutionResult();
+}
+
+ShowPoliciesCommand::ShowPoliciesCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
+
+  CHECK(ddl_payload.HasMember("effective"));
+  CHECK(ddl_payload["effective"].IsBool());
+
+  CHECK(ddl_payload.HasMember("granteeName"));
+  CHECK(ddl_payload["granteeName"].IsString());
+}
+
+ExecutionResult ShowPoliciesCommand::execute(bool read_only_mode) {
+  // valid in read_only_mode
+
+  auto& ddl_payload = extractPayload(ddl_data_);
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+
+  if (!session_ptr_->get_currentUser().isSuper) {
+    throw std::runtime_error("Only a super user can show security policies.");
+  }
+
+  bool effective = ddl_payload["effective"].GetBool();
+  std::string grantee_name = ddl_payload["granteeName"].GetString();
+
+  Catalog_Namespace::Catalog& cat = session_ptr_->getCatalog();
+  Catalog_Namespace::DBMetadata const& db = cat.getCurrentDB();
+
+  // label_infos -> column labels
+  std::vector<std::string> labels{"COLUMN", "VALUES"};
+  std::vector<TargetMetaInfo> label_infos;
+  for (const auto& label : labels) {
+    label_infos.emplace_back(label, SQLTypeInfo(kTEXT, true));
+  }
+
+  // logical_values -> table data
+  std::vector<RelLogicalValues::RowValues> logical_values;
+  auto restrictions{sys_cat.getRestrictions(grantee_name, effective)};
+  lockmgr::LockedTableDescriptors locks;
+  for (auto& [k, r] : restrictions) {
+    if (r.dbId != db.dbId) {
+      continue;
+    }
+    CHECK_EQ(std::get<0>(k), r.dbId)
+        << "database ID mismatch: " << std::get<0>(k) << "," << r.dbId;
+
+    locks.emplace_back(
+        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
+            lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+                cat, r.tableId)));
+
+    TableDescriptor const* td = cat.getMetadataForTable(r.tableId, false);
+    if (!td) {
+      LOG(WARNING) << "invalid table ID for SHOW POLICIES: " << std::to_string(r.tableId)
+                   << " (ignored)";
+      continue;
+    }
+    ColumnDescriptor const* cd = cat.getMetadataForColumn(td->tableId, r.columnId);
+    if (!cd) {
+      LOG(WARNING) << "invalid column ID for SHOW POLICIES: "
+                   << std::to_string(r.columnId) << " (ignored)";
+      continue;
+    }
+    CHECK_EQ(td->tableId, cd->tableId)
+        << "table ID mismatch: " << td->tableId << "," << cd->tableId;
+
+    std::string key{td->tableName + "." + cd->columnName};
+    logical_values.emplace_back(RelLogicalValues::RowValues{});
+    logical_values.back().emplace_back(genLiteralStr(key));
+    logical_values.back().emplace_back(genLiteralStr(join(r.values, ",")));
+  }
+
+  // Create ResultSet
+  std::shared_ptr<ResultSet> rSet = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(label_infos, logical_values));
+
+  return ExecutionResult(rSet, label_infos);
+}
+
+DropPolicyCommand::DropPolicyCommand(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {
+  auto& ddl_payload = extractPayload(ddl_data_);
+
+  CHECK(ddl_payload.HasMember("columnName"));
+  CHECK(ddl_payload["columnName"].IsArray());
+  for (auto& s : ddl_payload["columnName"].GetArray()) {
+    CHECK(s.IsString()) << "unexpected SQL name formatting for table.column";
+  }
+
+  CHECK(ddl_payload.HasMember("granteeName"));
+  CHECK(ddl_payload["granteeName"].IsString());
+}
+
+ExecutionResult DropPolicyCommand::execute(bool read_only_mode) {
+  auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+
+  auto& ddl_payload = extractPayload(ddl_data_);
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
+
+  if (read_only_mode) {
+    throw std::runtime_error("DROP POLICY invalid in read only mode.");
+  }
+  if (!session_ptr_->get_currentUser().isSuper) {
+    throw std::runtime_error("Only a super user can drop security policies.");
+  }
+
+  std::vector<std::string> column_name_components;
+  for (auto& s : ddl_payload["columnName"].GetArray()) {
+    CHECK(s.IsString()) << "unexpected SQL name formatting for table.column";
+    column_name_components.emplace_back(s.GetString());
+  }
+  if (column_name_components.size() != 2) {
+    throw std::runtime_error("table.column name is required");
+  }
+
+  std::string grantee_name = ddl_payload["granteeName"].GetString();
+
+  auto& catalog = session_ptr_->getCatalog();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          catalog, column_name_components.front(), true);
+  sys_cat.dropPolicy(catalog, column_name_components, grantee_name);
+
+  return ExecutionResult();
+}
+
 ReassignOwnedCommand::ReassignOwnedCommand(
     const DdlCommandData& ddl_data,
     std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
@@ -3771,4 +4052,60 @@ ExecutionResult ReassignOwnedCommand::execute(bool read_only_mode) {
     catalog->reassignOwners(old_owners_, new_owner_);
   }
   return ExecutionResult();
+}
+
+namespace {
+void add_data_source_row(std::vector<RelLogicalValues::RowValues>& row_values,
+                         const std::string& category,
+                         const std::string& type,
+                         const std::string& sub_type) {
+  row_values.emplace_back(RelLogicalValues::RowValues{});
+  row_values.back().emplace_back(genLiteralStr(category));
+  row_values.back().emplace_back(genLiteralStr(type));
+  row_values.back().emplace_back(genLiteralStr(sub_type));
+}
+}  // namespace
+
+ShowSupportedDataSources::ShowSupportedDataSources(
+    const DdlCommandData& ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+    : DdlCommand(ddl_data, session_ptr) {}
+
+ExecutionResult ShowSupportedDataSources::execute(bool read_only_mode) {
+  auto execute_read_lock = legacylockmgr::getExecuteReadLock();
+
+  // valid in read_only_mode
+
+  std::vector<TargetMetaInfo> column_info{{"source_category", {kTEXT}},
+                                          {"source_type", {kTEXT}},
+                                          {"source_sub_type", {kTEXT}}};
+  std::vector<RelLogicalValues::RowValues> row_values;
+  add_data_source_row(row_values, "FILE", "DELIMITED_FILE", "");
+  add_data_source_row(row_values, "FILE", "PARQUET_FILE", "");
+  for (const auto& file_type : {"GeoJSON", "KML", "FlatGeobuf", "Shapefile", "GDB"}) {
+    add_data_source_row(row_values, "FILE", "GEO_FILE", file_type);
+  }
+  for (const auto& file_type : {"GeoTIFF", "GRIB", "ZARR"}) {
+    add_data_source_row(row_values, "FILE", "RASTER_FILE", file_type);
+  }
+#if defined(EE_FSI_ODBC)
+  if (g_enable_fsi) {
+    const auto* data_wrapper =
+        foreign_storage::ForeignDataWrapperFactory::createForValidation(
+            foreign_storage::DataWrapperType::ODBC);
+    auto odbc_wrapper =
+        dynamic_cast<const foreign_storage::OdbcDataWrapper*>(data_wrapper);
+    CHECK(odbc_wrapper);
+    try {
+      for (const auto& driver : odbc_wrapper->getSupportedSubDatasourceTypes()) {
+        add_data_source_row(row_values, "RDMS", "ODBC", driver);
+      }
+    } catch (const foreign_storage::OdbcDriversConfigException& e) {
+      LOG(WARNING) << e.what();
+    }
+  }
+#endif
+  std::shared_ptr<ResultSet> result_set = std::shared_ptr<ResultSet>(
+      ResultSetLogicalValuesBuilder::create(column_info, row_values));
+  return ExecutionResult(result_set, column_info);
 }

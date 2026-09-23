@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2016-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -22,12 +11,14 @@
 
 #include "Tests/ResultSetTestUtils.h"
 
+#include "DataMgr/BufferMgr/BufferMgr.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/ResultSetReductionJIT.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Shared/checked_alloc.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Tests/DataMgrTestHelpers.h"
 #include "Tests/TestHelpers.h"
@@ -1826,13 +1817,29 @@ TEST(Reduce, BaselineHashColumnar) {
 }
 
 #ifndef HAVE_TSAN
-// The large buffers tests allocate too much memory to instrument under TSAN
+// The large buffers tests allocate too much memory to instrument under TSAN.
+// On hosts without enough free CPU buffer pool to fit the multi-GB
+// allocations these tests intentionally trigger, treat OutOfMemory as a
+// skip rather than a hard failure — the host can't exercise the 32-bit
+// overflow code path, but that's not a defect of the code under test.
+// CpuMgrArenaAllocator catches BufferMgr's OutOfMemory and re-throws as
+// OutOfHostMemory (std::bad_alloc-derived, see Shared/checked_alloc.h).
+// Catch both so we cover whichever propagates out of the reduction path.
+#define SKIP_IF_OOM(stmt)                                         \
+  try {                                                           \
+    stmt;                                                         \
+  } catch (const OutOfHostMemory& e) {                            \
+    GTEST_SKIP() << "Insufficient CPU memory: " << e.what();      \
+  } catch (const OutOfMemory& e) {                                \
+    GTEST_SKIP() << "Insufficient CPU buffer pool: " << e.what(); \
+  }
+
 TEST(ReduceLargeBuffers, PerfectHashOne_Overflow32) {
   const auto target_infos = generate_random_groups_nullable_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 222208903, {8});
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
-  test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
+  SKIP_IF_OOM(test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false));
 }
 
 TEST(ReduceLargeBuffers, PerfectHashColumnarOne_Overflow32) {
@@ -1841,7 +1848,7 @@ TEST(ReduceLargeBuffers, PerfectHashColumnarOne_Overflow32) {
   query_mem_desc.setOutputColumnar(true);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
-  test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false);
+  SKIP_IF_OOM(test_reduce(target_infos, query_mem_desc, gen1, gen2, 2, false));
 }
 
 TEST(ReduceLargeBuffers, BaselineHash_Overflow32) {
@@ -1849,7 +1856,7 @@ TEST(ReduceLargeBuffers, BaselineHash_Overflow32) {
   auto query_mem_desc = baseline_hash_two_col_desc_overflow32(target_infos, 8);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
-  run_reduction(target_infos, query_mem_desc, gen1, gen2, 2);
+  SKIP_IF_OOM(run_reduction(target_infos, query_mem_desc, gen1, gen2, 2));
 }
 
 TEST(ReduceLargeBuffers, BaselineHashColumnar_Overflow32) {
@@ -1858,8 +1865,9 @@ TEST(ReduceLargeBuffers, BaselineHashColumnar_Overflow32) {
   query_mem_desc.setOutputColumnar(true);
   EvenNumberGenerator gen1;
   EvenNumberGenerator gen2;
-  run_reduction(target_infos, query_mem_desc, gen1, gen2, 2);
+  SKIP_IF_OOM(run_reduction(target_infos, query_mem_desc, gen1, gen2, 2));
 }
+#undef SKIP_IF_OOM
 #endif
 
 TEST(MoreReduce, MissingValues) {

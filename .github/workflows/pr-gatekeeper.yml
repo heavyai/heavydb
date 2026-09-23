@@ -3,12 +3,206 @@
 
 name: PR Gatekeeper
 
+# ---------------------------------------------------------------------------
+# Sets required-check statuses on every PR push based on which files changed.
+# Each category maps to a specific required check and a /command to trigger it.
+#
+# Categories:
+#   core      → pr-required-checks   → /test
+#   deps      → deps-image-builder   → /test deps  (rebuilds deps + runs core)
+#   dev-tools → dev-tools tests      → /test dev-tools
+#
+# If a category's files are not touched the check is immediately set to
+# success ("No changes in this category"). If they are touched it is set
+# to pending with a description telling the developer which command to run.
+#
+# No catch-all: files outside every category (docs, README, etc.) require
+# no tests.
+# ---------------------------------------------------------------------------
+
 on:
-  workflow_dispatch:
+  # pull_request_target runs with write access even for fork PRs, which is
+  # required so we can post commit statuses. This is safe here because the
+  # workflow never checks out or executes code from the contributor's branch —
+  # it only calls the GitHub API (listFiles + createCommitStatus).
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: none       # gatekeeper never reads repo files — enforces no-checkout
+  pull-requests: read  # list changed files via the API
+  statuses: write      # post commit statuses
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  placeholder:
-    runs-on: linux-amd64-cpu16
+  gatekeeper:
+    name: set required-check statuses
+    runs-on: ubuntu-latest
     steps:
-      - name: placeholder
-        run: true
+      - name: Check changed files and post statuses
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sha = context.payload.pull_request.head.sha;
+            const prNumber = context.payload.pull_request.number;
+
+            // Fetch all changed files in this PR, following pagination so no
+            // file is missed regardless of PR size.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: prNumber });
+            const changed = files.map(f => f.filename);
+            core.info(`${changed.length} changed file(s): ${changed.slice(0, 10).join(', ')}${changed.length > 10 ? ' …' : ''}`);
+
+            // ----------------------------------------------------------------
+            // Category definitions
+            // ----------------------------------------------------------------
+            const categories = [
+              {
+                name: 'core',
+                context: 'pr-required-checks',
+                patterns: [
+                  // Build system
+                  /^CMakeLists\.txt$/,
+                  /^CMakePackaging\.txt$/,
+                  /\.cmake$/,
+                  /^cmake\//,
+                  // Thrift IDL (generates C++ and Java bindings)
+                  /\.thrift$/,
+                  // Root-level C++ entry points
+                  /^HeavyDB\.cpp$/,
+                  /^initdb\.cpp$/,
+                  // Java (Calcite, JDBC)
+                  /^java\//,
+                  // Tests
+                  /^Tests\//,
+                  // CI build scripts
+                  /^scripts\/ci\//,
+                  // C++ source directories
+                  /^Analyzer\//,
+                  /^Archive\//,
+                  /^Calcite\//,
+                  /^Catalog\//,
+                  /^CudaMgr\//,
+                  /^DataMgr\//,
+                  /^ExecuteRenderInterface\//,
+                  /^Fragmenter\//,
+                  /^Geospatial\//,
+                  /^GfxDriver\//,
+                  /^GfxInterop\//,
+                  /^HeavyIQ\//,
+                  /^ImportExport\//,
+                  /^Logger\//,
+                  /^LockMgr\//,
+                  /^MigrationMgr\//,
+                  /^NvidiaComputeCapability\//,
+                  /^Parser\//,
+                  /^QueryEngine\//,
+                  /^QueryRenderer\//,
+                  /^QueryRunner\//,
+                  /^RuntimeLibManager\//,
+                  /^Shared\//,
+                  /^SqliteConnector\//,
+                  /^SQLFrontend\//,
+                  /^StringDictionary\//,
+                  /^StringOps\//,
+                  /^TableArchiver\//,
+                  /^ThirdParty\//,
+                  /^ThriftHandler\//,
+                  /^UdfCompiler\//,
+                  /^Utils\//,
+                ],
+                // Exclude deps-specific ci scripts so they don't double-pend core.
+                excludePatterns: [
+                  /^scripts\/ci\/build_deps_image\.sh$/,
+                  /^scripts\/ci\/prepare_deps_context\.sh$/,
+                ],
+                pendingDesc: 'Run /test when ready',
+                successDesc: 'No core changes',
+              },
+              {
+                name: 'deps',
+                // deps gets its own context so it appears as a separate required
+                // check from core. /deps-test satisfies both pr-required-checks
+                // (by chaining into it) and deps-image-builder (by posting here).
+                context: 'deps-image-builder',
+                // Also pend pr-required-checks when deps files change, since the
+                // dev must run /deps-test which rebuilds deps then runs core tests.
+                extraContext: 'pr-required-checks',
+                patterns: [
+                  /^scripts\/mapd-deps-/,
+                  /^scripts\/common-functions\.sh$/,
+                  /^docker\/build\//,
+                  /^scripts\/ci\/build_deps_image\.sh$/,
+                  /^scripts\/ci\/prepare_deps_context\.sh$/,
+                ],
+                excludePatterns: [],
+                pendingDesc: 'Run /test deps when ready',
+                extraPendingDesc: 'Run /test deps when ready (rebuilds deps + runs PR checks)',
+                successDesc: 'No deps changes',
+              },
+              {
+                name: 'dev-tools',
+                // dev-tools tests is its own required branch-protection
+                // context (unlike deps, dev-tools changes can't affect the
+                // core build, so there's no need to tie it to
+                // pr-required-checks — see branch protection settings).
+                context: 'dev-tools tests',
+                patterns: [
+                  /^dev-tools\//,
+                  /^docker\/Dockerfile\.(cuda|cpu)$/,
+                ],
+                excludePatterns: [],
+                pendingDesc: 'Run /test dev-tools when ready',
+                successDesc: 'No dev-tools changes',
+              },
+            ];
+
+            // ----------------------------------------------------------------
+            // Evaluate each category and post its commit status
+            // ----------------------------------------------------------------
+            // Track which contexts have already been pended so that core and
+            // deps (which share pr-required-checks) produce only one status.
+            const posted = {};
+
+            for (const cat of categories) {
+              const triggered = changed.some(f =>
+                cat.patterns.some(p => p.test(f)) &&
+                !cat.excludePatterns.some(p => p.test(f))
+              );
+
+              // If a context was already set to pending by an earlier category,
+              // don't overwrite it with a success from a later category that
+              // happens to share the same context.
+              if (posted[cat.context] === 'pending' && !triggered) {
+                core.info(`${cat.name}: skipping (context ${cat.context} already pending)`);
+                continue;
+              }
+
+              const state = triggered ? 'pending' : 'success';
+              const description = triggered ? cat.pendingDesc : cat.successDesc;
+
+              core.info(`${cat.name}: ${state} — ${description}`);
+              await github.rest.repos.createCommitStatus({
+                owner, repo, sha, state,
+                context: cat.context,
+                description,
+              });
+              posted[cat.context] = state;
+
+              // Some categories also pend a shared context (e.g. deps pends
+              // pr-required-checks in addition to its own deps-image-builder).
+              if (cat.extraContext && triggered && posted[cat.extraContext] !== 'pending') {
+                const extraDesc = cat.extraPendingDesc || cat.pendingDesc;
+                core.info(`${cat.name} extra: pending — ${extraDesc}`);
+                await github.rest.repos.createCommitStatus({
+                  owner, repo, sha, state: 'pending',
+                  context: cat.extraContext,
+                  description: extraDesc,
+                });
+                posted[cat.extraContext] = 'pending';
+              }
+            }

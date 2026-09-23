@@ -1,0 +1,15 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_ray_tracing : enable
+//</extensions>
+
+layout(location = 1) callableDataInEXT vec3 callableValue;
+
+void main() {
+  // Generate a color using image UV for the pixel
+  callableValue = vec3(0.5, vec2(gl_LaunchIDEXT.xy) / vec2(gl_LaunchSizeEXT.xy));
+}

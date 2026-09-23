@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -23,11 +12,11 @@
 #include "Calcite.h"
 #include "Catalog/Catalog.h"
 #include "Logger/Logger.h"
-#include "OSDependent/heavyai_path.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/fixautotools.h"
+#include "Shared/heavyai_path.h"
 #include "Shared/measure.h"
 #include "ThriftHandler/QueryState.h"
 
@@ -88,7 +77,7 @@ static void start_calcite_server_as_daemon(const int db_port,
   std::string xmxP = "-Xmx" + std::to_string(calcite_max_mem) + "m";
   std::string jarP = "-jar";
   std::string jarD =
-      root_abs_path + "/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar";
+      root_abs_path + "/bin/calcite-1.41.0-SNAPSHOT-jar-with-dependencies.jar";
   std::string extensionsP = "-e";
   std::string extensionsD = root_abs_path + "/QueryEngine/";
   std::string dataP = "-d";
@@ -489,6 +478,68 @@ TPlanResult Calcite::processImpl(query_state::QueryStateProxy query_state_proxy,
                 << hide_sensitive_data_from_query(sql_string) << "\nEnd of SQL query";
 
   std::vector<TRestriction> trestrictions;
+  Restrictions restrictions;
+  if (user_session_info->get_currentUser().userId != -1) {
+    CHECK_NE(user_session_info->get_currentUser().userName,
+             getInternalSessionProxyUserName());
+    restrictions = Catalog_Namespace::SysCatalog::instance().getRestrictions(
+        user_session_info->get_currentUser().userName);
+  }
+  static const Restriction::Key deprecatedSamlKey = Restriction().getKey();
+  for (auto& [k, r] : restrictions) {
+    if (k == deprecatedSamlKey) {
+      // TODO(sy): For backwards-compatibility. Maybe remove in OmniSciDB 6.0+.
+      try {
+        LOG(WARNING) << "WARNING: Row-level security (RLS) filtering is enabled for this "
+                        "query. Some query results may be suppressed. Deprecated SAML "
+                        "column name filter will be removed in a future release: "
+                     << r.deprecatedSamlColumnName << ": " << join(r.values, ",");
+      } catch (...) {  // Should never fail.
+        LOG(WARNING) << "WARNING: Row-level security (RLS) filtering is enabled for this "
+                        "query. Some query results may be suppressed. Deprecated SAML "
+                        "column name filter will be removed in a future release.";
+      }
+      TRestriction trestriction;
+      trestriction.database = "";
+      trestriction.table = "";
+      trestriction.column = r.deprecatedSamlColumnName;
+      trestriction.values.insert(
+          trestriction.values.end(), r.values.begin(), r.values.end());
+      trestrictions.push_back(trestriction);
+      continue;
+    }
+    if (r.dbId != cat.getDatabaseId()) {
+      continue;
+    }
+    CHECK_EQ(std::get<0>(k), r.dbId)
+        << "database ID key mismatch: " << std::get<0>(k) << "," << r.dbId;
+    CHECK_EQ(std::get<1>(k), r.tableId)
+        << "table ID key mismatch: " << std::get<1>(k) << "," << r.tableId;
+    CHECK_EQ(std::get<2>(k), r.columnId)
+        << "column ID key mismatch: " << std::get<2>(k) << "," << r.columnId;
+    TableDescriptor const* td = cat.getMetadataForTable(r.tableId, false);
+    CHECK(td) << "invalid table ID: " << r.tableId;
+    ColumnDescriptor const* cd = cat.getMetadataForColumn(td->tableId, r.columnId);
+    CHECK(cd) << "invalid column ID: " << r.columnId;
+    CHECK_EQ(td->tableId, cd->tableId)
+        << "table ID mismatch: " << td->tableId << "," << cd->tableId;
+    try {
+      VLOG(1) << "Row-level security (RLS) filtering is enabled for this query. Some "
+                 "query results may be suppressed. Filter: "
+              << catalog << "." << td->tableName << "." << cd->columnName << ": "
+              << join(r.values, ",");
+    } catch (...) {  // Should never fail.
+      VLOG(1) << "Row-level security (RLS) filtering is enabled for this query. Some "
+                 "query results may be suppressed.";
+    }
+    TRestriction trestriction;
+    trestriction.database = catalog;
+    trestriction.table = td->tableName;
+    trestriction.column = cd->columnName;
+    trestriction.values.insert(
+        trestriction.values.end(), r.values.begin(), r.values.end());
+    trestrictions.push_back(trestriction);
+  }
 
   TPlanResult ret;
   if (server_available_) {
@@ -648,12 +699,10 @@ TQueryParsingOption Calcite::getCalciteQueryParsingOption(bool legacy_syntax,
 TOptimizationOption Calcite::getCalciteOptimizationOption(
     bool is_view_optimize,
     bool enable_watchdog,
-    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
-    bool distributed_mode) {
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info) {
   TOptimizationOption optimization_option;
   optimization_option.filter_push_down_info = filter_push_down_info;
   optimization_option.is_view_optimize = is_view_optimize;
   optimization_option.enable_watchdog = enable_watchdog;
-  optimization_option.distributed_mode = distributed_mode;
   return optimization_option;
 }

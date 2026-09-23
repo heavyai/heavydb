@@ -1,0 +1,53 @@
+{
+  "sources": [
+    {
+      "filename": "imgui_shader.vert",
+      "file_path": ".",
+      "internal_path": "ImGui/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "imgui_shader.frag",
+      "file_path": ".",
+      "internal_path": "ImGui/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "fullScreenTriangle.vert",
+      "file_path": ".",
+      "internal_path": "WSITests/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "wsiTestGradient.frag",
+      "file_path": ".",
+      "internal_path": "WSITests/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "symbolSandbox_FragMain.glsl",
+      "file_path": "../SymbolSandbox/shaders",
+      "internal_path": "WSITests/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "windbarbSandbox_FragMain.glsl",
+      "file_path": "../WindBarbSandbox/shaders",
+      "internal_path": "WSITests/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "background.frag",
+      "file_path": ".",
+      "internal_path": "WSITests/",
+      "language": "glsl",
+      "class": "fragment"
+    }
+  ]
+}

@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef COMMANDFUNCTORS_H
@@ -69,31 +58,6 @@ class ContextOperations {
       output_stream << "The Server Start Time      : " << buf << " : " << tm_ptr->tm_hour
                     << ":" << tm_ptr->tm_min << ":" << tm_ptr->tm_sec << std::endl;
       output_stream << "The Server edition         : " << server_version << std::endl;
-
-      if (lambda_context.cluster_status.size() > 1) {
-        output_stream << "The Number of Leaves       : "
-                      << lambda_context.cluster_status.size() - 1 << std::endl;
-        for (auto leaf = lambda_context.cluster_status.begin() + 1;
-             leaf != lambda_context.cluster_status.end();
-             ++leaf) {
-          t = (time_t)leaf->start_time;
-          buf[11] = 0;
-          std::tm* tm_ptr = gmtime(&t);
-          strftime(buf, 11, "%F", tm_ptr);
-          output_stream << "--------------------------------------------------"
-                        << std::endl;
-          output_stream << "Name of Leaf               : " << leaf->host_name
-                        << std::endl;
-          if (server_version.compare(leaf->version) != 0) {
-            output_stream << "The Leaf Version Number    : " << leaf->version
-                          << std::endl;
-            std::cerr << "Version number mismatch!" << std::endl;
-          }
-          output_stream << "The Leaf Start Time        : " << buf << " : "
-                        << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":"
-                        << tm_ptr->tm_sec << std::endl;
-        }
-      }
     };
     thrift_op<kGET_SERVER_STATUS>(context, success_op);
   }
@@ -249,7 +213,6 @@ StandardCommand(Help, {
   std::cout <<  "                   - Exports a dashboard to a file\n";
   std::cout << "\\gpu               - Execute in GPU mode's\n";
   std::cout << "\\gte <table>       - Get table epoch\n";
-  std::cout << "\\get_license       - Print license information\n";
   std::cout << "\\hardware_info     - Report hardware information\n";
   std::cout << "\\historylen <number> - Set history buffer size (default 100)\n";
   std::cout << "\\import_dashboard <dashboard name> <filename>\n";
@@ -269,7 +232,7 @@ StandardCommand(Help, {
   std::cout << "\\roles             - Reports all roles\n";
   std::cout << "\\role_list <userName>\n";
   std::cout <<  "                   - Reports all roles granted to user\n";
-  std::cout << "\\status            - Get status of the server and the leaf nodes\n";
+  std::cout << "\\status            - Get status of the server\n";
   std::cout << "\\ste <db_id:table_id:epoch>\n";
   std::cout <<  "                   - Set table epoch\n";
   std::cout << "\\t [regex]         - List all tables, optionally matching regex\n";

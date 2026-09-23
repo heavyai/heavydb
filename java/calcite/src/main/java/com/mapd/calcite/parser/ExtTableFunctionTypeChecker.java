@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package com.mapd.calcite.parser;
 
 import static org.apache.calcite.runtime.Resources.BaseMessage;
@@ -7,6 +12,7 @@ import com.mapd.calcite.parser.HeavyDBSqlOperatorTable.ExtTableFunction;
 
 import org.apache.calcite.linq4j.Ord;
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.runtime.Resources;
 import org.apache.calcite.sql.SqlBasicCall;
@@ -21,7 +27,7 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlSyntax;
 import org.apache.calcite.sql.SqlUtil;
 import org.apache.calcite.sql.type.SqlOperandCountRanges;
-import org.apache.calcite.sql.type.SqlOperandTypeChecker;
+import org.apache.calcite.sql.type.SqlOperandMetadata;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.validate.SqlNameMatchers;
 import org.apache.calcite.sql.validate.SqlValidator;
@@ -39,11 +45,55 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
+public class ExtTableFunctionTypeChecker implements SqlOperandMetadata {
   final HeavyDBSqlOperatorTable opTable;
+  // The ExtTableFunction operator that owns this checker. A distinct checker
+  // instance is created per operator (see HeavyDBSqlOperatorTable.ExtTableFunction's
+  // constructor), so this back-reference lets paramNames()/paramTypes() return
+  // the owning function's signature.
+  private ExtTableFunction tableFunction;
 
   ExtTableFunctionTypeChecker(HeavyDBSqlOperatorTable opTable) {
     this.opTable = opTable;
+  }
+
+  void setTableFunction(ExtTableFunction tableFunction) {
+    this.tableFunction = tableFunction;
+  }
+
+  // SqlOperandMetadata. As of Calcite 1.41, SqlUtil's routine resolution
+  // (filterRoutinesByParameterTypeAndName, used for named-argument matching)
+  // obtains parameter names/types by casting the operand type checker to
+  // SqlOperandMetadata, rather than reading SqlFunction.getParamNames()/
+  // getParamTypes() off the operator as in 1.25. Both are answered from the
+  // owning ExtTableFunction.
+  @Override
+  public List<String> paramNames() {
+    return tableFunction.getParamNames();
+  }
+
+  @Override
+  public List<RelDataType> paramTypes(RelDataTypeFactory typeFactory) {
+    return tableFunction.getParameters()
+            .stream()
+            .map(p -> p.getType(typeFactory))
+            .collect(Collectors.toList());
+  }
+
+  // Return false so Calcite's SQL:2003 routine-resolution sites in SqlUtil
+  // (filterRoutinesByParameterTypeAndName, filterRoutinesByTypePrecedence,
+  // bestMatch) treat these functions as having no fixed parameter metadata and
+  // keep them as candidates WITHOUT running their own canCastFrom()-based
+  // type/name filtering. Those sites bypass HeavyDBTypeCoercion.needToCast() and
+  // call SqlTypeUtil.canCastFrom() directly, which asserts ("No assign rules for
+  // CURSOR defined") on our CURSOR-typed params and mis-permutes overloads.
+  // HeavyDB does its own overload resolution in checkOperandTypes() instead.
+  // The unguarded cast in TypeCoercionImpl.userDefinedFunctionCoercion() still
+  // succeeds (because we implement SqlOperandMetadata) and is cursor-safe since
+  // it routes through our needToCast() override.
+  @Override
+  public boolean isFixedParameters() {
+    return false;
   }
 
   /*
@@ -97,21 +147,18 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
     }
 
     // remove candidate calls that have DEFAULT values for operands which are
-    // mandatory
-    candidateOverloads.removeIf(tf
-            -> IntStream
-                       .range(0,
-                               candidateBindings.get(tf)
-                                       .permutedCall()
-                                       .getOperandList()
-                                       .size())
-                       .anyMatch(idx
-                               -> candidateBindings.get(tf)
-                                                       .permutedCall()
-                                                       .operand(idx)
-                                                       .getKind()
-                                               == SqlKind.DEFAULT
-                                       && !tf.isArgumentOptional(idx)));
+    // mandatory. Use our own DEFAULT-padded permutation: in Calcite 1.41,
+    // SqlCallBinding.permutedCall() does not pad omitted arguments for our UDTFs
+    // (isFixedParameters()==false), so it would neither expose the DEFAULT markers
+    // this check looks for nor position named middle omissions correctly.
+    candidateOverloads.removeIf(tf -> {
+      final SqlCall permutedCall =
+              tf.permuteOperandsWithDefaultMarkers(candidateBindings.get(tf).getCall());
+      return IntStream.range(0, permutedCall.getOperandList().size())
+              .anyMatch(idx
+                      -> permutedCall.operand(idx).getKind() == SqlKind.DEFAULT
+                              && !tf.isArgumentOptional(idx));
+    });
 
     // Compute a typechecking score for each candidate, taking into account type promotion
     HeavyDBTypeCoercion tc =
@@ -203,7 +250,19 @@ public class ExtTableFunctionTypeChecker implements SqlOperandTypeChecker {
   public String getCallSignature(
           SqlCallBinding callBinding, SqlValidator validator, SqlValidatorScope scope) {
     List<String> signatureList = new ArrayList<>();
-    for (final SqlNode operand : callBinding.permutedCall().getOperandList()) {
+    // Use the DEFAULT-padded permutation (when this is one of our UDTFs) so the
+    // signature shown reflects the correct parameter positions; Calcite 1.41's
+    // permutedCall() does not pad/position omitted args for us.
+    final SqlCall permutedCall =
+            (callBinding.getOperator() instanceof ExtTableFunction)
+            ? ((ExtTableFunction) callBinding.getOperator())
+                      .permuteOperandsWithDefaultMarkers(callBinding.getCall())
+            : callBinding.permutedCall();
+    for (final SqlNode operand : permutedCall.getOperandList()) {
+      if (operand.getKind() == SqlKind.DEFAULT) {
+        signatureList.add("DEFAULT");
+        continue;
+      }
       final RelDataType argType = validator.deriveType(scope, operand);
       if (null == argType) {
         continue;

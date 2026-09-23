@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef QUERY_RUNNER_H
@@ -25,7 +14,6 @@
 #include "Catalog/SessionInfo.h"
 #include "Catalog/SysCatalog.h"
 #include "Catalog/TableDescriptor.h"
-#include "LeafAggregator.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
@@ -144,27 +132,12 @@ class QueryRunner {
                            const int reserved_gpu_mem = 256 << 20);
 
   static QueryRunner* init(const File_Namespace::DiskCacheConfig* disk_cache_config,
-                           const char* db_path,
-                           const std::vector<LeafHostInfo>& string_servers = {},
-                           const std::vector<LeafHostInfo>& leaf_servers = {});
-
-  static QueryRunner* init(const char* db_path,
-                           const std::vector<LeafHostInfo>& string_servers,
-                           const std::vector<LeafHostInfo>& leaf_servers) {
-    return QueryRunner::init(db_path,
-                             shared::kRootUsername,
-                             "HyperInteractive",
-                             shared::kDefaultDbName,
-                             string_servers,
-                             leaf_servers);
-  }
+                           const char* db_path);
 
   static QueryRunner* init(const char* db_path,
                            const std::string& user,
                            const std::string& pass,
                            const std::string& db_name,
-                           const std::vector<LeafHostInfo>& string_servers,
-                           const std::vector<LeafHostInfo>& leaf_servers,
                            const std::string& udf_filename = "",
                            bool uses_gpus = true,
                            const size_t max_gpu_mem = 0,  // use all available mem
@@ -317,8 +290,6 @@ class QueryRunner {
               const std::string& user,
               const std::string& pass,
               const std::string& db_name,
-              const std::vector<LeafHostInfo>& string_servers,
-              const std::vector<LeafHostInfo>& leaf_servers,
               const std::string& udf_filename,
               bool uses_gpus,
               const size_t max_gpu_mem,

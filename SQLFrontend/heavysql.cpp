@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -21,20 +10,8 @@
  */
 
 #include <rapidjson/document.h>
-#ifndef _WIN32
 #include <termios.h>
-#else
-#include <Shlobj.h>
-#include "Shared/clean_windows.h"
-#endif
-#if !defined(_WIN32)
 #include <unistd.h>
-#else
-#include <io.h>
-#ifdef _MSC_VER
-#define isatty _isatty
-#endif
-#endif
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -70,6 +47,7 @@
 #include "Shared/base64.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/misc.h"
+#include "Shared/timedate.h"
 #include "gen-cpp/Heavy.h"
 
 #include "include/linenoise.h"
@@ -554,23 +532,19 @@ TDatum columnar_val_to_datum(const TColumn& col,
 
 // based on http://www.gnu.org/software/libc/manual/html_node/getpass.html
 std::string mapd_getpass() {
-#ifndef _WIN32
   struct termios origterm, tmpterm;
 
   tcgetattr(STDIN_FILENO, &origterm);
   tmpterm = origterm;
   tmpterm.c_lflag &= ~ECHO;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &tmpterm);
-#endif
 
   std::cout << "Password: ";
   std::string password;
   std::getline(std::cin, password);
   std::cout << std::endl;
 
-#ifndef _WIN32
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &origterm);
-#endif
 
   return password;
 }
@@ -660,9 +634,7 @@ void omnisql_signal_handler(int signal_number) {
 
 void register_signal_handler() {
   signal(SIGTERM, omnisql_signal_handler);
-#ifndef _WIN32
   signal(SIGKILL, omnisql_signal_handler);
-#endif
   signal(SIGINT, omnisql_signal_handler);
 }
 
@@ -1012,35 +984,6 @@ bool get_db_object_privs(ClientContext& context) {
   return success;
 }
 
-bool set_license_key(ClientContext& context, const std::string& token) {
-  bool success{false};
-  context.license_key = token;
-  if ((success = thrift_with_retry(kSET_LICENSE_KEY, context, nullptr))) {
-    for (auto claims : context.license_info.claims) {
-      std::vector<std::string> jwt;
-      boost::split(jwt, claims, boost::is_any_of("."));
-      if (jwt.size() > 1) {
-        std::cout << shared::decode_base64(jwt[1]) << std::endl;
-      }
-    }
-  }
-  return success;
-}
-
-bool get_license_claims(ClientContext& context) {
-  bool success{false};
-  if ((success = thrift_with_retry(kGET_LICENSE_CLAIMS, context, nullptr))) {
-    for (auto claims : context.license_info.claims) {
-      std::vector<std::string> jwt;
-      boost::split(jwt, claims, boost::is_any_of("."));
-      if (jwt.size() > 1) {
-        std::cout << shared::decode_base64(jwt[1]) << std::endl;
-      }
-    }
-  }
-  return success;
-}
-
 std::string hide_sensitive_data_from_connect(const std::string& connect_str) {
   auto result = connect_str;
   boost::regex passwd{R"(^\\c\s+?.+?\s+?.+?\s+?(?<pwd>.+))",
@@ -1054,87 +997,29 @@ std::string hide_sensitive_data_from_connect(const std::string& connect_str) {
   return result;
 }
 
-std::string get_process_role(TRole::type role) {
-  switch (role) {
-    case TRole::type::SERVER:
-      return "Server";
-    case TRole::type::AGGREGATOR:
-      return "Aggregator";
-    case TRole::type::LEAF:
-      return "Leaf";
-    case TRole::type::STRING_DICTIONARY:
-      return "String Dictionary Server";
-  }
-  UNREACHABLE();
-  return "";
-}
-
 void print_status(ClientContext& context) {
   std::ostringstream tss;
   const size_t lhs_width = 36;
-  time_t t = (time_t)context.cluster_status[0].start_time;
+  const auto& status = context.cluster_status[0];
+  time_t t = static_cast<time_t>(status.start_time);
   std::tm* tm_ptr = gmtime(&t);
   char buf[12] = {0};
   strftime(buf, 11, "%F", tm_ptr);
-  const std::string agg_version = context.cluster_status[0].version;
-  const bool is_cluster = context.cluster_status.size() > 1;
-
-  std::string edition = "";
-  if (context.cluster_status[0].edition == "ee") {
-    edition = "Enterprise Edition";
-  }
-
-  const std::string deployment_type = (is_cluster) ? "Cluster" : "Server";
 
   tss << std::left << std::setfill(' ') << std::setw(lhs_width);
-  tss << deployment_type + " Version"
-      << ": " << agg_version << " " << edition;
+  tss << "Server Version"
+      << ": " << status.version;
   tss << std::endl;
 
-  const auto& host_id = context.cluster_status[0].host_id;
-  if (!host_id.empty()) {
-    tss << std::left << std::setfill(' ') << std::setw(lhs_width);
-    tss << "Host ID"
-        << ": " << host_id;
-    tss << std::endl;
-  }
+  tss << std::left << std::setfill(' ') << std::setw(lhs_width);
+  tss << "Server Name"
+      << ": " << status.host_name << std::endl;
 
-  if (is_cluster) {
-    tss << std::left << std::setfill(' ') << std::setw(lhs_width);
-    tss << "Number of processes"
-        << ": " << context.cluster_status.size() << std::endl;
-  }
+  tss << std::left << std::setfill(' ') << std::setw(lhs_width);
+  tss << "Server Start Time"
+      << ": " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":"
+      << tm_ptr->tm_sec << std::endl;
 
-  for (auto node = context.cluster_status.begin(); node != context.cluster_status.end();
-       ++node) {
-    const std::string process_role = get_process_role(node->role);
-
-    t = (time_t)node->start_time;
-    memset(buf, 0, 12);
-    std::tm* tm_ptr = gmtime(&t);
-    strftime(buf, 11, "%F", tm_ptr);
-
-    tss << "--------------------------------------------------" << std::endl;
-
-    tss << std::left << std::setfill(' ') << std::setw(lhs_width);
-    tss << process_role + " Name"
-        << ": " << node->host_name << std::endl;
-
-    tss << std::left << std::setfill(' ') << std::setw(lhs_width);
-    tss << process_role + " Start Time"
-        << ": " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":"
-        << tm_ptr->tm_sec << std::endl;
-
-    if (agg_version != node->version) {
-      tss << std::left << std::setfill(' ') << std::setw(lhs_width);
-      tss << process_role + " Version "
-          << ": " << node->version << std::endl
-          << "\033[31m*** Version mismatch! ***\033[0m Please make "
-             "sure All leaves, Aggregator and String Dictionary are running "
-             "the same version of HeavyDB."
-          << std::endl;
-    }
-  }
   std::cout << tss.str() << std::endl;
 }
 
@@ -1618,8 +1503,7 @@ int main(int argc, char** argv) {
         ( "\\export_dashboard", 3, 4, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name> <optional:dash_owner>" )
         ( "\\import_dashboard", 3, 3, ImportDashboardCmd<>( context ), "Usage \\import_dashboard <dash name> <file name>"  )
         ( "\\role_list", 2, 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")
-        ( "\\roles", 1, 1, RolesCmd<>(context))("\\set_license", 2, 2, [&](Params const& p ) { success = set_license_key(context, p[1]); })
-        ( "\\get_license", 1, 1, [&](Params const&) { success = get_license_claims(context); })
+        ( "\\roles", 1, 1, RolesCmd<>(context))
         ( "\\status", 1, 1, StatusCmd<>( context ), "Usage \\status" )
         ( "\\dash", 1, 1, ListDashboardsCmd<>( context ) )
         ( "\\multiline", 1, 1, [&](Params const&) { linenoiseSetMultiLine(1); } )

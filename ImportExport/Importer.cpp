@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /*
@@ -55,11 +44,13 @@
 #include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
 #include "Shared/LonLatBoundingBox.h"
-#include "Catalog/os/UserMapping.h"
+#ifdef EE_FSI_ODBC
+#include "DataMgr/ForeignStorage/ODBC/OdbcDataWrapper.h"
+#endif
 #ifdef ENABLE_IMPORT_PARQUET
 #include "DataMgr/ForeignStorage/ParquetDataWrapper.h"
 #endif
-#if defined(ENABLE_IMPORT_PARQUET)
+#if defined(EE_FSI_ODBC) || defined(ENABLE_IMPORT_PARQUET)
 #include "Catalog/ForeignTable.h"
 #include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
 #endif
@@ -93,11 +84,6 @@
 
 #include "gen-cpp/Heavy.h"
 
-#ifdef _WIN32
-#include <fcntl.h>
-#include <io.h>
-#endif
-
 #define TIMER_STOP(t)                                                                  \
   (float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>( \
        t)) /                                                                           \
@@ -105,8 +91,8 @@
 
 size_t g_max_import_threads =
     32;  // Max number of default import threads to use (num hardware threads will be used
-// if lower, and can also be explicitly overriden in copy statement with threads
-// option)
+         // if lower, and can also be explicitly overriden in copy statement with threads
+         // option)
 size_t g_archive_read_buf_size = 1 << 20;
 
 std::optional<size_t> g_detect_test_sample_size = std::nullopt;
@@ -3644,7 +3630,7 @@ bool Detector::detect_headers(const std::vector<SQLTypes>& head_types,
 }
 
 std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
-#if defined(ENABLE_IMPORT_PARQUET)
+#if defined(EE_FSI_ODBC) || defined(ENABLE_IMPORT_PARQUET)
   if (data_preview_.has_value()) {
     return data_preview_.value().sample_rows;
   } else
@@ -3659,7 +3645,7 @@ std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
 }
 
 std::vector<std::string> Detector::get_headers() {
-#if defined(ENABLE_IMPORT_PARQUET)
+#if defined(EE_FSI_ODBC) || defined(ENABLE_IMPORT_PARQUET)
   if (data_preview_.has_value()) {
     return data_preview_.value().column_names;
   } else
@@ -3678,7 +3664,7 @@ std::vector<std::string> Detector::get_headers() {
 }
 
 std::vector<SQLTypeInfo> Detector::getBestColumnTypes() const {
-#if defined(ENABLE_IMPORT_PARQUET)
+#if defined(EE_FSI_ODBC) || defined(ENABLE_IMPORT_PARQUET)
   if (data_preview_.has_value()) {
     return data_preview_.value().column_types;
   } else
@@ -3787,7 +3773,55 @@ ImportStatus DataStreamSink::archivePlumber(
   return import_status_;
 }
 
+#ifdef EE_FSI_ODBC
 namespace {
+foreign_storage::DataPreview get_odbc_data_preview(const CopyParams& copy_params) {
+  foreign_storage::OptionsMap server_options;
+  if (!copy_params.dsn.empty()) {
+    server_options[foreign_storage::OdbcDataWrapper::ODBC_DSN_KEY] = copy_params.dsn;
+  } else {
+    CHECK(!copy_params.connection_string.empty());
+    server_options[foreign_storage::OdbcDataWrapper::ODBC_CONNECTION_KEY] =
+        copy_params.connection_string;
+  }
+  foreign_storage::ForeignServer foreign_server{
+      "", foreign_storage::DataWrapperType::ODBC, server_options, -1};
+  foreign_storage::ForeignTable foreign_table;
+  foreign_table.foreign_server = &foreign_server;
+  foreign_storage::OptionsMap table_options;
+  CHECK(!copy_params.sql_select.empty());
+  table_options[foreign_storage::OdbcDataWrapper::ODBC_SELECT_KEY] =
+      copy_params.sql_select;
+  CHECK(!copy_params.sql_order_by.empty());
+  table_options[foreign_storage::OdbcDataWrapper::ODBC_ORDER_BY_KEY] =
+      copy_params.sql_order_by;
+  std::optional<foreign_storage::UserMapping> user_mapping;
+  if (!copy_params.credential_string.empty()) {
+    user_mapping = foreign_storage::UserMapping{-1, -1, -1, "", ""};
+    user_mapping.value().setOptions({{foreign_storage::OdbcDataWrapper::ODBC_CREDENTIAL,
+                                      copy_params.credential_string}});
+  } else if (!copy_params.username.empty() || !copy_params.password.empty()) {
+    user_mapping = foreign_storage::UserMapping{-1, -1, -1, "", ""};
+    user_mapping.value().setOptions(
+        {{foreign_storage::OdbcDataWrapper::ODBC_USERNAME, copy_params.username},
+         {foreign_storage::OdbcDataWrapper::ODBC_PASSWORD, copy_params.password}});
+  }
+  table_options[foreign_storage::ForeignTable::GEO_VALIDATE_GEOMETRY_KEY] =
+      copy_params.geo_validate_geometry ? "TRUE" : "FALSE";
+  foreign_table.populateOptionsMap(std::move(table_options));
+  const foreign_storage::UserMapping* user_mapping_ptr =
+      user_mapping.has_value() ? &user_mapping.value() : nullptr;
+  const auto data_wrapper = foreign_storage::ForeignDataWrapperFactory::create(
+      foreign_storage::DataWrapperType::ODBC, -1, &foreign_table, user_mapping_ptr);
+  auto odbc_wrapper =
+      dynamic_cast<const foreign_storage::OdbcDataWrapper*>(data_wrapper.get());
+  return odbc_wrapper->getDataPreview(shared::kDefaultSampleRowsCount);
+}
+}  // namespace
+#endif
+
+namespace {
+
 #ifdef ENABLE_IMPORT_PARQUET
 
 #ifdef HAVE_AWS_S3
@@ -3806,6 +3840,9 @@ create_parquet_s3_detect_filesystem_config(const foreign_storage::ForeignServer*
   if (!copy_params.s3_config.session_token.empty()) {
     config.s3_session_token = copy_params.s3_config.session_token;
   }
+
+  config.s3_region = shared::get_from_map(
+      server->options, foreign_storage::AbstractFileStorageDataWrapper::AWS_REGION_KEY);
 
   return config;
 }
@@ -3851,9 +3888,18 @@ foreign_storage::DataPreview get_parquet_data_preview(const std::string& file_na
 
 Detector::Detector(const boost::filesystem::path& fp, CopyParams& cp)
     : DataStreamSink(cp, fp.string()), file_path(fp) {
+#ifdef EE_FSI_ODBC
+  if (cp.source_type == import_export::SourceType::kOdbc) {
+    if (!g_enable_fsi) {
+      throw std::runtime_error{"ODBC source is not supported when FSI is disabled."};
+    }
+    foreign_storage::validate_odbc_options(cp);
+    data_preview_ = get_odbc_data_preview(cp);
+  } else
+#endif
 #ifdef ENABLE_IMPORT_PARQUET
-  if (cp.source_type == import_export::SourceType::kParquetFile && g_enable_fsi &&
-      !g_enable_legacy_parquet_import) {
+      if (cp.source_type == import_export::SourceType::kParquetFile && g_enable_fsi &&
+          !g_enable_legacy_parquet_import) {
     data_preview_ = get_parquet_data_preview(fp.string(), cp);
   } else
 #endif
@@ -3881,7 +3927,7 @@ inline auto open_parquet_table(const std::string& file_path,
   LOG(INFO) << "File " << file_path << " has " << num_rows << " rows and " << num_columns
             << " columns in " << num_row_groups << " groups.";
   return std::make_tuple(num_row_groups, num_columns, num_rows);
-}  // namespace import_export
+}
 
 void Detector::import_local_parquet(const std::string& file_path,
                                     const Catalog_Namespace::SessionInfo* session_info) {
@@ -4216,20 +4262,11 @@ void DataStreamSink::import_compressed(
   // Importer::importDelimited, so need to move pipe related
   // stuff to the outmost block.
   int fd[2];
-#ifdef _WIN32
-  // For some reason when folly is used to create the pipe, reader can
-  // read nothing.
-  auto pipe_res =
-      _pipe(fd, static_cast<unsigned int>(copy_params.buffer_size), _O_BINARY);
-#else
   auto pipe_res = pipe(fd);
-#endif
   if (pipe_res < 0) {
     throw std::runtime_error(std::string("failed to create a pipe: ") + strerror(errno));
   }
-#ifndef _WIN32
   signal(SIGPIPE, SIG_IGN);
-#endif
 
   std::exception_ptr teptr;
   // create a thread to read uncompressed byte stream out of pipe and
@@ -6417,6 +6454,17 @@ std::unique_ptr<AbstractImporter> create_importer(
         copy_from_source, copy_params, td);
   }
 
+#ifdef EE_FSI_ODBC
+  if (copy_params.source_type == import_export::SourceType::kOdbc) {
+    if (g_enable_fsi_odbc_import) {
+      return std::make_unique<import_export::ForeignDataImporter>(
+          copy_from_source, copy_params, td);
+    } else {
+      throw std::runtime_error("ODBC import only supported using 'fsi-odbc-import' flag");
+    }
+  }
+#endif
+
   if (copy_params.source_type == import_export::SourceType::kRegexParsedFile) {
     if (g_enable_fsi_regex_import) {
       return std::make_unique<import_export::ForeignDataImporter>(
@@ -6428,9 +6476,8 @@ std::unique_ptr<AbstractImporter> create_importer(
   }
 
   if (copy_params.source_type == import_export::SourceType::kRasterFile) {
-    throw std::runtime_error(
-        "HeavyConnect-based Raster file import only supported in Enterprise Edition.  "
-        "For legacy raster import, use the '--enable-legacy-raster-import' option.");
+    return std::make_unique<import_export::ForeignDataImporter>(
+        copy_from_source, copy_params, td);
   }
 
   return std::make_unique<import_export::Importer>(

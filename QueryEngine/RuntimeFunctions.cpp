@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifdef __CUDACC__
@@ -375,11 +364,7 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE void agg_count_distinct_bitmap(
   reinterpret_cast<int8_t*>(*agg)[bitmap_idx >> 3] |= (1 << (bitmap_idx & 7));
 }
 
-#ifdef _MSC_VER
-#define GPU_RT_STUB NEVER_INLINE
-#else
 #define GPU_RT_STUB NEVER_INLINE __attribute__((optnone))
-#endif
 
 extern "C" GPU_RT_STUB void agg_count_distinct_bitmap_gpu(int64_t*,
                                                           const int64_t,
@@ -1896,10 +1881,8 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE const int64_t* init_shared_mem_nop(
 extern "C" RUNTIME_EXPORT NEVER_INLINE void write_back_nop(int64_t* dest,
                                                            int64_t* src,
                                                            const int32_t sz) {
-#ifndef _WIN32
   // the body is not really needed, just make sure the call is not optimized away
   assert(dest);
-#endif
 }
 
 extern "C" RUNTIME_EXPORT int64_t* init_shared_mem(const int64_t* global_groups_buffer,
@@ -1915,10 +1898,8 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_gpu(
     const uint32_t agg_col_count,
     const bool keyless,
     const int8_t warp_size) {
-#ifndef _WIN32
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
-#endif
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE void init_columnar_group_by_buffer_gpu(
@@ -1930,10 +1911,8 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void init_columnar_group_by_buffer_gpu(
     const bool keyless,
     const bool blocks_share_memory,
     const int32_t frag_idx) {
-#ifndef _WIN32
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
-#endif
 }
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_impl(
@@ -1944,10 +1923,8 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_impl(
     const uint32_t agg_col_count,
     const bool keyless,
     const int8_t warp_size) {
-#ifndef _WIN32
   // the body is not really needed, just make sure the call is not optimized away
   assert(groups_buffer);
-#endif
 }
 
 template <typename T>
@@ -2423,11 +2400,9 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
     const int64_t* init_agg_value,
     const int64_t* join_hash_tables,
     const int8_t* row_func_mgr) {
-#ifndef _WIN32
   assert(error_codes || total_matched || out || frag_idx || row_index_resume ||
          col_buffers || literals || num_rows || frag_row_offsets || frag_ids ||
          max_matched || init_agg_value || join_hash_tables || row_func_mgr);
-#endif
 }
 
 // First 3 parameters are output, the rest are input.
@@ -2484,11 +2459,9 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(int32_t* error_codes,
                                                        const int64_t* init_agg_value,
                                                        const int64_t* join_hash_tables,
                                                        const int8_t* row_func_mgr) {
-#ifndef _WIN32
   assert(error_codes || total_matched || out || frag_idx || row_index_resume ||
          col_buffers || num_rows || frag_row_offsets || frag_ids || max_matched ||
          init_agg_value || join_hash_tables || row_func_mgr);
-#endif
 }
 
 // First 3 parameters are output, the rest are input.

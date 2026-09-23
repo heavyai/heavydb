@@ -2,10 +2,61 @@
 # SPDX-License-Identifier: Apache-2.0
 
 name: heavydb build and pack
+description: >
+  Standard step sequence used by every CI build job: cache ~/.m2, run
+  scripts/ci/build.sh, surface the Maven build log on failure, and
+  (optionally) pack the build outputs into a GHCR image via
+  scripts/ci/pack_image.sh. The job that uses this action provides
+  the build parameters (CMAKE_FLAGS, MAKE_TARGETS, IMAGE_NAME,
+  IMAGE_TAG, BASE_IMAGE, INCLUDE_PATHS, STRIP, etc.) via its `env:`
+  block — the scripts read them directly, no input plumbing needed.
+
+  CALLER REQUIREMENT: this is a local composite action; the source
+  must already be on disk when the job evaluates `uses:`. The job
+  must run actions/checkout before referencing this action.
+
+inputs:
+  pack:
+    description: 'Whether to run pack_image.sh after the build (true|false).'
+    default: 'true'
+  mvn-log-name:
+    description: Name of the Maven build log artifact uploaded on failure.
+    required: true
+
+outputs:
+  image:
+    description: GHCR image ref produced by pack_image.sh. Empty if pack=false.
+    value: ${{ steps.pack.outputs.image }}
 
 runs:
   using: composite
   steps:
-    - name: placeholder
+    - name: Cache Maven
+      uses: actions/cache@v6
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2-
+
+    - name: Build
       shell: bash
-      run: "true"
+      run: scripts/ci/build.sh
+
+    - name: Show Maven build log on failure
+      if: failure()
+      shell: bash
+      run: scripts/ci/show_mvn_log.sh
+
+    - name: Upload Maven build log
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ inputs.mvn-log-name }}
+        path: build/mvn_build.log
+        if-no-files-found: ignore
+
+    - id: pack
+      name: Pack into GHCR image
+      if: ${{ inputs.pack == 'true' }}
+      shell: bash
+      run: scripts/ci/pack_image.sh

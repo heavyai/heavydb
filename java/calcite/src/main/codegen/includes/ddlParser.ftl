@@ -1,17 +1,6 @@
 <#--
- Copyright 2022 HEAVY.AI, Inc.
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
- http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
+ SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ SPDX-License-Identifier: Apache-2.0
 -->
 
 
@@ -617,8 +606,6 @@ SqlDdl SqlCustomCreate(Span s) :
         |
         LOOKAHEAD(1) create = SqlCreateRole(s)
         |
-        LOOKAHEAD(1) create = SqlCreateDataframe(s)
-        |
         LOOKAHEAD(1) create = SqlCreatePolicy(s)
         |
         LOOKAHEAD(1) create = SqlCreateServer(s)
@@ -1186,7 +1173,15 @@ SqlDdl SqlComment(Span s) :
        { builder.setToNull(); }
        |
        value = StringLiteral()
-       { builder.setComment((new HeavySqlSanitizedString(value)).toString()); }
+       {
+         // The line below previously used `HeavySqlSanitizedString` to strip
+         // rendered quote syntax from SqlNode.toString(). After upgrading to
+         // Calcite 1.41, SqlNode.toString() renders control characters as
+         // Unicode escaped SQL text, so stripping is no longer necessary.
+         // getStringValue() stores the decoded literal payload so control
+         // characters render as the original comment text.
+         builder.setComment(((SqlLiteral) value).getStringValue());
+       }
     )
     {
         builder.setPos(s.end(this));
@@ -1247,11 +1242,11 @@ public void HyphenatedIdentifierSegment(List<String> nameList, List<SqlParserPos
     boolean trailingHyphen = false;
 }
 {
-    IdentifierSegment(localNameList, localPosList)
+    AddIdentifierSegment(localNameList, localPosList)
     (
         LOOKAHEAD(2)
         <MINUS>
-        IdentifierSegment(localNameList, localPosList)
+        AddIdentifierSegment(localNameList, localPosList)
     )*
     (
         <MINUS>
@@ -1294,7 +1289,7 @@ public void HyphenatedIdentifierSegment(List<String> nameList, List<SqlParserPos
  * Parses a compound identifier.
  *
  * Copied (almost) verbatum from Calcite's CompoundIdentifier(), except that
- *    it'll call HyphenatedIdentifierSegment() instead of IdentifierSegment()
+ *    it'll call HyphenatedIdentifierSegment() instead of AddIdentifierSegment()
  */
 SqlIdentifier HyphenatedCompoundIdentifier() :
 {
@@ -1606,30 +1601,6 @@ SqlDdl SqlRevokePrivilege(Span s, SqlNodeList privileges) :
     }
 }
 
-
-/*
- * Create a table using the following syntax:
- *
- *		CREATE DATAFRAME table '(' base_table_element_commalist ')' FROM STRING opt_with_option_list
- */
-SqlDdl SqlCreateDataframe(Span s) :
-{
-    SqlIdentifier name;
-    SqlNodeList elementList = null;
-    SqlNode filePath = null;
-    HeavyDBOptionsMap dataframeOptions = null;
-}
-{
-    <DATAFRAME> 
-    name = CompoundIdentifier()
-    elementList = TableElementList()
-    <FROM>
-    filePath = StringLiteral()
-    [ <WITH> dataframeOptions = OptionsOpt() ]
-    {
-        return new SqlCreateDataframe(s.end(this), name, elementList, filePath, dataframeOptions);
-    }
-}
 
 /*
  * CREATE POLICY

@@ -42,7 +42,7 @@ The DAG for this query is as follows:
       "Project [4]" -> "Scan [5]";
    }
 
-(with the number in paranthesis corresponding to the line number in the calcite plan)
+(with the number in parenthesis corresponding to the line number in the calcite plan)
 
 The topological for the above graph produces the following ordering:
 

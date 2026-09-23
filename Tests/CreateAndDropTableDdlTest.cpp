@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -1511,6 +1500,55 @@ TEST_F(CreateForeignTableTest, TableDirectoryIsNotCreated) {
   ASSERT_FALSE(boost::filesystem::exists(getTableDirPath()));
 }
 
+TEST_F(CreateForeignTableTest, RegexParserWrapperWithMissingLineRegex) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER default_local_regex_parsed WITH ("
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(
+      query, "Foreign table options must contain a non-empty value for \"LINE_REGEX\".");
+}
+
+TEST_F(CreateForeignTableTest, RegexParserWrapperWithEmptyLineRegex) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER default_local_regex_parsed WITH (LINE_REGEX = '', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(
+      query, "Foreign table options must contain a non-empty value for \"LINE_REGEX\".");
+}
+
+TEST_F(CreateForeignTableTest, RegexParserWrapperWithInvalidLineRegex) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER default_local_regex_parsed WITH (LINE_REGEX = '[', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(
+      query,
+      "Error parsing LINE_REGEX \"[\": Character set declaration starting with [ "
+      "terminated prematurely - either no ] was found or the set had no content.  The "
+      "error occurred while parsing the regular expression: '[>>>HERE>>>'.");
+}
+
+TEST_F(CreateForeignTableTest, RegexParserWrapperWithEmptyLineStartRegex) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER default_local_regex_parsed WITH (LINE_REGEX = '(.*)', "
+                      "LINE_START_REGEX = '', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(query,
+                          "Foreign table option \"LINE_START_REGEX\", when set, must "
+                          "contain a non-empty value.");
+}
+
+TEST_F(CreateForeignTableTest, RegexParserWrapperWithInvalidLineStartRegex) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER default_local_regex_parsed WITH (LINE_REGEX = '(.*)', "
+                      "LINE_START_REGEX = '[', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(
+      query,
+      "Error parsing LINE_START_REGEX \"[\": Character set declaration starting with [ "
+      "terminated prematurely - either no ] was found or the set had no content.  The "
+      "error occurred while parsing the regular expression: '[>>>HERE>>>'.");
+}
+
 TEST_F(CreateForeignTableTest, NonAppendModeWithFileRollOff) {
   std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
                       "SERVER default_local_regex_parsed WITH ("
@@ -1520,6 +1558,155 @@ TEST_F(CreateForeignTableTest, NonAppendModeWithFileRollOff) {
                           "The \"ALLOW_FILE_ROLL_OFF\" option can only be set to 'true' "
                           "for foreign tables with append refresh updates.");
 }
+
+TEST_F(CreateForeignTableTest, LargeRefreshDateTime) {
+  sql("CREATE FOREIGN TABLE test_foreign_table(col1 INTEGER) "
+      "SERVER default_local_delimited WITH (file_path = '" +
+      getTestFilePath() +
+      "', refresh_interval='1H', refresh_start_date_time='3000-01-01T10:10:10Z', "
+      "refresh_timing_type='SCHEDULED', refresh_update_type='APPEND');");
+  resetCatalog();
+  // Login again to force a catalog reload.
+  loginAdmin();
+
+  auto td = getCatalog().getMetadataForTable("test_foreign_table", false);
+  ASSERT_NE(td, nullptr);
+
+  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
+  ASSERT_NE(foreign_table, nullptr);
+
+  constexpr int64_t next_refresh_time_epoch{32503716610};
+  ASSERT_EQ(foreign_table->next_refresh_time, next_refresh_time_epoch);
+
+  auto stored_foreign_table =
+      getCatalog().getForeignTableFromStorage(foreign_table->tableId);
+  ASSERT_EQ(foreign_table->options, stored_foreign_table->options);
+  ASSERT_EQ(foreign_table->next_refresh_time, stored_foreign_table->next_refresh_time);
+}
+
+#ifdef EE_FSI_ODBC
+TEST_F(CreateForeignTableTest, ODBCAppend) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  sql("CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER test_server WITH "
+      "(sql_select = 'SELECT * FROM bar', sql_order_by = 'some_column;', "
+      "REFRESH_UPDATE_TYPE = 'APPEND');");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
+  assertOptionEquals("SQL_SELECT", "SELECT * FROM bar");
+  assertOptionEquals("SQL_ORDER_BY", "some_column;");
+}
+
+TEST_F(CreateForeignTableTest, ODBCNoSql) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER test_server;",
+      "Foreign table options must contain a value for \"SQL_SELECT\".");
+}
+
+TEST_F(CreateForeignTableTest, ODBCWithBufferSizeOption) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  sql("CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER test_server WITH "
+      "(sql_select = 'SELECT * from bar', sql_order_by = 'some_column', "
+      "buffer_size = '4');");
+  assertOptionEquals("BUFFER_SIZE", "4");
+}
+
+TEST_F(CreateForeignTableTest, ODBCWithInvalidBufferSizeOption) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE test_foreign_table (i INTEGER) SERVER test_server WITH "
+      "(sql_select = 'SELECT * from bar', sql_order_by = 'some_column', "
+      "buffer_size = '-1');",
+      "Can not parse string '-1' into a positive integer while validating "
+      "option 'BUFFER_SIZE'");
+}
+
+#endif
+#if defined(HAVE_AWS_S3)
+
+class CreateS3ForeignTableTest : public CreateForeignTableTest {
+  void SetUp() override {
+    CreateForeignTableTest::SetUp();
+    g_enable_s3_fsi = true;
+    sql("CREATE SERVER test_server FOREIGN DATA WRAPPER delimited_file WITH "
+        "(storage_type = "
+        "'AWS_S3', s3_bucket = 'test_bucket', aws_region = 'test_region');");
+    sql("CREATE SERVER test_server_ce FOREIGN DATA WRAPPER delimited_file WITH "
+        "(storage_type = "
+        "'AWS_S3', s3_bucket = 'test_bucket', aws_region = 'test_region', "
+        "s3_endpoint='test_endpoint');");
+  }
+
+  void TearDown() override { CreateForeignTableTest::TearDown(); }
+};
+
+TEST_F(CreateS3ForeignTableTest, InvalidS3AccessType) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER test_server WITH (S3_ACCESS_TYPE = 'Invalid_Type', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(
+      query,
+      "Invalid value provided for the \"S3_ACCESS_TYPE\" option. Value must "
+      "be one of the following: S3_DIRECT, S3_SELECT.");
+}
+
+TEST_F(CreateS3ForeignTableTest, S3AccessTypeDirect) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER test_server WITH (S3_ACCESS_TYPE = 'S3_DIRECT', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  sql(query);
+}
+
+TEST_F(CreateS3ForeignTableTest, S3AccessTypeSelect) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER test_server WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  sql(query);
+}
+
+TEST_F(CreateS3ForeignTableTest, S3SelectAndFileRollOff) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER test_server WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
+                      "REFRESH_UPDATE_TYPE = 'append', ALLOW_FILE_ROLL_OFF = 'true', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(
+      query, "File roll off is not currently supported with S3 select access type.");
+}
+
+TEST_F(CreateS3ForeignTableTest, S3SelectAndCustomEndpoint) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (t TEXT) "s +
+                      "SERVER test_server_ce WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(query,
+                          "S3_SELECT is not supported when using custom s3 endpoints.");
+}
+
+class S3SelectDisallowedTypeTest : public CreateS3ForeignTableTest,
+                                   public testing::WithParamInterface<std::string> {};
+
+TEST_P(S3SelectDisallowedTypeTest, S3Select) {
+  std::string query = "CREATE FOREIGN TABLE test_foreign_table (g " + GetParam() + ") "s +
+                      "SERVER test_server WITH (S3_ACCESS_TYPE = 'S3_SELECT', "
+                      "file_path = '../../Tests/FsiDataFiles/0.csv');";
+  queryAndAssertException(
+      query,
+      "Geo Types and Array Types not currently supported with S3_ACCESS_TYPE "
+      ": S3_SELECT. Please use S3_ACCESS_TYPE : S3_DIRECT");
+}
+
+INSTANTIATE_TEST_SUITE_P(DisallowedTypes,
+                         S3SelectDisallowedTypeTest,
+                         ::testing::Values("POINT",
+                                           "LINESTRING",
+                                           "POLYGON",
+                                           "MULTIPOLYGON",
+                                           "INT []",
+                                           "INT [4]"));
+
+#endif  // defined(HAVE_AWS_S3)
 
 class CreateTableInThrift : public DBHandlerTestFixture {
  protected:
@@ -1551,9 +1738,7 @@ TEST_F(CreateTableInThrift, ThriftCreateTableWithDefaults) {
   c3.col_type.encoding = TEncodingType::DICT;
   c3.__set_default_value("ARRAY['a', 'b', 'c']");
   TRowDescriptor row_desc = {c1, c2, c3};
-  TCreateParams cp;
-  cp.is_replicated = false;
-  handler->create_table(session, "test_table", row_desc, cp);
+  handler->create_table(session, "test_table", row_desc);
   TTableDetails details;
   handler->get_table_details(details, session, "test_table");
   auto created_row_desc = details.row_desc;
@@ -1600,8 +1785,6 @@ TEST_F(CreateTableInThrift, ThriftCreateTableDifferentEncodings) {
                                      {TDatumType::LINESTRING, TEncodingType::NONE, 0},
                                      {TDatumType::POLYGON, TEncodingType::NONE, 0},
                                      {TDatumType::MULTIPOLYGON, TEncodingType::NONE, 0}};
-  TCreateParams cp;
-  cp.is_replicated = false;
   TRowDescriptor row_desc;
   for (size_t i = 0; i < columns.size(); ++i) {
     TColumnType c;
@@ -1618,7 +1801,7 @@ TEST_F(CreateTableInThrift, ThriftCreateTableDifferentEncodings) {
     row_desc.push_back(move(c));
   }
   auto [handler, session] = getDbHandlerAndSessionId();
-  handler->create_table(session, "test_table", row_desc, cp);
+  handler->create_table(session, "test_table", row_desc);
   TTableDetails details;
   handler->get_table_details(details, session, "test_table");
   auto created_row_desc = details.row_desc;
@@ -2021,6 +2204,17 @@ TEST_F(RenameTableTest, SwapRename) {
   // reset
   sql("RENAME TABLE D TO E, E TO D;");
   sql("RENAME TABLE C TO B, B TO A, A TO C;");
+}
+
+TEST_F(RenameTableTest, SwapRenameRequiresPrivilegesOnEveryTable) {
+  createTestUser();
+  sql("GRANT ALTER ON TABLE A TO test_user;");
+
+  login("test_user", "test_pass");
+  queryAndAssertException("RENAME TABLE A TO B, B TO A;",
+                          "Current user does not have the privilege to alter table: B");
+
+  loginAdmin();
 }
 
 TEST_F(RenameTableTest, ErrorChecks) {
@@ -2508,6 +2702,11 @@ class TableOptionsValidationTest : public CreateAndDropTableDdlTest {
         ddl_utils::TableType::TABLE, "test_table", "(i INTEGER)", options);
   }
 };
+
+TEST_F(TableOptionsValidationTest, ReplicatedPartitionsNotSupported) {
+  queryAndAssertException(getCreateTableQuery({{"partitions", "'REPLICATED'"}}),
+                          "PARTITIONS='REPLICATED' is not supported");
+}
 
 class PageSizeValidationTest : public TableOptionsValidationTest {
  protected:

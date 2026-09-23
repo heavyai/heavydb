@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "InternalSystemDataWrapper.h"
@@ -23,9 +12,7 @@
 #include "FsiChunkUtils.h"
 #include "ImportExport/Importer.h"
 #include "Shared/SysDefinitions.h"
-#include "Shared/distributed.h"
 #include "TextFileBufferParser.h"
-#include "UserMapping.h"
 
 namespace foreign_storage {
 std::string get_db_name(int32_t db_id) {
@@ -55,12 +42,7 @@ std::string get_table_name(int32_t db_id, int32_t table_id) {
 void set_node_name(
     std::map<std::string, import_export::UnmanagedTypedImportBuffer*>& import_buffers) {
   if (import_buffers.find("node") != import_buffers.end()) {
-    if (dist::is_leaf_node()) {
-      std::string leaf_string{"Leaf " + to_string(g_distributed_leaf_idx)};
-      import_buffers["node"]->addDictStringWithTruncation(leaf_string);
-    } else {
-      import_buffers["node"]->addDictStringWithTruncation("Server");
-    }
+    import_buffers["node"]->addDictStringWithTruncation("Server");
   }
 }
 

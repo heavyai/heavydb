@@ -1,3 +1,8 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 #.rst:
 # FindLibAwsS3.cmake
 # -------------
@@ -132,10 +137,6 @@ find_library(LibAwsCI_LIBRARY
 
 get_filename_component(Aws_LIBRARY_DIR ${LibAwsCI_LIBRARY} DIRECTORY)
 include(${Aws_LIBRARY_DIR}/cmake/AWSSDK/AWSSDKConfigVersion.cmake)
-message(STATUS "AWSSDK version ${PACKAGE_VERSION}")
-#
-# Extra libraries needed for linking versions > 1.7
-#
 
 find_library(libAwsCrt_LIBRARY
   NAMES aws-crt-cpp
@@ -147,6 +148,7 @@ find_library(libAwsCrt_LIBRARY
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
 find_library(libAwsCIo_LIBRARY
   NAMES aws-c-io
   HINTS ENV LD_LIBRARY_PATH
@@ -157,6 +159,7 @@ find_library(libAwsCIo_LIBRARY
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
 find_library(libAwsCAuth_LIBRARY
   NAMES aws-c-auth
   HINTS ENV LD_LIBRARY_PATH
@@ -167,6 +170,7 @@ find_library(libAwsCAuth_LIBRARY
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
 find_library(libAwsCHttp
   NAMES aws-c-http
   HINTS ENV LD_LIBRARY_PATH
@@ -177,6 +181,7 @@ find_library(libAwsCHttp
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
 find_library(libAwsCSdkUtils
   NAMES aws-c-sdkutils
   HINTS ENV LD_LIBRARY_PATH
@@ -187,6 +192,7 @@ find_library(libAwsCSdkUtils
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
 find_library(libAwsCCal
   NAMES aws-c-cal
   HINTS ENV LD_LIBRARY_PATH
@@ -197,6 +203,7 @@ find_library(libAwsCCal
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
 find_library(LibS2N_LIBRARY
   NAMES s2n
   HINTS ENV LD_LIBRARY_PATH
@@ -207,6 +214,7 @@ find_library(LibS2N_LIBRARY
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
 find_library(libAwsCompression
   NAMES aws-c-compression
   HINTS ENV LD_LIBRARY_PATH
@@ -217,6 +225,7 @@ find_library(libAwsCompression
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
 find_library(libAwsCMqtt
   NAMES aws-c-mqtt
   HINTS ENV LD_LIBRARY_PATH
@@ -227,6 +236,7 @@ find_library(libAwsCMqtt
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
 find_library(libAwsCS3
   NAMES aws-c-s3
   HINTS ENV LD_LIBRARY_PATH

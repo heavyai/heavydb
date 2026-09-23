@@ -1,17 +1,13 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 
-if(MSVC)
-    set(table_archive_source_files
-        TableArchiverWindows.cpp
-    )
+set(table_archive_source_files
+    TableArchiver.cpp
+)
 
-    add_library(TableArchiver ${table_archive_source_files})
-else()
-    set(table_archive_source_files
-        TableArchiver.cpp
-    )
-
-    add_library(TableArchiver ${table_archive_source_files})
-endif()
+add_library(TableArchiver ${table_archive_source_files})
 
 target_link_libraries(TableArchiver Catalog Parser Shared)
 

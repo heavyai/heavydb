@@ -1,42 +1,31 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <thrift/Thrift.h>
 #include <array>
-#include <boost/filesystem.hpp>
-#include <boost/program_options.hpp>
 #include <exception>
 #include <iostream>
 #include <memory>
 #include <string>
 
+#include <thrift/TOutput.h>
+#include <thrift/Thrift.h>
+#include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
+
 #include "Catalog/Catalog.h"
 #include "Geospatial/GDAL.h"
 #include "Logger/Logger.h"
-#include "OSDependent/heavyai_path.h"
 #include "Shared/SysDefinitions.h"
+#include "Shared/heavyai_path.h"
 #include "ThriftHandler/DBHandler.h"
 
 #define CALCITEPORT 3279
 
-static const std::array<std::string, 3> SampleGeoFileNames{"us-states.json",
-                                                           "us-counties.json",
+static const std::array<std::string, 2> SampleGeoFileNames{"us-states.json",
                                                            "countries.json"};
-static const std::array<std::string, 3> SampleGeoTableNames{"heavyai_us_states",
-                                                            "heavyai_us_counties",
+static const std::array<std::string, 2> SampleGeoTableNames{"heavyai_us_states",
                                                             "heavyai_countries"};
 
 extern bool g_enable_thrift_logs;
@@ -54,8 +43,6 @@ static void loadGeo(std::string base_path) {
 #ifdef HAVE_TORCH_TFS
   std::string torch_lib_path{};
 #endif
-  std::vector<LeafHostInfo> db_leaves{};
-  std::vector<LeafHostInfo> string_leaves{};
 
   // Whitelist root path for tests by default
   ddl_utils::FilePathWhitelist::clear();
@@ -87,18 +74,12 @@ static void loadGeo(std::string base_path) {
   system_parameters.omnisci_server_port = -1;
   system_parameters.calcite_port = 3280;
 
-  system_parameters.aggregator = false;
-  g_leaf_count = 0;
-  g_cluster = false;
-
   File_Namespace::DiskCacheLevel cache_level{File_Namespace::DiskCacheLevel::fsi};
   File_Namespace::DiskCacheConfig disk_cache_config{
       File_Namespace::DiskCacheConfig::getDefaultPath(std::string(base_path)),
       cache_level};
 
-  auto db_handler = std::make_unique<DBHandler>(db_leaves,
-                                                string_leaves,
-                                                base_path,
+  auto db_handler = std::make_unique<DBHandler>(base_path,
                                                 allow_multifrag,
                                                 jit_debug,
                                                 intel_jit_profile,
@@ -151,13 +132,8 @@ static void loadGeo(std::string base_path) {
           "Unable to populate geo sample data. File does not exist: " +
           file_path.string());
     }
-#ifdef _WIN32
-    std::string sql_string = "COPY " + table_name + " FROM '" +
-                             file_path.generic_string() + "' WITH (GEO='true');";
-#else
     std::string sql_string =
         "COPY " + table_name + " FROM '" + file_path.string() + "' WITH (GEO='true');";
-#endif
     db_handler->sql_execute(res, session_id, sql_string, true, "", -1, -1);
   }
 }
@@ -214,7 +190,7 @@ int main(int argc, char* argv[]) {
   }
 
   if (!g_enable_thrift_logs) {
-    apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
+    apache::thrift::TOutput::instance().setOutputFunction([](const char* msg) {});
   }
 
   if (!boost::filesystem::exists(base_path)) {
@@ -329,7 +305,7 @@ int main(int argc, char* argv[]) {
         std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024, 5000, true, "");
     g_base_path = base_path;
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    sys_cat.init(base_path, dummy, {}, calcite, true, false, {}, {});
+    sys_cat.init(base_path, dummy, {}, calcite, true, {});
 
   } catch (std::exception& e) {
     std::cerr << "Exception: " << e.what() << "\n";

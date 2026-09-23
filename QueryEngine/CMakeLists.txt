@@ -1,13 +1,14 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR})
 
-if(MSVC)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall")
-else()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Wall -Wno-attributes")
 
-  # /opt/cuda/include/cub/detail/device_synchronize.cuh:33: warning: ignoring ‘#pragma nv_exec_check_disable ’
-  set_source_files_properties(JoinHashTable/Runtime/HashJoinRuntime.cpp PROPERTIES COMPILE_OPTIONS "-Wno-unknown-pragmas")
-endif()
+# /opt/cuda/include/cub/detail/device_synchronize.cuh:33: warning: ignoring ‘#pragma nv_exec_check_disable ’
+set_source_files_properties(JoinHashTable/Runtime/HashJoinRuntime.cpp PROPERTIES COMPILE_OPTIONS "-Wno-unknown-pragmas")
 
 set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES COMPILE_FLAGS -O0)
 set(query_engine_source_files
@@ -111,6 +112,7 @@ set(query_engine_source_files
   ResultSetReductionInterpreterStubs.cpp
   ResultSetReductionJIT.cpp
   ResultSetStorage.cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/TableFunctionsFactory_init.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
   ResultSetSort.cpp
@@ -189,17 +191,9 @@ set(query_engine_cuda_source_files
   GpuInitGroups.cu
   JoinHashTable/Runtime/HashJoinRuntimeGpu.cu)
 
-if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
-  list(APPEND query_engine_source_files
-    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderAllocator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderInfo.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ee/ResultSetSerialization.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/ee/PendingExecutionClosure.cpp)
-else()
-  list(APPEND query_engine_source_files
-    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderAllocator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderInfo.cpp)
-endif()
+list(APPEND query_engine_source_files
+  ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/RenderAllocator.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/RenderInfo.cpp)
 
 set(group_by_hash_test_files
   GroupByHashTest.cpp
@@ -222,19 +216,20 @@ endif()
 
 find_program(llvm_clangpp_cmd NAME clang++ HINTS ${LLVM_TOOLS_BINARY_DIR})
 
+add_custom_command(
+  DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/serialized_result_set.thrift ${CMAKE_SOURCE_DIR}/heavy.thrift ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
+  COMMAND ${Thrift_EXECUTABLE}
+  ARGS -gen cpp -r -I ${CMAKE_SOURCE_DIR} -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/serialized_result_set.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
+set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp GENERATED)
 
 if(ENABLE_JIT_DEBUG AND NOT ENABLE_CUDA)
   set(RT_OPT_FLAGS -O0 -g)
 else()
   set(RT_OPT_FLAGS -O3)
-endif()
-
-if(MSVC)
-  message(STATUS "MSVC BUILD removing RT_OPT_FLAGS")
-  unset(RT_OPT_FLAGS)
 endif()
 
 if(ENABLE_CUDA)
@@ -248,64 +243,62 @@ endif()
 set(TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TestFunctions/TableFunctionsTesting.h)
 
 if(ENABLE_SYSTEM_TFS)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.hpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/TableFunctionsStats.hpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/TableFunctionsMatrix.hpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleTableFunctions.h)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/UtilityTableFunctions.h)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleTableFunctions.cpp)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/GeoRasterTableFunctions.cpp)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ML/MLModelMetadata.cpp)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/MLTableFunctions.cpp)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ML/OneHotEncoder.cpp)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/UtilityTableFunctions.cpp)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/TableFunctionsCommon.cpp)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/TableFunctionsStats.cpp)
-  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/NullRowsRemoval.cpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/GeoRasterTableFunctions.hpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Graph/GraphTableFunctions.hpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/SessionizeTableFunctions.hpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/SimilarityTableFunctions.hpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/MLTableFunctions.hpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/GDALTableFunctions.hpp)
-  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/CrossSectionTableFunctions.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Shared/TableFunctionsCommon.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Shared/TableFunctionsStats.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Shared/TableFunctionsMatrix.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ExampleTableFunctions.h)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/UtilityTableFunctions.h)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ExampleTableFunctions.cpp)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/GeoRasterTableFunctions.cpp)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ML/MLModelMetadata.cpp)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/MLTableFunctions.cpp)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ML/OneHotEncoder.cpp)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/UtilityTableFunctions.cpp)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Shared/TableFunctionsCommon.cpp)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Shared/TableFunctionsStats.cpp)
+  list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Shared/NullRowsRemoval.cpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/GeoRasterTableFunctions.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Graph/GraphTableFunctions.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/SessionizeTableFunctions.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/SimilarityTableFunctions.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/MLTableFunctions.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/GDALTableFunctions.hpp)
+  list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/CrossSectionTableFunctions.hpp)
   list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdParty/kdtree-cpp/kdtree.cpp)
   list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../ThirdParty/kdtree-cpp/kdtree.hpp)
 
   if(ENABLE_RUNTIME_LIBS AND ENABLE_TORCH_TFS)
-    add_subdirectory(TableFunctions/SystemFunctions/os/Torch)
+    add_subdirectory(TableFunctions/SystemFunctions/Torch)
   endif()
 
   if(ENABLE_CUDA)
-    list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/ExampleTableFunctions.cpp)
+    list(APPEND CUDA_TABLE_FUNCTION_FILES ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ExampleTableFunctions.cpp)
   endif()
 
-  if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    if(ENABLE_RF_PROP_TFS)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFPropTableFunctions.hpp)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFUtilityTableFunctions.hpp)
-      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/AntennaPattern.cpp)
-      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/RFPropTableFunctions.cpp)
-    endif()
+  if(ENABLE_RF_PROP_TFS)
+    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/RFPropTableFunctions.hpp)
+    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/RFUtilityTableFunctions.hpp)
+    list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/AntennaPattern.cpp)
+    list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/RFPropTableFunctions.cpp)
+  endif()
 
-    if(ENABLE_POINT_CLOUD_TFS)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/TableFunctionsDataCache.h)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/Loaders/PdalLoader.h)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/PointCloudTableFunctions.h)
-      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/Shared/Loaders/PdalLoader.cpp)
-      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/os/PointCloudTableFunctions.cpp)
-    endif()
+  if(ENABLE_POINT_CLOUD_TFS)
+    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Shared/TableFunctionsDataCache.h)
+    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Shared/Loaders/PdalLoader.h)
+    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/PointCloudTableFunctions.h)
+    list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/Shared/Loaders/PdalLoader.cpp)
+    list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/PointCloudTableFunctions.cpp)
+  endif()
 
-    if(ENABLE_GFX_TFS AND ENABLE_RENDERING)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/GfxDriverTableFunctions.hpp)
-      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/TableFunctionRenderTest.cpp)
-    endif()
+  if(ENABLE_GFX_TFS AND ENABLE_RENDERING)
+    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/GfxDriverTableFunctions.hpp)
+    list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/TableFunctionRenderTest.cpp)
+  endif()
 
-    if(ENABLE_OMNIVERSE_CONNECTOR)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseExportTableFunctions.hpp)
-      list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseConnector.cpp)
-      list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/ee/OmniverseConnector.h)
-    endif()
+  if(ENABLE_OMNIVERSE_CONNECTOR)
+    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/OmniverseExportTableFunctions.hpp)
+    list(APPEND query_engine_source_files ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/OmniverseConnector.cpp)
+    list(APPEND TABLE_FUNCTION_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/OmniverseConnector.h)
   endif()
 endif()
 
@@ -451,19 +444,30 @@ target_precompile_headers(QueryEngine PRIVATE
 set(QUERY_ENGINE_INCLUDES ".") # fails to find other stuff if just ""
 
 set(QUERY_ENGINE_LIBS
-  OSDependent
   StringOps
   Analyzer
   StringDictionary
   Utils
   Logger
   Shared
-  sqlite3
+  SQLite::SQLite3
   ${Arrow_LIBRARIES}
   DataMgr # Needed for ArenaAllocator and others.
 )
 
-list(APPEND QUERY_ENGINE_LIBS ${llvm_libs} ${ZLIB_LIBRARIES})
+list(APPEND QUERY_ENGINE_LIBS ${llvm_libs})
+
+if(ENABLE_SYSTEM_TFS AND ENABLE_GFX_TFS AND ENABLE_RENDERING)
+  include(GenerateShaderTemplates)
+  generateShaderTemplates(
+    ${CMAKE_SOURCE_DIR}/scripts
+    ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/SystemFunctions/shaders/ShaderManifest.json
+    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/ShaderTemplates
+    QueryEngineShaderTemplates
+    QueryEngineShaders)
+  list(APPEND QUERY_ENGINE_INCLUDES ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/ShaderTemplates)
+  list(APPEND QUERY_ENGINE_LIBS QueryEngineShaderTemplates)
+endif()
 
 target_include_directories(QueryEngine PRIVATE ${QUERY_ENGINE_INCLUDES})
 target_link_libraries(QueryEngine ${QUERY_ENGINE_LIBS})
@@ -475,6 +479,7 @@ add_custom_command(
   ARGS
   -I ${CMAKE_SOURCE_DIR}
   -I ${CMAKE_SOURCE_DIR}/ThirdParty/warpcore/include
+  -I ${CMAKE_SOURCE_DIR}/ThirdParty/hpc_helpers/include
   -I ${CMAKE_CURRENT_BINARY_DIR}
   -I ${MAPD_DEPS_PATH}/include
   -I ${Boost_INCLUDE_DIR}
@@ -559,7 +564,7 @@ if(ENABLE_CUDA)
   # warning #20014-D: calling a __host__ function from a __host__ __device__ function is not allowed
   # (stack of mostly boost::fusion headers omitted)
   # instantiation of "robin_hood::detail::Table<...>" at line 126 of
-  #   /home/simon.eves/work/master/heavydb-internal/QueryEngine/Aggregate/AggModeHashTableGpu.cu
+  #   /home/simon.eves/work/master/heavydb/QueryEngine/Aggregate/AggModeHashTableGpu.cu
   target_compile_options(QueryEngine PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=20014>)
 
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/CudaTableFunctions.a DESTINATION QueryEngine COMPONENT "QE")

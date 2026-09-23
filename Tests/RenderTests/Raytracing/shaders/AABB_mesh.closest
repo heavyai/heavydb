@@ -1,0 +1,67 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_ray_tracing : enable
+#extension GL_EXT_scalar_block_layout : enable
+//</extensions>
+
+//<includes>
+#include "Shading/rtShadowsSimple.glsl"
+#include "Shading/shading.glsl"
+#include "RaytracingTest/AABB_payload.glsl"
+//</includes>
+
+layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
+
+hitAttributeEXT vec2 attribs;
+
+struct Vertex {
+  vec3 pos;
+  vec3 normal;
+};
+
+layout (scalar) buffer Vertices { Vertex v[]; } vertices;
+buffer Indices { uint i[]; } indices;
+
+void main()
+{
+  // Get indices for the triangle
+  uvec3 index = uvec3(indices.i[3 * gl_PrimitiveID],
+                      indices.i[3 * gl_PrimitiveID + 1],
+                      indices.i[3 * gl_PrimitiveID + 2]);
+
+  // Get vertex data for the triangle
+  Vertex v0 = vertices.v[index.x];
+  Vertex v1 = vertices.v[index.y];
+  Vertex v2 = vertices.v[index.z];
+
+  // Interpolate object space position and normal
+  const vec3 barycentric_coords = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
+  vec3 pos = v0.pos * barycentric_coords.x +
+             v1.pos * barycentric_coords.y +
+             v2.pos * barycentric_coords.z;
+  vec3 normal = normalize(v0.normal * barycentric_coords.x +
+                          v1.normal * barycentric_coords.y +
+                          v2.normal * barycentric_coords.z);
+
+  // Transform hit-point to world space
+  const vec3 world_pos = vec3(gl_ObjectToWorldEXT * vec4(pos, 1.0));
+
+  // Transform normal to world space
+  // (multiply on right with world->obj = inverse transpose of obj->world)
+  const vec3 world_normal = normalize(vec3(normal * gl_WorldToObjectEXT));
+
+  // Evaluate shading, getting color and reflectivity at the hit point
+  vec3 reflectivity = vec3(0);
+  const MaterialProperties material = materials[1];
+  vec4 color = shade_point(material, world_pos, world_normal, -gl_WorldRayDirectionEXT, reflectivity);
+
+  // Write values to payload
+  rayPayload.color = color.rgb * rayPayload.reflectivity;
+  rayPayload.position = world_pos;
+  rayPayload.normal = world_normal;
+  rayPayload.reflectivity = rayPayload.reflectivity * reflectivity;
+}

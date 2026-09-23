@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -368,6 +357,15 @@ class ShowRolesCommand : public DdlCommand {
   ExecutionResult execute(bool read_only_mode) override;
 };
 
+class ShowSupportedDataSources : public DdlCommand {
+ public:
+  ShowSupportedDataSources(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
 class RefreshForeignTablesCommand : public DdlCommand {
  public:
   RefreshForeignTablesCommand(
@@ -413,6 +411,35 @@ class AlterDatabaseCommand : public DdlCommand {
   void rename();
 };
 
+class UserMappingDdlCommand : public DdlCommand {
+ public:
+  UserMappingDdlCommand(const DdlCommandData& ddl_data,
+                        std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr)
+      : DdlCommand(ddl_data, session_ptr) {}
+
+ protected:
+  const foreign_storage::ForeignServer* getForeignServer();
+  std::pair<int32_t, std::string> getUserIdAndUserMappingType();
+};
+
+class CreateUserMappingCommand : public UserMappingDdlCommand {
+ public:
+  CreateUserMappingCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
+class DropUserMappingCommand : public UserMappingDdlCommand {
+ public:
+  DropUserMappingCommand(
+      const DdlCommandData& ddl_data,
+      std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr);
+
+  ExecutionResult execute(bool read_only_mode) override;
+};
+
 class ReassignOwnedCommand : public DdlCommand {
  public:
   ReassignOwnedCommand(const DdlCommandData& ddl_data,
@@ -424,14 +451,6 @@ class ReassignOwnedCommand : public DdlCommand {
   std::string new_owner_;
   std::set<std::string> old_owners_;
   bool all_;
-};
-
-enum class ExecutionLocation { ALL_NODES, AGGREGATOR_ONLY, LEAVES_ONLY };
-enum class AggregationType { NONE, UNION };
-
-struct DistributedExecutionDetails {
-  ExecutionLocation execution_location;
-  AggregationType aggregation_type;
 };
 
 class DdlCommandExecutor {
@@ -492,13 +511,6 @@ class DdlCommandExecutor {
    * Returns target query session if this command is KILL QUERY
    */
   const std::string getTargetQuerySessionToKill() const;
-
-  /**
-   * Returns an object indicating where command execution should
-   * take place and how results should be aggregated for
-   * distributed setups.
-   */
-  DistributedExecutionDetails getDistributedExecutionDetails() const;
 
   /**
    * Returns command string, can be useful for logging, conversion

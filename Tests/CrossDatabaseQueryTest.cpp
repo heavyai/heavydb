@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <filesystem>
@@ -39,11 +28,11 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
     createTestTable(shared::kDefaultDbName, "test_table");
     insertIntoTestTable(shared::kDefaultDbName, "test_table", {1, 2, 3}, {"a", "b", "c"});
 
-    createTestTable("db_1", "db_1_table", true);
+    createTestTable("db_1", "db_1_table");
     insertIntoTestTable(
         "db_1", "db_1_table", {1, 2, 10, 20, 30}, {"a", "b", "aa", "bb", "cc"});
 
-    createTestTable("db_2", "db_2_table", true);
+    createTestTable("db_2", "db_2_table");
     insertIntoTestTable("db_2", "db_2_table", {1, 10, 100}, {"a", "aa", "aaa"});
 
     sql("CREATE FOREIGN TABLE test_foreign_table(t TEXT, i INTEGER, d DOUBLE) "
@@ -52,7 +41,7 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
         std::filesystem::canonical("../../Tests/FsiDataFiles/example_2.csv").string() +
         "');");
 
-    createTestTable("db_3", "db_3_table", true);
+    createTestTable("db_3", "db_3_table");
     insertIntoTestTable(
         "db_3", "db_3_table", {1, 2, 10, 20, 30}, {"cc", "bb", "aa", "b", "a"});
 
@@ -75,14 +64,9 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
     std::filesystem::remove_all(export_file_path_);
   }
 
-  static void createTestTable(const std::string& db_name,
-                              const std::string& table_name,
-                              bool replicate = false) {
+  static void createTestTable(const std::string& db_name, const std::string& table_name) {
     login(shared::kRootUsername, shared::kDefaultRootPasswd, db_name);
     std::string options{"fragment_size = 2"};
-    if (replicate && isDistributedMode()) {
-      options += ", partitions = 'replicated'";
-    }
     sql("CREATE TABLE " + table_name +
         " (i INTEGER, t TEXT ENCODING DICT(32), t2 TEXT ENCODING NONE) WITH (" + options +
         ");");
@@ -220,9 +204,6 @@ TEST_F(CrossDatabaseQueryTest, WindowFunctionUsingTableFromAnotherDb) {
 }
 
 TEST_F(CrossDatabaseQueryTest, TableFunctionQueryReferencingAnotherDb) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Table functions are not supported in distributed mode.";
-  }
   // clang-format off
   sqlAndCompareResult("SELECT * FROM TABLE("
                         "tf_feature_self_similarity("
@@ -624,18 +605,12 @@ TEST_F(CrossDatabaseWriteQueryTest, AlterTableInAnotherDb) {
 }
 
 TEST_F(CrossDatabaseWriteQueryTest, DumpTableInAnotherDb) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Dump/Restore is not supported in distributed mode.";
-  }
   queryAndAssertException(
       "DUMP TABLE db_2.db_2_table TO '" + dump_path_ + "';",
       "Table/View db_2.db_2_table for catalog heavyai does not exist.");
 }
 
 TEST_F(CrossDatabaseWriteQueryTest, RestoreTableInAnotherDb) {
-  if (isDistributedMode()) {
-    GTEST_SKIP() << "Dump/Restore is not supported in distributed mode.";
-  }
   sql("DUMP TABLE test_table TO '" + dump_path_ + "';");
   ASSERT_TRUE(std::filesystem::exists(dump_path_));
 
@@ -654,8 +629,6 @@ TEST_F(CrossDatabaseWriteQueryTest, OptimizeTableInAnotherDb) {
       "OPTIMIZE TABLE db_2.db_2_table;",
       "Table/View db_2.db_2_table for catalog heavyai does not exist.");
 }
-
-// TODO: Setup distributed tests
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);

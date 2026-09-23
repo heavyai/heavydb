@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<assembly xmlns="http://maven.apache.org/ASSEMBLY/2.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/ASSEMBLY/2.2.0 https://maven.apache.org/xsd/assembly-2.2.0.xsd">
+  <id>production-utilities</id>
+  <formats>
+    <format>jar</format>
+  </formats>
+  <includeBaseDirectory>false</includeBaseDirectory>
+  <dependencySets>
+    <dependencySet>
+      <outputDirectory>/</outputDirectory>
+      <useProjectArtifact>true</useProjectArtifact>
+      <useTransitiveDependencies>true</useTransitiveDependencies>
+      <unpack>true</unpack>
+      <scope>runtime</scope>
+      <unpackOptions>
+        <excludes>
+          <exclude>com/mapd/tests/**</exclude>
+          <exclude>com/mapd/bench/**</exclude>
+          <exclude>com/mapd/dashboard/**</exclude>
+          <exclude>com/mapd/testthrift/**</exclude>
+          <exclude>com/heavydb/ldap/**</exclude>
+          <exclude>META-INF/maven/com.mapd/utility/**</exclude>
+          <!-- libthrift's optional Jakarta Servlet adapters are not used by
+               HeavyDB's command-line utilities. -->
+          <exclude>org/apache/thrift/server/TServlet*.class</exclude>
+          <exclude>org/apache/thrift/server/TExtensibleServlet*.class</exclude>
+        </excludes>
+      </unpackOptions>
+    </dependencySet>
+  </dependencySets>
+</assembly>

@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -23,9 +12,9 @@
 #include <boost/filesystem.hpp>  // TODO(Misiu): Update FileMgr API to remove this.
 #include <filesystem>
 #include <fstream>
+#include "DataMgr/FileMgr/CachingFileMgr.h"
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
-#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgrTestHelpers.h"
 #include "Shared/File.h"
 #include "TestHelpers.h"
@@ -167,8 +156,8 @@ class FileInfoTest : public testing::Test {
     // FileInfo's method calls.  Future work is underway to remove this dependency
     // entirely (a FileInfo should not need access to a parent FileMgr).
     gfm_ = std::make_unique<fn::GlobalFileMgr>(
-        0, fsi_, kTestDataDir, 0, page_size, meta_page_size);
-    fm_ptr_ = dynamic_cast<fn::FileMgr*>(gfm_->getFileMgr(db, tb));
+        0, kTestDataDir, 0, page_size, meta_page_size);
+    fm_ptr_ = gfm_->getFileMgr(db, tb);
 
     auto [fd, file_path] = fn::create(kTestDataDir, data_file_id, page_size, num_pages);
     file_info_ = std::make_unique<fn::FileInfo>(
@@ -183,7 +172,6 @@ class FileInfoTest : public testing::Test {
   static void SetUpTestSuite() {
     fn::FileMgr::setNumPagesPerDataFile(num_pages);
     fn::FileMgr::setNumPagesPerMetadataFile(num_pages);
-    fsi_ = std::make_shared<ForeignStorageInterface>();
   }
 
   static void TearDownTestSute() {
@@ -219,7 +207,6 @@ class FileInfoTest : public testing::Test {
     return type_data;
   }
 
-  static inline std::shared_ptr<ForeignStorageInterface> fsi_;
   std::unique_ptr<fn::GlobalFileMgr> gfm_;
   fn::FileMgr* fm_ptr_;
   std::unique_ptr<fn::FileInfo> file_info_;
@@ -521,7 +508,7 @@ class OpenExistingFileTest : public FileInfoTest {
 
     // Tests need a FileMgr to access epoch data.
     gfm_ = std::make_unique<fn::GlobalFileMgr>(
-        0, fsi_, kTestDataDir, 0, page_size, meta_page_size);
+        0, kTestDataDir, 0, page_size, meta_page_size);
 
     // The last checkpointed epoch for the pre-created files is actually "2", but the
     // FileMgr will automatically increment the epoch during initialization so we need to
@@ -542,10 +529,9 @@ class OpenExistingFileTest : public FileInfoTest {
     fs::remove_all(gfm_path);
 
     // Need to setup a temporary FileMgr to create files.
-    auto fsi = std::make_shared<ForeignStorageInterface>();
-    auto gfm = std::make_unique<fn::GlobalFileMgr>(
-        0, fsi, gfm_path, 0, page_size, meta_page_size);
-    auto fm = dynamic_cast<fn::FileMgr*>(gfm->getFileMgr(1, 1));
+    auto gfm =
+        std::make_unique<fn::GlobalFileMgr>(0, gfm_path, 0, page_size, meta_page_size);
+    auto fm = gfm->getFileMgr(1, 1);
 
     // Data to write.
     auto sql_info = SQLTypeInfo{kINT};
@@ -711,14 +697,10 @@ class FileMgrTest : public AbstractFileMgrTest {
 
   void initializeGlobalFileMgr() {
     fs::remove_all(kTestDataDir);
-    global_file_mgr_ = std::make_unique<fn::GlobalFileMgr>(
-        0, std::make_shared<ForeignStorageInterface>(), kTestDataDir, 0);
+    global_file_mgr_ = std::make_unique<fn::GlobalFileMgr>(0, kTestDataDir, 0);
   }
 
-  fn::FileMgr* getFileMgr() {
-    auto file_mgr = global_file_mgr_->getFileMgr(db_id, tb_id);
-    return dynamic_cast<fn::FileMgr*>(file_mgr);
-  }
+  fn::FileMgr* getFileMgr() { return global_file_mgr_->getFileMgr(db_id, tb_id); }
 
   void initializeChunk(int32_t value) {
     auto file_mgr = getFileMgr();
@@ -1647,8 +1629,6 @@ class FileMgrUnitTest : public testing::Test {
 
   static constexpr size_t page_size_ = 64;
 
-  static void SetUpTestSuite() { fsi_ = std::make_shared<ForeignStorageInterface>(); }
-
   void SetUp() override {
     fs::remove_all(kFileMgrPath);
     fs::create_directory(kFileMgrPath);
@@ -1658,8 +1638,8 @@ class FileMgrUnitTest : public testing::Test {
 
   std::unique_ptr<fn::GlobalFileMgr> initializeGFM(size_t num_pages = 1) {
     std::vector<int8_t> write_buffer{1, 2, 3, 4};
-    auto gfm = std::make_unique<fn::GlobalFileMgr>(0, fsi_, kFileMgrPath, 0, page_size_);
-    auto fm = dynamic_cast<fn::FileMgr*>(gfm->getFileMgr(1, 1));
+    auto gfm = std::make_unique<fn::GlobalFileMgr>(0, kFileMgrPath, 0, page_size_);
+    auto fm = gfm->getFileMgr(1, 1);
     auto buffer = fm->createBuffer({1, 1, 1, 1});
     auto page_data_size = page_size_ - buffer->reservedHeaderSize();
     for (size_t i = 0; i < page_data_size * num_pages; i += 4) {
@@ -1668,8 +1648,6 @@ class FileMgrUnitTest : public testing::Test {
     gfm->checkpoint(1, 1);
     return gfm;
   }
-
-  static inline std::shared_ptr<ForeignStorageInterface> fsi_;
 };
 
 TEST_F(FileMgrUnitTest, SimulateReadError) {
@@ -1689,7 +1667,7 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedFirstPage) {
     auto buffer = dynamic_cast<fn::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
     buffer->freePage(buffer->getMultiPage().front().current().page);
   }
-  fn::GlobalFileMgr gfm(0, fsi_, kFileMgrPath, 0, page_size_);
+  fn::GlobalFileMgr gfm(0, kFileMgrPath, 0, page_size_);
   auto buffer = gfm.getBuffer({1, 1, 1, 1});
   ASSERT_EQ(buffer->pageCount(), 2U);
 }
@@ -1700,7 +1678,7 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedLastPage) {
     auto buffer = dynamic_cast<fn::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
     buffer->freePage(buffer->getMultiPage().back().current().page);
   }
-  fn::GlobalFileMgr gfm(0, fsi_, kFileMgrPath, 0, page_size_);
+  fn::GlobalFileMgr gfm(0, kFileMgrPath, 0, page_size_);
   auto buffer = gfm.getBuffer({1, 1, 1, 1});
   ASSERT_EQ(buffer->pageCount(), 2U);
 }
@@ -1712,7 +1690,7 @@ TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedAppendPages) {
     auto buffer = dynamic_cast<fn::FileBuffer*>(temp_gfm->getBuffer({1, 1, 1, 1}));
     buffer->append(write_buffer.data(), 4);
   }
-  fn::GlobalFileMgr gfm(0, fsi_, kFileMgrPath, 0, page_size_);
+  fn::GlobalFileMgr gfm(0, kFileMgrPath, 0, page_size_);
   auto buffer = dynamic_cast<fn::FileBuffer*>(gfm.getBuffer({1, 1, 1, 1}));
   ASSERT_EQ(buffer->pageCount(), 1U);
 }
@@ -1729,7 +1707,7 @@ TEST_F(FileMgrUnitTest, MetadataReadWrite) {
     // Checkpoint will write metadata to disk.
     temp_gfm->checkpoint();
   }
-  fn::GlobalFileMgr gfm(0, fsi_, kFileMgrPath, 0, page_size_);
+  fn::GlobalFileMgr gfm(0, kFileMgrPath, 0, page_size_);
   auto buffer = dynamic_cast<fn::FileBuffer*>(gfm.getBuffer({1, 1, 1, 2}));
   auto meta = buffer->getEncoder()->getMetadata();
   EXPECT_CHUNK_METADATA_EQ(meta,
@@ -1754,7 +1732,7 @@ TEST_F(FileMgrUnitTest, MetadataRasterTile) {
     // Checkpoint will write metadata to disk.
     temp_gfm->checkpoint();
   }
-  fn::GlobalFileMgr gfm(0, fsi_, kFileMgrPath, 0, page_size_);
+  fn::GlobalFileMgr gfm(0, kFileMgrPath, 0, page_size_);
   auto buffer = dynamic_cast<fn::FileBuffer*>(gfm.getBuffer({1, 1, 1, 2}));
   auto meta = buffer->getEncoder()->getMetadata();
   EXPECT_CHUNK_METADATA_EQ(meta,
@@ -1770,7 +1748,7 @@ TEST_F(FileMgrUnitTest, OldMetadataOnNewSystem) {
   // but the values for raster metadata were set, so if the version was not being
   // respected the RasterTileInfo values would not be empty.
   fs::copy(pre_raster_metadata_dir_, kFileMgrPath, fs::copy_options::recursive);
-  fn::GlobalFileMgr gfm(0, fsi_, kFileMgrPath, 0, page_size_);
+  fn::GlobalFileMgr gfm(0, kFileMgrPath, 0, page_size_);
   auto buffer = dynamic_cast<fn::FileBuffer*>(gfm.getBuffer({1, 1, 1, 2}));
   auto meta = buffer->getEncoder()->getMetadata();
   EXPECT_CHUNK_METADATA_EQ(
@@ -1902,12 +1880,7 @@ class ReadOnlyAbstractFileMgrUnitTest : public AbstractFileMgrTest {
 
   void initAsFileMgr() {
     parent_file_mgr_ =
-        std::make_unique<fn::GlobalFileMgr>(0,
-                                            std::make_shared<ForeignStorageInterface>(),
-                                            kDataDir,
-                                            0,
-                                            page_size,
-                                            meta_page_size);
+        std::make_unique<fn::GlobalFileMgr>(0, kDataDir, 0, page_size, meta_page_size);
     file_mgr_ =
         static_cast<fn::FileMgr*>(static_cast<fn::GlobalFileMgr*>(parent_file_mgr_.get())
                                       ->getFileMgr(db_id, tb_id));

@@ -1,17 +1,23 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to you under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ *
+ * This file is a modified derivative of Apache Calcite's org.apache.calcite.rel.externalize.RelJson.
+ *
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package org.apache.calcite.rel.externalize;
@@ -50,6 +56,7 @@ import org.apache.calcite.rex.RexOver;
 import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.rex.RexWindow;
 import org.apache.calcite.rex.RexWindowBound;
+import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.sql.JoinType;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunction;
@@ -328,6 +335,12 @@ public class HeavyDBRelJson {
   }
 
   private Object toJson(RexNode node) {
+    if (node.getKind() == SqlKind.SEARCH) {
+      // Calcite 1.41 represents some IN/list predicates as SEARCH/Sarg nodes.
+      // HeavyDB's serialized RA JSON has no SEARCH node, so expand to the
+      // equivalent Rex expression before walking the tree.
+      node = RexUtil.expandSearch(RexBuilder.DEFAULT, null, node);
+    }
     final Map<String, Object> map;
     switch (node.getKind()) {
       case FIELD_ACCESS:

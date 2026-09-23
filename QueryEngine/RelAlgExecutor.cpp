@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2016-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "QueryEngine/RelAlgExecutor.h"
@@ -112,12 +101,6 @@ void set_parallelism_hints(const RelAlgNode& ra_node) {
         ChunkKey chunk_key = {
             physical_input.db_id, table_id, col_id, fragment.fragmentId};
 
-        // Parallelism hints should not include fragments that are not mapped to the
-        // current node, otherwise we will try to prefetch them and run into trouble.
-        if (foreign_storage::key_does_not_shard_to_leaf(chunk_key)) {
-          continue;
-        }
-
         // do not include chunk hints that are in CPU memory
         if (!chunk.isChunkOnDevice(
                 &catalog->getDataMgr(), chunk_key, Data_Namespace::CPU_LEVEL, 0)) {
@@ -207,8 +190,8 @@ void prepare_for_system_table_execution(const RelAlgNode& ra_node,
       // ExpressionRanges to reduce invalid with valid ranges (right now prefetching
       // causes us to fetch the chunks twice).  Right now if we do not prefetch (i.e. if
       // we remove the code below) some nodes will return valid ranges and others will
-      // return unknown because they only use placeholder metadata and the LeafAggregator
-      // has no idea how to reduce the two.
+      // return unknown because they only use placeholder metadata and there is no
+      // cross-node range reduction step to combine them.
       const auto td = info_schema_catalog->getMetadataForTable(table_id);
       CHECK(td);
       CHECK(td->fragmenter);
@@ -500,7 +483,7 @@ void check_none_encoded_string_cast_tuple_limit(
 bool RelAlgExecutor::canUseResultsetCache(const ExecutionOptions& eo) const {
   auto validate_or_explain_query = is_validate_or_explain_query(eo);
   auto query_for_partial_outer_frag = !eo.outer_fragment_indices.empty();
-  return g_enable_data_recycler && g_use_query_resultset_cache && !g_cluster &&
+  return g_enable_data_recycler && g_use_query_resultset_cache &&
          !validate_or_explain_query && !hasStepForUnion() &&
          !query_for_partial_outer_frag;
 }
@@ -1267,7 +1250,7 @@ QueryStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
     shard_count =
         GroupByAndAggregate::shard_count_for_top_groups(source_work_unit.exe_unit);
     if (!shard_count) {
-      // No point in sorting on the leaf, only execute the input to the sort node.
+      // Skip sorting here; execute only the sort input node and sort later.
       CHECK_EQ(size_t(1), sort->inputCount());
       const auto source = sort->getInput(0);
       if (sort->collationCount() || node_is_aggregate(source)) {
@@ -1405,11 +1388,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
                         (i == num_steps) ? render_info : nullptr,
                         queue_time_ms);
     } catch (const QueryMustRunOnCpu&) {
-      // Do not allow per-step retry if flag is off or in distributed mode
-      // TODO(todd): Determine if and when we can relax this restriction
-      // for distributed
+      // Do not allow per-step retry unless the flag is enabled.
       CHECK(co.device_type == ExecutorDeviceType::GPU);
-      if (!g_allow_query_step_cpu_retry || g_cluster) {
+      if (!g_allow_query_step_cpu_retry) {
         throw;
       }
       LOG(INFO) << "Retrying current query step " << i << " / " << num_steps
@@ -1476,11 +1457,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
                         (i == interval.second - 1) ? render_info : nullptr,
                         queue_time_ms);
     } catch (const QueryMustRunOnCpu&) {
-      // Do not allow per-step retry if flag is off or in distributed mode
-      // TODO(todd): Determine if and when we can relax this restriction
-      // for distributed
+      // Do not allow per-step retry unless the flag is enabled.
       CHECK(co.device_type == ExecutorDeviceType::GPU);
-      if (!g_allow_query_step_cpu_retry || g_cluster) {
+      if (!g_allow_query_step_cpu_retry) {
         throw;
       }
       LOG(INFO) << "Retrying current query step " << i << " on CPU";
@@ -1612,10 +1591,6 @@ void handle_query_hint(RegisteredQueryHint const& query_hints,
   }
   auto columnar_output_enabled = eo.output_columnar_hint ? !rowwise_output_hint_enabled
                                                          : columnar_output_hint_enabled;
-  if (g_cluster && (columnar_output_hint_enabled || rowwise_output_hint_enabled)) {
-    LOG(INFO) << "Currently, we do not support applying query hint to change query "
-                 "output layout in distributed mode.";
-  }
   eo.output_columnar_hint = columnar_output_enabled;
 }
 
@@ -1757,9 +1732,9 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       executeUpdate(project, co_copied, eo_copied, queue_time_ms);
     } else {
       std::optional<size_t> prev_count;
-      // Disabling the intermediate count optimization in distributed, as the previous
-      // execution descriptor will likely not hold the aggregated result.
-      if (g_skip_intermediate_count && step_idx > 0 && !g_cluster) {
+      // Skip the intermediate count optimization when the previous execution descriptor
+      // may not hold the aggregated result.
+      if (g_skip_intermediate_count && step_idx > 0) {
         // If the previous node produced a reliable count, skip the pre-flight count.
         RelAlgNode const* const prev_body = project->getInput(0);
         if (shared::dynamic_castable_to_any<RelCompound, RelLogicalValues>(prev_body)) {
@@ -2303,11 +2278,6 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
       // cases 2) or 3)
       // if at least one of two conditions satisfy, we must compute corresponding window
       // context before entering `execute_update_for_node` to properly update the table
-      if (!leaf_results_.empty()) {
-        throw std::runtime_error(
-            "Update query having window function is not yet supported in distributed "
-            "mode.");
-      }
       ColumnCacheMap column_cache;
       if (co.device_type == ExecutorDeviceType::GPU) {
         // window function is currently only supported by CPU
@@ -2516,9 +2486,6 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
 
   auto co = co_in;
 
-  if (g_cluster) {
-    throw std::runtime_error("Table functions not supported in distributed mode yet");
-  }
   if (!g_enable_table_functions) {
     throw std::runtime_error("Table function support is disabled");
   }
@@ -2599,10 +2566,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
     }
   } else {
     if (eo.keep_result) {
-      if (g_cluster) {
-        VLOG(1) << "Query hint \'keep_table_function_result\' is ignored since we do not "
-                   "support resultset recycling on distributed mode";
-      } else if (hasStepForUnion()) {
+      if (hasStepForUnion()) {
         VLOG(1) << "Query hint \'keep_table_function_result\' is ignored since a query "
                    "has union-(all) operator";
       } else if (is_validate_or_explain_query(eo)) {
@@ -3107,14 +3071,14 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(
   const int table_id = query.get_result_table_id();
   const auto& col_id_list = query.get_result_col_list();
   size_t rows_number = values_lists.size();
-  size_t leaf_count = inserter.getLeafCount();
+  size_t shard_count = inserter.getShardCount();
   const auto& catalog = session.getCatalog();
   const auto td = catalog.getMetadataForTable(table_id);
   CHECK(td);
   size_t rows_per_leaf = rows_number;
   if (td->nShards == 0) {
     rows_per_leaf =
-        ceil(static_cast<double>(rows_number) / static_cast<double>(leaf_count));
+        ceil(static_cast<double>(rows_number) / static_cast<double>(shard_count));
   }
   auto max_number_of_rows_per_package =
       std::max(size_t(1), std::min(rows_per_leaf, size_t(64 * 1024)));
@@ -3467,44 +3431,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   check_sort_node_source_constraint(sort);
   const auto source = sort->getInput(0);
   const bool is_aggregate = node_is_aggregate(source);
-  auto it = leaf_results_.find(sort->getId());
   auto order_entries = sort->getOrderEntries();
-  if (it != leaf_results_.end()) {
-    // Add any transient string literals to the sdp on the agg
-    const auto source_work_unit = createSortInputWorkUnit(sort, order_entries, eo);
-    executor_->addTransientStringLiterals(source_work_unit.exe_unit,
-                                          executor_->row_set_mem_owner_);
-    // Handle push-down for LIMIT for multi-node
-    auto& aggregated_result = it->second;
-    auto& result_rows = aggregated_result.rs;
-    auto limit = sort->getLimit();
-    const size_t offset = sort->getOffset();
-    if (limit || offset) {
-      if (!order_entries.empty()) {
-        result_rows->sort(
-            order_entries, get_limit_value(limit) + offset, co.device_type, executor_);
-      }
-      result_rows->dropFirstN(offset);
-      if (limit) {
-        result_rows->keepFirstN(get_limit_value(limit));
-      }
-    }
-
-    if (render_info) {
-      // We've hit a sort step that is the very last step
-      // in a distributed render query. We'll fill in the render targets
-      // since we have all that data needed to do so. This is normally
-      // done in executeWorkUnit, but that is bypassed in this case.
-      build_render_targets(*render_info,
-                           source_work_unit.exe_unit.target_exprs,
-                           aggregated_result.targets_meta);
-    }
-
-    ExecutionResult result(result_rows, aggregated_result.targets_meta);
-    sort->setOutputMetainfo(aggregated_result.targets_meta);
-
-    return result;
-  }
 
   std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   bool is_desc{false};
@@ -3594,17 +3521,9 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
       rows_to_sort->sort(order_entries, top_n, co.device_type, executor_);
     }
     if (limit || offset) {
-      if (g_cluster && sort->collationCount() == 0) {
-        if (offset >= rows_to_sort->rowCount()) {
-          rows_to_sort->dropFirstN(offset);
-        } else {
-          rows_to_sort->keepFirstN(limit_val + offset);
-        }
-      } else {
-        rows_to_sort->dropFirstN(offset);
-        if (limit) {
-          rows_to_sort->keepFirstN(limit_val);
-        }
+      rows_to_sort->dropFirstN(offset);
+      if (limit) {
+        rows_to_sort->keepFirstN(limit_val);
       }
     }
     return {rows_to_sort, source_result.getTargetsMeta()};
@@ -3661,7 +3580,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
 
   sort->setOutputMetainfo(source->getOutputMetainfo());
   // NB: the `body` field of the returned `WorkUnit` needs to be the `source` node,
-  // not the `sort`. The aggregator needs the pre-sorted result from leaves.
+  // not the `sort`.
   return {RelAlgExecutionUnit{source_exe_unit.input_descs,
                               std::move(source_exe_unit.input_col_descs),
                               source_exe_unit.simple_quals,
@@ -3830,10 +3749,8 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
       if (arg_range.getType() != ExpressionRangeType::Integer) {
         continue;
       }
-      // When running distributed, the threshold for using the precise implementation
-      // must be consistent across all leaves, otherwise we could have a mix of precise
-      // and approximate bitmaps and we cannot aggregate them.
-      const auto device_type = g_cluster ? ExecutorDeviceType::GPU : device_type_in;
+      // Use a consistent threshold for the precise count-distinct implementation.
+      const auto device_type = device_type_in;
       const auto bitmap_sz_bits = arg_range.getIntMax() - arg_range.getIntMin() + 1;
       const auto sub_bitmap_count =
           get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
@@ -3969,22 +3886,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   const auto body = work_unit.body;
   CHECK(body);
-  auto it = leaf_results_.find(body->getId());
-  VLOG(3) << "body->getId()=" << body->getId()
-          << " body->toString()=" << body->toString(RelRexToStringConfig::defaults())
-          << " it==leaf_results_.end()=" << (it == leaf_results_.end());
-  if (it != leaf_results_.end()) {
-    executor_->addTransientStringLiterals(work_unit.exe_unit,
-                                          executor_->row_set_mem_owner_);
-    auto& aggregated_result = it->second;
-    auto& result_rows = aggregated_result.rs;
-    ExecutionResult result(result_rows, aggregated_result.targets_meta);
-    body->setOutputMetainfo(aggregated_result.targets_meta);
-    if (render_info) {
-      build_render_targets(*render_info, work_unit.exe_unit.target_exprs, targets_meta);
-    }
-    return result;
-  }
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
   auto ra_exe_unit = decide_approx_count_distinct_implementation(
@@ -4286,10 +4187,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
   } else {
     if (eo.keep_result) {
-      if (g_cluster) {
-        VLOG(1) << "Query hint \'keep_result\' is ignored since we do not support "
-                   "resultset recycling on distributed mode";
-      } else if (hasStepForUnion()) {
+      if (hasStepForUnion()) {
         VLOG(1) << "Query hint \'keep_result\' is ignored since a query has union-(all) "
                    "operator";
       } else if (render_info && render_info->isInSitu()) {
@@ -4575,8 +4473,6 @@ struct ErrorInfo {
   const char* description{nullptr};
 };
 ErrorInfo getErrorDescription(const int32_t error_code) {
-  // 'designated initializers' don't compile on Windows for std 17
-  // They require /std:c++20.  They been removed for the windows port.
   if (0 < error_code && error_code < int32_t(ErrorCode::N_)) {
     auto const ec = static_cast<ErrorCode>(error_code);
     return {to_string(ec), to_description(ec)};
@@ -4736,25 +4632,10 @@ std::vector<size_t> do_table_reordering(
     const RA* node,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor) {
-  if (g_cluster) {
-    // Disable table reordering in distributed mode. The aggregator does not have enough
-    // information to break ties
-    return {};
-  }
   if (node->isUpdateViaSelect() || node->isDeleteViaSelect()) {
     // Do not reorder tables for UPDATE and DELETE queries, since the outer table always
     // has to be the physical table.
     return {};
-  }
-  for (const auto& table_info : query_infos) {
-    if (table_info.table_key.table_id < 0) {
-      continue;
-    }
-    const auto td = Catalog_Namespace::get_metadata_for_table(table_info.table_key);
-    CHECK(td);
-    if (table_is_replicated(td)) {
-      return {};
-    }
   }
   const auto input_permutation =
       get_node_input_permutation(left_deep_join_quals, query_infos, executor);
@@ -5725,8 +5606,7 @@ void RelAlgExecutor::initializeParallelismHints() {
   if (auto foreign_storage_mgr =
           executor_->getDataMgr()->getPersistentStorageMgr()->getForeignStorageMgr()) {
     // Parallelism hints need to be reset to empty so that we don't accidentally re-use
-    // them.  This can cause attempts to fetch strings that do not shard to the correct
-    // node in distributed mode.
+    // them from a prior query execution.
     foreign_storage_mgr->setParallelismHints({});
   }
 }

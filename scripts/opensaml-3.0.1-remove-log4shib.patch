@@ -1,0 +1,52 @@
+diff -ruN opensaml-3.0.1/configure.ac opensaml-3.0.1-nologs/configure.ac
+--- opensaml-3.0.1/configure.ac	2018-07-10 04:09:09.000000000 +0300
++++ opensaml-3.0.1-nologs/configure.ac	2018-09-17 12:56:27.216201000 +0300
+@@ -88,11 +88,6 @@
+ BOOST_SMART_PTR
+ BOOST_STRING_ALGO
+ 
+-AX_PKG_CHECK_MODULES([log4shib],,[log4shib],
+-    [AC_DEFINE([OPENSAML_LOG4SHIB],[1],[Define to 1 if log4shib library is used.])],
+-    [AX_PKG_CHECK_MODULES([log4cpp],,[log4cpp],
+-        [AC_DEFINE([OPENSAML_LOG4CPP],[1],[Define to 1 if log4cpp library is used.])])])
+-
+ AX_PKG_CHECK_MODULES([xerces],,[xerces-c >= 3.2])
+ 
+ AX_PKG_CHECK_MODULES([xmlsec],,[xml-security-c >= 2])
+diff -ruN opensaml-3.0.1/doc/Makefile.am opensaml-3.0.1-nologs/doc/Makefile.am
+--- opensaml-3.0.1/doc/Makefile.am	2018-07-10 04:09:09.000000000 +0300
++++ opensaml-3.0.1-nologs/doc/Makefile.am	2018-09-17 12:46:00.679200000 +0300
+@@ -10,8 +10,7 @@
+ docfiles = \
+ 	README.txt \
+ 	LICENSE.txt \
+-	NOTICE.txt \
+-	LOG4CPP.LICENSE
++	NOTICE.txt
+ 
+ pkgdoc_DATA = $(docfiles)
+ 
+diff -ruN opensaml-3.0.1/saml/saml2/metadata/impl/XMLMetadataProvider.cpp opensaml-3.0.1-nologs/saml/saml2/metadata/impl/XMLMetadataProvider.cpp
+--- opensaml-3.0.1/saml/saml2/metadata/impl/XMLMetadataProvider.cpp	2018-07-12 01:28:04.000000000 +0300
++++ opensaml-3.0.1-nologs/saml/saml2/metadata/impl/XMLMetadataProvider.cpp	2018-09-17 20:17:03.995773000 +0300
+@@ -44,6 +44,8 @@
+ # include <log4shib/NDC.hh>
+ #elif defined(OPENSAML_LOG4CPP)
+ # include <log4cpp/NDC.hh>
++#else
++# include <xmltooling/logging.h>
+ #endif
+ 
+ using namespace opensaml::saml2md;
+diff -ruN opensaml-3.0.1/saml/SAMLConfig.cpp opensaml-3.0.1-nologs/saml/SAMLConfig.cpp
+--- opensaml-3.0.1/saml/SAMLConfig.cpp	2018-07-10 04:09:09.000000000 +0300
++++ opensaml-3.0.1-nologs/saml/SAMLConfig.cpp	2018-09-17 20:04:16.891056000 +0300
+@@ -35,7 +35,7 @@
+ #  error "Logging library mismatch (XMLTooling is using log4cpp)."
+ # endif
+ #else
+-# error "No supported logging library."
++// using no logging at all
+ #endif
+ 
+ #include "exceptions.h"

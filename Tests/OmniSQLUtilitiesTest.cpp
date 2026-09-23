@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../SQLFrontend/CommandHistoryFile.h"
@@ -20,14 +9,42 @@
 #include <boost/program_options.hpp>
 #include <cstring>
 #include <fstream>
+#include <string>
+
+#include <unistd.h>
 
 #include <type_traits>
 // Mocks
 
 using GetEnvRetType = decltype(DefaultEnvResolver().getenv(""));
-#ifndef _WIN32
 using GetPWUIDRetType = decltype(DefaultEnvResolver().getpwuid(0));
-#endif
+
+namespace {
+
+std::string makeUnitTestHomeDirectory() {
+  return std::string("/tmp/heavydb_command_history_home_") + std::to_string(::getuid()) +
+         "_" + std::to_string(::getpid());
+}
+
+const char* unitTestHomeDirectory() {
+  static const std::string path = makeUnitTestHomeDirectory();
+  return path.c_str();
+}
+
+std::string defaultHistoryPathFor(const char* home_dir) {
+  return std::string(home_dir) + '/' + getDefaultHistoryFilename();
+}
+
+std::string defaultResolvedHistoryPath() {
+  DefaultEnvResolver resolver;
+  if (auto* home_env = resolver.getenv("HOME")) {
+    return defaultHistoryPathFor(home_env);
+  }
+  if (auto* pw_dir = resolver.getpwdir(resolver.getuid())) {
+    return defaultHistoryPathFor(pw_dir);
+  }
+  return getDefaultHistoryFilename();
+}
 
 class DefaultUnitTestResolver {
  public:
@@ -35,48 +52,44 @@ class DefaultUnitTestResolver {
   GetEnvRetType getenv(ARGS&&...) const {
     return nullptr;
   }
-#ifndef _WIN32
   template <typename... ARGS>
   GetPWUIDRetType getpwuid(ARGS&&...) const {
     return nullptr;
   }
-#endif
   template <typename... ARGS>
   const char* getpwdir(ARGS&&...) const {
     return nullptr;
   }
-  auto getuid() const {
-    return ::getuid();
-  }
+  auto getuid() const { return ::getuid(); }
 };
 
 class NoHomeNoPWEntResolver : public DefaultUnitTestResolver {};
 
-class NoHomePWEntResolver : public DefaultEnvResolver {
+class NoHomePWEntResolver : public DefaultUnitTestResolver {
  public:
   template <typename... ARGS>
-  GetEnvRetType getenv(ARGS&&...) const {
-    return nullptr;
+  const char* getpwdir(ARGS&&...) const {
+    return unitTestHomeDirectory();
   }
 };
 
-class HomeResolver : public DefaultEnvResolver {
+class HomeResolver : public DefaultUnitTestResolver {
  public:
   template <typename... ARGS>
-  GetEnvRetType getenv(ARGS&&... args) const {
-    return DefaultEnvResolver::getenv(std::forward<ARGS>(args)...);
+  GetEnvRetType getenv(ARGS&&...) const {
+    return unitTestHomeDirectory();
   }
-#ifndef _WIN32
   template <typename... ARGS>
   GetPWUIDRetType getpwuid(ARGS&&...) const {
     throw std::runtime_error("Unexpected getpwuid() invocation.");
   }
-#endif
   template <typename... ARGS>
   const char* getpwdir(ARGS&&...) const {
     throw std::runtime_error("Unexpected getpwdir() invocation.");
   }
 };
+
+}  // namespace
 
 // Mock-base class equivalents of CommandHistoryFile
 using CommandHistoryFile_NoHomeNoPWEnt = CommandHistoryFileImpl<NoHomeNoPWEntResolver>;
@@ -89,20 +102,17 @@ TEST(CommandHistoryFile, NoHomeEnv) {
   ASSERT_EQ(std::string(getDefaultHistoryFilename()), std::string(cmd_file));
 
   CommandHistoryFile_NoHomePWEnt cmd_file2;
-  ASSERT_EQ(getHomeDirectory() + '/' + std::string(getDefaultHistoryFilename()),
-            std::string(cmd_file2));
+  ASSERT_EQ(defaultHistoryPathFor(unitTestHomeDirectory()), std::string(cmd_file2));
 }
 
 TEST(CommandHistoryFile, HomeEnv) {
   CommandHistoryFile_Home cmd_file;
-  ASSERT_EQ(getHomeDirectory() + '/' + std::string(getDefaultHistoryFilename()),
-            std::string(cmd_file));
+  ASSERT_EQ(defaultHistoryPathFor(unitTestHomeDirectory()), std::string(cmd_file));
 }
 
 TEST(CommandHistoryFile, Basic) {
   CommandHistoryFile cmd_file;
-  ASSERT_EQ(getHomeDirectory() + '/' + std::string(getDefaultHistoryFilename()),
-            std::string(cmd_file));
+  ASSERT_EQ(defaultResolvedHistoryPath(), std::string(cmd_file));
 }
 
 TEST(CommandHistoryFile, Custom) {
@@ -124,8 +134,7 @@ TEST(CommandHistoryFile, BoostProgramOptionsCompatibility_DefaultOption) {
   po::store(po::command_line_parser(fake_argc, fake_argv).options(desc).run(), vm);
   po::notify(vm);
 
-  ASSERT_EQ(getHomeDirectory() + '/' + std::string(getDefaultHistoryFilename()),
-            std::string(cmd_file));
+  ASSERT_EQ(defaultResolvedHistoryPath(), std::string(cmd_file));
 }
 
 TEST(CommandHistoryFile, BoostProgramOptionsCompatibility_SetOption) {

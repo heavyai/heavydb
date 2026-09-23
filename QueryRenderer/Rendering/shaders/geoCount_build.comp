@@ -1,0 +1,85 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//
+// Compute Shader to populate a buffer of work units
+// required to process a given set of geo rows, each with
+// variable-length data (points, rings etc.)
+//
+
+#extension GL_EXT_buffer_reference2 : require
+
+#define USE_SUBGROUPS <useSubgroups>
+
+#if USE_SUBGROUPS == 1
+#extension GL_KHR_shader_subgroup_vote: enable
+#extension GL_KHR_shader_subgroup_arithmetic: enable
+#endif
+
+#define WORKGROUP_SIZE <workgroupSize>
+#define WORKGROUP_SIZE_BITS <workgroupSizeBits>
+
+layout (local_size_x = WORKGROUP_SIZE, local_size_y = 1, local_size_z = 1) in;
+
+layout(std430) buffer WORK_UNIT_INDEX_SSBO {
+  uint32_t index;
+} work_unit_index_buffer;
+
+struct WorkUnit {
+  // row index into QOB
+  uint32_t row_index;
+  // packed value index base and count
+  // assuming a WORKGROUP_SIZE of 32 this is:
+  //   bottom 5 bits are count (0 means 32)
+  //   upper 27 bits are base
+  uint32_t value_index_base_and_count;
+};
+layout(std430) buffer WORK_UNITS_SSBO {
+  WorkUnit items[];
+} work_units_buffer;
+
+layout(std430) uniform BUILD_UBO {
+  uint64_t base_address;
+  uint32_t num_rows;
+  uint32_t num_columns;
+  uint32_t column_index;
+  uint32_t value_byte_size;
+};
+
+layout(buffer_reference, scalar, buffer_reference_align = 8) buffer QOB_DATA {
+  uint64_t items[];
+};
+
+void main() {
+  uint32_t row_index = gl_GlobalInvocationID.x;
+  if (row_index >= num_rows) {
+    return;
+  }
+
+  uint32_t item_index = (row_index * num_columns) + column_index;
+
+  uint64_t value_bytes = QOB_DATA(base_address).items[item_index];
+  uint32_t value_count = uint32_t(value_bytes / value_byte_size);
+  uint32_t workgroup_count = (value_count + WORKGROUP_SIZE - 1) / WORKGROUP_SIZE;
+
+  //
+  // non-subgroup version
+  //
+
+  // bump-allocate workgroup_count from the buffer
+  uint32_t work_unit_index = atomicAdd(work_unit_index_buffer.index, workgroup_count);
+
+  // populate that many work units
+  uint32_t value_index = 0u;
+  for (uint32_t i = 0u; i < workgroup_count; i++) {
+    uint32_t workgroup_value_count = min(WORKGROUP_SIZE, value_count);
+    uint32_t value_index_base_and_count = (value_index << WORKGROUP_SIZE_BITS) | (workgroup_value_count & (WORKGROUP_SIZE - 1));
+    work_units_buffer.items[work_unit_index].row_index = row_index;
+    work_units_buffer.items[work_unit_index].value_index_base_and_count = value_index_base_and_count;
+    value_index += workgroup_value_count;
+    value_count -= workgroup_value_count;
+    work_unit_index++;
+  }
+}

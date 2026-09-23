@@ -1,0 +1,128 @@
+# SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Dev encrypted JDBC test: HeavyDB + TLS + backend and JDBC client verification.
+# See dev-tools/integration-tests/generate-calcite-test-keystore.sh for TLS material generation.
+#
+# Invoked via dev-tools/integration-tests/encrypted-jdbc/run.sh:
+#   dev-tools/integration-tests/encrypted-jdbc/run.sh --build-dir build
+#
+# Test scripts live under dev-tools/integration-tests/encrypted-jdbc/ (bind-mounted via HEAVYDB_SOURCE).
+# Host bind-mount paths are exported by the run script (derived from pwd / ../).
+# No host port mappings: all traffic stays on the compose network.
+# HeavyDB storage defaults to /tmp/heavydb-data inside the container (ephemeral; removed with the container).
+# /heavydb-data is used only with --host-storage (bind mount); see host-storage compose override.
+# Optional host bind mount: docker-compose.host-storage.yml via run.sh --host-storage.
+# Optional empty Maven cache: docker-compose.empty-m2.yml via run.sh --empty-m2.
+#
+# Container user: run.sh exports USER_SPEC=$(id -u):$(id -g). All services use it so
+# bind-mounted repo, build, and Maven cache paths stay owned by the invoking user.
+# TLS material uses a named compose volume; ca-info-init chowns it for USER_SPEC.
+#
+# verify-backend-encryption: confirms encrypted HeavyDB<->Calcite connection via heavysql queries.
+# verify-jdbc runs tst3a-tst3d: all four HTTPS connection variants (default/supplied truststore x no-hostname-check/full-validation) via Maven.
+
+volumes:
+  encrypted_jdbc_ca_info:
+
+services:
+  ca-info-init:
+    image: ${HEAVYDB_IMAGE}
+    user: "0:0"
+    environment:
+      USER_SPEC: ${USER_SPEC}
+    volumes:
+      - encrypted_jdbc_ca_info:/heavydb-ca-info
+    entrypoint: ["/bin/sh", "-c", "chown -R \"$$USER_SPEC\" /heavydb-ca-info"]
+    restart: "no"
+
+  heavydb:
+    image: ${HEAVYDB_IMAGE}
+    user: "${USER_SPEC}"
+    container_name: ${HEAVYDB_CONTAINER_NAME}
+    working_dir: /heavydb
+    entrypoint: ["/heavydb/dev-tools/integration-tests/encrypted-jdbc/entrypoint.sh"]
+    depends_on:
+      ca-info-init:
+        condition: service_completed_successfully
+    environment:
+      HEAVYDB_DATA: /tmp/heavydb-data
+      CA_INFO_DIR: /heavydb-ca-info
+      OPENSSL_BIN: /usr/local/mapd-deps/bin/openssl
+      KEYTOOL_BIN: keytool
+    volumes:
+      - type: bind
+        source: ${HEAVYDB_SOURCE}
+        target: /heavydb
+      - type: bind
+        source: ${HEAVYDB_BUILD}
+        target: /heavydb-build
+      - encrypted_jdbc_ca_info:/heavydb-ca-info
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    shm_size: 2gb
+    cap_add:
+      - SYS_PTRACE
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "echo 'SELECT 1;' | /heavydb-build/bin/heavysql --ca-cert /heavydb-ca-info/ca/ca.crt -s localhost --port 6274 -u admin -p HyperInteractive -n -q heavyai",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+
+  verify-backend-encryption:
+    image: ${HEAVYDB_IMAGE}
+    user: "${USER_SPEC}"
+    container_name: ${HEAVYDB_VERIFY_CONTAINER_NAME}
+    working_dir: /heavydb
+    entrypoint: ["/heavydb/dev-tools/integration-tests/encrypted-jdbc/verify-backend-encryption.sh"]
+    depends_on:
+      heavydb:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      CA_INFO_DIR: /heavydb-ca-info
+    volumes:
+      - type: bind
+        source: ${HEAVYDB_SOURCE}
+        target: /heavydb
+      - type: bind
+        source: ${HEAVYDB_BUILD}
+        target: /heavydb-build
+      - encrypted_jdbc_ca_info:/heavydb-ca-info
+
+  verify-jdbc:
+    image: ${HEAVYDB_IMAGE}
+    user: "${USER_SPEC}"
+    container_name: ${HEAVYDB_JDBC_CONTAINER_NAME}
+    working_dir: /heavydb
+    entrypoint: ["/heavydb/dev-tools/integration-tests/encrypted-jdbc/docker-jdbc-runner.sh"]
+    depends_on:
+      heavydb:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      CA_INFO_DIR: /heavydb-ca-info
+      JDBC_TEST_HTTPS_URL: jdbc:heavyai:heavydb:6278
+      JDBC_TEST_METHOD: tst3a_https_encrypted_default_truststore_no_hostname_verification+tst3b_https_encrypted_supplied_truststore_no_hostname_verification+tst3c_https_encrypted_server_validation_default_truststore+tst3d_https_encrypted_with_server_validation_supplied_truststore
+    volumes:
+      - type: bind
+        source: ${HEAVYDB_SOURCE}
+        target: /heavydb
+      - type: bind
+        source: ${HEAVYDB_BUILD}
+        target: /heavydb-build
+      - encrypted_jdbc_ca_info:/heavydb-ca-info
+      # Host ~/.m2 → /m2; Maven uses /m2/repository (standard local repo layout).
+      - type: bind
+        source: ${MAVEN_REPO}
+        target: /m2

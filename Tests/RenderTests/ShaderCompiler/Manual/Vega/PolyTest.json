@@ -1,0 +1,62 @@
+{
+  "usermeta": {
+    "shortName": "ShaderCompilerTest-PolyTest",
+    "shaderArtifacts": [
+      "builder", "spirv"
+    ]
+  },
+  "width" : 1024,
+  "height" : 1024,
+  "data": [
+      {
+          "name" : "table",
+          "format" : "polys",
+          "values": [
+              {"x": [51.1, 51.1, 154.1, 154.1], "y": [51.1, 254.1, 254.1, 51.1], "population" : 100},
+              {"x": [75.1, 75.1, 207.1, 207.1], "y": [31.1, 174.1, 174.1, 31.1], "population" : 175},
+              {"x": [18.1, 18.1, 461.1, 461.1], "y": [61.1, 134.1, 134.1, 61.1], "population" : -250},
+              {"x": [563.1, 614.1, 666.1, 640.1, 589.1], "y": [256.1, 307.1, 256.1, 205.1, 205.1], "population" : 175},
+              {"x": [717.1, 768.1, 819.1], "y": [205.1, 307.1, 205.1], "population" : 225},
+              {"x": [870.1, 896.1, 947.1, 973.1, 947.1, 896.1], "y": [256.1, 307.1, 307.1, 256.1, 205.1, 205.1], "population" : 50},
+              {"x": [563.1, 614.1, 666.1, 640.1, 589.1], "y": [102.1, 154.1, 102.1, 51.1, 51.1], "population" : 0}
+          ]
+      }
+  ],
+  "scales" : [
+      {
+          "name" : "strokeColor",
+          "type" : "quantize",
+          "domain" : {"data" : "table", "field" : "population"},
+          "range" : ["indigo", "lawngreen", "purple", "wheat", "lightpink", "fuchsia"]
+      },
+      {
+          "name" : "fillColor",
+          "type" : "quantize",
+          "domain" : {"data" : "table", "field" : "population"},
+          "range" : ["cyan", "red", "magenta", "green", "yellow"]
+      }
+  ],
+  "marks" : [
+      {
+          "type" : "polys",
+          "from" : {"data" : "table"},
+          "properties" : {
+              "x" : {
+                  "field" : "x"
+              },
+              "y" : {
+                  "field" : "y"
+              },
+              "fillColor" : {
+                "scale" : "fillColor",
+                "field" : "population"
+              },
+              "strokeColor" : {
+                "scale" : "strokeColor",
+                "field" : "population"
+              },
+              "strokeWidth" : 10.1
+          }
+      }
+  ]
+}

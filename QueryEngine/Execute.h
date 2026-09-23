@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef QUERYENGINE_EXECUTE_H
@@ -69,7 +58,6 @@
 #include "DataMgr/Chunk/Chunk.h"
 #include "Logger/Logger.h"
 #include "Shared/DbObjectKeys.h"
-#include "Shared/LruCache.h"
 #include "Shared/SystemParameters.h"
 #include "Shared/funcannotations.h"
 #include "Shared/heavyai_shared_mutex.h"
@@ -78,6 +66,7 @@
 #include "Shared/toString.h"
 #include "StringDictionary/StringDictionary.h"
 #include "StringDictionary/StringDictionaryProxy.h"
+#include "ThirdParty/LruCache/LruCache.h"
 #include "ThriftHandler/CommandLineOptions.h"
 
 namespace gfx {
@@ -307,9 +296,6 @@ class CompilationRetryNoCompaction : public std::runtime_error {
 // whatever reason we still run out of memory. In those cases we go down the
 // handleOutOfMemoryRetry path, which will first try per-fragment execution on GPU,
 // and if that fails, CPU execution.
-// Note that for distributed execution failures on leaves, we do not retry queries
-// TODO(todd): See if CPU retry of individual steps can be turned on safely for
-// distributed
 
 class QueryMustRunOnCpu : public std::runtime_error {
  public:
@@ -1678,10 +1664,8 @@ class Executor {
   friend class ResultSet;
   friend class InValuesBitmap;
   friend class StringDictionaryTranslationMgr;
-  friend class LeafAggregator;
   friend class PerfectJoinHashTable;
   friend class QueryRewriter;
-  friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
   friend class TableOptimizer;
   friend class TableFunctionCompilationContext;

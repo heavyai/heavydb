@@ -9,5 +9,5 @@ Data Model
     columnar_layout
     physical_layout
     memory_layout
-    api
     types
+    dump_restore

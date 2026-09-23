@@ -1,0 +1,32 @@
+{
+  "sources": [
+    {
+      "filename": "shaderRedecoratorTest.vert",
+      "file_path": ".",
+      "internal_path": "ShaderCompilerTests/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "shaderRedecoratorTest.frag",
+      "file_path": ".",
+      "internal_path": "ShaderCompilerTests/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "shaderRedecoratorClashTest.vert",
+      "file_path": ".",
+      "internal_path": "ShaderCompilerTests/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "shaderRedecoratorClashTest.frag",
+      "file_path": ".",
+      "internal_path": "ShaderCompilerTests/",
+      "language": "glsl",
+      "class": "fragment"
+    }
+  ]
+}

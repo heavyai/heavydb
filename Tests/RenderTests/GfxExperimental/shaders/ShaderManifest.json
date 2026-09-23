@@ -1,0 +1,74 @@
+{
+  "sources": [
+    {
+      "filename": "meshShaderTriangleTest.mesh",
+      "file_path": ".",
+      "internal_path": "ExperimentalTests/",
+      "language": "glsl",
+      "class": "mesh"
+    },
+    {
+      "filename": "meshShaderTriangleTest.frag",
+      "file_path": ".",
+      "internal_path": "ExperimentalTests/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "meshShaderWorkgroupIDTest.mesh",
+      "file_path": ".",
+      "internal_path": "ExperimentalTests/",
+      "language": "glsl",
+      "class": "mesh"
+    },
+    {
+      "filename": "meshShaderWorkgroupIDTest.frag",
+      "file_path": ".",
+      "internal_path": "ExperimentalTests/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "meshShaderPointsTest.mesh",
+      "file_path": ".",
+      "internal_path": "ExperimentalTests/",
+      "language": "glsl",
+      "class": "mesh"
+    },
+    {
+      "filename": "meshShaderPointsTest.frag",
+      "file_path": ".",
+      "internal_path": "ExperimentalTests/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "taskShaderTest.task",
+      "file_path": ".",
+      "internal_path": "ExperimentalTests/",
+      "language": "glsl",
+      "class": "task"
+    },
+    {
+      "filename": "taskShaderTest.mesh",
+      "file_path": ".",
+      "internal_path": "ExperimentalTests/",
+      "language": "glsl",
+      "class": "mesh"
+    },
+    {
+      "filename": "taskShaderTest.frag",
+      "file_path": ".",
+      "internal_path": "ExperimentalTests/",
+      "language": "glsl",
+      "class": "fragment"
+    },
+    {
+      "filename": "testUtils.glsl",
+      "file_path": "../../GfxDriver/shaders",
+      "internal_path": "DriverTests/",
+      "language": "glsl",
+      "class": "glsl"
+    }
+  ]
+}

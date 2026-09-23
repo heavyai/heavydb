@@ -1,3 +1,8 @@
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
+
 #.rst:
 # FindRdKafka.cmake
 # -------------
@@ -72,7 +77,20 @@ find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 
 # Set standard CMake FindPackage variables if found.
-set(RdKafka_LIBRARIES ${RdKafka++_LIBRARY} ${RdKafka_LIBRARY} ${lz4_LIBRARY} ${OPENSSL_LIBRARIES} ${ZLIB_LIBRARIES} ${CMAKE_DL_LIBS})
+set(RdKafka_LIBRARIES
+  ${RdKafka++_LIBRARY}
+  ${RdKafka_LIBRARY}
+  ${lz4_LIBRARY}
+  ${OPENSSL_LIBRARIES}
+  ${ZLIB_LIBRARIES}
+  ${CMAKE_DL_LIBS})
+# Static librdkafka may be built with libcurl (HTTP/OAuth support).
+if(NOT CURL_FOUND)
+  find_package(CURL QUIET)
+endif()
+if(CURL_FOUND)
+  list(APPEND RdKafka_LIBRARIES ${CURL_LIBRARIES})
+endif()
 set(RdKafka_LIBRARY_DIRS ${RdKafka_LIBRARY_DIR})
 set(RdKafka_INCLUDE_DIRS ${RdKafka_LIBRARY_DIR}/../include)
 

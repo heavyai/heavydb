@@ -1,64 +1,92 @@
 .. HeavyDB Quickstart
 
-###########################
-Start and Load Sample Data
-###########################
+#############
+Start HeavyDB
+#############
 
-Starting the Server
-===================
+After a :doc:`./build`, artifacts live under ``build/<distro>/`` (dev-script) or
+your cmake build directory (manual path).
 
-The `startheavy` wrapper script may be used to start HeavyDB in a testing environment. This script performs the following tasks:
+What you need for a working UI
+==============================
 
-* initializes the server `data` directory via ``initheavy``, if required
-* starts the HeavyDB server, ``heavydb``
-* offers to download and import a sample dataset using the `insert_sample_data` script if flag ``--sample-data`` is provided
+A usable Immerse session on port **6273** needs all three:
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `heavydb` repository, `startheavy` may be run by:
+* ``heavydb`` (and friends: ``initheavy``, ``heavysql``)
+* ``frontend/`` — Immerse static assets
+* ``bin/heavy_web_server`` — serves Immerse
 
-.. code-block::shell
+Engine-only trees answer SQL on **6274** / **6278**; **6273** stays blank or
+missing until the frontend and web server are present. That is the usual
+"I built heavydb but the browser is empty" failure mode.
+
+Using ``startheavy``
+====================
+
+From a build directory that contains ``bin/`` (for a cmake build directly under
+the repo, that is often ``build/``; for ``dev-tools`` output, use
+``build/<distro>/``):
+
+.. code-block:: bash
 
     ../startheavy
+    # or, from repo root pointing at the build tree you care about:
+    #   ./startheavy --data ...   # see startheavy --help / scripts/innerstartheavy
 
-Starting Manually
------------------
+``startheavy`` will:
 
-It is assumed that the following commands are run from inside the `build` directory.
+* initialize the ``storage`` directory with ``initheavy`` when needed;
+* start ``heavydb``;
+* start ``heavy_web_server`` when both the binary and a ``frontend`` directory
+  exist; and
+* start HeavyIQ when its directory is present.
 
-Initialize the `data` storage directory. This command only needs to be run once.
+Useful flags: ``--data PATH``, ``--config PATH``, ``--base-port PORT``,
+``--non-interactive``. Extra arguments are forwarded to ``heavydb``.
 
-.. code-block:: shell
+Default ports
+=============
 
-    mkdir data && ./bin/initheavy data
+============= ============================
+Service       Default port
+============= ============================
+Thrift TCP    6274
+HTTP/JSON     6278
+HTTP/binary   6276
+Calcite       6279
+Web / Immerse 6273
+============= ============================
 
-Start the HeavyDB server:
+Manual start
+============
 
-.. code-block:: shell
+From the build directory:
 
-    ./bin/heavydb
+.. code-block:: bash
 
-You can now start using the database. The `heavysql` utility may be used to interact with the database from the command line:
+    mkdir -p storage
+    ./bin/initheavy -f --data storage
+    ./bin/heavydb storage
 
-.. code-block::shell
+In another terminal:
+
+.. code-block:: bash
 
     ./bin/heavysql -p HyperInteractive
 
-where `HyperInteractive` is the default password. The default user `admin` is assumed if not provided.
+Default development user is ``admin``; password ``HyperInteractive``.
 
-Working With Data
-=================
+If the web server was built:
 
-Users can always insert a sample dataset by running the included `insert_sample_data` script:
+.. code-block:: bash
 
-.. code-block:: shell
+    ./bin/heavy_web_server
 
-    ../insert_sample_data
+Then open http://localhost:6273 when a frontend is present.
 
-HeavyDB also provides a variety of utilities for loading data into a table:
+Product Docker image
+====================
 
-* `COPY FROM <https://www.heavy.ai/docs/latest/6_loading_data.html#copy-from>`_
-* `SQLImporter <https://www.heavy.ai/docs/latest/6_loading_data.html#sqlimporter>`_
-* `StreamInsert <https://www.heavy.ai/docs/latest/6_loading_data.html#streaminsert>`_
-* `Importing AWS S3 Files <https://www.heavy.ai/docs/latest/6_loading_data.html#importing-aws-s3-files>`_
-* `KafkaImporter <https://www.heavy.ai/docs/latest/6_loading_data.html#kafkaimporter>`_
-* `StreamImporter <https://www.heavy.ai/docs/latest/6_loading_data.html#streamimporter>`_
-* `HDFS with Sqoop <https://www.heavy.ai/docs/latest/6_loading_data.html#hdfs>`_
+If you built with ``dev-tools/dev.sh build all --docker`` (or equivalent), run
+the resulting product image with your usual Docker GPU/port mappings. Prefer
+that path when you want the packaged layout rather than a raw build tree.

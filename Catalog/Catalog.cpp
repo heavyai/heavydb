@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2014-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -57,7 +46,6 @@
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/AbstractFileStorageDataWrapper.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DataMgr/ForeignStorage/FsiChunkUtils.h"
 #include "DataMgr/ForeignStorage/RegexParserDataWrapper.h"
 #include "Fragmenter/Fragmenter.h"
@@ -66,7 +54,6 @@
 #include "Fragmenter/SortedOrderFragmenter.h"
 #include "LockMgr/LockMgr.h"
 #include "MigrationMgr/MigrationMgr.h"
-#include "OSDependent/heavyai_path.h"
 #include "Parser/ParserNode.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -75,15 +62,14 @@
 #include "Shared/File.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
+#include "Shared/heavyai_path.h"
 #include "Shared/measure.h"
 #include "Shared/misc.h"
-#include "StringDictionary/StringDictionaryClient.h"
+#include "Shared/timedate.h"
 
 #include "MapDRelease.h"
 #include "RWLocks.h"
 #include "SharedDictionaryValidator.h"
-
-#include "Shared/distributed.h"
 
 using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
@@ -98,8 +84,6 @@ using std::vector;
 
 bool g_enable_fsi{true};
 bool g_enable_s3_fsi{false};
-int32_t g_distributed_leaf_idx{-1};
-int32_t g_distributed_num_leaves{0};
 bool g_enable_logs_system_tables{true};
 bool g_enable_logs_system_tables_auto_refresh{false};
 // 10 minutes refresh interval by default
@@ -133,7 +117,7 @@ using cat_sqlite_lock = sqlite_lock<Catalog>;
 // next release will remove old table, doing this to have fall back path
 // incase of migration failure
 void Catalog::updateFrontendViewsToDashboards() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(
@@ -174,41 +158,36 @@ inline auto table_json_filepath(const std::string& base_path,
 std::map<int32_t, std::string> get_user_id_to_user_name_map();
 }  // namespace
 
-Catalog::Catalog() {}
-
 Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                 const std::vector<LeafHostInfo>& string_dict_hosts,
                  std::shared_ptr<Calcite> calcite,
-                 bool is_new_db)
+                 bool is_new_db,
+                 const std::map<int32_t, std::string>& user_id_name_map,
+                 const UserMetadata& root_user)
     : basePath_(basePath)
     , sqliteConnector_(curDB.dbName, basePath + "/" + shared::kCatalogDirectoryName + "/")
     , currentDB_(curDB)
     , dataMgr_(dataMgr)
-    , string_dict_hosts_(string_dict_hosts)
     , calciteMgr_(calcite)
     , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
-    , nextTempDictId_(MAPD_TEMP_DICT_START_ID)
-    , dcatalogMutex_(std::make_unique<heavyai::DistributedSharedMutex>(
-          std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
-              shared::kCatalogDirectoryName / (currentDB_.dbName + ".lockfile"),
-          [this](size_t) {
-            if (!initialized_) {
-              return;
-            }
-            const auto user_name_by_user_id = get_user_id_to_user_name_map();
-            heavyai::unique_lock<heavyai::DistributedSharedMutex> dsqlite_lock(
-                *dsqliteMutex_);
-            reloadCatalogMetadataUnlocked(user_name_by_user_id);
-          }))
-    , dsqliteMutex_(std::make_unique<heavyai::DistributedSharedMutex>(
-          std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
-          shared::kCatalogDirectoryName / (currentDB_.dbName + ".sqlite.lockfile")))
-    , sqliteMutex_()
-    , sharedMutex_()
-    , thread_holding_sqlite_lock()
-    , thread_holding_write_lock() {
+    , nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
+  mutex_desc_.dist_mutex = std::make_unique<heavyai::DistributedSharedMutex>(
+      std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
+          shared::kCatalogDirectoryName / (currentDB_.dbName + ".lockfile"),
+      [this](size_t) {
+        if (!initialized_) {
+          return;
+        }
+        const auto user_name_by_user_id = get_user_id_to_user_name_map();
+        heavyai::unique_lock<heavyai::DistributedSharedMutex> dsqlite_lock(
+            *sqlite_mutex_desc_.dist_mutex);
+        reloadCatalogMetadataUnlocked(user_name_by_user_id);
+      });
+  sqlite_mutex_desc_.dist_mutex = std::make_unique<heavyai::DistributedSharedMutex>(
+      std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
+      shared::kCatalogDirectoryName / (currentDB_.dbName + ".sqlite.lockfile"));
+
   if (!g_enable_fsi) {
     CHECK(!g_enable_system_tables) << "System tables require FSI to be enabled";
     CHECK(!g_enable_s3_fsi) << "S3 FSI requires FSI to be enabled";
@@ -218,18 +197,18 @@ Catalog::Catalog(const string& basePath,
     CheckAndExecuteMigrations();
   }
 
-  buildMaps();
+  buildMaps(user_id_name_map);
 
   if (g_enable_fsi) {
     createDefaultServersIfNotExists();
   }
   if (!is_new_db) {
-    CheckAndExecuteMigrationsPostBuildMaps();
+    createDashboardSystemRoles();
   }
   if (g_serialize_temp_tables) {
     boost::filesystem::remove(table_json_filepath(basePath_, currentDB_.dbName));
   }
-  conditionallyInitializeSystemObjects();
+  conditionallyInitializeSystemObjects(root_user);
   // once all initialized use real object
   initialized_ = true;
 }
@@ -260,16 +239,28 @@ Catalog::~Catalog() {
   }
 }
 
-const Catalog* Catalog::getObjForLock() {
-  if (initialized_) {
-    return this;
-  } else {
-    return SysCatalog::instance().getDummyCatalog().get();
+void Catalog::updateColumnDescriptorSchema() {
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_columns)");
+    std::vector<std::string> cols;
+    for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
+      cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("comment")) == cols.end()) {
+      string query_string("ALTER TABLE mapd_columns ADD comment TEXT DEFAULT NULL");
+      sqliteConnector_.query(query_string);
+    }
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
   }
+  sqliteConnector_.query("END TRANSACTION");
 }
 
 void Catalog::updateTableDescriptorSchema() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_tables)");
@@ -340,7 +331,7 @@ void Catalog::updateTableDescriptorSchema() {
 }
 
 void Catalog::updateFixlenArrayColumns() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(
@@ -378,7 +369,7 @@ void Catalog::updateFixlenArrayColumns() {
 }
 
 void Catalog::updateGeoColumns() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(
@@ -420,7 +411,7 @@ void Catalog::updateGeoColumns() {
 }
 
 void Catalog::updateFrontendViewSchema() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     // check table still exists
@@ -455,7 +446,7 @@ void Catalog::updateFrontendViewSchema() {
 }
 
 void Catalog::updateLinkSchema() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(
@@ -478,7 +469,7 @@ void Catalog::updateLinkSchema() {
 }
 
 void Catalog::updateFrontendViewAndLinkUsers() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query("UPDATE mapd_links SET userid = 0 WHERE userid IS NULL");
@@ -506,7 +497,7 @@ void Catalog::updateFrontendViewAndLinkUsers() {
 // old value
 
 void Catalog::updatePageSize() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   if (currentDB_.dbName.length() == 0) {
     // updateDictionaryNames dbName length is zero nothing to do here
     return;
@@ -536,7 +527,7 @@ void Catalog::updatePageSize() {
 }
 
 void Catalog::updateDeletedColumnIndicator() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_columns)");
@@ -563,7 +554,7 @@ void Catalog::updateDeletedColumnIndicator() {
 }
 
 void Catalog::updateDefaultColumnValues() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_columns)");
@@ -587,7 +578,7 @@ void Catalog::updateDefaultColumnValues() {
 // if the DB does not have a version rename all dictionary tables
 
 void Catalog::updateDictionaryNames() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   if (currentDB_.dbName.length() == 0) {
     // updateDictionaryNames dbName length is zero nothing to do here
     return;
@@ -639,7 +630,7 @@ void Catalog::updateDictionaryNames() {
 }
 
 void Catalog::updateLogicalToPhysicalTableLinkSchema() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(
@@ -657,7 +648,7 @@ void Catalog::updateLogicalToPhysicalTableMap(const int32_t logical_tb_id) {
    * sqlite mapd_logical_to_physical table for given logical_tb_id as needed
    */
 
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     const auto physicalTableIt = logicalToPhysicalTableMapById_.find(logical_tb_id);
@@ -681,7 +672,7 @@ void Catalog::updateLogicalToPhysicalTableMap(const int32_t logical_tb_id) {
 }
 
 void Catalog::updateDictionarySchema() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_dictionaries)");
@@ -700,11 +691,14 @@ void Catalog::updateDictionarySchema() {
 }
 
 void Catalog::updateFsiSchemas() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(getForeignServerSchema(true));
     sqliteConnector_.query(getForeignTableSchema(true));
+    if (g_enable_fsi) {
+      sqliteConnector_.query(getUserMappingSchema(true));
+    }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -714,7 +708,7 @@ void Catalog::updateFsiSchemas() {
 
 void Catalog::renameLegacyDataWrappers() {
   // TODO: Move common migration logic to a shared function.
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(
@@ -745,6 +739,9 @@ void Catalog::renameLegacyDataWrappers() {
       {"OMNISCI_CSV", DataWrapperType::CSV},
       {"OMNISCI_PARQUET", DataWrapperType::PARQUET},
       {"OMNISCI_REGEX_PARSER", DataWrapperType::REGEX_PARSER},
+#if defined(EE_FSI_ODBC)
+      {"OMNISCI_ODBC", DataWrapperType::ODBC},
+#endif
       {"OMNISCI_INTERNAL_CATALOG", DataWrapperType::INTERNAL_CATALOG},
       {"INTERNAL_OMNISCI_MEMORY_STATS", DataWrapperType::INTERNAL_MEMORY_STATS},
       {"INTERNAL_OMNISCI_STORAGE_STATS", DataWrapperType::INTERNAL_STORAGE_STATS}
@@ -771,7 +768,7 @@ void Catalog::renameLegacyDataWrappers() {
 }
 
 void Catalog::updateCustomExpressionsSchema() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     sqliteConnector_.query(getCustomExpressionsSchema(true));
@@ -805,7 +802,7 @@ const std::string Catalog::getCustomExpressionsSchema(bool if_not_exists) {
 }
 
 void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   std::vector<DBObject> objects;
   try {
@@ -933,7 +930,7 @@ void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
 }
 
 void Catalog::checkDateInDaysColumnMigration() {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   migrations::MigrationMgr::migrateDateInDaysMetadata(
       tableDescriptorMapById_, getCurrentDB().dbId, this, sqliteConnector_);
 }
@@ -948,7 +945,7 @@ void Catalog::createDashboardSystemRoles() {
   std::vector<std::string> dashboard_ids;
   static const std::string migration_name{"dashboard_roles_migration"};
   {
-    cat_sqlite_lock sqlite_lock(getObjForLock());
+    cat_sqlite_lock sqlite_lock(this);
     sqliteConnector_.query("BEGIN TRANSACTION");
     try {
       // migration_history should be present in all catalogs by now
@@ -1000,7 +997,7 @@ void Catalog::createDashboardSystemRoles() {
             result->second);
       }
     }
-    cat_sqlite_lock sqlite_lock(getObjForLock());
+    cat_sqlite_lock sqlite_lock(this);
     // check if this has already been completed
     sqliteConnector_.query(
         "select * from mapd_version_history where migration_history = '" +
@@ -1019,29 +1016,9 @@ void Catalog::createDashboardSystemRoles() {
   LOG(INFO) << "Successfully created dashboard system roles during migration.";
 }
 
-void Catalog::updateColumnDescriptorSchema() {
-  cat_sqlite_lock sqlite_lock(this);
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query("PRAGMA TABLE_INFO(mapd_columns)");
-    std::vector<std::string> cols;
-    for (size_t i = 0; i < sqliteConnector_.getNumRows(); i++) {
-      cols.push_back(sqliteConnector_.getData<std::string>(i, 1));
-    }
-    if (std::find(cols.begin(), cols.end(), std::string("comment")) == cols.end()) {
-      string query_string("ALTER TABLE mapd_columns ADD comment TEXT DEFAULT NULL");
-      sqliteConnector_.query(query_string);
-    }
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
-  }
-  sqliteConnector_.query("END TRANSACTION");
-}
-
 void Catalog::CheckAndExecuteMigrations() {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   updateTableDescriptorSchema();
   updateColumnDescriptorSchema();
   updateFixlenArrayColumns();
@@ -1062,11 +1039,6 @@ void Catalog::CheckAndExecuteMigrations() {
   }
   updateCustomExpressionsSchema();
   updateDefaultColumnValues();
-}
-
-void Catalog::CheckAndExecuteMigrationsPostBuildMaps() {
-  checkDateInDaysColumnMigration();
-  createDashboardSystemRoles();
 }
 
 namespace {
@@ -1123,7 +1095,7 @@ void Catalog::buildDictionaryMapUnlocked() {
 // NOTE(sy): Only used by --multi-instance clusters.
 void Catalog::reloadTableMetadata(int table_id) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   reloadTableMetadataUnlocked(table_id);
 }
 
@@ -1221,7 +1193,7 @@ void Catalog::reloadTableMetadataUnlocked(int table_id) {
 void Catalog::reloadCatalogMetadata(
     const std::map<int32_t, std::string>& user_name_by_user_id) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   reloadCatalogMetadataUnlocked(get_user_id_to_user_name_map());
 }
 
@@ -1285,10 +1257,14 @@ void Catalog::reloadCatalogMetadataUnlocked(
   linkDescriptorMapById_.clear();
   foreignServerMap_.clear();
   foreignServerMapById_.clear();
+#if defined(HAVE_AWS_S3)
+  userMappingMap_.clear();
+#endif  // defined(HAVE_AWS_S3)
   custom_expr_map_by_id_.clear();
 
   if (g_enable_fsi) {
     buildForeignServerMapUnlocked();
+    buildUserMappingMapUnlocked();
   }
 
   updateViewsInMapUnlocked();
@@ -1617,14 +1593,9 @@ void Catalog::buildLogicalToPhysicalMapUnlocked() {
 // The catalog uses a series of maps to cache data that have been read from the sqlite
 // tables. Usually we update these maps whenever we write using sqlite, so this function
 // is responsible for initializing all of them based on the sqlite db state.
-void Catalog::buildMaps() {
-  // Get all user id to username mapping here in order to avoid making a call to
-  // SysCatalog (and attempting to acquire SysCatalog locks) while holding locks for this
-  // catalog.
-  const auto user_name_by_user_id = get_user_id_to_user_name_map();
-
+void Catalog::buildMaps(const std::map<int32_t, std::string>& user_name_by_user_id) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
 
   buildDictionaryMapUnlocked();
   buildTablesMapUnlocked();
@@ -1632,6 +1603,7 @@ void Catalog::buildMaps() {
   if (g_enable_fsi) {
     buildForeignServerMapUnlocked();
     updateForeignTablesInMapUnlocked();
+    buildUserMappingMapUnlocked();
   }
 
   buildColumnsMapUnlocked();
@@ -1707,20 +1679,13 @@ void Catalog::addTableToMap(const TableDescriptor* td,
   // TODO(sy): Why does addTableToMap() sort columnIdBySpi_ but not insert into it while
   // buildColumnsMapUnlocked() does both?
 
-  std::unique_ptr<StringDictionaryClient> client;
   DictRef dict_ref(currentDB_.dbId, -1);
-  if (!string_dict_hosts_.empty()) {
-    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dict_ref, true));
-  }
   for (auto dd : dicts) {
     if (!dd.dictRef.dictId) {
       // Dummy entry created for a shard of a logical table, nothing to do.
       continue;
     }
     dict_ref.dictId = dd.dictRef.dictId;
-    if (client) {
-      client->create(dict_ref, dd.dictIsTemp);
-    }
     DictDescriptor* new_dd = new DictDescriptor(dd);
     dictDescriptorMapByRef_[dict_ref].reset(new_dd);
     if (!dd.dictIsTemp) {
@@ -1752,13 +1717,6 @@ void Catalog::removeTableFromMap(const string& tableName,
 
   bool isTemp = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
   delete td;
-
-  std::unique_ptr<StringDictionaryClient> client;
-  if (SysCatalog::instance().isAggregator()) {
-    CHECK(!string_dict_hosts_.empty());
-    DictRef dict_ref(currentDB_.dbId, -1);
-    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dict_ref, true));
-  }
 
   // delete all column descriptors for the table
   // no more link columnIds to sequential indexes!
@@ -1798,9 +1756,6 @@ void Catalog::removeTableFromMap(const string& tableName,
           dd->stringDict.reset();
           if (!isTemp) {
             File_Namespace::renameForDelete(dd->dictFolderPath);
-          }
-          if (client) {
-            client->drop(dict_ref);
           }
           dictDescriptorMapByRef_.erase(dictIt);
         }
@@ -2074,17 +2029,12 @@ const DictDescriptor* Catalog::getMetadataForDict(const int dict_id,
     std::lock_guard string_dict_lock(*dd->string_dict_mutex);
     if (!dd->stringDict) {
       auto time_ms = measure<>::execution([&]() {
-        if (string_dict_hosts_.empty()) {
-          if (dd->dictIsTemp) {
-            dd->stringDict = std::make_shared<StringDictionary>(
-                dd->dictRef, dd->dictFolderPath, true, true, g_cache_string_hash);
-          } else {
-            dd->stringDict = std::make_shared<StringDictionary>(
-                dd->dictRef, dd->dictFolderPath, false, true, g_cache_string_hash);
-          }
+        if (dd->dictIsTemp) {
+          dd->stringDict = std::make_shared<StringDictionary>(
+              dd->dictRef, dd->dictFolderPath, true, true, g_cache_string_hash);
         } else {
-          dd->stringDict =
-              std::make_shared<StringDictionary>(string_dict_hosts_.front(), dd->dictRef);
+          dd->stringDict = std::make_shared<StringDictionary>(
+              dd->dictRef, dd->dictFolderPath, false, true, g_cache_string_hash);
         }
       });
       LOG(INFO) << "Time to load Dictionary " << dd->dictRef.dbId << "_"
@@ -2093,10 +2043,6 @@ const DictDescriptor* Catalog::getMetadataForDict(const int dict_id,
   }
 
   return dd.get();
-}
-
-const std::vector<LeafHostInfo>& Catalog::getStringDictionaryHosts() const {
-  return string_dict_hosts_;
 }
 
 const ColumnDescriptor* Catalog::getMetadataForColumn(int tableId,
@@ -2207,7 +2153,7 @@ void Catalog::deleteMetadataForDashboards(const std::vector<int32_t> dashboard_i
   SysCatalog::instance().revokeDBObjectPrivilegesFromAllBatch(dash_objs, this);
   {
     cat_write_lock write_lock(this);
-    cat_sqlite_lock sqlite_lock(getObjForLock());
+    cat_sqlite_lock sqlite_lock(this);
 
     sqliteConnector_.query("BEGIN TRANSACTION");
     try {
@@ -2449,15 +2395,6 @@ DictRef Catalog::addDictionaryNontransactional(ColumnDescriptor& cd) {
   auto& dd = dds.back();
   CHECK(dd.dictRef.dictId);
 
-  std::unique_ptr<StringDictionaryClient> client;
-  if (!string_dict_hosts_.empty()) {
-    client.reset(new StringDictionaryClient(
-        string_dict_hosts_.front(), DictRef(currentDB_.dbId, -1), true));
-  }
-  if (client) {
-    client->create(dd.dictRef, dd.dictIsTemp);
-  }
-
   DictDescriptor* new_dd = new DictDescriptor(dd);
   dictDescriptorMapByRef_[dd.dictRef].reset(new_dd);
   if (!dd.dictIsTemp) {
@@ -2481,7 +2418,7 @@ void Catalog::delDictionaryTransactional(const ColumnDescriptor& cd) {
 
 void Catalog::delDictionaryNontransactional(const ColumnDescriptor& cd) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   if (!(cd.columnType.is_string() || cd.columnType.is_string_array())) {
     return;
   }
@@ -2510,14 +2447,6 @@ void Catalog::delDictionaryNontransactional(const ColumnDescriptor& cd) {
   File_Namespace::renameForDelete(g_base_path + "/" + shared::kDataDirectoryName +
                                   "/DB_" + std::to_string(currentDB_.dbId) + "_DICT_" +
                                   std::to_string(dictId));
-
-  std::unique_ptr<StringDictionaryClient> client;
-  if (!string_dict_hosts_.empty()) {
-    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dictRef, true));
-  }
-  if (client) {
-    client->drop(dictRef);
-  }
 
   dictDescriptorMapByRef_.erase(dictRef);
 }
@@ -2854,6 +2783,7 @@ void Catalog::dropColumnNontransactional(const TableDescriptor& td,
 }
 
 void Catalog::dropColumnPolicies(const TableDescriptor& td, const ColumnDescriptor& cd) {
+  SysCatalog::instance().dropPoliciesForColumn(*this, td.tableName, cd.columnName);
 
   // for each shard
   if (td.nShards > 0 && td.shard < 0) {
@@ -2867,9 +2797,12 @@ void Catalog::dropColumnPolicies(const TableDescriptor& td, const ColumnDescript
 
 // NOTE: this function is deprecated
 void Catalog::dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd) {
+  SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
+      DBObject(td.tableName, cd.columnName, ColumnDBObjectType), this);
+  SysCatalog::instance().dropPoliciesForColumn(*this, td.tableName, cd.columnName);
   {
     cat_write_lock write_lock(this);
-    cat_sqlite_lock sqlite_lock(getObjForLock());
+    cat_sqlite_lock sqlite_lock(this);
     // caller must handle sqlite/chunk transaction TOGETHER
     sqliteConnector_.query_with_text_params(
         "DELETE FROM mapd_columns where tableid = ? and columnid = ?",
@@ -3159,16 +3092,6 @@ void Catalog::createTable(
   std::set<std::string> toplevel_column_names;
   list<ColumnDescriptor> columns;
 
-  // TODO(Misiu): TableDescriptors should not be allowed to have empty storage types.
-  // Currently this semes to imply non-ForeignTable fsi, but we should change this.
-  if (!td.storageType.empty() &&
-      (!g_enable_fsi || td.storageType != StorageType::FOREIGN_TABLE)) {
-    if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
-      throw std::runtime_error("Only temporary tables can be backed by foreign storage.");
-    }
-    dataMgr_->getForeignStorageInterface()->prepareTable(getCurrentDB().dbId, td, cds);
-  }
-
   for (auto cd : cds) {
     if (cd.columnName == "rowid") {
       throw std::runtime_error(
@@ -3213,7 +3136,7 @@ void Catalog::createTable(
 
   td.nColumns = columns.size();
   // TODO(sy): don't take disk locks or touch sqlite connector for temporary tables
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     try {
@@ -3377,9 +3300,6 @@ void Catalog::createTable(
 
     addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
-    if (!td.storageType.empty() && td.storageType != StorageType::FOREIGN_TABLE) {
-      dataMgr_->getForeignStorageInterface()->registerTable(this, td, cds);
-    }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     removeTableFromMap(td.tableName, td.tableId, true);
@@ -3502,7 +3422,7 @@ void Catalog::createForeignServer(
     std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
     bool if_not_exists) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   createForeignServerNoLocks(std::move(foreign_server), if_not_exists);
 }
 
@@ -3563,7 +3483,7 @@ const foreign_storage::ForeignServer* Catalog::getForeignServer(
 const std::unique_ptr<const foreign_storage::ForeignServer>
 Catalog::getForeignServerFromStorage(const std::string& server_name) {
   std::unique_ptr<foreign_storage::ForeignServer> foreign_server = nullptr;
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query_with_text_params(
       "SELECT id, name, data_wrapper_type, options, owner_user_id, creation_time "
       "FROM omnisci_foreign_servers WHERE name = ?",
@@ -3583,7 +3503,7 @@ Catalog::getForeignServerFromStorage(const std::string& server_name) {
 const std::unique_ptr<const foreign_storage::ForeignTable>
 Catalog::getForeignTableFromStorage(int table_id) {
   std::unique_ptr<foreign_storage::ForeignTable> foreign_table = nullptr;
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query_with_text_params(
       "SELECT table_id, server_id, options, last_refresh_time, next_refresh_time from "
       "omnisci_foreign_tables WHERE table_id = ?",
@@ -3667,7 +3587,7 @@ void Catalog::renameForeignServer(const std::string& server_name,
 
 void Catalog::dropForeignServer(const std::string& server_name) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
 
   sqliteConnector_.query_with_text_params(
       "SELECT id from omnisci_foreign_servers where name = ?",
@@ -3686,6 +3606,9 @@ void Catalog::dropForeignServer(const std::string& server_name) {
     }
     sqliteConnector_.query("BEGIN TRANSACTION");
     try {
+      if (g_enable_fsi) {
+        dropAllUserMappingsForServer(server_id);
+      }
       sqliteConnector_.query_with_text_params(
           "DELETE FROM omnisci_foreign_servers WHERE name = ?",
           std::vector<std::string>{server_name});
@@ -3705,7 +3628,7 @@ void Catalog::getForeignServersForUser(
     std::vector<const foreign_storage::ForeignServer*>& results) {
   sys_read_lock syscat_read_lock(&SysCatalog::instance());
   cat_read_lock read_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   // Customer facing and internal SQlite names
   std::map<std::string, std::string> col_names{{"server_name", "name"},
                                                {"data_wrapper", "data_wrapper_type"},
@@ -3793,6 +3716,172 @@ void Catalog::getForeignServersForUser(
   }
 }
 
+std::vector<const foreign_storage::ForeignTable*>
+Catalog::getAllForeignTablesForForeignServer(const int32_t foreign_server_id) {
+  cat_read_lock read_lock(this);
+  std::vector<const foreign_storage::ForeignTable*> foreign_tables;
+  for (auto entry : tableDescriptorMapById_) {
+    auto table_descriptor = entry.second;
+    if (table_descriptor->storageType == StorageType::FOREIGN_TABLE) {
+      auto foreign_table = dynamic_cast<foreign_storage::ForeignTable*>(table_descriptor);
+      CHECK(foreign_table);
+      if (foreign_table->foreign_server->id == foreign_server_id) {
+        foreign_tables.emplace_back(foreign_table);
+      }
+    }
+  }
+  return foreign_tables;
+}
+
+const std::string Catalog::getUserMappingSchema(bool if_not_exists) {
+  return "CREATE TABLE " + (if_not_exists ? std::string{"IF NOT EXISTS "} : "") +
+         "omnisci_user_mappings(id integer primary key, user_id integer, " +
+         "foreign_server_id integer, type text, options blob, " +
+         "FOREIGN KEY(user_id) REFERENCES mapd_users(userid), " +
+         "FOREIGN KEY(foreign_server_id) REFERENCES omnisci_foreign_servers(id), " +
+         "UNIQUE(user_id, foreign_server_id))";
+}
+
+void Catalog::createUserMapping(
+    std::unique_ptr<foreign_storage::UserMapping> user_mapping,
+    bool if_not_exists) {
+  if (user_mapping->user_id >= shared::kTempUserIdRange) {
+    throw std::runtime_error{"A temporary user may not be given a user mapping."};
+  }
+
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+
+  sqliteConnector_.query_with_text_params(
+      "SELECT id from omnisci_user_mappings where user_id = ? and foreign_server_id = ?",
+      std::vector<std::string>{std::to_string(user_mapping->user_id),
+                               std::to_string(user_mapping->foreign_server_id)});
+
+  if (sqliteConnector_.getNumRows() == 0) {
+    const std::vector<std::string> params{std::to_string(user_mapping->user_id),
+                                          std::to_string(user_mapping->foreign_server_id),
+                                          user_mapping->type,
+                                          user_mapping->options};
+    using BindType = SqliteConnector::BindType;
+    const std::vector<BindType> bind_types{
+        BindType::TEXT, BindType::TEXT, BindType::TEXT, BindType::BLOB};
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO omnisci_user_mappings (user_id, foreign_server_id, type, options) "
+        "VALUES (?, ?, ?, ?)",
+        params,
+        bind_types);
+    sqliteConnector_.query_with_text_params(
+        "SELECT id from omnisci_user_mappings where user_id = ? and foreign_server_id = "
+        "?",
+        std::vector<std::string>{std::to_string(user_mapping->user_id),
+                                 std::to_string(user_mapping->foreign_server_id)});
+    CHECK_EQ(sqliteConnector_.getNumRows(), size_t(1));
+    user_mapping->id = sqliteConnector_.getData<int32_t>(0, 0);
+    userMappingMap_[UserMappingKey{user_mapping->user_id,
+                                   user_mapping->foreign_server_id}] =
+        std::move(user_mapping);
+  } else if (!if_not_exists) {
+    throw std::runtime_error{
+        "A user mapping already exists for user and foreign server."};
+  }
+}
+
+const foreign_storage::UserMapping* Catalog::getUserMapping(
+    const int32_t user_id,
+    const int32_t foreign_server_id) const {
+  cat_read_lock read_lock(this);
+  foreign_storage::UserMapping* user_mapping = nullptr;
+  if (const auto user_mapping_entry =
+          userMappingMap_.find(UserMappingKey{user_id, foreign_server_id});
+      user_mapping_entry != userMappingMap_.end()) {
+    user_mapping = user_mapping_entry->second.get();
+  } else if (const auto user_mapping_entry = userMappingMap_.find(
+                 UserMappingKey{shared::kRootUserId, foreign_server_id});
+             user_mapping_entry != userMappingMap_.end() &&
+             user_mapping_entry->second->type ==
+                 foreign_storage::UserMappingType::PUBLIC) {
+    // If there is no user specific mapping, return a public user mapping,
+    // if one exists
+    user_mapping = user_mapping_entry->second.get();
+  }
+  return user_mapping;
+}
+
+const std::unique_ptr<const foreign_storage::UserMapping>
+Catalog::getUserMappingFromStorage(const int32_t user_id, const int foreign_server_id) {
+  std::unique_ptr<foreign_storage::UserMapping> user_mapping = nullptr;
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query_with_text_params(
+      "SELECT id, user_id, foreign_server_id, type, options FROM "
+      "omnisci_user_mappings WHERE user_id = ? AND foreign_server_id = ?",
+      std::vector<std::string>{std::to_string(user_id),
+                               std::to_string(foreign_server_id)});
+  if (sqliteConnector_.getNumRows() > 0) {
+    user_mapping = std::make_unique<foreign_storage::UserMapping>(
+        sqliteConnector_.getData<int32_t>(0, 0),
+        sqliteConnector_.getData<int32_t>(0, 1),
+        sqliteConnector_.getData<int32_t>(0, 2),
+        sqliteConnector_.getData<std::string>(0, 3),
+        sqliteConnector_.getData<std::string>(0, 4));
+  }
+  return user_mapping;
+}
+
+void Catalog::dropUserMapping(const int32_t user_id,
+                              const int32_t foreign_server_id,
+                              const bool if_exists) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+
+  sqliteConnector_.query_with_text_params(
+      "SELECT id from omnisci_user_mappings where user_id = ? and foreign_server_id = ?",
+      std::vector<std::string>{std::to_string(user_id),
+                               std::to_string(foreign_server_id)});
+  auto num_rows = sqliteConnector_.getNumRows();
+  if (num_rows > 0) {
+    CHECK_EQ(size_t(1), num_rows);
+    auto user_mapping_id = sqliteConnector_.getData<int32_t>(0, 0);
+    sqliteConnector_.query_with_text_params(
+        "DELETE FROM omnisci_user_mappings WHERE id = ?",
+        std::vector<std::string>{std::to_string(user_mapping_id)});
+    userMappingMap_.erase(UserMappingKey{user_id, foreign_server_id});
+  } else if (!if_exists) {
+    throw std::runtime_error{
+        "A user mapping does not exist for user and foreign server."};
+  }
+}
+
+void Catalog::dropAllUserMappingsForUser(const int32_t user_id) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+
+  sqliteConnector_.query_with_text_params(
+      "DELETE FROM omnisci_user_mappings WHERE user_id = ?",
+      std::vector<std::string>{std::to_string(user_id)});
+
+  for (auto it = userMappingMap_.begin(), last = userMappingMap_.end(); it != last;) {
+    if (it->second->user_id == user_id) {
+      it = userMappingMap_.erase(it);
+    } else {
+      it++;
+    }
+  }
+}
+
+void Catalog::dropAllUserMappingsForServer(const int32_t foreign_server_id) {
+  sqliteConnector_.query_with_text_params(
+      "DELETE FROM omnisci_user_mappings WHERE foreign_server_id = ?",
+      std::vector<std::string>{std::to_string(foreign_server_id)});
+
+  for (auto it = userMappingMap_.begin(), last = userMappingMap_.end(); it != last;) {
+    if (it->second->foreign_server_id == foreign_server_id) {
+      it = userMappingMap_.erase(it);
+    } else {
+      it++;
+    }
+  }
+}
+
 // returns the table epoch or -1 if there is something wrong with the shared epoch
 int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) const {
   cat_read_lock read_lock(this);
@@ -3843,23 +3932,6 @@ int32_t Catalog::getTableEpoch(const int32_t db_id, const int32_t table_id) cons
               << ", epoch: " << epoch;
     return epoch;
   }
-}
-
-std::vector<const foreign_storage::ForeignTable*>
-Catalog::getAllForeignTablesForForeignServer(const int32_t foreign_server_id) {
-  cat_read_lock read_lock(this);
-  std::vector<const foreign_storage::ForeignTable*> foreign_tables;
-  for (auto entry : tableDescriptorMapById_) {
-    auto table_descriptor = entry.second;
-    if (table_descriptor->storageType == StorageType::FOREIGN_TABLE) {
-      auto foreign_table = dynamic_cast<foreign_storage::ForeignTable*>(table_descriptor);
-      CHECK(foreign_table);
-      if (foreign_table->foreign_server->id == foreign_server_id) {
-        foreign_tables.emplace_back(foreign_table);
-      }
-    }
-  }
-  return foreign_tables;
 }
 
 void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) {
@@ -3925,7 +3997,7 @@ void Catalog::alterPhysicalTableMetadata(
 void Catalog::alterTableMetadata(const TableDescriptor* td,
                                  const TableDescriptorUpdateParams& table_update_params) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     const auto physical_table_it = logicalToPhysicalTableMapById_.find(td->tableId);
@@ -4195,7 +4267,7 @@ void Catalog::addReferenceToForeignDict(ColumnDescriptor& referencing_column,
   CHECK_GE(dd->refcount, 1);
   ++dd->refcount;
   if (persist_reference) {
-    cat_sqlite_lock sqlite_lock(getObjForLock());
+    cat_sqlite_lock sqlite_lock(this);
     sqliteConnector_.query_with_text_params(
         "UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
         {std::to_string(dict_id)});
@@ -4209,7 +4281,7 @@ bool Catalog::setColumnSharedDictionary(
     const TableDescriptor td,
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
 
   if (shared_dict_defs.empty()) {
     return false;
@@ -4282,7 +4354,7 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
   int dictId{0};
   std::string folderPath;
   if (is_logical_table) {
-    cat_sqlite_lock sqlite_lock(getObjForLock());
+    cat_sqlite_lock sqlite_lock(this);
 
     sqliteConnector_.query_with_text_params(
         "INSERT INTO mapd_dictionaries (name, nbits, is_shared, refcount) VALUES (?, ?, "
@@ -4371,12 +4443,6 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
   dataMgr_->removeTableRelatedDS(currentDB_.dbId, tableId);
 
   cat_write_lock write_lock(this);
-  std::unique_ptr<StringDictionaryClient> client;
-  if (SysCatalog::instance().isAggregator()) {
-    CHECK(!string_dict_hosts_.empty());
-    DictRef dict_ref(currentDB_.dbId, -1);
-    client.reset(new StringDictionaryClient(string_dict_hosts_.front(), dict_ref, true));
-  }
   // clean up any dictionaries
   // delete all column descriptors for the table
   for (const auto& columnDescriptor : columnDescriptorMapById_) {
@@ -4397,9 +4463,6 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
         // close the dictionary
         dd->stringDict.reset();
         File_Namespace::renameForDelete(dd->dictFolderPath);
-        if (client) {
-          client->drop(dd->dictRef);
-        }
         if (!dd->dictIsTemp) {
           boost::filesystem::create_directory(dd->dictFolderPath);
         }
@@ -4414,9 +4477,6 @@ void Catalog::doTruncateTable(const TableDescriptor* td) {
                                                   dd->dictIsTemp);
       dictDescriptorMapByRef_.erase(dictIt);
       // now create new Dict -- need to figure out what to do here for temp tables
-      if (client) {
-        client->create(new_dd->dictRef, new_dd->dictIsTemp);
-      }
       dictDescriptorMapByRef_[new_dd->dictRef].reset(new_dd);
       getMetadataForDict(new_dd->dictRef.dictId);
     }
@@ -4500,6 +4560,7 @@ void Catalog::removeChunks(const int table_id) const {
 void Catalog::dropTable(const TableDescriptor* td) {
   SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
       DBObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType), this);
+  SysCatalog::instance().dropPoliciesForTable(*this, td->tableName);
   std::vector<const TableDescriptor*> tables_to_drop;
   {
     cat_read_lock read_lock(this);
@@ -4529,7 +4590,7 @@ void Catalog::deleteTableCatalogMetadata(
     const TableDescriptor* logical_table,
     const std::vector<const TableDescriptor*>& physical_tables) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     // remove corresponding record from the logicalToPhysicalTableMap in sqlite database
@@ -4595,7 +4656,7 @@ void Catalog::executeDropTableSqliteQueries(const TableDescriptor* td) {
 
 void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTableName) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
 
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
@@ -4648,7 +4709,7 @@ void rename_column(const std::string& renamed_table,
 void Catalog::renameTable(const TableDescriptor* td, const string& newTableName) {
   {
     cat_write_lock write_lock(this);
-    cat_sqlite_lock sqlite_lock(getObjForLock());
+    cat_sqlite_lock sqlite_lock(this);
     // rename all corresponding physical tables if this is a logical table
     const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
     if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
@@ -4704,7 +4765,7 @@ void Catalog::renamePhysicalTables(
     std::vector<std::pair<std::string, std::string>>& names,
     std::vector<int>& tableIds) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
 
   // execute the SQL query
   for (size_t i = 0; i < names.size(); i++) {
@@ -4942,7 +5003,7 @@ void Catalog::renameColumn(const TableDescriptor* td,
 
 int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     // TODO(andrew): this should be an upsert
@@ -5006,7 +5067,7 @@ int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
 
 void Catalog::replaceDashboard(DashboardDescriptor& vd) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
 
   CHECK(sqliteConnector_.getSqlitePtr());
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -5095,7 +5156,7 @@ std::string Catalog::calculateSHA1(const std::string& data) {
 
 std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     ld.link = calculateSHA1(ld.viewState + ld.viewMetadata + std::to_string(ld.userId))
@@ -5393,6 +5454,24 @@ void Catalog::buildForeignServerMapUnlocked() {
   }
 }
 
+void Catalog::buildUserMappingMapUnlocked() {
+  sqliteConnector_.query(
+      "SELECT id, user_id, foreign_server_id, type, options FROM "
+      "omnisci_user_mappings");
+  auto num_rows = sqliteConnector_.getNumRows();
+  for (size_t row = 0; row < num_rows; row++) {
+    auto user_mapping = std::make_unique<foreign_storage::UserMapping>(
+        sqliteConnector_.getData<int32_t>(row, 0),
+        sqliteConnector_.getData<int32_t>(row, 1),
+        sqliteConnector_.getData<int32_t>(row, 2),
+        sqliteConnector_.getData<std::string>(row, 3),
+        sqliteConnector_.getData<std::string>(row, 4));
+    userMappingMap_[UserMappingKey{user_mapping->user_id,
+                                   user_mapping->foreign_server_id}] =
+        std::move(user_mapping);
+  }
+}
+
 void Catalog::updateForeignTablesInMapUnlocked() {
   CHECK(g_enable_fsi);
   sqliteConnector_.query(
@@ -5594,7 +5673,7 @@ TableDescriptor* Catalog::createTableFromDiskUnlocked(int32_t table_id) {
 void Catalog::setForeignServerProperty(const std::string& server_name,
                                        const std::string& property,
                                        const std::string& value) {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query_with_text_params(
       "SELECT id from omnisci_foreign_servers where name = ?",
       std::vector<std::string>{server_name});
@@ -5623,6 +5702,7 @@ void Catalog::createDefaultServersIfNotExists() {
 #ifdef ENABLE_IMPORT_PARQUET
       {shared::kDefaultParquetServerName, foreign_storage::DataWrapperType::PARQUET},
 #endif
+      {shared::kDefaultRasterServerName, foreign_storage::DataWrapperType::RASTER},
       {shared::kDefaultRegexServerName, foreign_storage::DataWrapperType::REGEX_PARSER}};
 
   for (const auto& [name, type] : server_names_and_types) {
@@ -5648,8 +5728,7 @@ std::vector<std::string> Catalog::getTableDataDirectories(
   const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
   std::vector<std::string> file_paths;
   for (auto shard : getPhysicalTablesDescriptors(td)) {
-    const auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
-        global_file_mgr->getFileMgr(currentDB_.dbId, shard->tableId));
+    const auto file_mgr = global_file_mgr->getFileMgr(currentDB_.dbId, shard->tableId);
     boost::filesystem::path file_path(file_mgr->getFileMgrBasePath());
     file_paths.push_back(file_path.filename().string());
   }
@@ -5796,9 +5875,7 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
     const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
     CHECK(shard_cd);
     os << ", SHARD KEY(" << shard_cd->columnName << ")";
-    with_options.push_back(
-        "SHARD_COUNT=" +
-        std::to_string(td->nShards * std::max(g_leaf_count, static_cast<size_t>(1))));
+    with_options.push_back("SHARD_COUNT=" + std::to_string(td->nShards));
   }
   if (td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
@@ -6021,9 +6098,7 @@ std::string Catalog::dumpCreateTableUnlocked(const TableDescriptor* td,
   if (!foreign_table && td->nShards > 0) {
     const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
     CHECK(shard_cd);
-    with_options.push_back(
-        "SHARD_COUNT=" +
-        std::to_string(td->nShards * std::max(g_leaf_count, static_cast<size_t>(1))));
+    with_options.push_back("SHARD_COUNT=" + std::to_string(td->nShards));
   }
   if (!foreign_table && td->sortedColumnId > 0) {
     const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
@@ -6104,7 +6179,7 @@ std::vector<std::string> Catalog::getAllForeignTableNamesForRefresh() const {
 
 void Catalog::updateForeignTableRefreshTimes(const int32_t table_id) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   CHECK(tableDescriptorMapById_.find(table_id) != tableDescriptorMapById_.end());
   auto table_descriptor = tableDescriptorMapById_.find(table_id)->second;
   CHECK(table_descriptor);
@@ -6147,7 +6222,7 @@ void Catalog::setForeignTableOptions(const std::string& table_name,
 void Catalog::setForeignTableProperty(const foreign_storage::ForeignTable* table,
                                       const std::string& property,
                                       const std::string& value) {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query_with_text_params(
       "SELECT table_id from omnisci_foreign_tables where table_id = ?",
       std::vector<std::string>{std::to_string(table->tableId)});
@@ -6244,7 +6319,7 @@ void Catalog::gatherAdditionalInfo(std::vector<std::string>& additional_info,
 int32_t Catalog::createCustomExpression(
     std::unique_ptr<CustomExpression> custom_expression) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   int32_t custom_expression_id{-1};
   try {
@@ -6301,7 +6376,7 @@ const CustomExpression* Catalog::getCustomExpression(int32_t custom_expression_i
 
 const std::unique_ptr<const CustomExpression> Catalog::getCustomExpressionFromStorage(
     int32_t custom_expression_id) {
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query_with_text_params(
       "SELECT id, name, expression_json, data_source_type, data_source_id, "
       "is_deleted FROM omnisci_custom_expressions WHERE id = ?",
@@ -6341,7 +6416,7 @@ std::vector<const CustomExpression*> Catalog::getCustomExpressionsForUser(
 void Catalog::updateCustomExpression(int32_t custom_expression_id,
                                      const std::string& expression_json) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   auto it = custom_expr_map_by_id_.find(custom_expression_id);
   if (it == custom_expr_map_by_id_.end() || it->second->is_deleted) {
     throw std::runtime_error{"Custom expression with id \"" +
@@ -6369,7 +6444,7 @@ void Catalog::updateCustomExpression(int32_t custom_expression_id,
 void Catalog::deleteCustomExpressions(const std::vector<int32_t>& custom_expression_ids,
                                       bool do_soft_delete) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
 
   std::vector<int32_t> invalid_ids;
   for (const auto id : custom_expression_ids) {
@@ -6481,7 +6556,7 @@ void Catalog::reassignOwners(const std::set<std::string>& old_owners,
   std::map<int32_t, std::vector<DBObject>> old_owner_db_objects;
   {
     cat_write_lock write_lock(this);
-    cat_sqlite_lock sqlite_lock(getObjForLock());
+    cat_sqlite_lock sqlite_lock(this);
     sqliteConnector_.query("BEGIN TRANSACTION");
     try {
       for (const auto old_user_id : old_owner_ids) {
@@ -6597,7 +6672,7 @@ void Catalog::restoreOldOwners(
     const std::map<int32_t, std::vector<DBObject>>& old_owner_db_objects,
     int32_t new_owner_id) {
   cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(getObjForLock());
+  cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
     for (const auto& [old_owner_id, db_objects] : old_owner_db_objects) {
@@ -6679,10 +6754,11 @@ void Catalog::restoreOldOwnersInMemory(
   }
 }
 
-void Catalog::conditionallyInitializeSystemObjects() {
+void Catalog::conditionallyInitializeSystemObjects(const UserMetadata& root_user) {
   if (g_enable_system_tables && isInfoSchemaDb()) {
     initializeSystemServers();
     initializeSystemTables();
+    initializeSystemDashboards(root_user);
   }
 }
 
@@ -6741,7 +6817,7 @@ void set_common_log_system_table_options(foreign_storage::ForeignTable& foreign_
     // Set start date time to 1 minute from now.
     auto start_epoch = foreign_storage::RefreshTimeCalculator::getCurrentTime() + 60;
     foreign_table.options[ForeignTable::REFRESH_START_DATE_TIME_KEY] =
-        shared::convert_temporal_to_iso_format({kTIMESTAMP}, start_epoch);
+        shared::convert_temporal_to_iso_format(start_epoch, kTIMESTAMP, 0);
     foreign_table.options[ForeignTable::REFRESH_INTERVAL_KEY] =
         g_logs_system_tables_refresh_interval;
   } else {
@@ -6777,7 +6853,7 @@ void clear_cached_table_data(const Data_Namespace::DataMgr* data_mgr,
 
 void drop_tables(Catalog& catalog, const std::vector<std::string>& table_names) {
   for (const auto& table_name : table_names) {
-    if (auto td = catalog.getMetadataForTable(table_name)) {
+    if (auto td = catalog.getMetadataForTable(table_name, false)) {
       clear_cached_table_data(
           &catalog.getDataMgr(), catalog.getDatabaseId(), td->tableId);
       catalog.dropTable(td);
@@ -6804,6 +6880,8 @@ void Catalog::initializeSystemTables() {
   if (g_enable_logs_system_tables) {
     initializeServerLogsSystemTables();
     initializeRequestLogsSystemTables();
+    initializeWebServerLogsSystemTables();
+    initializeWebServerAccessLogsSystemTables();
   } else {
     drop_tables(*this,
                 {SERVER_LOGS_SYS_TABLE_NAME,
@@ -7167,6 +7245,73 @@ void Catalog::initializeWebServerAccessLogsSystemTables() {
   }
 }
 
+namespace {
+DashboardDescriptor get_dashboard_from_file(const std::string& dashboard_file_name) {
+  const auto file_path = boost::filesystem::path(
+      heavyai::get_root_abs_path() + "/Catalog/SystemDashboards/DashboardContent/" +
+      dashboard_file_name);
+  if (!boost::filesystem::exists(file_path)) {
+    throw std::runtime_error{
+        "Unable to load system dashboard. Dashboard file does not exist: " +
+        file_path.string()};
+  }
+  // Dashboard file is expected to have the following format:
+  // Line 1: Dashboard name
+  // Line 2: Dashboard metadata JSON
+  // Line 3: Base64 encoded dashboard payload
+  std::ifstream file{file_path.string()};
+  if (file.is_open()) {
+    DashboardDescriptor dashboard;
+    std::getline(file, dashboard.dashboardName);
+    std::getline(file, dashboard.dashboardMetadata);
+    std::getline(file, dashboard.dashboardState);
+    if (!file.eof()) {
+      throw std::runtime_error{
+          "Unable to load system dashboard. Dashboard file has an unexpected format: " +
+          file_path.string()};
+    }
+    return dashboard;
+  } else {
+    throw std::runtime_error{
+        "Unable to load system dashboard. Dashboard file could not be opened: " +
+        file_path.string()};
+  }
+}
+}  // namespace
+
+void Catalog::initializeSystemDashboards(const UserMetadata& root_user) {
+  constexpr const char* logs_dashboard_file_name{"request_logs_and_monitoring.json"};
+  constexpr std::array<const char*, 3> dashboard_json_files{
+      "user_roles_and_permissions.json",
+      "system_resources.json",
+      logs_dashboard_file_name};
+  for (const auto& file_name : dashboard_json_files) {
+    auto dashboard = get_dashboard_from_file(file_name);
+    dashboard.user = root_user.userName;
+    dashboard.userId = root_user.userId;
+    auto stored_dashboard = getMetadataForDashboard(std::to_string(dashboard.userId),
+                                                    dashboard.dashboardName);
+    if (file_name == logs_dashboard_file_name && !g_enable_logs_system_tables) {
+      if (stored_dashboard) {
+        deleteMetadataForDashboards({stored_dashboard->dashboardId}, root_user);
+      }
+      continue;
+    }
+    if (stored_dashboard &&
+        stored_dashboard->dashboardMetadata != dashboard.dashboardMetadata) {
+      LOG(INFO) << "Dropping existing \"" << stored_dashboard->dashboardName
+                << "\" system dashboard.";
+      deleteMetadataForDashboards({stored_dashboard->dashboardId}, root_user);
+      stored_dashboard = nullptr;
+    }
+    if (!stored_dashboard) {
+      LOG(INFO) << "Creating a new \"" << dashboard.dashboardName
+                << "\" system dashboard.";
+      createDashboard(dashboard);
+    }
+  }
+}
+
 void Catalog::createSystemTableServer(const std::string& server_name,
                                       const std::string& data_wrapper_type,
                                       const foreign_storage::OptionsMap& options) {
@@ -7437,6 +7582,11 @@ void Catalog::removeFromColumnMap(ColumnDescriptor* cd) {
   }
   columnDescriptorMap_.erase(ColumnKey{cd->tableId, to_upper(cd->columnName)});
   columnDescriptorMapById_.erase(ColumnIdKey{cd->tableId, cd->columnId});
+}
+
+heavyai::DistributedSharedMutex& Catalog::getDistributedMutex() const {
+  CHECK(mutex_desc_.dist_mutex);
+  return *mutex_desc_.dist_mutex;
 }
 
 // TODO(Misiu): Replace most sqlite transactions with this idiom.

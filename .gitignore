@@ -2,23 +2,17 @@
 *.slo
 *.lo
 *.o
-*.obj
 
 # Compiled Dynamic libraries
 *.so
-*.dylib
-*.dll
 
 # Compiled Static libraries
 *.lai
 *.la
 *.a
-*.lib
 
 # Executables
-*.exe
 *.out
-*.app
 
 # CMake files
 CMakeCache.txt
@@ -46,10 +40,6 @@ Debug/
 .vscode
 *.code-workspace
 
-# VS settings files
-.vs
-CMakeSettings.json
-
 # VIM editor files
 .*.swp
 
@@ -63,12 +53,6 @@ gen-py/
 java/target/
 java/**/log/
 
-# go files
-ThirdParty/go/bin/
-ThirdParty/go/pkg/
-ThirdParty/go/src/*
-!ThirdParty/go/src/mapd/
-
 # sphinx docs
 !docs/**/Makefile
 *.pyc
@@ -80,10 +64,10 @@ docs/source/api/*
 # java-generated files
 java/**/target/
 java/thrift/src/
+java/.mvn/
 *.classpath
 *.project
 
-ThirdParty/
 data/
 
 # IntelliJ/CLion settings files

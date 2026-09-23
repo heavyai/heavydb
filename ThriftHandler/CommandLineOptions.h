@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -28,14 +17,12 @@
 
 #include "Catalog/AuthMetadata.h"
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
-#include "OSDependent/heavyai_locks.h"
 #include "QueryEngine/ExtractFromTime.h"
 #include "QueryEngine/HyperLogLog.h"
 #include "Shared/SystemParameters.h"
+#include "Shared/heavyai_locks.h"
 
 namespace po = boost::program_options;
-
-class LeafHostInfo;
 
 extern size_t g_watchdog_max_projected_rows_per_device;
 extern size_t g_preflight_count_query_threshold;
@@ -46,8 +33,7 @@ extern size_t g_in_clause_num_elem_skip_bitmap;
 
 class CommandLineOptions {
  public:
-  CommandLineOptions(char const* argv0, bool dist_v5_ = false)
-      : log_options_(argv0), exe_name(argv0), dist_v5_(dist_v5_) {
+  CommandLineOptions(char const* argv0) : log_options_(argv0), exe_name(argv0) {
     fillOptions();
     fillDeveloperOptions();
   }
@@ -56,9 +42,6 @@ class CommandLineOptions {
   size_t reserved_gpu_mem = 768 * 1024 * 1024;  // doubled from 384MB 2/13/24
   std::string base_path;
   File_Namespace::DiskCacheConfig disk_cache_config;
-  std::string cluster_file = {"cluster.conf"};
-  std::string cluster_topology_file = {"cluster_topology.conf"};
-  std::string license_path = {""};
   std::string encryption_key_store_path = {};
   bool verbose_logging = false;
   bool jit_debug = false;
@@ -71,9 +54,13 @@ class CommandLineOptions {
   AuthMetadata authMetadata;
 
   SystemParameters system_parameters;
+#ifdef HAVE_RENDERING
+  bool enable_rendering = true;
+#else
   bool enable_rendering = false;
-  bool enable_auto_clear_render_mem = false;
-  int render_oom_retry_threshold = 0;  // in milliseconds
+#endif  // HAVE_RENDERING
+  bool enable_auto_clear_render_mem = true;
+  int render_oom_retry_threshold = 10000;  // in milliseconds
   size_t render_mem_bytes = 1000000000;
   size_t max_concurrent_render_sessions = 500;
   bool render_compositor_use_last_gpu = true;
@@ -140,8 +127,6 @@ class CommandLineOptions {
   void fillOptions();
   void fillDeveloperOptions();
 
-  std::string compressor = std::string(BLOSC_LZ4HC_COMPNAME);
-
   po::options_description help_desc_;
   po::options_description developer_desc_;
   logger::LogOptions log_options_;
@@ -149,14 +134,7 @@ class CommandLineOptions {
   po::positional_options_description positional_options;
 
  public:
-  std::vector<LeafHostInfo> db_leaves;
-  std::vector<LeafHostInfo> string_leaves;
   po::variables_map vm;
-  std::string clusterIds_arg;
-
-  std::string getNodeIds();
-  std::vector<std::string> getNodeIdsArray();
-  static const std::string nodeIds_token, cluster_command_line_arg;
 
   boost::optional<int> parse_command_line(int argc,
                                           char const* const* argv,
@@ -164,7 +142,6 @@ class CommandLineOptions {
   void validate();
   void validate_base_path();
   void init_logging();
-  const bool dist_v5_;
 
  private:
   bool enable_runtime_udfs = true;
@@ -230,6 +207,8 @@ extern bool g_enable_geo_ops_on_uncompressed_coords;
 extern bool g_allow_memory_status_log;
 extern int g_max_num_gpu_per_query;
 
+extern bool g_enable_rf_prop_table_functions;
+
 extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
 extern bool g_enable_direct_columnarization;
@@ -247,8 +226,6 @@ extern size_t g_jump_buffer_parallel_copy_threads;
 extern size_t g_jump_buffer_min_h2d_transfer_threshold;
 extern size_t g_jump_buffer_min_d2h_transfer_threshold;
 
-extern int64_t g_omni_kafka_seek;
-extern size_t g_leaf_count;
 extern size_t g_compression_limit_bytes;
 extern bool g_skip_intermediate_count;
 extern bool g_enable_bump_allocator;
@@ -263,6 +240,10 @@ extern size_t g_max_import_num_fragment_buffered;
 extern size_t g_import_heuristic_varlen_column_byte_size;
 #ifdef ENABLE_IMPORT_PARQUET
 extern bool g_enable_legacy_parquet_import;
+#endif
+extern bool g_enable_legacy_raster_import;
+#ifdef EE_FSI_ODBC
+extern bool g_enable_fsi_odbc_import;
 #endif
 extern bool g_enable_fsi_regex_import;
 extern bool g_enable_add_metadata_columns;

@@ -35,9 +35,17 @@ The ``mapd_databases`` table functions as a lookup table for mapping a database 
 Permissions
 ****************************************
 
-All system-level object privilege grants are stored and accessed from the ``mapd_object_permissions`` table. An object permission can be assigned to a role, and specifies what level of access a role has to various parts of the system. See `DB Object Privileges <https://docs.heavy.ai/latest/5_roles.html#ddl-roles-and-privileges>`_ for more information about interfacing with HeavyDB's security model.
+All system-level object privilege grants are stored and accessed from the
+``mapd_object_permissions`` table. An object permission can be assigned to a
+role and specifies the access that role has to parts of the system. See
+`Roles <https://docs.nvidia.com/heavyai/installation-and-configuration/security/roles>`_
+for the user-facing privilege commands.
 
 The ``granteeMap_`` in the ``SysCatalog`` class stores ``Grantee`` objects, representing object level permissions grants. The ``granteeMap_`` is built at startup.
 
 
-The ``objectDescriptorMap_`` in the ``SysCatalog`` class stores ``ObjectRoleDescriptor``s, relating a role to a specific privilege grant. The  ``objectDescriptorMap_`` is also built when  Together, the ``granteeMap_`` and ``objectDescriptorMap_`` are referenced when determining if a user has access to perform an action in the database.
+The ``objectDescriptorMap_`` in the ``SysCatalog`` class stores
+``ObjectRoleDescriptor`` objects that relate roles to specific privilege grants.
+Like the ``granteeMap_``, it is built at startup. Together, the two maps are
+referenced when determining whether a user can perform an action in the
+database.

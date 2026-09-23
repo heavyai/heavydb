@@ -1,0 +1,375 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<includes>
+#include "Marks/typeDefines.glsl"
+#include "Utils/colorConvertSubroutines.glsl"
+#include "Marks/coordConvertSubroutines.glsl" // for decimalToDouble
+#include "PPLL/ppllCommon.h"
+//</includes>
+
+layout (local_size_x = <workgroupSize>, local_size_y = 1, local_size_z = 1) in;
+
+#define numSamples <numSamples>
+#define defaultMaxUniqueIds <defaultMaxUniqueIds>
+#define numTiles <numTiles>
+#define tileIndexOffset <tileIndexOffset>
+
+#define numid <numid>
+#define useSSBO <useSSBO>
+
+#if useSSBO == 1
+<polyData>
+#endif
+
+// Input RenderProperties
+<RenderPropertyTypeInfos>
+
+// Color conversion stub functions
+vec4 transformfillColorToRGB(in vec4 c) { return c; }
+vec4 unpackfillColor(in uint c) { return vec4(0); }
+
+//
+// uniforms
+//
+
+// Required uniform for hit-test support
+// To be replaced with #include when hit-testing support is added
+layout(std430) uniform OUTPUT_ID_UBO_TYPE {
+  uint uResultCacheId;
+};
+
+// uniforms
+layout (std430, binding = 4) uniform IMAGE_TILES_UBO {
+  Tile tiles[numTiles];
+};
+
+layout (std430, binding = 5) uniform IMAGE_INFO_UBO {
+  ImageInfo image_info;
+};
+
+// Uniform RenderProperties
+layout(std430) uniform <UniformProperties>;
+
+// get* functions for properties
+<PropertyGetters>
+
+// Resolve stats SSBO
+layout(std430) buffer PPLL_STATS_SSBO {
+  PPLLResolveStats resolve_stats;
+};
+
+// fragment counts image
+layout(r32ui) uniform restrict coherent uimage2D fragment_count_image;
+
+// fragment list SSBO
+coherent layout (std430) buffer PPLL_RECORDS_SSBO {
+  uint64_t records[];
+};
+
+// push constants
+layout(push_constant) uniform PPLL_CAPTURE_FRAG_PUSH_CONSTANTS {
+  layout(offset = tileIndexOffset) uint32_t tileIndex;
+} pushConstants;
+
+// specialization constants
+layout (constant_id = 0) const uint32_t MAX_UNIQUE_IDS = defaultMaxUniqueIds;
+layout (constant_id = 1) const uint32_t IS_OVERFLOW_PASS = 0;
+
+// color output mode constants
+const int kColorModeNormal      = 0;
+const int kColorModeDebugPolyID = 5;
+const int kColorModeDebugIDA    = 7;
+
+// outputs
+layout (rgba8) uniform image2DMS outputImageMS;
+
+#if numid > 0
+layout (r32ui) uniform uimage2DMS outputIDA;
+layout (r32ui) uniform uimage2DMS outputIDB;
+layout (r32ui) uniform uimage2DMS outputResultCacheId;
+#endif
+
+// helper macros
+#define UNPACK_DATA(a)     (uint32_t(uint64_t(a) >> 32))
+#define UNPACK_NEXT(a)     (uint32_t(a))
+#define SM_NONE            0x0
+#define SM_IS_BIT_SET(x,b) ((x & (1 << b)) != 0)
+
+#if numSamples == 2
+#define ID_MASK(x)         ((x) & 0x3FFFFFFFU)
+#define SM_ALL             0x3
+#define SM_BITS(x)         (int(((x) >> 30) & SM_ALL))
+#define SM_MASK(x)         ((x) & 0xC0000000U)
+#define SET_SM_BIT(x,b)    (x |= (1 << (30 + b)))
+#elif numSamples == 4
+#define ID_MASK(x)         ((x) & 0x0FFFFFFFU)
+#define SM_ALL             0xF
+#define SM_BITS(x)         (int(((x) >> 28) & SM_ALL))
+#define SM_MASK(x)         ((x) & 0xF0000000U)
+#define SET_SM_BIT(x,b)    (x |= (1 << (28 + b)))
+#elif numSamples == 8
+#define ID_MASK(x)         ((x) & 0x00FFFFFFU)
+#define SM_ALL             0xFF
+#define SM_BITS(x)         (int(((x) >> 24) & SM_ALL))
+#define SM_MASK(x)         ((x) & 0xFF000000U)
+#define SET_SM_BIT(x,b)    (x |= (1 << (24 + b)))
+#endif
+
+//
+// alpha blend fore color over back color
+//
+vec4 blend_over(vec4 fore, vec4 back) {
+  float inv_fore_alpha = 1.0 - fore.a;
+  return vec4((fore.rgb * fore.a + back.rgb * back.a * inv_fore_alpha), fore.a + back.a * inv_fore_alpha);
+}
+
+//
+// Get the color of a polygon using SSBO lookup or uniforms as required
+//
+// iSSBOIndex is a required variable name for shader builder substitutions to work
+vec4 get_poly_color(in uint32_t iSSBOIndex) {
+  vec4 poly_color = vec4(0);
+  float poly_opacity = 0.0;
+  float poly_fill_opacity = 0.0;
+
+#if useUfillColor == 1
+  poly_color = vec4(transformfillColorToRGB(getfillColor(fillColor)));
+#elif useSSBO == 1
+  poly_color = transformfillColorToRGB(getfillColor(polyData[iSSBOIndex].<fillColor>));
+#endif
+
+#if useSSBO == 1 && useUopacity == 0
+  poly_opacity = float(getopacity(polyData[iSSBOIndex].<opacity>));
+#else
+  poly_opacity = float(getopacity(opacity));
+#endif
+
+#if useSSBO == 1 && useUfillOpacity == 0
+  poly_fill_opacity = float(getfillOpacity(polyData[iSSBOIndex].<fillOpacity>));
+#else
+  poly_fill_opacity = float(getfillOpacity(fillOpacity));
+#endif
+
+  poly_color.a = poly_opacity * poly_fill_opacity * poly_color.a;
+  return poly_color;
+}
+
+//
+// get the packed hit-test row ids using SSBO lookup
+//
+// iSSBOIndex is a required variable name for shader builder substitutions to work
+//
+#if numid > 0
+uint64_t get_row_id(in uint32_t iSSBOIndex) {
+  uint64_t row_id = 0;
+  row_id = polyData[iSSBOIndex].<id> + 1;
+#if numid >= 2
+  int total_bitshift = id_offsets[0];
+  row_id = ((polyData[iSSBOIndex].<id1> + 1) << total_bitshift) | row_id;
+#endif
+#if numid >= 3
+  total_bitshift += id_offsets[1];
+  row_id = ((polyData[iSSBOIndex].<id2> + 1) << total_bitshift) | row_id;
+#endif
+  return row_id;
+}
+#endif
+
+void main(void) {
+  // get tile
+  uint32_t tile_index = pushConstants.tileIndex;
+  ivec2 tile_offset = ivec2(tiles[tile_index].x, tiles[tile_index].y);
+  uvec2 tile_size = uvec2(tiles[tile_index].w, tiles[tile_index].h);
+
+  //
+  // get first record for this pixel
+  //
+  ivec2 P = ivec2(gl_GlobalInvocationID.xy);
+  if (P.x >= tile_size.x || P.y >= tile_size.y) {
+    return;
+  }
+  uint32_t head_index = uint32_t(P.x + P.y * tile_size.x);
+  uint64_t record = records[head_index];
+
+  // empty record means nothing to do
+  if (record == 0U) {
+    return;
+  }
+
+  //
+  // Gather records for this pixel
+  //
+
+  // local storage for unique IDs
+  // no need to initialize this array
+  uint32_t unique_ids[MAX_UNIQUE_IDS];
+  uint32_t unique_id_count = 0U;
+  uint32_t next = 0U;
+
+  // gather unique ID list
+  do {
+    // unpack record
+    uint32_t data = UNPACK_DATA(record);
+    next = UNPACK_NEXT(record);
+
+    // do we have this ID already?
+    uint32_t index = 0U;
+    while (index < unique_id_count) {
+      if (ID_MASK(data) == ID_MASK(unique_ids[index])) {
+        // xor the sample mask bits from the new record
+        // if a polygon's contribution to this pixel is completely canceled,
+        // the sample mask bits will end up as zero, and this entry in the
+        // unique ID list will be ignored for shading
+        unique_ids[index] ^= SM_MASK(data);
+        break;
+      }
+      index++;
+    }
+
+    // If this is the initial pass with default unique ID array size limit
+    // Add IDs to the array until full, then mark the pixel as overflow and return
+    if (IS_OVERFLOW_PASS == 0) {
+      // if we didn't find this ID already
+      // store the entire data in the list and increment the number of unique IDs
+      if (index == unique_id_count) {
+        // add it to the list
+        unique_ids[index] = data;
+        unique_id_count++;
+      }
+
+      // check if we've exceeded the local array size
+      if (unique_id_count >= MAX_UNIQUE_IDS) {
+        atomicAdd(resolve_stats.overflow_pixel_count, 1);
+        return;
+      }
+    } else {
+      // Overflow pass render, check if we overflow again
+      // If so, we have hit shared memory limit and can no longer add IDs
+      // Continue processing fragments to ensure found IDs are resolved correctly
+      // This greatly increases the chances of getting the pixel correct, but
+      // it is no longer guaranteed
+      if (unique_id_count < MAX_UNIQUE_IDS) {
+        if (index == unique_id_count) {
+          // add it to the list
+          unique_ids[index] = data;
+          unique_id_count++;
+        }
+      } else {
+        // shared memory limit exceeded, mark the pixel as to complex so we can log it
+        atomicAdd(resolve_stats.overflow_pixel_count, 1);
+      }
+    }
+
+    // move to next record
+    record = records[next];
+  } while (next != 0U);
+
+  // Set head record to 0, marks it done
+  // Also ensures cleared for next batch when batching avoiding fillBuffer
+  records[head_index] = 0;
+
+  // Track max unique IDs
+  atomicMax(resolve_stats.max_unique_ids, unique_id_count);
+
+  //
+  // Find the lowest unique ID value for each image sample
+  //
+
+  // Initialize values to the max value sentinel
+  #define UNUSED_LOWEST_ID 0xFFFFFFFFU
+  uint32_t lowest_ids[numSamples];
+  for (int s = 0; s < numSamples; s++) {
+    lowest_ids[s] = UNUSED_LOWEST_ID;
+  }
+
+  // Find lowest IDs per sample
+  for (int i = 0; i < unique_id_count; i++) {
+    uint32_t id = ID_MASK(unique_ids[i]);
+    uint32_t sm_bits = SM_BITS(unique_ids[i]);
+    for (int s = 0; s < numSamples; s++) {
+      if (SM_IS_BIT_SET(sm_bits, s) && id < lowest_ids[s]) {
+        lowest_ids[s] = id;
+      }
+    }
+  }
+
+  //
+  // Merge lowest value samples, building a new unique ID list
+  // creating new sample masks per polygon
+  //
+  unique_id_count = 0;
+  for (int s = 0; s < numSamples; s++) {
+    uint32_t index = 0;
+    uint32_t lowest_id = lowest_ids[s];
+    while (index < unique_id_count) {
+      if (unique_ids[index] == lowest_id) {
+        SET_SM_BIT(unique_ids[index], s);
+        break;
+      }
+      index++;
+    }
+    if (index == unique_id_count && lowest_id != UNUSED_LOWEST_ID) {
+      SET_SM_BIT(lowest_id, s);
+      unique_ids[index] = lowest_id;
+      unique_id_count++;
+    }
+  }
+
+  //
+  // composite samples
+  //
+
+  ivec2 framebuffer_coord = P + tile_offset;
+  uint32_t fragment_count = imageLoad(fragment_count_image, framebuffer_coord).r;
+
+  // loop over the merged lowest IDs (now in the unique id list)
+  for (int i = 0; i < unique_id_count; i++) {
+    uint32_t poly_id = ID_MASK(unique_ids[i]);
+#if useSSBO == 1
+    if (poly_id > ssboMaxIndex) {
+      poly_id = ssboMaxIndex;
+    }
+#endif
+    vec4 poly_color;
+
+    if (colorOutputMode == kColorModeNormal) {
+      poly_color = get_poly_color(poly_id);
+    } else if (colorOutputMode == kColorModeDebugPolyID) {
+      poly_color = unpackBGRColor(poly_id, 1);
+    } else {
+      poly_color.a = 1;
+    }
+
+    // if fully transparent, we're done
+    if (poly_color.a > 0.0) {
+#if numid > 0
+      uint64_t row_id = get_row_id(poly_id);
+      uint32_t id_a = uint32_t(row_id);
+      uint32_t id_b = uint32_t(row_id >> 32);
+
+      if (colorOutputMode == kColorModeDebugIDA) {
+        poly_color = unpackBGRColor(id_a, 1);
+      }
+#endif
+      // Loop over all samples and check if the poly touches them
+      fragment_count |= SM_MASK(unique_ids[i]);
+      int sm = SM_BITS(unique_ids[i]);
+      for (int s = 0; s < numSamples; s++) {
+        if (SM_IS_BIT_SET(sm, s)) {
+          // blend composite the poly color over existing color in the image
+          vec4 output_color = blend_over(poly_color, imageLoad(outputImageMS, framebuffer_coord, s));
+          imageStore(outputImageMS, framebuffer_coord, s, output_color);
+#if numid > 0
+          imageStore(outputIDA, framebuffer_coord, s, uvec4(id_a));
+          imageStore(outputIDB, framebuffer_coord, s, uvec4(id_b));
+          imageStore(outputResultCacheId, framebuffer_coord, s, uvec4(uResultCacheId));
+#endif
+        }
+      }
+      imageStore(fragment_count_image, framebuffer_coord, uvec4(fragment_count));
+    }
+  }
+}

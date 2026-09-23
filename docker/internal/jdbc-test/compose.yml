@@ -1,0 +1,19 @@
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+services:
+  buildhost:
+    image: docker-internal.mapd.com/mapd/core-build-centos7-cuda11.4
+    volumes:
+      - type: bind
+        source: ${BUILD_TMP_DIR}/heavydb
+        target: /heavydb
+      - type: bind
+        source: ${MVNHOME}
+        target: /root/.m2
+    command: tail -f /dev/null # Prevents the container from exiting immediately
+    depends_on:
+      - heavydbserver
+
+  heavydbserver:
+    image: docker-internal.mapd.com/mapd/mapd-cpu:master

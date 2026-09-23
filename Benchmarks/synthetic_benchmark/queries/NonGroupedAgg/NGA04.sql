@@ -1,9 +1,0 @@
-select
-  MIN(x10),
-  MIN(y10),
-  MIN(z10),
-  MIN(x100),
-  MIN(y100),
-  MIN(z100)
-from
-  ##TAB##

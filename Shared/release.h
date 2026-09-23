@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2015-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -37,7 +26,6 @@ static const std::string MAPD_VERSION_EXTRA{"@MAPD_VERSION_EXTRA@"};
 static const std::string MAPD_VERSION_RAW{"@MAPD_VERSION_RAW@"};
 static const std::string MAPD_BUILD_DATE{"@MAPD_BUILD_DATE@"};
 static const std::string MAPD_GIT_HASH{"@MAPD_GIT_HASH@"};
-static const std::string MAPD_EDITION{"@MAPD_EDITION_LOWER@"};
 
 static const std::string MAPD_RELEASE{"@MAPD_VERSION_RAW@-@MAPD_BUILD_DATE@-@MAPD_GIT_HASH@"};
 

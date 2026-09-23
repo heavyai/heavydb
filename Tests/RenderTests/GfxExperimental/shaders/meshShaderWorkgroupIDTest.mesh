@@ -1,0 +1,60 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#extension GL_EXT_mesh_shader : enable
+
+#include "DriverTests/testUtils.glsl"
+
+#define NUM_QUADS <numQuads>
+#define NUM_TASKS <numTasks>
+
+layout (local_size_x = NUM_TASKS, local_size_y = 1, local_size_z = 1) in;
+layout (triangles, max_vertices = NUM_QUADS * 4, max_primitives = NUM_QUADS * 2) out;
+
+layout (location = 0) out PerVertexData {
+  vec4 color;
+} v_out[];
+
+layout(std430) uniform MESH_SHADER_UBO_TYPE {
+  vec2 imageSize;
+};
+
+void main()
+{
+  uint workgroup_id = gl_WorkGroupID.x;
+
+  float x_scale = 2.0 / float(NUM_QUADS);
+  float y_scale = 1.0 / float(NUM_TASKS);
+  float y_offset = float(workgroup_id) * (y_scale * 2.0) - (1.0 - y_scale);
+
+  vec2 pos[4] = {vec2(-x_scale, -y_scale + y_offset),
+                 vec2( x_scale, -y_scale + y_offset),
+                 vec2( x_scale,  y_scale + y_offset),
+                 vec2(-x_scale,  y_scale + y_offset)};
+
+  // size output
+  SetMeshOutputsEXT(NUM_QUADS * 4, NUM_QUADS * 2);
+
+  int vertex_id = 0;
+  int index_id = 0;
+  float x_offset = -1.0;
+  for (int quad = 0; quad < NUM_QUADS; quad++, vertex_id += 4, index_id += 2, x_offset += x_scale) {
+    gl_MeshVerticesEXT[vertex_id    ].gl_Position = vec4(pos[0].x + x_offset, pos[0].y, 0.0, 1.0);
+    gl_MeshVerticesEXT[vertex_id + 1].gl_Position = vec4(pos[1].x + x_offset, pos[1].y, 0.0, 1.0);
+    gl_MeshVerticesEXT[vertex_id + 2].gl_Position = vec4(pos[2].x + x_offset, pos[2].y, 0.0, 1.0);
+    gl_MeshVerticesEXT[vertex_id + 3].gl_Position = vec4(pos[3].x + x_offset, pos[3].y, 0.0, 1.0);
+
+    float hue = float(workgroup_id) / float(NUM_TASKS) * 360;
+    float light = float(quad) / float(NUM_QUADS) * 0.75 + 0.1;
+    vec4 c = transformHSLtoRGB(vec4(hue, 1.0, light, 1.0));
+    v_out[vertex_id    ].color = c;
+    v_out[vertex_id + 1].color = c;
+    v_out[vertex_id + 2].color = c;
+    v_out[vertex_id + 3].color = c;
+
+    gl_PrimitiveTriangleIndicesEXT[index_id    ] = uvec3(vertex_id, vertex_id + 1, vertex_id + 2);
+    gl_PrimitiveTriangleIndicesEXT[index_id + 1] = uvec3(vertex_id, vertex_id + 2, vertex_id + 3);
+  }
+}

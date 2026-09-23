@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -41,18 +30,25 @@
 #include "DataMgr/ForeignStorage/ForeignStorageCache.h"
 #include "DataMgr/ForeignStorage/ForeignStorageException.h"
 #include "DataMgr/ForeignStorage/RegexFileBufferParser.h"
-
-#include "Geospatial/Types.h"
+#include "ImportExport/DelimitedParserUtils.h"
+#include "Shared/Encryption.h"
+#include "ThriftHandler/ForeignTableRefreshScheduler.h"
 #if defined(HAVE_AWS_S3)
 #include "AwsHelpers.h"
 #include "DataMgr/HeavyDbAwsSdk.h"
-#endif
-#include "ImportExport/DelimitedParserUtils.h"
+#endif  // defined(HAVE_AWS_S3)
+#include "Geospatial/Types.h"
+#include "OdbcFsiTestHelper.h"
+#include "Tests/ForeignTableTestHelpers.h"
+#include "Tests/TestHelpers.h"
+#ifdef EE_FSI_ODBC
+#include "DataMgr/ForeignStorage/ODBC/OdbcDataWrapper.h"
+#include "DataMgr/ForeignStorage/ODBC/odbc_utils.h"
+extern bool g_enable_odbc_stats_scan;
+#endif  // def(EE_FSI_ODBC)
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
-#include "Tests/ForeignTableTestHelpers.h"
-#include "TestHelpers.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -119,25 +115,20 @@ static const std::string default_select = "SELECT * FROM " + default_table_name 
 
 namespace {
 // Needs to be a macro since GTEST_SKIP() breaks by invoking "return".
-#define SKIP_SETUP_IF_DISTRIBUTED(msg) \
-  if (isDistributedMode()) {           \
-    skip_teardown_ = true;             \
-    GTEST_SKIP() << msg;               \
-  }
-
-#define SKIP_IF_DISTRIBUTED(msg) \
-  if (isDistributedMode()) {     \
-    GTEST_SKIP() << msg;         \
-  }
-
-#define SKIP_AND_DISABLE_TEARDOWN(msg) \
-  skip_teardown_ = true;               \
-  GTEST_SKIP() << msg;
 
 // These need to be done as macros because GTEST_SKIP() invokes "return" in the function
 // it is called in as well as setting IsSkipped().
+#ifdef EE_FSI_ODBC
+#define SKIP_SETUP_IF_ODBC_DISABLED()                                             \
+  if (!g_run_odbc) {                                                              \
+    skip_teardown_ = true;                                                        \
+    GTEST_SKIP()                                                                  \
+        << "ODBC tests are disabled by default (enable with '--run-odbc-tests')"; \
+  }
+#else
 #define SKIP_SETUP_IF_ODBC_DISABLED() \
   GTEST_SKIP() << "ODBC tests not supported with this build configuration."
+#endif
 
 bool is_regex(const std::string& wrapper_type) {
   return (wrapper_type == "regex_parser");
@@ -266,6 +257,49 @@ std::string get_data_wrapper_name(const std::string& data_wrapper_type) {
   return data_wrapper;
 }
 
+foreign_storage::OptionsMap add_missing_options_for_wrapper(
+    const foreign_storage::OptionsMap& options,
+    const std::string& data_wrapper_type,
+    const std::vector<NameTypePair>& column_pairs,
+    const std::string& table_name,
+    const std::string& src_path,
+    const int32_t order_by_column_index = 0) {
+  foreign_storage::OptionsMap new_options = options;
+  if (data_wrapper_type == "regex_parser") {
+    if (options.find("LINE_REGEX") == options.end()) {
+      new_options["LINE_REGEX"] = get_line_regex(column_pairs.size());
+    }
+    if (options.find("HEADER") == options.end()) {
+      new_options["HEADER"] = "TRUE";
+    }
+  }
+
+  if (is_odbc(data_wrapper_type)) {
+    auto odbc_table_name =
+        DBHandlerTestFixture::getOdbcTableName(table_name, data_wrapper_type);
+    if (options.find("SQL_SELECT") == options.end()) {
+      std::stringstream ss;
+      ss << "select ";
+      size_t i = 0;
+      for (auto [name, type] : column_pairs) {
+        ss << name << ((++i < column_pairs.size()) ? ", " : " from " + odbc_table_name);
+      }
+      new_options["SQL_SELECT"] = ss.str();
+    }
+    if (options.find("SQL_ORDER_BY") == options.end()) {
+      CHECK_LT(static_cast<size_t>(order_by_column_index), column_pairs.size());
+      std::stringstream ss;
+      ss << column_pairs[order_by_column_index].first;
+      new_options["SQL_ORDER_BY"] = ss.str();
+    }
+  } else {
+    if (options.find("FILE_PATH") == options.end()) {
+      new_options["FILE_PATH"] = src_path;
+    }
+  }
+  return new_options;
+}
+
 void make_parquet_file(const std::string& file_name,
                        const std::vector<parquet::Type::type>& col_types,
                        const std::vector<std::vector<std::string>>& rows) {
@@ -353,6 +387,9 @@ class ForeignTableTest : public DBHandlerTestFixture {
     }
     g_enable_fsi = true;
     DBHandlerTestFixture::SetUp();
+#ifdef EE_FSI_ODBC
+    setupOdbcIfEnabled();
+#endif
   }
 
   void TearDown() override {
@@ -360,8 +397,69 @@ class ForeignTableTest : public DBHandlerTestFixture {
       return;
     }
     g_enable_fsi = true;
+#ifdef EE_FSI_ODBC
+    teardownOdbcIfEnabled();
+#endif
     DBHandlerTestFixture::TearDown();
   }
+
+#ifdef EE_FSI_ODBC
+  void setupOdbc() {
+    CHECK(is_odbc(wrapper_type_));
+    createLocalODBCServer(wrapper_type_);
+    createODBCUserMapping(wrapper_type_);
+    createODBCSchema(wrapper_type_);
+  }
+
+  void setupOdbcIfEnabled() {
+    if (is_odbc(wrapper_type_)) {
+      setupOdbc();
+    }
+  }
+
+  void teardownOdbc() {
+    CHECK(is_odbc(wrapper_type_));
+    dropUserMappingIfExists();
+    dropLocalODBCServerIfExists();
+    dropODBCSchema(wrapper_type_);
+  }
+
+  void teardownOdbcIfEnabled() {
+    if (is_odbc(wrapper_type_)) {
+      teardownOdbc();
+    }
+  }
+
+  void createLocalODBCServer(const std::string& dsn_name) {
+    dropLocalODBCServerIfExists();
+    sql("CREATE SERVER " + DEFAULT_ODBC_SERVER_NAME_ +
+        " FOREIGN DATA WRAPPER odbc WITH (DATA_SOURCE_NAME = '" + dsn_name + "');");
+  }
+
+  void createODBCUserMapping(const std::string& dsn_name) {
+    auto [username, password] = getODBCCredentials(dsn_name);
+    createUserMappingForDsn(DEFAULT_ODBC_SERVER_NAME_, username, password);
+  }
+
+  void dropLocalODBCServerIfExists() {
+    sql("DROP SERVER IF EXISTS " + DEFAULT_ODBC_SERVER_NAME_ + ";");
+  }
+
+  void dropUserMappingIfExists(
+      const std::string& server_name = DEFAULT_ODBC_SERVER_NAME_) {
+    std::string error_msg{"Foreign server with name \"" + server_name +
+                          "\" does not exist."};
+    try {
+      sql("DROP USER MAPPING IF EXISTS FOR PUBLIC SERVER " + server_name + ";");
+    } catch (const TDBException& e) {
+      // If the server does not exist then this request will throw.  This can happen if we
+      // skipped the setup for the test.
+      assertExceptionMessage(e, error_msg);
+    } catch (const std::runtime_error& e) {
+      assertExceptionMessage(e, error_msg);
+    }
+  }
+#endif
 
   static std::string getCreateForeignTableQuery(const std::string& columns,
                                                 const std::string& file_name_base,
@@ -466,32 +564,30 @@ class ForeignTableTest : public DBHandlerTestFixture {
       const foreign_storage::OptionsMap options = {},
       const std::string& table_name = default_table_name,
       const std::vector<NameTypePair>& db_specific_column_pairs = {},
-      const int order_by_column_index = -1) {
+      const int order_by_column_index = 0) {
     std::stringstream ss;
     ss << "CREATE FOREIGN TABLE " << table_name << " (";
     ss << column_pairs_to_schema_string(column_pairs) << ") ";
     const auto& stored_column_pairs =
         (db_specific_column_pairs.empty()) ? column_pairs : db_specific_column_pairs;
-
     if (is_odbc(data_wrapper_type)) {
       createODBCSourceTable(table_name, stored_column_pairs, src_path, data_wrapper_type);
+      ss << "SERVER temp_odbc WITH (";
     } else {
       ss << "SERVER " + get_default_server(data_wrapper_type);
-      ss << " WITH (file_path = '";
-      ss << src_path << "'";
+      ss << " WITH (";
     }
-    if (data_wrapper_type == "regex_parser") {
-      if (options.find("LINE_REGEX") == options.end()) {
-        ss << ", LINE_REGEX = '" + get_line_regex(column_pairs.size()) + "'";
-      }
-      if (options.find("HEADER") == options.end()) {
-        ss << ", HEADER = 'TRUE'";
-      }
+    auto filled_options = add_missing_options_for_wrapper(options,
+                                                          data_wrapper_type,
+                                                          stored_column_pairs,
+                                                          table_name,
+                                                          src_path,
+                                                          order_by_column_index);
+    size_t i = 0;
+    for (auto& [key, value] : filled_options) {
+      ss << key << " = '" << value << "'"
+         << ((++i < filled_options.size()) ? ", " : ");");
     }
-    for (auto& [key, value] : options) {
-      ss << ", " << key << " = '" << value << "'";
-    }
-    ss << ");";
     return ss.str();
   }
 
@@ -832,9 +928,6 @@ class CacheControllingSelectQueryBaseTest : public SelectQueryTest {
   }
 
   void SetUp() override {
-    // Distributed mode doens't handle the resetPersistentStorageMgr appropriately as the
-    // leaves don't have a way of being updated, so we skip these tests.
-    SKIP_SETUP_IF_DISTRIBUTED("Test relies on disk cache");
     // Disable/enable the cache as test param requires
     starting_cache_level_ = getCatalog()
                                 .getDataMgr()
@@ -980,6 +1073,9 @@ class RecoverCacheQueryTest : public ForeignTableTest {
   }
 
   void TearDown() override {
+    if (boost::filesystem::exists(test_dir_)) {
+      boost::filesystem::remove_all(test_dir_);
+    }
     if (skip_teardown_) {
       return;
     }
@@ -995,8 +1091,6 @@ class RecoverCacheQueryTest : public ForeignTableTest {
 };
 
 TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
-  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
-
   std::string query = "CREATE FOREIGN TABLE " + default_table_name +
                       " (t TEXT, i BIGINT[]) "s +
                       "SERVER default_local_delimited WITH (file_path = '" +
@@ -1026,8 +1120,6 @@ TEST_F(RecoverCacheQueryTest, RecoverWithoutWrappers) {
 }
 
 TEST_F(RecoverCacheQueryTest, ErrorDuringRecovery) {
-  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
-
   boost::filesystem::create_directory(test_dir_);
   boost::filesystem::copy_file(getDataFilesPath() + "0.csv", test_dir_ / "0.csv");
   boost::filesystem::copy_file(getDataFilesPath() + "1.csv", test_dir_ / "1.csv");
@@ -1067,6 +1159,3573 @@ TEST_F(RecoverCacheQueryTest, ErrorDuringRecovery) {
 
   ASSERT_EQ(cache_->getNumCachedChunks(), size_t(1));
   ASSERT_EQ(cache_->getNumCachedMetadata(), size_t(1));
+}
+
+#ifdef EE_FSI_ODBC
+class OdbcConnectTest : public RecoverCacheQueryTest {
+ protected:
+  inline static const std::string UNAUTHORIZED_USER_ = "odbc_auth_test_unauthorized_user";
+  inline static const std::string AUTHORIZED_USER_ = "odbc_auth_test_authorized_user";
+  inline static const std::string USER_PASSWORD_ = "odbc_auth_test_user_password";
+
+  inline static const std::string SERVER_NAME_ = "odbc_server";
+  inline static const std::string DATA_WRAPPER_NAME_ = "odbc";
+
+  static void SetUpTestSuite() {
+    if (!g_run_odbc) {
+      return;
+    }
+    // clang-format off
+    /*
+    Test tables and test users in (Postgres, ...) required by this test suite are
+    automatically setup. This setup stage has a number of pre-requisites such as
+    privileges & configurations to function properly. The setup varies depending on the
+    db.
+
+    Postgres:
+      Overall Requirements:
+        -A database where test tables can be created.
+        -A user which has 'Create role' attribute as well as connect/select privilege on tables in the database.
+        -'.odbc.ini' file which points to the afformentioned database and user.
+        -'pg_hba.conf' without peer authentication method (this allows postges to be used
+          with users other than your current unix user).
+
+      example ~/.odbc.ini:
+        [postgres]                 # or postgis
+        Driver=/.../psqlodbca.so
+        host=localhost             # not required
+        port=5432
+        Database={$db_name}        # set to a db which exists
+
+      example /etc/postgresql/13/main/pg_hba.conf:
+        local   all             postgres                                trust       # default: 'peer'
+        local   all             all                                     trust       # default: 'peer'
+        host    all             all             127.0.0.1/32            md5
+        host    all             all             ::1/128                 md5
+        local   replication     all                                     trust       # default: 'peer'
+        host    replication     all             127.0.0.1/32            md5
+        host    replication     all             ::1/128                 md5
+      NOTE: run 'sudo service postgresql restart` in order to reload configuration changes.
+    */
+    // clang-format on
+    DBHandlerTestFixture::SetUpTestSuite();
+    dropUsers();
+    dropTables();
+    createTables();
+    createUsers();
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_run_odbc) {
+      return;
+    }
+    dropUsers();
+    dropTables();
+    DBHandlerTestFixture::TearDownTestSuite();
+  }
+
+  void SetUp() override { RecoverCacheQueryTest::SetUp(); }
+
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    sql("DROP FOREIGN TABLE IF EXISTS foreign_selectable_table;");
+    dropUserMappingIfExists(SERVER_NAME_);
+    sql("DROP SERVER IF EXISTS " + SERVER_NAME_ + ";");
+    RecoverCacheQueryTest::TearDown();
+  }
+
+  static void runSqlNoException(
+      const std::unique_ptr<foreign_storage::OdbcConnection>& pg_connection,
+      const std::string& sql) {
+    try {
+      pg_connection->runSqlAllowSuccessWithInfo(sql);
+    } catch (const foreign_storage::ForeignStorageException& e) {
+      // some odbc drivers will throw a -1 on an "if exists" type of query.
+    }
+  }
+
+  static void dropUsers() {
+    auto pg_connection = createODBCConnection("postgres");
+    runSqlNoException(pg_connection, "DROP OWNED BY " + UNAUTHORIZED_USER_ + ";");
+    runSqlNoException(pg_connection, "DROP OWNED BY " + AUTHORIZED_USER_ + ";");
+
+    runSqlNoException(pg_connection, "DROP USER IF EXISTS " + UNAUTHORIZED_USER_ + ";");
+    runSqlNoException(pg_connection, "DROP USER IF EXISTS " + AUTHORIZED_USER_ + ";");
+  }
+
+  static void createUsers() {
+    auto pg_connection = createODBCConnection("postgres");
+    pg_connection->runSqlAllowSuccessWithInfo("CREATE USER " + UNAUTHORIZED_USER_ + ";");
+    pg_connection->runSqlAllowSuccessWithInfo("CREATE USER " + AUTHORIZED_USER_ +
+                                              " WITH PASSWORD '" + USER_PASSWORD_ + "';");
+    pg_connection->runSqlAllowSuccessWithInfo(
+        "do $$ begin execute format('grant create, connect on database %I to %I', "
+        "current_database(), '" +
+        AUTHORIZED_USER_ + "'); end; $$;");
+    pg_connection->runSqlAllowSuccessWithInfo("GRANT USAGE ON SCHEMA public TO " +
+                                              AUTHORIZED_USER_ + ";");
+    pg_connection->runSqlAllowSuccessWithInfo(
+        "GRANT SELECT ON public.selectable_table TO " + AUTHORIZED_USER_ + ";");
+  }
+
+  static void dropTables() {
+    auto pg_connection = createODBCConnection("postgres");
+    runSqlNoException(pg_connection, "DROP TABLE IF EXISTS public.selectable_table;"s);
+  }
+
+  static void createTables() {
+    auto pg_connection = createODBCConnection("postgres");
+    pg_connection->runSqlAllowSuccessWithInfo(
+        "CREATE TABLE public.selectable_table(i int);");
+    pg_connection->runSqlAllowSuccessWithInfo(
+        "INSERT INTO public.selectable_table VALUES(1);");
+    pg_connection->runSqlAllowSuccessWithInfo(
+        "INSERT INTO public.selectable_table VALUES(2);");
+    pg_connection->runSqlAllowSuccessWithInfo(
+        "INSERT INTO public.selectable_table VALUES(3);");
+    pg_connection->runSqlAllowSuccessWithInfo(
+        "INSERT INTO public.selectable_table VALUES(4);");
+  }
+
+  void setupForeignServer(const std::string& dsn_name, const bool use_dsn) {
+    sql("DROP SERVER IF EXISTS " + SERVER_NAME_ + ";");
+    sql("CREATE SERVER " + SERVER_NAME_ + " FOREIGN DATA WRAPPER " + DATA_WRAPPER_NAME_ +
+        " WITH (" + (use_dsn ? "DATA_SOURCE_NAME='" : "CONNECTION_STRING='DSN=") +
+        dsn_name + "');");
+    sql("CREATE FOREIGN TABLE foreign_selectable_table(i INTEGER) SERVER " +
+        SERVER_NAME_ +
+        " WITH (sql_select = 'select * from public.selectable_table', sql_order_by = "
+        "'i');");
+  }
+
+  void sqlSelectAndAssertSuccess() {
+    TQueryResult result;
+    sql(result, "SELECT * FROM foreign_selectable_table;");
+    assertResultSetEqual({{i(1)}, {i(2)}, {i(3)}, {i(4)}}, result);
+  }
+
+  void sqlSelectAndAssertRoleDoesNotExist() {
+    try {
+      sql("SELECT * FROM foreign_selectable_table;");
+    } catch (const TDBException& e) {
+      std::regex pattern{"role \".*\" does not exist"};
+      std::string msg{e.what()};
+      ASSERT_TRUE(std::regex_search(msg, pattern));
+    }
+  }
+
+  void sqlSelectAndAssertPermissionDeniedFailure(const std::string& username) {
+    try {
+      sql("SELECT * FROM foreign_selectable_table;");
+    } catch (const TDBException& e) {
+      std::string expected_errPostgres{
+          "TException - service has thrown: TDBException(error_msg="
+          "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] [Odbc error "
+          "SQLSTATE = [42501]. Native Error Code = [1]. Details:\"ERROR: permission "
+          "denied for table selectable_table;\nError while executing the query\"] .Extra "
+          "details [select count(1) from (select * from public.selectable_table) as "
+          "alias_name])"};
+      std::string msg{e.what()};
+      ASSERT_EQ(msg, expected_errPostgres);
+    }
+  }
+};
+
+class OdbcConnectAuthenticateTest
+    : public OdbcConnectTest,
+      public ::testing::WithParamInterface<std::tuple<DsnType, UseDsnFlag>> {
+ protected:
+  void SetUp() override {
+    const auto [dsn_name, use_dsn] = GetParam();
+    wrapper_type_ = dsn_name;
+    SKIP_SETUP_IF_ODBC_DISABLED();
+    OdbcConnectTest::SetUp();
+    setupForeignServer(dsn_name, use_dsn);
+  }
+
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    OdbcConnectTest::TearDown();
+  }
+};
+
+// '/Tests/FsiDataFiles/sqlite.db' does not support authentication
+INSTANTIATE_TEST_SUITE_P(OdbcConnectAuthenticateTest,
+                         OdbcConnectAuthenticateTest,
+                         ::testing::Combine(::testing::Values("postgres"),
+                                            ::testing::Values(true, false)),
+                         [](const auto& info) {
+                           std::stringstream ss;
+                           ss << std::get<0>(info.param) << "_"
+                              << std::get<1>(info.param);
+                           return ss.str();
+                         });
+
+TEST_P(OdbcConnectAuthenticateTest, WithoutUserMapping) {
+  sqlSelectAndAssertRoleDoesNotExist();
+}
+
+TEST_P(OdbcConnectAuthenticateTest, UnauthorizedUser) {
+  createUserMappingForOdbc(
+      SERVER_NAME_,
+      {{"USERNAME", UNAUTHORIZED_USER_}, {"PASSWORD", USER_PASSWORD_}},
+      std::get<1>(GetParam()));
+  sqlSelectAndAssertPermissionDeniedFailure(UNAUTHORIZED_USER_);
+}
+
+TEST_P(OdbcConnectAuthenticateTest, AuthorizedUser) {
+  createUserMappingForOdbc(SERVER_NAME_,
+                           {{"USERNAME", AUTHORIZED_USER_}, {"PASSWORD", USER_PASSWORD_}},
+                           std::get<1>(GetParam()));
+  sqlSelectAndAssertSuccess();
+}
+
+class OdbcConnectionStringValidityTest : public OdbcConnectTest,
+                                         public ::testing::WithParamInterface<DsnType> {
+ protected:
+  void SetUp() override {
+    wrapper_type_ = GetParam();
+    SKIP_SETUP_IF_ODBC_DISABLED();
+    OdbcConnectTest::SetUp();
+    setupForeignServer(GetParam(), false);
+  }
+};
+
+// '/Tests/FsiDataFiles/sqlite.db' does not support authentication
+INSTANTIATE_TEST_SUITE_P(OdbcConnectionStringValidityTest,
+                         OdbcConnectionStringValidityTest,
+                         ::testing::Values("postgres"),
+                         [](const auto& info) { return info.param; });
+
+TEST_P(OdbcConnectionStringValidityTest, ValidSuffix1) {
+  createUserMappingForCs(
+      SERVER_NAME_, {{"USERNAME", AUTHORIZED_USER_}, {"PASSWORD", USER_PASSWORD_}}, "");
+  sqlSelectAndAssertSuccess();
+}
+
+TEST_P(OdbcConnectionStringValidityTest, ValidSuffix2) {
+  createUserMappingForCs(
+      SERVER_NAME_, {{"USERNAME", AUTHORIZED_USER_}, {"PASSWORD", USER_PASSWORD_}}, ";");
+  sqlSelectAndAssertSuccess();
+}
+
+TEST_P(OdbcConnectionStringValidityTest, ValidSuffix3) {
+  createUserMappingForCs(SERVER_NAME_,
+                         {{"USERNAME", AUTHORIZED_USER_}, {"PASSWORD", USER_PASSWORD_}},
+                         ";    ");
+  sqlSelectAndAssertSuccess();
+}
+
+class OdbcSelectTest : public SelectQueryTest,
+                       public ::testing::WithParamInterface<WrapperType> {
+ protected:
+  void SetUp() override {
+    wrapper_type_ = GetParam();
+    SKIP_SETUP_IF_ODBC_DISABLED();
+    SelectQueryTest::SetUp();
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(OdbcSelect,
+                         OdbcSelectTest,
+                         ::testing::ValuesIn(odbc_wrappers),
+                         [](const auto& info) { return info.param; });
+
+TEST_P(OdbcSelectTest, NegativeDecimal) {
+  if (wrapper_type_ == "sqlite") {
+    GTEST_SKIP() << "test not valid for sqlite";
+  }
+  std::vector<NameTypePair> column_pairs = {{"negative_decimal", "DECIMAL(9,6)"}};
+  sql(createForeignTableQuery(
+      column_pairs, getDataFilesPath() + "negative_decimal.csv", GetParam()));
+  sqlAndCompareResult(
+      "SELECT * FROM " + default_table_name + " ORDER BY negative_decimal;",
+      {
+          {-123.234},
+          {678.912345},
+      });
+}
+
+TEST_P(OdbcSelectTest, SmallDictNulls) {
+  sql(createForeignTableQuery({{"a", "TEXT ENCODING DICT(8)"},
+                               {"b", "TEXT ENCODING DICT(16)"},
+                               {"c", "TEXT ENCODING DICT(32)"},
+                               {"d", "TEXT"}},
+                              getDataFilesPath() + "csv_nulls.csv",
+                              GetParam()));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY a;",
+                      {{Null, Null, Null, Null}});
+}
+
+TEST_P(OdbcSelectTest, SelectCharColumn) {
+  if (wrapper_type_ == "bigquery") {
+    GTEST_SKIP() << "char data type not supported.";
+  }
+  sql(createForeignTableQuery({{"c", "TEXT"}},
+                              getDataFilesPath() + "a.csv",
+                              GetParam(),
+                              {},
+                              default_table_name,
+                              {{"c", "CHAR"}}));
+  std::string query = "SELECT * FROM " + default_table_name + ";";
+  TQueryResult result;
+  sql(result, query);
+  assertResultSetEqual({{"a"}}, result);
+}
+
+TEST_P(OdbcSelectTest, QuotedIdentifier) {
+  sql(createForeignTableQuery({{"id", "BIGINT"}},
+                              getDataFilesPath() + "1.csv",
+                              GetParam(),
+                              {},
+                              default_table_name,
+                              {{quoted_identifier(wrapper_type_, "iD"), "BIGINT"}}));
+  std::string query = "SELECT * FROM " + default_table_name + ";";
+  TQueryResult result;
+  sql(result, query);
+  assertResultSetEqual({{1L}}, result);
+}
+
+TEST_P(OdbcSelectTest, GroupByQueryHighPrecisionTimestamp) {
+  if (GetParam() == "sqlite") {
+    GTEST_SKIP();
+  }
+
+  sql(createForeignTableQuery(
+      {{"pickup_datetime", "TIMESTAMP (6)"}, {"passenger_count", "SMALLINT"}},
+      getDataFilesPath() + "trips_mq03.csv",
+      GetParam()));
+  std::string query =
+      "SELECT passenger_count, extract( year from pickup_datetime ) AS pickup_year, "
+      "count(*) FROM " +
+      default_table_name +
+      " GROUP BY passenger_count, pickup_year ORDER BY passenger_count;";
+  TQueryResult result;
+  sql(result, query);
+  assertResultSetEqual({{1L, 2011L, 4L}, {2L, 2011L, 1L}}, result);
+}
+
+TEST_P(OdbcSelectTest, WithoutOrderBy) {
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE " + default_table_name +
+          " (i BIGINT) SERVER temp_odbc WITH (SQL_SELECT = 'select * from table');",
+      "Foreign table options must contain a value for \"SQL_ORDER_BY\".");
+}
+
+TEST_P(OdbcSelectTest, WithoutSqlSelect) {
+  queryAndAssertException(
+      "CREATE FOREIGN TABLE " + default_table_name +
+          " (i BIGINT) SERVER temp_odbc WITH (SQL_ORDER_BY = 'i');",
+      "Foreign table options must contain a value for \"SQL_SELECT\".");
+}
+
+TEST_P(OdbcSelectTest, WithBufferSizeOption) {
+  if (GetParam() == "snowflake") {
+    GTEST_SKIP() << "Test expects INTEGER size of 4 rather than snowflake's 38";
+  }
+  sql(createForeignTableQuery(
+      {{"i", "INT"}},
+      getDataFilesPath() + "two_row_1_2.csv",
+      GetParam(),
+      {{"buffer_size", wrapper_type_ == "bigquery" ? "8" : "4"}}));
+
+  TQueryResult result;
+  sql(result, "SELECT i FROM " + default_table_name + " order by i;");
+
+  // clang-format off
+  assertResultSetEqual({{i(1)},
+                        {i(2)}},
+                       result);
+  // clang-format on
+}
+
+TEST_P(OdbcSelectTest, WithBufferSizeLessThanRowSize) {
+  if (GetParam() == "snowflake") {
+    GTEST_SKIP() << "Test expects INTEGER size of 4 rather than snowflake's 38";
+  }
+  sql(createForeignTableQuery({{"i", "INT"}},
+                              getDataFilesPath() + "two_row_1_2.csv",
+                              GetParam(),
+                              {{"buffer_size", "1"}}));
+
+  std::string exception_msg =
+      "`BUFFER_SIZE` specified is too small to fetch at least one element of required "
+      "size ";
+  exception_msg += wrapper_type_ == "bigquery" ? "8" : "4";
+  exception_msg +=
+      " bytes in HeavyDB column 'i', please specify larger `BUFFER_SIZE` currently it is "
+      "1 bytes. Foreign table: test_foreign_table";
+
+  queryAndAssertException("SELECT i FROM " + default_table_name + " order by i;",
+                          exception_msg);
+}
+
+TEST_P(OdbcSelectTest, WithBufferSizeOptionAndStringData) {
+  sql(createForeignTableQuery({{"txt", "TEXT"}, {"quoted_txt", "TEXT"}},
+                              getDataFilesPath() + "non_quoted.csv",
+                              GetParam(),
+                              {{"buffer_size", "100"}}));
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY txt;");
+
+  // clang-format off
+  assertResultSetEqual({{"text_1","text_1"},
+                        {"text_2","text_2"},
+                        {"text_3","text_3"}},
+                       result);
+  // clang-format on
+}
+
+TEST_P(OdbcSelectTest, WithBufferSizeOptionLessThanRowSizeAndStringData) {
+  sql(createForeignTableQuery({{"txt", "TEXT"}, {"quoted_txt", "TEXT"}},
+                              getDataFilesPath() + "non_quoted.csv",
+                              GetParam(),
+                              {{"buffer_size", "1"}}));
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY txt;");
+
+  // clang-format off
+  assertResultSetEqual({{"text_1","text_1"},
+                        {"text_2","text_2"},
+                        {"text_3","text_3"}},
+                       result);
+  // clang-format on
+}
+
+TEST_P(OdbcSelectTest, OdbcSqlSelectWithQuoteEscape) {
+  sql(createForeignTableQuery(
+      {{"pickup_datetime", "TIMESTAMP (0)"}, {"passenger_count", "INT"}},
+      getDataFilesPath() + "trips_mq03.csv",
+      GetParam(),
+      {{"sql_select",
+        "select pickup_datetime, passenger_count from " +
+            getOdbcTableName(default_table_name, wrapper_type_) +
+            " where pickup_datetime > ''2011-06-19 00:00:00'' AND pickup_datetime < "
+            "''2011-06-28 00:00:00''"}}));
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY pickup_datetime;");
+
+  assertResultSetEqual({{"2011-06-19 17:52:31", i(1)}, {"2011-06-27 16:54:41", i(1)}},
+                       result);
+}
+
+TEST_P(OdbcSelectTest, OdbcWithMaxBufferSizeOptionLessThanRowSizeAndStringData) {
+  foreign_storage::OdbcConnection::max_buffer_resize_limit_ = 4;
+  sql(createForeignTableQuery({{"txt", "TEXT"}, {"quoted_txt", "TEXT"}},
+                              getDataFilesPath() + "non_quoted.csv",
+                              GetParam(),
+                              {{"buffer_size", "1"}}));
+
+  queryAndAssertException(
+      "SELECT * FROM " + default_table_name + " ORDER BY txt;",
+      "`BUFFER_SIZE` specified is too small to fetch at "
+      "least one element of required size 7 bytes in HeavyDB column "
+      "'txt', please specify "
+      "larger `BUFFER_SIZE` currently it is 1 bytes. Foreign table: test_foreign_table");
+}
+
+TEST_P(OdbcSelectTest, OdbcColumnTypeMismatch) {
+  if (GetParam() == "snowflake") {
+    GTEST_SKIP() << "Test expects column name as txt snowflake provides TXT";
+  }
+  sql(createForeignTableQuery({{"i", "INT"}},
+                              getDataFilesPath() + "1" + wrapper_ext(GetParam()),
+                              GetParam(),
+                              {},
+                              default_table_name,
+                              {{"txt", "TEXT"}}));
+  std::string msg =
+      "Remote database column 'txt' mapped onto HeavyDB column 'i' not "
+      "currently supported by ODBC foreign storage interface. Remote column type = "
+      "[Column name [txt], dimension [0], type [";
+  if (wrapper_type_ == "redshift") {
+    msg += "-10";
+  } else if (wrapper_type_ == "bigquery" || wrapper_type_ == "hive") {
+    msg += "12";
+  } else {
+    msg += "-1";
+  }
+  msg +=
+      "]] HeavyDB column type = [HeavyDB Catalog: column name [i], type [INTEGER], type "
+      "code [INT], dimension [0]]";
+  queryAndAssertException("SELECT * FROM " + default_table_name + ";", msg);
+}
+
+TEST_P(OdbcSelectTest, OdbcInvalidColumnName) {
+  if (GetParam() == "snowflake") {
+    GTEST_SKIP() << "snowflake error msg not implemented";
+  }
+  const std::string& table_name = default_table_name;
+  sql(createForeignTableQuery({{"t", "TEXT"}, {"i", "BIGINT"}, {"f", "DOUBLE"}},
+                              getDataFilesPath() + "example_2" + wrapper_ext(GetParam()),
+                              GetParam(),
+                              {{"sql_select",
+                                "select invalid_column from " +
+                                    getOdbcTableName(table_name, wrapper_type_) + ";"}},
+                              table_name));
+
+  queryAndAssertExceptionWithParam(
+      "SELECT * FROM " + table_name + ";",
+      GetParam(),
+      {{"sqlite",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+        "[Odbc error SQLSTATE = [HY000]. Native Error Code = [1]. Details:\"no such "
+        "column: invalid_column (1)\"] .Extra details [select invalid_column from " +
+            table_name + "]"},
+       {"postgres",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+        "[Odbc error SQLSTATE = [42703]. Native Error Code = [1]. Details:\"ERROR: "
+        "column \"invalid_column\" does not exist;\nNo query has been executed with that "
+        "handle\"]"},
+       {"redshift",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+        "[Odbc error SQLSTATE = [42703]. Native Error Code = [30]. "
+        "Details:\"[Amazon][Amazon Redshift] (30) Error occurred while trying to execute "
+        "a query: [SQLState 42703] ERROR:  column \"invalid_column\" does not exist in " +
+            table_name + "\n\"] .Extra details [select invalid_column from " +
+            getOdbcTableName(table_name, "redshift") + "]"},
+       {"bigquery",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] [Odbc error "
+        "SQLSTATE = [42000]. Native Error Code = [70]. Details:\"[Simba][BigQuery] (70) "
+        "Invalid query: Unrecognized name: invalid_column at [1:8]\"] .Extra details "
+        "[select invalid_column from " +
+            getOdbcTableName(table_name, "bigquery") + "]"},
+       {"hive",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] [Odbc error "
+        "SQLSTATE = [42000]. Native Error Code = [80]. Details:\"[Cloudera][Hardy] (80) "
+        "Syntax or semantic analysis error thrown in server while executing query. Error "
+        "message from server: Error while compiling statement: FAILED: SemanticException "
+        "[Error 10004]: Line 1:7 Invalid table alias or column reference "
+        "'invalid_column': (possible column names are: t, i, f)\"] .Extra details "
+        "[select invalid_column from " +
+            getOdbcTableName(table_name, "hive") + "]"}});
+}
+
+TEST_P(OdbcSelectTest, ReloadDataWrapperOnDropUserMapping) {
+  if (wrapper_type_ == "sqlite" || wrapper_type_ == "bigquery") {
+    GTEST_SKIP() << "User mapping not required to access rdms";
+  }
+
+  sql(createForeignTableQuery(
+      {{"i", "INT"}}, getDataFilesPath() + "two_row_1_2.csv", wrapper_type_));
+  TQueryResult result;
+  sql(result, "SELECT i FROM " + default_table_name + " order by i;");
+  assertResultSetEqual({{i(1)}, {i(2)}}, result);
+  sql("DROP USER MAPPING FOR PUBLIC SERVER temp_odbc;");
+
+  std::regex pattern;
+  if (wrapper_type_ == "postgres" || wrapper_type_ == "hive") {
+    pattern = "role \".*\" does not exist";
+  } else if (wrapper_type_ == "redshift") {
+    pattern =
+        "Unable to establish connection with data source\\. Missing settings: "
+        "\\{\\[PWD\\] \\[UID\\]\\}";
+  } else if (wrapper_type_ == "snowflake") {
+    pattern = "Required setting 'UID' is not present in the connection settings.";
+  } else {
+    UNREACHABLE();
+  }
+
+  try {
+    sql("SELECT i FROM " + default_table_name + " order by i;");
+  } catch (const TDBException& e) {
+    std::string msg{e.what()};
+    ASSERT_TRUE(std::regex_search(msg, pattern));
+  }
+}
+
+TEST_P(OdbcSelectTest, LegacyOrderBy) {
+  sql(createForeignTableQuery(
+      {{"i", "INT"}}, getDataFilesPath() + "two_row_1_2.csv", GetParam()));
+
+  // Need to edit the options directly, since they are validated otherwise.
+  auto cat = &getCatalog();
+  auto td = const_cast<foreign_storage::ForeignTable*>(
+      cat->getForeignTable(default_table_name));
+  td->options.erase("SQL_ORDER_BY");
+
+  queryAndAssertException(
+      "SELECT count(*) FROM " + default_table_name,
+      "Odbc-backed foreign tables require an \"SQL_ORDER_BY\" option to specify the odbc "
+      "result order.  Please add one to table \"" +
+          default_table_name +
+          "\" using the \"ALTER FOREIGN TABLE SET (SQL_ORDER_BY='')\" command.");
+}
+
+TEST_P(OdbcSelectTest, LegacyOrderByAltered) {
+  sql(createForeignTableQuery(
+      {{"i", "INT"}}, getDataFilesPath() + "two_row_1_2.csv", GetParam()));
+  auto cat = &getCatalog();
+  auto td = const_cast<foreign_storage::ForeignTable*>(
+      cat->getForeignTable(default_table_name));
+  td->options.erase("SQL_ORDER_BY");
+
+  sql("ALTER FOREIGN TABLE " + default_table_name + " SET (SQL_ORDER_BY = 'i');");
+  sqlAndCompareResult("SELECT i FROM " + default_table_name, {{i(1)}, {i(2)}});
+}
+
+class OdbcSelectTimeTest : public SelectQueryTest,
+                           public ::testing::WithParamInterface<WrapperType> {
+ protected:
+  void SetUp() override {
+    wrapper_type_ = GetParam();
+    SKIP_SETUP_IF_ODBC_DISABLED();
+    SelectQueryTest::SetUp();
+  }
+
+  bool hasTimestamp9() { return wrapper_type_ == "snowflake"; }
+
+  void testInvalidCoercions(const std::string& source_precision,
+                            const std::string& target_precision,
+                            const std::string& test_file,
+                            const std::vector<NameTypePair>& remote_schema) {
+    std::string column_name = "t_"s + source_precision;
+    sqlDropForeignTable();
+    sql(createForeignTableQuery(
+        {{column_name, "TIMESTAMP(" + target_precision + ")"}},
+        test_file,
+        wrapper_type_,
+        {{"sql_select",
+          "SELECT " + column_name + " FROM " +
+              getOdbcTableName(default_table_name, wrapper_type_) + " ORDER BY " +
+              column_name + ";"}},
+        default_table_name,
+        remote_schema));
+
+    queryAndAssertException(
+        "SELECT * FROM " + default_table_name + " ORDER BY " + column_name + ";",
+        "Remote database column '" + column_name + "' mapped onto HeavyDB column '" +
+            column_name +
+            "' not currently supported by ODBC foreign storage interface. Remote column "
+            "type = [Column name [" +
+            column_name + "], dimension [" + source_precision +
+            "], type [93]] HeavyDB column type = [HeavyDB Catalog: column name [" +
+            column_name + "], type [TIMESTAMP(" + target_precision +
+            ")], type code [TIMESTAMP], dimension [" + target_precision + "]]",
+        true);
+  }
+
+  // Remote Schemas for test files
+  inline static const std::vector<NameTypePair> timestamp_range_validation_schema_ = {
+      {"t_32fixed", "TIMESTAMP(0)"},
+      {"t_0", "TIMESTAMP(0)"},
+      {"t_1", "TIMESTAMP(1)"},
+      {"t_2", "TIMESTAMP(2)"},
+      {"t_3", "TIMESTAMP(3)"},
+      {"t_4", "TIMESTAMP(4)"},
+      {"t_5", "TIMESTAMP(5)"},
+      {"t_6", "TIMESTAMP(6)"}};
+  inline static const std::vector<NameTypePair> timestamp_coercion_32fixed_schema_ = {
+      {"t_0", "TIMESTAMP(0)"},
+      {"t_1", "TIMESTAMP(1)"},
+      {"t_2", "TIMESTAMP(2)"},
+      {"t_3", "TIMESTAMP(3)"},
+      {"t_4", "TIMESTAMP(4)"},
+      {"t_5", "TIMESTAMP(5)"},
+      {"t_6", "TIMESTAMP(6)"}};
+  inline static const std::vector<NameTypePair> extended_schema_ = {
+      {"t_7", "TIMESTAMP(7)"},
+      {"t_8", "TIMESTAMP(8)"},
+      {"t_9", "TIMESTAMP(9)"}};
+};
+
+TEST_P(OdbcSelectTimeTest, TimestampRangeValidation) {
+  sql(createForeignTableQuery(
+      {{"t_32fixed", "TIMESTAMP ENCODING FIXED(32)"},
+       {"t_0", "TIMESTAMP(0)"},
+       {"t_3", "TIMESTAMP(3)"},
+       {"t_6", "TIMESTAMP(6)"}},
+      getDataFilesPath() + "timestamp_range_validation.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT t_32fixed, t_0, t_3, t_6 FROM " +
+            getOdbcTableName(default_table_name, wrapper_type_) + ";"}},
+      default_table_name,
+      timestamp_range_validation_schema_));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY t_32fixed;",
+                      {{"1901-12-13 20:45:53",
+                        "1000-01-01 00:00:00",
+                        "1000-01-01 00:00:00.000",
+                        "1000-01-01 00:00:00.000000"},
+                       {"2038-01-19 03:14:07",
+                        "2900-12-31 23:59:59",
+                        "2900-12-31 23:59:59.999",
+                        "2900-12-31 23:59:59.999999"}});
+}
+
+TEST_P(OdbcSelectTimeTest, CoercionToTimestamp32fixed) {
+  sql(createForeignTableQuery(
+      {{"t_0", "TIMESTAMP ENCODING FIXED(32)"},
+       {"t_1", "TIMESTAMP ENCODING FIXED(32)"},
+       {"t_2", "TIMESTAMP ENCODING FIXED(32)"},
+       {"t_3", "TIMESTAMP ENCODING FIXED(32)"},
+       {"t_4", "TIMESTAMP ENCODING FIXED(32)"},
+       {"t_5", "TIMESTAMP ENCODING FIXED(32)"},
+       {"t_6", "TIMESTAMP ENCODING FIXED(32)"}},
+      getDataFilesPath() + "timestamp_coercion_32fixed.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT t_0, t_1, t_2, t_3, t_4, t_5, t_6 FROM " +
+            getOdbcTableName(default_table_name, wrapper_type_) + ";"},
+       {"sql_order_by", "t_0"}},
+      default_table_name,
+      timestamp_coercion_32fixed_schema_));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY t_0;",
+                      {{"1901-12-13 20:45:53",
+                        "1901-12-13 20:45:53",
+                        "1901-12-13 20:45:53",
+                        "1901-12-13 20:45:53",
+                        "1901-12-13 20:45:53",
+                        "1901-12-13 20:45:53",
+                        "1901-12-13 20:45:53"},
+                       {"2038-01-19 03:14:07",
+                        "2038-01-19 03:14:07",
+                        "2038-01-19 03:14:07",
+                        "2038-01-19 03:14:07",
+                        "2038-01-19 03:14:07",
+                        "2038-01-19 03:14:07",
+                        "2038-01-19 03:14:07"}});
+}
+
+TEST_P(OdbcSelectTimeTest, CoercionToTimestamp0) {
+  sql(createForeignTableQuery(
+      {{"t_1", "TIMESTAMP(0)"},
+       {"t_2", "TIMESTAMP(0)"},
+       {"t_3", "TIMESTAMP(0)"},
+       {"t_4", "TIMESTAMP(0)"},
+       {"t_5", "TIMESTAMP(0)"},
+       {"t_6", "TIMESTAMP(0)"}},
+      getDataFilesPath() + "timestamp_range_validation.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT t_1, t_2, t_3, t_4, t_5, t_6 FROM " +
+            getOdbcTableName(default_table_name, wrapper_type_) + ";"},
+       {"sql_order_by", "t_1"}},
+      default_table_name,
+      timestamp_range_validation_schema_));
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY t_1;",
+                      {{"1000-01-01 00:00:00",
+                        "1000-01-01 00:00:00",
+                        "1000-01-01 00:00:00",
+                        "1000-01-01 00:00:00",
+                        "1000-01-01 00:00:00",
+                        "1000-01-01 00:00:00"},
+                       {"2900-12-31 23:59:59",
+                        "2900-12-31 23:59:59",
+                        "2900-12-31 23:59:59",
+                        "2900-12-31 23:59:59",
+                        "2900-12-31 23:59:59",
+                        "2900-12-31 23:59:59"}});
+}
+
+TEST_P(OdbcSelectTimeTest, TimestampRangeValidationExtended) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP();
+  }
+  sql(createForeignTableQuery(
+      {{"t_9", "TIMESTAMP(9)"}},
+      getDataFilesPath() + "timestamp_range_validation_extended.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT t_9 FROM " + getOdbcTableName(default_table_name, wrapper_type_) + ";"},
+       {"sql_order_by", "t_9"}},
+      default_table_name,
+      extended_schema_));
+  sqlAndCompareResult(
+      "SELECT * FROM " + default_table_name + " ORDER BY t_9;",
+      {{"1677-09-21 00:12:43.145224193"}, {"2262-11-04 23:47:16.854775807"}});
+}
+
+TEST_P(OdbcSelectTimeTest, CoercionToTimestamp32fixedExtended) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP();
+  }
+  sql(createForeignTableQuery(
+      {{"t_7", "TIMESTAMP ENCODING FIXED(32)"},
+       {"t_8", "TIMESTAMP ENCODING FIXED(32)"},
+       {"t_9", "TIMESTAMP ENCODING FIXED(32)"}},
+      getDataFilesPath() + "timestamp_coercion_32fixed_extended.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT t_7, t_8, t_9 FROM " +
+            getOdbcTableName(default_table_name, wrapper_type_) + ";"}},
+      default_table_name,
+      extended_schema_));
+  sqlAndCompareResult(
+      "SELECT * FROM " + default_table_name + " ORDER BY t_7;",
+      {{"1901-12-13 20:45:53", "1901-12-13 20:45:53", "1901-12-13 20:45:53"},
+       {"2038-01-19 03:14:07", "2038-01-19 03:14:07", "2038-01-19 03:14:07"}});
+}
+
+TEST_P(OdbcSelectTimeTest, CoercionToTimestamp0Extended) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP();
+  }
+  sql(createForeignTableQuery(
+      {{"t_7", "TIMESTAMP(0)"}, {"t_8", "TIMESTAMP(0)"}, {"t_9", "TIMESTAMP(0)"}},
+      getDataFilesPath() + "timestamp_range_validation_extended.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT t_7, t_8, t_9 FROM " +
+            getOdbcTableName(default_table_name, wrapper_type_) + ";"}},
+      default_table_name,
+      extended_schema_));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY t_7;",
+                      {{"1677-09-21 00:12:43.1452241",
+                        "1677-09-21 00:12:43.14522419",
+                        "1677-09-21 00:12:43.145224193"},
+                       {"2262-11-04 23:47:16.8547758",
+                        "2262-11-04 23:47:16.85477580",
+                        "2262-11-04 23:47:16.854775807"}});
+}
+
+TEST_P(OdbcSelectTimeTest, CoercionToTimestamp3) {
+  sql(createForeignTableQuery(
+      {{"t_1", "TIMESTAMP(3)"}, {"t_2", "TIMESTAMP(3)"}},
+      getDataFilesPath() + "timestamp_range_validation.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT t_1, t_2 FROM " + getOdbcTableName(default_table_name, wrapper_type_) +
+            ";"},
+       {"sql_order_by", "t_1"}},
+      default_table_name,
+      timestamp_range_validation_schema_));
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY t_1;",
+                      {{"1000-01-01 00:00:00.000", "1000-01-01 00:00:00.000"},
+                       {"2900-12-31 23:59:59.900", "2900-12-31 23:59:59.990"}});
+}
+
+TEST_P(OdbcSelectTimeTest, CoercionToTimestamp6) {
+  sql(createForeignTableQuery(
+      {{"t_4", "TIMESTAMP(6)"}, {"t_5", "TIMESTAMP(6)"}},
+      getDataFilesPath() + "timestamp_range_validation.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT t_4, t_5 FROM " + getOdbcTableName(default_table_name, wrapper_type_) +
+            ";"},
+       {"sql_order_by", "t_4"}},
+      default_table_name,
+      timestamp_range_validation_schema_));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY t_4;",
+                      {{"1000-01-01 00:00:00.000000", "1000-01-01 00:00:00.000000"},
+                       {"2900-12-31 23:59:59.999900", "2900-12-31 23:59:59.999990"}});
+}
+
+TEST_P(OdbcSelectTimeTest, CoercionToTimestamp9) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP() << "Currently, only snowflake supports timestamp precision > 6";
+  }
+  sql(createForeignTableQuery(
+      {{"t_7", "TIMESTAMP(9)"}, {"t_8", "TIMESTAMP(9)"}},
+      getDataFilesPath() + "timestamp_range_validation_extended.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT t_7, t_8 FROM " + getOdbcTableName(default_table_name, wrapper_type_) +
+            ";"},
+       {"sql_order_by", "t_7"}},
+      default_table_name,
+      extended_schema_));
+  sqlAndCompareResult(
+      "SELECT * FROM " + default_table_name + " ORDER BY t_7;",
+      {{"2262-11-04 23:47:16.854775800", "2262-11-04 23:47:16.854775800"},
+       {"1677-09-21 00:12:43.145224100", "1677-09-21 00:12:43.145224190"}});
+}
+
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion0To3) {
+  testInvalidCoercions("0",
+                       "3",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion4To3) {
+  testInvalidCoercions("4",
+                       "3",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion5To3) {
+  testInvalidCoercions("5",
+                       "3",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion6To3) {
+  testInvalidCoercions("6",
+                       "3",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion7To3) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP() << "Currently, only snowflake supports timestamp precision > 6";
+  }
+  testInvalidCoercions("7",
+                       "3",
+                       getDataFilesPath() + "timestamp_range_validation_extended.csv",
+                       extended_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion8To3) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP() << "Currently, only snowflake supports timestamp precision > 6";
+  }
+  testInvalidCoercions("8",
+                       "3",
+                       getDataFilesPath() + "timestamp_range_validation_extended.csv",
+                       extended_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion9To3) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP() << "Currently, only snowflake supports timestamp precision > 6";
+  }
+  testInvalidCoercions("9",
+                       "3",
+                       getDataFilesPath() + "timestamp_range_validation_extended.csv",
+                       extended_schema_);
+}
+
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion0To6) {
+  testInvalidCoercions("0",
+                       "6",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion1To6) {
+  testInvalidCoercions("1",
+                       "6",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion2To6) {
+  testInvalidCoercions("2",
+                       "6",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion3To6) {
+  testInvalidCoercions("3",
+                       "6",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion7To6) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP() << "Currently, only snowflake supports timestamp precision > 6";
+  }
+  testInvalidCoercions("7",
+                       "6",
+                       getDataFilesPath() + "timestamp_range_validation_extended.csv",
+                       extended_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion8To6) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP() << "Currently, only snowflake supports timestamp precision > 6";
+  }
+  testInvalidCoercions("8",
+                       "6",
+                       getDataFilesPath() + "timestamp_range_validation_extended.csv",
+                       extended_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion9To6) {
+  if (!hasTimestamp9()) {
+    GTEST_SKIP() << "Currently, only snowflake supports timestamp precision > 6";
+  }
+  testInvalidCoercions("9",
+                       "6",
+                       getDataFilesPath() + "timestamp_range_validation_extended.csv",
+                       extended_schema_);
+}
+
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion0To9) {
+  testInvalidCoercions("0",
+                       "9",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion1To9) {
+  testInvalidCoercions("1",
+                       "9",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion2To9) {
+  testInvalidCoercions("2",
+                       "9",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion3To9) {
+  testInvalidCoercions("3",
+                       "9",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion4To9) {
+  testInvalidCoercions("4",
+                       "9",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion5To9) {
+  testInvalidCoercions("5",
+                       "9",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+TEST_P(OdbcSelectTimeTest, InvalidTimestampCoercion6To9) {
+  testInvalidCoercions("6",
+                       "9",
+                       getDataFilesPath() + "timestamp_range_validation.csv",
+                       timestamp_range_validation_schema_);
+}
+
+TEST_P(OdbcSelectTimeTest, DateRangeValidation) {
+  // Odbc seems to follow ISO-8601 with a minimum of 4 year digits, more digits could be
+  // specified but this must be a agreed upon fixed value between sender/reciever.
+  if (wrapper_type_ == "snowflake") {
+    // TODO (andrew-do): investigate [SIO-1013]
+    GTEST_SKIP() << "snowflake seems to follow a different encoding for B.C. dates.";
+  }
+  sql(createForeignTableQuery(
+      {{"d_16", "DATE ENCODING DAYS(16)"}, {"d_32", "DATE ENCODING DAYS(32)"}},
+      getDataFilesPath() + "date_range_validation.csv",
+      wrapper_type_,
+      {{"sql_select",
+        "SELECT * FROM " + getOdbcTableName(default_table_name, wrapper_type_) + ";"}},
+      default_table_name,
+      {{"d_16", "DATE"}, {"d_32", "DATE"}}));
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{"1880-04-15", "4713-01-01 BC"}, {"2059-09-08", "9999-12-31"}});
+}
+
+INSTANTIATE_TEST_SUITE_P(OdbcSelectTimeTest,
+                         OdbcSelectTimeTest,
+                         testing::Values("postgres", "snowflake"),
+                         [](const auto& param_info) { return param_info.param; });
+
+#endif
+
+class ThriftTest : public ForeignTableTest {
+ protected:
+  void SetUp() override { ForeignTableTest::SetUp(); }
+
+  void TearDown() override { ForeignTableTest::TearDown(); }
+
+  TDetectResult detect(const std::string& filename, const TCopyParams& copy_params) {
+    auto [db_handler, session_id] = getDbHandlerAndSessionId();
+    TDetectResult result;
+    db_handler->detect_column_types(result, session_id, filename, copy_params);
+    return result;
+  }
+
+  TDetectResult detect(const TCopyParams& copy_params) { return detect("", copy_params); }
+
+  static void assertExpectedColumns(const TDetectResult& result,
+                                    const std::vector<std::string>& column_names,
+                                    const std::vector<SQLTypeInfo>& column_types) {
+    const auto& row_desc = result.row_set.row_desc;
+    ASSERT_EQ(row_desc.size(), column_types.size());
+    ASSERT_EQ(row_desc.size(), column_names.size());
+    for (size_t i = 0; i < row_desc.size(); i++) {
+      EXPECT_EQ(column_names[i], row_desc[i].col_name);
+      EXPECT_EQ(column_types[i].get_precision(), row_desc[i].col_type.precision);
+      EXPECT_EQ(column_types[i].get_scale(), row_desc[i].col_type.scale);
+      EXPECT_EQ(column_types[i].get_comp_param(), row_desc[i].col_type.comp_param);
+      assertEqualColumnType(column_types[i], row_desc[i].col_type);
+      assertEqualEncoding(column_types[i].get_compression(),
+                          row_desc[i].col_type.encoding);
+    }
+  }
+
+  static void assertEqualColumnType(SQLTypeInfo sql_type_info, TTypeInfo type) {
+    auto datum_type = type.type;
+    auto sql_type = sql_type_info.is_array() ? sql_type_info.get_elem_type().get_type()
+                                             : sql_type_info.get_type();
+    if (sql_type_info.is_array()) {
+      ASSERT_TRUE(type.is_array);
+    }
+    auto it = sql_type_to_tdatum_type_.find(sql_type);
+    ASSERT_TRUE(it != sql_type_to_tdatum_type_.end());
+    EXPECT_EQ(it->second, datum_type);
+  }
+
+  static void assertEqualEncoding(EncodingType encoding_type,
+                                  TEncodingType::type t_encoding_type) {
+    auto it = sql_encoding_to_tencoding_.find(encoding_type);
+    ASSERT_TRUE(it != sql_encoding_to_tencoding_.end());
+    EXPECT_EQ(it->second, t_encoding_type);
+  }
+
+  static void assertExpectedSampleRows(const TDetectResult& result,
+                                       const foreign_storage::SampleRows& sample_rows) {
+    const auto& rows = result.row_set.rows;
+    EXPECT_EQ(rows.size(), sample_rows.size());
+    for (size_t row_index = 0; row_index < sample_rows.size(); row_index++) {
+      const auto& sample_row = sample_rows[row_index];
+      const auto& cols = rows[row_index].cols;
+      EXPECT_EQ(cols.size(), sample_row.size());
+      for (size_t col_index = 0; col_index < sample_row.size(); col_index++) {
+        EXPECT_EQ(cols[col_index].val.str_val, sample_row[col_index])
+            << "At row: " << row_index << ", column: " << col_index;
+      }
+    }
+  }
+
+  static void assertExpectedSampleRowsUnordered(
+      const TDetectResult& result,
+      std::vector<std::vector<std::string>> expected_rows) {
+    // convert result into 2d matrix for sorting
+    std::vector<std::vector<std::string>> actual_rows;
+    for (const auto& t_row : result.row_set.rows) {
+      std::vector<std::string> row;
+      for (size_t column_index = 0; column_index < t_row.cols.size(); column_index++) {
+        row.emplace_back(t_row.cols[column_index].val.str_val);
+      }
+      actual_rows.emplace_back(row);
+    }
+    std::stable_sort(actual_rows.begin(), actual_rows.end());
+    std::stable_sort(expected_rows.begin(), expected_rows.end());
+    EXPECT_EQ(actual_rows, expected_rows);
+  }
+
+  SQLTypeInfo getSqlType(
+      SQLTypes type,
+      EncodingType encoding_type = kENCODING_NONE,
+      std::optional<std::pair<int, int>> precision_scale = std::nullopt,
+      std::optional<int> comp_param = std::nullopt) {
+    SQLTypeInfo sql_type;
+    sql_type.set_type(type);
+    if (precision_scale.has_value()) {
+      sql_type.set_precision(precision_scale.value().first);
+      sql_type.set_scale(precision_scale.value().second);
+    }
+    sql_type.set_compression(encoding_type);
+    if (comp_param.has_value()) {
+      sql_type.set_comp_param(comp_param.value());
+    }
+    sql_type.set_fixed_size();
+    return sql_type;
+  }
+
+  SQLTypeInfo getArrayType(
+      SQLTypes type,
+      EncodingType encoding_type = kENCODING_NONE,
+      std::optional<std::pair<int, int>> precision_scale = std::nullopt,
+      std::optional<int> comp_param = std::nullopt) {
+    return getSqlType(type, encoding_type, precision_scale, comp_param).get_array_type();
+  }
+
+  SQLTypeInfo getGeoColumnType(SQLTypes type) {
+    import_export::CopyParams copy_params;
+    return {type,
+            copy_params.geo_coords_type,
+            copy_params.geo_coords_srid,
+            false,
+            copy_params.geo_coords_encoding,
+            copy_params.geo_coords_comp_param,
+            kNULLT};
+  }
+
+  inline static const std::map<SQLTypes, TDatumType::type> sql_type_to_tdatum_type_{
+      {kTINYINT, TDatumType::TINYINT},
+      {kSMALLINT, TDatumType::SMALLINT},
+      {kINT, TDatumType::INT},
+      {kBIGINT, TDatumType::BIGINT},
+      {kFLOAT, TDatumType::FLOAT},
+      {kDECIMAL, TDatumType::DECIMAL},
+      {kDOUBLE, TDatumType::DOUBLE},
+      {kTEXT, TDatumType::STR},
+      {kTIME, TDatumType::TIME},
+      {kTIMESTAMP, TDatumType::TIMESTAMP},
+      {kDATE, TDatumType::DATE},
+      {kBOOLEAN, TDatumType::BOOL},
+      {kPOINT, TDatumType::POINT},
+      {kMULTIPOINT, TDatumType::MULTIPOINT},
+      {kLINESTRING, TDatumType::LINESTRING},
+      {kMULTILINESTRING, TDatumType::MULTILINESTRING},
+      {kPOLYGON, TDatumType::POLYGON},
+      {kMULTIPOLYGON, TDatumType::MULTIPOLYGON}};
+
+  inline static const std::map<EncodingType, TEncodingType::type>
+      sql_encoding_to_tencoding_{{kENCODING_NONE, TEncodingType::NONE},
+                                 {kENCODING_DICT, TEncodingType::DICT},
+                                 {kENCODING_GEOINT, TEncodingType::GEOINT},
+                                 {kENCODING_DATE_IN_DAYS, TEncodingType::DATE_IN_DAYS}};
+};
+
+#ifdef EE_FSI_ODBC
+
+class OdbcThriftTest : public ThriftTest {
+ protected:
+  void SetUp() override {
+    if (!g_run_odbc) {
+      GTEST_SKIP() << "ODBC tests are disabled.";
+    }
+    ThriftTest::SetUp();
+  }
+
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    g_enable_fsi = true;
+    ThriftTest::TearDown();
+  }
+
+  static TCopyParams getOdbcCopyParamsForDsn(const std::string& sql_select,
+                                             const std::string& sql_order_by,
+                                             const std::string& dsn_name) {
+    auto [username, password] = getODBCCredentials(dsn_name);
+    return getOdbcCopyParams(sql_select, sql_order_by, username, password);
+  }
+
+  static TCopyParams getOdbcCopyParams(const std::string& sql_select,
+                                       const std::string& sql_order_by,
+                                       const std::string& username = "admin",
+                                       const std::string& password = "HyperInteractive") {
+    TCopyParams copy_params;
+    copy_params.source_type = TSourceType::ODBC;
+    copy_params.odbc_sql_select = sql_select;
+    copy_params.odbc_sql_order_by = sql_order_by;
+    copy_params.odbc_username = username;
+    copy_params.odbc_password = password;
+    return copy_params;
+  }
+
+  std::vector<NameTypePair> getQuotedIdentifierPairs() {
+    // clang-format off
+    return {
+      {quoted_identifier(dsn_,"iD"), dsn_ == "bigquery" ? "BIGINT" : "INTEGER"},
+    };
+    // clang-format on
+  }
+
+  std::vector<NameTypePair> getScalarColumnPairs() {
+    // clang-format off
+    return {
+      {"b", "BOOLEAN"},
+      {"t", ((dsn_ == "postgres" || dsn_ == "redshift") ? "SMALLINT" : (dsn_ == "bigquery" ? "BIGINT" : "TINYINT"))},
+      {"s", dsn_ == "bigquery" ? "BIGINT" : "SMALLINT"},
+      {"i", dsn_ == "bigquery" ? "BIGINT" : "INTEGER"},
+      {"bi", "BIGINT"},
+      {"f", (dsn_ == "sqlite" || dsn_ == "bigquery") ? "DOUBLE" : "FLOAT"},
+      {"dc", (dsn_ == "sqlite") ? "DOUBLE" : (dsn_ == "bigquery") ? "DECIMAL(18, 9)" : "DECIMAL(10, 5)"},
+      {"tm", dsn_ == "hive" ? "TEXT" : "TIME"},
+      {"tp", "TIMESTAMP"},
+      {"d", "DATE"},
+      {"txt", "TEXT"},
+      {"txt_2", "TEXT"}
+    };
+    // clang-format on
+  }
+
+  foreign_storage::SampleRows getScalarSampleRows() {
+    // clang-format off
+    return {
+      {"true", "100", "30000", "2000000000", "9000000000000000000", "10.100000",
+       dsn_ == "sqlite" ? "100.123400" : (dsn_ == "bigquery" ? "100.123400000" : "100.12340"), "00:00:10",
+       "2000-01-01 00:00:59", "2000-01-01", "text_1","quoted text"},
+      {"false", "110", "30500", "2000500000", "9000000050000000000",
+       (dsn_ == "bigquery" ? "100.120000" : (dsn_ == "sqlite" || dsn_ == "snowflake" ? "100.120000" : "100.120003")),
+       dsn_ == "sqlite" ? "2.123400" : (dsn_ == "bigquery" ? "2.123400000" : "2.12340"), "00:10:00",
+       "2020-06-15 00:59:59", "2020-06-15", "text_2", "quoted text 2"},
+      {"true", "120", "31000", "2100000000", "9100000000000000000",
+       (dsn_ == "bigquery" ? "1000.123000" : (dsn_ == "sqlite" || dsn_ == "snowflake" ? "1000.123000" : (dsn_ == "postgres" || dsn_ == "hive" ? "1000.122986" : "1000.119995"))),
+       dsn_ == "sqlite" ? "100.100000" : (dsn_ == "bigquery" ? "100.100000000" : "100.10000"), "10:00:00",
+       "2500-12-31 23:59:59", "2500-12-31", "text_3", "quoted text 3"},
+      {"NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL",
+       "NULL", "NULL", "NULL"}
+    };
+    // clang-format on
+  }
+
+  std::vector<NameTypePair> getGeoColumnPairs() {
+    // clang-format off
+    return {
+      {"id", "INTEGER"},
+      {"p", "TEXT"},
+      {"mp", "TEXT"},
+      {"l", "TEXT"},
+      {"ml", "TEXT"},
+      {"poly", "TEXT"},
+      {"multipoly", "TEXT"}
+    };
+    // clang-format on
+  }
+
+  foreign_storage::SampleRows getGeoSampleRows() {
+    // clang-format off
+    return {
+      {"1", "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING ((0 0,1 1),(5 5,2 2))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"},
+      {"2", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"},
+      {"3", "POINT (1 1)", "MULTIPOINT (0 0,1 2,3 2,0 4)", "LINESTRING (1 1,2 2,3 3)", "MULTILINESTRING ((1 1,2 2),(3 3,4 4))", "POLYGON ((5 4,7 4,6 5,5 4))",
+       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"},
+      {"4", "POINT (2 2)", "MULTIPOINT (5 5,2 2,1 0)", "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))", "POLYGON ((1 1,3 1,2 3,1 1))",
+       "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"},
+      {"5", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}
+    };
+    // clang-format on
+  }
+
+  static std::string getSqlSelectQuery(const std::vector<NameTypePair>& column_types,
+                                       const std::string& dsn) {
+    std::string columns_str;
+    for (const auto& [name, type] : column_types) {
+      if (!columns_str.empty()) {
+        columns_str += ", ";
+      }
+      columns_str += name;
+    }
+    return "SELECT " + columns_str + " FROM " +
+           getOdbcTableName(default_table_name, dsn) + ";";
+  }
+
+  std::string getPostgresConnectionString() {
+    return "Driver=PostgreSQL;Database=postgis;Servername=postgis;Port=5432";
+  }
+
+  std::string getSqliteConnectionString() {
+    return "Driver=SQLite;Database=/odbc-fsi-src/Tests/FsiDataFiles/sqlite.db";
+  }
+
+  std::string getHiveConnectionString() {
+    return "Driver=ApacheHive;HiveServerType=2;ServiceDiscoveryMode=0;Host=hive;Port="
+           "10000;UseNativeQuery=1";
+  }
+
+  void dropTableIfExists() { sql("DROP TABLE IF EXISTS " + default_table_name + ";"); }
+
+  void detectAndAssertException(const TCopyParams& copy_params,
+                                const std::string& error_message) {
+    executeLambdaAndAssertException([&, this] { detect(copy_params); }, error_message);
+  }
+
+  inline static const std::map<std::string, SQLTypes> sql_type_name_to_type_{
+      {"TINYINT", kTINYINT},
+      {"SMALLINT", kSMALLINT},
+      {"INTEGER", kINT},
+      {"BIGINT", kBIGINT},
+      {"FLOAT", kFLOAT},
+      {"DECIMAL", kDECIMAL},
+      {"DOUBLE", kDOUBLE},
+      {"TEXT", kTEXT},
+      {"VARCHAR", kTEXT},
+      {"WVARCHAR", kTEXT},
+      {"STRING", kTEXT},
+      {"TIME", kTIME},
+      {"TIMESTAMP", kTIMESTAMP},
+      {"DATE", kDATE},
+      {"BOOLEAN", kBOOLEAN},
+      {"POINT", kPOINT},
+      {"MULTIPOINT", kMULTIPOINT},
+      {"LINESTRING", kLINESTRING},
+      {"MULTILINESTRING", kMULTILINESTRING},
+      {"POLYGON", kPOLYGON},
+      {"MULTIPOLYGON", kMULTIPOLYGON}};
+
+  std::string dsn_;
+};
+
+class OdbcDetectAndImportTableValidationTest : public OdbcThriftTest,
+                                               public testing::WithParamInterface<bool> {
+ protected:
+  void SetUp() override {
+    OdbcThriftTest::SetUp();
+    dropTableIfExists();
+    sql("CREATE TABLE " + default_table_name + " (i INTEGER);");
+  }
+
+  void TearDown() override {
+    g_enable_fsi = true;
+    g_enable_fsi_odbc_import = true;
+    dropTableIfExists();
+    OdbcThriftTest::TearDown();
+  }
+
+  bool isDetect() { return GetParam(); }
+
+  void requestAndAssertException(const TCopyParams& copy_params,
+                                 const std::string& error_message) {
+    if (isDetect()) {
+      detectAndAssertException(copy_params, error_message);
+    } else {
+      importAndAssertException(copy_params, error_message);
+    }
+  }
+
+  void importAndAssertException(const TCopyParams& copy_params,
+                                const std::string& error_message) {
+    executeLambdaAndAssertException(
+        [&] {
+          auto [db_handler, session_id] = getDbHandlerAndSessionId();
+          db_handler->import_table(session_id, default_table_name, "", copy_params);
+        },
+        error_message);
+  }
+
+  std::string getErrorMessage(const std::string& error_message_suffix) {
+    std::string prefix;
+    if (isDetect()) {
+      prefix = "detect_column_types error: ";
+    }
+    return prefix + error_message_suffix;
+  };
+};
+
+TEST_P(OdbcDetectAndImportTableValidationTest, MissingSqlSelect) {
+  auto copy_params = getOdbcCopyParams("", "");
+  copy_params.odbc_dsn = "test_dsn";
+  requestAndAssertException(
+      copy_params, getErrorMessage("ODBC options must contain a SQL select statement."));
+}
+
+TEST_P(OdbcDetectAndImportTableValidationTest, MissingSqlOrderBy) {
+  auto copy_params = getOdbcCopyParams("SELECT i FROM test_table;", "");
+  copy_params.odbc_dsn = "test_dsn";
+  requestAndAssertException(
+      copy_params,
+      getErrorMessage("ODBC options must contain a SQL ORDER BY statement."));
+}
+
+TEST_P(OdbcDetectAndImportTableValidationTest, MissingDsnAndConnectionString) {
+  auto copy_params = getOdbcCopyParams("SELECT i FROM test_table;", "i");
+  requestAndAssertException(
+      copy_params,
+      getErrorMessage("ODBC options must contain either "
+                      "a data source name or a connection string."));
+}
+
+TEST_P(OdbcDetectAndImportTableValidationTest, DsnAndConnectionStringSet) {
+  auto copy_params = getOdbcCopyParams("SELECT i FROM test_table;", "i");
+  copy_params.odbc_dsn = "test_dsn";
+  copy_params.odbc_connection_string = getPostgresConnectionString();
+  requestAndAssertException(copy_params,
+                            getErrorMessage("ODBC options must contain only one "
+                                            "of data source name or connection string."));
+}
+
+TEST_P(OdbcDetectAndImportTableValidationTest, UsernamePasswordAndCredentialStringSet) {
+  auto copy_params = getOdbcCopyParams("SELECT i FROM test_table;", "i");
+  copy_params.odbc_dsn = "test_dsn";
+  copy_params.odbc_credential_string = getODBCCredentialString("test_dsn");
+  requestAndAssertException(
+      copy_params,
+      getErrorMessage("ODBC options must contain only "
+                      "one of username/password or credential string."));
+}
+
+TEST_P(OdbcDetectAndImportTableValidationTest, DsnAndCredentialStringSet) {
+  auto copy_params = getOdbcCopyParams("SELECT i FROM test_table;", "i", "", "");
+  copy_params.odbc_dsn = "postgres";
+  copy_params.odbc_credential_string = getODBCCredentialString("postgres");
+  requestAndAssertException(
+      copy_params,
+      getErrorMessage("The ODBC credential option \"credential_string\" is incompatible "
+                      "with the ODBC connection option \"data_source_name\"."));
+}
+
+TEST_P(OdbcDetectAndImportTableValidationTest, ConnectionStringAndUsernamePasswordSet) {
+  auto copy_params = getOdbcCopyParams("SELECT i FROM test_table;", "i");
+  copy_params.odbc_connection_string = getPostgresConnectionString();
+  requestAndAssertException(
+      copy_params,
+      getErrorMessage("The ODBC credential option \"username\" is incompatible with the "
+                      "ODBC connection option \"connection_string\"."));
+}
+
+TEST_F(OdbcDetectAndImportTableValidationTest, FsiDisabledForDetect) {
+  g_enable_fsi = false;
+  auto copy_params = getOdbcCopyParams("SELECT i FROM test_table;", "i");
+  detectAndAssertException(
+      copy_params,
+      "detect_column_types error: ODBC source is not supported when FSI is disabled.");
+}
+
+TEST_F(OdbcDetectAndImportTableValidationTest, FlagDisabledForImport) {
+  g_enable_fsi_odbc_import = false;
+  auto copy_params = getOdbcCopyParams("SELECT i FROM test_table;", "i");
+  importAndAssertException(copy_params,
+                           "ODBC import only supported using 'fsi-odbc-import' flag");
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentDatabaseTypes,
+                         OdbcDetectAndImportTableValidationTest,
+                         testing::Values(true, false),
+                         [](const auto& param_info) {
+                           return param_info.param ? "Detect" : "ImportTable";
+                         });
+
+class OdbcDetectColumnTestParamaterized
+    : public OdbcThriftTest,
+      public testing::WithParamInterface<std::string> {
+ protected:
+  void SetUp() override {
+    if (!g_run_odbc) {
+      GTEST_SKIP();
+    }
+    wrapper_type_ = GetParam();
+    OdbcThriftTest::SetUp();
+    dsn_ = GetParam();
+  }
+
+  TDetectResult detect(const std::string& sql_select,
+                       const std::string& sql_order_by,
+                       const std::string& dsn) {
+    auto copy_params = getOdbcCopyParamsForDsn(sql_select, sql_order_by, dsn);
+    copy_params.odbc_dsn = dsn;
+    return OdbcThriftTest::detect(copy_params);
+  }
+
+  bool isSnowflakeDsn() { return GetParam() == "snowflake"; }
+  bool isBigQueryDsn() { return GetParam() == "bigquery"; }
+  bool isRedShiftDsn() { return GetParam() == "redshift"; }
+  bool isHiveDsn() { return GetParam() == "hive"; }
+
+  std::vector<std::string> getColumnNames(const std::vector<NameTypePair>& column_types) {
+    std::vector<std::string> column_names;
+    for (const auto& [name, type] : column_types) {
+      std::string column_name;
+      // Check for quoted identifier
+      if (is_quoted_identifier(name)) {
+        if (!isRedShiftDsn() && !isHiveDsn()) {
+          column_name = strip_quoted_identifier(name);
+        } else {
+          // redshift: unless `enable_case_sensitive_identifier` is enabled,
+          // redshift follows the SQL_IC_LOWER convention for quoted
+          // identifiers and they are case insensitive. Note, this is in direct
+          // contradiction to SQL-92, which requires any entry level-conformant
+          // driver to to use the SQL_IC_SENSITIVE convention.
+          // hive: also follow the SQL_IC_LOWER convention for quoted identifiers.
+          column_name = strip_quoted_identifier(to_lower(name));
+        }
+      } else {
+        if (isSnowflakeDsn()) {
+          // Snowflake returns uppercase column names.
+          column_name = to_upper(name);
+        } else {
+          column_name = name;
+        }
+      }
+      column_names.emplace_back(column_name);
+    }
+    return column_names;
+  }
+
+  std::vector<SQLTypeInfo> getColumnTypes(const std::vector<NameTypePair>& column_types) {
+    std::vector<SQLTypeInfo> types;
+    for (const auto& [name, type] : column_types) {
+      auto type_name = type;
+      static std::regex decimal_regex{"DECIMAL\\((\\d+)\\s*,\\s*(\\d+)\\)"};
+      std::smatch dec_match;
+      if (std::regex_match(type_name, dec_match, decimal_regex)) {
+        CHECK_EQ(dec_match.size(), static_cast<size_t>(3));
+        type_name = "DECIMAL";
+      }
+      static std::regex varchar_regex{"VARCHAR\\((\\d+)\\s*\\)"};
+      std::smatch var_match;
+      if (std::regex_match(type_name, var_match, varchar_regex)) {
+        CHECK_EQ(var_match.size(), static_cast<size_t>(2));
+        type_name = "VARCHAR";
+      }
+      static std::regex string_regex{"STRING\\((\\d+)\\s*\\)"};
+      std::smatch str_match;
+      if (std::regex_match(type_name, str_match, string_regex)) {
+        CHECK_EQ(str_match.size(), static_cast<size_t>(2));
+        type_name = "STRING";
+      }
+      auto it = sql_type_name_to_type_.find(type_name);
+      CHECK(it != sql_type_name_to_type_.end()) << "Remote name [" << type_name << "]";
+      SQLTypeInfo type_info{it->second};
+      if (type_info.is_string()) {
+        type_info.set_compression(kENCODING_DICT);
+      } else if (type_info.is_decimal()) {
+        CHECK_EQ(dec_match.size(), static_cast<size_t>(3));
+        type_info.set_precision(std::stoi(dec_match[1]));
+        type_info.set_scale(std::stoi(dec_match[2]));
+      } else if (isSnowflakeDsn()) {
+        if (type_info.is_integer()) {
+          type_info = {kBIGINT};
+        } else if (type_info.is_fp()) {
+          type_info = {kDOUBLE};
+        }
+      }
+      types.emplace_back(type_info);
+    }
+    return types;
+  }
+
+  std::vector<SQLTypeInfo> getGeoColumnTypes() {
+    auto id_type = (isSnowflakeDsn() || isBigQueryDsn() ? kBIGINT : kINT);
+    return {{id_type},
+            getGeoColumnType(kPOINT),
+            getGeoColumnType(kMULTIPOINT),
+            getGeoColumnType(kLINESTRING),
+            getGeoColumnType(kMULTILINESTRING),
+            getGeoColumnType(kPOLYGON),
+            getGeoColumnType(kMULTIPOLYGON)};
+  }
+
+  const std::vector<NameTypePair> default_decimal_type_{{"d", "DECIMAL(18,9)"}};
+};
+
+TEST_P(OdbcDetectColumnTestParamaterized, VariableLengthCharacterColumn) {
+  //  Test that the dynamic db fsi discovery process works for variable length fields
+  //  with a specific emphasis on postgres.
+
+  //  Postgres allows the declaration of its VARCHAR field with or without a dimension.
+  //  For example VARCHAR or VARCHAR(12600). When declared with a dimension the ODBC
+  //  reports the width appropriately and postgres will throw an error if a pgm
+  //  attempts to insert a string that is longer than the column is wide.
+  //
+  //  When a column width is not defined, the max column width is is very large,
+  //  however the postgres ODBC driver reports the width as 255
+  //
+  //  TEXT fields in postgres can also be of variable length, but do not take a width
+  //  qualifier when created. Again, regardless of the actual width the postgres ODBC
+  //  driver will report a TEXT column width as 8190.
+
+  std::vector<NameTypePair> remote_column_pairs{{"txt_1", "TEXT"}, {"txt_2", "VARCHAR"}};
+  if (wrapper_type_ == "redshift") {
+    // Redshift TEXT columns cannot be created with width and can be up to 256 char wide.
+    // Redshift VARCHAR columns have to be created with width.
+    // In this case the code odbc_driver will correct the detected width of 12600 and
+    // 'narrow' it to the actual max width of the columns - 12505.
+    remote_column_pairs = {{"txt_1", "VARCHAR(12600)"}, {"txt_2", "VARCHAR(12600)"}};
+  } else if (wrapper_type_ == "bigquery") {
+    remote_column_pairs = {{"txt_1", "STRING"}, {"txt_2", "STRING(12600)"}};
+  } else if (wrapper_type_ == "hive") {
+    remote_column_pairs = {{"txt_1", "STRING"}, {"txt_2", "VARCHAR(12600)"}};
+  }
+  createODBCSourceTable(default_table_name,
+                        remote_column_pairs,
+                        getDataFilesPath() + "oversized_char_field.csv",
+                        dsn_);
+  auto q = getSqlSelectQuery(remote_column_pairs, dsn_);
+
+  auto result = detect(getSqlSelectQuery(remote_column_pairs, dsn_), "txt_1", dsn_);
+
+  assertExpectedColumns(
+      result, getColumnNames(remote_column_pairs), getColumnTypes(remote_column_pairs));
+
+  // Note the 12505 is the length of the long strings in the csv file
+  std::string long_text_1{"12505"};
+  std::string long_quoted_text_2{"12505"};
+  for (int32_t i = 0; i < 2500; ++i) {
+    long_text_1 += "text1";
+    long_quoted_text_2 += "text2";
+  }
+  std::vector<std::vector<std::string>> reference_result{
+      {long_text_1, "quoted text 2"},
+      {"text1", long_quoted_text_2},
+  };
+  assertExpectedSampleRowsUnordered(result, reference_result);
+}
+
+TEST_P(OdbcDetectColumnTestParamaterized, ScalarTypes) {
+  auto dsn = GetParam();
+  const auto column_pairs = getScalarColumnPairs();
+  createODBCSourceTable(
+      default_table_name, column_pairs, getDataFilesPath() + "scalar_types.csv", dsn);
+  auto result = detect(getSqlSelectQuery(column_pairs, dsn), "t", dsn);
+  assertExpectedColumns(
+      result, getColumnNames(column_pairs), getColumnTypes(column_pairs));
+  assertExpectedSampleRowsUnordered(result, getScalarSampleRows());
+}
+
+TEST_P(OdbcDetectColumnTestParamaterized, QuotedIdentifier) {
+  auto dsn = GetParam();
+  const auto column_pairs = getQuotedIdentifierPairs();
+  createODBCSourceTable(
+      default_table_name, column_pairs, getDataFilesPath() + "1.csv", dsn);
+  auto result =
+      detect(getSqlSelectQuery(column_pairs, dsn), quoted_identifier(dsn, "iD"), dsn);
+  assertExpectedColumns(
+      result, getColumnNames(column_pairs), getColumnTypes(column_pairs));
+  assertExpectedSampleRowsUnordered(result, {{"1"}});
+}
+
+TEST_P(OdbcDetectColumnTestParamaterized, GeoTypes) {
+  auto dsn = GetParam();
+  const auto column_pairs = getGeoColumnPairs();
+  createODBCSourceTable(
+      default_table_name, column_pairs, getDataFilesPath() + "geo_types_valid.csv", dsn);
+  auto result = detect(getSqlSelectQuery(column_pairs, dsn), "id", dsn);
+  assertExpectedColumns(result, getColumnNames(column_pairs), getGeoColumnTypes());
+  assertExpectedSampleRowsUnordered(result, getGeoSampleRows());
+}
+
+TEST_P(OdbcDetectColumnTestParamaterized, UsingConnectionAndCredentialString) {
+  auto dsn = GetParam();
+  auto odbc_table_name = getOdbcTableName(default_table_name, dsn);
+
+  createODBCSourceTable(
+      default_table_name, {{"i", "INTEGER"}}, getDataFilesPath() + "1.csv", dsn);
+  auto copy_params =
+      getOdbcCopyParams("SELECT i FROM " + odbc_table_name + ";", "i", "", "");
+  if (dsn == "postgres") {
+    copy_params.odbc_connection_string = getPostgresConnectionString();
+    copy_params.odbc_credential_string = getODBCCredentialString("postgres");
+  } else if (dsn == "sqlite") {
+    copy_params.odbc_connection_string = getSqliteConnectionString();
+  } else if (dsn == "hive") {
+    copy_params.odbc_connection_string = getHiveConnectionString();
+  } else if (dsn == "redshift" || dsn == "snowflake" || dsn == "bigquery") {
+    GTEST_SKIP() << "Connection string test case skipped for cloud/custom endpoints";
+  } else {
+    FAIL() << "Unexpected DSN: " << dsn;
+  }
+  auto result = ThriftTest::detect(copy_params);
+  assertExpectedColumns(result, {"i"}, {{kINT}});
+  assertExpectedSampleRows(result, {{"1"}});
+}
+
+TEST_P(OdbcDetectColumnTestParamaterized, DecimalsWithZeroScale) {
+  auto dsn = GetParam();
+  if (dsn == "bigquery") {
+    GTEST_SKIP() << "Data wrapper always returns maximum decimal scale.";
+  }
+  std::vector<NameTypePair> column_pairs = {
+      {"d1", dsn == "sqlite" ? "TINYINT" : "DECIMAL(2, 0)"},
+      {"d2", dsn == "sqlite" ? "SMALLINT" : "DECIMAL(4, 0)"},
+      {"d3", dsn == "sqlite" ? "INTEGER" : "DECIMAL(9, 0)"},
+      {"d4", dsn == "sqlite" ? "BIGINT" : "DECIMAL(12, 0)"}};
+  createODBCSourceTable(default_table_name,
+                        column_pairs,
+                        getDataFilesPath() + "zero_scale_decimals.csv",
+                        dsn);
+  auto result = detect(getSqlSelectQuery(column_pairs, dsn), "d1", dsn);
+
+  std::vector<SQLTypeInfo> expected_column_types{
+      {kTINYINT}, {kSMALLINT}, {kINT}, {kBIGINT}};
+  assertExpectedColumns(result, getColumnNames(column_pairs), expected_column_types);
+
+  foreign_storage::SampleRows expected_sample_rows{
+      {"50", "5000", "500000000", "5000000000"},
+      {"99", "9999", "999999999", "999999999999"},
+      {"7", "100", "10000", "1000000000"}};
+  assertExpectedSampleRowsUnordered(result, expected_sample_rows);
+}
+
+TEST_P(OdbcDetectColumnTestParamaterized, HighPrecisionDecimal) {
+  if (dsn_ == "sqlite") {
+    GTEST_SKIP() << "data wrapper doesn't have decimal data type.";
+  }
+  std::vector<NameTypePair> column_pairs{{"d", "DECIMAL(20, 5)"}};
+  createODBCSourceTable(
+      default_table_name, column_pairs, getDataFilesPath() + "decimal_20_5.csv", dsn_);
+  auto result = detect(getSqlSelectQuery(column_pairs, dsn_), "d", dsn_);
+  assertExpectedColumns(result,
+                        getColumnNames(default_decimal_type_),
+                        getColumnTypes(default_decimal_type_));
+  assertExpectedSampleRowsUnordered(
+      result,
+      {{dsn_ == "bigquery" ? "-123456789.234560000" : "-123456789.23456"},
+       {dsn_ == "bigquery" ? "-.123000000" : (dsn_ == "hive" ? "-.12300" : "-0.12300")},
+       {dsn_ == "bigquery" ? ".234560000" : (dsn_ == "hive" ? ".23456" : "0.23456")},
+       {dsn_ == "bigquery" ? "123456789.123450000" : "123456789.12345"}});
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentDatabaseTypes,
+                         OdbcDetectColumnTestParamaterized,
+                         testing::ValuesIn(odbc_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+class OdbcImportTableTest : public OdbcThriftTest,
+                            public testing::WithParamInterface<std::string> {
+ protected:
+  void SetUp() override {
+    if (!g_run_odbc) {
+      GTEST_SKIP();
+    }
+    OdbcThriftTest::SetUp();
+    dsn_ = GetParam();
+    wrapper_type_ = GetParam();
+    dropTableIfExists();
+    createODBCSchema(dsn_);
+  }
+
+  void TearDown() override {
+    if (!g_run_odbc) {
+      GTEST_SKIP();
+    }
+    dropTableIfExists();
+    dropODBCSchema(dsn_);
+    OdbcThriftTest::TearDown();
+  }
+
+  void import(const std::string& sql_select, const std::string& sql_order_by) {
+    auto copy_params = getOdbcCopyParamsForDsn(sql_select, sql_order_by, dsn_);
+    copy_params.odbc_dsn = dsn_;
+    auto [db_handler, session_id] = getDbHandlerAndSessionId();
+    db_handler->import_table(session_id, default_table_name, "", copy_params);
+  }
+};
+
+TEST_P(OdbcImportTableTest, QuotedIdentifier) {
+  const auto column_pairs = getQuotedIdentifierPairs();
+  createODBCSourceTable(
+      default_table_name, column_pairs, getDataFilesPath() + "1.csv", dsn_);
+  sql("CREATE TABLE " + default_table_name + " (id INT) ");
+  import(getSqlSelectQuery(column_pairs, dsn_), quoted_identifier(dsn_, "iD"));
+  queryAndAssertQuotedIdentifierPairs();
+}
+
+TEST_P(OdbcImportTableTest, ScalarTypes) {
+  const auto column_pairs = getScalarColumnPairs();
+  createODBCSourceTable(
+      default_table_name, column_pairs, getDataFilesPath() + "scalar_types.csv", dsn_);
+  sql("CREATE TABLE " + default_table_name +
+      " (b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+      "dc " +
+      (dsn_ == "sqlite" ? "DOUBLE" : "DECIMAL(10, 5)") + ", tm " +
+      (dsn_ == "hive" ? "TEXT" : "TIME") +
+      ", tp TIMESTAMP, d DATE, txt TEXT, "
+      "txt_2 TEXT ENCODING NONE);");
+  import(getSqlSelectQuery(column_pairs, dsn_), "t");
+  queryAndAssertScalarTypesResult(true);
+}
+
+TEST_P(OdbcImportTableTest, GeoTypes) {
+  const auto column_pairs = getGeoColumnPairs();
+  createODBCSourceTable(
+      default_table_name, column_pairs, getDataFilesPath() + "geo_types_valid.csv", dsn_);
+  sql("CREATE TABLE " + default_table_name +
+      " (id int, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, "
+      "poly POLYGON, multipoly MULTIPOLYGON);");
+  import(getSqlSelectQuery(column_pairs, dsn_), "id");
+  queryAndAssertGeoTypesResult();
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentDatabaseTypes,
+                         OdbcImportTableTest,
+                         testing::ValuesIn(odbc_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+class OdbcCoercionSelectTest : public SelectQueryTest,
+                               public ::testing::WithParamInterface<WrapperType> {
+ protected:
+  void SetUp() override {
+    wrapper_type_ = GetParam();
+    SKIP_SETUP_IF_ODBC_DISABLED();
+    SelectQueryTest::SetUp();
+  }
+};
+
+TEST_P(OdbcCoercionSelectTest, CoercionUnsignedIntegersToWiderInteger) {
+  if (wrapper_type_ == "redshift" || wrapper_type_ == "postgres" ||
+      wrapper_type_ == "snowflake" || wrapper_type_ == "bigquery" ||
+      wrapper_type_ == "hive") {
+    GTEST_SKIP() << "Data wrapper does not support unsigned integers";
+  }
+
+  sql(createForeignTableQuery({{"u32", "BIGINT"}, {"u16", "INTEGER"}, {"u8", "SMALLINT"}},
+                              getDataFilesPath() + "ints_unsigned_widen_limits.csv",
+                              wrapper_type_,
+                              {},
+                              default_table_name,
+                              {{"u32", "INTEGER UNSIGNED"},
+                               {"u16", "SMALLINT UNSIGNED"},
+                               {"u8", "TINYINT UNSIGNED"}}));
+
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + " ORDER BY u32;",
+                      {{i(0), i(0), i(0)}, {i(4294967295), i(65535), i(255)}});
+}
+
+TEST_P(OdbcCoercionSelectTest, CoercionDoubleToFloat) {
+  sql(createForeignTableQuery({{"f", "FLOAT"}},
+                              getDataFilesPath() + "floating_point.csv",
+                              wrapper_type_,
+                              {},
+                              default_table_name,
+                              {{"f", "DOUBLE"}}));
+
+  sqlAndCompareResult("SELECT f FROM " + default_table_name + " ORDER BY f;",
+                      {{10.1f}, {100.12f}, {1000.123f}});
+}
+
+TEST_P(OdbcCoercionSelectTest, CoercionFloatToDouble) {
+  if (wrapper_type_ == "redshift" || wrapper_type_ == "postgres" ||
+      wrapper_type_ == "bigquery" || wrapper_type_ == "hive") {
+    GTEST_SKIP() << (wrapper_type_ == "bigquery"
+                         ? "Data wrapper does not have floating point"
+                         : "Data wrapper does not map floating point to sql_float");
+  }
+
+  sql(createForeignTableQuery({{"d", "DOUBLE"}},
+                              getDataFilesPath() + "floating_point.csv",
+                              wrapper_type_,
+                              {},
+                              default_table_name,
+                              {{"f", "FLOAT"}}));
+
+  sqlAndCompareResult("SELECT d FROM " + default_table_name + " ORDER BY d;",
+                      {{10.1f}, {100.12f}, {1000.123f}});
+}
+
+struct CoercionColumnTypes {
+  std::vector<NameTypePair> remote_column_def;
+  std::vector<NameTypePair> local_column_def;
+};
+
+// clang-format off
+std::vector<CoercionColumnTypes> numeric_coercion_source{
+// This vector parameterizes coercions from Integral and DECIMAL types to
+// all versions of BIGINT, INTEGER, SMALLINT and TINYINT
+// because of the way sqlite stores decimal and bigint, and to allow it to
+// be included in some of the tests, text fields are used in some records
+    {
+      { {"dec_d", "DECIMAL(38)"}, {"dec_d32", "DECIMAL(37)"}, {"dec_d16", "DECIMAL(36)"}, {"dec_d8", "DECIMAL(35)"} },
+      { {"i64", "BIGINT"}, {"i32", "BIGINT ENCODING FIXED (32)"}, {"i16", "BIGINT ENCODING FIXED (16)"}, {"i8", "BIGINT ENCODING FIXED (8)"} },
+    },
+    {
+      { {"dec_ignore", "DECIMAL(38)"}, {"dec_d32", "DECIMAL(34)"}, {"dec_d16", "DECIMAL(33)"}, {"dec_d8", "DECIMAL(32)"} },
+      { {"i64", "BIGINT"}, {"i32", "INTEGER"}, {"i16", "INTEGER ENCODING FIXED (16)"}, {"i8", "INTEGER ENCODING FIXED (8)"} },
+    },
+    {
+      { {"dec_ignore", "DECIMAL(38)"}, {"dec_d32_ignore", "DECIMAL(31)"}, {"dec_d16", "DECIMAL(30)"}, {"dec_d8", "DECIMAL(29)"} },
+      { {"i64", "BIGINT"}, {"i32", "INTEGER"}, {"i16", "SMALLINT"}, {"i8", "SMALLINT ENCODING FIXED (8)"} },
+    },
+    {
+      { {"dec_ignore", "DECIMAL(38)"}, {"dec_d32_ignore", "DECIMAL(10)"}, {"dec_d16_ignore", "DECIMAL(9)"}, {"dec_d8", "DECIMAL(8)"} },
+      { {"i64", "BIGINT"}, {"i32", "INTEGER"}, {"i16", "SMALLINT"}, {"i8", "TINYINT"} },
+    },
+    {
+        { {"bi", "BIGINT"}, {"bi_d32", "BIGINT"}, {"bi_d16", "BIGINT"}, {"bi_d8", "BIGINT"} } ,
+        { {"i64", "BIGINT"}, {"i32", "INTEGER"}, {"i16", "SMALLINT"}, {"i8", "TINYINT"} }
+    },
+    {
+       // bigint as text allows sqlite to be tests
+       { {"bi_ignore", "TEXT"}, {"bi_d32", "INTEGER"}, {"bi_d16", "INTEGER"}, {"bi_d8", "INTEGER"} } ,
+       { {"i64", "TEXT"}, {"i32", "INTEGER"}, {"i16", "SMALLINT"}, {"i8", "TINYINT"} }
+    },
+    {
+       { {"bi_ignore", "TEXT"}, {"bi_d32_ignore", "INTEGER"}, {"bi_d16", "SMALLINT"}, {"bi_d8", "SMALLINT"} } ,
+       { {"i64", "TEXT"}, {"i32", "INTEGER"}, {"i16", "SMALLINT"}, {"i8", "TINYINT"} }
+    },
+    {
+       // Note our postgres preprocessing will convert bi_d8 TINYINT to a SMALLINT
+       { {"bi_ignore", "TEXT"}, {"bi_d32_ignore", "INTEGER"}, {"bi_d16_ignore", "SMALLINT"}, {"bi_d8", "TINYINT"} } ,
+       { {"i64", "TEXT"}, {"i32", "INTEGER"}, {"i16", "SMALLINT"}, {"i8", "TINYINT"} }
+    },
+    {
+       { {"i_unsigned", "INTEGER UNSIGNED"}, {"si_unsigned", "SMALLINT UNSIGNED"}, {"ti_unsigned", "TINYINT UNSIGNED"} },
+       { {"i32", "INTEGER "}, {"i16", "SMALLINT "}, {"i8", "TINYINT"} }
+    }
+  };
+// clang-format on
+
+INSTANTIATE_TEST_SUITE_P(OdbcCoercionSelect,
+                         OdbcCoercionSelectTest,
+                         testing::ValuesIn(odbc_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+class OdbcCoercionSelectIntTest
+    : public SelectQueryTest,
+      public ::testing::WithParamInterface<std::tuple<CoercionColumnTypes, WrapperType>> {
+  void SetUp() override {
+    wrapper_type_ = std::get<std::string>(GetParam());
+    SKIP_SETUP_IF_ODBC_DISABLED();
+    SelectQueryTest::SetUp();
+  }
+
+ protected:
+  std::vector<std::vector<NullableTargetValue>> getExpectedResultSet(
+      const std::string& result_type) {
+    if (result_type == "TEXT") {
+      // clang-format off
+      std::vector<std::vector<NullableTargetValue>> expected_result_set{
+          { "-9223372036854775807", i(-2147483647), i(-32767), i(-127), },
+          { "12", i(12), i(12), i(12), },
+          { "9223372036854775807", i(2147483647), i(32767), i(127), }
+      };
+      // clang-format on
+      return expected_result_set;
+    } else if (result_type == "INTEGER UNSIGNED") {
+      // clang-format off
+      std::vector<std::vector<NullableTargetValue>> expected_result_set{
+          { i(12), i(12), i(12), },
+          { i(2147483647), i(32767), i(127), }
+      };
+      // clang-format on
+      return expected_result_set;
+    }
+    // clang-format off
+    std::vector<std::vector<NullableTargetValue>> expected_result_set{
+        { i(-9223372036854775807), i(-2147483647), i(-32767), i(-127), },
+        { i(12), i(12), i(12), i(12), },
+        { i(9223372036854775807), i(2147483647), i(32767), i(127), }
+    };
+    // clang-format on
+    return expected_result_set;
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(OdbcCoercionSelect,
+                         OdbcCoercionSelectIntTest,
+                         ::testing::Combine(::testing::ValuesIn(numeric_coercion_source),
+                                            ::testing::ValuesIn(odbc_wrappers)));
+
+TEST_P(OdbcCoercionSelectIntTest, NumericConversion) {
+  const auto& ct = std::get<CoercionColumnTypes>(GetParam());
+  auto remote_column_def = ct.remote_column_def;
+  std::string file_path = getDataFilesPath() + "ints.csv";
+  if (wrapper_type_ == "sqlite") {
+    if (ct.remote_column_def[0].second != "TEXT") {
+      GTEST_SKIP() << " Data wrapper = [" << wrapper_type_ << "]";
+    }
+  }
+  if (wrapper_type_ == "snowflake" && remote_column_def[0].second == "DECIMAL(38)") {
+    // In snowflake an INTEGER column is actually implemented as DECIMAL(38,0)
+    remote_column_def[0].second = "INTEGER";
+  }
+  if (remote_column_def[0].second == "INTEGER UNSIGNED") {
+    if (wrapper_type_ != "sqlite") {
+      GTEST_SKIP() << "Data wrapper does not support unsigned integers";
+    }
+    file_path = getDataFilesPath() + "ints_unsigned.csv";
+  }
+
+  auto local_column_def = ct.local_column_def;
+
+  sql(createForeignTableQuery(local_column_def,
+                              file_path,
+                              wrapper_type_,
+                              {},
+                              default_table_name,
+                              remote_column_def));
+  TQueryResult result;
+  sql(result, "SELECT i64, i32, i16, i8 from " + default_table_name + " ORDER BY i64;");
+
+  std::vector<std::vector<NullableTargetValue>> ex =
+      getExpectedResultSet(ct.remote_column_def[0].second);
+  assertResultSetEqual(ex, result);
+}
+
+struct OdbcInvalidCoercionSelectTestParams {
+  std::string remote_column_type;
+  std::string column_type;
+  std::string test_file;
+};
+
+class OdbcInvalidCoercionSelectTest
+    : public SelectQueryTest,
+      public ::testing::WithParamInterface<
+          std::tuple<OdbcInvalidCoercionSelectTestParams, WrapperType>> {
+ protected:
+  void SetUp() override {
+    wrapper_type_ = std::get<std::string>(GetParam());
+    SKIP_SETUP_IF_ODBC_DISABLED();
+    SelectQueryTest::SetUp();
+  }
+
+  std::pair<bool, std::string> shouldSkipTest(const std::string& remote_column_type) {
+    if (wrapper_type_ == "snowflake" && !isDecimalType(remote_column_type)) {
+      return {true,
+              "Data wrapper backs integer types with numeric/decimal, integer coercion "
+              "limitations do not apply."};
+    }
+    if (shared::contains(no_tinyint_, wrapper_type_) && remote_column_type == "TINYINT") {
+      return {true, "Data wrapper does not support tinyint."};
+    }
+    if (shared::contains(no_smallint_, wrapper_type_) &&
+        remote_column_type == "SMALLINT") {
+      return {true, "Data wrapper does not support smallint."};
+    }
+    if (shared::contains(no_int_, wrapper_type_) && remote_column_type == "INTEGER") {
+      return {true, "Data wrapper does not support integer 32."};
+    }
+    if (shared::contains(no_float_, wrapper_type_) && remote_column_type == "FLOAT") {
+      return {true, "Data wrapper does not support float 32."};
+    }
+    if (shared::contains(no_sqlreal_, wrapper_type_) && remote_column_type == "FLOAT") {
+      return {true,
+              "Data wrapper maps float columns to odbc sql_double/sql_float, this test "
+              "applies only to sql_real."};
+    }
+    if (shared::contains(no_unsigned_, wrapper_type_) &&
+        std::regex_search(remote_column_type, std::regex("UNSIGNED"))) {
+      return {true, "Data wrapper does not support unsigned integer."};
+    }
+    return {false, ""};
+  }
+
+  std::string getSqlTypeDisplayCode(const std::string& odbc_sql_type) {
+    static const std::map<std::string, std::string> sql_type_display_code = {
+        {"TINYINT", "-6"},
+        {"SMALLINT", "5"},
+        {"INTEGER", "4"},
+        {"FLOAT", "7"},
+        {"BIGINT UNSIGNED", "-5"},
+    };
+
+    if (const auto& dc_it = sql_type_display_code.find(odbc_sql_type);
+        dc_it != sql_type_display_code.end()) {
+      return dc_it->second;
+    } else if (isDecimalType(odbc_sql_type)) {
+      std::string odbc_type_code;
+      if (wrapper_type_ == "sqlite") {
+        odbc_type_code = "8";  // SQL_DOUBLE
+      } else if (wrapper_type_ == "snowflake" || wrapper_type_ == "hive") {
+        odbc_type_code = "3";  // SQL_DECIMAL
+      } else {
+        odbc_type_code = "2";  // SQL_NUMERIC
+      }
+      return odbc_type_code;
+    }
+    return odbc_sql_type;
+  }
+
+  std::string getColTypeCode(const std::string& col_type) {
+    static const std::map<std::string, std::string> col_type_code = {
+        {"INTEGER", "INT"},
+    };
+
+    if (const auto& ct_it = col_type_code.find(col_type); ct_it != col_type_code.end()) {
+      return ct_it->second;
+    } else if (isDecimalType(col_type)) {
+      return "DECIMAL";
+    }
+    return col_type;
+  }
+
+  std::string getColumnMismatchMessage(const std::string& col_name,
+                                       const std::string& odbc_sql_type,
+                                       const std::string& col_type,
+                                       const std::string& catalog_dimension,
+                                       const std::string& remote_dimension) {
+    std::stringstream ss;
+    ss << "Remote database column '" << col_name << "' mapped onto HeavyDB column '"
+       << col_name
+       << "' not currently supported by ODBC foreign storage interface. Remote column "
+          "type = [Column name ["
+       << col_name << "], dimension [" << remote_dimension << "], type ["
+       << getSqlTypeDisplayCode(odbc_sql_type)
+       << "]] HeavyDB column type = [HeavyDB Catalog: column name [" << col_name
+       << "], type [" << col_type << "], type code [" << getColTypeCode(col_type)
+       << "], dimension [" << catalog_dimension << "]]";
+    return ss.str();
+  }
+
+  bool isDecimalType(const std::string& column_type_str) {
+    return to_upper(column_type_str).find("DECIMAL") != std::string::npos;
+  }
+
+  inline static const std::set<WrapperType> no_tinyint_ = {"postgres",
+                                                           "redshift",
+                                                           "bigquery"};
+  inline static const std::set<WrapperType> no_smallint_ = {"bigquery"};
+  inline static const std::set<WrapperType> no_int_ = {"bigquery"};
+  inline static const std::set<WrapperType> no_sqlreal_ = {"sqlite", "snowflake"};
+  inline static const std::set<WrapperType> no_float_ = {"bigquery"};
+  inline static const std::set<WrapperType> no_unsigned_ = {"postgres",
+                                                            "redshift",
+                                                            "snowflake",
+                                                            "bigquery",
+                                                            "hive"};
+};
+
+TEST_P(OdbcInvalidCoercionSelectTest, InvalidCoercion) {
+  auto test_param = std::get<OdbcInvalidCoercionSelectTestParams>(GetParam());
+  if (auto [should_skip, skip_reason] = shouldSkipTest(test_param.remote_column_type);
+      should_skip) {
+    GTEST_SKIP() << skip_reason;
+  }
+
+  std::string col_name = "col";
+  sql(createForeignTableQuery({{col_name, test_param.column_type}},
+                              getDataFilesPath() + test_param.test_file,
+                              wrapper_type_,
+                              {},
+                              default_table_name,
+                              {{col_name, test_param.remote_column_type}}));
+
+  auto query = "SELECT " + col_name + " from " + default_table_name + ";";
+  std::string catalog_dimension_str;
+  std::string remote_dimension_str;
+  if (isDecimalType(test_param.column_type)) {
+    catalog_dimension_str = "11";
+    if (wrapper_type_ == "sqlite") {
+      remote_dimension_str = "0";
+    } else {
+      remote_dimension_str = "38";
+    }
+  } else {
+    catalog_dimension_str = "0";
+    remote_dimension_str = "0";
+  }
+  auto expected_err = getColumnMismatchMessage(col_name,
+                                               test_param.remote_column_type,
+                                               test_param.column_type,
+                                               catalog_dimension_str,
+                                               remote_dimension_str);
+  queryAndAssertException(query, expected_err, /*i_case=*/true);
+}
+
+const std::vector<OdbcInvalidCoercionSelectTestParams> invalid_coercion_tests = {
+    {"TINYINT", "SMALLINT", "int8.csv"},
+    {"TINYINT", "INTEGER", "int8.csv"},
+    {"TINYINT", "BIGINT", "int8.csv"},
+
+    {"SMALLINT", "INTEGER", "int16.csv"},
+    {"SMALLINT", "BIGINT", "int16.csv"},
+
+    {"INTEGER", "BIGINT", "int32.csv"},
+
+    {"FLOAT", "DOUBLE", "floating_point.csv"},
+
+    {"BIGINT UNSIGNED", "BIGINT", "int64.csv"},
+    {"BIGINT UNSIGNED", "INTEGER", "int32.csv"},
+    {"BIGINT UNSIGNED", "SMALLINT", "int16.csv"},
+    {"BIGINT UNSIGNED", "TINYINT", "int8.csv"},
+
+    {"DECIMAL(38,9)", "DECIMAL(11,10)", "0.csv"}};
+
+INSTANTIATE_TEST_SUITE_P(OdbcCoercionSelect,
+                         OdbcInvalidCoercionSelectTest,
+                         ::testing::Combine(::testing::ValuesIn(invalid_coercion_tests),
+                                            ::testing::ValuesIn(odbc_wrappers)),
+                         [](const auto& info) {
+                           std::stringstream ss;
+                           OdbcInvalidCoercionSelectTestParams obj = {
+                               std::get<0>(info.param)};
+                           ss << obj.remote_column_type << "_to_" << obj.column_type;
+                           ss << "_" << std::get<1>(info.param);
+                           auto str = ss.str();
+                           static const std::regex invalid_chars{"(\\s|\\(|\\)|\\,)"};
+                           str = std::regex_replace(str, invalid_chars, "_");
+                           return str;
+                         });
+
+struct OdbcColumnDefinitionCoercionRangeErr {
+  std::string column_type;
+  std::string column_name;
+  std::string file_name;
+  std::string remote_column_type;
+
+  std::string toString() {
+    std::stringstream ss;
+    ss << remote_column_type << "_coercion_to_" << column_type;
+    auto contents = ss.str();
+    boost::replace_all(contents, " ", "_");
+    boost::replace_all(contents, "(", "");
+    boost::replace_all(contents, ")", "");
+    return contents;
+  }
+};
+
+static std::vector<OdbcColumnDefinitionCoercionRangeErr> odbc_definitions_for_range_err{
+    {"BIGINT", "COERCION_BIGINT", "int64_err.csv", "DECIMAL (38)"},
+    {"BIGINT ENCODING FIXED(32) ", "COERCION_BIGINT32", "int32_err.csv", "DECIMAL (38)"},
+    {"BIGINT ENCODING FIXED(16) ", "COERCION_BIGINT16", "int16_err.csv", "DECIMAL (38)"},
+    {"BIGINT ENCODING FIXED(8) ", "COERCION_BIGINT8", "int8_err.csv", "DECIMAL (38)"},
+
+    {"INTEGER", "COERCION_INTEGER", "int32_err.csv", "DECIMAL (38)"},
+    {"INTEGER ENCODING FIXED(16)", "COERCION_INTEGER16", "int16_err.csv", "DECIMAL (38)"},
+    {"INTEGER ENCODING FIXED(8)", "COERCION_INTEGER8", "int8_err.csv", "DECIMAL (38)"},
+
+    {"INTEGER", "COERCION_UNSIGNED", "int_val_2147483648.csv", "INTEGER UNSIGNED"},
+    {"SMALLINT", "COERCION_UNSIGNED", "int16_err.csv", "SMALLINT UNSIGNED"},
+    {"TINYINT", "COERCION_UNSIGNED", "int_val_128.csv", "TINYINT UNSIGNED"}};
+
+class OdbcCoercionSelectTestRangeExceeded
+    : public SelectQueryTest,
+      public ::testing::WithParamInterface<
+          std::tuple<OdbcColumnDefinitionCoercionRangeErr, WrapperType>> {
+  void SetUp() override {
+    wrapper_type_ = std::get<std::string>(GetParam());
+    SKIP_SETUP_IF_ODBC_DISABLED();
+    SelectQueryTest::SetUp();
+  }
+
+ protected:
+  std::string decorateMessage(const std::string& encountered_value) {
+    return "TException - service has thrown: TDBException(error_msg=" +
+           encountered_value + ")";
+  }
+
+  std::string getExceptionMessage(const std::string& column_name,
+                                  const std::string& column_type,
+                                  const std::string& foreign_table) {
+    std::map<std::pair<std::string, std::string>, std::string> possible_values{
+        {{"COERCION_BIGINT", "DECIMAL (38)"},
+         "Integer 9223372036854775808 is out of range for BIGINT"},
+        {{"COERCION_BIGINT32", "DECIMAL (38)"},
+         "Integer -2147483648 exceeds minimum value for nullable BIGINT(32)"},
+        {{"COERCION_BIGINT16", "DECIMAL (38)"},
+         "Integer 32768 exceeds maximum value for BIGINT(16)"},
+        {{"COERCION_BIGINT8", "DECIMAL (38)"},
+         "Integer -128 exceeds minimum value for nullable BIGINT(8)"},
+        {{"COERCION_INTEGER", "DECIMAL (38)"},
+         "Integer -2147483648 exceeds minimum value for nullable INTEGER(32)"},
+        {{"COERCION_INTEGER16", "DECIMAL (38)"},
+         "Integer 32768 exceeds maximum value for INTEGER(16)"},
+        {{"COERCION_INTEGER8", "DECIMAL (38)"},
+         "Integer -128 exceeds minimum value for nullable INTEGER(8)"},
+        {{"COERCION_UNSIGNED", "INTEGER UNSIGNED"},
+         "ODBC column contains values that are outside the range of the database column "
+         "type INTEGER. Min allowed value: -2147483647. Max allowed value: 2147483647. "
+         "Encountered value: 2147483648. Foreign table: " +
+             foreign_table},
+        {{"COERCION_UNSIGNED", "SMALLINT UNSIGNED"},
+         "ODBC column contains values that are outside the range of the database column "
+         "type SMALLINT. Min allowed value: -32767. Max allowed value: 32767. "
+         "Encountered value: 32768. Foreign table: " +
+             foreign_table},
+        {{"COERCION_UNSIGNED", "TINYINT UNSIGNED"},
+         "ODBC column contains values that are outside the range of the database column "
+         "type TINYINT. Min allowed value: -127. Max allowed value: 127. Encountered "
+         "value: 128. Foreign table: " +
+             foreign_table}};
+
+    auto idx = possible_values.find({column_name, column_type});
+    CHECK(idx != possible_values.end()) << column_name << ":" << column_type;
+    std::map<std::pair<std::string, std::string>, std::string> snowflake_addendum{
+        {{"COERCION_INTEGER16", "INTEGER"},
+         "Integer 32768 exceeds maximum value for INTEGER(16)"},
+        {{"COERCION_INTEGER8", "INTEGER"},
+         "Integer -128 exceeds minimum value for nullable INTEGER(8)"},
+        {{"COERCION_BIGINT16", "INTEGER"},
+         "Integer 32768 exceeds maximum value for BIGINT(16)"},
+        {{"COERCION_BIGINT8", "INTEGER"},
+         "Integer -128 exceeds minimum value for nullable BIGINT(8)"}};
+    std::map<std::pair<std::string, std::string>, std::string> bigquery_addendum{
+        {{"COERCION_BIGINT", "DECIMAL (38)"},
+         "Integer 9223372036854775808.00000000000000000000000000000000000000 is out of "
+         "range for BIGINT"},
+        {{"COERCION_BIGINT32", "DECIMAL (38)"},
+         "Integer -2147483648.00000000000000000000000000000000000000 exceeds minimum "
+         "value for nullable BIGINT(32)"},
+        {{"COERCION_BIGINT16", "DECIMAL (38)"},
+         "Integer 32768.00000000000000000000000000000000000000 exceeds maximum value for "
+         "BIGINT(16)"},
+        {{"COERCION_BIGINT8", "DECIMAL (38)"},
+         "Integer -128.00000000000000000000000000000000000000 exceeds minimum value for "
+         "nullable BIGINT(8)"},
+        {{"COERCION_INTEGER", "DECIMAL (38)"},
+         "Integer -2147483648.00000000000000000000000000000000000000 exceeds minimum "
+         "value for nullable INTEGER(32)"},
+        {{"COERCION_INTEGER16", "DECIMAL (38)"},
+         "Integer 32768.00000000000000000000000000000000000000 exceeds maximum value for "
+         "INTEGER(16)"},
+        {{"COERCION_INTEGER8", "DECIMAL (38)"},
+         "Integer -128.00000000000000000000000000000000000000 exceeds minimum value for "
+         "nullable INTEGER(8)"}};
+    if (wrapper_type_ == "snowflake") {
+      if (auto s_idx = snowflake_addendum.find({column_name, column_type});
+          s_idx != snowflake_addendum.end()) {
+        idx = s_idx;
+      }
+    }
+    if (wrapper_type_ == "bigquery") {
+      if (auto s_idx = bigquery_addendum.find({column_name, column_type});
+          s_idx != bigquery_addendum.end()) {
+        idx = s_idx;
+      }
+    }
+    return decorateMessage(idx->second);
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    OdbcCoercionSelectRangeExceeded,
+    OdbcCoercionSelectTestRangeExceeded,
+    ::testing::Combine(::testing::ValuesIn(odbc_definitions_for_range_err),
+                       ::testing::ValuesIn(odbc_wrappers)),
+    [](const auto& info) {
+      std::stringstream ss;
+      OdbcColumnDefinitionCoercionRangeErr obj = {std::get<0>(info.param)};
+      ss << obj.toString() << "_" << std::get<1>(info.param);
+      return ss.str();
+    });
+
+TEST_P(OdbcCoercionSelectTestRangeExceeded, RangeErrorTest) {
+  const auto& test_column_definition =
+      std::get<OdbcColumnDefinitionCoercionRangeErr>(GetParam());
+
+  const auto& rcd_type = test_column_definition.remote_column_type;
+  if (wrapper_type_ == "sqlite" && rcd_type == "DECIMAL (38)") {
+    GTEST_SKIP() << " Data wrapper = [" << wrapper_type_ << "]";
+  }
+  if (wrapper_type_ != "sqlite" && std::regex_search(rcd_type, std::regex("UNSIGNED"))) {
+    GTEST_SKIP() << "Data wrapper does not support unsigned integers";
+  }
+
+  const auto& file_name = getDataFilesPath() + test_column_definition.file_name;
+  sql(createForeignTableQuery(
+      {{test_column_definition.column_name, test_column_definition.column_type}},
+      file_name,
+      wrapper_type_,
+      {},
+      default_table_name,
+      {{test_column_definition.column_name, test_column_definition.remote_column_type}}));
+  std::string query = "SELECT " + test_column_definition.column_name + " from " +
+                      default_table_name + ";";
+  TQueryResult result;
+
+  try {
+    sql(result, query);
+    FAIL() << "An exception should have been thrown for this test case.";
+  } catch (apache::thrift::TException& e) {
+    assertExceptionMessage(e,
+                           getExceptionMessage(test_column_definition.column_name,
+                                               test_column_definition.remote_column_type,
+                                               default_table_name));
+  }
+}
+
+#endif
+#if defined(HAVE_AWS_S3)
+
+size_t regex_match_count(const std::string& line, const std::string& regex) {
+  size_t count{0};
+  std::smatch match;
+  auto search_str = line;
+  while (std::regex_search(search_str, match, std::regex{regex})) {
+    count++;
+    search_str = match.suffix().str();
+  }
+  return count;
+}
+
+class S3QueryTest : public RecoverCacheQueryTest,
+                    public ::testing::WithParamInterface<WrapperType> {
+ protected:
+  void SetUp() override {
+    g_enable_s3_fsi = true;
+    wrapper_type_ = GetParam();
+    RecoverCacheQueryTest::SetUp();
+    sqlDropForeignTable();
+    dropServers();
+    createServer("s3_public_server", "omnisci-fsi-test-public");
+    createServer("s3_private_server", "omnisci-fsi-test");
+    createServer("s3_invalid_server",
+                 "nieph9keegh9chio3Kierieyae7Hoh2chai5ohph8xa1luothohshin4aish2saeWoe1Iet"
+                 "a3zaevo5cahxi6raiphaes4aiS4ea1roh5si9ue5ieju6ioweexioH0ja");
+    createServer("non_s3_server_custom_endpoint",
+                 "heavyai-importtest-data",
+                 "",
+                 "storage.googleapis.com");
+    createServer("s3_server_custom_endpoint",
+                 "omnisci-fsi-test-public",
+                 "",
+                 "s3." + aws_region_ + ".amazonaws.com");
+  }
+
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    g_enable_s3_fsi = true;
+    sqlDropForeignTable();
+    sql("DROP USER MAPPING IF EXISTS FOR PUBLIC SERVER s3_private_server;");
+    dropServers();
+    RecoverCacheQueryTest::TearDown();
+  }
+
+  void createServer(const std::string& server_name,
+                    const std::string& bucket_name,
+                    const std::string& base_path = "",
+                    const std::string& custom_endpoint = "") {
+    std::string data_wrapper = get_data_wrapper_name(wrapper_type_);
+    std::string file_type = getFileType();
+
+    std::stringstream ss;
+    ss << "CREATE SERVER " << server_name << " FOREIGN DATA WRAPPER " << data_wrapper
+       << " WITH (storage_type = 'AWS_S3', s3_bucket = '" << bucket_name
+       << "', AWS_REGION = '" + aws_region_ + "'";
+    if (base_path.size() > 0) {
+      ss << ", BASE_PATH = '" << base_path << "'";
+    }
+    if (custom_endpoint.size() > 0) {
+      ss << ", S3_ENDPOINT = '" << custom_endpoint << "'";
+    }
+    ss << ");";
+    sql(ss.str());
+  }
+
+  void dropServers() {
+    sql("DROP SERVER IF EXISTS s3_public_server;");
+    sql("DROP SERVER IF EXISTS s3_private_server;");
+    sql("DROP SERVER IF EXISTS s3_invalid_server;");
+    sql("DROP SERVER IF EXISTS non_s3_server_custom_endpoint;");
+    sql("DROP SERVER IF EXISTS s3_server_custom_endpoint;");
+  }
+
+  void createForeignTable(const std::string& server_name,
+                          const std::string& file_name,
+                          const foreign_storage::OptionsMap options = {},
+                          const std::string& directory_name = "FsiDataFiles/",
+                          const std::string& schema = "t TEXT, i INTEGER, f DOUBLE") {
+    std::string query = "CREATE FOREIGN TABLE " + default_table_name + " (" + schema +
+                        ") "s + "SERVER " + server_name + " WITH (file_path = '" +
+                        directory_name + file_name + "'";
+    if (wrapper_type_ == "csv_s3_select") {
+      query += ", S3_ACCESS_TYPE = 'S3_SELECT'";
+    }
+
+    if (is_regex(wrapper_type_)) {
+      if (options.find("LINE_REGEX") == options.end()) {
+        auto column_count =
+            std::count(schema.begin(), schema.end(), ',') -
+            // Exclude column definitions that have parenthesis e.g. decimal, etc.
+            regex_match_count(schema, "\\(\\w+\\s*,\\s*\\d+\\)") + 1;
+        query += ", LINE_REGEX = '" + get_line_regex(column_count) + "'";
+      }
+
+      if (options.find("HEADER") == options.end()) {
+        query += ", HEADER = 'TRUE'";
+      }
+    }
+
+    for (auto& [key, value] : options) {
+      query += ", " + key + " = '" + value + "'";
+    }
+    query += ");";
+    sql(query);
+
+    // csv_s3_select needs a user mapping, even for public servers
+    if (wrapper_type_ == "csv_s3_select" && server_name != "s3_private_server") {
+      createUserMappingForS3FromEnv(server_name);
+    }
+  }
+
+  void createUserMappingForS3FromEnv(const std::string& server = "s3_private_server") {
+    const auto& env_key = get_aws_keys_from_env();
+    createUserMappingForS3(server, env_key.first, env_key.second);
+  }
+
+  void createUserMappingForS3FromSts(const std::string& server = "s3_private_server") {
+    const auto& env_key = get_aws_keys_from_env();
+    const auto& server_options = getCatalog().getForeignServer(server);
+    const auto& sts_credentials = generate_sts_credentials(env_key, server_options);
+    createUserMappingForS3(server,
+                           sts_credentials.GetAccessKeyId(),
+                           sts_credentials.GetSecretAccessKey(),
+                           sts_credentials.GetSessionToken());
+  }
+
+  std::string getFileType() {
+    if (wrapper_type_ == "csv_s3_select" || is_regex(wrapper_type_)) {
+      return "csv";
+    } else {
+      return wrapper_type_;
+    }
+  }
+
+  std::string getExample2FileName() { return "example_2." + getFileType(); }
+
+  std::string getExample2DirectoryName() { return "example_2_" + getFileType() + "_dir"; }
+
+  void queryAndAssertExample2SingleColumn() {
+    TQueryResult result;
+    sql(result, "SELECT i FROM " + default_table_name + ";");
+    assertResultSetEqual({{i(1)}, {i(1)}, {i(2)}, {i(1)}, {i(2)}, {i(3)}}, result);
+  }
+
+  void queryAndAssertFileAccessException(const std::string& file_path) {
+    queryAndAssertPartialException(default_select,
+                                   "Unable to access file \"" + file_path + "\".");
+  }
+
+  // Have necessary credentials to access private buckets
+  bool insufficientPrivateCredentials() const {
+    return !is_valid_aws_key(get_aws_keys_from_env());
+  }
+  // Have necessary credentials to access public buckets
+  bool insufficientPublicCredentials() const {
+    return (wrapper_type_ == "csv_s3_select") &&
+           !is_valid_aws_key(get_aws_keys_from_env());
+  }
+
+  inline static const std::string& aws_region_{"us-west-1"};
+};
+
+TEST_P(S3QueryTest, NonS3CustomEndpoint) {
+  if (wrapper_type_ == "csv_s3_select") {
+    GTEST_SKIP() << "Custom Endpoint not supported by S3_SELECT.";
+  }
+  createForeignTable("non_s3_server_custom_endpoint", getExample2FileName());
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3QueryTest, S3CustomEndpoint) {
+  if (wrapper_type_ == "csv_s3_select") {
+    GTEST_SKIP() << "Custom Endpoint not supported by S3_SELECT.";
+  }
+  createForeignTable("s3_server_custom_endpoint", getExample2FileName());
+  queryAndAssertExample2Result();
+}
+
+class S3WithPublicCredentialsTest : public S3QueryTest {
+ public:
+  void SetUp() override {
+    S3QueryTest::SetUp();
+    if (insufficientPublicCredentials()) {
+      GTEST_SKIP() << "Insufficient public credentials to run test";
+    }
+  }
+};
+
+class S3CsvWithPublicCredentialsTest : public S3WithPublicCredentialsTest {
+ public:
+  void SetUp() override {
+    S3WithPublicCredentialsTest::SetUp();
+    if (getFileType() != "csv") {
+      GTEST_SKIP() << "Test only valid for CSV files";
+    }
+  }
+};
+
+class S3WithPrivateCredentialsTest : public S3QueryTest {
+ public:
+  void SetUp() override {
+    S3QueryTest::SetUp();
+    if (insufficientPrivateCredentials()) {
+      GTEST_SKIP() << "Insufficient private credentials to run test";
+    }
+  }
+};
+
+TEST_P(S3WithPublicCredentialsTest, SingleFile) {
+  createForeignTable("s3_public_server", getExample2FileName());
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, LineDelimNewline) {
+  createForeignTable("s3_public_server", "example_2.csv", {{"line_delimiter", "\\n"}});
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, DelimTab) {
+  createForeignTable("s3_public_server", "example_2.tsv", {{"delimiter", "\\t"}});
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, FieldDelim) {
+  createForeignTable(
+      "s3_public_server", "example_2_field_delim.csv", {{"delimiter", "|"}});
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, LineDelim) {
+  createForeignTable(
+      "s3_public_server", "example_2_line_delim.csv", {{"line_delimiter", "*"}});
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, Quote) {
+  createForeignTable("s3_public_server", "example_2_quote.csv", {{"quote", "~"}});
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, QuoteEscape) {
+  createForeignTable("s3_public_server",
+                     "example_2_quote_escape.csv",
+                     {{"quote", "a"}, {"escape", "$"}});
+  // 'a' used as quote, so "a" is a$aa in csv file
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, CarriageReturn) {
+  createForeignTable("s3_public_server", "example_2_crlf.csv");
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPublicCredentialsTest, SingleFile_1col) {
+  createForeignTable("s3_public_server", getExample2FileName());
+  queryAndAssertExample2SingleColumn();
+}
+
+TEST_P(S3WithPublicCredentialsTest, SingleFileBasePath) {
+  sql("DROP SERVER IF EXISTS s3_public_server;");
+  createServer("s3_public_server", "omnisci-fsi-test-public", "FsiDataFiles");
+  createForeignTable("s3_public_server", getExample2FileName(), {}, "");
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPublicCredentialsTest, BasePathWithLeadingSlash) {
+  sql("DROP SERVER IF EXISTS s3_public_server;");
+  createServer("s3_public_server", "omnisci-fsi-test-public", "/FsiDataFiles");
+  createForeignTable("s3_public_server", getExample2FileName(), {}, "");
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPublicCredentialsTest, FilePathWithLeadingSlash) {
+  sql("DROP SERVER IF EXISTS s3_public_server;");
+  createServer("s3_public_server", "omnisci-fsi-test-public", "FsiDataFiles");
+  createForeignTable("s3_public_server", "/" + getExample2FileName(), {}, "");
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPublicCredentialsTest, FilePathWithLeadingSlashNoBasePath) {
+  createForeignTable("s3_public_server", "/" + getExample2FileName(), {});
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPublicCredentialsTest, Directory) {
+  createForeignTable("s3_public_server", getExample2DirectoryName());
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPublicCredentialsTest, EmptyDirectory) {
+  // TODO: Remove below skipping for Parquet when Arrow 4.0 is fully deployed
+  if (wrapper_type_ == "parquet") {
+    GTEST_SKIP();
+  }
+  createForeignTable("s3_public_server", "empty_dir");
+  sqlAndCompareResult(default_select, {});
+}
+
+// TODO(Misiu): Enable this test (possibly with alterations) once we establish if
+// file_path is a mandatory field for S3 tables.
+TEST_P(S3QueryTest, DISABLED_DirectoryNoFilePath) {
+  sql("DROP SERVER IF EXISTS s3_public_server;");
+  createServer("s3_public_server",
+               "omnisci-fsi-test-public/FsiDataFiles/" + getExample2DirectoryName());
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (t TEXT, i INTEGER, f DOUBLE) "
+      "SERVER s3_public_server;");
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPublicCredentialsTest, DirectoryAppendNothing) {
+  createForeignTable("s3_public_server",
+                     getExample2DirectoryName(),
+                     {{"REFRESH_UPDATE_TYPE", "APPEND"}});
+  queryAndAssertExample2Result();
+  sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPublicCredentialsTest, DirectoryRefreshAll) {
+  createForeignTable(
+      "s3_public_server", getExample2DirectoryName(), {{"REFRESH_UPDATE_TYPE", "ALL"}});
+  queryAndAssertExample2Result();
+  sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPublicCredentialsTest, FileMissing) {
+  createForeignTable("s3_public_server", "missing_file");
+  queryAndAssertFileNotFoundException(
+      "omnisci-fsi-test-public/FsiDataFiles/missing_file");
+}
+
+TEST_P(S3WithPublicCredentialsTest, InvalidBucket) {
+  createForeignTable("s3_invalid_server", getExample2FileName());
+  queryAndAssertFileNotFoundException(
+      "nieph9keegh9chio3Kierieyae7Hoh2chai5ohph8xa1luothohshin4aish2saeWoe1Ieta3zaevo5cah"
+      "xi6raiphaes4aiS4ea1roh5si9ue5ieju6ioweexioH0ja/FsiDataFiles/" +
+      getExample2FileName());
+}
+
+TEST_P(S3WithPrivateCredentialsTest, NoUserMapping) {
+  createForeignTable("s3_private_server", getExample2FileName());
+  if (wrapper_type_ == "csv_s3_select") {
+    queryAndAssertException(default_select,
+                            "S3_SELECT access requires a valid User Mapping.");
+  } else {
+    queryAndAssertFileAccessException("omnisci-fsi-test/FsiDataFiles/" +
+                                      getExample2FileName());
+  }
+}
+
+TEST_P(S3QueryTest, PrivateBucketWithUnauthorizedPublicUserMapping) {
+  createUserMappingForS3("s3_private_server", "invalid", "invalid");
+  createForeignTable("s3_private_server", getExample2FileName());
+  queryAndAssertFileAccessException("omnisci-fsi-test/FsiDataFiles/" +
+                                    getExample2FileName());
+}
+
+TEST_P(S3WithPrivateCredentialsTest, ReloadDataWrapperOnDropUserMapping) {
+  createUserMappingForS3FromEnv();
+  createForeignTable("s3_private_server", getExample2FileName());
+  std::string data_wrapper_type = GetParam();
+  queryAndAssertExample2Result();
+  sql("DROP USER MAPPING FOR PUBLIC SERVER s3_private_server");
+  if (GetParam() == "csv_s3_select") {
+    queryAndAssertException(default_select,
+                            "S3_SELECT access requires a valid User Mapping.");
+  } else {
+    queryAndAssertFileAccessException("omnisci-fsi-test/FsiDataFiles/" +
+                                      getExample2FileName());
+  }
+}
+
+TEST_P(S3WithPrivateCredentialsTest, AuthorizedPublicUserMapping_SingleFile) {
+  createUserMappingForS3FromEnv();
+  createForeignTable("s3_private_server", getExample2FileName());
+  std::string data_wrapper_type = GetParam();
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPrivateCredentialsTest, AuthorizedPublicUserMapping_Directory) {
+  createUserMappingForS3FromEnv();
+  createForeignTable("s3_private_server", getExample2DirectoryName());
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPrivateCredentialsTest, AuthorizedSTSPublicUserMapping_SingleFile) {
+  createUserMappingForS3FromSts();
+  createForeignTable("s3_private_server", getExample2FileName());
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3WithPrivateCredentialsTest, AuthorizedSTSPublicUserMapping_Directory) {
+  createUserMappingForS3FromSts();
+  createForeignTable("s3_private_server", getExample2DirectoryName());
+  queryAndAssertExample2Result();
+}
+
+// Check that csv datawrapper metadata is generated and restored correctly for S3 bucket
+TEST_P(S3WithPublicCredentialsTest, WrapperOnDisk) {
+  if (GetParam() == "csv_s3_select") {
+    GTEST_SKIP() << "S3 Select currently disabled for this test";
+  }
+
+  ASSERT_EQ(cache_->getNumCachedChunks(), 0U);
+  ASSERT_EQ(cache_->getNumCachedMetadata(), 0U);
+  createForeignTable("s3_public_server", getExample2DirectoryName());
+  // Query for # of rows to populate metadata but not actual data
+  TQueryResult result;
+  sql(result, "SELECT COUNT(*) FROM " + default_table_name + ";");
+  assertResultSetEqual({{i(6)}}, result);
+  auto cat = &getCatalog();
+  auto td = cat->getMetadataForTable(default_table_name, false);
+  ChunkKey table_key{cat->getCurrentDB().dbId, td->tableId};
+
+  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
+  ASSERT_TRUE(compareTableDatawrapperMetadataToFile(
+      default_table_name,
+      getWrapperMetadataPath("s3", is_regex(wrapper_type_) ? "csv" : wrapper_type_)));
+
+  // Reset cache and clear memory representations.
+  resetStorageManagerAndClearTableMemory(table_key);
+
+  queryAndAssertExample2Result();
+
+  ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
+}
+
+TEST_P(S3WithPublicCredentialsTest, RestoreCacheFromOldWrapperMetadata) {
+  if (GetParam() == "csv_s3_select") {
+    GTEST_SKIP() << "S3 Select currently disabled for this test";
+  }
+
+  createForeignTable("s3_public_server", getExample2DirectoryName());
+  sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(6)}});
+
+  // Reset cache and clear memory representations.
+  resetStorageManagerAndClearTableMemory(getTestTableKey());
+  ASSERT_TRUE(isTableDatawrapperDataOnDisk(default_table_name));
+  ASSERT_FALSE(isTableDatawrapperRestored(default_table_name));
+  setOldDataWrapperMetadata(default_table_name, "s3");
+
+  queryAndAssertExample2Result();
+
+  ASSERT_TRUE(isTableDatawrapperRestored(default_table_name));
+}
+
+TEST_P(S3QueryTest, FsiS3Disabled) {
+  createForeignTable("s3_public_server", getExample2FileName());
+
+  g_enable_s3_fsi = false;
+  queryAndAssertException(default_select,
+                          "Query cannot be executed for S3 backed foreign "
+                          "table because FSI S3 support is currently disabled.");
+}
+
+// Test record counting for S3 select wrapper, requires user mapping
+TEST_P(S3WithPublicCredentialsTest, SelectCount) {
+  createUserMappingForS3FromEnv();
+  createForeignTable("s3_public_server", getExample2FileName());
+  TQueryResult result;
+  sql(result, "SELECT COUNT(*) from " + default_table_name + ";");
+  assertResultSetEqual({{i(6)}}, result);
+}
+
+// Force multiple iterations of the row counting in S3 Select wrapper, requires user
+// mapping
+TEST_P(S3WithPublicCredentialsTest, SelectCount_Split) {
+  if (wrapper_type_ == "parquet" || wrapper_type_ == "csv_s3_select") {
+    // Fragment size is too small for row group size
+    GTEST_SKIP();
+  }
+  createUserMappingForS3FromEnv();
+  createForeignTable("s3_public_server", getExample2FileName(), {{"FRAGMENT_SIZE", "2"}});
+  TQueryResult result;
+  sql(result, "SELECT COUNT(*) from " + default_table_name + ";");
+  assertResultSetEqual({{i(6)}}, result);
+}
+
+TEST_P(S3WithPublicCredentialsTest, ColumnsMismatch) {
+  foreign_storage::OptionsMap options;
+  // Use a line regex that matches only one column
+  if (is_regex(wrapper_type_)) {
+    options["LINE_REGEX"] = "(.+)";
+  }
+  createForeignTable("s3_public_server", "0." + getFileType(), options);
+
+  queryAndAssertException(
+      default_select,
+      "Mismatched number of logical columns: (expected 3 columns, has 1): "
+      "in file 'omnisci-fsi-test-public/FsiDataFiles/0." +
+          getFileType() + "'");
+}
+
+TEST_P(S3WithPublicCredentialsTest, ColumnsMismatchAppendRepeat) {
+  foreign_storage::OptionsMap options{{"REFRESH_UPDATE_TYPE", "APPEND"}};
+  // Use a line regex that matches only one column
+  if (is_regex(wrapper_type_)) {
+    options["LINE_REGEX"] = "(.+)";
+  }
+  createForeignTable("s3_public_server", "0." + getFileType(), options);
+
+  queryAndAssertException(
+      default_select,
+      "Mismatched number of logical columns: (expected 3 columns, has 1): "
+      "in file 'omnisci-fsi-test-public/FsiDataFiles/0." +
+          getFileType() + "'");
+  queryAndAssertException(
+      default_select,
+      "Mismatched number of logical columns: (expected 3 columns, has 1): "
+      "in file 'omnisci-fsi-test-public/FsiDataFiles/0." +
+          getFileType() + "'");
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, ParseError) {
+  // Force fragment to be parsed in multiple requests
+  createForeignTable("s3_public_server",
+                     "1badint.csv",
+                     {{"buffer_size", "8"}},
+                     "FsiDataFiles/",
+                     "i INT");
+  queryAndAssertException(
+      default_select,
+      "Parsing failure \""
+      "Unable to parse -a to INTEGER"
+      "\" in row \"-a\" in file \"omnisci-fsi-test-public/FsiDataFiles/1badint.csv\"");
+}
+
+TEST_P(S3WithPublicCredentialsTest, ScalarTypes) {
+  createForeignTable("s3_public_server",
+                     "scalar_types." + getFileType(),
+                     {},
+                     "FsiDataFiles/",
+                     "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+                     "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+                     "txt_2 TEXT ENCODING NONE");
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY s;");
+  // clang-format off
+  assertResultSetEqual({
+    {
+      True, i(100), i(30000), i(2000000000), i(9000000000000000000), 10.1f, 100.1234, "00:00:10",
+      "1/1/2000 00:00:59", "1/1/2000", "text_1", "quoted text"
+    },
+    {
+      False, i(110), i(30500), i(2000500000), i(9000000050000000000), 100.12f, 2.1234, "00:10:00",
+      "6/15/2020 00:59:59", "6/15/2020", "text_2", "quoted text 2"
+    },
+    {
+      True, i(120), i(31000), i(2100000000), i(9100000000000000000), 1000.123f, 100.1, "10:00:00",
+      "12/31/2500 23:59:59", "12/31/2500", "text_3", "quoted text 3"
+    }},
+    result);
+  // clang-format on
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, ScalarNulls1Col) {
+  if (GetParam() == "csv_s3_select") {
+    GTEST_SKIP() << "S3 Select currently disabled for this test";
+  }
+  createForeignTable("s3_public_server",
+                     "scalar_types_w_nulls.csv",
+                     {},
+                     "FsiDataFiles/",
+                     "b BOOLEAN, t TINYINT, s SMALLINT, i INTEGER, bi BIGINT, f FLOAT, "
+                     "dc DECIMAL(10, 5), tm TIME, tp TIMESTAMP, d DATE, txt TEXT, "
+                     "txt_2 TEXT ENCODING NONE");
+
+  TQueryResult result;
+  sql(result, "SELECT f FROM " + default_table_name + " ORDER BY f;");
+
+  assertResultSetEqual({{10.1f}, {1000.123f}, {NULL_FLOAT}}, result);
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, CompressedFiles) {
+  std::string file = "example_1.csv.gz";
+  createForeignTable("s3_public_server", file, {}, "FsiDataFiles/");
+  if (GetParam() == "csv") {
+    queryAndAssertException(
+        "SELECT * FROM " + default_table_name + ";",
+        "File \"omnisci-fsi-test-public/FsiDataFiles/" + file +
+            "\" has mime type \"application/x-gzip\", compressed file "
+            "formats are not supported by S3 Foreign Tables.");
+  } else {
+    CHECK(GetParam() == "csv_s3_select");
+    queryAndAssertException("SELECT * FROM " + default_table_name + ";",
+                            "File \"omnisci-fsi-test-public/FsiDataFiles/" + file +
+                                "\" has extension type \".gz\", compressed file "
+                                "formats are not supported by S3 Foreign Tables.");
+  }
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, CompressedFilesMissingExtension) {
+  if (GetParam() == "csv_s3_select") {
+    GTEST_SKIP() << "S3 Select only uses extension check";
+  }
+  std::string file = "example_1_gz_no_ext";
+  createForeignTable("s3_public_server", file, {}, "FsiDataFiles/");
+  queryAndAssertException("SELECT * FROM " + default_table_name + ";",
+                          "File \"omnisci-fsi-test-public/FsiDataFiles/" + file +
+                              "\" has mime type \"application/x-gzip\", compressed file "
+                              "formats are not supported by S3 Foreign Tables.");
+}
+
+TEST_P(S3CsvWithPublicCredentialsTest, CompressedFilesMimeTypeMismatch) {
+  // fallback to extension check
+  std::string file = "example_1_not_gz.csv.gz";
+  createForeignTable("s3_public_server", file, {}, "FsiDataFiles/");
+  queryAndAssertException("SELECT * FROM " + default_table_name + ";",
+                          "File \"omnisci-fsi-test-public/FsiDataFiles/" + file +
+                              "\" has extension type \".gz\", compressed file "
+                              "formats are not supported by S3 Foreign Tables.");
+}
+
+TEST_P(S3WithPublicCredentialsTest, AggregateAndGroupByNull) {
+  createForeignTable("s3_public_server",
+                     "null_str." + getFileType(),
+                     {},
+                     "FsiDataFiles/",
+                     "t TEXT, i INT");
+
+  TQueryResult result;
+  sql(result,
+      "select t, count( * )  from " + default_table_name + " group by 1 order by 1 asc;");
+  // clang-format off
+  assertResultSetEqual({{"a", i(1)},
+                        {"b", i(1)},
+                        {"c", i(1)},
+                        {Null, i(1)}},
+                       result);
+  // clang-format on
+}
+
+TEST_P(S3WithPublicCredentialsTest, NoMatchRegexPathFilter) {
+  createForeignTable("s3_public_server",
+                     "example_2_" + getFileType() + "_dir/",
+                     {{"REGEX_PATH_FILTER", "very?obscure?pattern"}});
+  queryAndAssertException("SELECT * FROM " + default_table_name + ";",
+                          "No files matched the regex file path "
+                          "\"very?obscure?pattern\".");
+}
+
+TEST_P(S3WithPublicCredentialsTest, RegexPathFilterOnFiles) {
+  createForeignTable("s3_public_server",
+                     "example_2_" + getFileType() + "_dir/",
+                     {{"REGEX_PATH_FILTER", ".*_dir/file.*"}});
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY t, i;");
+  // clang-format off
+  assertResultSetEqual({{"a", i(1), 1.1},
+                        {"aa", i(1), 1.1},
+                        {"aa", i(2), 2.2},
+                        {"aaa", i(1), 1.1},
+                        {"aaa", i(2), 2.2},
+                        {"aaa", i(3), 3.3}},
+                       result);
+  // clang-format on
+}
+
+TEST_P(S3WithPublicCredentialsTest, SortedOnPathname) {
+  createForeignTable("s3_public_server",
+                     "sorted_dir/" + getFileType(),
+                     {{"FILE_SORT_ORDER_BY", "pathNAME"}},
+                     "FsiDataFiles/",
+                     "i INT");
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(2)}, {i(1)}, {i(0)}, {i(9)}});
+}
+
+TEST_P(S3WithPublicCredentialsTest, SortedOnDateModified) {
+  createForeignTable("s3_public_server",
+                     "sorted_dir/" + getFileType(),
+                     {{"FILE_SORT_ORDER_BY", "DATE_MODIFIED"}},
+                     "FsiDataFiles/",
+                     "i INT");
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(9)}, {i(2)}, {i(0)}, {i(1)}});
+}
+
+TEST_P(S3WithPublicCredentialsTest, SortedOnRegex) {
+  createForeignTable(
+      "s3_public_server",
+      "sorted_dir/" + getFileType(),
+      {{"FILE_SORT_ORDER_BY", "REGEX"}, {"FILE_SORT_REGEX", ".*[a-z]_[0-9]([0-9])_.*"}},
+      "FsiDataFiles/",
+      "i INT");
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(9)}, {i(0)}, {i(2)}, {i(1)}});
+}
+
+TEST_P(S3WithPublicCredentialsTest, SortedOnRegexDate) {
+  createForeignTable("s3_public_server",
+                     "sorted_dir/" + getFileType(),
+                     {{"FILE_SORT_ORDER_BY", "REGEX_DATE"},
+                      {"FILE_SORT_REGEX", ".*[a-z]_[0-9][0-9]_(.*)\\..*"}},
+                     "FsiDataFiles/",
+                     "i INT");
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(9)}, {i(2)}, {i(0)}, {i(1)}});
+}
+
+TEST_P(S3WithPublicCredentialsTest, SortedOnRegexNumberAndMultiCaptureGroup) {
+  createForeignTable("s3_public_server",
+                     "sorted_dir/" + getFileType(),
+                     {{"FILE_SORT_ORDER_BY", "REGEX_NUMBER"},
+                      {"FILE_SORT_REGEX", ".*[a-z]_(.*)_(.*)-(.*)-(.*)\\..*"}},
+                     "FsiDataFiles/",
+                     "i INT");
+  sqlAndCompareResult("SELECT * FROM " + default_table_name + ";",
+                      {{i(9)}, {i(0)}, {i(1)}, {i(2)}});
+}
+
+TEST_P(S3WithPublicCredentialsTest, SortedOnNonRegexWithSortRegex) {
+  executeLambdaAndAssertException(
+      [&]() {
+        createForeignTable("s3_public_server",
+                           "sorted_dir/" + getFileType() + "/zzz." + getFileType(),
+                           {{"FILE_SORT_REGEX", "xxx"}},
+                           "FsiDataFiles/",
+                           "i INT");
+      },
+      "Option \"FILE_SORT_REGEX\" must not be set for selected option "
+      "\"FILE_SORT_ORDER_BY='PATHNAME'\".");
+}
+
+TEST_P(S3WithPublicCredentialsTest, SortedOnRegexWithoutSortRegex) {
+  try {
+    createForeignTable("s3_public_server",
+                       "sorted_dir/" + getFileType() + "/zzz." + getFileType(),
+                       {{"FILE_SORT_ORDER_BY", "REGEX"}},
+                       "FsiDataFiles/",
+                       "i INT");
+    FAIL() << "An exception should have been thrown";
+  } catch (const TDBException& e) {
+    assertExceptionMessage(e,
+                           "Option \"FILE_SORT_REGEX\" must be set for selected option "
+                           "\"FILE_SORT_ORDER_BY='REGEX'\".");
+  }
+}
+
+// TODO(IAM): re-enable these three S3* instantiations once a CI IAM
+// user with read on the public S3 fixtures (and the omnisci-import-test
+// custom-endpoint bucket) is provisioned. The "PrivateCredentials"
+// instantiation below is left enabled — it self-skips when no creds
+// are detected and otherwise uses the working private bucket.
+INSTANTIATE_TEST_SUITE_P(DISABLED_S3QueryTest,
+                         S3QueryTest,
+                         ::testing::ValuesIn(s3_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+INSTANTIATE_TEST_SUITE_P(DISABLED_S3QueryTest,
+                         S3WithPublicCredentialsTest,
+                         ::testing::ValuesIn(s3_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+INSTANTIATE_TEST_SUITE_P(DISABLED_S3QueryTest,
+                         S3CsvWithPublicCredentialsTest,
+                         ::testing::ValuesIn(csv_s3_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+INSTANTIATE_TEST_SUITE_P(S3QueryTest,
+                         S3WithPrivateCredentialsTest,
+                         ::testing::ValuesIn(s3_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+class VirtualAddressingTest : public S3WithPublicCredentialsTest {
+ public:
+  inline static const std::string minio_server_name{"minio_server"};
+
+  // TODO(Misiu):  GTest adds support for GTEST_SKIP() in SetUpTestSuite in v.14 (we are
+  // currently on v.10).  Once we bump the version we can simplify this and make the
+  // output less noisy.
+  static void SetUpTestSuite() {
+    if (!g_run_minio) {
+      return;
+    }
+    S3WithPublicCredentialsTest::SetUpTestSuite();
+  }
+
+  static void TearDownTestSuite() {
+    if (!g_run_minio) {
+      return;
+    }
+    S3WithPublicCredentialsTest::TearDownTestSuite();
+  }
+
+  void SetUp() override {
+    if (!g_run_minio) {
+      GTEST_SKIP() << "Minio tests disabled";
+    }
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name);
+    sql("DROP SERVER IF EXISTS " + minio_server_name);
+    S3WithPublicCredentialsTest::SetUp();
+  }
+
+  void TearDown() override {
+    if (!g_run_minio) {
+      return;
+    }
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name);
+    sql("DROP SERVER IF EXISTS " + minio_server_name);
+    S3WithPublicCredentialsTest::TearDown();
+  }
+
+  void createMinioServer(const std::string& use_virtual_addressing) {
+    std::stringstream ss;
+    ss << "CREATE SERVER " << minio_server_name << " FOREIGN DATA WRAPPER "
+       << get_data_wrapper_name(wrapper_type_)
+       << " WITH (storage_type = 'AWS_S3', s3_bucket = 'omnisci-fsi-test-public', "
+          "AWS_REGION = 'us-east-1', S3_USE_VIRTUAL_ADDRESSING='"
+       << use_virtual_addressing << "'"
+       << ", S3_ENDPOINT = 'http://" + g_minio_hostname + ":9000');";
+    sql(ss.str());
+  }
+};
+
+TEST_P(VirtualAddressingTest, False) {
+  if (GetParam() == "csv_s3_select") {
+    GTEST_SKIP() << "S3_SELECT is not supported when using custom s3 endpoints.";
+  }
+  createMinioServer("false");
+  createForeignTable(minio_server_name, getExample2FileName());
+  queryAndAssertExample2Result();
+}
+
+TEST_P(VirtualAddressingTest, True) {
+  if (GetParam() == "csv_s3_select") {
+    GTEST_SKIP() << "S3_SELECT is not supported when using custom s3 endpoints.";
+  }
+  createMinioServer("true");
+  createForeignTable(minio_server_name, getExample2FileName());
+  queryAndAssertExample2Result();
+}
+
+INSTANTIATE_TEST_SUITE_P(VirtualAddressingTest,
+                         VirtualAddressingTest,
+                         ::testing::ValuesIn(s3_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+class S3QueryServerPrivilegeTest : public S3QueryTest {
+ protected:
+  inline const static std::string AWS_DUMMY_CREDENTIALS_DIR =
+      to_string(BASE_PATH) + "/aws";
+  inline static std::map<std::string, std::string> aws_environment_;
+
+  static void SetUpTestSuite() {
+    S3QueryTest::SetUpTestSuite();
+    g_allow_s3_server_privileges = true;
+    aws_environment_ = unset_aws_env();
+    create_stub_aws_profile(AWS_DUMMY_CREDENTIALS_DIR);
+  }
+
+  static void TearDownTestSuite() {
+    S3QueryTest::TearDownTestSuite();
+    g_allow_s3_server_privileges = false;
+    restore_aws_env(aws_environment_);
+    boost::filesystem::remove_all(AWS_DUMMY_CREDENTIALS_DIR);
+  }
+
+  bool insufficientPrivateCredentials() const {
+    return !is_valid_aws_key(aws_environment_);
+  }
+
+  bool insufficientPublicCredentials() const {
+    return (GetParam() == "csv_s3_select") && insufficientPrivateCredentials();
+  }
+
+  // Have necessary role credentials to access private buckets
+  bool instanceHasIAMRole() const { return is_valid_aws_role(); }
+};
+
+TEST_P(S3QueryServerPrivilegeTest,
+       PublicBucketWithoutUserMappingAndWithoutDefaultCredentialsProvider) {
+  if (insufficientPublicCredentials() || instanceHasIAMRole()) {
+    GTEST_SKIP();
+  }
+  if (GetParam() == "csv_s3_select") {
+    // keys required for csv s3 select
+    restore_aws_keys(aws_environment_);
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+
+  createForeignTable("s3_public_server", getExample2DirectoryName());
+  queryAndAssertExample2Result();
+  if (GetParam() == "csv_s3_select") {
+    unset_aws_keys();
+  }
+}
+
+TEST_P(S3QueryServerPrivilegeTest,
+       PrivateBucketWithoutUserMappingAndWithoutDefaultCredentialsProvider) {
+  if (instanceHasIAMRole()) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+
+  createForeignTable("s3_private_server", getExample2FileName());
+  queryAndAssertFileAccessException("omnisci-fsi-test/FsiDataFiles/" +
+                                    getExample2FileName());
+}
+
+TEST_P(S3QueryServerPrivilegeTest,
+       PrivateBucketWithUserMappingAndWithoutDefaultCredentialsProvider) {
+  if (insufficientPrivateCredentials() || instanceHasIAMRole()) {
+    GTEST_SKIP();
+  }
+  std::string aws_access_key_id("");
+  std::string aws_secret_access_key("");
+  if (aws_environment_.find("AWS_ACCESS_KEY_ID") != aws_environment_.end()) {
+    aws_access_key_id = aws_environment_.find("AWS_ACCESS_KEY_ID")->second;
+  }
+  if (aws_environment_.find("AWS_SECRET_ACCESS_KEY") != aws_environment_.end()) {
+    aws_secret_access_key = aws_environment_.find("AWS_SECRET_ACCESS_KEY")->second;
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  createUserMappingForS3("s3_private_server", aws_access_key_id, aws_secret_access_key);
+  createForeignTable("s3_private_server", getExample2DirectoryName());
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3QueryServerPrivilegeTest,
+       PrivateBucketWithoutUserMappingAndWithAuthorizedEnvironment) {
+  // AWS credentials will be drawn from environment values
+  if (insufficientPrivateCredentials()) {
+    GTEST_SKIP();
+  }
+  restore_aws_keys(aws_environment_);
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+
+  createForeignTable("s3_private_server", getExample2FileName());
+  queryAndAssertExample2Result();
+
+  unset_aws_keys();
+}
+
+TEST_P(S3QueryServerPrivilegeTest,
+       PrivateBucketWithUnauthorizedPublicUserMappingAndWithAuthorizedEnvironment) {
+  if (insufficientPrivateCredentials()) {
+    GTEST_SKIP();
+  }
+  restore_aws_keys(aws_environment_);
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  createUserMappingForS3("s3_private_server", "invalid", "invalid");
+  createForeignTable("s3_private_server", getExample2FileName());
+  queryAndAssertFileAccessException("omnisci-fsi-test/FsiDataFiles/" +
+                                    getExample2FileName());
+
+  unset_aws_keys();
+}
+
+TEST_P(S3QueryServerPrivilegeTest,
+       PrivateBucketWithoutUserMappingAndWithAuthorizedProfile) {
+  // AWS credentials will be drawn from profile keys
+  if (insufficientPrivateCredentials()) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, true, aws_environment_);
+
+  createForeignTable("s3_private_server", getExample2FileName());
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3QueryServerPrivilegeTest,
+       PrivateBucketWithUnauthorizedPublicUserMappingAndWithAuthorizedProfile) {
+  if (insufficientPrivateCredentials()) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, true, aws_environment_);
+  createUserMappingForS3("s3_private_server", "invalid", "invalid");
+  createForeignTable("s3_private_server", getExample2FileName());
+  queryAndAssertFileAccessException("omnisci-fsi-test/FsiDataFiles/" +
+                                    getExample2FileName());
+}
+
+TEST_P(S3QueryServerPrivilegeTest,
+       PrivateBucketWithoutUserMappingAndWithAuthorizedInstanceRole) {
+  // AWS credentials will be drawn from instance metadata
+  if (!instanceHasIAMRole()) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+
+  createForeignTable("s3_private_server", getExample2FileName());
+  queryAndAssertExample2Result();
+}
+
+TEST_P(S3QueryServerPrivilegeTest,
+       PrivateBucketWithUnauthorizedPublicUserMappingAndWithAuthorizedInstanceRole) {
+  if (instanceHasIAMRole()) {
+    GTEST_SKIP();
+  }
+  set_aws_profile(AWS_DUMMY_CREDENTIALS_DIR, false);
+  createUserMappingForS3("s3_private_server", "invalid", "invalid");
+  createForeignTable("s3_private_server", getExample2FileName());
+  queryAndAssertFileAccessException("omnisci-fsi-test/FsiDataFiles/" +
+                                    getExample2FileName());
+}
+
+// TODO(IAM): re-enable once a CI IAM user with read on the public S3
+// fixtures (omnisci-fsi-test-public/FsiDataFiles/example_2.*) is
+// provisioned.
+INSTANTIATE_TEST_SUITE_P(DISABLED_S3QueryServerPrivilegeTest,
+                         S3QueryServerPrivilegeTest,
+                         ::testing::ValuesIn(s3_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+class S3AppendQueryTest : public S3QueryTest {
+ public:
+  static void SetUpTestSuite() {
+    S3QueryTest::SetUpTestSuite();
+    auto uuid = boost::uuids::random_generator()();
+    s3_append_dir_path_ = "AppendTest/" + boost::uuids::to_string(uuid);
+  }
+
+  static void TearDownTestSuite() { S3QueryTest::TearDownTestSuite(); }
+
+  void SetUp() override {
+    S3QueryTest::SetUp();
+    if (insufficientPrivateCredentials()) {
+      GTEST_SKIP() << "Insufficient private credentials to run test";
+    }
+  }
+
+  void TearDown() override {
+    if (insufficientPrivateCredentials()) {
+      GTEST_SKIP() << "Insufficient private credentials to run test";
+    }
+    delete_object_keys_with_prefix(s3_bucket_name_, s3_append_dir_path_, aws_region_);
+    S3QueryTest::TearDown();
+  }
+
+  void uploadFileToS3(const std::string& local_file_path,
+                      const std::string& s3_object_key) {
+    upload_file_to_s3(s3_bucket_name_, local_file_path, s3_object_key, aws_region_);
+  }
+
+  std::string getLocalFilePath(const std::string& file_name) {
+    return getDataFilesPath() + file_name + "." + getFileType();
+  }
+
+  std::string getS3ObjectKey(const std::string& file_name) {
+    return s3_append_dir_path_ + "/" + file_name + "." + getFileType();
+  }
+
+  inline static std::string s3_append_dir_path_;
+  inline static const std::string s3_bucket_name_{"omnisci-fsi-test"};
+};
+
+TEST_P(S3AppendQueryTest, MultipleRefreshes) {
+  createUserMappingForS3FromEnv();
+
+  uploadFileToS3(getLocalFilePath("1"), getS3ObjectKey("1"));
+  createForeignTable("s3_private_server",
+                     "",
+                     {{"REFRESH_UPDATE_TYPE", "APPEND"}},
+                     s3_append_dir_path_,
+                     "i INTEGER");
+
+  const std::string select_query{"SELECT * FROM " + default_table_name + " ORDER BY i;"};
+  sqlAndCompareResult(select_query, {{i(1)}});
+
+  uploadFileToS3(getLocalFilePath("2"), getS3ObjectKey("2"));
+  sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+
+  // Second refresh would previously cause a crash.
+  sql("REFRESH FOREIGN TABLES " + default_table_name + ";");
+  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
+}
+
+INSTANTIATE_TEST_SUITE_P(S3AppendQueryTest,
+                         S3AppendQueryTest,
+                         ::testing::ValuesIn(s3_wrappers),
+                         [](const auto& param_info) { return param_info.param; });
+
+#endif  // defined(HAVE_AWS_S3)
+
+class CacheChunkSizeDataWrapperControllingTest
+    : public CacheControllingSelectQueryBaseTest,
+      public testing::WithParamInterface<
+          std::tuple<File_Namespace::DiskCacheLevel, ChunkSizeType, WrapperType>> {
+ public:
+  CacheChunkSizeDataWrapperControllingTest()
+      : CacheControllingSelectQueryBaseTest(std::get<0>(GetParam())) {}
+
+  ChunkSizeType chunk_size_;
+  inline static std::string cache_path_ =
+      to_string(BASE_PATH) + "/" + shared::kDefaultDiskCacheDirName;
+
+  static std::string getTestName(
+      const ::testing::TestParamInfo<
+          std::tuple<File_Namespace::DiskCacheLevel, ChunkSizeType, WrapperType>>& info) {
+    auto [cache_level, chunk_size, wrapper_type] = info.param;
+    std::stringstream ss;
+    ss << "CacheLevel_"
+       << (cache_level == File_Namespace::DiskCacheLevel::none ? "none"
+                                                               : "foreign_tables")
+       << "_DataWrapper_" << wrapper_type << "_ChunkSize_" << chunk_size;
+    return ss.str();
+  }
+
+  void SetUp() override {
+    std::tie(cache_level_, chunk_size_, wrapper_type_) = GetParam();
+    CacheControllingSelectQueryBaseTest::SetUp();
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(
+    ChunkSizeEnforcementTest,
+    CacheChunkSizeDataWrapperControllingTest,
+    ::testing::Combine(::testing::Values(File_Namespace::DiskCacheLevel::none,
+                                         File_Namespace::DiskCacheLevel::fsi),
+                       ::testing::Values(100),
+                       ::testing::ValuesIn(local_wrappers)),
+    CacheChunkSizeDataWrapperControllingTest::getTestName);
+
+TEST_P(CacheChunkSizeDataWrapperControllingTest, ChunkSizeTooLarge) {
+#ifndef EE_FSI_ODBC
+  if (is_odbc(wrapper_type_)) {
+    GTEST_SKIP() << "ODBC disabled, skipping test.";
+  }
+#endif
+  std::string file_extension = wrapper_type_;
+  if (is_regex(wrapper_type_) || is_odbc(wrapper_type_)) {
+    file_extension = "csv";
+  }
+  sql(createForeignTableQuery(
+      {{"id", "INT"}, {"too_much", "TEXT ENCODING NONE"}},
+      getDataFilesPath() + "chunk_size_too_large." + file_extension,
+      wrapper_type_,
+      {{"MAX_CHUNK_SIZE", std::to_string(chunk_size_)}}));
+  std::string exception_message =
+      "Chunk populated by data wrapper which is 1810 bytes exceeds maximum byte size "
+      "limit of 100. Foreign table: " +
+      default_table_name + ", column name : too_much";
+  queryAndAssertException("SELECT * FROM " + default_table_name + " ORDER BY id;",
+                          exception_message);
 }
 
 class DataTypeFragmentSizeAndDataWrapperTest
@@ -1425,6 +5084,429 @@ INSTANTIATE_TEST_SUITE_P(
                                          File_Namespace::DiskCacheLevel::fsi),
                        ::testing::ValuesIn(local_wrappers)),
     CacheAndDataWrapperControllingSelectQueryTest::getTestName);
+
+class ParquetDetectColumnTest : public ThriftTest,
+                                public testing::WithParamInterface<std::string> {
+ protected:
+  static void SetUpTestSuite() {
+    ThriftTest::SetUpTestSuite();
+    generateLocalTestData();
+  }
+
+  static void TearDownTestSuite() {
+    removeLocalGeneratedTestData();
+    ThriftTest::TearDownTestSuite();
+  }
+
+  void SetUp() override { ThriftTest::SetUp(); }
+
+  void TearDown() override {
+    g_detect_test_sample_size = std::nullopt;
+    ThriftTest::TearDown();
+  }
+
+  TDetectResult detectParquet(const std::string& filename) {
+    TCopyParams copy_params;
+    copy_params.source_type = TSourceType::PARQUET_FILE;
+    std::string filename_to_load;
+    if (GetParam() == "s3_public") {
+      const std::string public_test_bucket = "s3://omnisci-fsi-test-public/FsiDataFiles/";
+      filename_to_load = public_test_bucket + filename;
+      copy_params.s3_region = "us-west-1";
+    } else {
+      CHECK_EQ(GetParam(), "local");
+      filename_to_load = getDataFilesPath() + "/" + filename;
+    }
+    return detect(filename_to_load, copy_params);
+  }
+
+  static std::string generateRandomString(const size_t len) {
+    static const char alphanum[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+    std::string tmp_s;
+    tmp_s.reserve(len);
+
+    for (size_t i = 0; i < len; ++i) {
+      tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
+    }
+
+    return tmp_s;
+  }
+
+  static void generateSampleRowsForNoValidData() {
+    const size_t num_rows = 10;
+    const size_t string_length = std::numeric_limits<int16_t>::max() + 1UL;
+    for (size_t i = 0; i < num_rows; ++i) {
+      auto& row = no_valid_data_sample_rows_.emplace_back();
+      row.emplace_back(std::to_string(i));
+      row.emplace_back(generateRandomString(string_length));
+    }
+  }
+
+  static void generateSampleRowsForUnevenBatchReadSizes() {
+    const size_t num_rows = 2096;
+    const size_t string_length = 551;
+    for (size_t i = 0; i < num_rows; ++i) {
+      auto& row = uneven_batch_read_sizes_sample_rows_.emplace_back();
+      row.emplace_back(std::to_string(i));
+      row.emplace_back(generateRandomString(string_length));
+    }
+  }
+
+  static void generateLocalTestFileForTestCast(
+      const std::string& filename,
+      const foreign_storage::SampleRows& sample_rows) {
+    parquet::WriterProperties::Builder builder;
+    std::vector<std::shared_ptr<parquet::schema::Node>> fields{
+        parquet::schema::PrimitiveNode::Make("index",
+                                             parquet::Repetition::OPTIONAL,
+                                             parquet::LogicalType::Int(64, true),
+                                             parquet::Type::INT64),
+        parquet::schema::PrimitiveNode::Make("string",
+                                             parquet::Repetition::OPTIONAL,
+                                             parquet::LogicalType::String(),
+                                             parquet::Type::BYTE_ARRAY)};
+    std::shared_ptr<parquet::schema::GroupNode> schema =
+        std::static_pointer_cast<parquet::schema::GroupNode>(
+            parquet::schema::GroupNode::Make(
+                "schema", parquet::Repetition::REQUIRED, fields));
+
+    std::shared_ptr<arrow::io::FileOutputStream> outfile;
+    PARQUET_ASSIGN_OR_THROW(
+        outfile, arrow::io::FileOutputStream::Open(getDataFilesPath() + "/" + filename));
+
+    {
+      parquet::StreamWriter os{
+          parquet::ParquetFileWriter::Open(outfile, schema, builder.build())};
+      for (const auto& row : sample_rows) {
+        CHECK_EQ(row.size(), 2UL);
+        os << std::stol(row.at(0)) << row.at(1) << parquet::EndRow;
+      }
+    }
+
+    PARQUET_THROW_NOT_OK(outfile->Close());
+  }
+
+  static void generateLocalTestFileForUnevenBatchReadSizes() {
+    generateLocalTestFileForTestCast("uneven_batch_read_sizes.parquet",
+                                     uneven_batch_read_sizes_sample_rows_);
+  }
+
+  static void generateLocalTestFileForNoValidData() {
+    generateLocalTestFileForTestCast("no_valid_data_for_detect.parquet",
+                                     no_valid_data_sample_rows_);
+  }
+
+  static void generateLocalTestData() {
+    generateSampleRowsForUnevenBatchReadSizes();
+    generateLocalTestFileForUnevenBatchReadSizes();
+
+    generateSampleRowsForNoValidData();
+    generateLocalTestFileForNoValidData();
+  }
+
+  static void removeLocalGeneratedTestData() {
+    if (std::filesystem::exists(getDataFilesPath() +
+                                "/uneven_batch_read_sizes.parquet")) {
+      std::filesystem::remove(getDataFilesPath() + "/uneven_batch_read_sizes.parquet");
+    }
+    if (std::filesystem::exists(getDataFilesPath() +
+                                "/no_valid_data_for_detect.parquet")) {
+      std::filesystem::remove(getDataFilesPath() + "/no_valid_data_for_detect.parquet");
+    }
+  }
+
+  static foreign_storage::SampleRows uneven_batch_read_sizes_sample_rows_;
+  static foreign_storage::SampleRows no_valid_data_sample_rows_;
+};
+
+foreign_storage::SampleRows
+    ParquetDetectColumnTest::uneven_batch_read_sizes_sample_rows_ = {};
+foreign_storage::SampleRows ParquetDetectColumnTest::no_valid_data_sample_rows_ = {};
+
+TEST_P(ParquetDetectColumnTest, UnevenBatchReadSizes) {
+  g_detect_test_sample_size = 5;
+
+  auto result = detectParquet("uneven_batch_read_sizes.parquet");
+
+  assertExpectedColumns(result,
+                        {"index", "string"},
+                        {{kBIGINT}, getSqlType(kTEXT, kENCODING_DICT, std::nullopt, 0)});
+
+  // The S3 test case checks against a pre-existing file with known values,
+  // while the local use case builds the test case and writes out a local
+  // file.
+  if (GetParam() == "s3_public") {
+    // clang-format off
+    assertExpectedSampleRows(
+        result, {
+                    {"0", "f6731ce3ce5d143bbf1b2b0140fab245437d82da5f741f0fca47eb0cbc141b6ee9bc81e6fc6a911bad390e95b4d3bc45"
+                          "420a7809aed4f4a3716adc47f6e28644d3576cc3d7aebc397b3892aa6eaf87bca32e3e747665a254aeacf6336c58774f"
+                          "0e282d71ff40014996305af4ab4cf617da91719be5d00927ffa4cde8d9e2353ff69275335f3727d4ade772cd372101df"
+                          "3c5907866593ed6b5be242ebfd95408bd99f6381de7609f642d1d03d7aa0be5eb27557d31ab7c13d01e2cc24b329c59c"
+                          "e224b73563d0d7f35fd0b2c4cf5d8bbad0c4ada569edf4000792c0c769abdf84ba563cf3f023f2c9bef0bc9790ac660b"
+                          "4a40dd2587c0d413cdf48779dd2d2e64a19e66dc8d9c3255d7e61e394272608a06c38d"},
+                    {"1", "400395127e5bb386865ab02822c6b36eb6a9d482eb59b28dbc03b80b2f291a7c7ed8dd55d40ee6eaa05666ee62d66c81"
+                          "578bd3922c77da050c750523c12924d5496794062f2f2a555cbedc5af2d53c733532341bc12a2e12ff1fe270522decbe"
+                          "ab1138dc80c673f39d2682fe90c20709854f218e578a26cd726cb9bc2f3f00e6883ecde569414284b51aa94ab4dc3a6f"
+                          "3d73080bcaefaf21288b48ecbaa9f937343ac4193312d7289837179d370c91cbd74c5e41c18f8ad66135c7a8a712bd16"
+                          "3f81be4caa11aac71ee94d0d3907dfd128a5c9ebfd3c9554cb0263d5eb5f7fe4b783cba0282bce4b0f373ec74edd90b0"
+                          "c35b80d2306649c7ae5bc3bc0a503b7bafe2890206ebc87079633f50265e78515cd403"},
+                    {"2", "46b768324c372110620a0d97742fc08b05cbcca5caf2cef90694488f33d225f728bf39c49d8df5aacf5c559acd3710c1"
+                          "7521a597724e686f0a061bb3817f50baacebc9407399a87f164c01453dd171c7b959ea754583f9b6361943d3d28c0832"
+                          "c121ccf250b27772747177960a784541310a9af935d348c01a15031747d921a96d7ec3332b2478c251afb23e68977fa9"
+                          "d290a5ccb9586f017cb9fcbce7d033130eaba9ff291248a20dff5e36c512ed666c092e32ef3d558ddd182f8405369639"
+                          "9c44920ff221bcb07d9f3bd1f675cf2299b539d24cac167a80615a18d2b651f6bcdff7f532db3ce257f571afc81956a4"
+                          "f3a78f8b057bb025867f8ae4b405753b53c384c11159b7ee24c51fa3717473cb371ab1"},
+                    {"3", "a74f44c1cb0938b1efc0b71844d6d49a36b54af81cf7c5b7a6c466a69a8ba1e88613b5c2ec541d57bee5c718321d7973"
+                          "7a99b8b3dad612eba1bd8bb03030ba06392e8c146e7c37be9e5eeb4402d85ddc7707cc8221f935e3f63503a1d12a8003"
+                          "c0aed86c82b5bd0067bf7490a06d794bcf09a9cef9510b95e4263bbdef049edaa4e4711b561fd97727f7a76100f2079b"
+                          "67923e84ee1359643e9f889d39a40a6fd856106cbe0ace13d65a2e9ef43e46db20fd3210f76b1edcb296e079d2c7a7f2"
+                          "cbbc8b02b5f6a2bbfc4e4a601a77d718798ad739471f6574fe0f12741bbfbd3b748c7cce6d526a9aba2186a570a153d1"
+                          "85e66ddb842ae6f853b10b95bebd8d8bf0d63f07df253b97e57524f30c150c3b23539c"},
+                    {"4", "c02c5a00973d8ec7a5b65b2bada8de3583d42f7e1d3cdf041256cf11c57882c489f025d9836dfb1b2c50f6a577434c9a"
+                          "8ec178e6a928e9cea3a58b62dc161fbbf2512c6970ea770a4a6efab1142351317813cb9e978bd56f2ae5c51e83350eea"
+                          "93b059fe4c2343dbe635069e93a08e7f028fb5b26b5eeb7b677d15f8c05aa41bfca7b9f555721f6345fd96af8b3e49a7"
+                          "936984abd40e973989413ed04c161534855fc0d4781bdf121ead9d22ed708c77c102276c4a60ac82f706b008195afbaa"
+                          "a3ff9519d173f29f62218be4750dbcfc61b9099661e3fbb2daf64eca452c898698f79fd24fe046a6f669abe1efa3c3ff"
+                          "cb3ee13c49e60b183a008063c99a96fd60512df4eae437a7e104f0cc8cf75b63c4d35a"},
+                });
+    // clang-format on
+  } else {
+    foreign_storage::SampleRows sample_rows_to_check;
+    sample_rows_to_check.insert(
+        sample_rows_to_check.end(),
+        uneven_batch_read_sizes_sample_rows_.begin(),
+        uneven_batch_read_sizes_sample_rows_.begin() + g_detect_test_sample_size.value());
+    assertExpectedSampleRows(result, sample_rows_to_check);
+  }
+}
+
+TEST_P(ParquetDetectColumnTest, NoValidData) {
+  auto result = detectParquet("no_valid_data_for_detect.parquet");
+
+  assertExpectedColumns(result,
+                        {"index", "string"},
+                        {{kBIGINT}, getSqlType(kTEXT, kENCODING_DICT, std::nullopt, 0)});
+
+  assertExpectedSampleRows(result, {});
+}
+
+TEST_P(ParquetDetectColumnTest, GeoTypes) {
+  auto result = detectParquet(GetParam() == "local" ? "geo_types_valid.parquet"
+                                                    : "geo_types_3.parquet");
+
+  assertExpectedColumns(result,
+                        {"index",
+                         "point_",
+                         "multipoint_",
+                         "linestring_",
+                         "multilinestring_",
+                         "polygon_",
+                         "multipolygon_"},
+                        {{kBIGINT},
+                         getGeoColumnType(kPOINT),
+                         getGeoColumnType(kMULTIPOINT),
+                         getGeoColumnType(kLINESTRING),
+                         getGeoColumnType(kMULTILINESTRING),
+                         getGeoColumnType(kPOLYGON),
+                         getGeoColumnType(kMULTIPOLYGON)});
+  // clang-format off
+  assertExpectedSampleRows(result,
+    {
+      {"1", "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING ((0 0,1 1),(5 5,2 2))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"},
+      {"2", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"},
+      {"3", "POINT (1 1)", "MULTIPOINT (0 0,1 2,3 2,0 4)", "LINESTRING (1 1,2 2,3 3)", "MULTILINESTRING ((1 1,2 2),(3 3,4 4))", "POLYGON ((5 4,7 4,6 5,5 4))",
+       "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"},
+      {"4", "POINT (2 2)", "MULTIPOINT (5 5,2 2,1 0)", "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))","POLYGON ((1 1,3 1,2 3,1 1))",
+       "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"},
+      {"5", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"}
+    }
+    );
+  // clang-format on
+}
+
+TEST_P(ParquetDetectColumnTest, ArrayTypesWithSmallNumSamples) {
+  g_detect_test_sample_size = 5;
+
+  auto result = detectParquet("detect_large_array.parquet");
+
+  assertExpectedColumns(result, {"index", "i32_array"}, {{kINT}, getArrayType(kINT)});
+
+  assertExpectedSampleRows(result,
+                           {
+                               {"0", "{1,2}"},
+                               {"1", "{3,4,5}"},
+                               {"2", "{0,1,2,3,4,5,6,7}"},
+                               {"3", "{6}"},
+                               {"4", "NULL"},
+                           });
+}
+
+TEST_P(ParquetDetectColumnTest, NumSampleRowsLessThanRowGroup) {
+  g_detect_test_sample_size = 1;
+
+  auto result = detectParquet("example_2.parquet");
+
+  assertExpectedColumns(
+      result,
+      {"text_", "int_", "double_"},
+      {getSqlType(kTEXT, kENCODING_DICT, std::nullopt, 0), {kBIGINT}, {kDOUBLE}});
+  // clang-format off
+  assertExpectedSampleRows(result,
+    {
+      {"a","1","1.100000"},
+    }
+    );
+  // clang-format on
+}
+
+TEST_P(ParquetDetectColumnTest, ArrayTypes) {
+  auto result = detectParquet("array_types.parquet");
+
+  assertExpectedColumns(
+      result,
+      {"index",
+       "boolean_array",
+       "tinyint_array",
+       "smallint_array",
+       "int_array",
+       "bigint_array",
+       "float_array",
+       "time_array",
+       "timestamp_array",
+       "date_array",
+       "text_array",
+       "fixedpoint_array"},
+      {{kINT},
+       getArrayType(kBOOLEAN),
+       getArrayType(kTINYINT),
+       getArrayType(kSMALLINT),
+       getArrayType(kINT),
+       getArrayType(kBIGINT),
+       getArrayType(kFLOAT),
+       getArrayType(kTIME),
+       getArrayType(kTIMESTAMP, kENCODING_NONE, std::pair<int, int>{3, 0}),
+       getArrayType(kDATE),
+       getArrayType(kTEXT, kENCODING_DICT, std::nullopt, 0),
+       getArrayType(kDECIMAL, kENCODING_NONE, std::pair<int, int>{10, 5})});
+  // clang-format off
+  assertExpectedSampleRows(result,
+      {{"1", "{t}", "{50,100}", "{30000,20000}", "{2000000000}", "{9000000000000000000}",
+        "{10.100000,11.100000}", "{00:00:10}",
+        "{2000-01-01 00:00:59.000,2010-01-01 00:00:59.000}", "{2000-01-01,2000-02-02}",
+        "{text_1}", "{   1.23000,   2.34000}"},
+       {"2", "{f,t}", "{110}", "{30500}", "{2000500000}", "{9000000050000000000}",
+        "{100.120003}", "{00:10:00,00:20:00}", "{2020-06-15 00:59:59.000}",
+        "{2020-06-15}", "{text_2,text_3}", "{   3.45600,   4.50000,   5.60000}"},
+       {"3", "{t}", "{120}", "{31000}", "{2100000000,200000000}",
+        "{9100000000000000000,9200000000000000000}", "{1000.122986}", "{10:00:00}",
+        "{2500-12-31 23:59:59.000}", "{2500-12-31}", "{text_4}", "{   6.78000}"}});
+  // clang-format on
+}
+
+TEST_P(ParquetDetectColumnTest, ScalarTypes) {
+  auto result = detectParquet("scalar_types.parquet");
+
+  std::vector<std::string> column_names;
+  if (GetParam() == "s3_public") {
+    column_names = {
+        "boolean_",
+        "tiny_int",
+        "small_int",
+        "int_",
+        "big_int",
+        "float_",
+        "decimal_",
+        "time_",
+        "timestamp_",
+        "date_",
+        "text_",
+        "quoted_text",
+    };
+  } else {
+    CHECK_EQ(GetParam(), "local");
+    column_names = {
+        "boolean_",
+        "tinyint_",
+        "smallint_",
+        "int_",
+        "bigint_",
+        "float_",
+        "fixedpoint",
+        "time_",
+        "timestamp_",
+        "date_",
+        "string1",
+        "string2",
+    };
+  }
+
+  // clang-format off
+  std::vector<std::vector<std::string>> sample_rows =
+      {{"t", "100", "30000", "2000000000", "9000000000000000000", "10.100000",
+       " 100.12340", "00:00:10", "2000-01-01 00:00:59.000", "2000-01-01", "text_1",
+       "quoted text"},
+      {"f", "110", "30500", "2000500000", "9000000050000000000", "100.120003", 
+      "   2.12340", "00:10:00", "2020-06-15 00:59:59.000", "2020-06-15", "text_2",
+      "quoted text 2"},
+      {"t", "120", "31000", "2100000000", "9100000000000000000", "1000.122986",
+       " 100.10000", "10:00:00", "2500-12-31 23:59:59.000", "2500-12-31", "text_3",
+       "quoted text 3"}};
+  // clang-format on
+
+  if (GetParam() == "local") {
+    sample_rows.push_back({"NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL",
+                           "NULL"});
+  }
+
+  assertExpectedColumns(
+      result,
+      column_names,
+      {{kBOOLEAN},
+       {kTINYINT},
+       {kSMALLINT},
+       {kINT},
+       {kBIGINT},
+       {kFLOAT},
+       getSqlType(kDECIMAL, kENCODING_NONE, std::pair<int, int>{10, 5}),
+       {kTIME},
+       getSqlType(kTIMESTAMP, kENCODING_NONE, std::pair<int, int>{3, 0}),
+       getSqlType(kDATE),
+       getSqlType(kTEXT, kENCODING_DICT, std::nullopt, 0),
+       getSqlType(kTEXT, kENCODING_DICT, std::nullopt, 0)});
+
+  // clang-format off
+  assertExpectedSampleRows(result,
+      sample_rows
+      );
+  // clang-format on
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentDataSources,
+                         ParquetDetectColumnTest,
+                         testing::Values("local"),
+                         [](const auto& param_info) { return param_info.param; });
+// TODO(IAM): re-enable once a CI IAM user with read on the s3_public
+// fixtures is provisioned. The "local" instantiation above keeps
+// running.
+INSTANTIATE_TEST_SUITE_P(DISABLED_DifferentDataSources,
+                         ParquetDetectColumnTest,
+                         testing::Values("s3_public"),
+                         [](const auto& param_info) { return param_info.param; });
 
 TEST_F(SelectQueryTest, ParquetStringsAllNullPlacementPermutations) {
   const auto query = getCreateForeignTableQuery(
@@ -2518,12 +6600,10 @@ TEST_P(MetadataStatsTest, ParquetWithEmptyStringDictionaryNullable) {
                           {Null, 1L},
                       });
 
-  if (!isDistributedMode()) {
-    // Validate metadata matches expectations
-    auto stats = getSingleFragmentStats(default_table_name, "txt");
-    EXPECT_TRUE(stats.has_nulls);
-    EXPECT_EQ(stats.min.intval, 0);
-  }
+  // Validate metadata matches expectations
+  auto stats = getSingleFragmentStats(default_table_name, "txt");
+  EXPECT_TRUE(stats.has_nulls);
+  EXPECT_EQ(stats.min.intval, 0);
 }
 
 TEST_P(MetadataStatsTest, ParquetWithEmptyStringDictionaryNotNullable) {
@@ -2543,14 +6623,12 @@ TEST_P(MetadataStatsTest, ParquetWithEmptyStringDictionaryNotNullable) {
                           {"c", 1L},
                       });
 
-  if (!isDistributedMode()) {
-    // Validate metadata matches expectations
-    auto stats = getSingleFragmentStats(default_table_name, "txt");
-    EXPECT_TRUE(stats.has_nulls);  // NOTE: this is inline with other code-paths
-                                   // such as INSERT or DELIMITED import, although
-                                   // this is counter-intuitive.
-    EXPECT_EQ(stats.min.intval, 0);
-  }
+  // Validate metadata matches expectations
+  auto stats = getSingleFragmentStats(default_table_name, "txt");
+  EXPECT_TRUE(stats.has_nulls);  // NOTE: this is inline with other code-paths
+                                 // such as INSERT or DELIMITED import, although
+                                 // this is counter-intuitive.
+  EXPECT_EQ(stats.min.intval, 0);
 }
 
 TEST_P(MetadataStatsTest, ParquetWithEmptyStringNoneEncodedNullable) {
@@ -2569,11 +6647,9 @@ TEST_P(MetadataStatsTest, ParquetWithEmptyStringNoneEncodedNullable) {
                           {Null},
                       });
 
-  if (!isDistributedMode()) {
-    // Validate metadata matches expectations
-    auto stats = getSingleFragmentStats(default_table_name, "txt");
-    EXPECT_TRUE(stats.has_nulls);
-  }
+  // Validate metadata matches expectations
+  auto stats = getSingleFragmentStats(default_table_name, "txt");
+  EXPECT_TRUE(stats.has_nulls);
 }
 
 TEST_P(MetadataStatsTest, ParquetWithEmptyStringNoneEncodedNotNullable) {
@@ -2609,13 +6685,12 @@ TEST_P(MetadataStatsTest, ParquetWithEmptyStringNoneEncodedNotNullable) {
                             {"c"},
                         });
   }
-  if (!isDistributedMode()) {
-    // Validate metadata matches expectations
-    auto stats = getSingleFragmentStats(default_table_name, "txt");
-    EXPECT_TRUE(stats.has_nulls);  // NOTE: this is inline with other code-paths
-                                   // such as INSERT or DELIMITED import, although
-                                   // this is counter-intuitive.
-  }
+
+  // Validate metadata matches expectations
+  auto stats = getSingleFragmentStats(default_table_name, "txt");
+  EXPECT_TRUE(stats.has_nulls);  // NOTE: this is inline with other code-paths
+                                 // such as INSERT or DELIMITED import, although
+                                 // this is counter-intuitive.
 }
 
 class CSVFileTypeTests
@@ -2829,8 +6904,6 @@ TEST_P(CacheControllingSelectQueryTest, WithBufferSizeLessThanRowSize) {
 }
 
 TEST_P(CacheControllingSelectQueryTest, WithMaxBufferResizeLessThanRowSize) {
-  SKIP_IF_DISTRIBUTED("Leaf nodes not affected by global variable enabling seconds");
-
   import_export::delimited_parser::set_max_buffer_resize(15);
   const auto query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER[])", {{"buffer_size", "10"}}, "example_1", "csv");
@@ -3461,10 +7534,6 @@ class AlteredSourceTest : public RefreshTests,
 };
 
 TEST_P(AlteredSourceTest, FragmentRemoved) {
-  SKIP_IF_DISTRIBUTED(
-      "Test requires cache to be turned off in distributed mode, which is not an "
-      "implemented configuration at this time");
-
   createFilesAndTables({"1"});
   sqlAndCompareResult("SELECT COUNT(i) FROM " + default_table_name + "0", {{i(1)}});
   sql("ALTER SYSTEM CLEAR CPU MEMORY");
@@ -3536,8 +7605,6 @@ TEST_F(CorruptedRefreshTest, Parquet) {
 }
 
 TEST_F(CorruptedRefreshTest, ParquetRecover) {
-  SKIP_IF_DISTRIBUTED("Test relies on local cache access");
-
   sql("CREATE FOREIGN TABLE " + default_table_name +
       " (f32 FLOAT, f64 FLOAT) server default_local_parquet WITH "
       "(REFRESH_TIMING_TYPE='MANUAL', REFRESH_UPDATE_TYPE='APPEND', FILE_PATH='" +
@@ -3636,7 +7703,6 @@ class RefreshParamTests : public RefreshTests,
                           public ::testing::WithParamInterface<WrapperType> {
  protected:
   void SetUp() override {
-    SKIP_SETUP_IF_DISTRIBUTED("Test needs local metadata");
     wrapper_type_ = GetParam();
     RefreshTests::SetUp();
   }
@@ -3692,6 +7758,15 @@ TEST_P(RefreshParamTests, SingleTable) {
 }
 
 TEST_P(RefreshParamTests, FragmentSkip) {
+#ifdef EE_FSI_ODBC
+  if (wrapper_type_ == "postgres") {
+    GTEST_SKIP() << "Metadata scan queries on postgres dsn don't work when using an "
+                    "order by clause.";
+  }
+
+  g_enable_odbc_stats_scan = true;
+  ScopeGuard restore = [&]() { g_enable_odbc_stats_scan = false; };
+#endif
   // Create initial files and tables
   createFilesAndTables({"0", "1"});
 
@@ -3988,8 +8063,6 @@ INSTANTIATE_TEST_SUITE_P(RefreshDeviceTestsParameterizedTests,
                          });
 
 TEST_P(RefreshDeviceTests, Device) {
-  SKIP_IF_DISTRIBUTED("Test relies on local cache access");
-
   if (!setExecuteMode(GetParam())) {
     return;
   }
@@ -4025,8 +8098,6 @@ INSTANTIATE_TEST_SUITE_P(RefreshSyntaxTestsParameterizedTests,
                                            " WITH (EVICT = FALSE)"));
 
 TEST_P(RefreshSyntaxTests, EvictFalse) {
-  SKIP_IF_DISTRIBUTED("Test relies on local cache access");
-
   // Create initial files and tables
   createFilesAndTables({"0"});
 
@@ -4311,8 +8382,6 @@ INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTestsOdbcRecover,
                          FragmentSizesAppendRefreshTest::getTestName);
 
 TEST_P(FragmentSizesAppendRefreshTest, AppendFrags) {
-  SKIP_IF_DISTRIBUTED("Test relies on local cache access");
-
   std::string count_query = "SELECT COUNT(*) FROM "s + table_name_ + ";";
   std::string select_query = "SELECT * FROM "s + table_name_ + " ORDER BY i;";
 
@@ -4478,8 +8547,7 @@ TEST_P(StringDictAppendTest, AppendStringDictFilter) {
 
 TEST_P(StringDictAppendTest, AppendStringDictJoin) {
   foreign_storage::OptionsMap options{{"FRAGMENT_SIZE", std::to_string(fragment_size_)},
-                                      {"REFRESH_UPDATE_TYPE", "APPEND"},
-                                      {"PARTITIONS", "REPLICATED"}};
+                                      {"REFRESH_UPDATE_TYPE", "APPEND"}};
 
   std::string name_1 = table_name_;
   std::string name_2 = table_name2_;
@@ -4578,8 +8646,6 @@ INSTANTIATE_TEST_SUITE_P(AppendParamaterizedTests,
                          });
 
 TEST_P(DataWrapperAppendRefreshTest, AppendNothingGeo) {
-  SKIP_IF_DISTRIBUTED("Test relies on local cache access");
-
   file_name_ = "geo_types_valid"s + wrapper_ext(wrapper_type_);
   std::vector<NameTypePair> odbc_columns{};
   if (is_odbc(wrapper_type_)) {
@@ -4614,8 +8680,6 @@ TEST_P(DataWrapperAppendRefreshTest, AppendNothingGeo) {
 }
 
 TEST_P(DataWrapperAppendRefreshTest, AppendNothing) {
-  SKIP_IF_DISTRIBUTED("Test relies on local cache access");
-
   file_name_ = "single_file"s + wrapper_ext(wrapper_type_);
   sqlCreateTestTable();
   sqlAndCompareResult(select_query, {{i(1)}, {i(2)}});
@@ -4904,103 +8968,6 @@ TEST_P(DataWrapperAppendRefreshTest, AppendToLastFileAndRollOff) {
   sqlAndCompareResult(select_query, {{i(2)}, {i(3)}, {i(4)}});
 }
 
-class DistributedCacheConsistencyTest : public DataWrapperAppendRefreshTest {
- protected:
-  void SetUp() override {
-    if (!isDistributedMode()) {
-      GTEST_SKIP() << "This test case only applies to distributed mode.";
-    }
-    DataWrapperAppendRefreshTest::SetUp();
-    file_name_ = wrapper_file_type(wrapper_type_) + "_dir_file_roll_off";
-    fragment_size_ = 2;
-    switchToAdmin();
-  }
-
-  void TearDown() override {
-    if (!isDistributedMode()) {
-      GTEST_SKIP() << "This test case only applies to distributed mode.";
-    }
-    switchToAdmin();
-    sql("DROP DATABASE IF EXISTS test_db;");
-    DataWrapperAppendRefreshTest::TearDown();
-  }
-
-  void rollOffFileAndRefresh() {
-    overwriteSourceDir({{"i", "BIGINT"}});
-    renameSourceDir(wrapper_file_type(wrapper_type_) + "_dir_file_roll_off_only");
-    sql("REFRESH FOREIGN TABLES " + table_name_ + ";");
-  }
-
-  void forceFirstNodeTableEviction() {
-    const auto& [db_handler, session_id] = getDbHandlerAndSessionId();
-    Catalog_Namespace::SessionInfo session_info{
-        nullptr, {}, ExecutorDeviceType::CPU, session_id};
-    db_handler->leaf_aggregator_.forwardQueryToLeaf(
-        session_info,
-        "REFRESH FOREIGN TABLES " + table_name_ + " WITH (evict = 'true');",
-        0);
-  }
-
-  void switchToTestDb() {
-    if (test_db_session_.empty()) {
-      login(
-          shared::kRootUsername, shared::kDefaultRootPasswd, "test_db", test_db_session_);
-    }
-    ASSERT_FALSE(test_db_session_.empty());
-    setSessionId(test_db_session_);
-  }
-
-  void switchToDefaultDb() { switchToAdmin(); }
-
-  std::string test_db_session_{};
-};
-
-TEST_P(DistributedCacheConsistencyTest, FileRollOffWithEvictionOnOneLeafNode) {
-  sqlCreateTestTableWithRollOffOption();
-  sqlAndCompareResult(select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-
-  rollOffFileAndRefresh();
-  sqlAndCompareResult(select_query, {{i(3)}, {i(4)}});
-
-  forceFirstNodeTableEviction();
-  sqlAndCompareResult(select_query, {{i(3)}, {i(4)}});
-}
-
-TEST_P(DistributedCacheConsistencyTest, FileRollOffWithEvictionOnOneLeafNodeCrossDb) {
-  sql("CREATE DATABASE test_db;");
-  switchToTestDb();
-  sqlCreateTestTableWithRollOffOption();
-
-  static const std::string cross_db_select_query =
-      "SELECT * FROM test_db." + table_name_ + " ORDER BY i;";
-  switchToDefaultDb();
-  sqlAndCompareResult(cross_db_select_query, {{i(1)}, {i(2)}, {i(3)}, {i(4)}});
-
-  switchToTestDb();
-  rollOffFileAndRefresh();
-
-  switchToDefaultDb();
-  sqlAndCompareResult(cross_db_select_query, {{i(3)}, {i(4)}});
-
-  switchToTestDb();
-  forceFirstNodeTableEviction();
-
-  switchToDefaultDb();
-  queryAndAssertException(
-      cross_db_select_query,
-      "Table data inconsistently cached for table: refresh_tmp in catalog: test_db. "
-      "Please refresh table with the cache eviction option set.");
-}
-
-INSTANTIATE_TEST_SUITE_P(FileDataWrappers,
-                         DistributedCacheConsistencyTest,
-                         ::testing::Combine(::testing::ValuesIn(file_wrappers),
-                                            ::testing::Values(true, false)),
-                         [](const auto& info) {
-                           return DataWrapperAppendRefreshTest::testParamsToString(
-                               info.param);
-                         });
-
 INSTANTIATE_TEST_SUITE_P(
     DataTypeFragmentSizeAndDataWrapperCsvTests,
     DataTypeFragmentSizeAndDataWrapperTest,
@@ -5030,7 +8997,11 @@ INSTANTIATE_TEST_SUITE_P(
     DataTypeFragmentSizeAndDataWrapperTest::getTestName);
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, ScalarTypes) {
-  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
+#ifdef EE_FSI_ODBC
+  g_enable_odbc_stats_scan = true;
+  ScopeGuard restore = [&]() { g_enable_odbc_stats_scan = false; };
+#endif
+
   // Data type changes to handle unimplemented types in ODBC
   // Note: This requires the following option to be added to the postgres entry of
   // .odbc.ini:
@@ -5411,12 +9382,45 @@ TEST_F(SelectQueryTest, ParquetNullCompressedGeoTypes) {
   // clang-format on
 }
 
+TEST_F(SelectQueryTest, ParquetNullGeoTypes) {
+  const auto query = getCreateForeignTableQuery(
+      "( index INT, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, "
+      "poly POLYGON, mpoly MULTIPOLYGON )",
+      "geo_types_valid",
+      "parquet");
+  sql(query);
+
+  TQueryResult result;
+  sql(result, "SELECT * FROM " + default_table_name + " ORDER BY index;");
+
+  // clang-format off
+  assertResultSetEqual({
+    {
+      i(1), "POINT (0 0)", "MULTIPOINT (0 0,1 1)", "LINESTRING (0 0,1 1)", "MULTILINESTRING ((0 0,1 1),(5 5,2 2))", "POLYGON ((0 0,1 0,1 1,0 1,0 0))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2)))"
+    },
+    {
+      i(2), Null, Null, Null, Null, Null, Null
+    },
+    {
+      i(3), "POINT (1 1)", "MULTIPOINT (0 0,1 2,3 2,0 4)", "LINESTRING (1 1,2 2,3 3)", "MULTILINESTRING ((1 1,2 2),(3 3,4 4))", "POLYGON ((5 4,7 4,6 5,5 4))",
+      "MULTIPOLYGON (((0 0,1 0,0 1,0 0)),((2 2,3 2,2 3,2 2),(2.1 2.1,2.1 2.9,2.9 2.1,2.1 2.1)))"
+    },
+    {
+      i(4), "POINT (2 2)", "MULTIPOINT (5 5,2 2,1 0)", "LINESTRING (2 2,3 3)", "MULTILINESTRING ((2 2,3 3),(4 4,5 5))", "POLYGON ((1 1,3 1,2 3,1 1))",
+      "MULTIPOLYGON (((5 5,8 8,5 8,5 5)),((0 0,3 0,0 3,0 0)),((11 11,10 12,10 10,11 11)))"
+    },
+    {
+      i(5), Null, Null, Null, Null, Null, Null
+    }},
+    result);
+  // clang-format on
+}
+
 // TODO(Misiu): The has_nulls metadata stas are not consistent between data wrappers for
 // geo-types.  This test should be re-written to make sure we are consistent (or at least
 // igore that parts that don't matter).
 TEST_F(SelectQueryTest, ParquetGeoTypesMetadata) {
-  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
-
   const auto query = getCreateForeignTableQuery(
       "( index INT, p POINT, mp MULTIPOINT, l LINESTRING, ml MULTILINESTRING, poly "
       "POLYGON, mpoly "
@@ -5683,7 +9687,6 @@ TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypes) {
 }
 
 TEST_P(DataTypeFragmentSizeAndDataWrapperTest, GeoTypesEvictPhysicalColumn) {
-  SKIP_SETUP_IF_DISTRIBUTED("Test relies on disk cache");
   
   createForeignTableForGeoTypes(wrapper_type_, extension_, fragment_size_);
   queryAndAssertGeoTypesResult();
@@ -5846,10 +9849,7 @@ TEST_P(RowGroupAndFragmentSizeSelectQueryTest, Join) {
   filename_stream << "example_1_row_group_size." << row_group_size;
   foreign_storage::OptionsMap options{{"fragment_size", std::to_string(fragment_size)}};
   foreign_storage::OptionsMap options2;
-  if (isDistributedMode()) {
-    options["partitions"] = "REPLICATED";
-    options2["partitions"] = "REPLICATED";
-  }
+
   auto query = getCreateForeignTableQuery(
       "(t TEXT, i INTEGER)", options, filename_stream.str(), "parquet");
   sql(query);
@@ -5958,7 +9958,6 @@ class ForeignStorageCacheQueryTest : public ForeignTableTest {
   }
 
   void SetUp() override {
-    SKIP_SETUP_IF_DISTRIBUTED("Needs local cache");
     ForeignTableTest::SetUp();
     cache->clear();
     createTestTable();
@@ -6145,8 +10144,6 @@ class RecoverCacheTest : public RecoverCacheQueryTest,
 };
 
 TEST_P(RecoverCacheTest, RestoreCache) {
-  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache acces");
-
   sql(createForeignTableQuery(
       {{"t", "TEXT"}}, getDataFilesPath() + "a" + file_ext_, wrapper_type_));
 
@@ -6171,8 +10168,6 @@ TEST_P(RecoverCacheTest, RestoreCache) {
 }
 
 TEST_P(RecoverCacheTest, RestoreCacheFromOldWrapperMetadata) {
-  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache access");
-
   sql(createForeignTableQuery(
       {{"col1", "BIGINT"}}, getDataFilesPath() + "1" + file_ext_, wrapper_type_));
   sqlAndCompareResult("SELECT COUNT(*) FROM " + default_table_name + ";", {{i(1)}});
@@ -6214,7 +10209,6 @@ class DataWrapperRecoverCacheQueryTest
 };
 
 TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand) {
-  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache acces");
   bool cache_during_scan = (wrapper_type_ == "csv" || wrapper_type_ == "regex_parser");
 
   sql(createForeignTableQuery(
@@ -6254,8 +10248,6 @@ TEST_P(DataWrapperRecoverCacheQueryTest, RecoverThenPopulateDataWrappersOnDemand
 // Check that datawrapper metadata is generated and restored correctly when appending
 // data
 TEST_P(DataWrapperRecoverCacheQueryTest, AppendData) {
-  SKIP_IF_DISTRIBUTED("Test relies on local metadata or cache acces");
-
   int fragment_size = 2;
   // Create initial files and tables
   bf::remove_all(getDataFilesPath() + "append_tmp");
@@ -6405,6 +10397,434 @@ class MockDataWrapper : public foreign_storage::MockForeignDataWrapper {
   std::set<std::string_view> supported_user_mapping_options_;
 };
 
+class ScheduledRefreshTest : public RefreshTests {
+ protected:
+  static void SetUpTestSuite() {
+    createDBHandler();
+    foreign_storage::ForeignTableRefreshScheduler::setWaitDuration(1);
+  }
+
+  static void TearDownTestSuite() { stopScheduler(); }
+
+  static void startScheduler() {
+    is_program_running_ = true;
+    foreign_storage::ForeignTableRefreshScheduler::start(is_program_running_);
+    ASSERT_TRUE(foreign_storage::ForeignTableRefreshScheduler::isRunning());
+  }
+
+  static void stopScheduler() {
+    is_program_running_ = false;
+    foreign_storage::ForeignTableRefreshScheduler::stop();
+    ASSERT_FALSE(foreign_storage::ForeignTableRefreshScheduler::isRunning());
+    foreign_storage::ForeignTableRefreshScheduler::resetHasRefreshedTable();
+  }
+
+  void SetUp() override {
+    // Set current time to a fixed value for the tests
+    foreign_storage::RefreshTimeCalculator::setMockCurrentTime(getFixedCurrentTime());
+
+    g_enable_seconds_refresh = true;
+    ForeignTableTest::SetUp();
+    boost::filesystem::create_directory(REFRESH_TEST_DIR);
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + ";");
+    foreign_storage::ForeignTableRefreshScheduler::resetHasRefreshedTable();
+    startScheduler();
+  }
+
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    foreign_storage::RefreshTimeCalculator::resetMockCurrentTime();
+
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + ";");
+    boost::filesystem::remove_all(REFRESH_TEST_DIR);
+    ForeignTableTest::TearDown();
+  }
+
+  void setTestFile(const std::string& file_name) {
+    bf::copy_file(getDataFilesPath() + "/" + file_name,
+                  REFRESH_TEST_DIR + "/test.csv",
+#if 107400 <= BOOST_VERSION
+                  bf::copy_options::overwrite_existing
+#else
+                  bf::copy_option::overwrite_if_exists
+#endif
+    );
+  }
+
+  std::string getCurrentTimeString(int32_t delay) {
+    std::time_t timestamp = getFixedCurrentTime() + delay;
+    std::tm* gmt_time = std::gmtime(&timestamp);
+    constexpr int buffer_size = 256;
+    char buffer[buffer_size];
+    std::strftime(buffer, buffer_size, "%Y-%m-%d %H:%M:%S", gmt_time);
+    return std::string{buffer};
+  }
+
+  std::string getCreateScheduledRefreshTableQuery(
+      const std::string& refresh_interval,
+      const std::string& update_type = "all",
+      int32_t sec_from_now = 1,
+      const std::string& timing_type = "scheduled") {
+    auto start_date_time = getCurrentTimeString(sec_from_now);
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR) / "test.csv";
+    std::string query = "CREATE FOREIGN TABLE " + default_table_name +
+                        " (i INTEGER) server "
+                        "default_local_delimited with (file_path = '" +
+                        test_file_path.string() + "', refresh_update_type = '" +
+                        update_type + "', refresh_timing_type = '" + timing_type +
+                        "', refresh_start_date_time = '" + start_date_time + "'";
+    if (!refresh_interval.empty()) {
+      query += ", refresh_interval = '" + refresh_interval + "'";
+    }
+    query += ");";
+    return query;
+  }
+
+  void waitForSchedulerRefresh(bool reset_refreshed_table_flag = true) {
+    if (foreign_storage::ForeignTableRefreshScheduler::isRunning()) {
+      constexpr size_t max_check_count = 10;
+      size_t count = 0;
+      if (reset_refreshed_table_flag) {
+        foreign_storage::ForeignTableRefreshScheduler::resetHasRefreshedTable();
+      }
+      while (!foreign_storage::ForeignTableRefreshScheduler::hasRefreshedTable() &&
+             count < max_check_count) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        count++;
+      }
+      if (!foreign_storage::ForeignTableRefreshScheduler::hasRefreshedTable()) {
+        throw std::runtime_error{
+            "Max wait time for scheduled table refresh has been exceeded."};
+      }
+    }
+  }
+
+  /**
+   * For some test cases, a wait is done for two refresh cycles in order to ensure
+   * that a refresh is done, at least once, using new file content. For instance,
+   * if a test case executes the following sequence of operations:
+   * 1. Update foreign table file content
+   * 2. Wait for scheduled refresh to complete
+   * 3. Query foreign table and assert new content
+   *
+   * Step 3 may return old content if the last scheduled refresh began before
+   * and ended after step 1. Running step 2 twice ensures that, in this case,
+   * a second refresh that picks up new file content occurs before running the
+   * query in step 3.
+   */
+  void waitTwoRefreshCycles() {
+    waitForSchedulerRefresh();
+    waitForSchedulerRefresh();
+  }
+
+  int64_t getFixedCurrentTime() {
+    return foreign_storage::RefreshTimeCalculator::getCurrentTime();
+  }
+
+  void forwardTime(int64_t seconds_count) {
+    foreign_storage::RefreshTimeCalculator::setMockCurrentTime(getFixedCurrentTime() +
+                                                               seconds_count);
+  }
+
+  inline static const std::string REFRESH_TEST_DIR{"./fsi_scheduled_refresh_test"};
+  inline static std::atomic<bool> is_program_running_;
+};
+
+TEST_F(ScheduledRefreshTest, BatchMode) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S");
+  sql(query);
+  sqlAndCompareResult(default_select, {{i(0)}});
+
+  forwardTime(5);
+  setTestFile("1.csv");
+  waitTwoRefreshCycles();
+
+  sqlAndCompareResult(default_select, {{i(1)}});
+}
+
+TEST_F(ScheduledRefreshTest, AppendMode) {
+  setTestFile("1.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S", "append");
+  sql(query);
+  sqlAndCompareResult(default_select, {{i(1)}});
+
+  forwardTime(5);
+  setTestFile("two_row_1_2.csv");
+  waitTwoRefreshCycles();
+
+  sqlAndCompareResult(default_select, {{i(1)}, {i(2)}});
+}
+
+TEST_F(ScheduledRefreshTest, OnlyStartDateTime) {
+  stopScheduler();
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("", "all");
+  sql(query);
+  sqlAndCompareResult(default_select, {{i(0)}});
+
+  forwardTime(5);
+  setTestFile("1.csv");
+  startScheduler();
+  waitForSchedulerRefresh(false);
+  sqlAndCompareResult(default_select, {{i(1)}});
+}
+
+TEST_F(ScheduledRefreshTest, StartDateTimeInThePast) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S", "all", -60);
+  queryAndAssertException(query, "REFRESH_START_DATE_TIME cannot be a past date time.");
+}
+
+TEST_F(ScheduledRefreshTest, InvalidInterval) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("10A");
+  queryAndAssertException(query,
+                          "Invalid value provided for the REFRESH_INTERVAL option.");
+}
+
+TEST_F(ScheduledRefreshTest, InvalidRefreshTimingType) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S", "all", 1, "invalid");
+  queryAndAssertException(query,
+                          "Invalid value provided for the REFRESH_TIMING_TYPE "
+                          "option. Value must be \"MANUAL\" or \"SCHEDULED\".");
+}
+
+TEST_F(ScheduledRefreshTest, MissingStartDateTime) {
+  setTestFile("0.csv");
+  auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR) / "test.csv";
+  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
+                      " (i INTEGER) "
+                      "server default_local_delimited with (file_path = '" +
+                      test_file_path.string() +
+                      "', "
+                      "refresh_timing_type = 'scheduled');";
+  queryAndAssertException(query,
+                          "REFRESH_START_DATE_TIME option must be provided "
+                          "for scheduled refreshes.");
+}
+
+TEST_F(ScheduledRefreshTest, InvalidStartDateTime) {
+  setTestFile("0.csv");
+  auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR) / "test.csv";
+  std::string query = "CREATE FOREIGN TABLE " + default_table_name +
+                      " (i INTEGER) "
+                      "server default_local_delimited with (file_path = '" +
+                      test_file_path.string() +
+                      "', "
+                      "refresh_timing_type = 'scheduled', refresh_start_date_time = "
+                      "'invalid_date_time');";
+  queryAndAssertException(query, "Invalid TIMESTAMP string (INVALID_DATE_TIME)");
+}
+
+TEST_F(ScheduledRefreshTest, SchedulerStop) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S");
+  sql(query);
+  sqlAndCompareResult(default_select, {{i(0)}});
+
+  stopScheduler();
+  forwardTime(5);
+  setTestFile("1.csv");
+  waitForSchedulerRefresh(false);
+  sqlAndCompareResult(default_select, {{i(0)}});
+
+  startScheduler();
+  waitForSchedulerRefresh(false);
+  sqlAndCompareResult(default_select, {{i(1)}});
+}
+
+TEST_F(ScheduledRefreshTest, PostEvictionError) {
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("1S");
+  sql(query);
+  sqlAndCompareResult(default_select, {{i(0)}});
+
+  auto& catalog = getCatalog();
+  auto foreign_storage_mgr =
+      catalog.getDataMgr().getPersistentStorageMgr()->getForeignStorageMgr();
+  auto table = catalog.getMetadataForTable(default_table_name, false);
+
+  auto mock_data_wrapper = std::make_shared<MockDataWrapper>();
+  mock_data_wrapper->throwOnChunkFetch(true);
+  foreign_storage_mgr->setDataWrapper({catalog.getDatabaseId(), table->tableId},
+                                      mock_data_wrapper);
+
+  forwardTime(5);
+  setTestFile("1.csv");
+  waitTwoRefreshCycles();
+  mock_data_wrapper->throwOnChunkFetch(false);
+
+  // Assert that new data is fetched
+  sqlAndCompareResult(default_select, {{i(1)}});
+}
+
+TEST_F(ScheduledRefreshTest, SecondsIntervalDisabled) {
+  g_enable_seconds_refresh = false;
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery("10S");
+  queryAndAssertException(query,
+                          "Invalid value provided for the REFRESH_INTERVAL option.");
+}
+
+class ScheduledRefreshIntervalTest : public ScheduledRefreshTest,
+                                     public ::testing::WithParamInterface<std::string> {
+ protected:
+  int64_t getIntervalSecondsDuration() {
+    const auto& interval_str = GetParam();
+    int64_t interval_seconds_duration{0};
+    if (interval_str == "10S") {
+      interval_seconds_duration = 10;
+    } else if (interval_str == "10H") {
+      interval_seconds_duration = 10 * 60 * 60;
+    } else if (interval_str == "10D") {
+      interval_seconds_duration = 10 * 60 * 60 * 24;
+    } else {
+      UNREACHABLE() << "Unexpected interval: " << interval_str;
+    }
+    return interval_seconds_duration;
+  }
+};
+
+TEST_P(ScheduledRefreshIntervalTest, DifferentIntervalTypes) {
+  stopScheduler();
+  constexpr int32_t seconds_delay{1};
+  setTestFile("0.csv");
+  auto query = getCreateScheduledRefreshTableQuery(GetParam(), "all", seconds_delay);
+  sql(query);
+  auto start_time = getFixedCurrentTime() + seconds_delay;
+
+  forwardTime(5);
+  startScheduler();
+  waitForSchedulerRefresh(false);
+  auto refresh_end_time = getFixedCurrentTime();
+
+  auto [last_refresh_time, next_refresh_time] = getLastAndNextRefreshTimes();
+  ASSERT_EQ(refresh_end_time, last_refresh_time);
+
+  // Next refresh time should be set based on interval
+  ASSERT_EQ(start_time + getIntervalSecondsDuration(), next_refresh_time);
+}
+
+INSTANTIATE_TEST_SUITE_P(DifferentIntervalTypes,
+                         ScheduledRefreshIntervalTest,
+                         ::testing::Values("10S", "10H", "10D"),
+                         [](const auto& param_info) { return param_info.param; });
+
+class QueryEngineCacheInvalidationTest
+    : public ScheduledRefreshTest,
+      public ::testing::WithParamInterface<ScheduledRefreshFlag> {
+ protected:
+  void SetUp() override {
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + "_1;");
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + "_2;");
+    ScheduledRefreshTest::SetUp();
+  }
+
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + "_1;");
+    sql("DROP FOREIGN TABLE IF EXISTS " + default_table_name + "_2;");
+    ScheduledRefreshTest::TearDown();
+  }
+
+  void setTestDir(const std::string& src_dir_name) {
+    bf::remove_all(REFRESH_TEST_DIR);
+    recursive_copy(getDataFilesPath() + src_dir_name, REFRESH_TEST_DIR);
+  }
+
+  std::string getCreateScheduledRefreshTableQuery(const std::string& table_name) {
+    auto start_date_time = getCurrentTimeString(1);
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR);
+    std::string query = "CREATE FOREIGN TABLE " + table_name +
+                        " (txt TEXT) server "
+                        "default_local_parquet with (file_path = '" +
+                        test_file_path.string() +
+                        "', refresh_update_type = 'append', refresh_timing_type = "
+                        "'scheduled', refresh_start_date_time = '" +
+                        start_date_time +
+                        "', refresh_interval = '1S', fragment_size = 2);";
+    return query;
+  }
+
+  std::string getCreateTableQuery(const std::string& table_name) {
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR);
+    std::string query = "CREATE FOREIGN TABLE " + table_name +
+                        " (txt TEXT) server "
+                        "default_local_parquet with (file_path = '" +
+                        test_file_path.string() + "', refresh_update_type = 'append'," +
+                        "fragment_size = 2);";
+    return query;
+  }
+
+  void createForeignTestTable(const std::string& table_name) {
+    const auto& use_scheduled_refresh = GetParam();
+    if (use_scheduled_refresh) {
+      sql(getCreateScheduledRefreshTableQuery(table_name));
+    } else {
+      sql(getCreateTableQuery(table_name));
+    }
+  }
+
+  void refreshForeignTables(const std::vector<std::string>& table_names) {
+    const auto& use_scheduled_refresh = GetParam();
+    if (use_scheduled_refresh) {
+      waitTwoRefreshCycles();
+    } else {
+      for (const auto& table_name : table_names) {
+        sql("REFRESH FOREIGN TABLES " + table_name + "  WITH (evict = true) ;");
+      }
+    }
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(ScheduledAndNonScheduledRefreshTest,
+                         QueryEngineCacheInvalidationTest,
+                         ::testing::Values(true, false),
+                         [](const auto& param_info) {
+                           return (param_info.param) ? "ScheduledRefresh"
+                                                     : "ManualRefresh";
+                         });
+
+TEST_P(QueryEngineCacheInvalidationTest, StringDictAppendRefreshWithJoinQuery) {
+  const auto& use_scheduled_refresh = GetParam();
+  // TODO: Remove the skipping of the test once outstanding issues with
+  // ScheduledRefreshTest are resolved.
+  if (use_scheduled_refresh) {
+    GTEST_SKIP();
+  }
+  setTestDir("append_before/parquet_string_dir/");
+  createForeignTestTable("" + default_table_name + "_1");
+  createForeignTestTable("" + default_table_name + "_2");
+  std::string join_query = "SELECT t1.txt, t2.txt FROM " + default_table_name +
+                           "_1 AS t1 JOIN " + default_table_name +
+                           "_2 "
+                           "AS t2 ON t1.txt = t2.txt ORDER BY t1.txt;";
+  {
+    TQueryResult result;
+    sql(result, join_query);
+    assertResultSetEqual({{"a", "a"}, {"aa", "aa"}, {"aaa", "aaa"}}, result);
+  }
+  setTestDir("append_after/parquet_string_dir/");
+  refreshForeignTables({"" + default_table_name + "_1", "" + default_table_name + "_2"});
+  {
+    TQueryResult result;
+    sql(result, join_query);
+    assertResultSetEqual({{"a", "a"},
+                          {"aa", "aa"},
+                          {"aaa", "aaa"},
+                          {"aaaa", "aaaa"},
+                          {"aaaaa", "aaaaa"},
+                          {"aaaaaa", "aaaaaa"}},
+                         result);
+  }
+}
+
 class SchemaMismatchTest : public ForeignTableTest,
                            public TempDirManager,
                            public ::testing::WithParamInterface<WrapperType> {
@@ -6544,6 +10964,682 @@ TEST_P(SchemaMismatchTest, FileHasTooFewColumns_Refresh) {
                               test_temp_dir + TEMP_FILE + ext_ + "'");
 }
 
+#ifdef EE_FSI_ODBC
+class DifferentTableSchemaOdbcTest : public SchemaMismatchTest {
+ protected:
+  void setTestFile(const std::string& file_name,
+                   const std::string& ext,
+                   const std::vector<ColumnPair>& table_schema) override {
+    SchemaMismatchTest::setTestFile(file_name, ext, table_schema);
+    if (is_odbc(GetParam())) {
+      createODBCSourceTable(
+          default_table_name, table_schema, test_temp_dir + TEMP_FILE + ext, GetParam());
+    }
+  }
+};
+
+INSTANTIATE_TEST_SUITE_P(DataWrapperParameterization,
+                         DifferentTableSchemaOdbcTest,
+                         ::testing::ValuesIn(odbc_wrappers),
+                         [](const auto& info) { return info.param; });
+
+TEST_P(DifferentTableSchemaOdbcTest, FileHasMoreColumns_Create) {
+  // This case is legal in odbc and illegal (currently) for csv/parquet.
+  createODBCSourceTable(default_table_name,
+                        {{"i", "BIGINT"}, {"i2", "BIGINT"}},
+                        getDataFilesPath() + "two_col_1_2" + ext_,
+                        wrapper_type_);
+  sql("CREATE FOREIGN TABLE "s + default_table_name +
+      "(i BIGINT) SERVER temp_odbc WITH (sql_select = 'select i from " +
+      getOdbcTableName(default_table_name, wrapper_type_) + "', sql_order_by = 'i');");
+  sqlAndCompareResult("SELECT * FROM "s + default_table_name, {{i(1)}});
+}
+
+TEST_P(DifferentTableSchemaOdbcTest, FileHasTooFewColumns_Create) {
+  if (GetParam() == "snowflake") {
+    GTEST_SKIP() << "Test snowflake err required";
+  }
+
+  createODBCSourceTable(default_table_name,
+                        {{"i", "BIGINT"}},
+                        getDataFilesPath() + "0" + ext_,
+                        wrapper_type_);
+  sql("CREATE FOREIGN TABLE "s + default_table_name +
+      "(i BIGINT, i2 BIGINT) SERVER temp_odbc WITH (sql_select "
+      "= 'select i, i2 from " +
+      getOdbcTableName(default_table_name, wrapper_type_) +
+      "', sql_order_by = 'i, i2');");
+  queryAndAssertExceptionWithParam(
+      "SELECT * FROM "s + default_table_name,
+      wrapper_type_,
+      {{"sqlite",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+        "[Odbc error SQLSTATE = [HY000]. Native Error Code = [1]. Details:\"no such "
+        "column: i2 (1)\"] .Extra details [select i, i2 from " +
+            default_table_name + "]"},
+       {"postgres",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+        "[Odbc error SQLSTATE = [42703]. Native Error Code = [1]. Details:\"ERROR: "
+        "column \"i2\" does not exist;\nNo query has been executed with that "
+        "handle\"]"},
+       {"redshift",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] [Odbc error "
+        "SQLSTATE = [42703]. Native Error Code = [30]. Details:\"[Amazon][Amazon "
+        "Redshift] (30) Error occurred while trying to execute a query: [SQLState 42703] "
+        "ERROR:  column \"i2\" does not exist in " +
+            default_table_name +
+            "\n\"] .Extra details "
+            "[select i, i2 from " +
+            getOdbcTableName(default_table_name, "redshift") + "]"},
+       {"bigquery",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] [Odbc error "
+        "SQLSTATE = [42000]. Native Error Code = [70]. Details:\"[Simba][BigQuery] (70) "
+        "Invalid query: Unrecognized name: i2 at [1:11]\"] .Extra details [select i, i2 "
+        "from " +
+            getOdbcTableName(default_table_name, "bigquery") + "]"},
+       {"hive",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] [Odbc error "
+        "SQLSTATE = [42000]. Native Error Code = [80]. Details:\"[Cloudera][Hardy] (80) "
+        "Syntax or semantic analysis error thrown in server while executing query. Error "
+        "message from server: Error while compiling statement: FAILED: SemanticException "
+        "[Error 10004]: Line 1:10 Invalid table alias or column reference 'i2': "
+        "(possible column names are: i)\"] .Extra details [select i, i2 from " +
+            getOdbcTableName(default_table_name, "hive") + "]"}});
+}
+
+TEST_P(DifferentTableSchemaOdbcTest, FileHasMoreColumns_Refresh) {
+  setTestFile("two_col_1_2", ext_, {{"i", "BIGINT"}, {"i2", "BIGINT"}});
+  createODBCSourceTable(default_table_name,
+                        {{"i", "BIGINT"}, {"i2", "BIGINT"}},
+                        test_temp_dir + TEMP_FILE + ext_,
+                        wrapper_type_);
+  sql("CREATE FOREIGN TABLE "s + default_table_name +
+      "(i BIGINT) SERVER temp_odbc WITH (sql_select = 'select i from " +
+      getOdbcTableName(default_table_name, GetParam()) + "', sql_order_by = 'i');");
+  sqlAndCompareResult("SELECT * FROM "s + default_table_name, {{i(1)}});
+}
+
+TEST_P(DifferentTableSchemaOdbcTest, FileHasTooFewColumns_Refresh) {
+  if (GetParam() == "snowflake") {
+    GTEST_SKIP() << "Test snowflake err required";
+  }
+  setTestFile("0", ext_, {{"i", "BIGINT"}});
+  createODBCSourceTable(default_table_name,
+                        {{"i", "BIGINT"}},
+                        test_temp_dir + TEMP_FILE + ext_,
+                        wrapper_type_);
+
+  sql("CREATE FOREIGN TABLE "s + default_table_name +
+      "(i BIGINT, i2 BIGINT) SERVER temp_odbc WITH (sql_select "
+      "= 'select i, i2 from " +
+      getOdbcTableName(default_table_name, wrapper_type_) +
+      "', sql_order_by = 'i, i2');");
+
+  queryAndAssertExceptionWithParam(
+      "SELECT * FROM "s + default_table_name,
+      wrapper_type_,
+      {{"sqlite",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+        "[Odbc error SQLSTATE = [HY000]. Native Error Code = [1]. Details:\"no such "
+        "column: i2 (1)\"] .Extra details [select i, i2 from " +
+            default_table_name + "]"},
+       {"postgres",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] "
+        "[Odbc error SQLSTATE = [42703]. Native Error Code = [1]. Details:\"ERROR: "
+        "column \"i2\" does not exist;\nNo query has been executed with that "
+        "handle\"]"},
+       {"redshift",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] [Odbc error "
+        "SQLSTATE = [42703]. Native Error Code = [30]. Details:\"[Amazon][Amazon "
+        "Redshift] (30) Error occurred while trying to execute a query: [SQLState 42703] "
+        "ERROR:  column \"i2\" does not exist in " +
+            default_table_name +
+            "\n\"] .Extra details "
+            "[select i, i2 from " +
+            getOdbcTableName(default_table_name, "redshift") + "]"},
+       {"bigquery",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] [Odbc error "
+        "SQLSTATE = [42000]. Native Error Code = [70]. Details:\"[Simba][BigQuery] (70) "
+        "Invalid query: Unrecognized name: i2 at [1:11]\"] .Extra details [select i, i2 "
+        "from " +
+            getOdbcTableName(default_table_name, "bigquery") + "]"},
+       {"hive",
+        "Error: recieved code [-1]. Expected [0] or [1]\n:Type[SQL_ERROR] [Odbc error "
+        "SQLSTATE = [42000]. Native Error Code = [80]. Details:\"[Cloudera][Hardy] (80) "
+        "Syntax or semantic analysis error thrown in server while executing query. Error "
+        "message from server: Error while compiling statement: FAILED: SemanticException "
+        "[Error 10004]: Line 1:10 Invalid table alias or column reference 'i2': "
+        "(possible column names are: i)\"] .Extra details [select i, i2 from " +
+            getOdbcTableName(default_table_name, "hive") + "]"}});
+}
+#endif
+
+class AlterForeignTableTest : public ScheduledRefreshTest {
+ protected:
+  void createScheduledTable(const std::string& timing_type = "",
+                            const std::string& refresh_interval = "",
+                            const std::string& update_type = "",
+                            int32_t sec_from_now = 0,
+                            const std::string& allow_file_roll_off = "") {
+    setTestFile("1.csv");
+    auto start_date_time = getCurrentTimeString(sec_from_now);
+    auto test_file_path = boost::filesystem::canonical(REFRESH_TEST_DIR) / "test.csv";
+    std::string query = "CREATE FOREIGN TABLE " + default_table_name +
+                        " (i INTEGER) server "
+                        "default_local_delimited with (file_path = '" +
+                        test_file_path.string() + "'";
+    if (!update_type.empty()) {
+      query += ", refresh_update_type = '" + update_type + "'";
+    }
+    if (!timing_type.empty()) {
+      query += ", refresh_timing_type = '" + timing_type + "'";
+    }
+    if (sec_from_now != 0) {
+      query += ", refresh_start_date_time = '" + start_date_time + "'";
+    }
+    if (!refresh_interval.empty()) {
+      query += ", refresh_interval = '" + refresh_interval + "'";
+    }
+    if (!allow_file_roll_off.empty()) {
+      query += ", allow_file_roll_off = '" + allow_file_roll_off + "'";
+    }
+    query += ");";
+    sql(query);
+    populateForeignTable();
+  }
+
+  void populateForeignTable() {
+    cat_ = &getCatalog();
+    auto table = getCatalog().getMetadataForTable("" + default_table_name + "", false);
+    CHECK(table);
+    foreign_table_ = dynamic_cast<const foreign_storage::ForeignTable*>(table);
+  }
+
+  void sqlAlterForeignTable(const std::string& option_name,
+                            const std::string& option_value) {
+    sql("ALTER FOREIGN TABLE " + default_table_name + " SET (" + option_name + " = '" +
+        option_value + "');");
+  }
+
+  void queryAndAssertExceptionSubstr(const std::string& query,
+                                     const std::string_view error_substr) {
+    try {
+      sql(query);
+      FAIL() << "Expected exception starting with " << error_substr << "\n";
+    } catch (std::exception& e) {
+      ASSERT_NE(std::string(e.what()).find(error_substr), std::string::npos);
+    }
+  }
+
+  void assertOptionEquals(const ForeignTable* table,
+                          const std::string& key,
+                          const std::string& value) {
+    if (const auto& opt_it = table->options.find(key); opt_it != table->options.end()) {
+      ASSERT_EQ(opt_it->second, value);
+    } else {
+      FAIL() << "Expected value for option " << key;
+    }
+  }
+
+  void assertOptionNotEquals(const ForeignTable* table,
+                             const std::string& key,
+                             const std::string& value) {
+    if (const auto& opt_it = table->options.find(key); opt_it != table->options.end()) {
+      ASSERT_NE(opt_it->second, value);
+    } else {
+      FAIL() << "Expected value for option " << key;
+    }
+  }
+
+  // Asserts option is as expected for in-memory table then again in catalog storage.
+  void assertOptionEquals(const std::string& key, const std::string& value) {
+    assertOptionEquals(foreign_table_, key, value);
+    assertOptionEquals(
+        getCatalog().getForeignTableFromStorage(foreign_table_->tableId).get(),
+        key,
+        value);
+  }
+
+  void assertOptionNotEquals(const std::string& key, const std::string& value) {
+    assertOptionNotEquals(foreign_table_, key, value);
+    assertOptionNotEquals(
+        getCatalog().getForeignTableFromStorage(foreign_table_->tableId).get(),
+        key,
+        value);
+  }
+
+  void SetUp() override {
+    g_enable_seconds_refresh = true;
+    ScheduledRefreshTest::SetUp();
+  }
+
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    sql("DROP FOREIGN TABLE IF EXISTS renamed_table;");
+    ScheduledRefreshTest::TearDown();
+    sql("DROP SERVER IF EXISTS test_server;");
+  }
+
+  inline static const Catalog_Namespace::Catalog* cat_;
+  inline static const ForeignTable* foreign_table_;
+};
+
+TEST_F(AlterForeignTableTest, RefreshUpdateTypeAllToAppend) {
+  createScheduledTable("manual", "", "all");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "ALL");
+  sqlAlterForeignTable("refresh_update_type", "append");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
+}
+TEST_F(AlterForeignTableTest, RefreshUpdateTypeAppendToAll) {
+  createScheduledTable("manual", "", "append");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
+  sqlAlterForeignTable("REFRESH_UPDATE_TYPE", "all");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "ALL");
+}
+
+TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSeconds) {
+  createScheduledTable("scheduled", "1D", "all", 60);
+  assertOptionEquals("REFRESH_INTERVAL", "1D");
+  sqlAlterForeignTable("REFRESH_INTERVAL", "1S");
+  assertOptionEquals("REFRESH_INTERVAL", "1S");
+}
+
+TEST_F(AlterForeignTableTest, RefreshIntervalDaysToSecondsWithIntervalDisabled) {
+  g_enable_seconds_refresh = false;
+  createScheduledTable("scheduled", "1D", "all", 60);
+  assertOptionEquals("REFRESH_INTERVAL", "1D");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " SET (REFRESH_INTERVAL = '1S');",
+      "Invalid value provided for the REFRESH_INTERVAL option.");
+}
+
+TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToDaysLowerCase) {
+  createScheduledTable("scheduled", "1S", "all", 60);
+  assertOptionEquals("REFRESH_INTERVAL", "1S");
+  sqlAlterForeignTable("REFRESH_INTERVAL", "2d");
+  assertOptionEquals("REFRESH_INTERVAL", "2D");
+}
+TEST_F(AlterForeignTableTest, RefreshIntervalSecondsToInvalid) {
+  createScheduledTable("scheduled", "1S", "all", 60);
+  assertOptionEquals("REFRESH_INTERVAL", "1S");
+  queryAndAssertException("ALTER FOREIGN TABLE " + default_table_name +
+                              " SET (REFRESH_INTERVAL = 'SCHEDULED');",
+                          "Invalid value provided for the REFRESH_INTERVAL option.");
+  assertOptionEquals("REFRESH_INTERVAL", "1S");
+}
+
+TEST_F(AlterForeignTableTest, RefreshTimingTypeManualToScheduledNoStartDateError) {
+  createScheduledTable("manual");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+  queryAndAssertException("ALTER FOREIGN TABLE " + default_table_name +
+                              " SET (REFRESH_TIMING_TYPE = 'SCHEDULED')",
+                          "REFRESH_START_DATE_TIME option must be provided "
+                          "for scheduled refreshes.");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+}
+TEST_F(AlterForeignTableTest, RefreshTimingType_ManualToScheduled_StartDate) {
+  createScheduledTable("manual");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+  auto start_time = getCurrentTimeString(1);
+  sql("ALTER FOREIGN TABLE " + default_table_name +
+      " SET (REFRESH_TIMING_TYPE = 'SCHEDULED', "
+      "REFRESH_START_DATE_TIME = '" +
+      start_time + "')");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+  assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
+}
+TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToManual) {
+  createScheduledTable("scheduled", "1S", "all", 60);
+  sqlAndCompareResult(default_select, {{i(1)}});
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+  sqlAlterForeignTable("REFRESH_TIMING_TYPE", "MANUAL");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+}
+TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToManualLowerCase) {
+  createScheduledTable("scheduled", "1S", "all", 60);
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+  sqlAlterForeignTable("REFRESH_TIMING_TYPE", "manual");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "MANUAL");
+}
+TEST_F(AlterForeignTableTest, RefreshTimingTypeScheduledToInvalid) {
+  createScheduledTable("scheduled", "1S", "all", 60);
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " SET (REFRESH_TIMING_TYPE = '2D');",
+      "Invalid value provided for the REFRESH_TIMING_TYPE "
+      "option. Value must be \"MANUAL\" or \"SCHEDULED\".");
+  assertOptionEquals("REFRESH_TIMING_TYPE", "SCHEDULED");
+}
+
+TEST_F(AlterForeignTableTest, RefreshStartDateTime) {
+  createScheduledTable("scheduled", "1S", "all", 120);
+  auto start_time = getCurrentTimeString(60);
+  sqlAlterForeignTable("REFRESH_START_DATE_TIME", start_time);
+  assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
+}
+TEST_F(AlterForeignTableTest, RefreshStartDateTimeLowerCase) {
+  createScheduledTable("scheduled", "1S", "all", 120);
+  auto start_time = getCurrentTimeString(60);
+  boost::algorithm::to_lower(start_time);
+  sqlAlterForeignTable("REFRESH_START_DATE_TIME", start_time);
+  assertOptionEquals("REFRESH_START_DATE_TIME", start_time);
+}
+TEST_F(AlterForeignTableTest, RefreshStartDateTimeScheduledInPastError) {
+  createScheduledTable("scheduled", "1S", "all", 60);
+  auto start_time = getCurrentTimeString(-10);
+  queryAndAssertException("ALTER FOREIGN TABLE " + default_table_name +
+                              " SET (REFRESH_START_DATE_TIME = '" + start_time + "');",
+                          "REFRESH_START_DATE_TIME cannot be a past date time.");
+  assertOptionNotEquals("REFRESH_START_DATE_TIME", start_time);
+}
+
+TEST_F(AlterForeignTableTest, CsvBufferSizeOption) {
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (i INTEGER) SERVER default_local_delimited WITH "
+      "(file_path='" +
+      getDataFilesPath() + "/1.csv');");
+  populateForeignTable();
+  sql("ALTER FOREIGN TABLE " + default_table_name + " SET (BUFFER_SIZE = '4');");
+  assertOptionEquals("BUFFER_SIZE", "4");
+}
+
+TEST_F(AlterForeignTableTest, RefreshUpdateTypeAppendToAllWithFileRollOffSet) {
+  createScheduledTable("MANUAL", "", "APPEND", 0, "TRUE");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
+  assertOptionEquals("ALLOW_FILE_ROLL_OFF", "TRUE");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " SET (REFRESH_UPDATE_TYPE = 'ALL');",
+      "The \"ALLOW_FILE_ROLL_OFF\" option can only be set to 'true' for foreign tables "
+      "with append refresh updates.");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "APPEND");
+}
+
+TEST_F(AlterForeignTableTest, FileRollOffFalseToTrueNonAppend) {
+  createScheduledTable("MANUAL", "", "ALL", 0, "FALSE");
+  assertOptionEquals("REFRESH_UPDATE_TYPE", "ALL");
+  assertOptionEquals("ALLOW_FILE_ROLL_OFF", "FALSE");
+  queryAndAssertException("ALTER FOREIGN TABLE " + default_table_name +
+                              " SET (ALLOW_FILE_ROLL_OFF = 'TRUE');",
+                          "The \"ALLOW_FILE_ROLL_OFF\" option can only be set to 'true' "
+                          "for foreign tables with append refresh updates.");
+  assertOptionEquals("ALLOW_FILE_ROLL_OFF", "FALSE");
+}
+
+#ifdef EE_FSI_ODBC
+class OdbcAlterForeignTableTest : public AlterForeignTableTest {
+  void SetUp() override {
+    wrapper_type_ = "odbc";
+    AlterForeignTableTest::SetUp();
+  }
+};
+
+TEST_F(OdbcAlterForeignTableTest, Append) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (i INTEGER) SERVER test_server WITH "
+      "(sql_select = 'SELECT * from bar', sql_order_by = 'col;');");
+  sql("ALTER FOREIGN TABLE " + default_table_name +
+      " SET (REFRESH_UPDATE_TYPE = 'APPEND');");
+}
+
+TEST_F(OdbcAlterForeignTableTest, BufferSizeOption) {
+  sql("DROP SERVER IF EXISTS test_server");
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (i INTEGER) SERVER test_server WITH "
+      "(sql_select = 'SELECT * from bar;', sql_order_by = 'i');");
+  populateForeignTable();
+  sql("ALTER FOREIGN TABLE " + default_table_name + " SET (BUFFER_SIZE = '4');");
+  assertOptionEquals("BUFFER_SIZE", "4");
+}
+
+TEST_F(OdbcAlterForeignTableTest, InvalidBufferSizeOption) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (i INTEGER) SERVER test_server WITH "
+      "(sql_select = 'SELECT * from bar;', sql_order_by = 'bar');");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " SET (BUFFER_SIZE = '-1');",
+      "Can not parse string '-1' into a positive integer while validating "
+      "option 'BUFFER_SIZE'");
+}
+
+TEST_F(OdbcAlterForeignTableTest, SqlSelect) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (i INTEGER) SERVER test_server WITH "
+      "(sql_select = 'SELECT * from bar;', sql_order_by = 'i');");
+  populateForeignTable();
+  assertOptionEquals("SQL_SELECT", "SELECT * from bar;");
+  sqlAlterForeignTable("SQL_SELECT", "SELECT a FROM bar;");
+  assertOptionEquals("SQL_SELECT", "SELECT a FROM bar;");
+}
+
+TEST_F(OdbcAlterForeignTableTest, SqlOrderBy) {
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER odbc "
+      "WITH (DATA_SOURCE_NAME = 'dsn_name');");
+  sql("CREATE FOREIGN TABLE " + default_table_name +
+      " (i INTEGER) SERVER test_server WITH "
+      "(sql_select = 'SELECT * from bar;', sql_order_by = 'i');");
+  populateForeignTable();
+  assertOptionEquals("SQL_ORDER_BY", "i");
+  sqlAlterForeignTable("SQL_ORDER_BY", "a");
+  assertOptionEquals("SQL_ORDER_BY", "a");
+}
+
+#endif
+
+// TODO(Misiu): Implement these skeleton tests for full alter foreign table support.
+TEST_F(AlterForeignTableTest, FilePath) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " SET (file_path = '/');",
+      "Altering foreign table option \"FILE_PATH\" is not currently "
+      "supported.");
+}
+
+TEST_F(AlterForeignTableTest, FragmentSize) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " SET (fragment_size = 10);",
+      "Altering foreign table option \"FRAGMENT_SIZE\" is not currently "
+      "supported.");
+}
+
+TEST_F(AlterForeignTableTest, DataWrapperOption) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " SET (base_path = '/');",
+      "Invalid foreign table option \"BASE_PATH\".");
+}
+
+TEST_F(AlterForeignTableTest, NonExistantOption) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " SET (foo = '/');",
+      "Invalid foreign table option \"FOO\".");
+}
+
+TEST_F(AlterForeignTableTest, TableDoesNotExist) {
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " RENAME TO renamed_table;",
+      "Table/View " + default_table_name + " for catalog " + shared::kDefaultDbName +
+          " does not exist.");
+}
+
+TEST_F(AlterForeignTableTest, Table) {
+  createScheduledTable("manual");
+  sql("ALTER FOREIGN TABLE " + default_table_name + " RENAME TO renamed_table;");
+  sqlAndCompareResult("SELECT * FROM renamed_table;", {{i(1)}});
+  queryAndAssertExceptionSubstr(default_select,
+                                "Object '" + default_table_name + "' not found");
+}
+
+TEST_F(AlterForeignTableTest, TableAlreadyExists) {
+  createScheduledTable("manual");
+  sqlCreateForeignTable("(i INTEGER)", "0", "csv", {}, 0, "renamed_table");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " RENAME TO renamed_table;",
+      "Foreign table with name \"" + default_table_name +
+          "\" can not be renamed to "
+          "\"renamed_table\". A different table with name \"renamed_table\" already "
+          "exists.");
+}
+
+TEST_F(AlterForeignTableTest, Owner) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE " + default_table_name + " OWNER TO test_user;",
+      "Encountered \"OWNER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, ColumnDoesNotExist) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " RENAME COLUMN b TO renamed_column;",
+      "Column with name \"b\" can not be renamed to \"renamed_column\". "
+      "Column with name \"b\" does not exist.");
+}
+
+TEST_F(AlterForeignTableTest, Column) {
+  createScheduledTable("manual");
+  sql("ALTER FOREIGN TABLE " + default_table_name +
+      " RENAME COLUMN i TO renamed_column;");
+  sqlAndCompareResult("SELECT renamed_column FROM " + default_table_name + ";", {{i(1)}});
+  queryAndAssertExceptionSubstr("SELECT i FROM " + default_table_name + ";",
+                                "Column 'i' not found in any table");
+}
+
+TEST_F(AlterForeignTableTest, ColumnAlreadyExists) {
+  sqlCreateForeignTable(
+      "(t TEXT, i INTEGER[])", "example_1", "csv", {}, 0, "" + default_table_name + "");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name + " RENAME COLUMN i TO t;",
+      "Column with name \"i\" can not be renamed to \"t\". "
+      "A column with name \"t\" already exists.");
+}
+
+TEST_F(AlterForeignTableTest, Add) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE " + default_table_name + " ADD a;",
+                                "Encountered \"ADD\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, AddColumn) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE " + default_table_name + " ADD COLUMN a;",
+      "Encountered \"ADD\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, Drop) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE " + default_table_name + " DROP i;",
+                                "Encountered \"DROP\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, DropColumn) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE " + default_table_name + " DROP COLUMN i;",
+      "Encountered \"DROP\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, DropIfExists) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE " + default_table_name + " DROP IF EXISTS i;",
+      "Encountered \"DROP\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, AlterType) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE " + default_table_name + " ALTER i TYPE float;",
+      "Encountered \"ALTER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, AlterColumnType) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE " + default_table_name + " ALTER COLUMN i TYPE float;",
+      "Encountered \"ALTER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, AlterSetDataType) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE " + default_table_name + " ALTER i SET DATA TYPE float;",
+      "Encountered \"ALTER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, AlterTypeSetNotNull) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE " + default_table_name + " ALTER i TYPE float SET NOT NULL;",
+      "Encountered \"ALTER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, AlterTypeDropNotNull) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr(
+      "ALTER FOREIGN TABLE " + default_table_name + " ALTER i TYPE float DROP NOT NULL;",
+      "Encountered \"ALTER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, AlterTypeSetEncoding) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE " + default_table_name +
+                                    " ALTER i TYPE text SET ENCODING DICT(32);",
+                                "Encountered \"ALTER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, AlterTypeDropEncoding) {
+  createScheduledTable("manual");
+  queryAndAssertExceptionSubstr("ALTER FOREIGN TABLE " + default_table_name +
+                                    " ALTER i TYPE text DROP ENCODING DICT(32);",
+                                "Encountered \"ALTER\" at line 1, column 40");
+}
+
+TEST_F(AlterForeignTableTest, RenameRegularTable) {
+  createScheduledTable("manual");
+  queryAndAssertException(
+      "ALTER TABLE " + default_table_name + " RENAME to renamed_table;",
+      default_table_name +
+          " is a foreign table. Use "
+          "ALTER FOREIGN TABLE.");
+}
+
+TEST_F(AlterForeignTableTest, RenameRegularTableColumn) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE " + default_table_name + " RENAME COLUMN i to a;",
+                          default_table_name +
+                              " is a foreign table. Use "
+                              "ALTER FOREIGN TABLE.");
+}
+
+TEST_F(AlterForeignTableTest, AddColumnRegularTable) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE " + default_table_name + " ADD COLUMN t TEXT;",
+                          default_table_name +
+                              " is a foreign table. Use "
+                              "ALTER FOREIGN TABLE.");
+}
+
+TEST_F(AlterForeignTableTest, DropColumnRegularTable) {
+  createScheduledTable("manual");
+  queryAndAssertException("ALTER TABLE " + default_table_name + " DROP COLUMN t;",
+                          default_table_name +
+                              " is a foreign table. Use "
+                              "ALTER FOREIGN TABLE.");
+}
+
 class AlterForeignTableRegularTableTest : public DBHandlerTestFixture {
  protected:
   void SetUp() override {
@@ -6562,6 +11658,37 @@ TEST_F(AlterForeignTableRegularTableTest, RenameRegularTable) {
   sql("CREATE TABLE test_table (i INTEGER);");
   queryAndAssertException("ALTER FOREIGN TABLE test_table RENAME to renamed_table;",
                           "test_table is a table. Use ALTER TABLE.");
+}
+
+class AlterForeignTablePermissionTest : public AlterForeignTableTest {
+  void SetUp() override {
+    loginAdmin();
+    AlterForeignTableTest::SetUp();
+    dropTestUserIfExists();
+  }
+  void TearDown() override {
+    if (skip_teardown_) {
+      return;
+    }
+    loginAdmin();
+    dropTestUserIfExists();
+    AlterForeignTableTest::TearDown();
+  }
+  void dropTestUserIfExists() { sql("DROP USER IF EXISTS test_user;"); }
+};
+
+TEST_F(AlterForeignTablePermissionTest, NoPermission) {
+  createScheduledTable("manual", "", "all");
+  sql("CREATE USER test_user (password = 'test_pass');");
+  sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  login("test_user", "test_pass");
+  queryAndAssertException(
+      "ALTER FOREIGN TABLE " + default_table_name +
+          " SET (REFRESH_TIMING_TYPE = "
+          "'SCHEDULED')",
+      "Current user does not have the privilege to alter foreign table: "
+      "" + default_table_name +
+          "");
 }
 
 class ParquetCoercionTest : public SelectQueryTest {
@@ -7085,7 +12212,7 @@ TEST_F(ParquetCoercionTest,
   queryAndAssertException("SELECT * FROM " + default_table_name + "",
                           getCoercionException("1901-12-13 20:45:53",
                                                "2038-01-19 03:14:07",
-                                               "292277026596-12-04 15:30:07",
+                                               "219250468-12-04 15:30:07",
                                                base_file_name));
 }
 
@@ -7370,7 +12497,6 @@ TEST_P(RegexParserSelectQueryTest, MultipleMultiLineFiles) {
 }
 
 TEST_F(RegexParserSelectQueryTest, MaxBufferResizeLessThanRowSize) {
-  SKIP_IF_DISTRIBUTED("Leaf nodes not affected by global variable");
   foreign_storage::RegexFileBufferParser::setMaxBufferResize(8);
   createForeignTable("single_lines.log", 4);
   queryAndAssertException(
@@ -7553,7 +12679,6 @@ class PrefetchLimitTest : public RecoverCacheQueryTest {
   static constexpr size_t cache_size_ = 1ULL << 34;       // 16GB
 
   void SetUp() override {
-    SKIP_SETUP_IF_DISTRIBUTED("Cache settings are not distributed yet.");
     // TODO(Misiu): Right now we only test parquet since it prefetches multi-fragment and
     // does not prefetch for metdata scan.
     wrapper_type_ = "parquet";
@@ -8099,6 +13224,8 @@ int main(int argc, char** argv) {
   g_enable_s3_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+
+  PkiEncryptor::setKeyStorePath("../../Tests/Encryption/ValidCert/");
 
   // get dirname of test binary
   test_binary_file_path = bf::canonical(argv[0]).parent_path().string();

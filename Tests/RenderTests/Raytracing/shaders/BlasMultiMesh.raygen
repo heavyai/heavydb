@@ -1,0 +1,123 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_ray_tracing : enable
+//</extensions>
+
+//<includes>
+#include "Filtering/reconstructionFilters.glsl"
+#include "RaytracingTest/BlasMultiMesh_payload.glsl"
+#include "Sampling/randomGenerators.glsl"
+#include "Shading/projection.glsl"
+#include "Shading/rtUtils.glsl"
+#include "Sampling/sampleTransformations.glsl"
+//</includes>
+
+uniform accelerationStructureEXT topLevelAS;
+layout(rgba8) uniform image2D outputImage;
+
+layout(location = 0) rayPayloadEXT RayPayload rayPayload;
+
+// Maximum recursion depth
+const int kMaxRayDepth = 4;
+const int kNumAASamples = 32;
+
+void main() {
+  vec3 pixel_color = vec3(0);
+  float aa_pos_volume = 0;
+  float aa_neg_volume = 0;
+  for (int aa_sample_idx = 0; aa_sample_idx < kNumAASamples; aa_sample_idx++) {
+    // Antialias using the hammersley sequence
+    vec2 ld_sample = generate_hammersley(aa_sample_idx, kNumAASamples);
+    // Remap the rectangular offset to a disc
+    vec2 aa_offset = map_disc_concentric(ld_sample) * 0.5;
+    // Compute the reconstruction filter weight
+    const float aa_weight = eval_mitchell_filter(aa_offset);
+    // Sum positive and negative lobes for normalization
+    if (aa_weight > 0.0) {
+      aa_pos_volume += aa_weight;
+    } else {
+      aa_neg_volume += -aa_weight;
+    }
+
+    const vec2 pixel_center = vec2(gl_LaunchIDEXT.xy) + aa_offset;
+    const vec2 uv = pixel_center / vec2(gl_LaunchSizeEXT.xy);
+    vec2 d = uv * 2.0 - 1.0;
+
+    // Generate initial ray direction (primary ray)
+    vec4 origin = viewInverse * vec4(0, 0, 0, 1);
+    vec4 target = projInverse * vec4(d.x, d.y, 1, 1);
+    vec4 direction = viewInverse * vec4(normalize(target.xyz), 0);
+
+    // color accumulation
+    vec3 aa_sample_color = vec3(0);
+
+    // Initalize reflectivity to white. This simplifies compositing logic below
+    rayPayload.reflectivity = vec3(1);
+    for (int depth = 0; depth < kMaxRayDepth; depth++) {
+      rayPayload.color = vec3(0);
+
+      // Capture the current `reflectivity`
+      // The payload value will be overwritten by either the hit or miss shader but we
+      // need the current value to composite the ray color with the emitting material
+      // color
+      vec3 reflectivity = rayPayload.reflectivity;
+
+      // Trace the ray
+      traceRayEXT(topLevelAS,
+                  gl_RayFlagsOpaqueEXT,
+                  0xff,  // culling mask (no culling),
+                  0,     // sbt record offset
+                  0,     // sbt record stride
+                  0,     // sbt miss shader index
+                  origin.xyz,
+                  0.0,  // t min
+                  direction.xyz,
+                  10000.0,  // t max
+                  0);       // payload location binding
+
+      // Accumulate ray color, masking with the captured pre-trace reflectivity
+      aa_sample_color += (rayPayload.color * reflectivity);
+
+      // Check for hit surface reflectivity
+      if (dot(rayPayload.reflectivity, rayPayload.reflectivity) > 0.01) {
+        // offset the ray origin along the face normal to prevent self-intersection
+        origin.xyz = offset_ray_origin(rayPayload.position, rayPayload.face_normal);
+
+        // Compute a new ray (reflection), which will be traced if the loop continues
+        vec3 R = reflect(direction.xyz, rayPayload.normal);
+
+        // Use halton 3,5 for glossy sampling (Hamersley uses halton 2)
+        vec2 s = generate_halton_35(aa_sample_idx);
+        s = (s - 0.5) * 0.1;
+
+        // Apply random rotation to the kernel to prevent sample path aliasing
+        // Use image coords and depth as keys
+        float r = generate_random(
+            vec2(float(gl_LaunchIDEXT.x + depth), float(gl_LaunchIDEXT.y)));
+        s = rotate_sample(r, s);
+
+        // Orient the sample pattern to reflect vector
+        direction.xyz = align_sample_to_vector(R, s);
+
+        // Check if ray points into surface
+        if (dot(direction.xyz, rayPayload.face_normal) <= 0.0) {
+          direction.xyz = R;
+        }
+      } else {
+        // no-reflectivity, exit the loop
+        break;
+      }
+    }
+    pixel_color += aa_sample_color * aa_weight;
+  }
+
+  // Normalize the accumulated filter volume accounting for negative lobes
+  aa_pos_volume -= aa_neg_volume;
+  float filter_norm = 1.0 / aa_pos_volume;
+
+  imageStore(outputImage, ivec2(gl_LaunchIDEXT.xy), vec4(pixel_color * filter_norm, 1.0));
+}

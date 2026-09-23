@@ -1,8 +1,13 @@
-A chunk represents a vertical partition of a fragment. The set of chunks corresponding to the same set of rows across all columns in a given table makes up a single fragment. A chunk is the smallest unit of device-level data parallelism in HeavyDB. Therefore, an important part of optimizing schema is picking the appropriate chunk width and fragment size. Different chunks in a given fragment will contain the same number of items, but depending on the data type of the column the size of the chunks (in bytes) will differ. By default, a chunk has a maximum size of 1 GB.
+A chunk represents a vertical partition of a fragment. The set of chunks corresponding to the same set of rows across all columns in a given table makes up a single fragment. A chunk is the smallest unit of device-level data parallelism in HeavyDB. Therefore, an important part of optimizing schema is picking the appropriate chunk width and fragment size. Different chunks in a given fragment will contain the same number of items, but depending on the data type of the column the size of the chunks (in bytes) will differ. By default, a chunk has a maximum size of 2 GB.
 
 Once loaded into memory, the in-memory Chunk representation contains both the raw data for the chunk and additional metadata (`ChunkStats`). The additional metadata is used to optimize query execution. For example, `ChunkStats` allows HeavyDB to only load chunks directly relevant to the query; e.g. `SELECT x FROM t WHERE x > 10` would rely on `ChunkStats` to ensure all chunks with `max` less than or equal to 10 are skipped.
 
-`ChunkStats` are updated every time a table update or delete occurs, or whenever new data is inserted into the chunk. Note that `ChunkStats` are only ever widened. The `OPTIMIZE` `command <https://docs.heavy.ai/latest/5_tables.html#optimize-table>`_ can be used to narrow chunk stats (e.g. after multiple deletes have occured for a given table).
+`ChunkStats` are updated every time a table update or delete occurs, or
+whenever new data is inserted into the chunk. Note that `ChunkStats` are only
+ever widened. The
+`OPTIMIZE command <https://docs.nvidia.com/heavyai/sql/data-definition-ddl/tables#optimize-table>`_
+can be used to narrow chunk stats (for example, after multiple deletes for a
+given table).
 
 .. code-block:: cpp
 
@@ -14,10 +19,11 @@ Once loaded into memory, the in-memory Chunk representation contains both the ra
 
     struct ChunkMetadata {
         SQLTypeInfo sqlType;
-        size_t nuMB;
+        size_t numBytes;
         size_t numElements;
         ChunkStats chunkStats;
-    }
+        RasterTileInfo rasterTile;
+    };
 
 
 
@@ -25,7 +31,7 @@ Once loaded into memory, the in-memory Chunk representation contains both the ra
 Example for chunk physical representations
 --------------------------------------------
 
-The example is based on a table **t**, defined using the below DDL, with the default fragment size of 32 million rows and default chunk size of 1 GB, loaded with 8 million (8M) records.
+The example is based on a table **t**, defined using the below DDL, with the default fragment size of 32 million rows and default chunk size of 2 GB, loaded with 8 million (8M) records.
 
 .. code-block:: sql
     
@@ -66,12 +72,10 @@ The table below describes the `ChunkKey` representation for common chunk indexin
 .. table:: CHUNK KEY MAPPING
     :widths: 10 10 10 10 10 100
 
-    +-------------+-------------+-------------+-------------+-------------+--------------------------------------------------------------------------------------------------------------------------------------+
-    | ChunkKey[0] | ChunkKey[1] | ChunkKey[2] | ChunkKey[3] | ChunkKey[4] | Description                                                                                                                          |
-    +=============+=============+=============+=============+=============+======================================================================================================================================+
-    | -1          | idx < 0     | idx > 0     | idx == 0    |             | Ephemeral temp chunk (only one fragment currently supported)                                                                         |                                             
-    +-------------+-------------+-------------+-------------+-------------+--------------------------------------------------------------------------------------------------------------------------------------+
-    | db > 0      | tb > 0      | col > 0     | frag >= 0   |             | References a scalar chunk from HeavyDB storage                                                                                     |
-    +-------------+-------------+-------------+-------------+-------------+--------------------------------------------------------------------------------------------------------------------------------------+
-    | db > 0      | tb > 0      | col > 0     | frag >= 0   | var > 0     | References a unique varlen chunk from HeavyDB storage. Var indicates whether the chunk is a data chunk or an index (offset) chunk  |
-    +-------------+-------------+-------------+-------------+-------------+--------------------------------------------------------------------------------------------------------------------------------------+
+    ============= ============= ============= ============= ============= ===================================================================================================
+    ChunkKey[0]   ChunkKey[1]   ChunkKey[2]   ChunkKey[3]   ChunkKey[4]   Description
+    ============= ============= ============= ============= ============= ===================================================================================================
+    ``-1``        ``idx < 0``   ``idx > 0``   ``idx == 0``                Ephemeral temporary chunk (only one fragment is currently supported).
+    ``db > 0``    ``tb > 0``    ``col > 0``   ``frag >= 0``               Scalar chunk in HeavyDB storage.
+    ``db > 0``    ``tb > 0``    ``col > 0``   ``frag >= 0`` ``var > 0``   Varlen data or index (offset) subchunk in HeavyDB storage.
+    ============= ============= ============= ============= ============= ===================================================================================================

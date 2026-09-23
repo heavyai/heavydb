@@ -1,0 +1,193 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_mesh_shader : enable
+//</extensions>
+//<includes>
+#include "Marks/typeDefines.glsl"
+#include "Utils/colorConvertSubroutines.glsl"
+#include "Marks/coordConvertSubroutines.glsl"
+#include "Marks/slabAddressTable.glsl"
+//</includes>
+
+// MESH SHADER
+
+#define IS_MESH_SHADER 1
+
+#define workgroupSize <workgroupSize>
+#define workgroupSizeBits <workgroupSizeBits>
+
+layout (local_size_x = workgroupSize, local_size_y = 1, local_size_z = 1) in;
+layout (points, max_vertices = workgroupSize, max_primitives = workgroupSize) out;
+
+uint g_output_index = 0u;
+
+// RenderProperty type info defines
+<RenderPropertyTypeInfos>
+
+// Vertex attribute inputs
+<VertexProperties>
+
+// Outputs
+
+// flat uint64_t fRowId
+// flat float fPointSize
+// flat vec4 fColor
+out <FragmentShaderInputs> v_out[];
+
+// Uniform RenderProperties
+layout(std430) uniform <UniformProperties>;
+
+// viewport data
+struct Viewport {
+  int x;
+  int y;
+  int width;
+  int height;
+};
+
+layout(std430, binding = 0) uniform SHARED_VIEWPORT_UBO {
+  Viewport viewport;
+};
+
+// Push constants
+layout(push_constant) uniform POINT_MESH_PUSH_CONSTANTS {
+  uint firstWorkUnit;
+} pushConstants;
+
+// Color conversion declaration stubs
+vec4 transformfillColorToRGB(in vec4 c) { return c; }
+vec4 unpackfillColor(in uint c) { return vec4(0); }
+
+// get* functions for properties
+<PropertyGetters>
+
+// project* functions for coord inputs
+inTx projectx(in inTx x) {
+  return x;
+}
+
+inTy projecty(in inTy y) {
+  return y;
+}
+
+// General #defines
+#define numid <numid>
+#define useKey <useKey>
+#define IS_MULTISAMPLING <isMultiSampling>
+
+layout(buffer_reference, scalar, buffer_reference_align = 8) buffer VERTEX_DATA {
+  VertexData vertex_data[];
+};
+
+////////////////////////////////////////////////////////////////
+// Grow primitive slightly to avoid multi-sampling issues at the edges
+// This is compensated in the fragment shader which shrinks the circle diameter
+// by 2 pixels
+const float kMultiSamplingSizePad = 2.0;
+
+struct WorkUnit {
+  uint32_t row_index;
+  uint32_t point_index_base_and_count;
+};
+
+layout(std430) buffer WORK_UNITS_SSBO {
+  WorkUnit items[];
+} work_units_buffer;
+
+void main() {
+  // work unit index
+  uint32_t work_unit_index = gl_WorkGroupID.x + pushConstants.firstWorkUnit;
+  if (work_unit_index >= work_units_buffer.items.length()) {
+    // this should never happen
+    return;
+  }
+
+  // look up work unit
+  uint32_t row_index = work_units_buffer.items[work_unit_index].row_index;
+  uint32_t point_index_base_and_count = work_units_buffer.items[work_unit_index].point_index_base_and_count;
+
+  // unpack point index base and count
+  uint32_t point_index_base = point_index_base_and_count >> workgroupSizeBits;
+  uint32_t point_count = point_index_base_and_count & (workgroupSize - 1);
+  if (point_count == 0) {
+    point_count = workgroupSize;
+  }
+
+  // size the outputs
+  SetMeshOutputsEXT(point_count, point_count);
+
+  // output index
+  g_output_index = gl_LocalInvocationID.x;
+
+  // exit if past last point in this work unit
+  if (g_output_index >= point_count) {
+    return;
+  }
+
+  // one vertex per primitive
+  gl_PrimitivePointIndicesEXT[g_output_index] = g_output_index;
+
+  // read vertex attributes
+  uint32_t vbo_index = row_index; // generated code expects this
+  <VertexAttributeFetches>
+
+  // check key
+#if useKey == 1
+  if (key == invalidKey) {
+    return;
+  }
+#endif
+
+  // point index
+  uint32_t point_index = point_index_base + g_output_index;
+
+  // get actual x/y from pointers or direct
+#if inTxEnum == UNSIGNED_INT64_ARB
+    float px = float(projectx(getx_ptr(x, propCompressionBits, PROP_COMPRESSION_BIT_X, point_index)));
+#else
+    float px = float(getx(projectx(x)));
+#endif
+#if inTyEnum == UNSIGNED_INT64_ARB
+    float py = float(projecty(gety_ptr(y, propCompressionBits, PROP_COMPRESSION_BIT_Y, point_index)));
+#else
+    float py = float(gety(projecty(y)));
+#endif
+  gl_MeshVerticesEXT[g_output_index].gl_Position =
+      vec4(px * uViewProjMatrix[0][0] + uViewProjMatrix[2][0],
+           py * uViewProjMatrix[1][1] + uViewProjMatrix[2][1],
+           0.5,
+           1.0);
+#if IS_MULTISAMPLING == 1
+  float sz = float(getsize(size)) + kMultiSamplingSizePad;
+#else
+  float sz = float(getsize(size));
+#endif
+  v_out[g_output_index].fPointSize = sz;
+  gl_MeshVerticesEXT[g_output_index].gl_PointSize = sz;
+
+  v_out[g_output_index].fColor = transformfillColorToRGB(getfillColor(fillColor));
+  v_out[g_output_index].fColor.a *= float(getopacity(opacity)) * float(getfillOpacity(fillOpacity));
+
+  // ids from queries go from 0 to numrows-1, but since we're storing
+  // the ids as unsigned ints, and there isn't a way to specify the
+  // clear value for secondary buffers, we need to account for that
+  // offset here
+  uint64_t fRowId = 0;
+#if numid >= 1
+  fRowId = uint64_t(id + 1);
+#endif
+#if numid >= 2
+  int total_bitshift = id_offsets[0];
+  fRowId = (uint64_t(id1 + 1) << total_bitshift) | fRowId;
+#endif
+#if numid >= 3
+  total_bitshift += id_offsets[1];
+  fRowId = (uint64_t(id2 + 1) << total_bitshift) | fRowId;
+#endif
+  v_out[g_output_index].fRowId = fRowId;
+}

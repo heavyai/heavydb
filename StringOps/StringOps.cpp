@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "StringOps.h"
@@ -975,63 +964,63 @@ NullableStrType UrlDecode::operator()(const std::string& str) const {
 namespace {
 const char* translateCPRLibraryErrorCode(int32_t error_code) {
   switch (error_code) {
-  case CURLE_OK:
-    return "OK";
-  case CURLE_UNSUPPORTED_PROTOCOL:
-    return "UNSUPPORTED_PROTOCOL";
-  case CURLE_URL_MALFORMAT:
-    return "INVALID_URL_FORMAT";
-  case CURLE_COULDNT_RESOLVE_PROXY:
-    return "PROXY_RESOLUTION_FAILURE";
-  case CURLE_COULDNT_RESOLVE_HOST:
-    return "HOST_RESOLUTION_FAILURE";
-  case CURLE_COULDNT_CONNECT:
-    return "CONNECTION_FAILURE";
-  case CURLE_OPERATION_TIMEDOUT:
-    return "OPERATION_TIMEDOUT";
-  case CURLE_SSL_CONNECT_ERROR:
-    return "SSL_CONNECT_ERROR";
+    case CURLE_OK:
+      return "OK";
+    case CURLE_UNSUPPORTED_PROTOCOL:
+      return "UNSUPPORTED_PROTOCOL";
+    case CURLE_URL_MALFORMAT:
+      return "INVALID_URL_FORMAT";
+    case CURLE_COULDNT_RESOLVE_PROXY:
+      return "PROXY_RESOLUTION_FAILURE";
+    case CURLE_COULDNT_RESOLVE_HOST:
+      return "HOST_RESOLUTION_FAILURE";
+    case CURLE_COULDNT_CONNECT:
+      return "CONNECTION_FAILURE";
+    case CURLE_OPERATION_TIMEDOUT:
+      return "OPERATION_TIMEDOUT";
+    case CURLE_SSL_CONNECT_ERROR:
+      return "SSL_CONNECT_ERROR";
 #if LIBCURL_VERSION_NUM < 0x073e00
-  case CURLE_PEER_FAILED_VERIFICATION:
-    return "SSL_REMOTE_CERTIFICATE_ERROR";
+    case CURLE_PEER_FAILED_VERIFICATION:
+      return "SSL_REMOTE_CERTIFICATE_ERROR";
 #endif
-  case CURLE_ABORTED_BY_CALLBACK:
-  case CURLE_WRITE_ERROR:
-    return "REQUEST_CANCELLED";
-  case CURLE_GOT_NOTHING:
-    return "EMPTY_RESPONSE";
-  case CURLE_SSL_ENGINE_NOTFOUND:
-  case CURLE_SSL_ENGINE_SETFAILED:
-    return "GENERIC_SSL_ERROR";
-  case CURLE_SEND_ERROR:
-    return "NETWORK_SEND_FAILURE";
-  case CURLE_RECV_ERROR:
-    return "NETWORK_RECEIVE_ERROR";
-  case CURLE_SSL_CERTPROBLEM:
-    return "SSL_LOCAL_CERTIFICATE_ERROR";
-  case CURLE_SSL_CIPHER:
-    return "GENERIC_SSL_ERROR";
+    case CURLE_ABORTED_BY_CALLBACK:
+    case CURLE_WRITE_ERROR:
+      return "REQUEST_CANCELLED";
+    case CURLE_GOT_NOTHING:
+      return "EMPTY_RESPONSE";
+    case CURLE_SSL_ENGINE_NOTFOUND:
+    case CURLE_SSL_ENGINE_SETFAILED:
+      return "GENERIC_SSL_ERROR";
+    case CURLE_SEND_ERROR:
+      return "NETWORK_SEND_FAILURE";
+    case CURLE_RECV_ERROR:
+      return "NETWORK_RECEIVE_ERROR";
+    case CURLE_SSL_CERTPROBLEM:
+      return "SSL_LOCAL_CERTIFICATE_ERROR";
+    case CURLE_SSL_CIPHER:
+      return "GENERIC_SSL_ERROR";
 #if LIBCURL_VERSION_NUM >= 0x073e00
-  case CURLE_PEER_FAILED_VERIFICATION:
-    return "SSL_REMOTE_CERTIFICATE_ERROR";
+    case CURLE_PEER_FAILED_VERIFICATION:
+      return "SSL_REMOTE_CERTIFICATE_ERROR";
 #else
-  case CURLE_SSL_CACERT:
-    return "SSL_CACERT_ERROR";
+    case CURLE_SSL_CACERT:
+      return "SSL_CACERT_ERROR";
 #endif
-  case CURLE_USE_SSL_FAILED:
-  case CURLE_SSL_ENGINE_INITFAILED:
-    return "GENERIC_SSL_ERROR";
-  case CURLE_SSL_CACERT_BADFILE:
-    return "SSL_CACERT_ERROR";
-  case CURLE_SSL_SHUTDOWN_FAILED:
-    return "GENERIC_SSL_ERROR";
-  case CURLE_SSL_CRL_BADFILE:
-  case CURLE_SSL_ISSUER_ERROR:
-    return "SSL_CACERT_ERROR";
-  case CURLE_TOO_MANY_REDIRECTS:
-    return "TOO_MANY_REDIRECTS";
-  default:
-    return "INTERNAL_ERROR";
+    case CURLE_USE_SSL_FAILED:
+    case CURLE_SSL_ENGINE_INITFAILED:
+      return "GENERIC_SSL_ERROR";
+    case CURLE_SSL_CACERT_BADFILE:
+      return "SSL_CACERT_ERROR";
+    case CURLE_SSL_SHUTDOWN_FAILED:
+      return "GENERIC_SSL_ERROR";
+    case CURLE_SSL_CRL_BADFILE:
+    case CURLE_SSL_ISSUER_ERROR:
+      return "SSL_CACERT_ERROR";
+    case CURLE_TOO_MANY_REDIRECTS:
+      return "TOO_MANY_REDIRECTS";
+    default:
+      return "INTERNAL_ERROR";
   }
 }
 }  // namespace

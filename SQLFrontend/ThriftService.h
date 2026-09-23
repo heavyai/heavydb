@@ -1,3 +1,8 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #ifndef THRIFTSERVICE_H
 #define THRIFTSERVICE_H
 
@@ -32,8 +37,6 @@ enum ThriftService {
   kGET_OBJECT_PRIVS,
   kGET_ROLES_FOR_USER,
   kGET_HARDWARE_INFO,
-  kSET_LICENSE_KEY,
-  kGET_LICENSE_CLAIMS,
   kGET_COMPLETION_HINTS,
   kGET_DASHBOARDS,
   kGET_DASHBOARD

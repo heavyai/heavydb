@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -49,13 +38,6 @@ class TooManyHashEntries : public std::runtime_error {
       : std::runtime_error("Hash tables with more than 4B entries not supported yet") {}
 
   TooManyHashEntries(const std::string& reason) : std::runtime_error(reason) {}
-};
-
-class TableMustBeReplicated : public std::runtime_error {
- public:
-  TableMustBeReplicated(const std::string& table_name)
-      : std::runtime_error("Hash join failed: Table '" + table_name +
-                           "' must be replicated.") {}
 };
 
 enum class InnerQualDecision { IGNORE = 0, UNKNOWN, LHS, RHS };
@@ -271,10 +253,6 @@ class HashJoin {
   static bool canAccessHashTable(bool allow_hash_table_recycling,
                                  bool invalid_cache_key,
                                  JoinType join_type);
-
-  static void checkHashJoinReplicationConstraint(const shared::TableKey& table_key,
-                                                 const size_t shard_count,
-                                                 const Executor* executor);
 
   // Swap the columns if needed and make the inner column the first component.
   static std::pair<InnerOuter, InnerOuterStringOpInfos> normalizeColumnPair(

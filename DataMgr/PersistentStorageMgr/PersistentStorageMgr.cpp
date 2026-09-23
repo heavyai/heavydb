@@ -1,35 +1,18 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "PersistentStorageMgr.h"
 #include "Catalog/Catalog.h"
 #include "DataMgr/FileMgr/CachingGlobalFileMgr.h"
-#include "DataMgr/ForeignStorage/ArrowForeignStorage.h"
 #include "DataMgr/ForeignStorage/CachingForeignStorageMgr.h"
-#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 
 PersistentStorageMgr::PersistentStorageMgr(
     const std::string& data_dir,
     const size_t num_reader_threads,
     const File_Namespace::DiskCacheConfig& disk_cache_config)
     : AbstractBufferMgr(0), disk_cache_config_(disk_cache_config) {
-  fsi_ = std::make_shared<ForeignStorageInterface>();
-  ::registerArrowForeignStorage(fsi_);
-  ::registerArrowCsvForeignStorage(fsi_);
-
   disk_cache_ =
       disk_cache_config_.isEnabled()
           ? std::make_unique<foreign_storage::ForeignStorageCache>(disk_cache_config)
@@ -37,10 +20,10 @@ PersistentStorageMgr::PersistentStorageMgr(
   if (disk_cache_config_.isEnabledForMutableTables()) {
     CHECK(disk_cache_);
     global_file_mgr_ = std::make_unique<File_Namespace::CachingGlobalFileMgr>(
-        0, fsi_, data_dir, num_reader_threads, disk_cache_.get());
+        0, data_dir, num_reader_threads, disk_cache_.get());
   } else {
-    global_file_mgr_ = std::make_unique<File_Namespace::GlobalFileMgr>(
-        0, fsi_, data_dir, num_reader_threads);
+    global_file_mgr_ =
+        std::make_unique<File_Namespace::GlobalFileMgr>(0, data_dir, num_reader_threads);
   }
 
   if (disk_cache_config_.isEnabledForFSI()) {

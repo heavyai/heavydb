@@ -30,7 +30,8 @@ A failed hash join can sometimes automatically fall back to a loop join, such as
 Hash Join Buffers
 =================
 
-HeavyDB can choose between different kinds of hash tables (described later) when executing a SQL join query, but each hash join clause will have a single buffer allocated in memory, except that multiple buffers will sometimes be coalesced into a single buffer. (Coalescing is described later.)
+HeavyDB can choose between different hash-table implementations when executing
+a join. Each hash table stores its sections in a contiguous buffer.
 
 A hash join buffer can have up to four sections which are located consecutively in memory:
 
@@ -77,7 +78,7 @@ The location of each Payloads subarray is stored in the Offsets section. The len
 Kinds of Hash Joins
 ===================
 
-An HeavyDB hash join buffer can have either a one-to-one layout or a one-to-many layout.
+A HeavyDB hash join buffer can have either a one-to-one layout or a one-to-many layout.
 
 A one-to-one layout is the least-complicated and fastest kind of hash join buffer. The Offsets and Counts sections are not required for a one-to-one layout because there is always exactly one payload row ID stored per key.
 
@@ -85,153 +86,121 @@ A one-to-many hash join buffer will have at least the Offsets, Counts, and Paylo
 
 In some cases the Keys section can be omitted from the hash join buffer giving perfect hashing, where integer keys are directly mapped to locations in the other sections.
 
-HeavyDB automatically selects from one of three C++ classes when building a hash join buffer:
+HeavyDB selects among these implementations:
 
-=================================== ============================= ========================
-C++ Class Name                       Layouts                       Selected For
-=================================== ============================= ========================
-JoinHashTable                       One-To-One or One-To-Many     Perfect hashing
-BaselineJoinHashTable               One-To-One or One-To-Many     Keyed hashing
-BoundingBoxIntersectJoinHashTable   only One-To-Many              Geospatial hashing
-=================================== ============================= ========================
+* ``PerfectJoinHashTable`` maps a bounded integer-like key range directly to
+  buffer slots. It supports one-to-one and one-to-many layouts.
+* ``BaselineJoinHashTable`` stores explicit keys and handles composite keys or
+  key ranges that are unsuitable for perfect hashing. It also supports both
+  layouts.
+* ``BoundingBoxIntersectJoinHashTable`` builds a one-to-many spatial hash for
+  bounding-box intersection.
+* ``RangeJoinHashTable`` extends the bounding-box implementation for supported
+  range predicates.
 
 =============================
 Inspecting a Hash Join Buffer
 =============================
 
-For learning about and/or for debugging a hash join buffer, HeavyDB provides a toString() function for decoding the buffer into a human-readable string.
+The ``HashJoin`` subclasses provide ``toString()`` for decoding a small buffer
+into a human-readable representation. Verbose level 2 logs this representation
+automatically when the buffer is no larger than 1,000 bytes.
 
-Be aware that a hash join buffer often may be built using multiple threads, possibly causing the exact layout of a buffer to vary for the same SQL across different builds. (See later section about comparing buffers for more info.)
+Buffers may be built in parallel, so equivalent hash tables do not always have
+identical byte layouts. Tests should use ``toSet()`` to decode the entries into
+a set and compare their logical contents.
 
-One-To-One JoinHashTable Example
---------------------------------
+Perfect Hashing Examples
+------------------------
 
-This SQL causes HeavyDB to use one-to-one perfect hashing shown by the very simple hash join buffer containing only a small Payloads section. The second table is selected for hashing because it has the lowest cardinality and because it has no duplicate records.
+Consider a join where the inner table has one row for each key:
 
-    SQL:
-      create table table1 (a integer);
-create table table2(b integer);
+.. code-block:: sql
 
-insert into table1 values(1);
-insert into table1 values(1);
-insert into table1 values(2);
-insert into table1 values(3);
-insert into table1 values(4);
+  CREATE TABLE outer_t (a INTEGER);
+  CREATE TABLE inner_t (b INTEGER);
 
-insert into table2 values(0);
-insert into table2 values(1);
-insert into table2 values(3);
+  INSERT INTO outer_t VALUES (1), (1), (2), (3), (4);
+  INSERT INTO inner_t VALUES (0), (1), (3);
 
-select* from table1 join table2 on a = b;
+  SELECT * FROM outer_t JOIN inner_t ON a = b;
 
-C++ toString()
-    : | payloads 0 1 * 2 |
+The unique inner keys permit a one-to-one perfect hash table. A decoded buffer
+has a payload slot for each value in the selected key range; ``*`` marks an
+empty slot:
 
-    One - To -
-        Many JoinHashTable Example-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+.. code-block:: text
 
-        This SQL is nearly identical to the previous example
-, except that a duplicate record has been added to the second table
-, causing one - to - many perfect hashing to be selected instead of one - to
-      - one perfect hashing.The one - to -
-      many hashing requires Offsets and Counts sections to be built into the hash join
-      buffer in addition to the Payloads section
-, and the Offsets section acts as the hash table instead of the Payloads section.
+  | perfect one-to-one | payloads 0 1 * 2 |
 
-  SQL : create table table1(a integer);
-create table table2(b integer);
+Adding a duplicate inner key changes the required layout:
 
-insert into table1 values(1);
-insert into table1 values(1);
-insert into table1 values(2);
-insert into table1 values(3);
-insert into table1 values(4);
+.. code-block:: sql
 
-insert into table2 values(0);
-insert into table2 values(1);
-insert into table2 values(3);
-insert into table2 values(3);
+  INSERT INTO inner_t VALUES (3);
 
-select* from table1 join table2 on a = b;
+The one-to-many layout uses offsets and counts to locate all payload row IDs
+for a key:
 
-C++ toString()
-    : | offsets 0 1 * 2 | counts 1 1 * 2 | payloads 0 1 2 3 |
+.. code-block:: text
 
-    One - To -
-        One BaselineJoinHashTable Example
-        -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+  | perfect one-to-many |
+  | offsets 0 1 * 2 | counts 1 1 * 2 | payloads 0 1 2 3 |
 
-        Adding a second column to one of the tables
-, then including that column in the join
-      qualifier(the ``ON`` expression) prevents perfect hashing from being used
-      and requires a Keys section to be built into the hash buffer.As an
-              optimization that is possible with one
-              - to - one hashing
-, the payloads are interleaved into the keys as
-  if each payload row ID was an additional key component.
+Baseline Hashing Example
+------------------------
 
-  SQL : create table table1(a1 integer, a2 integer);
-create table table2(b integer);
+A composite equality condition requires explicit tuple keys:
 
-insert into table1 values(1, 11);
-insert into table1 values(2, 12);
-insert into table1 values(3, 13);
-insert into table1 values(4, 14);
+.. code-block:: sql
 
-insert into table2 values(0);
-insert into table2 values(1);
-insert into table2 values(3);
+  CREATE TABLE outer_pair (a1 INTEGER, a2 INTEGER);
+  CREATE TABLE inner_pair (b1 INTEGER, b2 INTEGER);
 
-select* from table1 join table2 on a1 = b and a2 - 10 = b;
+  SELECT *
+  FROM outer_pair
+  JOIN inner_pair ON outer_pair.a1 = inner_pair.b1
+                 AND outer_pair.a2 = inner_pair.b2;
 
-C++ toString()
-    : | keys * (1, 1, 1)(3, 3, 2)(0, 0, 0) * * |
+HeavyDB coalesces the compatible equality predicates into one composite key
+and builds a ``BaselineJoinHashTable``. A one-to-one baseline layout can
+interleave each payload row ID with its key. If an inner key is duplicated,
+the implementation switches to one-to-many and uses all four sections.
 
-    One - To -
-        Many BaselineJoinHashTable Example
-        -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+Bounding-Box Intersection
+-------------------------
 
-        Adding a duplicate record to the previous example turns the hash join into a one
-        - to - many lookup
-, requiring all four buffer sections to be built.
+Supported geospatial joins use ``BoundingBoxIntersectJoinHashTable`` rather
+than comparing every geometry pair. The implementation chooses spatial bucket
+sizes, inserts each inner geometry's bounds into the buckets it overlaps, and
+stores the matching inner row IDs in a one-to-many payload section. An outer
+geometry probes its overlapping buckets; the original spatial predicate then
+determines the exact matches.
 
-  SQL : create table table1(a1 integer, a2 integer);
-create table table2(b integer);
-
-insert into table1 values(1, 11);
-insert into table1 values(2, 12);
-insert into table1 values(3, 13);
-insert into table1 values(4, 14);
-
-insert into table2 values(0);
-insert into table2 values(1);
-insert into table2 values(3);
-insert into table2 values(3);
-
-select* from table1 join table2 on a1 = b and a2 - 10 = b;
-
-    C++ toString():
-      | keys * (1,1) (3,3) (0,0) * * | offsets * 0 1 3 * * | counts * 1 2 1 * * | payloads 1 2 3 0 |
-
-One-To-Many JoinHashTable for Bounding Box Intersection Example
------------------------------------------
-
-TODO
-
-===========================
-Comparing Hash Join Buffers
-===========================
-
-To help support unit testing, a hash join buffer can be decoded into a std::set by using the toSet() member function. Two of these sets can be compared for equality to determine if the hash join buffers are logically equal, even when the exact layouts of the buffers may differ in memory, such as when trivial layout differences occur due to multiple threads being used to build a single hash join buffer.
+The same inner row can occupy several spatial buckets, so explicit keys,
+offsets, counts, and payloads are required. Bucket sizing and table-size limits
+are controlled by the bounding-box intersection options in
+``ThriftHandler/CommandLineOptions.cpp``.
 
 ==========================
 Equijoins vs Non-Equijoins
 ==========================
 
-TODO
+Equality and bitwise-equality predicates over supported scalar or
+dictionary-encoded string columns are candidates for perfect or baseline hash
+joins. Bounding-box and supported range predicates use their specialized hash
+tables.
+
+Other non-equijoins require nested-loop execution. Loop-join fallback depends
+on the query shape, inner-table size, and the ``allow-loop-joins`` setting; a
+failed hash-table build therefore cannot always fall back automatically.
 
 ==========
 Coalescing
 ==========
 
-TODO
+When a join has multiple compatible equality predicates over the same pair of
+tables, HeavyDB can combine them into one tuple equality. Numeric, Boolean, and
+dictionary-encoded string columns are supported, up to the runtime limit of
+eight conditions. The tuple is used as a composite baseline-hash key, avoiding
+separate hash-table probes for each predicate.

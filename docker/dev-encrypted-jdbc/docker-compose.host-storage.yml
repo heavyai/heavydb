@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Optional compose override: bind-mount HeavyDB storage to the host for debugging.
+# Applied by encrypted-jdbc/run.sh with --host-storage or USE_HOST_STORAGE=1.
+#
+# Compose replaces the entire volumes list for a service when merging, so this file
+# repeats the base mounts and adds /heavydb-data.
+
+services:
+  heavydb:
+    environment:
+      HEAVYDB_DATA: /heavydb-data
+      CA_INFO_DIR: /heavydb-ca-info
+    volumes:
+      - type: bind
+        source: ${HEAVYDB_SOURCE}
+        target: /heavydb
+      - type: bind
+        source: ${HEAVYDB_BUILD}
+        target: /heavydb-build
+      - type: bind
+        source: ${HEAVYDB_DATA}
+        target: /heavydb-data
+      - encrypted_jdbc_ca_info:/heavydb-ca-info

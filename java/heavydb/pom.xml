@@ -5,37 +5,21 @@
   <artifactId>heavyai-utility</artifactId>
   <version>${omnisci.release.version}</version>
   <packaging>jar</packaging>
-  <repositories>
-    <repository>
-      <id>Mapd Dependencies</id>
-      <url>https://dependencies.mapd.com/mvn/</url>
-    </repository>
-  </repositories>
   <dependencies>
-    <dependency>
-      <groupId>com.mapd</groupId>
-      <artifactId>thrift</artifactId>
-      <version>1.0-SNAPSHOT</version>
-    </dependency>
     <dependency>
       <groupId>com.mapd</groupId>
       <artifactId>utility</artifactId>
       <version>1.0-SNAPSHOT</version>
-    </dependency>
-    <dependency>
-      <groupId>com.mapd</groupId>
-      <artifactId>calcite</artifactId>
-      <version>1.0-SNAPSHOT</version>
-    </dependency>
-    <dependency>
-      <groupId>ai.heavy</groupId>
-      <artifactId>heavyai-jdbc</artifactId>
-      <version>${omnisci.release.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.mapd</groupId>
-      <artifactId>heavydbcommon</artifactId>
-      <version>${omnisci.release.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>ai.heavy</groupId>
+          <artifactId>heavyai-jdbc</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.apache.commons</groupId>
+          <artifactId>commons-math3</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
   </dependencies>
   <build>
@@ -45,16 +29,13 @@
         <version>3.3.0</version>
         <configuration>
           <archive>
-            <manifest>
-              <mainClass>com.mapd.parser.server.CalciteServerCaller</mainClass>
-            </manifest>
             <manifestEntries>
               <Multi-Release>true</Multi-Release>
             </manifestEntries>
           </archive>
-          <descriptorRefs>
-            <descriptorRef>jar-with-dependencies</descriptorRef>
-          </descriptorRefs>
+          <descriptors>
+            <descriptor>src/assembly/production-utilities.xml</descriptor>
+          </descriptors>
           <appendAssemblyId>false</appendAssemblyId>
         </configuration>
         <executions>

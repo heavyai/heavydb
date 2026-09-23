@@ -1,18 +1,6 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to you under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 package org.apache.calcite.prepare;
 
@@ -29,6 +17,8 @@ import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.linq4j.function.Functions;
 import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptCluster;
+import org.apache.calcite.plan.RelOptTable;
+import org.apache.calcite.prepare.Prepare;
 import org.apache.calcite.plan.RelOptCostImpl;
 import org.apache.calcite.plan.RelOptRule;
 import org.apache.calcite.plan.hep.HepPlanner;
@@ -39,9 +29,14 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.externalize.HeavyDBRelJsonReader;
-import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.*;
+import org.apache.calcite.DataContexts;
+import org.apache.calcite.rex.HeavyDBRexBuilder;
+import org.apache.calcite.rex.HeavyDBRexExecutor;
 import org.apache.calcite.rex.RexBuilder;
+import org.apache.calcite.sql2rel.HeavyDBSqlToRelConverter;
+import org.apache.calcite.sql2rel.SqlRexConvertletTable;
+import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlNode;
@@ -76,6 +71,16 @@ public class HeavyDBPlanner extends PlannerImpl {
   public HeavyDBPlanner(FrameworkConfig config) {
     super(config);
     this.config = config;
+  }
+
+  // Install HeavyDBRexBuilder for the SQL-text path. Without this override,
+  // PlannerImpl.rel() and PlannerImpl.expandView() use the stock RexBuilder
+  // and our HeavyDBRexBuilder.makeCast / canRemoveCastFromLiteral overrides
+  // never fire (they would only fire on the RA-from-JSON path which already
+  // explicitly constructs new HeavyDBRexBuilder(...) below).
+  @Override
+  protected RexBuilder createRexBuilder() {
+    return new HeavyDBRexBuilder(getTypeFactory());
   }
 
   private static SchemaPlus rootSchema(SchemaPlus schema) {
@@ -168,12 +173,30 @@ public class HeavyDBPlanner extends PlannerImpl {
 
   public static HepPlanner getHepPlanner(
           HepProgram hepProgram, boolean doNotEliminateSharedNodesInQueryPlanDag) {
+    final HepPlanner planner;
     if (doNotEliminateSharedNodesInQueryPlanDag) {
-      return new HepPlanner(
+      planner = new HepPlanner(
               hepProgram, null, true, Functions.ignore2(), RelOptCostImpl.FACTORY);
     } else {
-      return new HepPlanner(hepProgram);
+      planner = new HepPlanner(hepProgram);
     }
+    planner.setExecutor(new HeavyDBRexExecutor(DataContexts.EMPTY));
+    return planner;
+  }
+
+  // Override the PlannerImpl factory method so that virtual dispatch causes
+  // HeavyDBSqlToRelConverter (which handles ExtTableFunction column mappings)
+  // to be used wherever PlannerImpl creates a SqlToRelConverter.
+  @Override
+  protected SqlToRelConverter createSqlToRelConverter(
+          RelOptTable.ViewExpander viewExpander,
+          SqlValidator validator,
+          Prepare.CatalogReader catalogReader,
+          RelOptCluster cluster,
+          SqlRexConvertletTable convertletTable,
+          SqlToRelConverter.Config config) {
+    return new HeavyDBSqlToRelConverter(
+        viewExpander, validator, catalogReader, cluster, convertletTable, config);
   }
 
   @Override
@@ -293,8 +316,9 @@ public class HeavyDBPlanner extends PlannerImpl {
   public RelRoot buildRATreeAndPerformQueryOptimization(
           String query, HeavyDBSchema schema) throws IOException {
     ready();
-    RexBuilder builder = new RexBuilder(getTypeFactory());
+    RexBuilder builder = new HeavyDBRexBuilder(getTypeFactory());
     RelOptCluster cluster = RelOptCluster.create(new VolcanoPlanner(), builder);
+    cluster.getPlanner().setExecutor(new HeavyDBRexExecutor(DataContexts.EMPTY));
     CalciteCatalogReader catalogReader = createCatalogReader();
     HeavyDBRelJsonReader reader =
             new HeavyDBRelJsonReader(cluster, catalogReader, schema);

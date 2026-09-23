@@ -1,0 +1,22 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_EXT_ray_tracing : enable
+//</extensions>
+
+//<includes>
+#include "Shading/rtIntersection.glsl"
+//</includes>
+
+layout (scalar, binding = 3) buffer Spheres { Sphere s[]; } spheres;
+
+void main() {
+  Sphere s = spheres.s[gl_PrimitiveID];
+  float t = intersect_sphere(s, gl_ObjectRayOriginEXT, gl_ObjectRayDirectionEXT);
+  if (t > 0) {
+    reportIntersectionEXT(t, 0);
+  }
+}

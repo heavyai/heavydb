@@ -35,19 +35,24 @@ Columns of type `dictionary encoded string` require a separate string dictionary
 Sharded Tables
 ****************************************
 
-HeavyDB supports `sharded tables` -- that is, a table partitioned by a predefined column (called the `shard key`) into a pre-determined number of `physical tables`, more commonly referred to as `shards`. Sharding is used for increasing performance (by grouping like data on like devices) and for support complex queries in distributed mode (Enterprise Edition only). Internally, a sharded table is represented as a top-level `logical` table and several underlying `physical` tables (with the number of physical tables corresponding to the total shard count). This mapping is stored in the ``mapd_logical_to_physical`` *SQLite* table. 
+HeavyDB supports `sharded tables` -- that is, a table partitioned by a predefined column (called the `shard key`) into a pre-determined number of `physical tables`, more commonly referred to as `shards`. Sharding is used for increasing performance by grouping like data on like devices. Internally, a sharded table is represented as a top-level `logical` table and several underlying `physical` tables (with the number of physical tables corresponding to the total shard count). This mapping is stored in the ``mapd_logical_to_physical`` *SQLite* table. 
 
 ****************************************
 Views
 ****************************************
 
-Views in HeavyDB are currently not materialized during creation. Instead, the definition for the view is stored in the ``mapd_views`` *SQLite* table, and the view is materialized lazily when the view is queried. By using lazy materialization, HeavyDB fuse the query on the view with the underlying table(s) backing the view, reducing the number of intermediate projections required and/or the amount of data that must be loaded and processed. Views are represented by a :cpp:class:`TableDescriptor` object with the `isView` boolean member set to `true`.
+Views in HeavyDB are currently not materialized during creation. Instead, the definition for the view is stored in the ``mapd_views`` *SQLite* table, and the view is materialized lazily when the view is queried. By using lazy materialization, HeavyDB fuses the query on the view with the underlying table(s) backing the view, reducing the number of intermediate projections required and/or the amount of data that must be loaded and processed. Views are represented by a :cpp:class:`TableDescriptor` object with the `isView` boolean member set to `true`.
 
 ****************************************
 Temporary Tables
 ****************************************
 
-HeavyDB supports temporary tables. Temporary tables can be created using ``CREATE TEMPORARY TABLE``. All types (except geospatial types) are supported in temporary tables. Temporary tables store their data in CPU memory and persist until the server is restarted. 
+HeavyDB supports temporary tables. Temporary tables can be created using
+``CREATE TEMPORARY TABLE`` and can contain scalar, array, string, and geospatial
+columns. Their data is stored in CPU memory and persists until the server is
+restarted. Some operations have additional restrictions for temporary tables;
+in particular, GEOS-backed functions do not currently support geometry columns
+stored in temporary tables.
 
 Temporary tables are identified by checking the ``persistenceLevel`` property of the :cpp:class:`TableDescriptor`. A free function, ``table_is_temporary``, is available for convenience.
 

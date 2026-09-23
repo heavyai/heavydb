@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -71,7 +60,6 @@ EXTENSION_NOINLINE int8_t* allocate_varlen_buffer(int64_t element_count,
   Table function management functions and macros:
  */
 #define FUNC_NAME (std::string(__func__).substr(0, std::string(__func__).find("__")))
-// TODO: support windows path format
 #define ERROR_STRING(MSG)                                                     \
   (std::string(__FILE__).substr(std::string(__FILE__).rfind("/") + 1) + ":" + \
    std::to_string(__LINE__) + " " + FUNC_NAME + ": " + MSG)                   \
@@ -442,6 +430,13 @@ struct TableFunctionManager {
   int8_t* makeBuffer(int64_t element_count, int64_t element_size) {
     return TableFunctionManager_makeBuffer(
         reinterpret_cast<int8_t*>(this), element_count, element_size);
+  }
+  const gfx::GfxContext* getGfxContext() {
+    return TableFunctionManager_getGfxContext(reinterpret_cast<int8_t*>(this));
+  }
+  gfx::CommandExecutionContext* getGfxCommandExecutionContext() {
+    return TableFunctionManager_getGfxCommandExecutionContext(
+        reinterpret_cast<int8_t*>(this));
   }
 
 #ifdef HAVE_TOSTRING

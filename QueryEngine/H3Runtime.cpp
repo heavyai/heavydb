@@ -1,17 +1,6 @@
 /*
- * Copyright 2025 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #ifndef __CUDACC__
@@ -37,7 +26,6 @@ extern "C" RUNTIME_EXPORT bool H3_CellToBoundary_POLYGON(
   if (num_points == 0) {
     return false;
   }
-  std::vector<int32_t> ring_sizes{static_cast<int32_t>(num_points)};
 
   // POLYGON
   *result_type = static_cast<int>(kPOLYGON);
@@ -55,15 +43,14 @@ extern "C" RUNTIME_EXPORT bool H3_CellToBoundary_POLYGON(
 
   // ring sizes
   *result_ring_sizes = nullptr;
-  int64_t ring_sizes_size = ring_sizes.size() * sizeof(int32_t);
-  auto* ring_sizes_buf = malloc(ring_sizes_size);
+  int32_t* ring_sizes_buf = reinterpret_cast<int32_t*>(malloc(sizeof(int32_t)));
   if (!ring_sizes_buf) {
     free(coords_buf);
     return false;
   }
-  std::memcpy(ring_sizes_buf, ring_sizes.data(), ring_sizes_size);
-  *result_ring_sizes = reinterpret_cast<int32_t*>(ring_sizes_buf);
-  *result_ring_sizes_size = ring_sizes.size();
+  *ring_sizes_buf = static_cast<int32_t>(num_points);
+  *result_ring_sizes = ring_sizes_buf;
+  *result_ring_sizes_size = static_cast<int64_t>(1);
 
   return true;
 #else

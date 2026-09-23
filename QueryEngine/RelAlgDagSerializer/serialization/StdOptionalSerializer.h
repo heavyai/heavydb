@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -109,7 +98,7 @@ void serialize(Archive& ar, std::optional<T>& in_opt, const unsigned int version
   //                  from /usr/include/c++/9/utility:70,
   //                  from /usr/include/c++/9/algorithm:60,
   //                  from ../QueryEngine/Execute.h:20,
-  //                  from heavydb-internal/build/QueryEngine/CMakeFiles/QueryEngine.dir/cmake_pch.hxx:5,
+  //                  from heavydb/build/QueryEngine/CMakeFiles/QueryEngine.dir/cmake_pch.hxx:5,
   //                  from <command-line>:
   // /usr/include/c++/9/type_traits: In instantiation of ‘struct std::__is_trivially_copy_constructible_impl<boost::serialization::U, true>’:
   // /usr/include/c++/9/type_traits:1157:12:   required from ‘struct std::is_trivially_copy_constructible<boost::serialization::U>’
@@ -138,7 +127,7 @@ void serialize(Archive& ar, std::optional<T>& in_opt, const unsigned int version
   //                  from /usr/include/c++/9/utility:70,
   //                  from /usr/include/c++/9/algorithm:60,
   //                  from ../QueryEngine/Execute.h:20,
-  //                  from heavydb-internal/build/QueryEngine/CMakeFiles/QueryEngine.dir/cmake_pch.hxx:5,
+  //                  from heavydb/build/QueryEngine/CMakeFiles/QueryEngine.dir/cmake_pch.hxx:5,
   //                  from <command-line>:
   //
   //

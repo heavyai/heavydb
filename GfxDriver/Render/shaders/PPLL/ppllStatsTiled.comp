@@ -1,0 +1,57 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//<extensions>
+#extension GL_KHR_shader_subgroup_vote: enable
+#extension GL_KHR_shader_subgroup_arithmetic: enable
+//</extensions>
+
+//<includes>
+#include "PPLL/ppllCommon.h"
+//</includes>
+
+#define numTiles <numTiles>
+
+layout (local_size_x = <workgroupSize>, local_size_y = 1, local_size_z = 1) in;
+
+layout(r32ui) uniform restrict readonly uimage2D fragment_count_image;
+
+layout(std430) buffer PPLL_STAT_COUNTERS_SSBO {
+  PPLLFragmentStats stats[numTiles];
+};
+
+layout(std430, binding = 0) uniform IMAGE_TILES_UBO {
+  Tile tiles[numTiles];
+};
+
+layout(push_constant) uniform PPLL_STAT_PUSH_CONSTANTS {
+  uint32_t tileIndex;
+} pushConstants;
+
+void main() {
+  if (gl_GlobalInvocationID.x >= tiles[pushConstants.tileIndex].w) {
+    return;
+  }
+
+  ivec2 framebuffer_coord = ivec2(gl_GlobalInvocationID.x + tiles[pushConstants.tileIndex].x,
+                                  gl_GlobalInvocationID.y + tiles[pushConstants.tileIndex].y);
+  uint32_t fragment_count = imageLoad(fragment_count_image, framebuffer_coord).r;
+  uint32_t deep_pixel_fragment_count = fragment_count > 1 ? fragment_count : 0;
+
+  bool have_fragments = fragment_count > 0;
+
+  if (subgroupAny(have_fragments)) {
+    uint32_t subgroup_sum = subgroupAdd(fragment_count);
+    uint32_t subgroup_max = subgroupMax(fragment_count);
+    uint32_t subgroup_deep_pixel_sum = subgroupAdd(deep_pixel_fragment_count);
+
+    if (subgroupElect()) {
+      int i = int(pushConstants.tileIndex);
+      atomicAdd(stats[i].total_fragment_count, subgroup_sum);
+      atomicAdd(stats[i].deep_pixel_fragment_count, subgroup_deep_pixel_sum);
+      atomicMax(stats[i].max_per_pixel_fragment_count, subgroup_max);
+    }
+  }
+}

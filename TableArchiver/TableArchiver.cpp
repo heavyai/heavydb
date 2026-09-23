@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "TableArchiver/TableArchiver.h"
@@ -52,7 +41,6 @@
 #include "Shared/scope.h"
 #include "Shared/thread_count.h"
 
-extern bool g_cluster;
 extern std::string g_base_path;
 bool g_test_rollback_dump_restore{false};
 
@@ -116,42 +104,30 @@ inline std::string run(const std::string& cmd,
       LOG(ERROR) << "stdout: " << output;
       LOG(ERROR) << "stderr: " << errors;
     }
-#if defined(__APPLE__)
-    // osx bsdtar options "--use-compress-program" and "--fast-read" together
-    // run into pipe write error after tar extracts the first occurrence of a
-    // file and closes the read end while the decompression program still writes
-    // to the pipe. bsdtar doesn't handle this situation well like gnu tar does.
-    if (1 == rcode && cmd.find("--fast-read") &&
-        (errors.find("cannot write decoded block") != std::string::npos ||
-         errors.find("Broken pipe") != std::string::npos)) {
-      // ignore this error, or lose speed advantage of "--fast-read" on osx.
-      LOG(ERROR) << "tar error ignored on osx for --fast-read";
-    } else
-#endif
-      // circumvent tar warning on reading file that is "changed as we read it".
-      // this warning results from reading a table file under concurrent inserts
-      if (1 == rcode && errors.find("changed as we read") != std::string::npos) {
-        LOG(ERROR) << "tar error ignored under concurrent inserts";
+    // circumvent tar warning on reading file that is "changed as we read it".
+    // this warning results from reading a table file under concurrent inserts
+    if (1 == rcode && errors.find("changed as we read") != std::string::npos) {
+      LOG(ERROR) << "tar error ignored under concurrent inserts";
+    } else {
+      int error_code;
+      std::string error_message;
+      if (ec) {
+        error_code = ec.value();
+        error_message = ec.message();
       } else {
-        int error_code;
-        std::string error_message;
-        if (ec) {
-          error_code = ec.value();
-          error_message = ec.message();
+        error_code = rcode;
+        // Show a more concise message for permission errors instead of the default
+        // verbose message. Error logs will still contain all details.
+        if (to_lower(errors).find("permission denied") != std::string::npos) {
+          error_message = "Insufficient file read/write permission.";
         } else {
-          error_code = rcode;
-          // Show a more concise message for permission errors instead of the default
-          // verbose message. Error logs will still contain all details.
-          if (to_lower(errors).find("permission denied") != std::string::npos) {
-            error_message = "Insufficient file read/write permission.";
-          } else {
-            error_message = errors;
-          }
+          error_message = errors;
         }
-        throw std::runtime_error(
-            "An error occurred while executing an internal command. Error code: " +
-            std::to_string(error_code) + ", message: " + error_message);
       }
+      throw std::runtime_error(
+          "An error occurred while executing an internal command. Error code: " +
+          std::to_string(error_code) + ", message: " + error_message);
+    }
   } else {
     VLOG(3) << "finished cmd: " << cmd;
     VLOG(3) << "time: " << time_ms << " ms";
@@ -166,11 +142,7 @@ inline std::string simple_file_cat(const std::string& archive_path,
                                    const bool log_failure = true) {
   ddl_utils::validate_allowed_file_path(archive_path,
                                         ddl_utils::DataTransferType::IMPORT);
-#if defined(__APPLE__)
-  constexpr static auto opt_occurrence = "--fast-read";
-#else
   constexpr static auto opt_occurrence = "--occurrence=1";
-#endif
   boost::filesystem::path temp_dir =
       boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
   boost::filesystem::create_directories(temp_dir);
@@ -603,9 +575,6 @@ void TableArchiver::dumpTable(const TableDescriptor* td,
   }
   ddl_utils::validate_allowed_file_path(archive_path,
                                         ddl_utils::DataTransferType::EXPORT);
-  if (g_cluster) {
-    throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
-  }
   if (boost::filesystem::exists(archive_path)) {
     throw std::runtime_error("Archive " + archive_path + " already exists.");
   }
@@ -680,9 +649,6 @@ void TableArchiver::restoreTable(const Catalog_Namespace::SessionInfo& session,
                                  const std::string& compression) {
   ddl_utils::validate_allowed_file_path(archive_path,
                                         ddl_utils::DataTransferType::IMPORT);
-  if (g_cluster) {
-    throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
-  }
   if (!boost::filesystem::exists(archive_path)) {
     throw std::runtime_error("Archive " + archive_path + " does not exist.");
   }

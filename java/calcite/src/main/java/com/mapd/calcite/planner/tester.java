@@ -1,17 +1,6 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2017-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package com.mapd.calcite.planner;
@@ -112,32 +101,4 @@ public class tester {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
     }
   }
-
-  // /** User-defined aggregate function. */
-  // public static class MyCountAggFunction extends SqlAggFunction {
-  // public MyCountAggFunction() {
-  // super("MY_COUNT", null, SqlKind.OTHER_FUNCTION, ReturnTypes.BIGINT, null,
-  // OperandTypes.ANY, SqlFunctionCategory.NUMERIC, false, false);
-  // }
-  //
-  // @SuppressWarnings("deprecation")
-  // public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory) {
-  // return ImmutableList.of(typeFactory.createSqlType(SqlTypeName.ANY));
-  // }
-  //
-  // @SuppressWarnings("deprecation")
-  // public RelDataType getReturnType(RelDataTypeFactory typeFactory) {
-  // return typeFactory.createSqlType(SqlTypeName.BIGINT);
-  // }
-  //
-  // public RelDataType deriveType(SqlValidator validator,
-  // SqlValidatorScope scope, SqlCall call) {
-  // // Check for COUNT(*) function. If it is we don't
-  // // want to try and derive the "*"
-  // if (call.isCountStar()) {
-  // return validator.getTypeFactory().createSqlType(SqlTypeName.BIGINT);
-  // }
-  // return super.deriveType(validator, scope, call);
-  // }
-  // }
 }

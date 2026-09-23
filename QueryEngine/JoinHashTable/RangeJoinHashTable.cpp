@@ -1,18 +1,8 @@
 /*
- * Copyright 2022 HEAVY.AI, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
+
 #include "QueryEngine/JoinHashTable/RangeJoinHashTable.h"
 
 #include "QueryEngine/CodeGenerator.h"
@@ -113,11 +103,6 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
     throw TooManyHashEntries();
   }
 
-  const auto shard_count = memory_level == Data_Namespace::GPU_LEVEL
-                               ? BaselineJoinHashTable::getShardCountForCondition(
-                                     condition.get(), executor, inner_outer_pairs)
-                               : 0;
-
   auto join_hash_table = std::make_shared<RangeJoinHashTable>(condition,
                                                               join_type,
                                                               range_expr,
@@ -131,8 +116,6 @@ std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
                                                               query_hints,
                                                               hashtable_build_dag_map,
                                                               table_id_to_node_map);
-  HashJoin::checkHashJoinReplicationConstraint(
-      HashJoin::getInnerTableId(inner_outer_pairs), shard_count, executor);
   try {
     join_hash_table->reifyWithLayout(HashType::OneToMany);
   } catch (const HashJoinFail& e) {
@@ -510,20 +493,6 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
     std::unordered_map<int, ColumnsForDevice>& columns_per_device,
     const size_t chosen_max_hashtable_size,
     const double chosen_bucket_threshold) {
-#ifdef _WIN32
-  // WIN32 needs have C++20 set for designated initialisation to work
-  CountDistinctDescriptor count_distinct_desc{
-      CountDistinctImplType::Bitmap,
-      0,
-      0,
-      11,
-      true,
-      effective_memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL
-          ? ExecutorDeviceType::GPU
-          : ExecutorDeviceType::CPU,
-      1,
-  };
-#else
   CountDistinctDescriptor count_distinct_desc{
       .impl_type_ = CountDistinctImplType::Bitmap,
       .min_val = 0,
@@ -535,7 +504,6 @@ std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
                          : ExecutorDeviceType::CPU,
       .sub_bitmap_count = 1,
   };
-#endif
   const auto padded_size_bytes = count_distinct_desc.bitmapPaddedSizeBytes();
 
   CHECK(!columns_per_device.empty() &&
