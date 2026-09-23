@@ -56,11 +56,7 @@ EOF
     echo "Auto-detected deps image: $deps_image" >&2
   fi
 
-  local extra_env=()
-  [ -n "${PRIVATE_PACKAGES_TOKEN:-}" ] && extra_env+=(-e "PRIVATE_PACKAGES_TOKEN=${PRIVATE_PACKAGES_TOKEN}")
-  [ -z "${PRIVATE_PACKAGES_TOKEN:-}" ] \
-    && echo "WARN: PRIVATE_PACKAGES_TOKEN not set — private npm packages may fail" >&2
-  extra_env+=(-e "NPM_UPGRADE_SPEC=${npm_spec}")
+  local extra_env=(-e "NPM_UPGRADE_SPEC=${npm_spec}")
 
   echo "=== Immerse tests ===" >&2
   docker run --rm \
@@ -77,11 +73,6 @@ EOF
       set -euo pipefail
       export PATH="/opt/dev-tools/node/bin:$PATH"
       git config --global --add safe.directory /work
-      if [ -n "${PRIVATE_PACKAGES_TOKEN:-}" ]; then
-        git config --global \
-          "url.https://x-access-token:${PRIVATE_PACKAGES_TOKEN}@github.com/.insteadOf" \
-          "ssh://git@github.com/"
-      fi
       export NPM_CONFIG_PREFIX="$HOME/.npm-global"
       export PATH="$HOME/.npm-global/bin:$PATH"
       npm install -g "${NPM_UPGRADE_SPEC}" --loglevel=error

@@ -242,13 +242,10 @@ _build_immerse() {
   echo "Building Immerse in deps container (Node.js ${NODE_VERSION} from tool cache)..." >&2
 
   local extra_env=()
-  [ -n "${PRIVATE_PACKAGES_TOKEN:-}" ] && extra_env+=(-e "PRIVATE_PACKAGES_TOKEN=${PRIVATE_PACKAGES_TOKEN}")
   [ -n "${GOOGLE_API_KEY:-}" ]         && extra_env+=(-e "GOOGLE_API_KEY=${GOOGLE_API_KEY}")
   [ -n "${MAPBOX_TOKEN:-}" ]           && extra_env+=(-e "MAPBOX_TOKEN=${MAPBOX_TOKEN}")
   [ -n "${RAYGUN_AUTH_TOKEN:-}" ]      && extra_env+=(-e "RAYGUN_AUTH_TOKEN=${RAYGUN_AUTH_TOKEN}")
   extra_env+=(-e "NPM_UPGRADE_SPEC=${npm_spec}")
-  [ -z "${PRIVATE_PACKAGES_TOKEN:-}" ] \
-    && echo "WARN: PRIVATE_PACKAGES_TOKEN not set — private npm packages may fail" >&2
   [ -z "${MAPBOX_TOKEN:-}" ] \
     && echo "WARN: MAPBOX_TOKEN not set — Mapbox maps will not work in the built image" >&2
   [ -z "${GOOGLE_API_KEY:-}" ] \
@@ -275,11 +272,6 @@ _build_immerse() {
       export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       git config --global --add safe.directory /work
       apt-get install -y -q --no-install-recommends rsync zip > /dev/null 2>&1 || true
-      if [ -n "${PRIVATE_PACKAGES_TOKEN:-}" ]; then
-        git config --global \
-          "url.https://x-access-token:${PRIVATE_PACKAGES_TOKEN}@github.com/.insteadOf" \
-          "ssh://git@github.com/"
-      fi
       # The npm bundled with the cached Node build may fail npm ci with EBADPLATFORM
       # on wrong-platform optional binaries. NPM_UPGRADE_SPEC comes from the
       # engines.npm field in the Immerse package.json.
@@ -432,7 +424,6 @@ Components:
   heavyiq    Python admin UI (dist.tgz). Uses its declared dependencies and may
              include only an explicitly selected pyheavydb wheel.
   immerse    Node.js frontend (npm run deploy → packages/*.zip)
-             Set PRIVATE_PACKAGES_TOKEN for private npm packages.
              Optionally set GOOGLE_API_KEY, MAPBOX_TOKEN, RAYGUN_AUTH_TOKEN.
   webserver  Go HTTP server   (Linux-x86_64-heavy_web_server.tar.gz)
   geos-dsos  GEOS shared libs (heavydb-libgeos-<os>-<arch>.tar.xz).

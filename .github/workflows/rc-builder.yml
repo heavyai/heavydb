@@ -203,7 +203,6 @@ jobs:
       # contents:read on those, so we reuse COMPONENT_DOWNLOAD_TOKEN (already used
       # to clone the heavyai component repos). Swap to a dedicated secret if that
       # token's scope doesn't cover those repos.
-      PRIVATE_PACKAGES_TOKEN: ${{ secrets.COMPONENT_DOWNLOAD_TOKEN }}
       MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
       RAYGUN_AUTH_TOKEN: ${{ secrets.RAYGUN_AUTH_TOKEN }}
       GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
