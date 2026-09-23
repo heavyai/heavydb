@@ -37,12 +37,15 @@ export GOOGLE_API_KEY=AIzaXXX
 #   Front-end (Immerse and Webserver)
 #   GEOS bundle
 #   Sphinx docs
-# This will create a tarball package
-# To create a Docker container, add the --docker option
-./dev-tools/dev.sh build [--docker]
+# This creates a tarball for bare-metal deployment
+./dev-tools/dev.sh build
 
-# Alternative:
-#   Just build back-end (HeavyDB server and renderer only) as a tarball
+# Alternatively, to do a full build as above but then
+# create a Docker image for container deployment
+./dev-tools/dev.sh build --docker
+
+# Alternatively, to just build back-end (HeavyDB server
+# and renderer only) as a tarball
 ./dev-tools/dev.sh build heavydb
 ```
 
