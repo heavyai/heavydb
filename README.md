@@ -16,11 +16,10 @@ The repository includes a number of third party packages provided under separate
 - [License](#license)
 - [Contributing](#contributing)
 - [Building](#building)
-- [Testing](#testing)
-- [Using](#using)
 - [Code Style](#code-style)
 - [Dependencies](#dependencies)
-- [Roadmap](ROADMAP.md)
+- [Security](#security)
+- [Support](#support)
 
 # Links
 
@@ -131,6 +130,4 @@ NVIDIA takes security seriously. If you discover a vulnerability in heavydb, **D
 # Support
 Join the [HeavyAI GitHub Discussions](https://github.com/orgs/heavyai/discussions) to ask questions, share feedback, and report issues. HeavyAI maintainers review issues, discussions, and pull requests on a best effort basis without guaranteed response timelines.
   
-# License
-Apache 2.0. See [LICENSE](https://github.com/heavyai/heavydb/blob/master/LICENSE.txt).
 
