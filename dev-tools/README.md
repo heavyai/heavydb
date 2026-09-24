@@ -256,3 +256,12 @@ One log file per step:
 | Docker image build | `docker-build.log` |
 
 On failure the last 50 lines of the relevant log are printed automatically.
+
+Pass `--verbose` (or `-v`) to any `build` command to stream the output to the
+terminal as it is produced instead of printing progress dots. The same log files
+are still written, so nothing is lost:
+
+```bash
+dev-tools/dev.sh build heavydb --verbose
+dev-tools/dev.sh build --verbose            # applies to every step of the build
+```
