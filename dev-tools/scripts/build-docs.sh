@@ -93,6 +93,8 @@ build (Doxyfile) exists and doxygen is on PATH.
 Options:
   --output-dir=<path>    Heavydb build directory (Doxygen XML source and
                          docs HTML destination). Default: build/ inside the repo.
+  --verbose, -v          Stream Doxygen and Sphinx output to the shell as well
+                         as the log files, instead of printing progress dots
 
 Environment:
   HEAVYDB_SPHINX_IMAGE   Sphinx Docker image name (default: heavydb-sphinx-doc).

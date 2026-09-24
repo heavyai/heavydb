@@ -283,6 +283,12 @@ assert_output_contains "build image --help has --tar" "--tar=" \
 assert_output_contains "build image --help has --product-base-image" "--product-base-image" \
   bash "$DEV_SH" build image --help
 
+assert_output_contains "build --help has --verbose" "--verbose" \
+  bash "$DEV_SH" build --help
+
+assert_output_contains "build heavydb --help has --verbose" "--verbose" \
+  bash "$DEV_SH" build heavydb --help
+
 # ---------------------------------------------------------------------------
 # Section 4: Unknown / invalid inputs
 # ---------------------------------------------------------------------------
@@ -303,6 +309,12 @@ assert_fails_with "build heavydb bad distro"    "unsupported distro" \
   bash "$DEV_SH" build heavydb --distro=windows
 assert_fails_with "build all bad distro"        "unsupported distro" \
   bash "$DEV_SH" build --distro=windows
+# --verbose is consumed by cmd_build, so the per-target parsers must never see
+# it: these reach the distro check rather than failing with "Unknown option".
+assert_fails_with "--verbose before target"     "unsupported distro" \
+  bash "$DEV_SH" build --verbose --distro=windows
+assert_fails_with "--verbose after target"      "unsupported distro" \
+  bash "$DEV_SH" build heavydb --verbose --distro=windows
 assert_fails_with "build ci nonexistent config" "not found" \
   bash "$DEV_SH" build ci nonexistent-config-xyz
 assert_fails_with "test nonexistent variant"    "not found" \

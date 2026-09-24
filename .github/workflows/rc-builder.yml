@@ -80,6 +80,10 @@ on:
         description: 'Build description label'
         type: string
         default: ''
+      verbose:
+        description: 'Stream build output to the workflow log instead of progress dots'
+        type: boolean
+        default: true
       # push_to_dockerhub and push_to_binary_scan_testing send the finished
       # product to private/independent targets. They are NOT gated on repo
       # visibility: their exposure is controlled entirely by Docker Hub's and
@@ -278,7 +282,7 @@ jobs:
             product_base_flag="--product-base-image=${{ inputs.base_product_image_name }}"
           fi
 
-          dev-tools/dev.sh build all \
+          dev-tools/dev.sh build all ${{ inputs.verbose && '--verbose' || '' }} \
             --heavyiq-ref="${{ inputs.heavyiq_ref }}" \
             --immerse-ref="${{ inputs.immerse_ref }}" \
             --webserver-ref="${{ inputs.webserver_ref }}" \

@@ -49,6 +49,8 @@ Options:
   --product-base-image=<image>
                           Base image for the product Docker build. Auto-detected
                           from the deps image name if omitted.
+  --verbose, -v           Stream build output to the shell as well as the log
+                          file, instead of printing progress dots
 EOF
       return 0 ;;
     esac
@@ -501,6 +503,8 @@ Options:
                                 from this image name.
   --tag=<tag>                   Override the image tag. Default: parsed from
                                 the tarball name as <version>-<YYYYMMDD>-<sha>.
+  --verbose, -v                 Stream the docker build output to the shell as
+                                well as the log file, instead of progress dots.
 
 Examples:
   # Typical use — base image auto-detected from tarball name:

@@ -465,6 +465,8 @@ Options:
   --cuda-version=<ver>   CUDA version filter for deps image auto-detection
                          (e.g. 12.9.2). Use when multiple CUDA versions are
                          available locally. Default: any
+  --verbose, -v          Stream build output to the shell as well as the log
+                         file, instead of printing progress dots
 EOF
       return 0 ;;
     esac
