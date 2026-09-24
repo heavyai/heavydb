@@ -81,7 +81,7 @@ on:
         type: string
         default: ''
       verbose:
-        description: 'Stream build output to the workflow log instead of progress dots. Build logs are not retained as artifacts, so this is the only record of a failed build.'
+        description: 'Stream build output to the workflow log instead of progress dots'
         type: boolean
         default: true
       # push_to_dockerhub and push_to_binary_scan_testing send the finished
