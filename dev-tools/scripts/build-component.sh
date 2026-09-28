@@ -241,15 +241,7 @@ _build_immerse() {
 
   echo "Building Immerse in deps container (Node.js ${NODE_VERSION} from tool cache)..." >&2
 
-  local extra_env=()
-  [ -n "${GOOGLE_API_KEY:-}" ]         && extra_env+=(-e "GOOGLE_API_KEY=${GOOGLE_API_KEY}")
-  [ -n "${MAPBOX_TOKEN:-}" ]           && extra_env+=(-e "MAPBOX_TOKEN=${MAPBOX_TOKEN}")
-  [ -n "${RAYGUN_AUTH_TOKEN:-}" ]      && extra_env+=(-e "RAYGUN_AUTH_TOKEN=${RAYGUN_AUTH_TOKEN}")
-  extra_env+=(-e "NPM_UPGRADE_SPEC=${npm_spec}")
-  [ -z "${MAPBOX_TOKEN:-}" ] \
-    && echo "WARN: MAPBOX_TOKEN not set — Mapbox maps will not work in the built image" >&2
-  [ -z "${GOOGLE_API_KEY:-}" ] \
-    && echo "WARN: GOOGLE_API_KEY not set — Google Maps / Street View will not work in the built image" >&2
+  local extra_env=(-e "NPM_UPGRADE_SPEC=${npm_spec}")
 
   _run_logged "immerse" "${_BUILD_LOG_DIR}/immerse.log" \
     docker run --rm \
@@ -262,7 +254,6 @@ _build_immerse() {
       "$deps_image" \
       bash -c '
       set -euo pipefail
-      echo "MAPBOX_TOKEN: ${MAPBOX_TOKEN:+present (${#MAPBOX_TOKEN} chars)} ${MAPBOX_TOKEN:-MISSING}"
       export PATH="/opt/dev-tools/node/bin:$PATH"
       # Puppeteer (a test-only transitive dep) downloads a Chromium binary in
       # its install script; there is no arm64 build for the pinned version, so
@@ -424,7 +415,6 @@ Components:
   heavyiq    Python admin UI (dist.tgz). Uses its declared dependencies and may
              include only an explicitly selected pyheavydb wheel.
   immerse    Node.js frontend (npm run deploy → packages/*.zip)
-             Optionally set GOOGLE_API_KEY, MAPBOX_TOKEN, RAYGUN_AUTH_TOKEN.
   webserver  Go HTTP server   (Linux-x86_64-heavy_web_server.tar.gz)
   geos-dsos  GEOS shared libs (heavydb-libgeos-<os>-<arch>.tar.xz).
   docs       Sphinx developer docs (build/docs/html/). Uses the
