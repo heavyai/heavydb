@@ -194,18 +194,6 @@ jobs:
       id-token: write  # required for cosign OIDC keyless signing
     env:
       WORKDIR: ${{ github.workspace }}/heavydb
-      # Cloning the component repos (heavyiq/immerse/webserver) uses a token so
-      # it works whether a given repo is still private or already public.
-      COMPONENT_DOWNLOAD_TOKEN: ${{ secrets.COMPONENT_DOWNLOAD_TOKEN }}
-      # Consumed inside the Immerse build container for its private npm packages,
-      # which are git+ssh deps on heavyai/* repos (heavyai-charting, heavyai-d3,
-      # heavyai-draw, gauge-chart, skewt-chart, useWhisper). It only needs repo
-      # contents:read on those, so we reuse COMPONENT_DOWNLOAD_TOKEN (already used
-      # to clone the heavyai component repos). Swap to a dedicated secret if that
-      # token's scope doesn't cover those repos.
-      MAPBOX_TOKEN: ${{ secrets.MAPBOX_TOKEN }}
-      RAYGUN_AUTH_TOKEN: ${{ secrets.RAYGUN_AUTH_TOKEN }}
-      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
     steps:
       - name: Install tools
         # The host runner already provides the Docker daemon+CLI (it hosts the
@@ -250,17 +238,6 @@ jobs:
         with:
           ref: ${{ inputs.sha1_heavydb }}
           path: heavydb
-
-      - name: Configure git for component clones
-        # build-component.sh clones the component repos via git@github.com: SSH
-        # URLs. Rewrite those to authenticated HTTPS so CI can clone them without
-        # an SSH key, working for both private and public component repos.
-        run: |
-          # --add so both rewrites coexist; a plain (non --add) second config
-          # would replace the first, dropping the scp-style rewrite that
-          # build-component.sh actually uses (git@github.com:owner/repo.git).
-          git config --global --add url."https://x-access-token:${COMPONENT_DOWNLOAD_TOKEN}@github.com/".insteadOf "git@github.com:"
-          git config --global --add url."https://x-access-token:${COMPONENT_DOWNLOAD_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
 
       - name: Log in to GHCR and pull deps image
         run: |
@@ -339,6 +316,7 @@ jobs:
       - name: Push binary to heavyai-binary-scan-testing
         if: ${{ inputs.push_to_binary_scan_testing && steps.artifacts.outputs.binary_tar != '' }}
         env:
+          # todo: rename this secret
           GH_TOKEN: ${{ secrets.COMPONENT_DOWNLOAD_TOKEN }}
         run: |
           BINARY="${{ steps.artifacts.outputs.binary_tar }}"
