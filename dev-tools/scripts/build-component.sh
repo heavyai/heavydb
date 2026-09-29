@@ -436,11 +436,12 @@ Components:
              Optionally set GOOGLE_API_KEY, MAPBOX_TOKEN, RAYGUN_AUTH_TOKEN.
   webserver  Go HTTP server   (Linux-x86_64-heavy_web_server.tar.gz)
   geos-dsos  GEOS shared libs (heavydb-libgeos-<os>-<arch>.tar.xz).
-  docs       Sphinx developer docs (build/docs/html/). Uses the
-             docs Docker image; optional host Doxygen when a heavydb build exists.
+  docs       Validates the Fern developer docs site (fern check). Pass
+             --regenerate-api to regenerate the C++ API reference pages first
+             (requires Docker).
 
 All components except docs build inside the local heavydb deps container.
-Docs use the Sphinx docs image (docs/Dockerfile); optional Doxygen runs on the host.
+Docs use the Fern CLI directly (requires `fern` on PATH).
 Node.js and Go are downloaded to a local tool cache on first use.
 
 Options:
@@ -519,9 +520,9 @@ EOF
     webserver) _build_webserver "$repos_dir" "$ref" "$output_dir" "$deps_image" ;;
     geos-dsos) _build_geos_dsos "$output_dir" "$deps_image" ;;
     docs)
-      # Docs write under the heavydb build dir (parent of components/), not
-      # into the component artifact directory. Does not use the deps image.
-      _build_docs "$(dirname "$output_dir")" ;;
+      # Docs validate the fern/ site in place; no component artifact is
+      # written and the deps image is not used.
+      _build_docs ;;
     *)
       echo "ERROR: unknown component '$component'. Use heavyiq, immerse, webserver, geos-dsos, or docs." >&2
       exit 1 ;;
