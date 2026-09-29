@@ -1,5 +1,5 @@
 instances:
-- url: heavyai-heavydb.docs.buildwithfern.com
+- url: heavyai-heavydb.docs.buildwithfern.com/heavyai/heavydb
   custom-domain: docs.nvidia.com/heavyai/heavydb
   multi-source: true
 

@@ -34,8 +34,8 @@ out of `fern/` into `docs/pages/` and `docs/images/` so it sits alongside
 
 ## Site structure
 
-- Single Fern instance: `heavyai-heavydb.docs.buildwithfern.com`, custom
-  domain `docs.nvidia.com/heavyai/heavydb`, theme `nvidia`.
+- Single Fern instance: `heavyai-heavydb.docs.buildwithfern.com/heavyai/heavydb`,
+  custom domain `docs.nvidia.com/heavyai/heavydb`, theme `nvidia`.
 - `docs.yml`'s `navigation:` mirrors the old Sphinx `docs/source/index.rst`
   toctree: Introduction → System Architecture (Overview, Quickstart, Catalog,
   Data Model, Data Flow, Calcite Parser, Query Execution, Foreign Storage,
