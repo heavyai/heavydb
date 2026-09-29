@@ -4,10 +4,11 @@
 name: Product Builder
 run-name: ${{ inputs.description != '' && format('Product Builder — {0}', inputs.description) || 'Product Builder' }}
 
-# Builds the full HeavyDB product from source — including the HeavyIQ, Immerse
-# frontend, and web server components, which are cloned and compiled from their
-# own repos via `dev-tools/dev.sh build all` rather than downloaded as prebuilt
-# release assets. This keeps every product asset off any public GitHub Release:
+# Builds the full HeavyDB product from source — including the Immerse frontend,
+# web server, and (when build_heavyiq is enabled) HeavyIQ components, which are
+# cloned and compiled from their own repos via `dev-tools/dev.sh build` rather
+# than downloaded as prebuilt release assets. This keeps every product asset off
+# any public GitHub Release:
 # the finished product is pushed only to private/independent targets (Docker Hub
 # heavyai/scantest and the heavyai-binary-scan-testing repo) and NOTHING is
 # retained as a GitHub Actions artifact or attached to a GitHub Release.
@@ -19,8 +20,12 @@ on:
         description: 'heavydb branch or SHA to build'
         type: string
         default: 'master'
+      build_heavyiq:
+        description: 'Build HeavyIQ'
+        type: boolean
+        default: false
       heavyiq_ref:
-        description: 'HeavyIQ ref to build (blank = repo default branch)'
+        description: 'HeavyIQ ref to build (blank = repo default branch, only used when Build HeavyIQ is enabled)'
         type: string
         default: ''
       immerse_ref:
@@ -184,7 +189,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
     # Runs on the plain host runner (NOT inside a container:) because
-    # `dev-tools/dev.sh build all` drives Docker itself — it launches the deps
+    # `dev-tools/dev.sh build` drives Docker itself — it launches the deps
     # container to build each component and heavydb, then builds the product
     # image on the host. The deps image is pulled explicitly below.
     runs-on: ${{ matrix.runner }}
@@ -244,9 +249,15 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           docker pull "${{ matrix.image }}"
 
-      - name: Build product from source (build all)
+      - name: Build product from source
         working-directory: ${{ env.WORKDIR }}
         run: |
+          # "build all" includes HeavyIQ; the bare "build" target omits it.
+          build_target=""
+          if [ "${{ inputs.build_heavyiq }}" = "true" ]; then
+            build_target="all"
+          fi
+
           product_base_flag=""
           if [ "${{ matrix.os_family }}" = "rocky" ] && [ -n "${{ inputs.rocky_product_image_name }}" ]; then
             product_base_flag="--product-base-image=${{ inputs.rocky_product_image_name }}"
@@ -254,7 +265,7 @@ jobs:
             product_base_flag="--product-base-image=${{ inputs.base_product_image_name }}"
           fi
 
-          dev-tools/dev.sh build all \
+          dev-tools/dev.sh build $build_target \
             --heavyiq-ref="${{ inputs.heavyiq_ref }}" \
             --immerse-ref="${{ inputs.immerse_ref }}" \
             --webserver-ref="${{ inputs.webserver_ref }}" \
