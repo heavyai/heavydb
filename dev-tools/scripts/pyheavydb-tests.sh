@@ -114,7 +114,7 @@ EOF
 
   : "${repos_dir:=$(cd "$REPO_ROOT/.." && pwd)}"
   local repo_dir="$repos_dir/pyheavydb"
-  _ensure_repo "git@github.com:heavyai/pyheavydb.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/pyheavydb.git" "$repo_dir" "$ref"
 
   if [ -z "$deps_image" ]; then
     deps_image=$(_resolve_deps_image "static" "$distro")

@@ -39,9 +39,6 @@ faster disk:
 Environment Variables
 =====================
 
-None of these are required for a bare ``dev-tools/dev.sh build-heavydb`` (engine
-only). They matter for full product / Immerse builds.
-
 ================================== =============================================
 Variable                           Purpose
 ================================== =============================================
@@ -50,18 +47,7 @@ Variable                           Purpose
                                    (default
                                    ``/usr/local/mapd-deps/mapd-deps.sh``).
 ``HEAVYAI_DEV_CACHE``              Cache for Node/Go and npm/Go module caches.
-``MAPBOX_TOKEN``                   Optional. Omit and Mapbox tiles will not work
-                                   in the built frontend (warning only).
-``GOOGLE_API_KEY``                 Optional. Omit and geocoding features will not
-                                   work in the built frontend.
 ================================== =============================================
-
-Example — Immerse-capable session:
-
-.. code-block:: bash
-
-    export MAPBOX_TOKEN=pk.eyJ1...   # optional
-    export GOOGLE_API_KEY=AIza...    # optional
 
 Host mapd-deps (legacy / secondary)
 ===================================
