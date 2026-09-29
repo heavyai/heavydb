@@ -1,0 +1,99 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Tests for the Fern documentation site (fern/, docs/pages/, docs/images/).
+# Manual dispatch only for now, matching dev-tools-tests.yml.
+#
+# Jobs:
+#   fern-check   — validates fern/docs.yml and every page (`fern check`)
+#   api-generate — regenerates the C++ API reference pages from source
+#                  (`fern docs md generate --local`, requires Docker) and
+#                  fails if that changes any committed file, catching pages
+#                  that drifted from the source they were generated from
+
+name: docs tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha1:
+        description: "PR head SHA to report status on (leave empty for manual runs)"
+        default: ""
+      pr_number:
+        description: "PR number (informational)"
+        default: ""
+
+permissions:
+  contents: read
+  statuses: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fern-check:
+    name: Fern docs validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check out the PR head when dispatched with sha1 (e.g. via
+          # `/test docs`); fall back to the dispatch ref for manual runs.
+          ref: ${{ inputs.sha1 || github.sha }}
+
+      - name: Install Fern CLI
+        run: npm install -g fern-api
+
+      - name: fern check
+        run: cd fern && fern check
+
+  api-generate:
+    name: C++ API reference drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.sha1 || github.sha }}
+
+      - name: Install Fern CLI
+        run: npm install -g fern-api
+
+      - name: Regenerate C++ API reference pages
+        run: cd fern && fern docs md generate --local
+
+      - name: Fail if regeneration changed committed pages
+        run: |
+          if ! git diff --quiet -- docs/pages/api/cpp; then
+            echo "::error::docs/pages/api/cpp is out of date. Run 'dev-tools/dev.sh build docs --regenerate-api' and commit the result." >&2
+            git diff --stat -- docs/pages/api/cpp >&2
+            exit 1
+          fi
+
+  report:
+    name: report-status
+    needs: [fern-check, api-generate]
+    if: always() && inputs.sha1 != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        env:
+          INPUT_SHA1: ${{ inputs.sha1 }}
+          FERN_CHECK_RESULT: ${{ needs.fern-check.result }}
+          API_GENERATE_RESULT: ${{ needs.api-generate.result }}
+        with:
+          script: |
+            const sha = process.env.INPUT_SHA1;
+            // 'skipped' counts as passing — a job can be skipped intentionally
+            // (e.g. via a future `if:` condition) without failing the overall check.
+            const ok = r => r === 'success' || r === 'skipped';
+            const state = ok(process.env.FERN_CHECK_RESULT) && ok(process.env.API_GENERATE_RESULT)
+              ? 'success' : 'failure';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              state,
+              context: 'docs tests',
+              description: state === 'success' ? 'All docs tests passed' : 'docs tests failed',
+            });
