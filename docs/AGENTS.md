@@ -153,7 +153,11 @@ actions, only `actions/*` + `actions/github-script`):
 - **`cleanup-docs-preview.yml`** — deletes a PR's preview on merge.
   Automatic, no `/test` gating needed (push-only trust boundary).
 - **`publish-docs.yml`** — publishes to production on push to `master`
-  touching `fern/`, `docs/pages/`, or `docs/images/`. Automatic.
+  touching `fern/`, `docs/pages/`, or `docs/images/`. Automatic. Regenerates
+  the C++ API reference pages from current source before publishing
+  (ephemeral — not committed back), so production always reflects the
+  latest source rather than whatever was last manually regenerated and
+  committed.
 - **`pr-gatekeeper.yml`** — has a `docs` category (context `docs tests`)
   that pends whenever a PR touches `fern/`, `docs/pages/`, or
   `docs/images/`.
