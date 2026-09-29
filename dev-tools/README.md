@@ -13,6 +13,14 @@ optional Doxygen on the host.
 - For GPU access inside containers: `nvidia-container-toolkit` (auto-detected
   via `nvidia-smi`; containers run CPU-only if absent)
 
+Component repos (heavyiq, immerse, webserver, pyheavydb) are cloned over
+anonymous HTTPS, so no SSH key or token is needed. If you push from those
+checkouts and prefer SSH, set the rewrite once globally:
+
+```bash
+git config --global url."git@github.com:".insteadOf "https://github.com/"
+```
+
 ## Quick start
 
 ```bash
@@ -26,11 +34,6 @@ cd heavydb
 
 # Build a local build/dependencies container
 dev-tools/dev.sh build deps
-
-# If doing a full build (including front-end) and you have
-# these, set them in the env before the build
-export MAPBOX_TOKEN=pk.xxx
-export GOOGLE_API_KEY=AIzaXXX
 
 # Default full build:
 #   Back-end (HeavyDB server and renderer)
@@ -87,14 +90,6 @@ dev-tools/dev.sh build [target] [options]
 --clean                       Wipe build directories and repo artifacts before building
 --ref=<branch|sha>            Ref to check out for all component repos
 --repos-dir=<path>            Parent dir for component repo clones (default: ../)
-```
-
-**Environment variables for Immerse:**
-
-```bash
-MAPBOX_TOKEN=pk.xxx \                       # for Mapbox maps to work
-GOOGLE_API_KEY=AIzaXXX \                   # for Google Maps / Street View to work
-  dev-tools/dev.sh build immerse
 ```
 
 **Per-component options** (when building a single component):

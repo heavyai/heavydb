@@ -10,7 +10,7 @@
 _build_pyheavydb_wheel() {
   local repos_dir="$1" ref="$2" deps_image="$3" requirement="$4"
   local repo_dir="$repos_dir/pyheavydb"
-  _ensure_repo "git@github.com:heavyai/pyheavydb.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/pyheavydb.git" "$repo_dir" "$ref"
 
   echo "Building pyheavydb wheel from source in deps container..." >&2
   _run_logged "pyheavydb wheel" "${_BUILD_LOG_DIR}/pyheavydb.log" \
@@ -102,7 +102,7 @@ _build_heavyiq() {
   local repos_dir="$1" ref="$2" output_dir="$3" distro="$4" deps_image="$5"
   local pyheavydb_source="$6" pyheavydb_ref="$7"
   local repo_dir="$repos_dir/heavyiq"
-  _ensure_repo "git@github.com:heavyai/heavyiq.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/heavyiq.git" "$repo_dir" "$ref"
 
   case "$pyheavydb_source" in
     project|pypi|testpypi|build-local-wheel) ;;
@@ -225,7 +225,7 @@ _build_heavyiq() {
 _build_immerse() {
   local repos_dir="$1" ref="$2" output_dir="$3" deps_image="$4"
   local repo_dir="$repos_dir/immerse"
-  _ensure_repo "git@github.com:heavyai/immerse.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/immerse.git" "$repo_dir" "$ref"
 
   NODE_VERSION=$(_read_node_version "$repo_dir")
 
@@ -241,18 +241,7 @@ _build_immerse() {
 
   echo "Building Immerse in deps container (Node.js ${NODE_VERSION} from tool cache)..." >&2
 
-  local extra_env=()
-  [ -n "${PRIVATE_PACKAGES_TOKEN:-}" ] && extra_env+=(-e "PRIVATE_PACKAGES_TOKEN=${PRIVATE_PACKAGES_TOKEN}")
-  [ -n "${GOOGLE_API_KEY:-}" ]         && extra_env+=(-e "GOOGLE_API_KEY=${GOOGLE_API_KEY}")
-  [ -n "${MAPBOX_TOKEN:-}" ]           && extra_env+=(-e "MAPBOX_TOKEN=${MAPBOX_TOKEN}")
-  [ -n "${RAYGUN_AUTH_TOKEN:-}" ]      && extra_env+=(-e "RAYGUN_AUTH_TOKEN=${RAYGUN_AUTH_TOKEN}")
-  extra_env+=(-e "NPM_UPGRADE_SPEC=${npm_spec}")
-  [ -z "${PRIVATE_PACKAGES_TOKEN:-}" ] \
-    && echo "WARN: PRIVATE_PACKAGES_TOKEN not set — private npm packages may fail" >&2
-  [ -z "${MAPBOX_TOKEN:-}" ] \
-    && echo "WARN: MAPBOX_TOKEN not set — Mapbox maps will not work in the built image" >&2
-  [ -z "${GOOGLE_API_KEY:-}" ] \
-    && echo "WARN: GOOGLE_API_KEY not set — Google Maps / Street View will not work in the built image" >&2
+  local extra_env=(-e "NPM_UPGRADE_SPEC=${npm_spec}")
 
   _run_logged "immerse" "${_BUILD_LOG_DIR}/immerse.log" \
     docker run --rm \
@@ -265,7 +254,6 @@ _build_immerse() {
       "$deps_image" \
       bash -c '
       set -euo pipefail
-      echo "MAPBOX_TOKEN: ${MAPBOX_TOKEN:+present (${#MAPBOX_TOKEN} chars)} ${MAPBOX_TOKEN:-MISSING}"
       export PATH="/opt/dev-tools/node/bin:$PATH"
       # Puppeteer (a test-only transitive dep) downloads a Chromium binary in
       # its install script; there is no arm64 build for the pinned version, so
@@ -275,11 +263,6 @@ _build_immerse() {
       export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
       git config --global --add safe.directory /work
       apt-get install -y -q --no-install-recommends rsync zip > /dev/null 2>&1 || true
-      if [ -n "${PRIVATE_PACKAGES_TOKEN:-}" ]; then
-        git config --global \
-          "url.https://x-access-token:${PRIVATE_PACKAGES_TOKEN}@github.com/.insteadOf" \
-          "ssh://git@github.com/"
-      fi
       # The npm bundled with the cached Node build may fail npm ci with EBADPLATFORM
       # on wrong-platform optional binaries. NPM_UPGRADE_SPEC comes from the
       # engines.npm field in the Immerse package.json.
@@ -306,7 +289,7 @@ _build_immerse() {
 _build_webserver() {
   local repos_dir="$1" ref="$2" output_dir="$3" deps_image="$4"
   local repo_dir="$repos_dir/webserver"
-  _ensure_repo "git@github.com:heavyai/webserver.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/webserver.git" "$repo_dir" "$ref"
 
   GO_VERSION=$(_read_go_version "$repo_dir")
 
@@ -432,8 +415,6 @@ Components:
   heavyiq    Python admin UI (dist.tgz). Uses its declared dependencies and may
              include only an explicitly selected pyheavydb wheel.
   immerse    Node.js frontend (npm run deploy → packages/*.zip)
-             Set PRIVATE_PACKAGES_TOKEN for private npm packages.
-             Optionally set GOOGLE_API_KEY, MAPBOX_TOKEN, RAYGUN_AUTH_TOKEN.
   webserver  Go HTTP server   (Linux-x86_64-heavy_web_server.tar.gz)
   geos-dsos  GEOS shared libs (heavydb-libgeos-<os>-<arch>.tar.xz).
   docs       Sphinx developer docs (build/docs/html/). Uses the

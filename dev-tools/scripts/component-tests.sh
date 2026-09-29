@@ -37,7 +37,7 @@ EOF
 
   : "${repos_dir:=$(cd "$REPO_ROOT/.." && pwd)}"
   local repo_dir="$repos_dir/immerse"
-  _ensure_repo "git@github.com:heavyai/immerse.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/immerse.git" "$repo_dir" "$ref"
 
   NODE_VERSION=$(_read_node_version "$repo_dir")
 
@@ -56,11 +56,7 @@ EOF
     echo "Auto-detected deps image: $deps_image" >&2
   fi
 
-  local extra_env=()
-  [ -n "${PRIVATE_PACKAGES_TOKEN:-}" ] && extra_env+=(-e "PRIVATE_PACKAGES_TOKEN=${PRIVATE_PACKAGES_TOKEN}")
-  [ -z "${PRIVATE_PACKAGES_TOKEN:-}" ] \
-    && echo "WARN: PRIVATE_PACKAGES_TOKEN not set — private npm packages may fail" >&2
-  extra_env+=(-e "NPM_UPGRADE_SPEC=${npm_spec}")
+  local extra_env=(-e "NPM_UPGRADE_SPEC=${npm_spec}")
 
   echo "=== Immerse tests ===" >&2
   docker run --rm \
@@ -77,11 +73,6 @@ EOF
       set -euo pipefail
       export PATH="/opt/dev-tools/node/bin:$PATH"
       git config --global --add safe.directory /work
-      if [ -n "${PRIVATE_PACKAGES_TOKEN:-}" ]; then
-        git config --global \
-          "url.https://x-access-token:${PRIVATE_PACKAGES_TOKEN}@github.com/.insteadOf" \
-          "ssh://git@github.com/"
-      fi
       export NPM_CONFIG_PREFIX="$HOME/.npm-global"
       export PATH="$HOME/.npm-global/bin:$PATH"
       npm install -g "${NPM_UPGRADE_SPEC}" --loglevel=error
@@ -124,7 +115,7 @@ EOF
 
   : "${repos_dir:=$(cd "$REPO_ROOT/.." && pwd)}"
   local repo_dir="$repos_dir/webserver"
-  _ensure_repo "git@github.com:heavyai/webserver.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/webserver.git" "$repo_dir" "$ref"
 
   GO_VERSION=$(_read_go_version "$repo_dir")
 
@@ -196,7 +187,7 @@ EOF
 
   : "${repos_dir:=$(cd "$REPO_ROOT/.." && pwd)}"
   local repo_dir="$repos_dir/heavyiq"
-  _ensure_repo "git@github.com:heavyai/heavyiq.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/heavyiq.git" "$repo_dir" "$ref"
 
   if [ -z "$deps_image" ]; then
     deps_image=$(_resolve_deps_image "static" "$distro")
