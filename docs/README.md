@@ -15,6 +15,11 @@ from `fern/` at the repository root:
   generator (replaces the old Doxygen/breathe integration).
 * `docs/images/` — images referenced by the pages above.
 
+See [AGENTS.md](AGENTS.md) for the full picture: page/nav conventions, how
+the C++ API reference is generated and kept in sync, known gaps (a handful
+of diagrams still aren't rendered), and how the CI (preview links, publish
+on merge) is wired up.
+
 ### Validating
 
 From the repository root:
