@@ -1,0 +1,35 @@
+---
+title: getLeafColumnRange
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getLeafColumnRange(
+    const Analyzer::ColumnVar *col_expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Executor *executor,
+    const bool is_outer_join_proj
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getLeafColumnRange(
+    const Analyzer::ColumnVar *,
+    const std::vector<InputTableInfo> &,
+    const Executor *,
+    const bool is_outer_join_proj
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

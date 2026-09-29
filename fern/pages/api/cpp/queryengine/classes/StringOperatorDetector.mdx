@@ -1,0 +1,141 @@
+---
+title: StringOperatorDetector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CommonVisitors.h>
+```
+
+**Inherits from:** `RexVisitor< void * >` (public)
+
+---
+
+## Constructors
+
+### StringOperatorDetector [#stringoperatordetector]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector"}}>
+```cpp showLineNumbers={false}
+StringOperatorDetector::StringOperatorDetector(
+    SqlStringOpKind kind
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### visitInput [#visitinput]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexInput": "rexinput", "RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+void * RexVisitor<void *>::visitInput(
+    const RexInput *
+) const override
+```
+</CodeBlock>
+
+### visitLiteral [#visitliteral]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexLiteral": "rexliteral", "RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+void * RexVisitor<void *>::visitLiteral(
+    const RexLiteral *
+) const override
+```
+</CodeBlock>
+
+### visitSubQuery [#visitsubquery]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexSubQuery": "rexsubquery", "RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+void * RexVisitor<void *>::visitSubQuery(
+    const RexSubQuery *
+) const override
+```
+</CodeBlock>
+
+### visitRef [#visitref]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexRef": "rexref", "RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+void * RexVisitor<void *>::visitRef(
+    const RexRef *
+) const override
+```
+</CodeBlock>
+
+### visitCase [#visitcase]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexCase": "rexcase", "RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+void * RexVisitor<void *>::visitCase(
+    const RexCase *rex_case
+) const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexScalar": "rexscalar", "RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * RexVisitorBase<void *>::visit(
+    const RexScalar *rex_scalar
+) const
+```
+</CodeBlock>
+
+### visitOperator [#visitoperator]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+void * StringOperatorDetector::visitOperator(
+    const RexOperator *rex_operator
+) const override
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * RexVisitor<void *>::aggregateResult(
+    const void *&aggregate,
+    const void *&next_result
+) const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+void * RexVisitor<void *>::defaultResult() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### hasStringOperator [#hasstringoperator]
+
+<CodeBlock links={{"StringOperatorDetector": "stringoperatordetector", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+static bool StringOperatorDetector::hasStringOperator(
+    SqlStringOpKind kind,
+    const RexScalar *expr
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `kind_` | `std::string` | |
+| `has_string_oper_` | `bool` | |

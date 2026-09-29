@@ -1,0 +1,111 @@
+---
+title: heavyai::UUID
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavyai/uuid.h>
+```
+
+---
+
+## Constructors
+
+### UUID [#uuid]
+
+<Tabs>
+<Tab title="Default">
+
+<Badge intent="note" minimal>constexpr</Badge>
+
+<CodeBlock links={{"UUID": "uuid"}}>
+```cpp showLineNumbers={false}
+heavyai::UUID::UUID() noexcept
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"UUID": "uuid"}}>
+```cpp showLineNumbers={false}
+heavyai::UUID::UUID(
+    const value_type (&arr)[16]
+) noexcept
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"UUID": "uuid"}}>
+```cpp showLineNumbers={false}
+heavyai::UUID::UUID(
+    char (&arr)[16]
+) noexcept
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### swap [#swap]
+
+<CodeBlock links={{"UUID": "uuid"}}>
+```cpp showLineNumbers={false}
+void heavyai::UUID::swap(
+    UUID &other
+) noexcept
+```
+</CodeBlock>
+
+### data [#data]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"UUID": "uuid"}}>
+```cpp showLineNumbers={false}
+value_type * heavyai::UUID::data() noexcept
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"UUID": "uuid"}}>
+```cpp showLineNumbers={false}
+const value_type * heavyai::UUID::data() const noexcept
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `value_type` | `uint8_t` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `data_` | `std::array< value_type, 16 >` | |

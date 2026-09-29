@@ -1,0 +1,137 @@
+---
+title: SubConditionRemover
+description: ""
+---
+
+**Inherits from:** `RexDeepCopyVisitor` (public)
+
+---
+
+## Constructors
+
+### SubConditionRemover [#subconditionremover]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+SubConditionRemover::SubConditionRemover(
+    const std::vector<const RexScalar *> sub_conds
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### visitOperator [#visitoperator]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+RetType SubConditionRemover::visitOperator(
+    const RexOperator *rex_operator
+) const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexScalar": "rexscalar", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unique_ptr<const RexScalar> RexVisitorBase<std::unique_ptr<const RexScalar>>::visit(
+    const RexScalar *rex_scalar
+) const
+```
+</CodeBlock>
+
+### visitInput [#visitinput]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexInput": "rexinput", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType SubConditionRemover::visitInput(
+    const RexInput *input
+) const override
+```
+</CodeBlock>
+
+### visitLiteral [#visitliteral]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexLiteral": "rexliteral", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType SubConditionRemover::visitLiteral(
+    const RexLiteral *literal
+) const override
+```
+</CodeBlock>
+
+### visitSubQuery [#visitsubquery]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexSubQuery": "rexsubquery", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType SubConditionRemover::visitSubQuery(
+    const RexSubQuery *subquery
+) const override
+```
+</CodeBlock>
+
+### visitRef [#visitref]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexRef": "rexref", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType SubConditionRemover::visitRef(
+    const RexRef *ref
+) const override
+```
+</CodeBlock>
+
+### visitWindowFunctionOperator [#visitwindowfunctionoperator]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType SubConditionRemover::visitWindowFunctionOperator(
+    const RexWindowFunctionOperator *rex_window_function_operator
+) const
+```
+</CodeBlock>
+
+### visitCase [#visitcase]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexCase": "rexcase", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType SubConditionRemover::visitCase(
+    const RexCase *rex_case
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### copy [#copy]
+
+<CodeBlock links={{"SubConditionRemover": "subconditionremover", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+static std::vector<RowValues> SubConditionRemover::copy(
+    std::vector<RowValues> const &rhs
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `RetType` | `std::unique_ptr< const RexScalar >` |
+| `RowValues` | `std::vector< std::unique_ptr< const RexScalar > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `sub_conditions_` | `std::unordered_set< const RexScalar * >` | |

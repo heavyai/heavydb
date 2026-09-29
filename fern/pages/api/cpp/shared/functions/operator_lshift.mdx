@@ -1,0 +1,145 @@
+---
+title: "operator<<"
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DateTime": "../classes/datetimeparser#datetime"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &out,
+    DateTimeParser::DateTime const &dt
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    SqlWindowFunctionKind const kind
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    SqlWindowFrameBoundType const kind
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const SqlStringOpKind kind
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    SQLTypes const sql_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    EncodingType const type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLTypeInfo": "../classes/sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const SQLTypeInfo &type_info
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const SQLTypeInfoLite::SQLTypes &type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const SQLTypeInfoLite::EncodingType &type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLTypeInfoLite": "../structs/sqltypeinfolite"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const SQLTypeInfoLite &ti_lite
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,22 @@
+---
+title: fill_one_to_many_hash_table_sharded_impl
+description: ""
+---
+
+<CodeBlock links={{"JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo", "ShardInfo": "../structs/shardinfo"}}>
+```cpp showLineNumbers={false}
+template <typename COUNT_MATCHES_LAUNCH_FUNCTOR, typename FILL_ROW_IDS_LAUNCH_FUNCTOR>
+void fill_one_to_many_hash_table_sharded_impl(
+    int32_t *buff,
+    const int64_t hash_entry_count,
+    const JoinColumn &join_column,
+    const JoinColumnTypeInfo &type_info,
+    const ShardInfo &shard_info,
+    const int32_t *sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t cpu_thread_count,
+    COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_launcher,
+    FILL_ROW_IDS_LAUNCH_FUNCTOR fill_row_ids_launcher
+)
+```
+</CodeBlock>

@@ -1,0 +1,60 @@
+---
+title: numStepsBetween
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+int64_t numStepsBetween(
+    int64_t start,
+    int64_t stop,
+    int64_t step
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+int64_t numStepsBetween(
+    Timestamp start,
+    Timestamp stop,
+    T step
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Timestamp": "../structs/timestamp", "DayTimeInterval": "../structs/daytimeinterval"}}>
+```cpp showLineNumbers={false}
+template int64_t numStepsBetween(
+    Timestamp,
+    Timestamp,
+    DayTimeInterval
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Timestamp": "../structs/timestamp", "YearMonthTimeInterval": "../structs/yearmonthtimeinterval"}}>
+```cpp showLineNumbers={false}
+template int64_t numStepsBetween(
+    Timestamp,
+    Timestamp,
+    YearMonthTimeInterval
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

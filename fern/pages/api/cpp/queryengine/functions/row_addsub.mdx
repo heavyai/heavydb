@@ -1,0 +1,16 @@
+---
+title: row_addsub
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t row_addsub(
+    const int copy_multiplier,
+    const Column<double> &input_col1,
+    const Column<double> &input_col2,
+    Column<double> &output_col1,
+    Column<double> &output_col2
+)
+```
+</CodeBlock>

@@ -1,0 +1,35 @@
+---
+title: init_shared_mem
+description: "Initializes the shared memory buffer for perfect hash group by."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ const int64_t * init_shared_mem(
+    const int64_t *global_groups_buffer,
+    const int32_t groups_buffer_size
+)
+```
+</CodeBlock>
+
+Initializes the shared memory buffer for perfect hash group by.
+
+In this function, we simply copy the global group by buffer (already initialized on the host and transferred) to all shared memory group by buffers.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT int64_t * init_shared_mem(
+    const int64_t *global_groups_buffer,
+    const int32_t groups_buffer_size
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,443 @@
+---
+title: RelLogicalValues
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public)
+
+---
+
+## Constructors
+
+### RelLogicalValues [#rellogicalvalues]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+RelLogicalValues::RelLogicalValues() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with tuple type and values)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+RelLogicalValues::RelLogicalValues(
+    const std::vector<TargetMetaInfo> &tuple_type,
+    std::vector<RowValues> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+RelLogicalValues::RelLogicalValues(
+    RelLogicalValues const &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelLogicalValues::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelLogicalValues::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### getTupleType [#gettupletype]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> RelLogicalValues::getTupleType() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelLogicalValues::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### getFieldName [#getfieldname]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+std::string RelLogicalValues::getFieldName(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getValueAt [#getvalueat]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelLogicalValues::getValueAt(
+    const size_t row_idx,
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getRowsSize [#getrowssize]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalValues::getRowsSize() const
+```
+</CodeBlock>
+
+### getNumRows [#getnumrows]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalValues::getNumRows() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalValues::size() const override
+```
+</CodeBlock>
+
+### hasRows [#hasrows]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+bool RelLogicalValues::hasRows() const
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelLogicalValues::deepCopy() const override
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalValues::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalValues::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalValues::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalValues::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::string RelLogicalValues::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalValues::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelLogicalValues::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+unsigned RelLogicalValues::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelLogicalValues::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelLogicalValues::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const size_t RelLogicalValues::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelLogicalValues::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelLogicalValues::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelLogicalValues::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalValues::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelLogicalValues::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelLogicalValues::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalValues::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalValues::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelLogicalValues::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalValues::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalValues::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalValues::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalValues::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelLogicalValues": "rellogicalvalues", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalValues::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `RowValues` | `std::vector< std::unique_ptr< const RexScalar > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `tuple_type_` | `std::vector< TargetMetaInfo >` | |
+| `values_` | `std::vector< RowValues >` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

@@ -1,0 +1,14 @@
+---
+title: CodeCache
+description: ""
+---
+
+```cpp showLineNumbers={false}
+template <typename CC>
+using CodeCache = LruCache<CodeCacheKey, CodeCacheVal<CC>, boost::hash<CodeCacheKey>>;
+```
+
+**Template parameters**
+
+<ParamField path="CC" type="typename">
+</ParamField>

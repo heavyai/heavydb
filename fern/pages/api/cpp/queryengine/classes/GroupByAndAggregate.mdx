@@ -1,0 +1,405 @@
+---
+title: GroupByAndAggregate
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <GroupByAndAggregate.h>
+```
+
+---
+
+## Constructors
+
+### GroupByAndAggregate [#groupbyandaggregate]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "Executor": "executor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputTableInfo": "../structs/inputtableinfo", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+GroupByAndAggregate::GroupByAndAggregate(
+    Executor *executor,
+    const ExecutorDeviceType device_type,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<InputTableInfo> &query_infos,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const std::optional<int64_t> &group_cardinality_estimation
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegen [#codegen]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor", "CompilationOptions": "../structs/compilationoptions", "GpuSharedMemoryContext": "gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+bool GroupByAndAggregate::codegen(
+    llvm::Value *filter_result,
+    llvm::BasicBlock *sc_false,
+    QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const GpuSharedMemoryContext &gpu_smem_context
+)
+```
+</CodeBlock>
+
+### gpuCanHandleOrderEntries [#gpucanhandleorderentries]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate"}}>
+```cpp showLineNumbers={false}
+bool GroupByAndAggregate::gpuCanHandleOrderEntries(
+    const std::list<Analyzer::OrderEntry> &order_entries
+)
+```
+</CodeBlock>
+
+### initApproxQuantileDescriptors [#initapproxquantiledescriptors]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate"}}>
+```cpp showLineNumbers={false}
+ApproxQuantileDescriptors GroupByAndAggregate::initApproxQuantileDescriptors()
+```
+</CodeBlock>
+
+### initQueryMemoryDescriptor [#initquerymemorydescriptor]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "RenderInfo": "renderinfo", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescriptor(
+    const bool allow_multifrag,
+    const size_t max_groups_buffer_entry_count,
+    const int8_t crt_min_byte_width,
+    RenderInfo *render_info,
+    const bool output_columnar_hint
+)
+```
+</CodeBlock>
+
+### initQueryMemoryDescriptorImpl [#initquerymemorydescriptorimpl]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "RenderInfo": "renderinfo", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescriptorImpl(
+    const bool allow_multifrag,
+    const size_t max_groups_buffer_entry_count,
+    const int8_t crt_min_byte_width,
+    const bool sort_on_gpu_hint,
+    RenderInfo *render_info,
+    const bool must_use_baseline_sort,
+    const bool output_columnar_hint
+)
+```
+</CodeBlock>
+
+### getShardedTopBucket [#getshardedtopbucket]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "ColRangeInfo": "../structs/colrangeinfo"}}>
+```cpp showLineNumbers={false}
+int64_t GroupByAndAggregate::getShardedTopBucket(
+    const ColRangeInfo &col_range_info,
+    const size_t shard_count
+) const
+```
+</CodeBlock>
+
+### codegenOutputSlot [#codegenoutputslot]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor", "CompilationOptions": "../structs/compilationoptions", "DiamondCodegen": "../structs/diamondcodegen"}}>
+```cpp showLineNumbers={false}
+llvm::Value * GroupByAndAggregate::codegenOutputSlot(
+    llvm::Value *groups_buffer,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    DiamondCodegen &diamond_codegen
+)
+```
+</CodeBlock>
+
+### codegenGroupBy [#codegengroupby]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor", "CompilationOptions": "../structs/compilationoptions", "DiamondCodegen": "../structs/diamondcodegen"}}>
+```cpp showLineNumbers={false}
+std::tuple<llvm::Value *, llvm::Value *> GroupByAndAggregate::codegenGroupBy(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    DiamondCodegen &codegen
+)
+```
+</CodeBlock>
+
+### codegenVarlenOutputBuffer [#codegenvarlenoutputbuffer]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+llvm::Value * GroupByAndAggregate::codegenVarlenOutputBuffer(
+    const QueryMemoryDescriptor &query_mem_desc
+)
+```
+</CodeBlock>
+
+### codegenSingleColumnPerfectHash [#codegensinglecolumnperfecthash]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::tuple<llvm::Value *, llvm::Value *> GroupByAndAggregate::codegenSingleColumnPerfectHash(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    llvm::Value *groups_buffer,
+    llvm::Value *group_expr_lv_translated,
+    llvm::Value *group_expr_lv_original,
+    const int32_t row_size_quad
+)
+```
+</CodeBlock>
+
+### codegenMultiColumnPerfectHash [#codegenmulticolumnperfecthash]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::tuple<llvm::Value *, llvm::Value *> GroupByAndAggregate::codegenMultiColumnPerfectHash(
+    llvm::Value *groups_buffer,
+    llvm::Value *group_key,
+    llvm::Value *key_size_lv,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const int32_t row_size_quad
+)
+```
+</CodeBlock>
+
+### codegenPerfectHashFunction [#codegenperfecthashfunction]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate"}}>
+```cpp showLineNumbers={false}
+llvm::Function * GroupByAndAggregate::codegenPerfectHashFunction()
+```
+</CodeBlock>
+
+### codegenMultiColumnBaselineHash [#codegenmulticolumnbaselinehash]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "CompilationOptions": "../structs/compilationoptions", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::tuple<llvm::Value *, llvm::Value *> GroupByAndAggregate::codegenMultiColumnBaselineHash(
+    const CompilationOptions &co,
+    llvm::Value *groups_buffer,
+    llvm::Value *group_key,
+    llvm::Value *key_size_lv,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const size_t key_width,
+    const int32_t row_size_quad
+)
+```
+</CodeBlock>
+
+### getColRangeInfo [#getcolrangeinfo]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "ColRangeInfo": "../structs/colrangeinfo"}}>
+```cpp showLineNumbers={false}
+ColRangeInfo GroupByAndAggregate::getColRangeInfo()
+```
+</CodeBlock>
+
+### getBaselineThreshold [#getbaselinethreshold]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+size_t GroupByAndAggregate::getBaselineThreshold(
+    const RelAlgExecutionUnit &,
+    ExecutorDeviceType
+)
+```
+</CodeBlock>
+
+### convertNullIfAny [#convertnullifany]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * GroupByAndAggregate::convertNullIfAny(
+    const SQLTypeInfo &arg_type,
+    const TargetInfo &agg_info,
+    llvm::Value *target
+)
+```
+</CodeBlock>
+
+### codegenAggCalls [#codegenaggcalls]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor", "CompilationOptions": "../structs/compilationoptions", "GpuSharedMemoryContext": "gpusharedmemorycontext", "DiamondCodegen": "../structs/diamondcodegen"}}>
+```cpp showLineNumbers={false}
+bool GroupByAndAggregate::codegenAggCalls(
+    const std::tuple<llvm::Value *, llvm::Value *> &agg_out_ptr_w_idx,
+    llvm::Value *varlen_output_buffer,
+    const std::vector<llvm::Value *> &agg_out_vec,
+    QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const GpuSharedMemoryContext &gpu_smem_context,
+    DiamondCodegen &diamond_codegen
+)
+```
+</CodeBlock>
+
+### codegenWindowRowPointer [#codegenwindowrowpointer]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor", "CompilationOptions": "../structs/compilationoptions", "DiamondCodegen": "../structs/diamondcodegen"}}>
+```cpp showLineNumbers={false}
+llvm::Value * GroupByAndAggregate::codegenWindowRowPointer(
+    const Analyzer::WindowFunction *window_func,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    DiamondCodegen &diamond_codegen
+)
+```
+</CodeBlock>
+
+### codegenAggColumnPtr [#codegenaggcolumnptr]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+llvm::Value * GroupByAndAggregate::codegenAggColumnPtr(
+    llvm::Value *output_buffer_byte_stream,
+    llvm::Value *out_row_idx,
+    const std::tuple<llvm::Value *, llvm::Value *> &agg_out_ptr_w_idx,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const size_t chosen_bytes,
+    const size_t agg_out_off,
+    const size_t target_idx
+)
+```
+</CodeBlock>
+
+: returns the pointer to where the aggregation should be stored.
+
+### codegenEstimator [#codegenestimator]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "DiamondCodegen": "../structs/diamondcodegen", "QueryMemoryDescriptor": "querymemorydescriptor", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+void GroupByAndAggregate::codegenEstimator(
+    std::stack<llvm::BasicBlock *> &array_loops,
+    DiamondCodegen &diamond_codegen,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenCountDistinct [#codegencountdistinct]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void GroupByAndAggregate::codegenCountDistinct(
+    const size_t target_idx,
+    const Analyzer::Expr *target_expr,
+    std::vector<llvm::Value *> &agg_args,
+    const QueryMemoryDescriptor &,
+    const ExecutorDeviceType
+)
+```
+</CodeBlock>
+
+### codegenApproxQuantile [#codegenapproxquantile]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void GroupByAndAggregate::codegenApproxQuantile(
+    const size_t target_idx,
+    const Analyzer::Expr *target_expr,
+    std::vector<llvm::Value *> &agg_args,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+### codegenMode [#codegenmode]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void GroupByAndAggregate::codegenMode(
+    const size_t target_idx,
+    const Analyzer::Expr *target_expr,
+    std::vector<llvm::Value *> &agg_args,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+### getAdditionalLiteral [#getadditionalliteral]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * GroupByAndAggregate::getAdditionalLiteral(
+    const int32_t off
+)
+```
+</CodeBlock>
+
+### codegenAggArg [#codegenaggarg]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> GroupByAndAggregate::codegenAggArg(
+    const Analyzer::Expr *target_expr,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### emitCall [#emitcall]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * GroupByAndAggregate::emitCall(
+    const std::string &fname,
+    const std::vector<llvm::Value *> &args
+)
+```
+</CodeBlock>
+
+### checkErrorCode [#checkerrorcode]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate"}}>
+```cpp showLineNumbers={false}
+void GroupByAndAggregate::checkErrorCode(
+    llvm::Value *retCode
+)
+```
+</CodeBlock>
+
+### getBucketedCardinality [#getbucketedcardinality]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "ColRangeInfo": "../structs/colrangeinfo"}}>
+```cpp showLineNumbers={false}
+int64_t GroupByAndAggregate::getBucketedCardinality(
+    const ColRangeInfo &col_range_info
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### shard_count_for_top_groups [#shardcountfortopgroups]
+
+<CodeBlock links={{"GroupByAndAggregate": "groupbyandaggregate", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+size_t GroupByAndAggregate::shard_count_for_top_groups(
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `Executor *` | |
+| `ra_exe_unit_` | `const RelAlgExecutionUnit &` | |
+| `query_infos_` | `const std::vector< InputTableInfo > &` | |
+| `row_set_mem_owner_` | `std::shared_ptr< RowSetMemoryOwner >` | |
+| `output_columnar_` | `bool` | |
+| `device_type_` | `const ExecutorDeviceType` | |
+| `group_cardinality_estimation_` | `const std::optional< int64_t >` | |

@@ -1,0 +1,153 @@
+---
+title: ddl_utils::SqlType
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ddl_utils/DdlUtils.h>
+```
+
+---
+
+## Constructors
+
+### SqlType [#sqltype]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+ddl_utils::SqlType::SqlType(
+    SQLTypes type,
+    int param1,
+    int param2,
+    bool is_array,
+    int array_size
+)
+```
+</CodeBlock>
+
+Encapsulates column definition type information.
+
+**Parameters**
+
+<ParamField path="type" type="SQLTypes">
+- Column type.
+</ParamField>
+
+<ParamField path="param1" type="int">
+- For column types followed by parenthesis with more information, this represents the first parameter in the parenthesis. For example, in DECIMAL(5, 2), this would represent the precision value of 5. In GEOMETRY(POINT,
+4326), this would represent the integer value of the kPOINT enum.
+</ParamField>
+
+<ParamField path="param2" type="int">
+- For column types followed by parenthesis with more information, this represents the second parameter in the parenthesis. For example, in DECIMAL(5, 2), this would represent the scale value of 2. In GEOMETRY(POINT, 4326), this would represent the coordinate type integer value of 4326.
+</ParamField>
+
+<ParamField path="is_array" type="bool">
+- Flag that indicates whether or not column type is an array.
+</ParamField>
+
+<ParamField path="array_size" type="int">
+- For array column types, this is the specified size of the array.
+</ParamField>
+
+---
+
+## Methods
+
+### get_type [#gettype]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+SQLTypes ddl_utils::SqlType::get_type() const
+```
+</CodeBlock>
+
+### get_param1 [#getparam1]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+int ddl_utils::SqlType::get_param1() const
+```
+</CodeBlock>
+
+### set_param1 [#setparam1]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+void ddl_utils::SqlType::set_param1(
+    int param
+)
+```
+</CodeBlock>
+
+### get_param2 [#getparam2]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+int ddl_utils::SqlType::get_param2() const
+```
+</CodeBlock>
+
+### get_is_array [#getisarray]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+bool ddl_utils::SqlType::get_is_array() const
+```
+</CodeBlock>
+
+### set_is_array [#setisarray]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+void ddl_utils::SqlType::set_is_array(
+    bool a
+)
+```
+</CodeBlock>
+
+### get_array_size [#getarraysize]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+int ddl_utils::SqlType::get_array_size() const
+```
+</CodeBlock>
+
+### set_array_size [#setarraysize]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+void ddl_utils::SqlType::set_array_size(
+    int s
+)
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+std::string ddl_utils::SqlType::to_string() const
+```
+</CodeBlock>
+
+### check_type [#checktype]
+
+<CodeBlock links={{"SqlType": "sqltype"}}>
+```cpp showLineNumbers={false}
+void ddl_utils::SqlType::check_type()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type` | `SQLTypes` | |
+| `param1` | `int` | |
+| `param2` | `int` | |
+| `is_array` | `bool` | |
+| `array_size` | `int` | |

@@ -1,0 +1,52 @@
+---
+title: Constant
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Value` (public)
+
+---
+
+## Constructors
+
+### Constant [#constant]
+
+<CodeBlock links={{"Constant": "constant"}}>
+```cpp showLineNumbers={false}
+Constant::Constant(
+    const Type type
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### type [#type]
+
+<CodeBlock links={{"Constant": "constant", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Type Constant::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"Constant": "constant", "Value": "value"}}>
+```cpp showLineNumbers={false}
+size_t Constant::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"Constant": "constant", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const std::string & Constant::label() const
+```
+</CodeBlock>

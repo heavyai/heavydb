@@ -1,0 +1,14 @@
+---
+title: "Geospatial::decompress_coords< double, SQLTypeInfo >"
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::shared_ptr<std::vector<double>> Geospatial::decompress_coords<double, SQLTypeInfo>(
+    const SQLTypeInfo &geo_ti,
+    const int8_t *coords,
+    const size_t coords_sz
+)
+```
+</CodeBlock>

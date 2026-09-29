@@ -1,0 +1,174 @@
+---
+title: StringOps_Namespace::SplitPart
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+**Inherits from:** `StringOps_Namespace::StringOp` (public)
+
+---
+
+## Constructors
+
+### SplitPart [#splitpart]
+
+<CodeBlock links={{"SplitPart": "splitpart", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::SplitPart::SplitPart(
+    const std::optional<std::string> &var_str_optional_literal,
+    const std::string &delimiter,
+    const int64_t split_part,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"SplitPart": "splitpart", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+NullableStrType StringOps_Namespace::SplitPart::operator()(
+    const std::string &str
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SplitPart": "splitpart", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::SplitPart::operator()(
+    const std::string &str1,
+    const std::string &str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SplitPart": "splitpart", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::SplitPart::operator()() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### numericEval [#numericeval]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"SplitPart": "splitpart", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::SplitPart::numericEval(
+    const std::string_view str
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<CodeBlock links={{"SplitPart": "splitpart", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::SplitPart::numericEval(
+    const std::string_view str1,
+    const std::string_view str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"SplitPart": "splitpart", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::SplitPart::numericEval() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getReturnType [#getreturntype]
+
+<CodeBlock links={{"SplitPart": "splitpart", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual const SQLTypeInfo & StringOps_Namespace::SplitPart::getReturnType() const
+```
+</CodeBlock>
+
+### getVarStringLiteral [#getvarstringliteral]
+
+<CodeBlock links={{"SplitPart": "splitpart", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const std::string & StringOps_Namespace::SplitPart::getVarStringLiteral() const
+```
+</CodeBlock>
+
+### hasVarStringLiteral [#hasvarstringliteral]
+
+<CodeBlock links={{"SplitPart": "splitpart", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::SplitPart::hasVarStringLiteral() const
+```
+</CodeBlock>
+
+### getOpInfo [#getopinfo]
+
+<CodeBlock links={{"SplitPart": "splitpart", "StringOpInfo": "stringopinfo", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const StringOpInfo & StringOps_Namespace::SplitPart::getOpInfo() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generateRegex [#generateregex]
+
+<CodeBlock links={{"SplitPart": "splitpart", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+boost::regex StringOps_Namespace::SplitPart::generateRegex(
+    const std::string &op_name,
+    const std::string &regex_pattern,
+    const std::string &regex_params,
+    const bool supports_sub_matches
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `delimiter_` | `const std::string` | |
+| `split_part_` | `const size_t` | |
+| `delimiter_length_` | `const size_t` | |
+| `reverse_` | `const bool` | |
+| `op_kind_` | `const SqlStringOpKind` | |
+| `return_ti_` | `const SQLTypeInfo` | |
+| `has_var_str_literal_` | `const bool` | |
+| `var_str_literal_` | `const NullableStrType` | |
+| `string_op_info_` | `const StringOpInfo` | |

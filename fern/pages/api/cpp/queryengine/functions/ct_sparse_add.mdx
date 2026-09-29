@@ -1,0 +1,20 @@
+---
+title: ct_sparse_add
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_sparse_add(
+    TableFunctionManager &mgr,
+    const Column<int32_t> &x1,
+    const Column<int32_t> &d1,
+    int32_t f1,
+    const Column<int32_t> &x2,
+    const Column<int32_t> &d2,
+    int32_t f2,
+    Column<int32_t> &x,
+    Column<int32_t> &d
+)
+```
+</CodeBlock>

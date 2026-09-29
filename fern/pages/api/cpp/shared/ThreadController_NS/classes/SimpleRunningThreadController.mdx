@@ -1,0 +1,152 @@
+---
+title: ThreadController_NS::SimpleRunningThreadController
+description: ""
+---
+
+<CodeBlock id="SimpleRunningThreadController" links={{"SimpleRunningThreadController": "simplerunningthreadcontroller"}}>
+```cpp showLineNumbers={false}
+template <typename FutureReturnType = void>
+class SimpleRunningThreadController
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <ThreadController_NS/ThreadController.h>
+```
+
+**Template parameters**
+
+<ParamField path="FutureReturnType" type="typename" default="void">
+</ParamField>
+
+**Inherits from:** `ThreadController_NS::SimpleThreadController< void >` (public)
+
+---
+
+## Constructors
+
+### SimpleRunningThreadController [#simplerunningthreadcontroller]
+
+<Tabs>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller"}}>
+```cpp showLineNumbers={false}
+template <bool future_return_void = std::is_void<FutureReturnType>::value>
+ThreadController_NS::SimpleRunningThreadController<FutureReturnType>::SimpleRunningThreadController(
+    const int max_threads,
+    std::enable_if_t<future_return_void> * = 0
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller", "FutureGetter": "../structs/futuregetter"}}>
+```cpp showLineNumbers={false}
+template <bool future_return_void = std::is_void<FutureReturnType>::value>
+ThreadController_NS::SimpleRunningThreadController<FutureReturnType>::SimpleRunningThreadController(
+    const int max_threads,
+    const FutureGetter<FutureReturnType> future_getter,
+    std::enable_if_t<!future_return_void> * = 0
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Deleted overload 1">
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller"}}>
+```cpp showLineNumbers={false}
+ThreadController_NS::SimpleRunningThreadController<FutureReturnType>::SimpleRunningThreadController() = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~SimpleRunningThreadController
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller"}}>
+```cpp showLineNumbers={false}
+ThreadController_NS::SimpleRunningThreadController<FutureReturnType>::~SimpleRunningThreadController() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### notify_thread_is_completed [#notifythreadiscompleted]
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller"}}>
+```cpp showLineNumbers={false}
+int ThreadController_NS::SimpleRunningThreadController<FutureReturnType>::notify_thread_is_completed()
+```
+</CodeBlock>
+
+### getRunningThreadCount [#getrunningthreadcount]
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller"}}>
+```cpp showLineNumbers={false}
+int ThreadController_NS::SimpleRunningThreadController<FutureReturnType>::getRunningThreadCount() const override
+```
+</CodeBlock>
+
+### checkThreadsStatus [#checkthreadsstatus]
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller"}}>
+```cpp showLineNumbers={false}
+void ThreadController_NS::SimpleRunningThreadController<FutureReturnType>::checkThreadsStatus() override
+```
+</CodeBlock>
+
+### startThread [#startthread]
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller"}}>
+```cpp showLineNumbers={false}
+template <typename FuncType, typename... Args>
+int ThreadController_NS::SimpleRunningThreadController<FutureReturnType>::startThread(
+    FuncType &&func,
+    Args &&... args
+)
+```
+</CodeBlock>
+
+### getThreadCount [#getthreadcount]
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller", "SimpleThreadController": "simplethreadcontroller"}}>
+```cpp showLineNumbers={false}
+virtual int ThreadController_NS::SimpleThreadController<void>::getThreadCount() const
+```
+</CodeBlock>
+
+### finish [#finish]
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller", "SimpleThreadController": "simplethreadcontroller"}}>
+```cpp showLineNumbers={false}
+virtual void ThreadController_NS::SimpleThreadController<void>::finish()
+```
+</CodeBlock>
+
+### get_future [#getfuture]
+
+<CodeBlock links={{"SimpleRunningThreadController": "simplerunningthreadcontroller", "SimpleThreadController": "simplethreadcontroller"}}>
+```cpp showLineNumbers={false}
+void ThreadController_NS::SimpleThreadController<void>::get_future(
+    std::future<void> &future,
+    std::enable_if_t<future_return_void> * = 0
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `n_running_threads_` | `std::atomic< int >` | |

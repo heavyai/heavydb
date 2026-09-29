@@ -1,0 +1,79 @@
+---
+title: Parser::AlterUserStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### AlterUserStmt [#alteruserstmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"AlterUserStmt": "alteruserstmt"}}>
+```cpp showLineNumbers={false}
+Parser::AlterUserStmt::AlterUserStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"AlterUserStmt": "alteruserstmt", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::AlterUserStmt::AlterUserStmt(
+    std::string *n,
+    std::list<NameValueAssign *> *l
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"AlterUserStmt": "alteruserstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::AlterUserStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"AlterUserStmt": "alteruserstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::AlterUserStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `user_name_` | `std::unique_ptr< std::string >` | |
+| `options_` | `std::list< std::unique_ptr< NameValueAssign > >` | |

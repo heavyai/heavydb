@@ -1,0 +1,33 @@
+---
+title: GeoConverterFactory
+description: ""
+---
+
+<CodeBlock id="GeoConverterFactory" links={{"GeoConverterFactory": "geoconverterfactory"}}>
+```cpp showLineNumbers={false}
+template <typename CONVERTER, class Enable = void>
+struct GeoConverterFactory
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="CONVERTER" type="typename">
+</ParamField>
+
+<ParamField path="Enable" type="class" default="void">
+</ParamField>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"GeoConverterFactory": "geoconverterfactory", "ConverterCreateParameter": "convertercreateparameter", "TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<TargetValueConverter> GeoConverterFactory<CONVERTER, Enable>::operator()(
+    ConverterCreateParameter param
+)
+```
+</CodeBlock>

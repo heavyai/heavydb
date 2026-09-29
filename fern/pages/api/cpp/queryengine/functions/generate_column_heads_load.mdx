@@ -1,0 +1,17 @@
+---
+title: generate_column_heads_load
+description: "Loads individual columns from a single, packed pointers buffer (the byte stream arg)."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> generate_column_heads_load(
+    const int num_columns,
+    llvm::Value *byte_stream_arg,
+    llvm::IRBuilder<> &ir_builder,
+    llvm::LLVMContext &ctx
+)
+```
+</CodeBlock>
+
+Loads individual columns from a single, packed pointers buffer (the byte stream arg).

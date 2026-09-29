@@ -1,0 +1,2144 @@
+---
+title: ResultSet
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSet.h>
+```
+
+---
+
+## Constructors
+
+### ResultSet [#resultset]
+
+<Tabs>
+<Tab title="Copy (with targets and device type and query mem desc and row set mem owner and block size and grid size)">
+
+<CodeBlock links={{"ResultSet": "resultset", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+ResultSet::ResultSet(
+    const std::vector<TargetInfo> &targets,
+    const ExecutorDeviceType device_type,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const unsigned block_size,
+    const unsigned grid_size
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with targets and device type and query mem desc and row set mem owner and block size and grid size and lazy fetch info and col buffers and frag offsets and consistent frag sizes and device id and thread idx)">
+
+<CodeBlock links={{"ResultSet": "resultset", "ColumnLazyFetchInfo": "../structs/columnlazyfetchinfo", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+ResultSet::ResultSet(
+    const std::vector<TargetInfo> &targets,
+    const std::vector<ColumnLazyFetchInfo> &lazy_fetch_info,
+    const std::vector<std::vector<const int8_t *>> &col_buffers,
+    const std::vector<std::vector<int64_t>> &frag_offsets,
+    const std::vector<int64_t> &consistent_frag_sizes,
+    const ExecutorDeviceType device_type,
+    const int device_id,
+    const int thread_idx,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const unsigned block_size,
+    const unsigned grid_size
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ResultSet": "resultset", "Estimator": "../analyzer/classes/estimator"}}>
+```cpp showLineNumbers={false}
+ResultSet::ResultSet(
+    const std::shared_ptr<const Analyzer::Estimator>,
+    const ExecutorDeviceType device_type,
+    const int device_id,
+    Data_Namespace::DataMgr *data_mgr,
+    std::shared_ptr<CudaAllocator> device_allocator
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with explanation)">
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSet::ResultSet(
+    const std::string &explanation
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"ResultSet": "resultset", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+ResultSet::ResultSet(
+    int64_t queue_time_ms,
+    int64_t render_time_ms,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~ResultSet
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSet::~ResultSet()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### toString [#tostring]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::string ResultSet::toString() const
+```
+</CodeBlock>
+
+### summaryToString [#summarytostring]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::string ResultSet::summaryToString() const
+```
+</CodeBlock>
+
+### rowIterator [#rowiterator]
+
+<Tabs>
+<Tab title="Const (with from logical index)">
+
+<CodeBlock links={{"ResultSet": "resultset", "ResultSetRowIterator": "resultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ResultSetRowIterator ResultSet::rowIterator(
+    size_t from_logical_index,
+    bool translate_strings,
+    bool decimal_to_double
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"ResultSet": "resultset", "ResultSetRowIterator": "resultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ResultSetRowIterator ResultSet::rowIterator(
+    bool translate_strings,
+    bool decimal_to_double
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getDeviceType [#getdevicetype]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ExecutorDeviceType ResultSet::getDeviceType() const
+```
+</CodeBlock>
+
+### allocateStorage [#allocatestorage]
+
+<Tabs>
+<Tab title="Const (0 params)">
+
+<CodeBlock links={{"ResultSet": "resultset", "ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+const ResultSetStorage * ResultSet::allocateStorage() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (3 params)">
+
+<CodeBlock links={{"ResultSet": "resultset", "VarlenOutputInfo": "../structs/varlenoutputinfo", "ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+const ResultSetStorage * ResultSet::allocateStorage(
+    int8_t *,
+    const std::vector<int64_t> &,
+    std::shared_ptr<VarlenOutputInfo>=nullptr
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (1 params)">
+
+<CodeBlock links={{"ResultSet": "resultset", "ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+const ResultSetStorage * ResultSet::allocateStorage(
+    const std::vector<int64_t> &
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### updateStorageEntryCount [#updatestorageentrycount]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::updateStorageEntryCount(
+    const size_t new_entry_count
+)
+```
+</CodeBlock>
+
+### getNextRow [#getnextrow]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> ResultSet::getNextRow(
+    const bool translate_strings,
+    const bool decimal_to_double
+) const
+```
+</CodeBlock>
+
+### getCurrentRowBufferIndex [#getcurrentrowbufferindex]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::getCurrentRowBufferIndex() const
+```
+</CodeBlock>
+
+### getRowAt [#getrowat]
+
+<Tabs>
+<Tab title="Const (with index)">
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> ResultSet::getRowAt(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with row idx and col idx and translate strings and decimal to double)">
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+TargetValue ResultSet::getRowAt(
+    const size_t row_idx,
+    const size_t col_idx,
+    const bool translate_strings,
+    const bool decimal_to_double = true
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index and translate strings and decimal to double and fixup count distinct pointers and targets to skip)">
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> ResultSet::getRowAt(
+    const size_t index,
+    const bool translate_strings,
+    const bool decimal_to_double,
+    const bool fixup_count_distinct_pointers,
+    const std::vector<bool> &targets_to_skip = {}
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOneColRow [#getonecolrow]
+
+<CodeBlock links={{"ResultSet": "resultset", "OneIntegerColumnRow": "../structs/oneintegercolumnrow"}}>
+```cpp showLineNumbers={false}
+OneIntegerColumnRow ResultSet::getOneColRow(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### getRowAtNoTranslations [#getrowatnotranslations]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> ResultSet::getRowAtNoTranslations(
+    const size_t index,
+    const std::vector<bool> &targets_to_skip = {}
+) const
+```
+</CodeBlock>
+
+### isRowAtEmpty [#isrowatempty]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isRowAtEmpty(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### sort [#sort]
+
+<CodeBlock links={{"ResultSet": "resultset", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void ResultSet::sort(
+    const std::list<Analyzer::OrderEntry> &order_entries,
+    size_t top_n,
+    const ExecutorDeviceType device_type,
+    Executor *executor,
+    bool need_to_initialize_device_ids_to_use = false
+)
+```
+</CodeBlock>
+
+### keepFirstN [#keepfirstn]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::keepFirstN(
+    const size_t n
+)
+```
+</CodeBlock>
+
+### dropFirstN [#dropfirstn]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::dropFirstN(
+    const size_t n
+)
+```
+</CodeBlock>
+
+### append [#append]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::append(
+    ResultSet &that
+)
+```
+</CodeBlock>
+
+### getStorage [#getstorage]
+
+<CodeBlock links={{"ResultSet": "resultset", "ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+const ResultSetStorage * ResultSet::getStorage() const
+```
+</CodeBlock>
+
+### colCount [#colcount]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::colCount() const
+```
+</CodeBlock>
+
+### getColType [#getcoltype]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo ResultSet::getColType(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### rowCount [#rowcount]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::rowCount(
+    const bool force_parallel = false
+) const
+```
+</CodeBlock>
+
+Returns the number of valid entries in the result set (i.e that will be returned from the SQL query or inputted into the next query step).
+
+Note that this can be less than or equal to the value returned by ResultSet::getEntries(), whether due to a SQL LIMIT/OFFSET applied or because the result set representation is inherently sparse (i.e. baseline hash group by).
+
+Internally this function references/sets a cached value (`cached_row_count_`) so that the cost of computing the result is only paid once per result set.
+
+If the actual row count is not cached and needs to be computed, in some cases that can be O(1) (i.e. if limits and offsets are present, or for the output of a table function). [For](for) projections, we use a binary search, so it is O(log n), otherwise it is O(n) (with n being ResultSet::entryCount()), which will be run in parallel if the entry count &gt;= the default of 20000 or if `force_parallel` is set to true
+
+Note that we currently do not invalidate the cache if the result set is changed (i.e appended to), so this function should only be called after the result set is finalized.
+
+**Parameters**
+
+<ParamField path="force_parallel" type="const bool" default="false">
+Forces the row count to be computed in parallel if the row count cannot be otherwise be computed from metadata or via a binary search (otherwise parallel search is automatically used for result sets with `entryCount()`` >= 20000`)
+</ParamField>
+
+### invalidateCachedRowCount [#invalidatecachedrowcount]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::invalidateCachedRowCount() const
+```
+</CodeBlock>
+
+### setCachedRowCount [#setcachedrowcount]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setCachedRowCount(
+    const size_t row_count
+) const
+```
+</CodeBlock>
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isEmpty() const
+```
+</CodeBlock>
+
+Returns a boolean signifying whether there are valid entries in the result set.
+
+Note a result set can be logically empty even if the value returned by `ResultSet::entryCount()` is &gt; 0, whether due to a SQL LIMIT/OFFSET applied or because the result set representation is inherently sparse (i.e. baseline hash group by).
+
+Internally this function is just implemented as `ResultSet::rowCount()`` == 0`, which caches it's value so the row count will only be computed once per finalized result set.
+
+### entryCount [#entrycount]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::entryCount() const
+```
+</CodeBlock>
+
+Returns the number of entries the result set is allocated to hold.
+
+Note that this can be greater than or equal to the actual number of valid rows in the result set, whether due to a SQL LIMIT/OFFSET applied or because the result set representation is inherently sparse (i.e. baseline hash group by)
+
+[For](for) getting the number of valid rows in the result set (inclusive of any applied LIMIT and/or OFFSET), use `ResultSet::rowCount()``.` Or to just test if there are any valid rows, use `ResultSet::entryCount()`, as a return value from `entryCount()` greater than 0 does not neccesarily mean the result set is empty.
+
+### getBufferSizeBytes [#getbuffersizebytes]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::getBufferSizeBytes(
+    const ExecutorDeviceType device_type
+) const
+```
+</CodeBlock>
+
+### definitelyHasNoRows [#definitelyhasnorows]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::definitelyHasNoRows() const
+```
+</CodeBlock>
+
+### getQueryMemDesc [#getquerymemdesc]
+
+<CodeBlock links={{"ResultSet": "resultset", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+const QueryMemoryDescriptor & ResultSet::getQueryMemDesc() const
+```
+</CodeBlock>
+
+### getTargetInfos [#gettargetinfos]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetInfo> & ResultSet::getTargetInfos() const
+```
+</CodeBlock>
+
+### getTargetInitVals [#gettargetinitvals]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const std::vector<int64_t> & ResultSet::getTargetInitVals() const
+```
+</CodeBlock>
+
+### getDeviceEstimatorBuffer [#getdeviceestimatorbuffer]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+int8_t * ResultSet::getDeviceEstimatorBuffer() const
+```
+</CodeBlock>
+
+### getHostEstimatorBuffer [#gethostestimatorbuffer]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+int8_t * ResultSet::getHostEstimatorBuffer() const
+```
+</CodeBlock>
+
+### syncEstimatorBuffer [#syncestimatorbuffer]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::syncEstimatorBuffer() const
+```
+</CodeBlock>
+
+### getNDVEstimator [#getndvestimator]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::getNDVEstimator() const
+```
+</CodeBlock>
+
+### setQueueTime [#setqueuetime]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setQueueTime(
+    const int64_t queue_time
+)
+```
+</CodeBlock>
+
+### setKernelQueueTime [#setkernelqueuetime]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setKernelQueueTime(
+    const int64_t kernel_queue_time
+)
+```
+</CodeBlock>
+
+### addCompilationQueueTime [#addcompilationqueuetime]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::addCompilationQueueTime(
+    const int64_t compilation_queue_time
+)
+```
+</CodeBlock>
+
+### getQueueTime [#getqueuetime]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+int64_t ResultSet::getQueueTime() const
+```
+</CodeBlock>
+
+### getRenderTime [#getrendertime]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+int64_t ResultSet::getRenderTime() const
+```
+</CodeBlock>
+
+### moveToBegin [#movetobegin]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::moveToBegin() const
+```
+</CodeBlock>
+
+### isTruncated [#istruncated]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isTruncated() const
+```
+</CodeBlock>
+
+### isExplain [#isexplain]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isExplain() const
+```
+</CodeBlock>
+
+### setValidationOnlyRes [#setvalidationonlyres]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setValidationOnlyRes()
+```
+</CodeBlock>
+
+### isValidationOnlyRes [#isvalidationonlyres]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isValidationOnlyRes() const
+```
+</CodeBlock>
+
+### getExplanation [#getexplanation]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::string ResultSet::getExplanation() const
+```
+</CodeBlock>
+
+### isGeoColOnGpu [#isgeocolongpu]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isGeoColOnGpu(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+int ResultSet::getDeviceId() const
+```
+</CodeBlock>
+
+### getThreadIdx [#getthreadidx]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+int ResultSet::getThreadIdx() const
+```
+</CodeBlock>
+
+### getString [#getstring]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::string ResultSet::getString(
+    SQLTypeInfo const &,
+    int64_t const ival
+) const
+```
+</CodeBlock>
+
+### convertToScalarTargetValue [#converttoscalartargetvalue]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ScalarTargetValue ResultSet::convertToScalarTargetValue(
+    SQLTypeInfo const &,
+    bool const translate_strings,
+    int64_t const val
+) const
+```
+</CodeBlock>
+
+### isLessThan [#islessthan]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isLessThan(
+    SQLTypeInfo const &,
+    int64_t const lhs,
+    int64_t const rhs
+) const
+```
+</CodeBlock>
+
+### fillOneEntry [#filloneentry]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::fillOneEntry(
+    const std::vector<int64_t> &entry
+)
+```
+</CodeBlock>
+
+### initializeStorage [#initializestorage]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::initializeStorage() const
+```
+</CodeBlock>
+
+### holdChunks [#holdchunks]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::holdChunks(
+    const std::list<std::shared_ptr<Chunk_NS::Chunk>> &chunks
+)
+```
+</CodeBlock>
+
+### holdChunkIterators [#holdchunkiterators]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::holdChunkIterators(
+    const std::shared_ptr<std::list<ChunkIter>> chunk_iters
+)
+```
+</CodeBlock>
+
+### holdLiterals [#holdliterals]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::holdLiterals(
+    std::vector<int8_t> &literal_buff
+)
+```
+</CodeBlock>
+
+### getRowSetMemOwner [#getrowsetmemowner]
+
+<CodeBlock links={{"ResultSet": "resultset", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RowSetMemoryOwner> ResultSet::getRowSetMemOwner() const
+```
+</CodeBlock>
+
+### getPermutationBuffer [#getpermutationbuffer]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const Permutation & ResultSet::getPermutationBuffer() const
+```
+</CodeBlock>
+
+### isPermutationBufferEmpty [#ispermutationbufferempty]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const bool ResultSet::isPermutationBufferEmpty() const
+```
+</CodeBlock>
+
+### serialize [#serialize]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::serialize(
+    TSerializedRows &serialized_rows
+) const
+```
+</CodeBlock>
+
+### getLimit [#getlimit]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::getLimit() const
+```
+</CodeBlock>
+
+### copy [#copy]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr ResultSet::copy()
+```
+</CodeBlock>
+
+### clearPermutation [#clearpermutation]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::clearPermutation()
+```
+</CodeBlock>
+
+### initStatus [#initstatus]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::initStatus()
+```
+</CodeBlock>
+
+### invalidateResultSetChunks [#invalidateresultsetchunks]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::invalidateResultSetChunks()
+```
+</CodeBlock>
+
+### isEstimator [#isestimator]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const bool ResultSet::isEstimator() const
+```
+</CodeBlock>
+
+### setCached [#setcached]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setCached(
+    bool val
+)
+```
+</CodeBlock>
+
+### isCached [#iscached]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const bool ResultSet::isCached() const
+```
+</CodeBlock>
+
+### setExecTime [#setexectime]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setExecTime(
+    const long exec_time
+)
+```
+</CodeBlock>
+
+### getExecTime [#getexectime]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const long ResultSet::getExecTime() const
+```
+</CodeBlock>
+
+### setQueryPlanHash [#setqueryplanhash]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setQueryPlanHash(
+    const QueryPlanHash query_plan
+)
+```
+</CodeBlock>
+
+### getQueryPlanHash [#getqueryplanhash]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const QueryPlanHash ResultSet::getQueryPlanHash()
+```
+</CodeBlock>
+
+### getInputTableKeys [#getinputtablekeys]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<size_t> ResultSet::getInputTableKeys() const
+```
+</CodeBlock>
+
+### setInputTableKeys [#setinputtablekeys]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setInputTableKeys(
+    std::unordered_set<size_t> &&intput_table_keys
+)
+```
+</CodeBlock>
+
+### setTargetMetaInfo [#settargetmetainfo]
+
+<CodeBlock links={{"ResultSet": "resultset", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setTargetMetaInfo(
+    const std::vector<TargetMetaInfo> &target_meta_info
+)
+```
+</CodeBlock>
+
+### getTargetMetaInfo [#gettargetmetainfo]
+
+<CodeBlock links={{"ResultSet": "resultset", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetMetaInfo> ResultSet::getTargetMetaInfo()
+```
+</CodeBlock>
+
+### canUseSpeculativeTopNSort [#canusespeculativetopnsort]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::optional<bool> ResultSet::canUseSpeculativeTopNSort() const
+```
+</CodeBlock>
+
+### setUseSpeculativeTopNSort [#setusespeculativetopnsort]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setUseSpeculativeTopNSort(
+    bool value
+)
+```
+</CodeBlock>
+
+### hasValidBuffer [#hasvalidbuffer]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const bool ResultSet::hasValidBuffer() const
+```
+</CodeBlock>
+
+### getBlockSize [#getblocksize]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+unsigned ResultSet::getBlockSize() const
+```
+</CodeBlock>
+
+### getGridSize [#getgridsize]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+unsigned ResultSet::getGridSize() const
+```
+</CodeBlock>
+
+### getGeoReturnType [#getgeoreturntype]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+GeoReturnType ResultSet::getGeoReturnType() const
+```
+</CodeBlock>
+
+### setGeoReturnType [#setgeoreturntype]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setGeoReturnType(
+    const GeoReturnType val
+)
+```
+</CodeBlock>
+
+### copyColumnIntoBuffer [#copycolumnintobuffer]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::copyColumnIntoBuffer(
+    const size_t column_idx,
+    int8_t *output_buffer,
+    const size_t output_buffer_size
+) const
+```
+</CodeBlock>
+
+[For](for) each specified column, this function goes through all available storages and copies its content into a contiguous output_buffer.
+
+### isDirectColumnarConversionPossible [#isdirectcolumnarconversionpossible]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isDirectColumnarConversionPossible() const
+```
+</CodeBlock>
+
+Determines if it is possible to directly form a [ColumnarResults](columnarresults) class from this result set, bypassing the default columnarization.
+
+NOTE: If there exists a permutation vector (i.e., in some ORDER BY queries), it becomes equivalent to the row-wise columnarization.
+
+### didOutputColumnar [#didoutputcolumnar]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::didOutputColumnar() const
+```
+</CodeBlock>
+
+### isZeroCopyColumnarConversionPossible [#iszerocopycolumnarconversionpossible]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isZeroCopyColumnarConversionPossible(
+    size_t column_idx
+) const
+```
+</CodeBlock>
+
+### getColumnarBuffer [#getcolumnarbuffer]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const int8_t * ResultSet::getColumnarBuffer(
+    size_t column_idx
+) const
+```
+</CodeBlock>
+
+### getColumnarBufferSize [#getcolumnarbuffersize]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const size_t ResultSet::getColumnarBufferSize(
+    size_t column_idx
+) const
+```
+</CodeBlock>
+
+### getQueryDescriptionType [#getquerydescriptiontype]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+QueryDescriptionType ResultSet::getQueryDescriptionType() const
+```
+</CodeBlock>
+
+### getPaddedSlotWidthBytes [#getpaddedslotwidthbytes]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const int8_t ResultSet::getPaddedSlotWidthBytes(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### getSingleSlotTargetBitmap [#getsingleslottargetbitmap]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::tuple<std::vector<bool>, size_t> ResultSet::getSingleSlotTargetBitmap() const
+```
+</CodeBlock>
+
+### getSupportedSingleSlotTargetBitmap [#getsupportedsingleslottargetbitmap]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::tuple<std::vector<bool>, size_t> ResultSet::getSupportedSingleSlotTargetBitmap() const
+```
+</CodeBlock>
+
+This function returns a bitmap and population count of it, where it denotes all supported single-column targets suitable for direct columnarization.
+
+The final goal is to remove the need for such selection, but at the moment for any target that doesn't qualify for direct columnarization, we use the traditional result set's iteration to handle it (e.g., count distinct, approximate count distinct)
+
+### getSlotIndicesForTargetIndices [#getslotindicesfortargetindices]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::vector<size_t> ResultSet::getSlotIndicesForTargetIndices() const
+```
+</CodeBlock>
+
+### getLazyFetchInfo [#getlazyfetchinfo]
+
+<CodeBlock links={{"ResultSet": "resultset", "ColumnLazyFetchInfo": "../structs/columnlazyfetchinfo"}}>
+```cpp showLineNumbers={false}
+const std::vector<ColumnLazyFetchInfo> & ResultSet::getLazyFetchInfo() const
+```
+</CodeBlock>
+
+### areAnyColumnsLazyFetched [#areanycolumnslazyfetched]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::areAnyColumnsLazyFetched() const
+```
+</CodeBlock>
+
+### getNumColumnsLazyFetched [#getnumcolumnslazyfetched]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::getNumColumnsLazyFetched() const
+```
+</CodeBlock>
+
+### setSeparateVarlenStorageValid [#setseparatevarlenstoragevalid]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setSeparateVarlenStorageValid(
+    const bool val
+)
+```
+</CodeBlock>
+
+### getStringDictionaryPayloadCopy [#getstringdictionarypayloadcopy]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> ResultSet::getStringDictionaryPayloadCopy(
+    const shared::StringDictKey &dict_key
+) const
+```
+</CodeBlock>
+
+### getUniqueStringsForDictEncodedTargetCol [#getuniquestringsfordictencodedtargetcol]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const std::pair<std::vector<int32_t>, std::vector<std::string>> ResultSet::getUniqueStringsForDictEncodedTargetCol(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getStringDictionaryProxy [#getstringdictionaryproxy]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy * ResultSet::getStringDictionaryProxy(
+    const shared::StringDictKey &dict_key
+) const
+```
+</CodeBlock>
+
+### getEntryAt [#getentryat]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <typename ENTRY_TYPE, QueryDescriptionType QUERY_TYPE, bool COLUMNAR_FORMAT>
+ENTRY_TYPE ResultSet::getEntryAt(
+    const size_t row_idx,
+    const size_t target_idx,
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### getTableFunctionChunkStats [#gettablefunctionchunkstats]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ChunkStats ResultSet::getTableFunctionChunkStats(
+    const size_t target_idx
+) const
+```
+</CodeBlock>
+
+### translateDictEncodedColumns [#translatedictencodedcolumns]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::translateDictEncodedColumns(
+    std::vector<TargetInfo> const &,
+    size_t const start_idx
+)
+```
+</CodeBlock>
+
+### eachCellInColumn [#eachcellincolumn]
+
+<CodeBlock links={{"ResultSet": "resultset", "RowIterationState": "#rowiterationstate", "CellCallback": "#cellcallback"}}>
+```cpp showLineNumbers={false}
+void ResultSet::eachCellInColumn(
+    RowIterationState &,
+    CellCallback const &
+)
+```
+</CodeBlock>
+
+### getExecutor [#getexecutor]
+
+<CodeBlock links={{"ResultSet": "resultset", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+const Executor * ResultSet::getExecutor() const
+```
+</CodeBlock>
+
+### checkSlotUsesFlatBufferFormat [#checkslotusesflatbufferformat]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::checkSlotUsesFlatBufferFormat(
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+### setCudaAllocator [#setcudaallocator]
+
+<CodeBlock links={{"ResultSet": "resultset", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setCudaAllocator(
+    const Executor *executor,
+    int device_id
+)
+```
+</CodeBlock>
+
+### getCudaAllocator [#getcudaallocator]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+CudaAllocator * ResultSet::getCudaAllocator() const
+```
+</CodeBlock>
+
+### setCudaStream [#setcudastream]
+
+<CodeBlock links={{"ResultSet": "resultset", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void ResultSet::setCudaStream(
+    const Executor *executor,
+    int device_id
+)
+```
+</CodeBlock>
+
+### getCudaStream [#getcudastream]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+CUstream ResultSet::getCudaStream() const
+```
+</CodeBlock>
+
+### fetchLazyColumnValue [#fetchlazycolumnvalue]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+template void ResultSet::fetchLazyColumnValue<double>(
+    const size_t global_entry_idx,
+    const size_t col_index,
+    T *output_ptr
+) const
+```
+</CodeBlock>
+
+Fetches and materializes a lazily-fetched column value into a provided buffer.
+
+This function retrieves a lazily-fetched column value for a specific entry and column, decodes it if necessary, and writes the result to the provided output buffer. It is meant as a faster alternative to normal result fetching with the [ResultSet::getRowAt](#getrowat) function, which has significant overhead by going through the boost variant interface to access data.
+
+<Note>
+This function supports various data types including boolean, integer types, floating-point types, temporal types, and dictionary-encoded text types. [For](for) non-dictionary-encoded text types, it will throw an exception. It also does not support flatbuffer storage.
+</Note>
+
+**Parameters**
+
+<ParamField path="global_entry_idx" type="const size_t">
+The global index of the entry to fetch.
+</ParamField>
+
+<ParamField path="output_ptr" type="T *">
+Pointer to the buffer where the fetched value will be written.
+</ParamField>
+
+### advanceCursorToNextEntry [#advancecursortonextentry]
+
+<Tabs>
+<Tab title="Const (with iter)">
+
+<CodeBlock links={{"ResultSet": "resultset", "ResultSetRowIterator": "resultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+void ResultSet::advanceCursorToNextEntry(
+    ResultSetRowIterator &iter
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::advanceCursorToNextEntry() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNextRowImpl [#getnextrowimpl]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> ResultSet::getNextRowImpl(
+    const bool translate_strings,
+    const bool decimal_to_double
+) const
+```
+</CodeBlock>
+
+### getNextRowUnlocked [#getnextrowunlocked]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> ResultSet::getNextRowUnlocked(
+    const bool translate_strings,
+    const bool decimal_to_double
+) const
+```
+</CodeBlock>
+
+### getColumnarPerfectHashEntryAt [#getcolumnarperfecthashentryat]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <typename ENTRY_TYPE>
+ENTRY_TYPE ResultSet::getColumnarPerfectHashEntryAt(
+    const size_t row_idx,
+    const size_t target_idx,
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+Directly accesses the result set's storage buffer for a particular data type (columnar output, perfect hash group by).
+
+NOTE: Currently, only used in direct columnarization
+
+### getRowWisePerfectHashEntryAt [#getrowwiseperfecthashentryat]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <typename ENTRY_TYPE>
+ENTRY_TYPE ResultSet::getRowWisePerfectHashEntryAt(
+    const size_t row_idx,
+    const size_t target_idx,
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+Directly accesses the result set's storage buffer for a particular data type (row-wise output, perfect hash group by).
+
+NOTE: Currently, only used in direct columnarization
+
+### getRowWiseBaselineEntryAt [#getrowwisebaselineentryat]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <typename ENTRY_TYPE>
+ENTRY_TYPE ResultSet::getRowWiseBaselineEntryAt(
+    const size_t row_idx,
+    const size_t target_idx,
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+Directly accesses the result set's storage buffer for a particular data type (columnar output, baseline hash group by).
+
+NOTE: Currently, only used in direct columnarization
+
+### getColumnarBaselineEntryAt [#getcolumnarbaselineentryat]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <typename ENTRY_TYPE>
+ENTRY_TYPE ResultSet::getColumnarBaselineEntryAt(
+    const size_t row_idx,
+    const size_t target_idx,
+    const size_t slot_idx
+) const
+```
+</CodeBlock>
+
+Directly accesses the result set's storage buffer for a particular data type (row-wise output, baseline hash group by).
+
+NOTE: Currently, only used in direct columnarization
+
+### binSearchRowCount [#binsearchrowcount]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::binSearchRowCount() const
+```
+</CodeBlock>
+
+### parallelRowCount [#parallelrowcount]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::parallelRowCount() const
+```
+</CodeBlock>
+
+### radixSortOnGpu [#radixsortongpu]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::radixSortOnGpu(
+    const std::list<Analyzer::OrderEntry> &order_entries
+) const
+```
+</CodeBlock>
+
+### radixSortOnCpu [#radixsortoncpu]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::radixSortOnCpu(
+    const std::list<Analyzer::OrderEntry> &order_entries
+) const
+```
+</CodeBlock>
+
+### getTargetValueFromBufferRowwise [#gettargetvaluefrombufferrowwise]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+TargetValue ResultSet::getTargetValueFromBufferRowwise(
+    int8_t *rowwise_target_ptr,
+    int8_t *keys_ptr,
+    const size_t entry_buff_idx,
+    const TargetInfo &target_info,
+    const size_t target_logical_idx,
+    const size_t slot_idx,
+    const bool translate_strings,
+    const bool decimal_to_double,
+    const bool fixup_count_distinct_pointers
+) const
+```
+</CodeBlock>
+
+### getTargetValueFromBufferColwise [#gettargetvaluefrombuffercolwise]
+
+<CodeBlock links={{"ResultSet": "resultset", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+TargetValue ResultSet::getTargetValueFromBufferColwise(
+    const int8_t *col_ptr,
+    const int8_t *keys_ptr,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const size_t local_entry_idx,
+    const size_t global_entry_idx,
+    const TargetInfo &target_info,
+    const size_t target_logical_idx,
+    const size_t slot_idx,
+    const bool translate_strings,
+    const bool decimal_to_double
+) const
+```
+</CodeBlock>
+
+### makeTargetValue [#maketargetvalue]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+TargetValue ResultSet::makeTargetValue(
+    const int8_t *ptr,
+    const int8_t compact_sz,
+    const TargetInfo &target_info,
+    const size_t target_logical_idx,
+    const bool translate_strings,
+    const bool decimal_to_double,
+    const size_t entry_buff_idx
+) const
+```
+</CodeBlock>
+
+### makeStringTargetValue [#makestringtargetvalue]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ScalarTargetValue ResultSet::makeStringTargetValue(
+    SQLTypeInfo const &chosen_type,
+    bool const translate_strings,
+    int64_t const ival
+) const
+```
+</CodeBlock>
+
+### makeVarlenTargetValue [#makevarlentargetvalue]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+TargetValue ResultSet::makeVarlenTargetValue(
+    const int8_t *ptr1,
+    const int8_t compact_sz1,
+    const int8_t *ptr2,
+    const int8_t compact_sz2,
+    const TargetInfo &target_info,
+    const size_t target_logical_idx,
+    const bool translate_strings,
+    const size_t entry_buff_idx
+) const
+```
+</CodeBlock>
+
+### makeGeoTargetValue [#makegeotargetvalue]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+TargetValue ResultSet::makeGeoTargetValue(
+    const int8_t *geo_target_ptr,
+    const size_t slot_idx,
+    const TargetInfo &target_info,
+    const size_t target_logical_idx,
+    const size_t entry_buff_idx
+) const
+```
+</CodeBlock>
+
+### getVarlenOrderEntry [#getvarlenorderentry]
+
+<CodeBlock links={{"ResultSet": "resultset", "InternalTargetValue": "../structs/internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+InternalTargetValue ResultSet::getVarlenOrderEntry(
+    const int64_t str_ptr,
+    const size_t str_len
+) const
+```
+</CodeBlock>
+
+### lazyReadInt [#lazyreadint]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+int64_t ResultSet::lazyReadInt(
+    const int64_t ival,
+    const size_t target_logical_idx,
+    const StorageLookupResult &storage_lookup_result
+) const
+```
+</CodeBlock>
+
+### getStorageIndex [#getstorageindex]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> ResultSet::getStorageIndex(
+    const size_t entry_idx
+) const
+```
+</CodeBlock>
+
+Returns (storageIdx, entryIdx) pair, where: storageIdx : 0 is storage_, storageIdx-1 is index into appended_storage_.
+
+entryIdx : local index into the storage object.
+
+### getColumnFrag [#getcolumnfrag]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const std::vector<const int8_t *> & ResultSet::getColumnFrag(
+    const size_t storge_idx,
+    const size_t col_logical_idx,
+    int64_t &global_idx
+) const
+```
+</CodeBlock>
+
+### getVarlenOutputInfo [#getvarlenoutputinfo]
+
+<CodeBlock links={{"ResultSet": "resultset", "VarlenOutputInfo": "../structs/varlenoutputinfo"}}>
+```cpp showLineNumbers={false}
+const VarlenOutputInfo * ResultSet::getVarlenOutputInfo(
+    const size_t entry_idx
+) const
+```
+</CodeBlock>
+
+### findStorage [#findstorage]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSet::StorageLookupResult ResultSet::findStorage(
+    const size_t entry_idx
+) const
+```
+</CodeBlock>
+
+### initMaterializedSortBuffers [#initmaterializedsortbuffers]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::initMaterializedSortBuffers(
+    const std::list<Analyzer::OrderEntry> &order_entries,
+    bool single_threaded
+)
+```
+</CodeBlock>
+
+Initialize materialized sort buffers for dictionary encoded sort permutations, count distinct/approx_count distinct, mode, and quantile/percentile calculations.
+
+### createComparator [#createcomparator]
+
+<CodeBlock links={{"ResultSet": "resultset", "Executor": "executor", "ResultSetComparatorBase": "resultsetcomparatorbase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ResultSetComparatorBase> ResultSet::createComparator(
+    const std::list<Analyzer::OrderEntry> &order_entries,
+    const PermutationView permutation,
+    const Executor *executor,
+    const bool single_threaded
+)
+```
+</CodeBlock>
+
+### initPermutationBuffer [#initpermutationbuffer]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+PermutationView ResultSet::initPermutationBuffer(
+    PermutationView permutation,
+    PermutationIdx const begin,
+    PermutationIdx const end
+) const
+```
+</CodeBlock>
+
+### parallelTop [#paralleltop]
+
+<CodeBlock links={{"ResultSet": "resultset", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void ResultSet::parallelTop(
+    const std::list<Analyzer::OrderEntry> &order_entries,
+    const size_t top_n,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### baselineSort [#baselinesort]
+
+<CodeBlock links={{"ResultSet": "resultset", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void ResultSet::baselineSort(
+    const std::list<Analyzer::OrderEntry> &order_entries,
+    const size_t top_n,
+    const ExecutorDeviceType device_type,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### doBaselineSort [#dobaselinesort]
+
+<CodeBlock links={{"ResultSet": "resultset", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void ResultSet::doBaselineSort(
+    const ExecutorDeviceType device_type,
+    const std::list<Analyzer::OrderEntry> &order_entries,
+    const size_t top_n,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### canUseFastBaselineSort [#canusefastbaselinesort]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::canUseFastBaselineSort(
+    const std::list<Analyzer::OrderEntry> &order_entries,
+    const size_t top_n
+)
+```
+</CodeBlock>
+
+### rowCountImpl [#rowcountimpl]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+size_t ResultSet::rowCountImpl(
+    const bool force_parallel
+) const
+```
+</CodeBlock>
+
+### getDataManager [#getdatamanager]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::DataMgr * ResultSet::getDataManager() const
+```
+</CodeBlock>
+
+### getGpuCount [#getgpucount]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+int ResultSet::getGpuCount() const
+```
+</CodeBlock>
+
+### serializeProjection [#serializeprojection]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::serializeProjection(
+    TSerializedRows &serialized_rows
+) const
+```
+</CodeBlock>
+
+### serializeVarlenAggColumn [#serializevarlenaggcolumn]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::serializeVarlenAggColumn(
+    int8_t *buf,
+    std::vector<std::string> &varlen_bufer
+) const
+```
+</CodeBlock>
+
+### serializeCountDistinctColumns [#serializecountdistinctcolumns]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::serializeCountDistinctColumns(
+    TSerializedRows &
+) const
+```
+</CodeBlock>
+
+### unserializeCountDistinctColumns [#unserializecountdistinctcolumns]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::unserializeCountDistinctColumns(
+    const TSerializedRows &
+)
+```
+</CodeBlock>
+
+### fixupCountDistinctPointers [#fixupcountdistinctpointers]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::fixupCountDistinctPointers()
+```
+</CodeBlock>
+
+### create_active_buffer_set [#createactivebufferset]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSet::create_active_buffer_set(
+    CountDistinctSet &count_distinct_active_buffer_set
+) const
+```
+</CodeBlock>
+
+### getDistinctBufferRefFromBufferRowwise [#getdistinctbufferreffrombufferrowwise]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+int64_t ResultSet::getDistinctBufferRefFromBufferRowwise(
+    int8_t *rowwise_target_ptr,
+    const TargetInfo &target_info
+) const
+```
+</CodeBlock>
+
+### getKeyInfo [#getkeyinfo]
+
+<CodeBlock links={{"ResultSet": "resultset", "ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+ResultSet::KeyInfo ResultSet::getKeyInfo(
+    const ResultSetStorage *storage,
+    const int8_t *buff,
+    const size_t col_idx,
+    const size_t local_entry_idx
+) const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"ResultSet": "resultset", "InternalTargetValue": "../structs/internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isNull(
+    const SQLTypeInfo &ti,
+    const InternalTargetValue &val,
+    const bool float_argument_input
+)
+```
+</CodeBlock>
+
+### topPermutation [#toppermutation]
+
+<CodeBlock links={{"ResultSet": "resultset", "ResultSetComparatorBase": "resultsetcomparatorbase"}}>
+```cpp showLineNumbers={false}
+PermutationView ResultSet::topPermutation(
+    PermutationView,
+    const size_t top_n,
+    const ResultSetComparatorBase *
+)
+```
+</CodeBlock>
+
+### topPermutationImpl [#toppermutationimpl]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <typename BUFFER_ITERATOR_TYPE>
+PermutationView ResultSet::topPermutationImpl(
+    PermutationView,
+    const size_t top_n,
+    const ResultSetComparator<BUFFER_ITERATOR_TYPE> *
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### fixupQueryMemoryDescriptor [#fixupquerymemorydescriptor]
+
+<CodeBlock links={{"ResultSet": "resultset", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
+    const QueryMemoryDescriptor &
+)
+```
+</CodeBlock>
+
+### isNullIval [#isnullival]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+bool ResultSet::isNullIval(
+    SQLTypeInfo const &,
+    bool const translate_strings,
+    int64_t const ival
+)
+```
+</CodeBlock>
+
+### nullScalarTargetValue [#nullscalartargetvalue]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ScalarTargetValue ResultSet::nullScalarTargetValue(
+    SQLTypeInfo const &,
+    bool const translate_strings
+)
+```
+</CodeBlock>
+
+### unserialize [#unserialize]
+
+<CodeBlock links={{"ResultSet": "resultset", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+static std::unique_ptr<ResultSet> ResultSet::unserialize(
+    const TSerializedRows &serialized_rows,
+    const Executor *
+)
+```
+</CodeBlock>
+
+### calculateQuantile [#calculatequantile]
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+double ResultSet::calculateQuantile(
+    quantile::TDigest *const t_digest
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ApproxQuantileBuffers` | `std::vector< std::vector< double > >` |
+| `ModeBuffers` | `std::vector< std::vector< int64_t > >` |
+| `SerializedVarlenBufferStorage` | `std::vector< std::string >` |
+
+### GeoReturnType
+
+`Geo` return type options when accessing geo columns from a result set.
+
+| Name | Value | Description |
+|---|---|---|
+| `GeoTargetValue` | | Copies the geo data into a struct of vectors - coords are uncompressed. |
+| `WktString` | | Returns the geo data as a WKT string. |
+| `GeoTargetValuePtr` | | Returns only the pointers of the underlying buffers for the geo data. |
+| `GeoTargetValueGpuPtr` | | If geo data is currently on a device, keep the data on the device and return the device ptrs. |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ResultSetBuilder` | `friend` | |
+| `targets_` | `const std::vector< TargetInfo >` | |
+| `device_type_` | `const ExecutorDeviceType` | |
+| `device_id_` | `const int` | |
+| `thread_idx_` | `const int` | |
+| `query_mem_desc_` | `QueryMemoryDescriptor` | |
+| `storage_` | `std::unique_ptr< ResultSetStorage >` | |
+| `appended_storage_` | `AppendedStorage` | |
+| `crt_row_buff_idx_` | `size_t` | |
+| `fetched_so_far_` | `size_t` | |
+| `drop_first_` | `size_t` | |
+| `keep_first_` | `size_t` | |
+| `row_set_mem_owner_` | `std::shared_ptr< RowSetMemoryOwner >` | |
+| `permutation_` | `Permutation` | |
+| `block_size_` | `unsigned` | |
+| `grid_size_` | `unsigned` | |
+| `timings_` | `QueryExecutionTimings` | |
+| `chunks_` | `std::list< std::shared_ptr< Chunk_NS::Chunk > >` | |
+| `chunk_iters_` | `std::vector< std::shared_ptr< std::list< ChunkIter > > >` | |
+| `literal_buffers_` | `std::vector< std::vector< int8_t > >` | |
+| `lazy_fetch_info_` | `std::vector< ColumnLazyFetchInfo >` | |
+| `col_buffers_` | `std::vector< std::vector< std::vector< const int8_t * > > >` | |
+| `frag_offsets_` | `std::vector< std::vector< std::vector< int64_t > > >` | |
+| `consistent_frag_sizes_` | `std::vector< std::vector< int64_t > >` | |
+| `estimator_` | `const std::shared_ptr< const Analyzer::Estimator >` | |
+| `device_estimator_buffer_` | `Data_Namespace::AbstractBuffer *` | |
+| `host_estimator_buffer_` | `int8_t *` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `cuda_allocator_` | `std::shared_ptr< CudaAllocator >` | |
+| `cuda_stream_` | `CUstream` | |
+| `serialized_varlen_buffer_` | `std::vector< SerializedVarlenBufferStorage >` | |
+| `separate_varlen_storage_valid_` | `bool` | |
+| `explanation_` | `std::string` | |
+| `just_explain_` | `const bool` | |
+| `for_validation_only_` | `bool` | |
+| `cached_row_count_` | `std::atomic< int64_t >` | |
+| `row_iteration_mutex_` | `std::mutex` | |
+| `geo_return_type_` | `GeoReturnType` | |
+| `cached_` | `bool` | |
+| `query_exec_time_` | `size_t` | |
+| `query_plan_` | `QueryPlanHash` | |
+| `input_table_keys_` | `std::unordered_set< size_t >` | |
+| `target_meta_info_` | `std::vector< TargetMetaInfo >` | |
+| `materialized_sort_buffers_` | `std::unique_ptr< MaterializedSortBuffersBase >` | |
+| `can_use_speculative_top_n_sort` | `std::optional< bool >` | |
+
+---
+
+## Inner classes
+
+### QueryExecutionTimings
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+struct ResultSet::QueryExecutionTimings
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_queue_time` | `int64_t` | |
+| `render_time` | `int64_t` | |
+| `compilation_queue_time` | `int64_t` | |
+| `kernel_queue_time` | `int64_t` | |
+
+### RowIterationState
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+struct ResultSet::RowIterationState
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `prev_target_idx_` | `size_t` | |
+| `cur_target_idx_` | `size_t` | |
+| `agg_idx_` | `size_t` | |
+| `buf_ptr_` | `int8_t const  *` | |
+| `compact_sz1_` | `int8_t` | |
+
+### VarlenTargetPtrPair
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+struct ResultSet::VarlenTargetPtrPair
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr1` | `int8_t *` | |
+| `compact_sz1` | `int8_t` | |
+| `ptr2` | `int8_t *` | |
+| `compact_sz2` | `int8_t` | |
+
+### StorageLookupResult
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+struct ResultSet::StorageLookupResult
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `storage_ptr` | `const ResultSetStorage *` | |
+| `fixedup_entry_idx` | `const size_t` | |
+| `storage_idx` | `const size_t` | |
+
+### TargetOffsets
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+struct ResultSet::TargetOffsets
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr1` | `const int8_t *` | |
+| `compact_sz1` | `const size_t` | |
+| `ptr2` | `const int8_t *` | |
+| `compact_sz2` | `const size_t` | |
+
+### RowWiseTargetAccessor
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+struct ResultSet::RowWiseTargetAccessor
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `offsets_for_storage_` | `std::vector< std::vector< TargetOffsets > >` | |
+| `result_set_` | `const ResultSet *` | |
+| `row_bytes_` | `const size_t` | |
+| `key_width_` | `const size_t` | |
+| `key_bytes_with_padding_` | `const size_t` | |
+
+### ColumnWiseTargetAccessor
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+struct ResultSet::ColumnWiseTargetAccessor
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `offsets_for_storage_` | `std::vector< std::vector< TargetOffsets > >` | |
+| `result_set_` | `const ResultSet *` | |
+
+### MaterializedSortBuffersBase
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+class ResultSet::MaterializedSortBuffersBase
+```
+</CodeBlock>
+
+Base class for materialized sort buffers We need a base class so we can store a pointer to the non-BUFFER_ITERATOR_TYPE templated base class in the `ResultSet` class.
+
+| Name | Type | Description |
+|---|---|---|
+| `result_set_` | `const ResultSet *` | |
+| `order_entries_` | `const std::list< Analyzer::OrderEntry > &` | |
+| `single_threaded_` | `const bool` | |
+| `dictionary_string_sorted_permutations_` | `std::vector< SortedStringPermutation >` | |
+| `count_distinct_materialized_buffers_` | `std::vector< std::vector< int64_t > >` | |
+| `approx_quantile_materialized_buffers_` | `ApproxQuantileBuffers` | |
+| `mode_buffers_` | `ModeBuffers` | |
+
+### MaterializedSortBuffers
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+class ResultSet::MaterializedSortBuffers
+```
+</CodeBlock>
+
+Templated class that actually handles the materialization of sort buffers, templated by BUFFER_ITERATOR_TYPE, which is either RowWiseTargetAccessor or ColumnWiseTargetAccessor.
+
+| Name | Type | Description |
+|---|---|---|
+| `buffer_itr_` | `const BufferIteratorType` | |
+| `result_set_` | `const ResultSet *` | |
+| `order_entries_` | `const std::list< Analyzer::OrderEntry > &` | |
+| `single_threaded_` | `const bool` | |
+| `dictionary_string_sorted_permutations_` | `std::vector< SortedStringPermutation >` | |
+| `count_distinct_materialized_buffers_` | `std::vector< std::vector< int64_t > >` | |
+| `approx_quantile_materialized_buffers_` | `ApproxQuantileBuffers` | |
+| `mode_buffers_` | `ModeBuffers` | |
+
+**Inherits from:** `ResultSet::MaterializedSortBuffersBase` (public)
+
+### ResultSetComparator
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+struct ResultSet::ResultSetComparator
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `order_entries_` | `const std::list< Analyzer::OrderEntry > &` | |
+| `result_set_` | `const ResultSet *` | |
+| `permutation_` | `const PermutationView` | |
+| `buffer_itr_` | `const BufferIteratorType` | |
+| `executor_` | `const Executor *` | |
+| `single_threaded_` | `const bool` | |
+| `dictionary_string_sorted_permutations_` | `const std::vector< SortedStringPermutation > &` | |
+| `count_distinct_materialized_buffers_` | `const std::vector< std::vector< int64_t > > &` | |
+| `approx_quantile_materialized_buffers_` | `const ApproxQuantileBuffers &` | |
+| `mode_buffers_` | `const ModeBuffers &` | |
+
+**Inherits from:** `ResultSetComparatorBase` (public)
+
+### KeyInfo
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+struct ResultSet::KeyInfo
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `key_ptr` | `const int8_t *` | |
+| `key_width` | `const size_t` | |
+
+### CellCallback
+
+<CodeBlock links={{"ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+class ResultSet::CellCallback
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `id_map_` | `StringDictionaryProxy::IdMap const` | |
+| `null_int_` | `int64_t const` | |

@@ -1,0 +1,54 @@
+---
+title: File_Namespace::HeaderInfo
+description: "@type HeaderInfo"
+---
+
+@type `HeaderInfo`
+
+Stores Pair of ChunkKey and [Page](page) id and version, in a pair with a [Page](page) struct itself (File id and [Page](page) num)
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/Page.h>
+```
+
+---
+
+## Constructors
+
+### HeaderInfo [#headerinfo]
+
+<CodeBlock links={{"HeaderInfo": "headerinfo", "Page": "page"}}>
+```cpp showLineNumbers={false}
+File_Namespace::HeaderInfo::HeaderInfo(
+    const ChunkKey &chunkKey,
+    const int32_t pageId,
+    const int32_t versionEpoch,
+    const Page &page
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"HeaderInfo": "headerinfo"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::HeaderInfo::operator<(
+    const HeaderInfo &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `chunkKey` | `ChunkKey` | |
+| `pageId` | `int32_t` | |
+| `versionEpoch` | `int32_t` | |
+| `page` | `Page` | |

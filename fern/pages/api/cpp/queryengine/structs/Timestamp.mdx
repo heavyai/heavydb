@@ -1,0 +1,298 @@
+---
+title: Timestamp
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Constructors
+
+### Timestamp [#timestamp]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+Timestamp::Timestamp() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE Timestamp::Timestamp(
+    int64_t timeval
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE Timestamp::Timestamp(
+    std::string_view const str
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator+ [#operator_plus]
+
+<Tabs>
+<Tab title="Const (with interval) (1)">
+
+<CodeBlock links={{"Timestamp": "timestamp", "DayTimeInterval": "daytimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::operator+(
+    const DayTimeInterval &interval
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with interval) (2)">
+
+<CodeBlock links={{"Timestamp": "timestamp", "YearMonthTimeInterval": "yearmonthtimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::operator+(
+    const YearMonthTimeInterval &interval
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with other)">
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE const Timestamp Timestamp::operator+(
+    const Timestamp &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator- [#operator_minus]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE const Timestamp Timestamp::operator-(
+    const Timestamp &other
+) const
+```
+</CodeBlock>
+
+### operator/ [#operator_div]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::operator/(
+    const Timestamp &other
+) const
+```
+</CodeBlock>
+
+### operator* [#operator_mul]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE const Timestamp Timestamp::operator*(
+    const int64_t multiplier
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool Timestamp::operator==(
+    const Timestamp &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool Timestamp::operator!=(
+    const Timestamp &other
+) const
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool Timestamp::operator<(
+    const Timestamp &other
+) const
+```
+</CodeBlock>
+
+### truncateToMicroseconds [#truncatetomicroseconds]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::truncateToMicroseconds() const
+```
+</CodeBlock>
+
+### truncateToMilliseconds [#truncatetomilliseconds]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::truncateToMilliseconds() const
+```
+</CodeBlock>
+
+### truncateToSeconds [#truncatetoseconds]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::truncateToSeconds() const
+```
+</CodeBlock>
+
+### truncateToMinutes [#truncatetominutes]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::truncateToMinutes() const
+```
+</CodeBlock>
+
+### truncateToHours [#truncatetohours]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::truncateToHours() const
+```
+</CodeBlock>
+
+### truncateToDay [#truncatetoday]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::truncateToDay() const
+```
+</CodeBlock>
+
+### truncateToMonth [#truncatetomonth]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::truncateToMonth() const
+```
+</CodeBlock>
+
+### truncateToYear [#truncatetoyear]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp Timestamp::truncateToYear() const
+```
+</CodeBlock>
+
+### getNanoseconds [#getnanoseconds]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::getNanoseconds() const
+```
+</CodeBlock>
+
+### getMicroseconds [#getmicroseconds]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::getMicroseconds() const
+```
+</CodeBlock>
+
+### getMilliseconds [#getmilliseconds]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::getMilliseconds() const
+```
+</CodeBlock>
+
+### getSeconds [#getseconds]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::getSeconds() const
+```
+</CodeBlock>
+
+### getMinutes [#getminutes]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::getMinutes() const
+```
+</CodeBlock>
+
+### getHours [#gethours]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::getHours() const
+```
+</CodeBlock>
+
+### getDay [#getday]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::getDay() const
+```
+</CodeBlock>
+
+### getMonth [#getmonth]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::getMonth() const
+```
+</CodeBlock>
+
+### getYear [#getyear]
+
+<CodeBlock links={{"Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t Timestamp::getYear() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `time` | `int64_t` | |

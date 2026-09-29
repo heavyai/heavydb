@@ -1,0 +1,57 @@
+---
+title: TableGenerations
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableGenerations.h>
+```
+
+---
+
+## Methods
+
+### setGeneration [#setgeneration]
+
+<CodeBlock links={{"TableGenerations": "tablegenerations", "TableGeneration": "../structs/tablegeneration"}}>
+```cpp showLineNumbers={false}
+void TableGenerations::setGeneration(
+    const shared::TableKey &table_key,
+    const TableGeneration &generation
+)
+```
+</CodeBlock>
+
+### getGeneration [#getgeneration]
+
+<CodeBlock links={{"TableGenerations": "tablegenerations", "TableGeneration": "../structs/tablegeneration"}}>
+```cpp showLineNumbers={false}
+const TableGeneration & TableGenerations::getGeneration(
+    const shared::TableKey &table_key
+) const
+```
+</CodeBlock>
+
+### asMap [#asmap]
+
+<CodeBlock links={{"TableGenerations": "tablegenerations", "TableGeneration": "../structs/tablegeneration"}}>
+```cpp showLineNumbers={false}
+const std::unordered_map<shared::TableKey, TableGeneration> & TableGenerations::asMap() const
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"TableGenerations": "tablegenerations"}}>
+```cpp showLineNumbers={false}
+void TableGenerations::clear()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_key_to_generation_` | `std::unordered_map< shared::TableKey, TableGeneration >` | |

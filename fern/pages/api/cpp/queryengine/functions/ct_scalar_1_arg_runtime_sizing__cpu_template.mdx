@@ -1,0 +1,68 @@
+---
+title: ct_scalar_1_arg_runtime_sizing__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_scalar_1_arg_runtime_sizing__cpu_template(
+    const T num,
+    Column<T> &answer
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_scalar_1_arg_runtime_sizing__cpu_template(
+    const float num,
+    Column<float> &answer
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_scalar_1_arg_runtime_sizing__cpu_template(
+    const double num,
+    Column<double> &answer
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_scalar_1_arg_runtime_sizing__cpu_template(
+    const int32_t num,
+    Column<int32_t> &answer
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_scalar_1_arg_runtime_sizing__cpu_template(
+    const int64_t num,
+    Column<int64_t> &answer
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

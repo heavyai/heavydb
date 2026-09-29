@@ -1,0 +1,21 @@
+---
+title: fill_hash_join_buff_sharded_impl
+description: ""
+---
+
+<CodeBlock links={{"JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo", "ShardInfo": "../structs/shardinfo"}}>
+```cpp showLineNumbers={false}
+template <typename HASHTABLE_FILLING_FUNC>
+DEVICE int fill_hash_join_buff_sharded_impl(
+    int32_t *buff,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const ShardInfo shard_info,
+    const int32_t *sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count,
+    HASHTABLE_FILLING_FUNC filling_func
+)
+```
+</CodeBlock>

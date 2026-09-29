@@ -1,0 +1,8 @@
+---
+title: X509_ptr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+using X509_ptr = std::unique_ptr<X509, std::function<void(X509 *)>>;
+```

@@ -1,0 +1,126 @@
+---
+title: Parser::LocalQueryConnector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::QueryConnector` (public), `Fragmenter_Namespace::LocalInsertConnector` (private)
+
+---
+
+## Methods
+
+### getOuterFragmentCount [#getouterfragmentcount]
+
+<CodeBlock links={{"LocalQueryConnector": "localqueryconnector"}}>
+```cpp showLineNumbers={false}
+size_t Parser::LocalQueryConnector::getOuterFragmentCount(
+    QueryStateProxy,
+    std::string &sql_query_string
+) override
+```
+</CodeBlock>
+
+### query [#query]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"LocalQueryConnector": "localqueryconnector"}}>
+```cpp showLineNumbers={false}
+AggregatedResult Parser::LocalQueryConnector::query(
+    QueryStateProxy,
+    std::string &sql_query_string,
+    std::vector<size_t> outer_frag_indices,
+    bool validate_only,
+    bool allow_interrupt
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"LocalQueryConnector": "localqueryconnector"}}>
+```cpp showLineNumbers={false}
+std::vector<AggregatedResult> Parser::LocalQueryConnector::query(
+    QueryStateProxy,
+    std::string &sql_query_string,
+    std::vector<size_t> outer_frag_indices,
+    bool allow_interrupt
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getColumnDescriptors [#getcolumndescriptors]
+
+<CodeBlock links={{"LocalQueryConnector": "localqueryconnector"}}>
+```cpp showLineNumbers={false}
+std::list<ColumnDescriptor> Parser::LocalQueryConnector::getColumnDescriptors(
+    AggregatedResult &result,
+    bool for_create
+)
+```
+</CodeBlock>
+
+### shardCount [#shardcount]
+
+<CodeBlock links={{"LocalQueryConnector": "localqueryconnector"}}>
+```cpp showLineNumbers={false}
+size_t Parser::LocalQueryConnector::shardCount() override
+```
+</CodeBlock>
+
+### insertChunksToLeaf [#insertchunkstoleaf]
+
+<CodeBlock links={{"LocalQueryConnector": "localqueryconnector"}}>
+```cpp showLineNumbers={false}
+void Parser::LocalQueryConnector::insertChunksToLeaf(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    const size_t shard_idx,
+    const Fragmenter_Namespace::InsertChunks &insert_chunks
+) override
+```
+</CodeBlock>
+
+### insertDataToLeaf [#insertdatatoleaf]
+
+<CodeBlock links={{"LocalQueryConnector": "localqueryconnector"}}>
+```cpp showLineNumbers={false}
+void Parser::LocalQueryConnector::insertDataToLeaf(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    const size_t shard_idx,
+    Fragmenter_Namespace::InsertData &insert_data
+) override
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<CodeBlock links={{"LocalQueryConnector": "localqueryconnector"}}>
+```cpp showLineNumbers={false}
+void Parser::LocalQueryConnector::checkpoint(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    int tableId
+) override
+```
+</CodeBlock>
+
+### rollback [#rollback]
+
+<CodeBlock links={{"LocalQueryConnector": "localqueryconnector"}}>
+```cpp showLineNumbers={false}
+void Parser::LocalQueryConnector::rollback(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    int tableId
+) override
+```
+</CodeBlock>

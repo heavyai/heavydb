@@ -1,0 +1,86 @@
+---
+title: Parser::CaseExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### CaseExpr [#caseexpr]
+
+<CodeBlock links={{"CaseExpr": "caseexpr", "ExprPair": "exprpair", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::CaseExpr::CaseExpr(
+    std::list<ExprPair *> *w,
+    Expr *e
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### analyze [#analyze]
+
+<CodeBlock links={{"CaseExpr": "caseexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::CaseExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"CaseExpr": "caseexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::CaseExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### normalize [#normalize]
+
+<CodeBlock links={{"CaseExpr": "caseexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::CaseExpr::normalize(
+    const std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>> &,
+    const std::shared_ptr<Analyzer::Expr>,
+    const Executor *executor = nullptr
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `when_then_list_` | `std::list< std::unique_ptr< ExprPair > >` | |
+| `else_expr_` | `std::unique_ptr< Expr >` | |

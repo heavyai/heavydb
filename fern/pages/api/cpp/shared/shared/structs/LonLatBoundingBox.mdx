@@ -1,0 +1,47 @@
+---
+title: shared::LonLatBoundingBox
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <shared/LonLatBoundingBox.h>
+```
+
+---
+
+## Methods
+
+### hasNoOverlapWith [#hasnooverlapwith]
+
+<CodeBlock links={{"LonLatBoundingBox": "lonlatboundingbox"}}>
+```cpp showLineNumbers={false}
+bool shared::LonLatBoundingBox::hasNoOverlapWith(
+    const LonLatBoundingBox &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### parse [#parse]
+
+<CodeBlock links={{"LonLatBoundingBox": "lonlatboundingbox"}}>
+```cpp showLineNumbers={false}
+std::optional<LonLatBoundingBox> shared::LonLatBoundingBox::parse(
+    const std::string &str
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `min_lon` | `double` | |
+| `min_lat` | `double` | |
+| `max_lon` | `double` | |
+| `max_lat` | `double` | |

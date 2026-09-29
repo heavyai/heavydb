@@ -1,0 +1,456 @@
+---
+title: foreign_storage::ParquetDateInSecondsEncoder
+description: ""
+---
+
+<CodeBlock id="ParquetDateInSecondsEncoder" links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder"}}>
+```cpp showLineNumbers={false}
+template <typename NullType>
+class ParquetDateInSecondsEncoder
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetDateInSecondsEncoder.h>
+```
+
+**Template parameters**
+
+<ParamField path="NullType" type="typename">
+</ParamField>
+
+**Inherits from:** `foreign_storage::TypedParquetInPlaceEncoder< int64_t, int32_t, NullType >` (public), `foreign_storage::ParquetMetadataValidator` (public)
+
+---
+
+## Constructors
+
+### ParquetDateInSecondsEncoder [#parquetdateinsecondsencoder]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetDateInSecondsEncoder<NullType>::ParquetDateInSecondsEncoder(
+    Data_Namespace::AbstractBuffer *buffer,
+    const ColumnDescriptor *column_desciptor,
+    const parquet::ColumnDescriptor *parquet_column_descriptor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetDateInSecondsEncoder<NullType>::ParquetDateInSecondsEncoder(
+    Data_Namespace::AbstractBuffer *buffer
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### encodeAndCopy [#encodeandcopy]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetDateInSecondsEncoder<NullType>::encodeAndCopy(
+    const int8_t *parquet_data_bytes,
+    int8_t *omnisci_data_bytes
+) override
+```
+</CodeBlock>
+
+### validate [#validate]
+
+<Tabs>
+<Tab title="Const (with stats)">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetDateInSecondsEncoder<NullType>::validate(
+    std::shared_ptr<parquet::Statistics> stats,
+    const SQLTypeInfo &column_type
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with parquet data and j)">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetDateInSecondsEncoder<NullType>::validate(
+    const int8_t *parquet_data,
+    const int64_t j,
+    const SQLTypeInfo &column_type
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with value)">
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetDateInSecondsEncoder<NullType>::validate(
+    const int32_t &value,
+    const SQLTypeInfo &column_type
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### integralTypeToString [#integraltypetostring]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::integralTypeToString(
+    const int64_t &element
+) const
+```
+</CodeBlock>
+
+### isIntegralType [#isintegraltype]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::isIntegralType(
+    const SQLTypeInfo &type
+) const
+```
+</CodeBlock>
+
+### elementToString [#elementtostring]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::elementToString(
+    const int64_t &element
+) const
+```
+</CodeBlock>
+
+### encodedDataToString [#encodeddatatostring]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::encodedDataToString(
+    const int8_t *bytes
+) const override
+```
+</CodeBlock>
+
+### setDetectBufferConverterType [#setdetectbufferconvertertype]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::setDetectBufferConverterType()
+```
+</CodeBlock>
+
+### validateUsingEncodersColumnType [#validateusingencoderscolumntype]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::validateUsingEncodersColumnType(
+    const int8_t *parquet_data,
+    const int64_t j
+) const override
+```
+</CodeBlock>
+
+### reserve [#reserve]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::reserve(
+    const size_t num_append_elements
+) override
+```
+</CodeBlock>
+
+### appendDataTrackErrors [#appenddatatrackerrors]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::appendDataTrackErrors(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetEncoder::appendDataTrackErrors(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### validateAndAppendData [#validateandappenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::validateAndAppendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetImportEncoder::validateAndAppendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### eraseInvalidIndicesInBuffer [#eraseinvalidindicesinbuffer]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::eraseInvalidIndicesInBuffer(
+    const InvalidRowGroupIndices &invalid_indices
+) override
+```
+</CodeBlock>
+
+### appendData [#appenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::appendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+) override
+```
+</CodeBlock>
+
+This is a specialization of [`ParquetInPlaceEncoder::appendData`](parquetinplaceencoder#appenddata) for known types that allows for optimization.
+
+See comment for [`ParquetInPlaceEncoder::appendData`](parquetinplaceencoder#appenddata) for details.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetEncoder::appendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### encodeAndCopyContiguous [#encodeandcopycontiguous]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::encodeAndCopyContiguous(
+    const int8_t *parquet_data_bytes,
+    int8_t *omnisci_data_bytes,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+### setNull [#setnull]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::setNull(
+    int8_t *omnisci_data_bytes
+) override
+```
+</CodeBlock>
+
+### copy [#copy]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::copy(
+    const int8_t *omnisci_data_bytes_source,
+    int8_t *omnisci_data_bytes_destination
+) override
+```
+</CodeBlock>
+
+### getRowGroupMetadata [#getrowgroupmetadata]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "ChunkMetadata": "../../structs/chunkmetadata", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::getRowGroupMetadata(
+    const parquet::RowGroupMetaData *group_metadata,
+    const int parquet_column_index,
+    const SQLTypeInfo &column_type
+) override
+```
+</CodeBlock>
+
+### getRejectedRowIndices [#getrejectedrowindices]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+RejectedRowIndices foreign_storage::ParquetEncoder::getRejectedRowIndices() const
+```
+</CodeBlock>
+
+### disableMetadataStatsValidation [#disablemetadatastatsvalidation]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetEncoder::disableMetadataStatsValidation()
+```
+</CodeBlock>
+
+### initializeErrorTracking [#initializeerrortracking]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetEncoder::initializeErrorTracking()
+```
+</CodeBlock>
+
+### initializeColumnType [#initializecolumntype]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetEncoder::initializeColumnType(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### encodingIsIdentityForSameTypes [#encodingisidentityforsametypes]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::encodingIsIdentityForSameTypes() const
+```
+</CodeBlock>
+
+### getUnencodedStats [#getunencodedstats]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+std::pair<int32_t, int32_t> foreign_storage::TypedParquetInPlaceEncoder<int64_t, int32_t, NullType>::getUnencodedStats(
+    std::shared_ptr<parquet::Statistics> stats
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### createMetadata [#createmetadata]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "ChunkMetadata": "../../structs/chunkmetadata", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<ChunkMetadata> foreign_storage::ParquetEncoder::createMetadata(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### throwNotNullViolation [#thrownotnullviolation]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetEncoder::throwNotNullViolation(
+    const std::string &parquet_column_name
+)
+```
+</CodeBlock>
+
+### validateNullCount [#validatenullcount]
+
+<CodeBlock links={{"ParquetDateInSecondsEncoder": "parquetdateinsecondsencoder", "TypedParquetInPlaceEncoder": "typedparquetinplaceencoder", "ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetEncoder::validateNullCount(
+    const std::string &parquet_column_name,
+    int64_t null_count,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `omnisci_data_type_byte_size_` | `const size_t` | |
+| `parquet_data_type_byte_size_` | `const size_t` | |
+| `buffer_` | `Data_Namespace::AbstractBuffer *` | |
+| `is_error_tracking_enabled_` | `bool` | |
+| `invalid_indices_` | `RejectedRowIndices` | |
+| `current_chunk_offset_` | `size_t` | |
+| `column_type_` | `SQLTypeInfo` | |
+| `validate_metadata_stats_` | `bool` | |

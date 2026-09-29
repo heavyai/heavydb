@@ -1,0 +1,108 @@
+---
+title: import_export::ExpressionParser
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/ExpressionParser.h>
+```
+
+---
+
+## Constructors
+
+### ExpressionParser [#expressionparser]
+
+<CodeBlock links={{"ExpressionParser": "expressionparser"}}>
+```cpp showLineNumbers={false}
+import_export::ExpressionParser::ExpressionParser()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setExpression [#setexpression]
+
+<CodeBlock links={{"ExpressionParser": "expressionparser"}}>
+```cpp showLineNumbers={false}
+void import_export::ExpressionParser::setExpression(
+    const std::string &expression
+)
+```
+</CodeBlock>
+
+### setStringConstant [#setstringconstant]
+
+<CodeBlock links={{"ExpressionParser": "expressionparser"}}>
+```cpp showLineNumbers={false}
+void import_export::ExpressionParser::setStringConstant(
+    const std::string &name,
+    const std::string &value
+)
+```
+</CodeBlock>
+
+### setIntConstant [#setintconstant]
+
+<CodeBlock links={{"ExpressionParser": "expressionparser"}}>
+```cpp showLineNumbers={false}
+void import_export::ExpressionParser::setIntConstant(
+    const std::string &name,
+    const int value
+)
+```
+</CodeBlock>
+
+### evalAsString [#evalasstring]
+
+<CodeBlock links={{"ExpressionParser": "expressionparser"}}>
+```cpp showLineNumbers={false}
+std::string import_export::ExpressionParser::evalAsString()
+```
+</CodeBlock>
+
+### evalAsInt [#evalasint]
+
+<CodeBlock links={{"ExpressionParser": "expressionparser"}}>
+```cpp showLineNumbers={false}
+int import_export::ExpressionParser::evalAsInt()
+```
+</CodeBlock>
+
+### evalAsDouble [#evalasdouble]
+
+<CodeBlock links={{"ExpressionParser": "expressionparser"}}>
+```cpp showLineNumbers={false}
+double import_export::ExpressionParser::evalAsDouble()
+```
+</CodeBlock>
+
+### evalAsBool [#evalasbool]
+
+<CodeBlock links={{"ExpressionParser": "expressionparser"}}>
+```cpp showLineNumbers={false}
+bool import_export::ExpressionParser::evalAsBool()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `parser_` | `std::unique_ptr< mup::ParserX, ParserDeleter >` | |
+
+---
+
+## Inner classes
+
+### ParserDeleter
+
+<CodeBlock links={{"ExpressionParser": "expressionparser"}}>
+```cpp showLineNumbers={false}
+struct import_export::ExpressionParser::ParserDeleter
+```
+</CodeBlock>

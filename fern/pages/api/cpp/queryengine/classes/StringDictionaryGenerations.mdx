@@ -1,0 +1,80 @@
+---
+title: StringDictionaryGenerations
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringDictionaryGenerations.h>
+```
+
+---
+
+## Constructors
+
+### StringDictionaryGenerations [#stringdictionarygenerations]
+
+<CodeBlock links={{"StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+StringDictionaryGenerations::StringDictionaryGenerations()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setGeneration [#setgeneration]
+
+<CodeBlock links={{"StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+void StringDictionaryGenerations::setGeneration(
+    const shared::StringDictKey &dict_key,
+    const uint64_t generation
+)
+```
+</CodeBlock>
+
+### updateGeneration [#updategeneration]
+
+<CodeBlock links={{"StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+void StringDictionaryGenerations::updateGeneration(
+    const shared::StringDictKey &dict_key,
+    const uint64_t generation
+)
+```
+</CodeBlock>
+
+### getGeneration [#getgeneration]
+
+<CodeBlock links={{"StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+int64_t StringDictionaryGenerations::getGeneration(
+    const shared::StringDictKey &dict_key
+) const
+```
+</CodeBlock>
+
+### asMap [#asmap]
+
+<CodeBlock links={{"StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+const std::unordered_map<shared::StringDictKey, uint64_t> & StringDictionaryGenerations::asMap() const
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+void StringDictionaryGenerations::clear()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dict_key_to_generation_` | `std::unordered_map< shared::StringDictKey, uint64_t >` | |

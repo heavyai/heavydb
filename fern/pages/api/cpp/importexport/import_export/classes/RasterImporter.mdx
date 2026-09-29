@@ -1,0 +1,400 @@
+---
+title: import_export::RasterImporter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/RasterImporter.h>
+```
+
+---
+
+## Constructors
+
+### RasterImporter [#rasterimporter]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+import_export::RasterImporter::RasterImporter() = default
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~RasterImporter
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+import_export::RasterImporter::~RasterImporter() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### detect [#detect]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+void import_export::RasterImporter::detect(
+    const std::string &file_name,
+    const std::string &specified_band_names,
+    const std::string &specified_band_dimensions,
+    const PointType point_type,
+    const PointTransform point_transform,
+    const bool throw_on_error,
+    const MetadataColumnInfos &metadata_column_infos
+)
+```
+</CodeBlock>
+
+### import [#import]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+void import_export::RasterImporter::import(
+    size_t &max_threads,
+    const bool max_threads_using_default
+)
+```
+</CodeBlock>
+
+### getFileName [#getfilename]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const std::string & import_export::RasterImporter::getFileName() const
+```
+</CodeBlock>
+
+### getNumBands [#getnumbands]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const uint32_t import_export::RasterImporter::getNumBands() const
+```
+</CodeBlock>
+
+### getPointTransform [#getpointtransform]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const RasterImporter::PointTransform import_export::RasterImporter::getPointTransform() const
+```
+</CodeBlock>
+
+### getPointNamesAndSQLTypes [#getpointnamesandsqltypes]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const RasterImporter::NamesAndSQLTypes import_export::RasterImporter::getPointNamesAndSQLTypes() const
+```
+</CodeBlock>
+
+### getBandNamesAndSQLTypes [#getbandnamesandsqltypes]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const RasterImporter::NamesAndSQLTypes import_export::RasterImporter::getBandNamesAndSQLTypes() const
+```
+</CodeBlock>
+
+### getBandsWidth [#getbandswidth]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const int import_export::RasterImporter::getBandsWidth() const
+```
+</CodeBlock>
+
+### getBandsHeight [#getbandsheight]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const int import_export::RasterImporter::getBandsHeight() const
+```
+</CodeBlock>
+
+### getBlockWidth [#getblockwidth]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const int import_export::RasterImporter::getBlockWidth() const
+```
+</CodeBlock>
+
+### getBlockHeight [#getblockheight]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const int import_export::RasterImporter::getBlockHeight() const
+```
+</CodeBlock>
+
+### getInitializedFilePath [#getinitializedfilepath]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+std::string import_export::RasterImporter::getInitializedFilePath() const
+```
+</CodeBlock>
+
+### getBandNullValue [#getbandnullvalue]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const RasterImporter::NullValue import_export::RasterImporter::getBandNullValue(
+    const int band_idx
+) const
+```
+</CodeBlock>
+
+### getProjectedPixelCoords [#getprojectedpixelcoords]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const RasterImporter::Coords import_export::RasterImporter::getProjectedPixelCoords(
+    const uint32_t thread_idx,
+    const int y
+) const
+```
+</CodeBlock>
+
+### getProjectedPixelCoord [#getprojectedpixelcoord]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+const std::pair<double, double> import_export::RasterImporter::getProjectedPixelCoord(
+    const uint32_t thread_idx,
+    const int x,
+    const int y
+) const
+```
+</CodeBlock>
+
+### getProjectedPixelCoordChunks [#getprojectedpixelcoordchunks]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter", "ChunkBoundingBox": "#chunkboundingbox"}}>
+```cpp showLineNumbers={false}
+RasterImporter::CoordBuffers import_export::RasterImporter::getProjectedPixelCoordChunks(
+    const ChunkBoundingBox &chunk_size,
+    const double *const lons = nullptr,
+    const double *const lats = nullptr,
+    const ChunkBoundingBox *const prev_chunk_size = nullptr
+) const
+```
+</CodeBlock>
+
+### getRawPixels [#getrawpixels]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+void import_export::RasterImporter::getRawPixels(
+    const uint32_t thread_idx,
+    const uint32_t band_idx,
+    const int y_start,
+    const int num_rows,
+    const SQLTypes column_sql_type,
+    RawPixels &raw_pixel_bytes
+)
+```
+</CodeBlock>
+
+### getRawPixelsFineGrained [#getrawpixelsfinegrained]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter", "ChunkBoundingBox": "#chunkboundingbox"}}>
+```cpp showLineNumbers={false}
+void import_export::RasterImporter::getRawPixelsFineGrained(
+    const uint32_t thread_idx,
+    const uint32_t band_idx,
+    const ChunkBoundingBox &chunk_size,
+    const SQLTypes column_sql_type,
+    int8_t *raw_pixel_bytes
+)
+```
+</CodeBlock>
+
+### getRawBandNamesForFormat [#getrawbandnamesforformat]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+void import_export::RasterImporter::getRawBandNamesForFormat(
+    const Geospatial::GDAL::DataSourceUqPtr &datasource
+)
+```
+</CodeBlock>
+
+### initializeFiltering [#initializefiltering]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+void import_export::RasterImporter::initializeFiltering(
+    const std::string &specified_band_names,
+    const std::string &specified_band_dimensions,
+    const MetadataColumnInfos &metadata_column_infos
+)
+```
+</CodeBlock>
+
+### shouldImportBandWithName [#shouldimportbandwithname]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+bool import_export::RasterImporter::shouldImportBandWithName(
+    const std::string &name
+)
+```
+</CodeBlock>
+
+### shouldImportBandWithDimensions [#shouldimportbandwithdimensions]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+bool import_export::RasterImporter::shouldImportBandWithDimensions(
+    const int width,
+    const int height
+)
+```
+</CodeBlock>
+
+### getBandName [#getbandname]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+std::string import_export::RasterImporter::getBandName(
+    const uint32_t datasource_idx,
+    const int band_idx
+)
+```
+</CodeBlock>
+
+### checkSpecifiedBandNamesFound [#checkspecifiedbandnamesfound]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+void import_export::RasterImporter::checkSpecifiedBandNamesFound() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### createPointType [#createpointtype]
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+RasterImporter::PointType import_export::RasterImporter::createPointType(
+    const std::string &str
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `NamesAndSQLTypes` | `std::vector< std::pair< std::string, SQLTypes > >` |
+| `RawPixels` | `std::vector< std::byte >` |
+| `NullValue` | `std::pair< double, bool >` |
+| `Coords` | `std::vector< std::pair< double, double > >` |
+| `CoordBuffers` | `std::pair< std::unique_ptr< double[]>, std::unique_ptr< double[]> >` |
+
+### PointType
+
+| Name | Value | Description |
+|---|---|---|
+| `kNone` | | |
+| `kAuto` | | |
+| `kSmallInt` | | |
+| `kInt` | | |
+| `kFloat` | | |
+| `kDouble` | | |
+| `kPoint` | | |
+### PointTransform
+
+| Name | Value | Description |
+|---|---|---|
+| `kNone` | | |
+| `kAuto` | | |
+| `kFile` | | |
+| `kWorld` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `file_name_` | `std::string` | |
+| `datasource_names_` | `std::vector< std::string >` | |
+| `raw_band_names_` | `std::vector< std::vector< std::string > >` | |
+| `specified_band_names_map_` | `std::map< std::string, bool >` | |
+| `column_name_repeats_map_` | `std::map< std::string, int >` | |
+| `import_band_infos_` | `std::vector< ImportBandInfo >` | |
+| `affine_transform_matrix_` | `std::array< double, 6 >` | |
+| `datasource_handles_` | `std::vector< std::vector< Geospatial::GDAL::DataSourceUqPtr > >` | |
+| `specified_band_width_` | `int` | |
+| `specified_band_height_` | `int` | |
+| `bands_width_` | `int` | |
+| `bands_height_` | `int` | |
+| `block_width_` | `int` | |
+| `block_height_` | `int` | |
+| `point_type_` | `PointType` | |
+| `point_transform_` | `PointTransform` | |
+| `coordinate_transformations_` | `std::vector< Geospatial::GDAL::CoordinateTransformationUqPtr >` | |
+| `gcp_transformers_` | `std::vector< std::unique_ptr< GCPTransformer > >` | |
+| `initialized_file_path_` | `std::string` | |
+
+---
+
+## Inner classes
+
+### FailedToReadException
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+class import_export::RasterImporter::FailedToReadException
+```
+</CodeBlock>
+
+**Inherits from:** `std::runtime_error` (public)
+
+### ChunkBoundingBox
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+struct import_export::RasterImporter::ChunkBoundingBox
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `x_offset` | `int32_t` | |
+| `y_offset` | `int32_t` | |
+| `width` | `int32_t` | |
+| `height` | `int32_t` | |
+| `num_pixels` | `int32_t` | |
+
+### ImportBandInfo
+
+<CodeBlock links={{"RasterImporter": "rasterimporter"}}>
+```cpp showLineNumbers={false}
+struct import_export::RasterImporter::ImportBandInfo
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `name` | `std::string` | |
+| `alt_name` | `std::string` | |
+| `sql_type` | `SQLTypes` | |
+| `datasource_idx` | `uint32_t` | |
+| `band_idx` | `int` | |
+| `null_value` | `double` | |
+| `null_value_valid` | `bool` | |

@@ -1,0 +1,37 @@
+---
+title: get_matching_group_value_columnar
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ int64_t * get_matching_group_value_columnar(
+    int64_t *groups_buffer,
+    const uint32_t h,
+    const int64_t *key,
+    const uint32_t key_qw_count,
+    const size_t entry_count
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE int64_t * get_matching_group_value_columnar(
+    int64_t *groups_buffer,
+    const uint32_t h,
+    const int64_t *key,
+    const uint32_t key_qw_count,
+    const size_t entry_count
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

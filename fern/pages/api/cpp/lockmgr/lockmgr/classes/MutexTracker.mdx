@@ -1,0 +1,94 @@
+---
+title: lockmgr::MutexTracker
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgrImpl.h>
+```
+
+**Inherits from:** `heavyai::SharedMutexInterface` (public)
+
+---
+
+## Constructors
+
+### MutexTracker [#mutextracker]
+
+<CodeBlock links={{"MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+lockmgr::MutexTracker::MutexTracker(
+    std::unique_ptr<heavyai::DistributedSharedMutex> dmutex
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### lock [#lock]
+
+<CodeBlock links={{"MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+void lockmgr::MutexTracker::lock()
+```
+</CodeBlock>
+
+### try_lock [#trylock]
+
+<CodeBlock links={{"MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+bool lockmgr::MutexTracker::try_lock()
+```
+</CodeBlock>
+
+### unlock [#unlock]
+
+<CodeBlock links={{"MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+void lockmgr::MutexTracker::unlock()
+```
+</CodeBlock>
+
+### lock_shared [#lockshared]
+
+<CodeBlock links={{"MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+void lockmgr::MutexTracker::lock_shared()
+```
+</CodeBlock>
+
+### try_lock_shared [#trylockshared]
+
+<CodeBlock links={{"MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+bool lockmgr::MutexTracker::try_lock_shared()
+```
+</CodeBlock>
+
+### unlock_shared [#unlockshared]
+
+<CodeBlock links={{"MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+void lockmgr::MutexTracker::unlock_shared()
+```
+</CodeBlock>
+
+### isAcquired [#isacquired]
+
+<CodeBlock links={{"MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+virtual bool lockmgr::MutexTracker::isAcquired() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ref_count_` | `std::atomic< size_t >` | |
+| `mutex_` | `MutexTypeBase` | |
+| `dmutex_` | `std::unique_ptr< heavyai::DistributedSharedMutex >` | |

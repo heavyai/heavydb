@@ -1,0 +1,456 @@
+---
+title: TransientStringLiteralsVisitor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TransientStringLiteralsVisitor.h>
+```
+
+**Inherits from:** `ScalarExprVisitor< void * >` (public)
+
+---
+
+## Constructors
+
+### TransientStringLiteralsVisitor [#transientstringliteralsvisitor]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+TransientStringLiteralsVisitor::TransientStringLiteralsVisitor(
+    StringDictionaryProxy *sdp,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor"}}>
+```cpp showLineNumbers={false}
+void * TransientStringLiteralsVisitor::visitConstant(
+    const Analyzer::Constant *constant
+) const override
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor"}}>
+```cpp showLineNumbers={false}
+void * TransientStringLiteralsVisitor::visitUOper(
+    const Analyzer::UOper *uoper
+) const override
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor"}}>
+```cpp showLineNumbers={false}
+void * TransientStringLiteralsVisitor::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+void * ScalarExprVisitor<void *>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor"}}>
+```cpp showLineNumbers={false}
+void * TransientStringLiteralsVisitor::defaultResult() const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitColumnVar(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *
+) const
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::aggregateResult(
+    const void *&aggregate,
+    const void *&next_result
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"TransientStringLiteralsVisitor": "transientstringliteralsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<void *>::visitBegin() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `sdp_` | `StringDictionaryProxy *` | |
+| `executor_` | `Executor *` | |
+| `parent_feeds_sdp_` | `bool` | |

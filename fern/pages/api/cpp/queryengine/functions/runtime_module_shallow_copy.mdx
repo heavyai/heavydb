@@ -1,0 +1,16 @@
+---
+title: runtime_module_shallow_copy
+description: "Makes a shallow copy (just declarations) of the runtime module."
+---
+
+<CodeBlock links={{"CgenState": "../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<llvm::Module> runtime_module_shallow_copy(
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+Makes a shallow copy (just declarations) of the runtime module.
+
+[Function](../classes/function) definitions are cloned only if they're used from the generated code.

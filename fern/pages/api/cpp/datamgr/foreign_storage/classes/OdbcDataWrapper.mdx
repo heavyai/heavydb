@@ -1,0 +1,570 @@
+---
+title: foreign_storage::OdbcDataWrapper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/OdbcDataWrapper.h>
+```
+
+**Inherits from:** `foreign_storage::ForeignDataWrapper` (public)
+
+---
+
+## Constructors
+
+### OdbcDataWrapper [#odbcdatawrapper]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+foreign_storage::OdbcDataWrapper::OdbcDataWrapper()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+foreign_storage::OdbcDataWrapper::OdbcDataWrapper(
+    const int db_id,
+    const ForeignTable *foreign_table,
+    const UserMapping *user_mapping
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### populateChunkMetadata [#populatechunkmetadata]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::populateChunkMetadata(
+    ChunkMetadataVector &chunk_metadata_vector
+) override
+```
+</CodeBlock>
+
+Populates given chunk metadata vector with metadata for all chunks in related foreign table.
+
+**Parameters**
+
+<ParamField path="chunk_metadata_vector" type="ChunkMetadataVector &">
+- Vector that will be populated with chunk metadata
+</ParamField>
+
+### populateChunkBuffers [#populatechunkbuffers]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::populateChunkBuffers(
+    const ChunkToBufferMap &required_buffers,
+    const ChunkToBufferMap &optional_buffers,
+    AbstractBuffer *delete_buffer
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "AbstractBuffer": "../../classes/abstractbuffer", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::OdbcDataWrapper::populateChunkBuffers(
+    const ChunkToBufferMap &required_buffers,
+    const ChunkToBufferMap &optional_buffers,
+    AbstractBuffer *delete_buffer = nullptr
+)
+```
+</CodeBlock>
+
+Populates given chunk buffers identified by chunk keys.
+
+All provided chunk buffers are expected to be for the same fragment.
+
+**Parameters**
+
+<ParamField path="required_buffers" type="const ChunkToBufferMap &">
+- Chunk buffers that must always be populated
+</ParamField>
+
+<ParamField path="optional_buffers" type="const ChunkToBufferMap &">
+- Chunk buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats)
+</ParamField>
+
+<ParamField path="delete_buffer" type="AbstractBuffer *" default="nullptr">
+- Chunk buffer for fragment's delete column, if non-null data wrapper is expected to mark deleted rows in buffer and continue processing
+</ParamField>
+
+</Tab>
+</Tabs>
+
+### getSerializedDataWrapper [#getserializeddatawrapper]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OdbcDataWrapper::getSerializedDataWrapper() const override
+```
+</CodeBlock>
+
+Serialize internal state of wrapper into file at given path if implemented.
+
+### restoreDataWrapperInternals [#restoredatawrapperinternals]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::restoreDataWrapperInternals(
+    const std::string &file_path,
+    const ChunkMetadataVector &chunk_metadata
+) override
+```
+</CodeBlock>
+
+Restore internal state of datawrapper.
+
+**Parameters**
+
+<ParamField path="file_path" type="const std::string &">
+- Location of file created by serializeMetadata
+</ParamField>
+
+### isRestored [#isrestored]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::OdbcDataWrapper::isRestored() const override
+```
+</CodeBlock>
+
+### getDbConnectionInfo [#getdbconnectioninfo]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "OdbcConnectionInfo": "../structs/odbcconnectioninfo"}}>
+```cpp showLineNumbers={false}
+OdbcConnectionInfo foreign_storage::OdbcDataWrapper::getDbConnectionInfo() const
+```
+</CodeBlock>
+
+### getDbSelect [#getdbselect]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OdbcDataWrapper::getDbSelect() const
+```
+</CodeBlock>
+
+### validateServerOptions [#validateserveroptions]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::validateServerOptions(
+    const ForeignServer *foreign_server
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given foreign server object are valid.
+
+**Parameters**
+
+<ParamField path="foreign_server" type="const ForeignServer *">
+- Foreign server object containing options to be validated
+</ParamField>
+
+### validateTableOptions [#validatetableoptions]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::validateTableOptions(
+    const ForeignTable *foreign_table
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given foreign table object are valid.
+
+**Parameters**
+
+<ParamField path="foreign_table" type="const ForeignTable *">
+- Foreign table object containing options to be validated
+</ParamField>
+
+### getSupportedTableOptions [#getsupportedtableoptions]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string_view> & foreign_storage::OdbcDataWrapper::getSupportedTableOptions() const override
+```
+</CodeBlock>
+
+Gets the set of supported table options for the data wrapper.
+
+### getAlterableTableOptions [#getalterabletableoptions]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string> foreign_storage::OdbcDataWrapper::getAlterableTableOptions() const override
+```
+</CodeBlock>
+
+Gets the subset of table options that can be altered for the data wrapper.
+
+### validateUserMappingOptions [#validateusermappingoptions]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::validateUserMappingOptions(
+    const UserMapping *user_mapping,
+    const ForeignServer *foreign_server
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given user mapping object are valid.
+
+**Parameters**
+
+<ParamField path="user_mapping" type="const UserMapping *">
+- User mapping object containing options to be validated
+</ParamField>
+
+### getSupportedUserMappingOptions [#getsupportedusermappingoptions]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string_view> & foreign_storage::OdbcDataWrapper::getSupportedUserMappingOptions() const override
+```
+</CodeBlock>
+
+Gets the set of supported user mapping options for the data wrapper.
+
+### getSupportedSubDatasourceTypes [#getsupportedsubdatasourcetypes]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+std::set<std::string> foreign_storage::OdbcDataWrapper::getSupportedSubDatasourceTypes() const
+```
+</CodeBlock>
+
+Gets the set of more specific supported datasource types.
+
+### getCachedParallelismLevel [#getcachedparallelismlevel]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+ParallelismLevel foreign_storage::OdbcDataWrapper::getCachedParallelismLevel() const override
+```
+</CodeBlock>
+
+Gets the desired level of parallelism for the data wrapper when a cache is in use.
+
+This affects the optional buffers that the data wrapper is made aware of during data requests.
+
+### getNonCachedParallelismLevel [#getnoncachedparallelismlevel]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper"}}>
+```cpp showLineNumbers={false}
+ParallelismLevel foreign_storage::OdbcDataWrapper::getNonCachedParallelismLevel() const override
+```
+</CodeBlock>
+
+Gets the desired level of parallelism for the data wrapper when no cache is in use.
+
+This affects the optional buffers that the data wrapper is made aware of during data requests.
+
+### getDataPreview [#getdatapreview]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "DataPreview": "../structs/datapreview"}}>
+```cpp showLineNumbers={false}
+DataPreview foreign_storage::OdbcDataWrapper::getDataPreview(
+    size_t max_row_count
+) const
+```
+</CodeBlock>
+
+### populateChunkBatchBuffers [#populatechunkbatchbuffers]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "AbstractBuffer": "../../classes/abstractbuffer", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::OdbcDataWrapper::populateChunkBatchBuffers(
+    const ChunkToBatchBufferMap &required_buffers,
+    const ChunkToBatchBufferMap &optional_buffers,
+    const std::vector<AbstractBuffer *> &delete_buffer = {}
+)
+```
+</CodeBlock>
+
+Mirrors [`populateChunkBuffers`](abstractfilestoragedatawrapper#populatechunkbuffers), but uses batch buffers instead as an optimization.
+
+Populates given chunk batch buffers identified by chunk keys. All provided chunk buffers are expected to be for the same fragment.
+
+**Parameters**
+
+<ParamField path="required_buffers" type="const ChunkToBatchBufferMap &">
+- Chunk batch buffers that must always be populated
+</ParamField>
+
+<ParamField path="optional_buffers" type="const ChunkToBatchBufferMap &">
+- Chunk batch buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats)
+</ParamField>
+
+<ParamField path="delete_buffer" type="const std::vector<AbstractBuffer *> &" default="{}">
+- Chunk batch buffer for fragment's delete column, if non-null data wrapper is expected to mark deleted rows in buffer and continue processing
+</ParamField>
+
+### getOptimalBatchSize [#getoptimalbatchsize]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::OdbcDataWrapper::getOptimalBatchSize()
+```
+</CodeBlock>
+
+Get the size of batches to be used in `BatchBuffer` code paths.
+
+This quantity must be a constant and can not change over the course of the lifetime of the data wrapper. Typically, this quantity is chosen to ensure concurrency can be best executed.
+
+### validateSchema [#validateschema]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::OdbcDataWrapper::validateSchema(
+    const std::list<ColumnDescriptor> &columns,
+    const ForeignTable *foreign_table
+) const
+```
+</CodeBlock>
+
+Verifies the schema is supported by this foreign table.
+
+**Parameters**
+
+<ParamField path="columns" type="const std::list<ColumnDescriptor> &">
+- Column descriptors for this table
+</ParamField>
+
+### isLazyFragmentFetchingEnabled [#islazyfragmentfetchingenabled]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::OdbcDataWrapper::isLazyFragmentFetchingEnabled() const
+```
+</CodeBlock>
+
+If `true` data wrapper implements a lazy fragment fetching mode.
+
+This mode allows requests for fragments to be issued to `populateChunks` *without* the prerequisite that [`populateChunkMetadata`](abstractfilestoragedatawrapper#populatechunkmetadata) has successfully finished execution. This is an optimization that has some specific use-cases and is not required.
+
+NOTE: this mode is not guaranteed to work as expected when combined with certain types of refresh modes such as append. This is subject to change in the future, but has no impact on the intended use-cases of this mode.
+
+### acceptsPrepopulatedDeleteBuffer [#acceptsprepopulateddeletebuffer]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::OdbcDataWrapper::acceptsPrepopulatedDeleteBuffer() const
+```
+</CodeBlock>
+
+If `true` data wrapper accepts delete buffers that may be prepoulated with a speculative number of `false` values.
+
+This is an minor optimization that prevents unnecessary allocations and deallocations by reusing the buffer when it is large enouhg, and requiring a smaller allocation when it needs to be resized.
+
+This option is only used when delete buffers are in use.
+
+TODO: remove this method when it will become the default behaviour for all data wrappers going forward.
+
+### processRemoteDataSource [#processremotedatasource]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::processRemoteDataSource(
+    const int64_t buffer_byte_size,
+    ResultSetProcessor result_set_processor,
+    const OdbcSelectDescriptor &select_desc
+)
+```
+</CodeBlock>
+
+### initializeGeoChunks [#initializegeochunks]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "AbstractBuffer": "../../classes/abstractbuffer", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+std::list<Chunk_NS::Chunk> foreign_storage::OdbcDataWrapper::initializeGeoChunks(
+    const std::map<ChunkKey, AbstractBuffer *> &required_buffers,
+    const std::list<const ColumnDescriptor *> &column_descriptors,
+    const int fragment_id
+)
+```
+</CodeBlock>
+
+### updateGeoChunkMetadata [#updategeochunkmetadata]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "AbstractBuffer": "../../classes/abstractbuffer", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::updateGeoChunkMetadata(
+    const std::map<ChunkKey, AbstractBuffer *> &required_buffers,
+    const std::list<Chunk_NS::Chunk> &chunks,
+    const int fragment_id,
+    std::list<std::unique_ptr<ChunkMetadata>> &chunk_metadata
+)
+```
+</CodeBlock>
+
+### processGeoBuffer [#processgeobuffer]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::processGeoBuffer(
+    const std::map<ChunkKey, AbstractBuffer *> &required_buffers,
+    const std::list<const ColumnDescriptor *> &column_descriptors,
+    const ChunkKey &key,
+    const size_t thread_count,
+    AbstractBuffer *delete_buffer
+)
+```
+</CodeBlock>
+
+### processChunkbuffer [#processchunkbuffer]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::processChunkbuffer(
+    const std::map<ChunkKey, AbstractBuffer *> &required_buffers,
+    const ColumnDescriptor *column_descriptor,
+    const ChunkKey &key,
+    const size_t thread_count,
+    AbstractBuffer *delete_buffer
+)
+```
+</CodeBlock>
+
+### processRemoteDataWithThreads [#processremotedatawiththreads]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::processRemoteDataWithThreads(
+    const ChunkKey &key,
+    const size_t thread_count,
+    ResultSetProcessor result_set_processor,
+    const OdbcSelectDescriptor &select_desc
+)
+```
+</CodeBlock>
+
+### appendRemoteDataToChunk [#appendremotedatatochunk]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer", "Chunk": "../../chunkns/classes/chunk", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::appendRemoteDataToChunk(
+    const ColumnDescriptor *column_descriptor,
+    Data_Namespace::AbstractBuffer *data_buffer,
+    Data_Namespace::AbstractBuffer *index_buffer,
+    Data_Namespace::AbstractBuffer *delete_buffer,
+    const ChunkKey &key,
+    Chunk_NS::Chunk &chunk,
+    const int thread_count,
+    const OdbcSelectDescriptor &select_desc
+)
+```
+</CodeBlock>
+
+### getDefaultSelectDescriptor [#getdefaultselectdescriptor]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+OdbcSelectDescriptor foreign_storage::OdbcDataWrapper::getDefaultSelectDescriptor(
+    const ColumnDescriptor *column_descriptor,
+    const ChunkKey &key
+) const
+```
+</CodeBlock>
+
+### getMinValueSelectDescriptor [#getminvalueselectdescriptor]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+OdbcSelectDescriptor foreign_storage::OdbcDataWrapper::getMinValueSelectDescriptor(
+    const ColumnDescriptor *column_descriptor,
+    const ChunkKey &key
+) const
+```
+</CodeBlock>
+
+### getMaxValueSelectDescriptor [#getmaxvalueselectdescriptor]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+OdbcSelectDescriptor foreign_storage::OdbcDataWrapper::getMaxValueSelectDescriptor(
+    const ColumnDescriptor *column_descriptor,
+    const ChunkKey &key
+) const
+```
+</CodeBlock>
+
+### populateMinMaxChunkStats [#populateminmaxchunkstats]
+
+<CodeBlock links={{"OdbcDataWrapper": "odbcdatawrapper", "ChunkStats": "../../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcDataWrapper::populateMinMaxChunkStats(
+    ChunkStats &chunk_stats,
+    const ColumnDescriptor *column_descriptor,
+    const ChunkKey &key
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### ParallelismLevel
+
+ParallelismLevel describes the desired level of parallelism of the data wrapper.
+
+| Name | Value | Description |
+|---|---|---|
+| `NONE` | | |
+| `INTRA_FRAGMENT` | | |
+| `INTER_FRAGMENT` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ODBC_DSN_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ODBC_CONNECTION_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ODBC_SELECT_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ODBC_BUFFER_SIZE_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ODBC_ORDER_BY_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `DEFAULT_BUFFER_SIZE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `ODBC_USERNAME` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ODBC_PASSWORD` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ODBC_CREDENTIAL` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `supported_table_options_` <Badge intent="note" minimal>static</Badge> | `const std::set< std::string_view >` | |
+| `supported_server_options_` <Badge intent="note" minimal>static</Badge> | `const std::set< std::string_view >` | |
+| `supported_user_mapping_options_` <Badge intent="note" minimal>static</Badge> | `const std::set< std::string_view >` | |
+| `db_id_` | `const int` | |
+| `foreign_table_` | `const ForeignTable *` | |
+| `chunk_metadata_map_` | `std::map< ChunkKey, std::shared_ptr< ChunkMetadata > >` | |
+| `fragment_remote_db_rownumber_start_` | `std::map< int, int64_t >` | |
+| `remote_column_details_` | `std::map< int, foreign_storage::RemoteColumnDescription >` | |
+| `odbc_connection_mutex_` | `std::mutex` | |
+| `is_restored_` | `bool` | |
+| `total_row_count_` | `size_t` | |
+| `user_mapping_` | `const UserMapping *` | |
+| `delete_buffer_mutex_` | `std::mutex` | |

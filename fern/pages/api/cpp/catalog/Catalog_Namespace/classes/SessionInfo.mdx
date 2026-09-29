@@ -1,0 +1,208 @@
+---
+title: Catalog_Namespace::SessionInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/SessionInfo.h>
+```
+
+---
+
+## Constructors
+
+### SessionInfo [#sessioninfo]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SessionInfo": "sessioninfo", "Catalog": "catalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::SessionInfo::SessionInfo(
+    std::shared_ptr<Catalog> cat,
+    const UserMetadata &user,
+    const ExecutorDeviceType t,
+    const std::string &sid
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::SessionInfo::SessionInfo(
+    const SessionInfo &s
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getCatalog [#getcatalog]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+Catalog & Catalog_Namespace::SessionInfo::getCatalog() const
+```
+</CodeBlock>
+
+### get_catalog_ptr [#getcatalogptr]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog> Catalog_Namespace::SessionInfo::get_catalog_ptr() const
+```
+</CodeBlock>
+
+### set_catalog_ptr [#setcatalogptr]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SessionInfo::set_catalog_ptr(
+    std::shared_ptr<Catalog> c
+)
+```
+</CodeBlock>
+
+### get_currentUser [#getcurrentuser]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+const UserMetadata & Catalog_Namespace::SessionInfo::get_currentUser() const
+```
+</CodeBlock>
+
+### get_executor_device_type [#getexecutordevicetype]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+const ExecutorDeviceType Catalog_Namespace::SessionInfo::get_executor_device_type() const
+```
+</CodeBlock>
+
+### set_executor_device_type [#setexecutordevicetype]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SessionInfo::set_executor_device_type(
+    ExecutorDeviceType t
+)
+```
+</CodeBlock>
+
+### get_session_id [#getsessionid]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::SessionInfo::get_session_id() const
+```
+</CodeBlock>
+
+### get_last_used_time [#getlastusedtime]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+time_t Catalog_Namespace::SessionInfo::get_last_used_time() const
+```
+</CodeBlock>
+
+### update_last_used_time [#updatelastusedtime]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SessionInfo::update_last_used_time()
+```
+</CodeBlock>
+
+### checkDBAccessPrivileges [#checkdbaccessprivileges]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo", "AccessPrivileges": "../../structs/accessprivileges"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SessionInfo::checkDBAccessPrivileges(
+    const DBObjectType &permissionType,
+    const AccessPrivileges &privs,
+    const std::string &objectName = ""
+) const
+```
+</CodeBlock>
+
+### get_start_time [#getstarttime]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+time_t Catalog_Namespace::SessionInfo::get_start_time() const
+```
+</CodeBlock>
+
+### get_public_session_id [#getpublicsessionid]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+std::string const  & Catalog_Namespace::SessionInfo::get_public_session_id() const
+```
+</CodeBlock>
+
+### operator std::string [#operatorstdstring]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::SessionInfo::operator std::string() const
+```
+</CodeBlock>
+
+### get_connection_info [#getconnectioninfo]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+std::string const  & Catalog_Namespace::SessionInfo::get_connection_info() const
+```
+</CodeBlock>
+
+### set_connection_info [#setconnectioninfo]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SessionInfo::set_connection_info(
+    const std::string &connection
+)
+```
+</CodeBlock>
+
+### getLock [#getlock]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+heavyai::shared_mutex & Catalog_Namespace::SessionInfo::getLock() const
+```
+</CodeBlock>
+
+### public_session_id [#publicsessionid]
+
+<CodeBlock links={{"SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::SessionInfo::public_session_id() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `catalog_` | `std::shared_ptr< Catalog >` | |
+| `currentUser_` | `UserMetadata` | |
+| `executor_device_type_` | `std::atomic< ExecutorDeviceType >` | |
+| `session_id_` | `const std::string` | |
+| `last_used_time_` | `std::atomic< time_t >` | |
+| `start_time_` | `std::atomic< time_t >` | |
+| `public_session_id_` | `const std::string` | |
+| `connection_info_` | `std::string` | |
+| `mtx_` | `heavyai::shared_mutex` | |

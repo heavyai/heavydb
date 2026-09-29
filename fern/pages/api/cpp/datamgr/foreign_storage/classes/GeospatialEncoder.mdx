@@ -1,0 +1,282 @@
+---
+title: foreign_storage::GeospatialEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/GeospatialEncoder.h>
+```
+
+---
+
+## Constructors
+
+### GeospatialEncoder [#geospatialencoder]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+foreign_storage::GeospatialEncoder::GeospatialEncoder(
+    const bool geo_validate_geometry
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+foreign_storage::GeospatialEncoder::GeospatialEncoder(
+    std::list<Chunk_NS::Chunk> &chunks,
+    const bool geo_validate_geometry
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+foreign_storage::GeospatialEncoder::GeospatialEncoder(
+    std::list<Chunk_NS::Chunk> &chunks,
+    std::list<std::unique_ptr<ChunkMetadata>> &chunk_metadata,
+    const bool geo_validate_geometry
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~GeospatialEncoder
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+virtual foreign_storage::GeospatialEncoder::~GeospatialEncoder() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### appendBaseDataAndUpdateMetadata [#appendbasedataandupdatemetadata]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::GeospatialEncoder::appendBaseDataAndUpdateMetadata(
+    const int64_t row_count
+)
+```
+</CodeBlock>
+
+### validateChunksSizing [#validatechunkssizing]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::GeospatialEncoder::validateChunksSizing(
+    const std::list<Chunk_NS::Chunk> &chunks
+) const
+```
+</CodeBlock>
+
+### validateMetadataSizing [#validatemetadatasizing]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::GeospatialEncoder::validateMetadataSizing(
+    const std::list<std::unique_ptr<ChunkMetadata>> &chunk_metadata
+) const
+```
+</CodeBlock>
+
+### appendArrayDatumsToBufferAndUpdateMetadata [#appendarraydatumstobufferandupdatemetadata]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::GeospatialEncoder::appendArrayDatumsToBufferAndUpdateMetadata()
+```
+</CodeBlock>
+
+### appendToArrayEncoderAndUpdateMetadata [#appendtoarrayencoderandupdatemetadata]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder", "Encoder": "../../classes/encoder", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::GeospatialEncoder::appendToArrayEncoderAndUpdateMetadata(
+    const std::vector<ArrayDatum> &datum_parse_buffer,
+    Encoder *encoder,
+    ChunkMetadata *chunk_metadata
+) const
+```
+</CodeBlock>
+
+### processGeoElement [#processgeoelement]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::GeospatialEncoder::processGeoElement(
+    std::string_view geo_string_view
+)
+```
+</CodeBlock>
+
+### processNullGeoElement [#processnullgeoelement]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::GeospatialEncoder::processNullGeoElement()
+```
+</CodeBlock>
+
+### clearParseBuffers [#clearparsebuffers]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::GeospatialEncoder::clearParseBuffers()
+```
+</CodeBlock>
+
+### clearDatumBuffers [#cleardatumbuffers]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::GeospatialEncoder::clearDatumBuffers()
+```
+</CodeBlock>
+
+### getIteratorForGeoColumnType [#getiteratorforgeocolumntype]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+std::list<T>::iterator foreign_storage::GeospatialEncoder::getIteratorForGeoColumnType(
+    std::list<T> &list,
+    const SQLTypes column_type,
+    const GeoColumnType geo_column
+)
+```
+</CodeBlock>
+
+### initEncoderAndGetEncoderAndMetadata [#initencoderandgetencoderandmetadata]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata", "Encoder": "../../classes/encoder"}}>
+```cpp showLineNumbers={false}
+std::tuple<Encoder *, ChunkMetadata *, const ColumnDescriptor *> foreign_storage::GeospatialEncoder::initEncoderAndGetEncoderAndMetadata(
+    std::list<Chunk_NS::Chunk> &chunks,
+    std::list<std::unique_ptr<ChunkMetadata>> &chunk_metadata,
+    const SQLTypes sql_type,
+    GeoColumnType geo_column_type
+)
+```
+</CodeBlock>
+
+### getColumnDescriptor [#getcolumndescriptor]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * foreign_storage::GeospatialEncoder::getColumnDescriptor(
+    std::list<Chunk_NS::Chunk> &chunks,
+    const SQLTypes sql_type,
+    GeoColumnType geo_column_type
+)
+```
+</CodeBlock>
+
+### hasBoundsColumn [#hasboundscolumn]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::GeospatialEncoder::hasBoundsColumn() const
+```
+</CodeBlock>
+
+### hasRingOrLineSizesColumn [#hasringorlinesizescolumn]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::GeospatialEncoder::hasRingOrLineSizesColumn() const
+```
+</CodeBlock>
+
+### hasPolyRingsColumn [#haspolyringscolumn]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::GeospatialEncoder::hasPolyRingsColumn() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### throwMalformedGeoElement [#throwmalformedgeoelement]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::GeospatialEncoder::throwMalformedGeoElement(
+    const std::string &omnisci_column_name
+)
+```
+</CodeBlock>
+
+### throwMismatchedGeoElement [#throwmismatchedgeoelement]
+
+<CodeBlock links={{"GeospatialEncoder": "geospatialencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::GeospatialEncoder::throwMismatchedGeoElement(
+    const std::string &omnisci_column_name
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### GeoColumnType
+
+| Name | Value | Description |
+|---|---|---|
+| `COORDS` | | |
+| `BOUNDS` | | |
+| `RING_OR_LINE_SIZES` | | |
+| `POLY_RINGS` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `geo_column_descriptor_` | `const ColumnDescriptor *` | |
+| `base_column_encoder_` | `StringNoneEncoder *` | |
+| `coords_column_encoder_` | `Encoder *` | |
+| `bounds_column_encoder_` | `Encoder *` | |
+| `ring_or_line_sizes_column_encoder_` | `Encoder *` | |
+| `poly_rings_column_encoder_` | `Encoder *` | |
+| `base_column_metadata_` | `ChunkMetadata *` | |
+| `coords_column_metadata_` | `ChunkMetadata *` | |
+| `bounds_column_metadata_` | `ChunkMetadata *` | |
+| `ring_or_line_sizes_column_metadata_` | `ChunkMetadata *` | |
+| `poly_rings_column_metadata_` | `ChunkMetadata *` | |
+| `coords_column_descriptor_` | `const ColumnDescriptor *` | |
+| `bounds_column_descriptor_` | `const ColumnDescriptor *` | |
+| `ring_or_line_sizes_column_descriptor_` | `const ColumnDescriptor *` | |
+| `poly_rings_column_descriptor_` | `const ColumnDescriptor *` | |
+| `base_values_` | `std::vector< std::string >` | |
+| `coords_parse_buffer_` | `std::vector< double >` | |
+| `bounds_parse_buffer_` | `std::vector< double >` | |
+| `ring_or_line_sizes_parse_buffer_` | `std::vector< int >` | |
+| `poly_rings_parse_buffer_` | `std::vector< int >` | |
+| `coords_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `bounds_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `ring_or_line_sizes_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `poly_rings_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `geo_validate_geometry_` | `bool` | |

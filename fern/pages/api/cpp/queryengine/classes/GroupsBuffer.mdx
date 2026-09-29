@@ -1,0 +1,59 @@
+---
+title: GroupsBuffer
+description: ""
+---
+
+---
+
+## Constructors
+
+### GroupsBuffer [#groupsbuffer]
+
+<CodeBlock links={{"GroupsBuffer": "groupsbuffer"}}>
+```cpp showLineNumbers={false}
+GroupsBuffer::GroupsBuffer(
+    const size_t groups_buffer_entry_count,
+    const size_t key_qw_count,
+    const int64_t init_val
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~GroupsBuffer
+
+<CodeBlock links={{"GroupsBuffer": "groupsbuffer"}}>
+```cpp showLineNumbers={false}
+GroupsBuffer::~GroupsBuffer()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator int64_t * [#operatorint64t]
+
+<CodeBlock links={{"GroupsBuffer": "groupsbuffer"}}>
+```cpp showLineNumbers={false}
+GroupsBuffer::operator int64_t *() const
+```
+</CodeBlock>
+
+### qw_size [#qwsize]
+
+<CodeBlock links={{"GroupsBuffer": "groupsbuffer"}}>
+```cpp showLineNumbers={false}
+size_t GroupsBuffer::qw_size() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `groups_buffer_` | `int64_t *` | |
+| `size_` | `const size_t` | |

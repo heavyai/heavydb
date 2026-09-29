@@ -1,0 +1,37 @@
+---
+title: get_group_value_fast
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t * get_group_value_fast(
+    int64_t *groups_buffer,
+    const int64_t key,
+    const int64_t min_key,
+    const int64_t bucket,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT int64_t * get_group_value_fast(
+    int64_t *groups_buffer,
+    const int64_t key,
+    const int64_t min_key,
+    const int64_t bucket,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

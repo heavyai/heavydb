@@ -1,0 +1,63 @@
+---
+title: foreign_storage::ParquetImportEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetEncoder.h>
+```
+
+---
+
+## Methods
+
+### eraseInvalidIndicesInBuffer [#eraseinvalidindicesinbuffer]
+
+<CodeBlock links={{"ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetImportEncoder::eraseInvalidIndicesInBuffer(
+    const InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+### validateAndAppendData [#validateandappenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetImportEncoder::validateAndAppendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetImportEncoder::validateAndAppendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

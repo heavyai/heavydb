@@ -1,0 +1,204 @@
+---
+title: ModifyManipulationTarget
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+---
+
+## Constructors
+
+### ModifyManipulationTarget [#modifymanipulationtarget]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+ModifyManipulationTarget::ModifyManipulationTarget(
+    bool const update_via_select = false,
+    bool const delete_via_select = false,
+    bool const varlen_update_required = false,
+    TableDescriptor const *table_descriptor = nullptr,
+    ColumnNameList target_columns = ColumnNameList(),
+    const Catalog_Namespace::Catalog *catalog = nullptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setUpdateViaSelectFlag [#setupdateviaselectflag]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void ModifyManipulationTarget::setUpdateViaSelectFlag(
+    bool required
+) const
+```
+</CodeBlock>
+
+### setDeleteViaSelectFlag [#setdeleteviaselectflag]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void ModifyManipulationTarget::setDeleteViaSelectFlag(
+    bool required
+) const
+```
+</CodeBlock>
+
+### setVarlenUpdateRequired [#setvarlenupdaterequired]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void ModifyManipulationTarget::setVarlenUpdateRequired(
+    bool required
+) const
+```
+</CodeBlock>
+
+### forceRowwiseOutput [#forcerowwiseoutput]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void ModifyManipulationTarget::forceRowwiseOutput() const
+```
+</CodeBlock>
+
+### getModifiedTableDescriptor [#getmodifiedtabledescriptor]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+TableDescriptor const  * ModifyManipulationTarget::getModifiedTableDescriptor() const
+```
+</CodeBlock>
+
+### getTableDescriptor [#gettabledescriptor]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+TableDescriptor const  * ModifyManipulationTarget::getTableDescriptor() const
+```
+</CodeBlock>
+
+### setModifiedTableDescriptor [#setmodifiedtabledescriptor]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void ModifyManipulationTarget::setModifiedTableDescriptor(
+    TableDescriptor const *td
+) const
+```
+</CodeBlock>
+
+### getModifiedTableCatalog [#getmodifiedtablecatalog]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const Catalog_Namespace::Catalog * ModifyManipulationTarget::getModifiedTableCatalog() const
+```
+</CodeBlock>
+
+### setModifiedTableCatalog [#setmodifiedtablecatalog]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void ModifyManipulationTarget::setModifiedTableCatalog(
+    const Catalog_Namespace::Catalog *catalog
+) const
+```
+</CodeBlock>
+
+### isUpdateViaSelect [#isupdateviaselect]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const ModifyManipulationTarget::isUpdateViaSelect() const
+```
+</CodeBlock>
+
+### isDeleteViaSelect [#isdeleteviaselect]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const ModifyManipulationTarget::isDeleteViaSelect() const
+```
+</CodeBlock>
+
+### isVarlenUpdateRequired [#isvarlenupdaterequired]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const ModifyManipulationTarget::isVarlenUpdateRequired() const
+```
+</CodeBlock>
+
+### isProjectForUpdate [#isprojectforupdate]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const ModifyManipulationTarget::isProjectForUpdate() const
+```
+</CodeBlock>
+
+### isRowwiseOutputForced [#isrowwiseoutputforced]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const ModifyManipulationTarget::isRowwiseOutputForced() const
+```
+</CodeBlock>
+
+### setTargetColumns [#settargetcolumns]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void ModifyManipulationTarget::setTargetColumns(
+    ColumnNameList const &target_columns
+) const
+```
+</CodeBlock>
+
+### getTargetColumns [#gettargetcolumns]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+ColumnNameList const  & ModifyManipulationTarget::getTargetColumns() const
+```
+</CodeBlock>
+
+### invalidateTargetColumns [#invalidatetargetcolumns]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void ModifyManipulationTarget::invalidateTargetColumns() const
+```
+</CodeBlock>
+
+### validateTargetColumns [#validatetargetcolumns]
+
+<CodeBlock links={{"ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+template <typename VALIDATION_FUNCTOR>
+bool ModifyManipulationTarget::validateTargetColumns(
+    VALIDATION_FUNCTOR validator
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_update_via_select_` | `bool` | |
+| `is_delete_via_select_` | `bool` | |
+| `varlen_update_required_` | `bool` | |
+| `table_descriptor_` | `TableDescriptor const  *` | |
+| `target_columns_` | `ColumnNameList` | |
+| `force_rowwise_output_` | `bool` | |
+| `catalog_` | `const Catalog_Namespace::Catalog *` | |

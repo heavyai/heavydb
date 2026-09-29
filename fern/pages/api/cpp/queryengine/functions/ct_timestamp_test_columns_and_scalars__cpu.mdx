@@ -1,0 +1,16 @@
+---
+title: ct_timestamp_test_columns_and_scalars__cpu
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column", "Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t ct_timestamp_test_columns_and_scalars__cpu(
+    const Column<Timestamp> &input,
+    const int64_t dummy,
+    const int32_t multiplier,
+    const Column<Timestamp> &input2,
+    Column<Timestamp> &out
+)
+```
+</CodeBlock>

@@ -1,0 +1,53 @@
+---
+title: ResultSetMetaInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetRecycler.h>
+```
+
+---
+
+## Constructors
+
+### ResultSetMetaInfo [#resultsetmetainfo]
+
+<CodeBlock links={{"ResultSetMetaInfo": "resultsetmetainfo"}}>
+```cpp showLineNumbers={false}
+ResultSetMetaInfo::ResultSetMetaInfo(
+    const std::unordered_set<size_t> input_table_infos
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### keepTargetExprs [#keeptargetexprs]
+
+<CodeBlock links={{"ResultSetMetaInfo": "resultsetmetainfo"}}>
+```cpp showLineNumbers={false}
+void ResultSetMetaInfo::keepTargetExprs(
+    std::vector<std::shared_ptr<Analyzer::Expr>> &in_target_exprs
+)
+```
+</CodeBlock>
+
+### getTargetExprs [#gettargetexprs]
+
+<CodeBlock links={{"ResultSetMetaInfo": "resultsetmetainfo"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> & ResultSetMetaInfo::getTargetExprs()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `input_table_keys` | `std::unordered_set< size_t >` | |
+| `target_exprs` | `std::vector< std::shared_ptr< Analyzer::Expr > >` | |

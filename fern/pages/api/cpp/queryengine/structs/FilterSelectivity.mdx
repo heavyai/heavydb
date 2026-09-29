@@ -1,0 +1,32 @@
+---
+title: FilterSelectivity
+description: "Statistics stored for filters with respect to a table, so that selective filters can be pushed down in join operations."
+---
+
+Statistics stored for filters with respect to a table, so that selective filters can be pushed down in join operations.
+
+```cpp showLineNumbers={false}
+#include <JoinFilterPushDown.h>
+```
+
+---
+
+## Methods
+
+### isFilterSelectiveEnough [#isfilterselectiveenough]
+
+<CodeBlock links={{"FilterSelectivity": "filterselectivity"}}>
+```cpp showLineNumbers={false}
+bool FilterSelectivity::isFilterSelectiveEnough() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_valid` | `const bool` | |
+| `selectivity` | `const float` | |
+| `num_rows_passed` | `const size_t` | |

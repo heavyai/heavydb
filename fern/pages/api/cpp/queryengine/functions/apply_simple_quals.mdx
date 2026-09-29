@@ -1,0 +1,33 @@
+---
+title: apply_simple_quals
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange apply_simple_quals(
+    const Analyzer::ColumnVar *col_expr,
+    const ExpressionRange &col_range,
+    const boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange apply_simple_quals(
+    const Analyzer::ColumnVar *,
+    const ExpressionRange &,
+    const boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>>=boost::none
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,22 @@
+---
+title: omniverse_connector::export_polygons
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void omniverse_connector::export_polygons(
+    const int64_t num_rows,
+    const int64_t *rowids,
+    const std::vector<std::vector<double>> &row_coords,
+    const std::vector<std::vector<int32_t>> &row_ring_sizes,
+    const std::vector<std::vector<int32_t>> &row_poly_rings,
+    const double *row_centroids_x,
+    const double *row_centroids_y,
+    const float *row_base_elevations,
+    const std::vector<std::vector<float>> &row_heights,
+    int32_t **&row_mesh_data,
+    int32_t *&row_mesh_data_size
+)
+```
+</CodeBlock>

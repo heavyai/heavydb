@@ -1,0 +1,534 @@
+---
+title: import_export::OptionallyMemoryManagedTypedImportBuffer
+description: ""
+---
+
+<CodeBlock id="OptionallyMemoryManagedTypedImportBuffer" links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+template <const bool managed_memory = true>
+class OptionallyMemoryManagedTypedImportBuffer
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <import_export/Importer.h>
+```
+
+**Template parameters**
+
+<ParamField path="managed_memory" type="const bool" default="true">
+</ParamField>
+
+**Inherits from:** `boost::noncopyable` (private)
+
+---
+
+## Constructors
+
+### OptionallyMemoryManagedTypedImportBuffer [#optionallymemorymanagedtypedimportbuffer]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::OptionallyMemoryManagedTypedImportBuffer(
+    const ColumnDescriptor *col_desc,
+    StringDictionary *string_dict
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~OptionallyMemoryManagedTypedImportBuffer
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::~OptionallyMemoryManagedTypedImportBuffer()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### addBoolean [#addboolean]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addBoolean(
+    const int8_t v
+)
+```
+</CodeBlock>
+
+### addTinyint [#addtinyint]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addTinyint(
+    const int8_t v
+)
+```
+</CodeBlock>
+
+### addSmallint [#addsmallint]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addSmallint(
+    const int16_t v
+)
+```
+</CodeBlock>
+
+### addInt [#addint]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addInt(
+    const int32_t v
+)
+```
+</CodeBlock>
+
+### addBigint [#addbigint]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addBigint(
+    const int64_t v
+)
+```
+</CodeBlock>
+
+### addFloat [#addfloat]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addFloat(
+    const float v
+)
+```
+</CodeBlock>
+
+### addDouble [#adddouble]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addDouble(
+    const double v
+)
+```
+</CodeBlock>
+
+### addString [#addstring]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addString(
+    const std::string_view v
+)
+```
+</CodeBlock>
+
+### addDictStringWithTruncation [#adddictstringwithtruncation]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addDictStringWithTruncation(
+    std::string_view v
+)
+```
+</CodeBlock>
+
+### addGeoString [#addgeostring]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addGeoString(
+    const std::string_view v
+)
+```
+</CodeBlock>
+
+### addArray [#addarray]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addArray(
+    const ArrayDatum &v
+)
+```
+</CodeBlock>
+
+### addStringArray [#addstringarray]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+OptionalStringVector & import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addStringArray()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addStringArray(
+    const OptionalStringVector &arr
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### addDictEncodedString [#adddictencodedstring]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+template <typename VectorType>
+template void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addDictEncodedString(
+    const VectorType &string_vec
+)
+```
+</CodeBlock>
+
+### addDictEncodedStringArray [#adddictencodedstringarray]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+template <typename VectorType>
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addDictEncodedStringArray(
+    const VectorType &string_array_vec
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getTypeInfo() const
+```
+</CodeBlock>
+
+### getColumnDesc [#getcolumndesc]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getColumnDesc() const
+```
+</CodeBlock>
+
+### getStringDictionary [#getstringdictionary]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+StringDictionary * import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getStringDictionary() const
+```
+</CodeBlock>
+
+### getAsBytes [#getasbytes]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+int8_t * import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getAsBytes() const
+```
+</CodeBlock>
+
+### getElementSize [#getelementsize]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+size_t import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getElementSize() const
+```
+</CodeBlock>
+
+### getStringBuffer [#getstringbuffer]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+vector<std::string> * import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getStringBuffer() const
+```
+</CodeBlock>
+
+### getGeoStringBuffer [#getgeostringbuffer]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+vector<std::string> * import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getGeoStringBuffer() const
+```
+</CodeBlock>
+
+### getArrayBuffer [#getarraybuffer]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+vector<ArrayDatum> * import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getArrayBuffer() const
+```
+</CodeBlock>
+
+### getStringArrayBuffer [#getstringarraybuffer]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+vector<OptionalStringVector> * import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getStringArrayBuffer() const
+```
+</CodeBlock>
+
+### getStringArrayDictBuffer [#getstringarraydictbuffer]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+vector<ArrayDatum> * import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getStringArrayDictBuffer() const
+```
+</CodeBlock>
+
+### getStringDictBuffer [#getstringdictbuffer]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+int8_t * import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getStringDictBuffer() const
+```
+</CodeBlock>
+
+### stringDictCheckpoint [#stringdictcheckpoint]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+bool import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::stringDictCheckpoint()
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::clear()
+```
+</CodeBlock>
+
+### add_values [#addvalues]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+size_t import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::add_values(
+    const ColumnDescriptor *cd,
+    const TColumn &data
+)
+```
+</CodeBlock>
+
+### add_arrow_values [#addarrowvalues]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer", "BadRowsTracker": "../structs/badrowstracker"}}>
+```cpp showLineNumbers={false}
+size_t import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::add_arrow_values(
+    const ColumnDescriptor *cd,
+    const arrow::Array &data,
+    const bool exact_type_match,
+    const ArraySliceRange &slice_range,
+    BadRowsTracker *bad_rows_tracker
+)
+```
+</CodeBlock>
+
+### add_value [#addvalue]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::add_value(
+    const ColumnDescriptor *cd,
+    const std::string_view val,
+    const bool is_null,
+    const CopyParams &copy_params,
+    const bool check_not_null = true
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::add_value(
+    const ColumnDescriptor *cd,
+    const TDatum &val,
+    const bool is_null
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### addDefaultValues [#adddefaultvalues]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::addDefaultValues(
+    const ColumnDescriptor *cd,
+    size_t num_rows
+)
+```
+</CodeBlock>
+
+### pop_value [#popvalue]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+void import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::pop_value()
+```
+</CodeBlock>
+
+### convert_arrow_val_to_import_buffer [#convertarrowvaltoimportbuffer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer", "BadRowsTracker": "../structs/badrowstracker"}}>
+```cpp showLineNumbers={false}
+template <typename DATA_TYPE>
+size_t import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::convert_arrow_val_to_import_buffer(
+    const ColumnDescriptor *cd,
+    const arrow::Array &array,
+    vector<DATA_TYPE> &buffer,
+    const ArraySliceRange &slice_range,
+    BadRowsTracker *const bad_rows_tracker
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer", "BadRowsTracker": "../structs/badrowstracker"}}>
+```cpp showLineNumbers={false}
+template <typename DATA_TYPE>
+size_t import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::convert_arrow_val_to_import_buffer(
+    const ColumnDescriptor *cd,
+    const Array &array,
+    vector<DATA_TYPE> &buffer,
+    const ArraySliceRange &slice_range,
+    import_export::BadRowsTracker *const bad_rows_tracker
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### del_values [#delvalues]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer", "BadRowsTracker": "../structs/badrowstracker"}}>
+```cpp showLineNumbers={false}
+template <typename DATA_TYPE>
+auto import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::del_values(
+    vector<DATA_TYPE> &buffer,
+    BadRowsTracker *const bad_rows_tracker
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer", "BadRowsTracker": "../structs/badrowstracker"}}>
+```cpp showLineNumbers={false}
+auto import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::del_values(
+    const SQLTypes type,
+    BadRowsTracker *const bad_rows_tracker
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Static methods
+
+### getImportBufferMemoryUsage [#getimportbuffermemoryusage]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer", "ImportBufferMemoryUsage": "#importbuffermemoryusage"}}>
+```cpp showLineNumbers={false}
+static ImportBufferMemoryUsage import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::getImportBufferMemoryUsage()
+```
+</CodeBlock>
+
+### get_data_block_pointers [#getdatablockpointers]
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+std::vector<DataBlockPtr> import_export::OptionallyMemoryManagedTypedImportBuffer<managed_memory>::get_data_block_pointers(
+    const std::vector<std::unique_ptr<OptionallyMemoryManagedTypedImportBuffer<managed_memory>>> &import_buffers
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `vector` | `typename std:: conditional< managed_memory, import_export::vector< T >, std::vector< T > >::type` |
+| `OptionalStringVector` | `std::optional< std::vector< std::string > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `import_buffers` | `std::vector< std::unique_ptr< OptionallyMemoryManagedTypedImportBuffer< managed_memory > > > *` | |
+| `col_idx` | `size_t` | |
+| `bool_buffer_` | `vector< int8_t > *` | |
+| `tinyint_buffer_` | `vector< int8_t > *` | |
+| `smallint_buffer_` | `vector< int16_t > *` | |
+| `int_buffer_` | `vector< int32_t > *` | |
+| `bigint_buffer_` | `vector< int64_t > *` | |
+| `float_buffer_` | `vector< float > *` | |
+| `double_buffer_` | `vector< double > *` | |
+| `string_buffer_` | `vector< std::string > *` | |
+| `geo_string_buffer_` | `vector< std::string > *` | |
+| `array_buffer_` | `vector< ArrayDatum > *` | |
+| `string_array_buffer_` | `vector< OptionalStringVector > *` | |
+| `string_dict_i8_buffer_` | `vector< uint8_t > *` | |
+| `string_dict_i16_buffer_` | `vector< uint16_t > *` | |
+| `string_dict_i32_buffer_` | `vector< int32_t > *` | |
+| `string_array_dict_buffer_` | `vector< ArrayDatum > *` | |
+| `` | `union import_export::OptionallyMemoryManagedTypedImportBuffer` | |
+| `` | `union import_export::OptionallyMemoryManagedTypedImportBuffer` | |
+| `column_desc_` | `const ColumnDescriptor *` | |
+| `string_dict_` | `StringDictionary *` | |
+
+---
+
+## Inner classes
+
+### ImportBufferMemoryUsage
+
+<CodeBlock links={{"OptionallyMemoryManagedTypedImportBuffer": "optionallymemorymanagedtypedimportbuffer"}}>
+```cpp showLineNumbers={false}
+struct import_export::OptionallyMemoryManagedTypedImportBuffer::ImportBufferMemoryUsage
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `fixed_length` | `size_t` | |
+| `var_length` | `size_t` | |

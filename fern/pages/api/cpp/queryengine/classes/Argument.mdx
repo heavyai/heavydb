@@ -1,0 +1,53 @@
+---
+title: Argument
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Value` (public)
+
+---
+
+## Constructors
+
+### Argument [#argument]
+
+<CodeBlock links={{"Argument": "argument"}}>
+```cpp showLineNumbers={false}
+Argument::Argument(
+    const Type type,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### type [#type]
+
+<CodeBlock links={{"Argument": "argument", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Type Argument::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"Argument": "argument", "Value": "value"}}>
+```cpp showLineNumbers={false}
+size_t Argument::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"Argument": "argument", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const std::string & Argument::label() const
+```
+</CodeBlock>

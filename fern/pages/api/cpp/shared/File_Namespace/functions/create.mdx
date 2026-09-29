@@ -1,0 +1,49 @@
+---
+title: File_Namespace::create
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::pair<FILE *, std::string> File_Namespace::create(
+    const std::string &basePath,
+    const int fileId,
+    const size_t pageSize,
+    const size_t numPages
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+FILE * File_Namespace::create(
+    const std::string &full_path,
+    const size_t requested_file_size
+)
+```
+</CodeBlock>
+
+Opens/creates a file with the given path and file size.
+
+Fatal crash if file can not be created to required size.
+
+**Returns:** FILE* A pointer to a FILE pointer; cannot be null.
+
+**Parameters**
+
+<ParamField path="full_path" type="const std::string &">
+Full path to file. ^
+</ParamField>
+
+<ParamField path="requested_file_size" type="const size_t">
+File size file must be created with.
+</ParamField>
+
+</Tab>
+</Tabs>

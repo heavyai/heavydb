@@ -1,0 +1,27 @@
+---
+title: ST_DWithin_LineString_Polygon
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+EXTENSION_INLINE bool ST_DWithin_LineString_Polygon(
+    int8_t *l1,
+    int64_t l1size,
+    double *l1bounds,
+    int64_t l1bounds_size,
+    int8_t *poly_coords,
+    int64_t poly_coords_size,
+    int32_t *poly_ring_sizes,
+    int64_t poly_num_rings,
+    double *poly_bounds,
+    int64_t poly_bounds_size,
+    int32_t ic1,
+    int32_t isr1,
+    int32_t ic2,
+    int32_t isr2,
+    int32_t osr,
+    double distance_within
+)
+```
+</CodeBlock>

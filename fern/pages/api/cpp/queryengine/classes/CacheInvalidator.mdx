@@ -1,0 +1,64 @@
+---
+title: CacheInvalidator
+description: ""
+---
+
+<CodeBlock id="CacheInvalidator" links={{"CacheInvalidator": "cacheinvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename... CACHE_HOLDING_TYPES>
+class CacheInvalidator
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <CacheInvalidator.h>
+```
+
+**Template parameters**
+
+<ParamField path="CACHE_HOLDING_TYPES..." type="typename...">
+</ParamField>
+
+---
+
+## Constructors
+
+### CacheInvalidator [#cacheinvalidator]
+
+<CodeBlock links={{"CacheInvalidator": "cacheinvalidator"}}>
+```cpp showLineNumbers={false}
+CacheInvalidator<CACHE_HOLDING_TYPES>::CacheInvalidator() = delete
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~CacheInvalidator
+
+<CodeBlock links={{"CacheInvalidator": "cacheinvalidator"}}>
+```cpp showLineNumbers={false}
+CacheInvalidator<CACHE_HOLDING_TYPES>::~CacheInvalidator() = delete
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### invalidateCaches [#invalidatecaches]
+
+<CodeBlock links={{"CacheInvalidator": "cacheinvalidator"}}>
+```cpp showLineNumbers={false}
+static void CacheInvalidator<CACHE_HOLDING_TYPES>::invalidateCaches()
+```
+</CodeBlock>
+
+### invalidateCachesByTable [#invalidatecachesbytable]
+
+<CodeBlock links={{"CacheInvalidator": "cacheinvalidator"}}>
+```cpp showLineNumbers={false}
+static void CacheInvalidator<CACHE_HOLDING_TYPES>::invalidateCachesByTable(
+    size_t table_key
+)
+```
+</CodeBlock>

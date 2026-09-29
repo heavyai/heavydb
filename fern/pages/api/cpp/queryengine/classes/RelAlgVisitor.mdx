@@ -1,0 +1,173 @@
+---
+title: RelAlgVisitor
+description: ""
+---
+
+<CodeBlock id="RelAlgVisitor" links={{"RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+template <class T>
+class RelAlgVisitor
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <RelAlgVisitor.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="class">
+</ParamField>
+
+---
+
+## Methods
+
+### visit [#visit]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+T RelAlgVisitor<T>::visit(
+    const RelAlgNode *rel_alg
+) const
+```
+</CodeBlock>
+
+### visitAggregate [#visitaggregate]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitAggregate(
+    const RelAggregate *
+) const
+```
+</CodeBlock>
+
+### visitCompound [#visitcompound]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitCompound(
+    const RelCompound *
+) const
+```
+</CodeBlock>
+
+### visitFilter [#visitfilter]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelFilter": "relfilter"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitFilter(
+    const RelFilter *
+) const
+```
+</CodeBlock>
+
+### visitJoin [#visitjoin]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelJoin": "reljoin"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitJoin(
+    const RelJoin *
+) const
+```
+</CodeBlock>
+
+### visitLeftDeepInnerJoin [#visitleftdeepinnerjoin]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelLeftDeepInnerJoin": "relleftdeepinnerjoin"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitLeftDeepInnerJoin(
+    const RelLeftDeepInnerJoin *
+) const
+```
+</CodeBlock>
+
+### visitProject [#visitproject]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitProject(
+    const RelProject *
+) const
+```
+</CodeBlock>
+
+### visitScan [#visitscan]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitScan(
+    const RelScan *
+) const
+```
+</CodeBlock>
+
+### visitSort [#visitsort]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitSort(
+    const RelSort *
+) const
+```
+</CodeBlock>
+
+### visitLogicalValues [#visitlogicalvalues]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitLogicalValues(
+    const RelLogicalValues *
+) const
+```
+</CodeBlock>
+
+### visitModify [#visitmodify]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelModify": "relmodify"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitModify(
+    const RelModify *
+) const
+```
+</CodeBlock>
+
+### visitTableFunction [#visittablefunction]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitTableFunction(
+    const RelTableFunction *
+) const
+```
+</CodeBlock>
+
+### visitLogicalUnion [#visitlogicalunion]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor", "RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::visitLogicalUnion(
+    const RelLogicalUnion *
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::aggregateResult(
+    const T &aggregate,
+    const T &next_result
+) const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T RelAlgVisitor<T>::defaultResult() const
+```
+</CodeBlock>

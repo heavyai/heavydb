@@ -1,0 +1,173 @@
+---
+title: data_conversion::StringViewToStringDictEncoder
+description: ""
+---
+
+<CodeBlock id="StringViewToStringDictEncoder" links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder"}}>
+```cpp showLineNumbers={false}
+template <typename IdType>
+class StringViewToStringDictEncoder
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <data_conversion/StringViewToStringDictEncoder.h>
+```
+
+**Template parameters**
+
+<ParamField path="IdType" type="typename">
+</ParamField>
+
+**Inherits from:** `data_conversion::TypedBaseConvertEncoder< IdType >` (public)
+
+---
+
+## Constructors
+
+### StringViewToStringDictEncoder [#stringviewtostringdictencoder]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+data_conversion::StringViewToStringDictEncoder<IdType>::StringViewToStringDictEncoder(
+    const Chunk_NS::Chunk &dst_chunk,
+    const bool error_tracking_enabled
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### encodeAndAppendData [#encodeandappenddata]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToStringDictEncoder<IdType>::encodeAndAppendData(
+    const int8_t *data,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToStringDictEncoder<IdType>::clear() override
+```
+</CodeBlock>
+
+### getDstChunk [#getdstchunk]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+const Chunk_NS::Chunk & data_conversion::StringViewToStringDictEncoder<IdType>::getDstChunk() const
+```
+</CodeBlock>
+
+### getDeleteBuffer [#getdeletebuffer]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder"}}>
+```cpp showLineNumbers={false}
+std::optional<std::vector<bool>> & data_conversion::StringViewToStringDictEncoder<IdType>::getDeleteBuffer()
+```
+</CodeBlock>
+
+### getMetadata [#getmetadata]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> data_conversion::TypedBaseConvertEncoder<IdType, IdType>::getMetadata(
+    const Chunk_NS::Chunk &chunk
+) const override
+```
+</CodeBlock>
+
+### initializeDeleteBuffer [#initializedeletebuffer]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::BaseConvertEncoder::initializeDeleteBuffer(
+    const size_t size_hint
+)
+```
+</CodeBlock>
+
+### finalize [#finalize]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::BaseConvertEncoder::finalize(
+    const size_t rows_appended
+)
+```
+</CodeBlock>
+
+### initialize [#initialize]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToStringDictEncoder<IdType>::initialize()
+```
+</CodeBlock>
+
+### getNull [#getnull]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+DataType data_conversion::TypedBaseConvertEncoder<IdType, IdType>::getNull() const
+```
+</CodeBlock>
+
+### updateMetadataStats [#updatemetadatastats]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::TypedBaseConvertEncoder<IdType, IdType>::updateMetadataStats(
+    const DataType &typed_value,
+    const bool is_date_in_days = false
+)
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"StringViewToStringDictEncoder": "stringviewtostringdictencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+template <typename DataType>
+bool data_conversion::BaseConvertEncoder::isNull(
+    const DataType &typed_value
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DataType` | `IdType` |
+| `MetadataType` | `IdType` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dst_type_info_` | `SQLTypeInfo` | |
+| `dst_chunk_` | `const Chunk_NS::Chunk &` | |
+| `string_dict_` | `StringDictionary *` | |
+| `dict_encoding_output_buffer_` | `std::vector< IdType >` | |
+| `buffer_` | `AbstractBuffer *` | |
+| `min_` | `MetadataType` | |
+| `max_` | `MetadataType` | |
+| `delete_buffer_` | `std::optional< std::vector< bool > >` | |
+| `error_tracking_enabled_` | `const bool` | |
+| `has_nulls_` | `bool` | |
+| `num_elements_` | `size_t` | |

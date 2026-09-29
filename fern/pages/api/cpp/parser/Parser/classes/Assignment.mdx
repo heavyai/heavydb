@@ -1,0 +1,54 @@
+---
+title: Parser::Assignment
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public)
+
+---
+
+## Constructors
+
+### Assignment [#assignment]
+
+<CodeBlock links={{"Assignment": "assignment", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::Assignment::Assignment(
+    std::string *c,
+    Expr *a
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_column [#getcolumn]
+
+<CodeBlock links={{"Assignment": "assignment"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::Assignment::get_column() const
+```
+</CodeBlock>
+
+### get_assignment [#getassignment]
+
+<CodeBlock links={{"Assignment": "assignment", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::Assignment::get_assignment() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_` | `std::unique_ptr< std::string >` | |
+| `assignment_` | `std::unique_ptr< Expr >` | |

@@ -1,0 +1,47 @@
+---
+title: ct_templated_no_cursor_user_constant_sizer__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_templated_no_cursor_user_constant_sizer__cpu_template(
+    const T input_num,
+    int32_t c,
+    Column<T> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_templated_no_cursor_user_constant_sizer__cpu_template(
+    const int32_t input_num,
+    int32_t c,
+    Column<int32_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_templated_no_cursor_user_constant_sizer__cpu_template(
+    const float input_num,
+    int32_t c,
+    Column<float> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

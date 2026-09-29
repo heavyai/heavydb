@@ -1,0 +1,31 @@
+---
+title: "boost::log::operator<<"
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+formatting_ostream & boost::log::operator<<(
+    formatting_ostream &os,
+    Aws::Client::FollowRedirectsPolicy frp
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+formatting_ostream & boost::log::operator<<(
+    formatting_ostream &os,
+    Aws::Crt::Optional<bool> opt_bool
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

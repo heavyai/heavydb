@@ -1,0 +1,18 @@
+---
+title: partition_by_null
+description: ""
+---
+
+<CodeBlock links={{"GroupByBufferLayoutInfo": "../structs/groupbybufferlayoutinfo"}}>
+```cpp showLineNumbers={false}
+template <typename ForwardIterator>
+ForwardIterator partition_by_null(
+    ForwardIterator first,
+    ForwardIterator last,
+    const int64_t null_val,
+    const bool nulls_first,
+    const int8_t *rows_ptr,
+    const GroupByBufferLayoutInfo &layout
+)
+```
+</CodeBlock>

@@ -1,0 +1,610 @@
+---
+title: StringDictionaryProxy
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringDictionaryProxy.h>
+```
+
+---
+
+## Constructors
+
+### StringDictionaryProxy [#stringdictionaryproxy]
+
+<Tabs>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy", "StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy::StringDictionaryProxy(
+    std::shared_ptr<StringDictionary> sd,
+    const shared::StringDictKey &string_dict_key,
+    const int64_t generation
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy::StringDictionaryProxy(
+    StringDictionaryProxy const &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy const  & StringDictionaryProxy::operator=(
+    StringDictionaryProxy const &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getDictKey [#getdictkey]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+const shared::StringDictKey & StringDictionaryProxy::getDictKey() const noexcept
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+bool StringDictionaryProxy::operator==(
+    StringDictionaryProxy const &
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+bool StringDictionaryProxy::operator!=(
+    StringDictionaryProxy const &
+) const
+```
+</CodeBlock>
+
+### getOrAdd [#getoradd]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+int32_t StringDictionaryProxy::getOrAdd(
+    const std::string &str
+) noexcept
+```
+</CodeBlock>
+
+### getDictionary [#getdictionary]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy", "StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+StringDictionary * StringDictionaryProxy::getDictionary() const noexcept
+```
+</CodeBlock>
+
+### getGeneration [#getgeneration]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+int64_t StringDictionaryProxy::getGeneration() const noexcept
+```
+</CodeBlock>
+
+### getTransientBulk [#gettransientbulk]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionaryProxy::getTransientBulk(
+    const std::vector<std::string> &strings
+) const
+```
+</CodeBlock>
+
+Executes read-only lookup of a vector of strings and returns a vector of their integer ids.
+
+This function, unlike getOrAddTransientBulk, will not add strings to the dictionary. Use this function if strings that don't currently exist in the `StringDictionaryProxy` should not be added to the proxy as transient entries. This method also has performance advantages over getOrAddTransientBulk for read-only use cases, in that it can: 1) Take a read lock instead of a write lock for the transient lookups 2) Use a tbb::parallel_for implementation of the transient string lookups as we are guaranteed that the underlying map of strings to int ids cannot change
+
+**Returns:** A vector of string_ids of the same length as strings, containing the id of any strings for which were found in the underlying [StringDictionary](stringdictionary) instance or in the proxy's tranient map, otherwise StringDictionary::INVALID_STR_ID for strings not found.
+
+**Parameters**
+
+<ParamField path="strings" type="const std::vector<std::string> &">
+- Vector of strings to perform string id lookups on
+</ParamField>
+
+### getOrAddTransient [#getoraddtransient]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+int32_t StringDictionaryProxy::getOrAddTransient(
+    const std::string &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+int32_t StringDictionaryProxy::getOrAddTransient(
+    const std::string_view
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOrAddTransientBulk [#getoraddtransientbulk]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionaryProxy::getOrAddTransientBulk(
+    const std::vector<std::string> &strings
+)
+```
+</CodeBlock>
+
+### getIdOfString [#getidofstring]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+int32_t StringDictionaryProxy::getIdOfString(
+    const std::string &str
+) const
+```
+</CodeBlock>
+
+### getIdOfStringNoGeneration [#getidofstringnogeneration]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+int32_t StringDictionaryProxy::getIdOfStringNoGeneration(
+    const std::string &str
+) const
+```
+</CodeBlock>
+
+### getString [#getstring]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+std::string StringDictionaryProxy::getString(
+    int32_t string_id
+) const
+```
+</CodeBlock>
+
+### getStrings [#getstrings]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> StringDictionaryProxy::getStrings(
+    const std::vector<int32_t> &string_ids
+) const
+```
+</CodeBlock>
+
+### getStringBytes [#getstringbytes]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+std::pair<const char *, size_t> StringDictionaryProxy::getStringBytes(
+    int32_t string_id
+) const noexcept
+```
+</CodeBlock>
+
+### initIdMap [#initidmap]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+IdMap StringDictionaryProxy::initIdMap() const
+```
+</CodeBlock>
+
+### buildNumericTranslationMap [#buildnumerictranslationmap]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy", "TranslationMap": "#translationmap"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy::TranslationMap<Datum> StringDictionaryProxy::buildNumericTranslationMap(
+    const StringOps_Namespace::StringOps &string_ops
+) const
+```
+</CodeBlock>
+
+Builds a vectorized string_id translation map from this proxy to dest_proxy.
+
+**Returns:** An IdMap which encapsulates a std::vector&lt;int32_t&gt; of string ids for both transient and non-transient strings, mapping to their translated string_ids. offset_ is defined to be the number of transient entries + 1. The ordering of values in the vector_map_ is:the transient ids (there are offset_-1 of these) INVALID_STR_ID (=-1) the non-transient string ids For example if there are 3 transient entries in this proxy and 20 in the underlying string dictionary, then vector_map_ will be of size() == 24 and offset_=3+1. The formula to translate ids is new_id = vector_map_[offset_ + old_id]. It is always the case that vector_map_[offset_-1]==-1 so that INVALID_STR_ID maps to INVALID_STR_ID.
+
+### buildIntersectionTranslationMapToOtherProxy [#buildintersectiontranslationmaptootherproxy]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy::IdMap StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxy(
+    const StringDictionaryProxy *dest_proxy,
+    const StringOps_Namespace::StringOps &string_ops
+) const
+```
+</CodeBlock>
+
+### buildUnionTranslationMapToOtherProxy [#builduniontranslationmaptootherproxy]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy::IdMap StringDictionaryProxy::buildUnionTranslationMapToOtherProxy(
+    StringDictionaryProxy *dest_proxy,
+    const StringOps_Namespace::StringOps &string_ops
+) const
+```
+</CodeBlock>
+
+### storageEntryCount [#storageentrycount]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionaryProxy::storageEntryCount() const
+```
+</CodeBlock>
+
+Returns the number of string entries in the underlying string dictionary, at this proxy's generation_ if it is set/valid, otherwise just the current size of the dictionary.
+
+**Returns:** size_t Number of entries in the string dictionary (at this proxy's generation if set)
+
+### transientEntryCount [#transiententrycount]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionaryProxy::transientEntryCount() const
+```
+</CodeBlock>
+
+Returns the number of transient string entries for this proxy,.
+
+**Returns:** size_t Number of transient string entries for this proxy
+
+### entryCount [#entrycount]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionaryProxy::entryCount() const
+```
+</CodeBlock>
+
+Returns the number of total string entries for this proxy, both stored in the underlying dictionary and in the transient map.
+
+Equal to storageEntryCount() + transientEntryCount()
+
+**Returns:** size_t Number of total string entries for this proxy
+
+### updateGeneration [#updategeneration]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+void StringDictionaryProxy::updateGeneration(
+    const int64_t generation
+) noexcept
+```
+</CodeBlock>
+
+### getLike [#getlike]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+template std::vector<int64_t> StringDictionaryProxy::getLike<int64_t>(
+    const std::string &pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape
+) const
+```
+</CodeBlock>
+
+### getCompare [#getcompare]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionaryProxy::getCompare(
+    const std::string &pattern,
+    const std::string &comp_operator
+) const
+```
+</CodeBlock>
+
+### getSortedPermutation [#getsortedpermutation]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy", "SortedStringPermutation": "../structs/sortedstringpermutation"}}>
+```cpp showLineNumbers={false}
+SortedStringPermutation StringDictionaryProxy::getSortedPermutation(
+    const bool should_sort_descending
+)
+```
+</CodeBlock>
+
+### getRegexpLike [#getregexplike]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionaryProxy::getRegexpLike(
+    const std::string &pattern,
+    const char escape
+) const
+```
+</CodeBlock>
+
+### getTransientVector [#gettransientvector]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string const  *> & StringDictionaryProxy::getTransientVector() const
+```
+</CodeBlock>
+
+### eachStringSerially [#eachstringserially]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy", "StringCallback": "stringdictionary#stringcallback"}}>
+```cpp showLineNumbers={false}
+void StringDictionaryProxy::eachStringSerially(
+    StringDictionary::StringCallback &
+) const
+```
+</CodeBlock>
+
+### transientUnion [#transientunion]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy::IdMap StringDictionaryProxy::transientUnion(
+    StringDictionaryProxy const &
+)
+```
+</CodeBlock>
+
+### getStringUnlocked [#getstringunlocked]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+std::string StringDictionaryProxy::getStringUnlocked(
+    const int32_t string_id
+) const
+```
+</CodeBlock>
+
+### transientEntryCountUnlocked [#transiententrycountunlocked]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionaryProxy::transientEntryCountUnlocked() const
+```
+</CodeBlock>
+
+### entryCountUnlocked [#entrycountunlocked]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionaryProxy::entryCountUnlocked() const
+```
+</CodeBlock>
+
+### persistedC [#persistedc]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionaryProxy::persistedC() const
+```
+</CodeBlock>
+
+### getOrAddTransientImpl [#getoraddtransientimpl]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+template <typename String>
+int32_t StringDictionaryProxy::getOrAddTransientImpl(
+    String
+)
+```
+</CodeBlock>
+
+### lookupTransientStringUnlocked [#lookuptransientstringunlocked]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+template <typename String>
+int32_t StringDictionaryProxy::lookupTransientStringUnlocked(
+    const String &lookup_string
+) const
+```
+</CodeBlock>
+
+### getTransientBulkImpl [#gettransientbulkimpl]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionaryProxy::getTransientBulkImpl(
+    const std::vector<std::string> &strings,
+    int32_t *string_ids,
+    const bool take_read_lock
+) const
+```
+</CodeBlock>
+
+### transientLookupBulk [#transientlookupbulk]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+template <typename String>
+size_t StringDictionaryProxy::transientLookupBulk(
+    const std::vector<String> &lookup_strings,
+    int32_t *string_ids,
+    const bool take_read_lock
+) const
+```
+</CodeBlock>
+
+### transientLookupBulkUnlocked [#transientlookupbulkunlocked]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+template <typename String>
+size_t StringDictionaryProxy::transientLookupBulkUnlocked(
+    const std::vector<String> &lookup_strings,
+    int32_t *string_ids
+) const
+```
+</CodeBlock>
+
+### transientLookupBulkParallelUnlocked [#transientlookupbulkparallelunlocked]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+template <typename String>
+size_t StringDictionaryProxy::transientLookupBulkParallelUnlocked(
+    const std::vector<String> &lookup_strings,
+    int32_t *string_ids
+) const
+```
+</CodeBlock>
+
+### buildIntersectionTranslationMapToOtherProxyUnlocked [#buildintersectiontranslationmaptootherproxyunlocked]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy::IdMap StringDictionaryProxy::buildIntersectionTranslationMapToOtherProxyUnlocked(
+    const StringDictionaryProxy *dest_proxy,
+    const StringOps_Namespace::StringOps &string_ops
+) const
+```
+</CodeBlock>
+
+### getIdOfStringFromClient [#getidofstringfromclient]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+template <typename String>
+int32_t StringDictionaryProxy::getIdOfStringFromClient(
+    String const &
+) const
+```
+</CodeBlock>
+
+### getOrAddTransientUnlocked [#getoraddtransientunlocked]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+template <typename String>
+int32_t StringDictionaryProxy::getOrAddTransientUnlocked(
+    String const &
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### transientIdToIndex [#transientidtoindex]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+static unsigned StringDictionaryProxy::transientIdToIndex(
+    int32_t const id
+)
+```
+</CodeBlock>
+
+### transientIndexToId [#transientindextoid]
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+static int32_t StringDictionaryProxy::transientIndexToId(
+    unsigned const index
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `IdMap` | `TranslationMap< int32_t >` |
+| `TransientMap` | `robin_hood::unordered_node_map< std::string, int32_t, HeterogeneousStringHash, HeterogeneousStringEqual >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `string_dict_` | `std::shared_ptr< StringDictionary >` | |
+| `string_dict_key_` | `const shared::StringDictKey` | |
+| `transient_str_to_int_` | `TransientMap` | |
+| `transient_string_vec_` | `std::vector< std::string const  * >` | |
+| `generation_` | `int64_t` | |
+| `rw_mutex_` | `std::shared_mutex` | |
+
+---
+
+## Inner classes
+
+### TranslationMap
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+class StringDictionaryProxy::TranslationMap
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `offset_` | `size_t const` | |
+| `vector_map_` | `std::vector< T >` | |
+| `num_untranslated_strings_` | `int64_t` | |
+| `range_start_` | `T` | |
+| `range_end_` | `T` | |
+
+### HeterogeneousStringHash
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+struct StringDictionaryProxy::HeterogeneousStringHash
+```
+</CodeBlock>
+
+### HeterogeneousStringEqual
+
+<CodeBlock links={{"StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+struct StringDictionaryProxy::HeterogeneousStringEqual
+```
+</CodeBlock>

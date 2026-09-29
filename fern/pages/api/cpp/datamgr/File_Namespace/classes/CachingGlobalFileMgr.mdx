@@ -1,0 +1,536 @@
+---
+title: File_Namespace::CachingGlobalFileMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/CachingGlobalFileMgr.h>
+```
+
+**Inherits from:** `File_Namespace::GlobalFileMgr` (public)
+
+---
+
+## Constructors
+
+### CachingGlobalFileMgr [#cachingglobalfilemgr]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "ForeignStorageCache": "../../foreignstorage/classes/foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+File_Namespace::CachingGlobalFileMgr::CachingGlobalFileMgr(
+    int32_t device_id,
+    const std::string &base_path,
+    size_t num_reader_threads,
+    foreign_storage::ForeignStorageCache *disk_cache,
+    size_t defaultPageSize = DEFAULT_PAGE_SIZE
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### createBuffer [#createbuffer]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * File_Namespace::CachingGlobalFileMgr::createBuffer(
+    const ChunkKey &chunk_key,
+    const size_t page_size,
+    const size_t initial_size
+) override
+```
+</CodeBlock>
+
+### deleteBuffer [#deletebuffer]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::deleteBuffer(
+    const ChunkKey &chunk_key,
+    const bool purge
+) override
+```
+</CodeBlock>
+
+### deleteBuffersWithPrefix [#deletebufferswithprefix]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::deleteBuffersWithPrefix(
+    const ChunkKey &chunk_key_prefix,
+    const bool purge
+) override
+```
+</CodeBlock>
+
+### getChunkMetadataVecForKeyPrefix [#getchunkmetadatavecforkeyprefix]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::getChunkMetadataVecForKeyPrefix(
+    ChunkMetadataVector &chunk_metadata,
+    const ChunkKey &keyPrefix
+) override
+```
+</CodeBlock>
+
+### fetchBuffer [#fetchbuffer]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::fetchBuffer(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### putBuffer [#putbuffer]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * File_Namespace::CachingGlobalFileMgr::putBuffer(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *source_buffer,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::checkpoint() override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::checkpoint(
+    const int db_id,
+    const int tb_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::checkpoint(
+    const int32_t db_id,
+    const int32_t tb_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### removeTableRelatedDS [#removetablerelatedds]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::removeTableRelatedDS(
+    const int db_id,
+    const int table_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::removeTableRelatedDS(
+    const int32_t db_id,
+    const int32_t tb_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### removeCachedData [#removecacheddata]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::removeCachedData(
+    const int db_id,
+    const int table_id
+)
+```
+</CodeBlock>
+
+### isBufferOnDevice [#isbufferondevice]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingGlobalFileMgr::isBufferOnDevice(
+    const ChunkKey &key
+) override
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * File_Namespace::CachingGlobalFileMgr::getBuffer(
+    const ChunkKey &key,
+    const size_t numBytes = 0
+) override
+```
+</CodeBlock>
+
+Returns the a pointer to the chunk with the specified key.
+
+### alloc [#alloc]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * File_Namespace::CachingGlobalFileMgr::alloc(
+    const size_t numBytes
+) override
+```
+</CodeBlock>
+
+### free [#free]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::free(
+    AbstractBuffer *buffer
+) override
+```
+</CodeBlock>
+
+### getMgrType [#getmgrtype]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+MgrType File_Namespace::CachingGlobalFileMgr::getMgrType() override
+```
+</CodeBlock>
+
+### getStringMgrType [#getstringmgrtype]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingGlobalFileMgr::getStringMgrType() override
+```
+</CodeBlock>
+
+### printSlabs [#printslabs]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingGlobalFileMgr::printSlabs() override
+```
+</CodeBlock>
+
+### getMaxSize [#getmaxsize]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingGlobalFileMgr::getMaxSize() const override
+```
+</CodeBlock>
+
+### getInUseSize [#getinusesize]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingGlobalFileMgr::getInUseSize() const override
+```
+</CodeBlock>
+
+### getAllocated [#getallocated]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingGlobalFileMgr::getAllocated() const override
+```
+</CodeBlock>
+
+### isAllocationCapped [#isallocationcapped]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingGlobalFileMgr::isAllocationCapped() const override
+```
+</CodeBlock>
+
+### init [#init]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::init()
+```
+</CodeBlock>
+
+### getNumReaderThreads [#getnumreaderthreads]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingGlobalFileMgr::getNumReaderThreads()
+```
+</CodeBlock>
+
+Returns number of threads defined by parameter num-reader-threads which should be used during initial load and consequent read of data.
+
+### getNumChunks [#getnumchunks]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingGlobalFileMgr::getNumChunks() override
+```
+</CodeBlock>
+
+### compactDataFiles [#compactdatafiles]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::compactDataFiles(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### findFileMgr [#findfilemgr]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "FileMgr": "filemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+FileMgr * File_Namespace::CachingGlobalFileMgr::findFileMgr(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### setFileMgrParams [#setfilemgrparams]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "FileMgrParams": "../structs/filemgrparams", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::setFileMgrParams(
+    const int32_t db_id,
+    const int32_t tb_id,
+    const FileMgrParams &file_mgr_params
+)
+```
+</CodeBlock>
+
+### getFileMgr [#getfilemgr]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "FileMgr": "filemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+FileMgr * File_Namespace::CachingGlobalFileMgr::getFileMgr(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "FileMgr": "filemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+FileMgr * File_Namespace::CachingGlobalFileMgr::getFileMgr(
+    const ChunkKey &key
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getBasePath [#getbasepath]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingGlobalFileMgr::getBasePath() const
+```
+</CodeBlock>
+
+### getPageSize [#getpagesize]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingGlobalFileMgr::getPageSize() const
+```
+</CodeBlock>
+
+### getMetadataPageSize [#getmetadatapagesize]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingGlobalFileMgr::getMetadataPageSize() const
+```
+</CodeBlock>
+
+### writeFileMgrData [#writefilemgrdata]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "FileMgr": "filemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::writeFileMgrData(
+    FileMgr *fileMgr = 0
+)
+```
+</CodeBlock>
+
+### getDBConvert [#getdbconvert]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingGlobalFileMgr::getDBConvert() const
+```
+</CodeBlock>
+
+### setDBConvert [#setdbconvert]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::setDBConvert(
+    bool val
+)
+```
+</CodeBlock>
+
+### setTableEpoch [#settableepoch]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::setTableEpoch(
+    const int32_t db_id,
+    const int32_t tb_id,
+    const int32_t start_epoch
+)
+```
+</CodeBlock>
+
+### getTableEpoch [#gettableepoch]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingGlobalFileMgr::getTableEpoch(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### resetTableEpochFloor [#resettableepochfloor]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::resetTableEpochFloor(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### getStorageStats [#getstoragestats]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "StorageStats": "../structs/storagestats", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+StorageStats File_Namespace::CachingGlobalFileMgr::getStorageStats(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### getSharedFileMgr [#getsharedfilemgr]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "FileMgr": "filemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<FileMgr> File_Namespace::CachingGlobalFileMgr::getSharedFileMgr(
+    const int db_id,
+    const int table_id
+)
+```
+</CodeBlock>
+
+### setFileMgr [#setfilemgr]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "FileMgr": "filemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::setFileMgr(
+    const int db_id,
+    const int table_id,
+    std::shared_ptr<FileMgr> file_mgr
+)
+```
+</CodeBlock>
+
+### closeFileMgr [#closefilemgr]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingGlobalFileMgr::closeFileMgr(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr", "GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+int Data_Namespace::AbstractBufferMgr::getDeviceId()
+```
+</CodeBlock>
+
+### isChunkPrefixCacheable [#ischunkprefixcacheable]
+
+<CodeBlock links={{"CachingGlobalFileMgr": "cachingglobalfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingGlobalFileMgr::isChunkPrefixCacheable(
+    const ChunkKey &chunk_prefix
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `disk_cache_` | `foreign_storage::ForeignStorageCache *` | |
+| `cached_chunk_keys_` | `std::set< ChunkKey >` | |
+| `cached_chunk_keys_mutex_` | `heavyai::shared_mutex` | |
+| `db_version_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `parentMgr_` | `AbstractBufferMgr *` | |
+| `device_id_` | `int` | |

@@ -1,0 +1,251 @@
+instances:
+- url: heavyai-heavydb.docs.buildwithfern.com
+  custom-domain: docs.nvidia.com/heavyai/heavydb
+  multi-source: true
+
+title: HeavyDB Documentation
+
+global-theme: nvidia
+
+navbar-links:
+  - type: github
+    value: https://github.com/heavyai/heavydb
+
+navigation:
+- page: Introduction
+  path: pages/introduction.mdx
+- section: System Architecture
+  contents:
+  - page: Overview
+    path: pages/overview/index.mdx
+  - section: Quickstart
+    contents:
+    - page: Getting Started
+      path: pages/quickstart/getting-started.mdx
+    - page: Start
+      path: pages/quickstart/start.mdx
+    - page: Dependencies
+      path: pages/quickstart/deps.mdx
+    - page: Build
+      path: pages/quickstart/build.mdx
+  - page: Catalog
+    path: pages/catalog/index.mdx
+  - section: Data Model
+    contents:
+    - page: Overview
+      path: pages/data-model/index.mdx
+    - page: Physical Layout
+      path: pages/data-model/physical-layout.mdx
+    - page: Columnar Layout
+      path: pages/data-model/columnar-layout.mdx
+    - page: Memory Layout
+      path: pages/data-model/memory-layout.mdx
+    - page: Types
+      path: pages/data-model/types.mdx
+    - page: Dump / Restore
+      path: pages/data-model/dump-restore.mdx
+    - page: External API
+      path: pages/data-model/api.mdx
+  - page: Data Flow
+    path: pages/flow/data.mdx
+  - page: Calcite Parser
+    path: pages/calcite/calcite-parser.mdx
+  - section: Query Execution
+    contents:
+    - page: Overview
+      path: pages/execution/index.mdx
+    - page: Execution Overview
+      path: pages/execution/overview.mdx
+    - page: Optimizer
+      path: pages/execution/optimizer.mdx
+    - page: Hash Joins
+      path: pages/execution/hash-joins.mdx
+    - page: Kernels
+      path: pages/execution/kernels.mdx
+    - page: Scheduler
+      path: pages/execution/scheduler.mdx
+    - page: Code Generation
+      path: pages/execution/codegen.mdx
+    - page: Results
+      path: pages/execution/results.mdx
+  - page: Foreign Storage Interface (FSI)
+    path: pages/foreign-storage/index.mdx
+  - page: Table Functions
+    path: pages/table-functions/index.mdx
+  - page: ML Models
+    path: pages/ml-models/index.mdx
+  - page: Row Level Security
+    path: pages/security/row-level-security.mdx
+  - page: Runtime
+    path: pages/runtime/index.mdx
+  - page: Configuration
+    path: pages/configuration/index.mdx
+- section: C++ API Reference
+  contents:
+  - folder: pages/api/cpp/analyzer
+  - folder: pages/api/cpp/archive
+  - folder: pages/api/cpp/calcite
+  - folder: pages/api/cpp/catalog
+  - folder: pages/api/cpp/cudamgr
+  - folder: pages/api/cpp/datamgr
+  - folder: pages/api/cpp/fragmenter
+  - folder: pages/api/cpp/geospatial
+  - folder: pages/api/cpp/importexport
+  - folder: pages/api/cpp/lockmgr
+  - folder: pages/api/cpp/logger
+  - folder: pages/api/cpp/migrationmgr
+  - folder: pages/api/cpp/parser
+  - folder: pages/api/cpp/queryengine
+  - folder: pages/api/cpp/queryrunner
+  - folder: pages/api/cpp/shared
+  - folder: pages/api/cpp/sqliteconnector
+  - folder: pages/api/cpp/stringdictionary
+  - folder: pages/api/cpp/stringops
+  - folder: pages/api/cpp/tablearchiver
+  - folder: pages/api/cpp/thrifthandler
+  - folder: pages/api/cpp/utils
+- section: Additional Resources
+  contents:
+  - page: Glossary
+    path: pages/glossary/index.mdx
+- section: Detailed Class Information
+  contents:
+  - page: Logger
+    path: pages/components/logger.mdx
+  - page: QueryState
+    path: pages/components/query-state.mdx
+
+
+libraries:
+  heavydb-analyzer:
+    lang: cpp
+    input:
+      path: ../Analyzer
+    output:
+      path: pages/api/cpp/analyzer
+  heavydb-archive:
+    lang: cpp
+    input:
+      path: ../Archive
+    output:
+      path: pages/api/cpp/archive
+  heavydb-calcite:
+    lang: cpp
+    input:
+      path: ../Calcite
+    output:
+      path: pages/api/cpp/calcite
+  heavydb-catalog:
+    lang: cpp
+    input:
+      path: ../Catalog
+    output:
+      path: pages/api/cpp/catalog
+  heavydb-cudamgr:
+    lang: cpp
+    input:
+      path: ../CudaMgr
+    output:
+      path: pages/api/cpp/cudamgr
+  heavydb-datamgr:
+    lang: cpp
+    input:
+      path: ../DataMgr
+    output:
+      path: pages/api/cpp/datamgr
+  heavydb-fragmenter:
+    lang: cpp
+    input:
+      path: ../Fragmenter
+    output:
+      path: pages/api/cpp/fragmenter
+  heavydb-geospatial:
+    lang: cpp
+    input:
+      path: ../Geospatial
+    output:
+      path: pages/api/cpp/geospatial
+  heavydb-importexport:
+    lang: cpp
+    input:
+      path: ../ImportExport
+    output:
+      path: pages/api/cpp/importexport
+  heavydb-lockmgr:
+    lang: cpp
+    input:
+      path: ../LockMgr
+    output:
+      path: pages/api/cpp/lockmgr
+  heavydb-logger:
+    lang: cpp
+    input:
+      path: ../Logger
+    output:
+      path: pages/api/cpp/logger
+  heavydb-migrationmgr:
+    lang: cpp
+    input:
+      path: ../MigrationMgr
+    output:
+      path: pages/api/cpp/migrationmgr
+  heavydb-parser:
+    lang: cpp
+    input:
+      path: ../Parser
+    output:
+      path: pages/api/cpp/parser
+  heavydb-queryengine:
+    lang: cpp
+    input:
+      path: ../QueryEngine
+    output:
+      path: pages/api/cpp/queryengine
+  heavydb-queryrunner:
+    lang: cpp
+    input:
+      path: ../QueryRunner
+    output:
+      path: pages/api/cpp/queryrunner
+  heavydb-shared:
+    lang: cpp
+    input:
+      path: ../Shared
+    output:
+      path: pages/api/cpp/shared
+  heavydb-sqliteconnector:
+    lang: cpp
+    input:
+      path: ../SqliteConnector
+    output:
+      path: pages/api/cpp/sqliteconnector
+  heavydb-stringdictionary:
+    lang: cpp
+    input:
+      path: ../StringDictionary
+    output:
+      path: pages/api/cpp/stringdictionary
+  heavydb-stringops:
+    lang: cpp
+    input:
+      path: ../StringOps
+    output:
+      path: pages/api/cpp/stringops
+  heavydb-tablearchiver:
+    lang: cpp
+    input:
+      path: ../TableArchiver
+    output:
+      path: pages/api/cpp/tablearchiver
+  heavydb-thrifthandler:
+    lang: cpp
+    input:
+      path: ../ThriftHandler
+    output:
+      path: pages/api/cpp/thrifthandler
+  heavydb-utils:
+    lang: cpp
+    input:
+      path: ../Utils
+    output:
+      path: pages/api/cpp/utils

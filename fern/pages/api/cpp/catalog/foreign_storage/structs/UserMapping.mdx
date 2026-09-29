@@ -1,0 +1,87 @@
+---
+title: foreign_storage::UserMapping
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/UserMapping.h>
+```
+
+---
+
+## Constructors
+
+### UserMapping [#usermapping]
+
+<Tabs>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"UserMapping": "usermapping"}}>
+```cpp showLineNumbers={false}
+foreign_storage::UserMapping::UserMapping()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"UserMapping": "usermapping"}}>
+```cpp showLineNumbers={false}
+foreign_storage::UserMapping::UserMapping(
+    const int32_t id,
+    const int32_t user_id,
+    const int32_t foreign_server_id,
+    const std::string type,
+    const std::string options
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getUnencryptedOptions [#getunencryptedoptions]
+
+<CodeBlock links={{"UserMapping": "usermapping"}}>
+```cpp showLineNumbers={false}
+OptionsMap foreign_storage::UserMapping::getUnencryptedOptions() const
+```
+</CodeBlock>
+
+### validate [#validate]
+
+<CodeBlock links={{"UserMapping": "usermapping", "ForeignServer": "foreignserver"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::UserMapping::validate(
+    const ForeignServer *foreign_server
+)
+```
+</CodeBlock>
+
+### setOptions [#setoptions]
+
+<CodeBlock links={{"UserMapping": "usermapping"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::UserMapping::setOptions(
+    const OptionsMap &options
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `id` | `int32_t` | |
+| `user_id` | `int32_t` | |
+| `foreign_server_id` | `int32_t` | |
+| `type` | `std::string` | |
+| `options` | `std::string` | |

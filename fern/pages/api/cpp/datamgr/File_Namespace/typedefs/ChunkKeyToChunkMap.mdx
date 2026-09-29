@@ -1,0 +1,14 @@
+---
+title: File_Namespace::ChunkKeyToChunkMap
+description: "@type ChunkKeyToChunkMap"
+---
+
+@type [ChunkKeyToChunkMap](chunkkeytochunkmap)
+
+```cpp showLineNumbers={false}
+using ChunkKeyToChunkMap = std::map<ChunkKey, FileBuffer *>;
+```
+
+Maps ChunkKeys (unique ids for Chunks) to [Chunk](chunk) objects.
+
+The file system can store multiple chunks across multiple files. With that in mind, the challenge is to be able to reconstruct the pages that compose a chunk upon request. A chunk key (ChunkKey) uniquely identifies a chunk, and so [ChunkKeyToChunkMap](chunkkeytochunkmap) maps chunk keys to [Chunk](chunk) types, which are vectors of MultiPage* pointers (logical pages).

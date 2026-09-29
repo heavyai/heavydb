@@ -1,0 +1,18 @@
+---
+title: import_export::delimited_parser::find_end
+description: ""
+---
+
+<CodeBlock links={{"CopyParams": "../../../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+size_t import_export::delimited_parser::find_end(
+    const char *buffer,
+    size_t size,
+    const import_export::CopyParams &copy_params,
+    unsigned int &num_rows_this_buffer,
+    size_t buffer_first_row_index,
+    bool &in_quote,
+    size_t offset
+)
+```
+</CodeBlock>

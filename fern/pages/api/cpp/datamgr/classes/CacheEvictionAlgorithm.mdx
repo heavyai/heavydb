@@ -1,0 +1,54 @@
+---
+title: CacheEvictionAlgorithm
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CacheEvictionAlgorithm.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~CacheEvictionAlgorithm
+
+<CodeBlock links={{"CacheEvictionAlgorithm": "cacheevictionalgorithm"}}>
+```cpp showLineNumbers={false}
+virtual CacheEvictionAlgorithm::~CacheEvictionAlgorithm()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### evictNextChunk [#evictnextchunk]
+
+<CodeBlock links={{"CacheEvictionAlgorithm": "cacheevictionalgorithm"}}>
+```cpp showLineNumbers={false}
+virtual const ChunkKey CacheEvictionAlgorithm::evictNextChunk()
+```
+</CodeBlock>
+
+### touchChunk [#touchchunk]
+
+<CodeBlock links={{"CacheEvictionAlgorithm": "cacheevictionalgorithm"}}>
+```cpp showLineNumbers={false}
+virtual void CacheEvictionAlgorithm::touchChunk(
+    const ChunkKey &
+)
+```
+</CodeBlock>
+
+### removeChunk [#removechunk]
+
+<CodeBlock links={{"CacheEvictionAlgorithm": "cacheevictionalgorithm"}}>
+```cpp showLineNumbers={false}
+virtual void CacheEvictionAlgorithm::removeChunk(
+    const ChunkKey &
+)
+```
+</CodeBlock>

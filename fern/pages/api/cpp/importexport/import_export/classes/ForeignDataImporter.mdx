@@ -1,0 +1,149 @@
+---
+title: import_export::ForeignDataImporter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/ForeignDataImporter.h>
+```
+
+**Inherits from:** `import_export::AbstractImporter` (public)
+
+---
+
+## Constructors
+
+### ForeignDataImporter [#foreigndataimporter]
+
+<CodeBlock links={{"ForeignDataImporter": "foreigndataimporter", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+import_export::ForeignDataImporter::ForeignDataImporter(
+    const std::string &file_path,
+    const CopyParams &copy_params,
+    const TableDescriptor *table
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### import [#import]
+
+<CodeBlock links={{"ForeignDataImporter": "foreigndataimporter", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::ForeignDataImporter::import(
+    const Catalog_Namespace::SessionInfo *session_info
+) override
+```
+</CodeBlock>
+
+### finalize [#finalize]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ForeignDataImporter": "foreigndataimporter", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+void import_export::ForeignDataImporter::finalize(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    ImportStatus &import_status,
+    const std::vector<std::pair<const ColumnDescriptor *, StringDictionary *>> &string_dictionaries
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ForeignDataImporter": "foreigndataimporter", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+void import_export::ForeignDataImporter::finalize(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    ImportStatus &import_status,
+    const int32_t table_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### importGeneral [#importgeneral]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ForeignDataImporter": "foreigndataimporter", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::ForeignDataImporter::importGeneral(
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ForeignDataImporter": "foreigndataimporter", "CopyParams": "../structs/copyparams", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::ForeignDataImporter::importGeneral(
+    const Catalog_Namespace::SessionInfo *session_info,
+    const std::string &copy_from_source,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### importGeneralNoFinalize [#importgeneralnofinalize]
+
+<CodeBlock links={{"ForeignDataImporter": "foreigndataimporter", "CopyParams": "../structs/copyparams", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::ForeignDataImporter::importGeneralNoFinalize(
+    const Catalog_Namespace::SessionInfo *session_info,
+    const std::string &copy_from_source,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### importGeneralS3 [#importgenerals3]
+
+<CodeBlock links={{"ForeignDataImporter": "foreigndataimporter", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::ForeignDataImporter::importGeneralS3(
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### setDefaultImportPath [#setdefaultimportpath]
+
+<CodeBlock links={{"ForeignDataImporter": "foreigndataimporter"}}>
+```cpp showLineNumbers={false}
+void import_export::ForeignDataImporter::setDefaultImportPath(
+    const std::string &base_path
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `proxy_foreign_table_fragment_size_` <Badge intent="note" minimal>static</Badge> | `int32_t` | |
+| `connector_` | `std::unique_ptr< Fragmenter_Namespace::InsertDataLoader::InsertConnector >` | |
+| `copy_from_source_` | `std::string` | |
+| `copy_params_` | `CopyParams` | |
+| `table_` | `const TableDescriptor *` | |
+| `default_import_path_` <Badge intent="note" minimal>static</Badge> | `std::string` | |

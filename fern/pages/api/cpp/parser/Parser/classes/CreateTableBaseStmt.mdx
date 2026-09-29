@@ -1,0 +1,52 @@
+---
+title: Parser::CreateTableBaseStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Methods
+
+### get_table [#gettable]
+
+<CodeBlock links={{"CreateTableBaseStmt": "createtablebasestmt"}}>
+```cpp showLineNumbers={false}
+virtual const std::string * Parser::CreateTableBaseStmt::get_table() const
+```
+</CodeBlock>
+
+### get_table_element_list [#gettableelementlist]
+
+<CodeBlock links={{"CreateTableBaseStmt": "createtablebasestmt", "TableElement": "tableelement"}}>
+```cpp showLineNumbers={false}
+virtual const std::list<std::unique_ptr<TableElement>> & Parser::CreateTableBaseStmt::get_table_element_list() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"CreateTableBaseStmt": "createtablebasestmt", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+virtual void Parser::CreateTableBaseStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+)
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"CreateTableBaseStmt": "createtablebasestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateTableBaseStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>

@@ -1,0 +1,107 @@
+---
+title: data_conversion::BaseConvertEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <data_conversion/BaseConvertEncoder.h>
+```
+
+---
+
+## Constructors
+
+### BaseConvertEncoder [#baseconvertencoder]
+
+<CodeBlock links={{"BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+data_conversion::BaseConvertEncoder::BaseConvertEncoder(
+    const bool error_tracking_enabled
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~BaseConvertEncoder
+
+<CodeBlock links={{"BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual data_conversion::BaseConvertEncoder::~BaseConvertEncoder()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### initializeDeleteBuffer [#initializedeletebuffer]
+
+<CodeBlock links={{"BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::BaseConvertEncoder::initializeDeleteBuffer(
+    const size_t size_hint
+)
+```
+</CodeBlock>
+
+### finalize [#finalize]
+
+<CodeBlock links={{"BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::BaseConvertEncoder::finalize(
+    const size_t rows_appended
+)
+```
+</CodeBlock>
+
+### encodeAndAppendData [#encodeandappenddata]
+
+<CodeBlock links={{"BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::BaseConvertEncoder::encodeAndAppendData(
+    const int8_t *data,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+### getMetadata [#getmetadata]
+
+<CodeBlock links={{"BaseConvertEncoder": "baseconvertencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<ChunkMetadata> data_conversion::BaseConvertEncoder::getMetadata(
+    const Chunk_NS::Chunk &chunk
+) const
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::BaseConvertEncoder::clear()
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+template <typename DataType>
+bool data_conversion::BaseConvertEncoder::isNull(
+    const DataType &typed_value
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `delete_buffer_` | `std::optional< std::vector< bool > >` | |
+| `error_tracking_enabled_` | `const bool` | |
+| `has_nulls_` | `bool` | |
+| `num_elements_` | `size_t` | |

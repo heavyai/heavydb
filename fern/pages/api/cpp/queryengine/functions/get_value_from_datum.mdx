@@ -1,0 +1,48 @@
+---
+title: get_value_from_datum
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+T get_value_from_datum(
+    const Datum datum,
+    const SQLTypes type_info
+) noexcept
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+int64_t get_value_from_datum(
+    const Datum datum,
+    const SQLTypes type_info
+) noexcept
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+double get_value_from_datum(
+    const Datum datum,
+    const SQLTypes type_info
+) noexcept
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

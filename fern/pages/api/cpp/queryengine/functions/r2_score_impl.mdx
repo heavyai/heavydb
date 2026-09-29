@@ -1,0 +1,17 @@
+---
+title: r2_score_impl
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "AbstractMLModel": "../classes/abstractmlmodel", "Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t r2_score_impl(
+    TableFunctionManager &mgr,
+    const std::shared_ptr<AbstractMLModel> &model,
+    const Column<T> &input_labels,
+    const ColumnList<T> &input_features,
+    Column<double> &output_r2
+)
+```
+</CodeBlock>

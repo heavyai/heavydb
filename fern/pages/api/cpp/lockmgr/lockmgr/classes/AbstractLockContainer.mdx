@@ -1,0 +1,46 @@
+---
+title: lockmgr::AbstractLockContainer
+description: ""
+---
+
+<CodeBlock id="AbstractLockContainer" links={{"AbstractLockContainer": "abstractlockcontainer"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class AbstractLockContainer
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgrImpl.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~AbstractLockContainer
+
+<CodeBlock links={{"AbstractLockContainer": "abstractlockcontainer"}}>
+```cpp showLineNumbers={false}
+virtual lockmgr::AbstractLockContainer<T>::~AbstractLockContainer()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"AbstractLockContainer": "abstractlockcontainer"}}>
+```cpp showLineNumbers={false}
+virtual T lockmgr::AbstractLockContainer<T>::operator()() const
+```
+</CodeBlock>

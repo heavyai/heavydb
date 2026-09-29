@@ -1,0 +1,44 @@
+---
+title: z_std_normalize_data
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::vector<std::vector<T>> z_std_normalize_data(
+    const std::vector<T *> &input_data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template std::vector<std::vector<float>> z_std_normalize_data(
+    const std::vector<float *> &input_data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template std::vector<std::vector<double>> z_std_normalize_data(
+    const std::vector<double *> &input_data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

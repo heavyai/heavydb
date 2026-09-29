@@ -1,0 +1,593 @@
+---
+title: ExecutorResourceMgr_Namespace::ExecutorResourcePool
+description: "ExecutorResourcePool keeps track of available compute and memory resources and can be queried to get the min and max resources grantable (embodied in a ResourceGrant) for a request, given a ResourceRequest."
+---
+
+`ExecutorResourcePool` keeps track of available compute and memory resources and can be queried to get the min and max resources grantable (embodied in a [ResourceGrant](../structs/resourcegrant)) for a request, given a [ResourceRequest](../structs/resourcerequest).
+
+`ExecutorResourcePool` keeps track of logical resources available to the executor, categorized and typed by the [ResourceType](../enums/resourcetype) enum. Current valid categories of [ResourceType](../enums/resourcetype) include CPU_SLOTS, GPU_SLOTS, CPU_RESULT_MEM, CPU_BUFFER_POOL_MEM, and GPU_BUFFER_POOL_MEM. Furthermore, a [ResourceSubtype](../enums/resourcesubtype) enum is used to represent more granular sub-categories of the above. Namely, there exists [ResourceSubtype](../enums/resourcesubtype) PINNED_CPU_BUFFER_POOL_MEM and PINNED_GPU_BUFFER_POOL_MEM to represent non-pageable memory (specifically for kernel results), and PAGEABLE_CPU_BUFFER_POOL_MEM and PAGEABLE_GPU_BUFFER_POOL_MEM to represent data that could be evicted as necessary.
+
+Currently, a singleton `ExecutorResourcePool` is managed by [ExecutorResourceMgr](executorresourcemgr) and is initialized by the latter in the [ExecutorResourceMgr](executorresourcemgr) constructor. Various parameters driving behavior of `ExecutorResourcePool` are passed to its constructor, comprising the total resources available in the pool in each of the above categories, policies around concurrent requests to the pool for each of the resources (embodied in a vector of [ConcurrentResourceGrantPolicy](../structs/concurrentresourcegrantpolicy)), and policies around limits to individual resource grants (embodied in a vector of [ResourceGrantPolicy](../structs/resourcegrantpolicy)).
+
+Generally for a given resource request, the following lifecycle is prescribed, as can be seen in the various invocations of `ExecutorResourcePool` methods by [ExecutorResourceMgr](executorresourcemgr):
+
+1. call_min_max_resource_grants_for_request: Get min and max possible resource grant, given a resource_request. If it is determined to be impossible to grant even the minimum requests specified in resource_request, this will throw an error.
+2. determine_dynamic_resource_grant: Given the min and max possible resource grants determined from #1, the `ExecutorResourcePool` calculates an actual grant to give a query based on current resource availability in the pool.
+3. allocate_resources: Allocate the actual resource grant computed in #2 from the `ExecutorResourcePool`, marking the resources as used/allocated so they cannot be used by other queries/requestors until deallocated
+4. deallocate_resources: Ultimately invoked from the destructor of the resource handle given to the executing thread, this returns the allocated resources to the pool for use by other queries.
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ExecutorResourcePool.h>
+```
+
+---
+
+## Constructors
+
+### ExecutorResourcePool [#executorresourcepool]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ConcurrentResourceGrantPolicy": "../structs/concurrentresourcegrantpolicy", "ResourceGrantPolicy": "../structs/resourcegrantpolicy", "CPUResultMemResourceType": "../structs/cpuresultmemresourcetype"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ExecutorResourcePool::ExecutorResourcePool(
+    const std::vector<std::pair<ResourceType, size_t>> &total_resources,
+    const std::vector<ConcurrentResourceGrantPolicy> &concurrent_resource_grant_policies,
+    const std::vector<ResourceGrantPolicy> &max_per_request_resource_grant_policies,
+    const CPUResultMemResourceType cpu_result_mem_resource_type
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### log_parameters [#logparameters]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::log_parameters() const
+```
+</CodeBlock>
+
+### calc_min_max_resource_grants_for_request [#calcminmaxresourcegrantsforrequest]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "RequestInfo": "../structs/requestinfo", "ResourceGrant": "../structs/resourcegrant"}}>
+```cpp showLineNumbers={false}
+std::pair<ResourceGrant, ResourceGrant> ExecutorResourceMgr_Namespace::ExecutorResourcePool::calc_min_max_resource_grants_for_request(
+    const RequestInfo &resource_request
+) const
+```
+</CodeBlock>
+
+Given the provided resource_request, statically calculate the minimum and maximum grantable resources for that request.
+
+Note that the max resource grant may be less that requested by the query.
+
+Note that this method only looks at static total available resources as well as the ideal and minimum resources requested (in resource_request) to determine the max grants, and does not evaluate the current state of resource use in the pool. That is done in a later call, detrmine_dynamic_resource_grant.
+
+**Returns:** std::pair&lt;ResourceGrant, ResourceGrant&gt; - A pair of the minimum and maximum grantable resources that could be potentially granted for this request,
+
+**Parameters**
+
+<ParamField path="resource_request" type="const RequestInfo &">
+- Details the resources a query would like to have as well as the minimum resources it can run with
+</ParamField>
+
+### can_currently_satisfy_request [#cancurrentlysatisfyrequest]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourceGrant": "../structs/resourcegrant", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+bool ExecutorResourceMgr_Namespace::ExecutorResourcePool::can_currently_satisfy_request(
+    const ResourceGrant &min_resource_grant,
+    const ChunkRequestInfo &chunk_request_info
+) const
+```
+</CodeBlock>
+
+### determine_dynamic_resource_grant [#determinedynamicresourcegrant]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourceGrant": "../structs/resourcegrant", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+std::pair<bool, ResourceGrant> ExecutorResourceMgr_Namespace::ExecutorResourcePool::determine_dynamic_resource_grant(
+    const ResourceGrant &min_resource_grant,
+    const ResourceGrant &max_resource_grant,
+    const ChunkRequestInfo &chunk_request_info,
+    const double max_request_backoff_ratio
+) const
+```
+</CodeBlock>
+
+Determines the actual resource grant to give a query (which will be somewhere between the provided min_resource_grant and max_resource_grant, unless it is determined that the request cannot be currently satisfied).
+
+Generally the resources granted of each type are computed independently, but if buffer_mem_gated_per_slot is set on min_resource_grant, other resources such as threads granted may be scaled back to match the amount of buffer pool mem available.
+
+**Returns:** std::pair&lt;bool, ResourceGrant&gt; - the first boolean member of the pair specifies whether the request can currently be satisfied given current resources in the pool, the second is the actual resource grant a requestor will receive.
+
+**Parameters**
+
+<ParamField path="min_resource_grant" type="const ResourceGrant &">
+- The min resource grant allowable for this request, determined in calc_min_max_resource_grants_for_request
+</ParamField>
+
+<ParamField path="max_resource_grant" type="const ResourceGrant &">
+- The max resource grant possible for this request, determined in calc_min_max_resource_grants_for_request
+</ParamField>
+
+<ParamField path="chunk_request_info" type="const ChunkRequestInfo &">
+- The DataMgr chunks with associated sizes needed for this query
+</ParamField>
+
+<ParamField path="max_request_backoff_ratio" type="const double">
+- The fraction from 0 to 1 of each resource we will leave in the pool, even if the resources are available to satisfy the max_resource_grant (so that there will be resources available for other queries).
+</ParamField>
+
+### allocate_resources [#allocateresources]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourceGrant": "../structs/resourcegrant", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::allocate_resources(
+    const ResourceGrant &resource_grant,
+    const ChunkRequestInfo &chunk_request_info
+)
+```
+</CodeBlock>
+
+Given a resource grant (assumed to be computed in determine_dynamic_resource_grant), actually allocate (reserve) the resources in the pool so other requestors (queries) cannot use those resources until returned to the pool.
+
+Note that the chunk requests do not and should not neccessarily match the state of the BufferMgrs (where evictions can happen etc), but are just used to keep track of what chunks are pledged for running queries. In the future we may try to get all of this info from the BufferMgr directly, but would need to add a layer of state there that would keep track of both what is currently allocated and what is pledged to queries. [For](../../classes/for) now, this effort was not deemed worth the complexity and risk it would introduce.
+
+**Parameters**
+
+<ParamField path="resource_grant" type="const ResourceGrant &">
+- Granted resource_grant, assumed to be determined previously in determine_dynamic_resource_grant
+</ParamField>
+
+<ParamField path="chunk_request_info" type="const ChunkRequestInfo &">
+- The DataMgr chunk keys and other associated info needed by this query. The `ExecutorResourcePool` must keep track of chunks that are in the pool so it can properly determine whether queries can execute (given chunks can be shared resources across requestors/queries).
+</ParamField>
+
+### deallocate_resources [#deallocateresources]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourceGrant": "../structs/resourcegrant", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::deallocate_resources(
+    const ResourceGrant &resource_grant,
+    const ChunkRequestInfo &chunk_request_info
+)
+```
+</CodeBlock>
+
+Deallocates resources granted to a requestor such that they can be used for other requests.
+
+**Parameters**
+
+<ParamField path="resource_grant" type="const ResourceGrant &">
+- Resources granted to the request that should be deallocated
+</ParamField>
+
+<ParamField path="chunk_request_info" type="const ChunkRequestInfo &">
+- The DataMgr chunk keys (and other associated info) granted to this query that should be deallocated.
+</ParamField>
+
+### get_resource_info [#getresourceinfo]
+
+<Tabs>
+<Tab title="Const (with resource type)">
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_resource_info(
+    const ResourceType resource_type
+) const
+```
+</CodeBlock>
+
+Returns the allocated and total available amount of the resource specified.
+
+**Returns:** std::pair&lt;size_t, size_t&gt; - First member is the allocated amount of the resource, the second member is the total amount of the resource (including allocated and available)
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourcePoolInfo": "../structs/resourcepoolinfo"}}>
+```cpp showLineNumbers={false}
+ResourcePoolInfo ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_resource_info() const
+```
+</CodeBlock>
+
+Returns a struct detailing the allocated and total available resources of each type tracked in `ExecutorResourcePool`.
+
+**Returns:** [ResourcePoolInfo](../structs/resourcepoolinfo) - Struct detailining the allocaated and total available resources of each typed tracked in `ExecutorResourcePool`
+
+</Tab>
+</Tabs>
+
+### set_resource [#setresource]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::set_resource(
+    const ResourceType resource_type,
+    const size_t resource_quantity
+)
+```
+</CodeBlock>
+
+Sets the quantity of resource_type to resource_quantity.
+
+If pool has outstanding requests, will throw. Responsibility of allowing the pool to empty and preventing concurrent requests while this operation is running is left to the caller (in particular, [ExecutorResourceMgr::set_resource](executorresourcemgr#setresource) pauses the process queue, which waits until all executing requests are finished before yielding to the caller, before calling this method).
+
+Currently only used for testing, but a SQL interface to live-change resources available in the pool could be added.
+
+**Parameters**
+
+<ParamField path="resource_type" type="const ResourceType">
+- Type of resource to change the quanity of
+</ParamField>
+
+<ParamField path="resource_quantity" type="const size_t">
+- New quantity of resource for given resource_type
+</ParamField>
+
+### get_concurrent_resource_grant_policy [#getconcurrentresourcegrantpolicy]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ConcurrentResourceGrantPolicy": "../structs/concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+ConcurrentResourceGrantPolicy ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_concurrent_resource_grant_policy(
+    const ResourceType resource_type
+) const
+```
+</CodeBlock>
+
+### get_max_resource_grant_per_request_policy [#getmaxresourcegrantperrequestpolicy]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourceGrantPolicy": "../structs/resourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+const ResourceGrantPolicy & ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_max_resource_grant_per_request_policy(
+    const ResourceSubtype resource_subtype
+) const
+```
+</CodeBlock>
+
+### set_concurrent_resource_grant_policy [#setconcurrentresourcegrantpolicy]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ConcurrentResourceGrantPolicy": "../structs/concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::set_concurrent_resource_grant_policy(
+    const ConcurrentResourceGrantPolicy &concurrent_resource_grant_policy
+)
+```
+</CodeBlock>
+
+Resets the concurrent resource grant policy object, which specifies a [ResourceType](../enums/resourcetype) as well as normal and oversubscription concurrency policies.
+
+If pool has outstanding requests, will throw. Responsibility of allowing the pool to empty and preventing concurrent requests while this operation is running is left to the caller (in particular, ExecutorResourceMgr::set_concurent_resource_grant_policy pauses the process queue, which waits until all executing requests are finished before yielding to the caller, before calling this method).
+
+Currently only used for testing, but a SQL interface to live-change concurrency policies for the pool could be added.
+
+**Parameters**
+
+<ParamField path="concurrent_resource_grant_policy" type="const ConcurrentResourceGrantPolicy &">
+- New concurrent resource policy (which encompasses the type of resource)
+</ParamField>
+
+### init [#init]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ConcurrentResourceGrantPolicy": "../structs/concurrentresourcegrantpolicy", "ResourceGrantPolicy": "../structs/resourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::init(
+    const std::vector<std::pair<ResourceType, size_t>> &total_resources,
+    const std::vector<ConcurrentResourceGrantPolicy> &concurrent_resource_grant_policies,
+    const std::vector<ResourceGrantPolicy> &max_per_request_resource_grant_policies
+)
+```
+</CodeBlock>
+
+### init_concurrency_policies [#initconcurrencypolicies]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::init_concurrency_policies()
+```
+</CodeBlock>
+
+### init_max_resource_grants_per_requests [#initmaxresourcegrantsperrequests]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::init_max_resource_grants_per_requests()
+```
+</CodeBlock>
+
+### calc_max_resource_grant_for_request [#calcmaxresourcegrantforrequest]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::calc_max_resource_grant_for_request(
+    const size_t requested_resource_quantity,
+    const size_t min_requested_resource_quantity,
+    const size_t max_grantable_resource_quantity
+) const
+```
+</CodeBlock>
+
+### calc_min_dependent_resource_grant_for_request [#calcmindependentresourcegrantforrequest]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> ExecutorResourceMgr_Namespace::ExecutorResourcePool::calc_min_dependent_resource_grant_for_request(
+    const size_t min_requested_dependent_resource_quantity,
+    const size_t min_requested_independent_resource_quantity,
+    const size_t dependent_to_independent_resource_ratio
+) const
+```
+</CodeBlock>
+
+### calc_max_dependent_resource_grant_for_request [#calcmaxdependentresourcegrantforrequest]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> ExecutorResourceMgr_Namespace::ExecutorResourcePool::calc_max_dependent_resource_grant_for_request(
+    const size_t requested_dependent_resource_quantity,
+    const size_t min_requested_dependent_resource_quantity,
+    const size_t max_grantable_dependent_resource_quantity,
+    const size_t min_requested_independent_resource_quantity,
+    const size_t max_grantable_independent_resource_quantity,
+    const size_t dependent_to_independent_resource_ratio
+) const
+```
+</CodeBlock>
+
+### check_request_against_global_policy [#checkrequestagainstglobalpolicy]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ConcurrentResourceGrantPolicy": "../structs/concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+bool ExecutorResourceMgr_Namespace::ExecutorResourcePool::check_request_against_global_policy(
+    const size_t resource_total,
+    const size_t resource_allocated,
+    const ConcurrentResourceGrantPolicy &concurrent_resource_grant_policy
+) const
+```
+</CodeBlock>
+
+### check_request_against_policy [#checkrequestagainstpolicy]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ConcurrentResourceGrantPolicy": "../structs/concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+bool ExecutorResourceMgr_Namespace::ExecutorResourcePool::check_request_against_policy(
+    const size_t resource_request,
+    const size_t resource_total,
+    const size_t resource_allocated,
+    const size_t global_outstanding_requests,
+    const ConcurrentResourceGrantPolicy &concurrent_resource_grant_policy
+) const
+```
+</CodeBlock>
+
+### can_currently_satisfy_request_impl [#cancurrentlysatisfyrequestimpl]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourceGrant": "../structs/resourcegrant", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+bool ExecutorResourceMgr_Namespace::ExecutorResourcePool::can_currently_satisfy_request_impl(
+    const ResourceGrant &min_resource_grant,
+    const ChunkRequestInfo &chunk_request_info
+) const
+```
+</CodeBlock>
+
+### can_currently_satisfy_chunk_request [#cancurrentlysatisfychunkrequest]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourceGrant": "../structs/resourcegrant", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+bool ExecutorResourceMgr_Namespace::ExecutorResourcePool::can_currently_satisfy_chunk_request(
+    const ResourceGrant &min_resource_grant,
+    const ChunkRequestInfo &chunk_request_info
+) const
+```
+</CodeBlock>
+
+### get_requested_chunks_not_in_pool [#getrequestedchunksnotinpool]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+ChunkRequestInfo ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_requested_chunks_not_in_pool(
+    const ChunkRequestInfo &chunk_request_info
+) const
+```
+</CodeBlock>
+
+### get_chunk_bytes_not_in_pool [#getchunkbytesnotinpool]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_chunk_bytes_not_in_pool(
+    const ChunkRequestInfo &chunk_request_info
+) const
+```
+</CodeBlock>
+
+### add_chunk_requests_to_allocated_pool [#addchunkrequeststoallocatedpool]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourceGrant": "../structs/resourcegrant", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::add_chunk_requests_to_allocated_pool(
+    const ResourceGrant &resource_grant,
+    const ChunkRequestInfo &chunk_request_info
+)
+```
+</CodeBlock>
+
+### remove_chunk_requests_from_allocated_pool [#removechunkrequestsfromallocatedpool]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool", "ResourceGrant": "../structs/resourcegrant", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::remove_chunk_requests_from_allocated_pool(
+    const ResourceGrant &resource_grant,
+    const ChunkRequestInfo &chunk_request_info
+)
+```
+</CodeBlock>
+
+### determine_dynamic_single_resource_grant [#determinedynamicsingleresourcegrant]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::determine_dynamic_single_resource_grant(
+    const size_t min_resource_requested,
+    const size_t max_resource_requested,
+    const size_t resource_allocated,
+    const size_t total_resource,
+    const double max_request_backoff_ratio
+) const
+```
+</CodeBlock>
+
+### sanity_check_requests_against_allocations [#sanitycheckrequestsagainstallocations]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourcePool::sanity_check_requests_against_allocations() const
+```
+</CodeBlock>
+
+### get_total_allocated_buffer_pool_mem_for_level [#gettotalallocatedbufferpoolmemforlevel]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_total_allocated_buffer_pool_mem_for_level(
+    const ExecutorDeviceType memory_pool_type
+) const
+```
+</CodeBlock>
+
+### is_resource_valid [#isresourcevalid]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+bool ExecutorResourceMgr_Namespace::ExecutorResourcePool::is_resource_valid(
+    const ResourceType resource_type
+) const
+```
+</CodeBlock>
+
+### get_total_resource [#gettotalresource]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_total_resource(
+    const ResourceType resource_type
+) const
+```
+</CodeBlock>
+
+### get_allocated_resource_of_subtype [#getallocatedresourceofsubtype]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_allocated_resource_of_subtype(
+    const ResourceSubtype resource_subtype
+) const
+```
+</CodeBlock>
+
+### get_allocated_resource_of_type [#getallocatedresourceoftype]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_allocated_resource_of_type(
+    const ResourceType resource_type
+) const
+```
+</CodeBlock>
+
+### get_max_resource_grant_per_request [#getmaxresourcegrantperrequest]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_max_resource_grant_per_request(
+    const ResourceSubtype resource_subtype
+) const
+```
+</CodeBlock>
+
+### get_total_per_resource_num_requests [#gettotalperresourcenumrequests]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_total_per_resource_num_requests(
+    const ResourceType resource_type
+) const
+```
+</CodeBlock>
+
+### increment_total_per_resource_num_requests [#incrementtotalperresourcenumrequests]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::increment_total_per_resource_num_requests(
+    const ResourceType resource_type
+)
+```
+</CodeBlock>
+
+### decrement_total_per_resource_num_requests [#decrementtotalperresourcenumrequests]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::decrement_total_per_resource_num_requests(
+    const ResourceType resource_type
+)
+```
+</CodeBlock>
+
+### get_outstanding_per_resource_num_requests [#getoutstandingperresourcenumrequests]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::get_outstanding_per_resource_num_requests(
+    const ResourceType resource_type
+) const
+```
+</CodeBlock>
+
+### increment_outstanding_per_resource_num_requests [#incrementoutstandingperresourcenumrequests]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::increment_outstanding_per_resource_num_requests(
+    const ResourceType resource_type
+)
+```
+</CodeBlock>
+
+### decrement_outstanding_per_resource_num_requests [#decrementoutstandingperresourcenumrequests]
+
+<CodeBlock links={{"ExecutorResourcePool": "executorresourcepool"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ExecutorResourcePool::decrement_outstanding_per_resource_num_requests(
+    const ResourceType resource_type
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cpu_result_mem_resource_type_` | `CPUResultMemResourceType` | |
+| `total_resources_` | `std::array< size_t, ResourceTypeSize >` | |
+| `resource_type_validity_` | `std::array< bool, ResourceTypeSize >` | |
+| `allocated_resources_` | `std::array< size_t, ResourceSubtypeSize >` | |
+| `max_resource_grants_per_request_policies_` | `std::array< ResourceGrantPolicy, ResourceSubtypeSize >` | |
+| `max_resource_grants_per_request_` | `std::array< size_t, ResourceSubtypeSize >` | |
+| `concurrent_resource_grant_policies_` | `std::array< ConcurrentResourceGrantPolicy, ResourceTypeSize >` | |
+| `total_num_requests_` | `size_t` | |
+| `outstanding_num_requests_` | `size_t` | |
+| `total_per_resource_num_requests_` | `std::array< size_t, ResourceTypeSize >` | |
+| `outstanding_per_resource_num_requests_` | `std::array< size_t, ResourceTypeSize >` | |
+| `allocated_cpu_buffer_pool_chunks_` | `BufferPoolChunkMap` | |
+| `allocated_gpu_buffer_pool_chunks_` | `BufferPoolChunkMap` | |
+| `sanity_check_pool_state_on_deallocations_` | `const bool` | |
+| `resource_mutex_` | `std::shared_mutex` | |

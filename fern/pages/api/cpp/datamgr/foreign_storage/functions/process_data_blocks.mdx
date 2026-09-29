@@ -1,0 +1,21 @@
+---
+title: foreign_storage::process_data_blocks
+description: "Updates metadata encapsulated in encoders for all table columns given new data blocks gotten from parsing a new set of rows in a file buffer."
+---
+
+<CodeBlock links={{"MetadataScanMultiThreadingParams": "../structs/metadatascanmultithreadingparams", "ParseBufferRequest": "../structs/parsebufferrequest", "ParseBufferResult": "../structs/parsebufferresult"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::process_data_blocks(
+    MetadataScanMultiThreadingParams &multi_threading_params,
+    int fragment_id,
+    const ParseBufferRequest &request,
+    ParseBufferResult &result,
+    std::map<int, const ColumnDescriptor *> &column_by_id,
+    std::map<int, FileRegions> &fragment_id_to_file_regions_map
+)
+```
+</CodeBlock>
+
+Updates metadata encapsulated in encoders for all table columns given new data blocks gotten from parsing a new set of rows in a file buffer.
+
+If cache is available, also append the data_blocks to chunks in the cache

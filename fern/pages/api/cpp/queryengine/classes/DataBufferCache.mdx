@@ -1,0 +1,103 @@
+---
+title: DataBufferCache
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableFunctionsDataCache.h>
+```
+
+---
+
+## Methods
+
+### isKeyCached [#iskeycached]
+
+<CodeBlock links={{"DataBufferCache": "databuffercache"}}>
+```cpp showLineNumbers={false}
+bool DataBufferCache::isKeyCached(
+    const std::string &key
+) const
+```
+</CodeBlock>
+
+### isKeyCachedAndSameLength [#iskeycachedandsamelength]
+
+<CodeBlock links={{"DataBufferCache": "databuffercache"}}>
+```cpp showLineNumbers={false}
+bool DataBufferCache::isKeyCachedAndSameLength(
+    const std::string &key,
+    const size_t num_bytes
+) const
+```
+</CodeBlock>
+
+### getDataForKey [#getdataforkey]
+
+<CodeBlock links={{"DataBufferCache": "databuffercache"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void DataBufferCache::getDataForKey(
+    const std::string &key,
+    T *dest_buffer
+) const
+```
+</CodeBlock>
+
+### getDataRefForKey [#getdatarefforkey]
+
+<CodeBlock links={{"DataBufferCache": "databuffercache"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+const T & DataBufferCache::getDataRefForKey(
+    const std::string &key
+) const
+```
+</CodeBlock>
+
+### getDataPtrForKey [#getdataptrforkey]
+
+<CodeBlock links={{"DataBufferCache": "databuffercache"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+const T * DataBufferCache::getDataPtrForKey(
+    const std::string &key
+) const
+```
+</CodeBlock>
+
+### putDataForKey [#putdataforkey]
+
+<CodeBlock links={{"DataBufferCache": "databuffercache"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void DataBufferCache::putDataForKey(
+    const std::string &key,
+    T *const data_buffer,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+### copyData [#copydata]
+
+<CodeBlock links={{"DataBufferCache": "databuffercache"}}>
+```cpp showLineNumbers={false}
+void DataBufferCache::copyData(
+    int8_t *dest,
+    const int8_t *source,
+    const size_t num_bytes
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `parallel_copy_min_bytes` | `const size_t` | |
+| `data_cache_` | `std::unordered_map< std::string, std::shared_ptr< CacheDataTf > >` | |
+| `cache_mutex_` | `std::shared_mutex` | |
+| `debug_print_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `bool` | |

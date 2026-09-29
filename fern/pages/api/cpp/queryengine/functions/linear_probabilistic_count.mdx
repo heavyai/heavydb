@@ -1,0 +1,49 @@
+---
+title: linear_probabilistic_count
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ void linear_probabilistic_count(
+    uint8_t *bitmap,
+    const uint32_t bitmap_bytes,
+    const uint8_t *key_bytes,
+    const uint32_t key_len
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE void linear_probabilistic_count(
+    uint8_t *bitmap,
+    const uint32_t bitmap_bytes,
+    const uint8_t *key_bytes,
+    const uint32_t key_len
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT void linear_probabilistic_count(
+    uint8_t *bitmap,
+    const uint32_t bitmap_bytes,
+    const uint8_t *key_bytes,
+    const uint32_t key_len
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

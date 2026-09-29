@@ -1,0 +1,87 @@
+---
+title: Parser::DropTableStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### DropTableStmt [#droptablestmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"DropTableStmt": "droptablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropTableStmt::DropTableStmt(
+    std::string *tab,
+    bool i
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"DropTableStmt": "droptablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropTableStmt::DropTableStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_table [#gettable]
+
+<CodeBlock links={{"DropTableStmt": "droptablestmt"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::DropTableStmt::get_table() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"DropTableStmt": "droptablestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropTableStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"DropTableStmt": "droptablestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropTableStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `if_exists_` | `bool` | |

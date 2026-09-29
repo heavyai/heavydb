@@ -1,0 +1,240 @@
+---
+title: heavyai::serialize_literals::Serializer
+description: "Serialize all literals into one std::vector<int8_t>."
+---
+
+Serialize all literals into one std::vector&lt;int8_t&gt;.
+
+```cpp showLineNumbers={false}
+#include <heavyai/serialize_literals/SerializeLiterals.h>
+```
+
+---
+
+## Constructors
+
+### Serializer [#serializer]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"Serializer": "serializer", "Executor": "../../../../classes/executor", "MemoryRequirements": "memoryrequirements"}}>
+```cpp showLineNumbers={false}
+heavyai::serialize_literals::Serializer::Serializer(
+    Executor const &executor,
+    MemoryRequirements &memory_requirements
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+heavyai::serialize_literals::Serializer::Serializer(
+    Serializer const &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+Serializer & heavyai::serialize_literals::Serializer::operator=(
+    Serializer const &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getMaxOffset [#getmaxoffset]
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+size_t heavyai::serialize_literals::Serializer::getMaxOffset() const
+```
+</CodeBlock>
+
+### getSerializedVector [#getserializedvector]
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+std::vector<int8_t> & heavyai::serialize_literals::Serializer::getSerializedVector()
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    CgenState::LiteralValue const &lit
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    int8_t v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    int16_t v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    int32_t v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    int64_t v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    float v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    double v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    std::pair<std::string, shared::StringDictKey> const &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    std::string const &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void heavyai::serialize_literals::Serializer::operator()(
+    std::vector<T> const &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+void heavyai::serialize_literals::Serializer::operator()(
+    std::pair<std::vector<int8_t>, int> const &v
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### pack [#pack]
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+static int32_t heavyai::serialize_literals::Serializer::pack(
+    size_t const offset,
+    size_t const length
+)
+```
+</CodeBlock>
+
+### rangeCheck [#rangecheck]
+
+<CodeBlock links={{"Serializer": "serializer"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+static void heavyai::serialize_literals::Serializer::rangeCheck(
+    size_t const n,
+    std::string const name
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `Executor const  &` | |
+| `memory_requirements_` | `MemoryRequirements &` | |
+| `serialized_` | `std::vector< int8_t >` | |
+| `header_index_` | `size_t` | |
+| `max_offset_` | `size_t` | |
+| `variant_index_` | `size_t` | |
+| `lit_bytes` | `size_t` | |

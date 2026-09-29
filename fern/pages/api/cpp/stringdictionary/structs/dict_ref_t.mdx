@@ -1,0 +1,126 @@
+---
+title: dict_ref_t
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DictRef.h>
+```
+
+---
+
+## Constructors
+
+### dict_ref_t [#dictreft]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"dict_ref_t": "dictreft"}}>
+```cpp showLineNumbers={false}
+dict_ref_t::dict_ref_t()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"dict_ref_t": "dictreft"}}>
+```cpp showLineNumbers={false}
+dict_ref_t::dict_ref_t(
+    int32_t db_id,
+    int32_t dict_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"dict_ref_t": "dictreft"}}>
+```cpp showLineNumbers={false}
+struct dict_ref_t & dict_ref_t::operator=(
+    const struct dict_ref_t &rhs
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator shared::StringDictKey [#operatorsharedstringdictkey]
+
+<CodeBlock links={{"dict_ref_t": "dictreft"}}>
+```cpp showLineNumbers={false}
+dict_ref_t::operator shared::StringDictKey() const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"dict_ref_t": "dictreft"}}>
+```cpp showLineNumbers={false}
+bool dict_ref_t::operator==(
+    const struct dict_ref_t &rhs
+) const
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"dict_ref_t": "dictreft"}}>
+```cpp showLineNumbers={false}
+bool dict_ref_t::operator<(
+    const struct dict_ref_t &rhs
+) const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"dict_ref_t": "dictreft"}}>
+```cpp showLineNumbers={false}
+size_t dict_ref_t::operator()(
+    const struct dict_ref_t &ref
+) const noexcept
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"dict_ref_t": "dictreft"}}>
+```cpp showLineNumbers={false}
+std::string dict_ref_t::toString() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### InvalidDictRef [#invaliddictref]
+
+<CodeBlock links={{"dict_ref_t": "dictreft"}}>
+```cpp showLineNumbers={false}
+static dict_ref_t dict_ref_t::InvalidDictRef()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dbId` | `int32_t` | |
+| `dictId` | `int32_t` | |
+| `invalidDbId` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `invalidDictId` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `literalsDictId` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |

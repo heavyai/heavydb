@@ -1,0 +1,18 @@
+---
+title: linear_reg_coefs__cpu_1
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+EXTENSION_NOINLINE_HOST int32_t linear_reg_coefs__cpu_1(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    Column<int64_t> &output_coef_idx,
+    Column<TextEncodingDict> &output_feature,
+    Column<int64_t> &output_sub_coef_idx,
+    Column<TextEncodingDict> &output_sub_feature,
+    Column<double> &output_coef
+)
+```
+</CodeBlock>

@@ -1,0 +1,85 @@
+---
+title: RangeKeyHandler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashJoinKeyHandlers.h>
+```
+
+---
+
+## Constructors
+
+### RangeKeyHandler [#rangekeyhandler]
+
+<CodeBlock links={{"RangeKeyHandler": "rangekeyhandler", "JoinColumn": "joincolumn"}}>
+```cpp showLineNumbers={false}
+RangeKeyHandler::RangeKeyHandler(
+    const bool is_compressed,
+    const size_t key_dims_count,
+    const JoinColumn *join_column,
+    const double *bucket_sizes_for_dimension
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"RangeKeyHandler": "rangekeyhandler", "JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename KEY_BUFF_HANDLER>
+DEVICE int RangeKeyHandler::operator()(
+    JoinColumnIterator *join_column_iterators,
+    T *key_scratch_buff,
+    KEY_BUFF_HANDLER f
+) const
+```
+</CodeBlock>
+
+### get_number_of_columns [#getnumberofcolumns]
+
+<CodeBlock links={{"RangeKeyHandler": "rangekeyhandler"}}>
+```cpp showLineNumbers={false}
+DEVICE size_t RangeKeyHandler::get_number_of_columns() const
+```
+</CodeBlock>
+
+### get_key_component_count [#getkeycomponentcount]
+
+<CodeBlock links={{"RangeKeyHandler": "rangekeyhandler"}}>
+```cpp showLineNumbers={false}
+DEVICE size_t RangeKeyHandler::get_key_component_count() const
+```
+</CodeBlock>
+
+### get_join_columns [#getjoincolumns]
+
+<CodeBlock links={{"RangeKeyHandler": "rangekeyhandler", "JoinColumn": "joincolumn"}}>
+```cpp showLineNumbers={false}
+DEVICE const JoinColumn * RangeKeyHandler::get_join_columns() const
+```
+</CodeBlock>
+
+### get_join_column_type_infos [#getjoincolumntypeinfos]
+
+<CodeBlock links={{"RangeKeyHandler": "rangekeyhandler", "JoinColumnTypeInfo": "joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+DEVICE const JoinColumnTypeInfo * RangeKeyHandler::get_join_column_type_infos() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_compressed_` | `const bool` | |
+| `key_dims_count_` | `const size_t` | |
+| `join_column_` | `const JoinColumn *` | |
+| `bucket_sizes_for_dimension_` | `const double *` | |

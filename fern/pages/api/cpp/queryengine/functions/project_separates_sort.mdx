@@ -1,0 +1,17 @@
+---
+title: project_separates_sort
+description: "Return true if the input project separates two sort nodes, i.e."
+---
+
+<CodeBlock links={{"RelProject": "../classes/relproject", "RelAlgNode": "../classes/relalgnode"}}>
+```cpp showLineNumbers={false}
+bool project_separates_sort(
+    const RelProject *project,
+    const RelAlgNode *next_node
+)
+```
+</CodeBlock>
+
+Return true if the input project separates two sort nodes, i.e.
+
+Sort -&gt; Project -&gt; Sort. This pattern often occurs in machine generated SQL, e.g. SELECT * FROM (SELECT * FROM t LIMIT 10) t0 LIMIT 1; Use this function to prevent optimizing out the intermediate project, as the project is required to ensure the first sort runs to completion prior to the second sort. Back to back sort nodes are not executable and will throw an error.

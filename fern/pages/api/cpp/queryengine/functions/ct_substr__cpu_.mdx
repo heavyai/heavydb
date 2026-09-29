@@ -1,0 +1,16 @@
+---
+title: ct_substr__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_substr__cpu_(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input_str,
+    const Column<int> &pos,
+    const Column<int> &len,
+    Column<TextEncodingDict> &output_substr
+)
+```
+</CodeBlock>

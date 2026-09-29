@@ -1,0 +1,53 @@
+---
+title: create_dev_group_by_buffers
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../classes/querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers"}}>
+```cpp showLineNumbers={false}
+GpuGroupByBuffers create_dev_group_by_buffers(
+    DeviceAllocator *device_allocator,
+    const std::vector<int64_t *> &group_by_buffers,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    const int device_id,
+    const ExecutorDispatchMode dispatch_mode,
+    const int64_t num_input_rows,
+    const bool prepend_index_buffer,
+    const bool always_init_group_by_on_host,
+    const bool use_bump_allocator,
+    const bool has_varlen_output,
+    Allocator *insitu_allocator
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../classes/querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers"}}>
+```cpp showLineNumbers={false}
+GpuGroupByBuffers create_dev_group_by_buffers(
+    DeviceAllocator *device_allocator,
+    const std::vector<int64_t *> &group_by_buffers,
+    const QueryMemoryDescriptor &,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    const int device_id,
+    const ExecutorDispatchMode dispatch_mode,
+    const int64_t num_input_rows,
+    const bool prepend_index_buffer,
+    const bool always_init_group_by_on_host,
+    const bool use_bump_allocator,
+    const bool has_varlen_output,
+    Allocator *insitu_allocator
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

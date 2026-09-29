@@ -1,0 +1,100 @@
+---
+title: SortField
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+---
+
+## Constructors
+
+### SortField [#sortfield]
+
+<CodeBlock links={{"SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+SortField::SortField(
+    const size_t field,
+    const SortDirection sort_dir,
+    const NullSortedPosition nulls_pos
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~SortField
+
+<CodeBlock links={{"SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+virtual SortField::~SortField() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+bool SortField::operator==(
+    const SortField &that
+) const
+```
+</CodeBlock>
+
+### getField [#getfield]
+
+<CodeBlock links={{"SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+size_t SortField::getField() const
+```
+</CodeBlock>
+
+### getSortDir [#getsortdir]
+
+<CodeBlock links={{"SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+SortDirection SortField::getSortDir() const
+```
+</CodeBlock>
+
+### getNullsPosition [#getnullsposition]
+
+<CodeBlock links={{"SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+NullSortedPosition SortField::getNullsPosition() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+std::string SortField::toString() const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+size_t SortField::toHashImpl(
+    RelRexNodeHashCache &cache
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `field_` | `size_t` | |
+| `sort_dir_` | `SortDirection` | |
+| `nulls_pos_` | `NullSortedPosition` | |

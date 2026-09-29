@@ -1,0 +1,25 @@
+---
+title: multifrag_query
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT void multifrag_query(
+    int32_t *error_codes,
+    int32_t *total_matched,
+    int64_t **out,
+    const uint32_t *num_fragments_ptr,
+    const uint32_t *num_tables_ptr,
+    const uint32_t *row_index_resume,
+    const int8_t ***col_buffers,
+    const int64_t *num_rows,
+    const uint64_t *frag_row_offsets,
+    const int32_t *frag_ids,
+    const int32_t *max_matched,
+    const int64_t *init_agg_value,
+    const int64_t *join_hash_tables,
+    const int8_t *row_func_mgr
+)
+```
+</CodeBlock>

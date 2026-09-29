@@ -1,0 +1,23 @@
+---
+title: Mandelbrot::mandelbrot_impl
+description: ""
+---
+
+<CodeBlock links={{"Column": "../../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+TEMPLATE_NOINLINE void Mandelbrot::mandelbrot_impl(
+    const int32_t x_pixels,
+    const int32_t y_begin,
+    const int32_t y_end,
+    const T x_min,
+    const T y_min,
+    const T x_scale,
+    const T y_scale,
+    const int32_t max_iterations,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<int32_t> &output_num_iterations
+)
+```
+</CodeBlock>

@@ -1,0 +1,20 @@
+---
+title: tf_export_ov_buildings_polygons__cpu_template
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename G>
+NEVER_INLINE HOST int32_t tf_export_ov_buildings_polygons__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &rowids,
+    const Column<G> &polys,
+    const Column<double> &centroids_x,
+    const Column<double> &centroids_y,
+    const Column<float> &base_elevations,
+    const Column<Array<float>> &heights,
+    Column<Array<int32_t>> &mesh_data_out
+)
+```
+</CodeBlock>

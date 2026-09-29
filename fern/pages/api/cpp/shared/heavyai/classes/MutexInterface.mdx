@@ -1,0 +1,50 @@
+---
+title: heavyai::MutexInterface
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavyai/heavyai_locks.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~MutexInterface
+
+<CodeBlock links={{"MutexInterface": "mutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual heavyai::MutexInterface::~MutexInterface()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### lock [#lock]
+
+<CodeBlock links={{"MutexInterface": "mutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual void heavyai::MutexInterface::lock()
+```
+</CodeBlock>
+
+### try_lock [#trylock]
+
+<CodeBlock links={{"MutexInterface": "mutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual bool heavyai::MutexInterface::try_lock()
+```
+</CodeBlock>
+
+### unlock [#unlock]
+
+<CodeBlock links={{"MutexInterface": "mutexinterface"}}>
+```cpp showLineNumbers={false}
+virtual void heavyai::MutexInterface::unlock()
+```
+</CodeBlock>

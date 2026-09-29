@@ -1,0 +1,52 @@
+---
+title: ExecutorResourceMgr_Namespace::ExecutorResourceMgrError
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ExecutorResourceMgrCommon.h>
+```
+
+---
+
+## Constructors
+
+### ExecutorResourceMgrError [#executorresourcemgrerror]
+
+<CodeBlock links={{"ExecutorResourceMgrError": "executorresourcemgrerror"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ExecutorResourceMgrError::ExecutorResourceMgrError(
+    std::optional<RequestId> const request_id,
+    std::string error_msg
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getRequestId [#getrequestid]
+
+<CodeBlock links={{"ExecutorResourceMgrError": "executorresourcemgrerror"}}>
+```cpp showLineNumbers={false}
+std::optional<RequestId> ExecutorResourceMgr_Namespace::ExecutorResourceMgrError::getRequestId() const
+```
+</CodeBlock>
+
+### getErrorMsg [#geterrormsg]
+
+<CodeBlock links={{"ExecutorResourceMgrError": "executorresourcemgrerror"}}>
+```cpp showLineNumbers={false}
+std::string ExecutorResourceMgr_Namespace::ExecutorResourceMgrError::getErrorMsg() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `request_id_` | `std::optional< RequestId >` | |
+| `error_msg_` | `std::string` | |

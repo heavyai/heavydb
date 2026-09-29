@@ -1,0 +1,21 @@
+---
+title: writeBackCellGeoNestedArray
+description: ""
+---
+
+<CodeBlock links={{"FlatBufferManager": "../structs/flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+template <size_t NDIM,
+          typename GeospatialGeoType,
+          typename GeoTypeTargetValue,
+          typename GeoTypeTargetValuePtr,
+          bool is_multi>
+void writeBackCellGeoNestedArray(
+    FlatBufferManager &m,
+    const int64_t index,
+    const SQLTypeInfo &ti,
+    const TargetValue &col_val,
+    std::mutex *write_mutex
+)
+```
+</CodeBlock>
