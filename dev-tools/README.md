@@ -13,6 +13,14 @@ optional Doxygen on the host.
 - For GPU access inside containers: `nvidia-container-toolkit` (auto-detected
   via `nvidia-smi`; containers run CPU-only if absent)
 
+Component repos (heavyiq, immerse, webserver, pyheavydb) are cloned over
+anonymous HTTPS, so no SSH key or token is needed. If you push from those
+checkouts and prefer SSH, set the rewrite once globally:
+
+```bash
+git config --global url."git@github.com:".insteadOf "https://github.com/"
+```
+
 ## Quick start
 
 ```bash

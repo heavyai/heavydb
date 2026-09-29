@@ -239,17 +239,6 @@ jobs:
           ref: ${{ inputs.sha1_heavydb }}
           path: heavydb
 
-      - name: Configure git for component clones
-        # build-component.sh clones the component repos via git@github.com: SSH
-        # URLs. Rewrite those to authenticated HTTPS so CI can clone them without
-        # an SSH key, working for both private and public component repos.
-        run: |
-          # --add so both rewrites coexist; a plain (non --add) second config
-          # would replace the first, dropping the scp-style rewrite that
-          # build-component.sh actually uses (git@github.com:owner/repo.git).
-          git config --global --add url."https://x-access-token:${COMPONENT_DOWNLOAD_TOKEN}@github.com/".insteadOf "git@github.com:"
-          git config --global --add url."https://x-access-token:${COMPONENT_DOWNLOAD_TOKEN}@github.com/".insteadOf "ssh://git@github.com/"
-
       - name: Log in to GHCR and pull deps image
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
