@@ -10,7 +10,7 @@
 _build_pyheavydb_wheel() {
   local repos_dir="$1" ref="$2" deps_image="$3" requirement="$4"
   local repo_dir="$repos_dir/pyheavydb"
-  _ensure_repo "git@github.com:heavyai/pyheavydb.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/pyheavydb.git" "$repo_dir" "$ref"
 
   echo "Building pyheavydb wheel from source in deps container..." >&2
   _run_logged "pyheavydb wheel" "${_BUILD_LOG_DIR}/pyheavydb.log" \
@@ -102,7 +102,7 @@ _build_heavyiq() {
   local repos_dir="$1" ref="$2" output_dir="$3" distro="$4" deps_image="$5"
   local pyheavydb_source="$6" pyheavydb_ref="$7"
   local repo_dir="$repos_dir/heavyiq"
-  _ensure_repo "git@github.com:heavyai/heavyiq.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/heavyiq.git" "$repo_dir" "$ref"
 
   case "$pyheavydb_source" in
     project|pypi|testpypi|build-local-wheel) ;;
@@ -225,7 +225,7 @@ _build_heavyiq() {
 _build_immerse() {
   local repos_dir="$1" ref="$2" output_dir="$3" deps_image="$4"
   local repo_dir="$repos_dir/immerse"
-  _ensure_repo "git@github.com:heavyai/immerse.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/immerse.git" "$repo_dir" "$ref"
 
   NODE_VERSION=$(_read_node_version "$repo_dir")
 
@@ -289,7 +289,7 @@ _build_immerse() {
 _build_webserver() {
   local repos_dir="$1" ref="$2" output_dir="$3" deps_image="$4"
   local repo_dir="$repos_dir/webserver"
-  _ensure_repo "git@github.com:heavyai/webserver.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/webserver.git" "$repo_dir" "$ref"
 
   GO_VERSION=$(_read_go_version "$repo_dir")
 

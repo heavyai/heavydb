@@ -37,7 +37,7 @@ EOF
 
   : "${repos_dir:=$(cd "$REPO_ROOT/.." && pwd)}"
   local repo_dir="$repos_dir/immerse"
-  _ensure_repo "git@github.com:heavyai/immerse.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/immerse.git" "$repo_dir" "$ref"
 
   NODE_VERSION=$(_read_node_version "$repo_dir")
 
@@ -115,7 +115,7 @@ EOF
 
   : "${repos_dir:=$(cd "$REPO_ROOT/.." && pwd)}"
   local repo_dir="$repos_dir/webserver"
-  _ensure_repo "git@github.com:heavyai/webserver.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/webserver.git" "$repo_dir" "$ref"
 
   GO_VERSION=$(_read_go_version "$repo_dir")
 
@@ -187,7 +187,7 @@ EOF
 
   : "${repos_dir:=$(cd "$REPO_ROOT/.." && pwd)}"
   local repo_dir="$repos_dir/heavyiq"
-  _ensure_repo "git@github.com:heavyai/heavyiq.git" "$repo_dir" "$ref"
+  _ensure_repo "https://github.com/heavyai/heavyiq.git" "$repo_dir" "$ref"
 
   if [ -z "$deps_image" ]; then
     deps_image=$(_resolve_deps_image "static" "$distro")
