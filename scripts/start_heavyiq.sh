@@ -4,6 +4,13 @@
 
 set -e
 
+# HeavyIQ requires an `[iq]` section in the HeavyDB config. This avoids the
+# virtual environment and dependency install, which are expensive on first run.
+if [[ ! -f "$CONFIG_FILE" ]] || ! grep -qF '[iq]' "$CONFIG_FILE"; then
+  echo "No [iq] section found in the HeavyDB configuration. Skipping HeavyIQ startup."
+  exit 0
+fi
+
 if ! command -v python3 &> /dev/null; then
   echo "Python3 is not installed. Skipping HeavyIQ deployment."
   exit 0
