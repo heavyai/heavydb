@@ -11,6 +11,8 @@ Group=@HEAVYAI_GROUP@
 WorkingDirectory=@HEAVYAI_PATH@
 ExecStart=/usr/bin/env CONFIG_FILE=@HEAVYAI_BASE@/heavy.conf MAPD_DATA=@HEAVYAI_STORAGE@ MAPD_HEAVYIQ_PORT=6275 START_MODE=f @HEAVYAI_PATH@/scripts/start_heavyiq.sh
 Restart=always
+# start_heavyiq.sh exits 0 when HeavyIQ is not configured; do not respawn it.
+RestartPreventExitStatus=0
 
 [Install]
 WantedBy=multi-user.target
