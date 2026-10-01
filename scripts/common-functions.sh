@@ -1088,7 +1088,6 @@ function install_vulkan() {
   # glslang 14 tightened which headers it installs, so the destinations may not exist
   mkdir -p ${ARCH}/include/glslang/Include
   mkdir -p ${ARCH}/include/glslang/MachineIndependent
-  mkdir -p ${ARCH}/include/glslang/SPIRV
   \cp source/glslang/glslang/Include/InfoSink.h ${ARCH}/include/glslang/Include
   \cp source/glslang/glslang/Include/intermediate.h ${ARCH}/include/glslang/Include
   \cp source/glslang/glslang/Include/Common.h ${ARCH}/include/glslang/Include
@@ -1103,8 +1102,6 @@ function install_vulkan() {
   \cp source/glslang/glslang/MachineIndependent/LiveTraverser.h ${ARCH}/include/glslang/MachineIndependent
   \cp source/glslang/glslang/MachineIndependent/localintermediate.h ${ARCH}/include/glslang/MachineIndependent
   \cp source/glslang/glslang/MachineIndependent/reflection.h ${ARCH}/include/glslang/MachineIndependent
-  \cp source/glslang/build/include/glslang/build_info.h ${ARCH}/include/glslang
-  \cp source/glslang/SPIRV/disassemble.h ${ARCH}/include/glslang/SPIRV
   popd
   # install
   rsync -av ${VULKAN_VERSION}/${ARCH}/* ${PREFIX}
