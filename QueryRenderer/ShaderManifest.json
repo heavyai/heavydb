@@ -211,13 +211,6 @@
       "class": "vertex"
     },
     {
-      "filename": "accumulationComposite.frag",
-      "file_path": "./Rendering/shaders",
-      "internal_path": "Rendering/",
-      "language": "glsl",
-      "class": "fragment"
-    },
-    {
       "filename": "accumulationCompositePeer.frag",
       "file_path": "./Rendering/shaders",
       "internal_path": "Rendering/",
