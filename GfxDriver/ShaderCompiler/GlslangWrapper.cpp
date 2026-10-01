@@ -136,6 +136,12 @@ class IoMapResolver : public glslang::TIoMapResolver {
   // Set by the resolver itself rather than reported through the mapper's return value
   bool hasError() const { return resolver_.hasError; }
 
+  // Any inter-stage varying that arrived without a location of its own. See
+  // resolveInOutLocation below for why that cannot be allowed to pass.
+  const std::vector<std::string>& unlocatedVaryings() const {
+    return unlocated_varyings_;
+  }
+
   int resolveBinding(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
     ent.live = true;
     return resolver_.resolveBinding(stage, ent);
@@ -153,12 +159,25 @@ class IoMapResolver : public glslang::TIoMapResolver {
   bool validateInOut(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
     return resolver_.validateInOut(stage, ent);
   }
-  // Our inter-stage interface blocks declare a location on each member, and giving the
-  // block variable one as well is what spirv-val rejects as a member location. glslang
-  // only declines to assign to a block whose first member is a built-in, so decline for
-  // the rest of them here. Plain variables still get one, which vertex inputs rely on.
   int resolveInOutLocation(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
-    if (ent.symbol->getType().isStruct()) {
+    auto const& type = ent.symbol->getType();
+    auto const& qualifier = type.getQualifier();
+
+    // A vertex input and a fragment output are both matched against the reflection
+    // rather than against another stage, so either is free to be assigned here. Every
+    // other varying has a stage on the far side of it.
+    auto const is_vertex_input = stage == EShLangVertex && qualifier.isPipeInput();
+    auto const is_fragment_output = stage == EShLangFragment && qualifier.isPipeOutput();
+    if (!is_vertex_input && !is_fragment_output && !type.isBuiltIn() &&
+        !qualifier.hasSpirvDecorate()) {
+      recordIfUnlocated(ent);
+    }
+
+    // Our inter-stage interface blocks declare a location on each member, and giving the
+    // block variable one as well is what spirv-val rejects as a member location. glslang
+    // only declines to assign to a block whose first member is a built-in, so decline for
+    // the rest of them here. Plain variables still get one, which vertex inputs rely on.
+    if (type.isStruct()) {
       return ent.newLocation = -1;
     }
     return resolver_.resolveInOutLocation(stage, ent);
@@ -194,7 +213,47 @@ class IoMapResolver : public glslang::TIoMapResolver {
   }
 
  private:
+  // glslang lines a varying up across stages only where the shader declares its
+  // location. Its own comment on the Vulkan path is that it "does not do proper
+  // cross-stage lining up", and the OpenGL path we use here matches by name only for
+  // resources, not across an interface. So a location assigned here agrees with the
+  // next stage only by luck of declaration order, and does so silently: there is no
+  // link step across our per-stage programs to catch the mismatch, and the shader
+  // renders wrong rather than failing. Collect the offenders for glslToSpirv to fail
+  // the compile on.
+  //
+  // Everything in the shader library declares its locations today, interface blocks
+  // doing so on each member, so this should never fire. It exists because nothing else
+  // would notice if that stopped being true.
+  void recordIfUnlocated(const glslang::TVarEntryInfo& ent) {
+    auto const& type = ent.symbol->getType();
+    auto const name = std::string{ent.symbol->getAccessName().c_str()};
+    if (type.isStruct()) {
+      // A block may carry one location for the whole of it, its members then taking
+      // consecutive locations from there, or one on each member. Either form fully
+      // determines it, and both are in use here. Only a block with neither cannot be
+      // matched, so report its members rather than the block, that being where the
+      // locations are missing from.
+      if (type.getQualifier().hasLocation()) {
+        return;
+      }
+      // Built-in members are skipped for the same reason a built-in variable is: the
+      // implicit gl_PerVertex output block every vertex shader has declares no
+      // locations and needs none, and it is the members that are marked built-in
+      // rather than the block, which is why testing the block above does not catch it.
+      for (auto const& member : *type.getStruct()) {
+        if (!member.type->isBuiltIn() && !member.type->getQualifier().hasLocation()) {
+          unlocated_varyings_.emplace_back(name + "." +
+                                           member.type->getFieldName().c_str());
+        }
+      }
+    } else if (!type.getQualifier().hasLocation()) {
+      unlocated_varyings_.emplace_back(name);
+    }
+  }
+
   glslang::TDefaultGlslIoResolver resolver_;
+  std::vector<std::string> unlocated_varyings_;
 };
 
 //
@@ -406,6 +465,20 @@ GlslangWrapper::CompileResults GlslangWrapper::glslToSpirv(
     if (io_map_resolver.hasError()) {
       results.stages[i].second = "Error resolving I/O for shader \"" + stage.pretty_name +
                                  "\":\n" + program.getInfoLog();
+      return results;
+    }
+
+    // Checked per stage rather than once at the end so that the message names the stage
+    // the varying wants a location adding to
+    auto const& unlocated = io_map_resolver.unlocatedVaryings();
+    if (!unlocated.empty()) {
+      std::string error_string = "Shader \"" + stage.pretty_name +
+                                 "\" has inter-stage varyings without an explicit "
+                                 "location, which cannot be matched to the next stage:";
+      for (auto const& varying : unlocated) {
+        error_string += "\n    " + varying;
+      }
+      results.stages[i].second = error_string;
       return results;
     }
 
