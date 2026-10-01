@@ -9,13 +9,13 @@ todos:
     content: "PR 0b: Compile the shader corpus through slangc -allow-glsl and classify failures, reporting Tests/ and non-Tests/ counts separately. Prefer assembled final_glsl over raw sources. No dependencies; gates the scope of PRs 6, 7 and 8"
     status: pending
   - id: remove-tshaderirutils
-    content: "PR 3: Delete TShaderIRUtils and reimplement subroutine binding as a post-assembly textual pass over final_glsl. No dependencies; required by PR 5c part 3"
-    status: pending
+    content: "PR 3: Delete TShaderIRUtils and reimplement subroutine binding as a textual pass, resolving targets through the Library because the assembled source holds #include directives rather than their text. Landed as 9b8be38b08, no golden changed. Retired one copied header rather than the three estimated"
+    status: completed
   - id: remove-iomapresolver
-    content: "PR 4: Link all stages of a material into one glslang::TProgram using public mapIO(nullptr, nullptr); delete IoMapResolver, the sentinels and ShaderRedecorator's allocation logic, preserving clash diagnostics. Expect every .reflect golden to regenerate. No dependencies; required by PR 5c part 3"
+    content: "PR 4: Link all stages of a material into one glslang::TProgram using public mapIO(nullptr, nullptr); delete IoMapResolver, the sentinels and ShaderRedecorator's allocation logic, preserving clash diagnostics. Expect every .reflect golden to regenerate. No dependencies; now the sole blocker of PR 5c part 3"
     status: pending
   - id: drop-copy-block
-    content: "PR 5c part 3: Delete the 14-header copy block and the two mkdir guards from common-functions.sh. Needs both PR 3 and PR 4. Verify with a full deps rebuild, since these 14 are genuinely not installed by glslang"
+    content: "PR 5c part 3: Delete the 13-header copy block and the two mkdir guards from common-functions.sh. Needs PR 4 alone, since GlslangWrapper.cpp is the only remaining consumer. Verify with a full deps rebuild, since these 13 are genuinely not installed by glslang"
     status: pending
   - id: instance-1.4
     content: "PR 5d (optional): Raise kVulkanInstanceApiVersion to Vulkan 1.4. No dependencies and nothing depends on it. No technical upside; costs the NVIDIA driver floor rising from 535 to roughly R570. Take only if something else needs 1.4"
@@ -44,6 +44,7 @@ Companion to [.cursor/plans/glslang-to-slang-migration.md](.cursor/plans/glslang
 - **PR 5a** - Vulkan SDK 1.4.363.0 with Slang built alongside glslang. `slangc` and `slang.h` are now in the deps prefix.
 - **PR 5b** (`4752a50653`) - Retargeted the compiler to Vulkan 1.3 / SPIR-V 1.6, split `VULKAN_API_VERSION` into instance and device-minimum constants, fixed a `VulkanPhysicalDevice` gate that tested 1.2 while chaining 1.3 structs.
 - **PR 5c parts 1 and 2** (`d4019d84e6`) - Deleted the dead `build_info.h` include and swapped glslang's disassembler for the SPIRV-Tools one. The copy block in `scripts/common-functions.sh` is down from 16 files to 14.
+- **PR 3** (`9b8be38b08`) - Deleted `TShaderIRUtils` and moved subroutine resolution to a textual pass in `ShaderManager`, run before glslang sees the source. Took the copy block from 14 files to 13.
 
 ## How the remaining pieces depend on each other
 
@@ -51,31 +52,28 @@ Companion to [.cursor/plans/glslang-to-slang-migration.md](.cursor/plans/glslang
 flowchart TD
     OSRB["Slang OSRB approval (external, start now)"]
     PR0b["PR 0b: slangc -allow-glsl spike"]
-    PR3["PR 3: delete TShaderIRUtils"]
     PR4["PR 4: delete IoMapResolver"]
-    PR5c3["PR 5c part 3: delete the 14-header copy block"]
+    PR5c3["PR 5c part 3: delete the 13-header copy block"]
     PR5d["PR 5d: instance to Vulkan 1.4 (optional)"]
     PR6["PR 6: ShaderCompilerBackend seam, Slang alongside"]
     PR7["PR 7: Slang becomes the default"]
     PR8["PR 8+: migrate shaders to Slang modules"]
 
-    PR3 --> PR5c3
     PR4 --> PR5c3
     PR0b --> PR6
     OSRB --> PR6
     PR6 --> PR7
     PR6 --> PR8
     PR4 -.->|"shrinks PR 7's deletion surface"| PR7
-    PR3 -.->|"PR 8 supersedes its textual pass"| PR8
 ```
 
 There are two tracks that do not touch each other, plus one standalone item:
 
-- **Cleanup track: PRs 3, 4, 5c part 3.** Retires the last glslang private headers. Nothing in the Slang track waits on it.
+- **Cleanup track: PRs 4 and 5c part 3.** Retires the last glslang private headers. Nothing in the Slang track waits on it.
 - **Migration track: PRs 0b, 6, 7, 8+.** The actual replacement. Gated at the front by the spike and by OSRB approval.
 - **Standalone: PR 5d.** Independent of everything, and optional.
 
-PRs 3 and 4 are independent of each other but both edit `GlslangWrapper.cpp`, so expect a textual conflict if they run in parallel. There is no logical ordering between them.
+PR 3 was expected to share this cleanup with PR 4 but retired only one header, so PR 4 is now the whole of it.
 
 ## PR 0b - Spike slangc's GLSL compatibility mode
 
@@ -89,31 +87,18 @@ Two things make the raw-source version of this spike misleading:
 - Stage files are not independently compilable. They depend on the `#include` dictionary assembled at runtime by `buildExtensionAndIncludesString` and on the `processOperators` substitutions. Either run over assembled `final_glsl` captured from a real run via the `ShaderArtifactTypeBits` hooks, or treat a raw pass as a lower bound only.
 - Report test and non-test counts separately. Of 161 shader sources, **85 live under `Tests/`**, so more than half the corpus is fixtures that can be rewritten or deleted freely. Only the 76 outside `Tests/` are load-bearing.
 
-## PR 3 - Remove TShaderIRUtils, resolve subroutines textually
+## What PR 3 established, which the rest inherits
 
-**Depends on:** nothing.
-**Required by:** PR 5c part 3.
+Two findings from landing it change how later PRs should be scoped.
 
-Delete [GfxDriver/ShaderCompiler/TShaderIRUtils.cpp](GfxDriver/ShaderCompiler/TShaderIRUtils.cpp) and its header, drop the `rebind_tshader_function_calls` call from `glslToSpirv`, and reimplement subroutine resolution as a post-assembly textual pass over `final_glsl`.
+**The assembled source does not contain its includes.** `buildExtensionAndIncludesString` emits `#include` directives, because `Library` wraps each dictionary entry as `"#include \"...\""`, and `GlslangIncluder` resolves them during parse. So `final_glsl` names its includes without holding their text. The subroutine pass has to look targets up through the Library, since the colour conversion subroutines are defined only in an included file. Any backend that replaces glslang inherits this: it needs its own answer for the include dictionary, not just for the assembled string.
 
-It cannot be an `OpType`: targets such as `transformRGBtoRGB` live in `colorConvertSubroutines.glsl`, which is not present when `processOperators` runs. Includes are prepended afterwards.
-
-Requirements:
-
-- Match on `name(` and handle the source function's own definition explicitly. The AST path currently leans on glslang's dead-code elimination to drop what becomes unreachable.
-- `is_required` needs lexical detection of the target definition. Reuse the existing `get_function_bounds` helper.
-- Tolerate transient empty targets: `addSubroutineBinding("getAccumulatedColor", "", true)` at `QueryRenderer/Scales/ScaleAccumState.cpp:526` is overwritten at 575.
-
-Gives up no capability: the AST path already does not support overloads (`TShaderIRUtils.cpp:56-61` keys `function_map_` on the bare name). `replaceFunctionCall` has no live callers, reachable only via builder deserialization at `ShaderManager.cpp:354`.
-
-Retires **at most 3** of the 14 copied headers (`Include/InfoSink.h`, `Include/intermediate.h`, `MachineIndependent/localintermediate.h`). Not `LiveTraverser.h`, which PR 0a gave a direct include in `GlslangWrapper.cpp`. "At most" because `iomapper.h` survives until PR 4 and probably pulls `localintermediate.h` in transitively.
-
-Residual risk for review: targets reaching a shader via a literal `#include` resolved by `GlslangIncluder`, rather than through the include dictionary, are invisible to text-time inspection.
+**Textual inspection of the shader library has to survive the preprocessor.** `quantitativeScaleTemplate.vert` selects the type of a function's last parameter with an `#if`, and in one case leaves the body on the far side of the `#endif`. Neither a parameter-list pattern nor brace-matching can classify those definitions; what works is that a definition names its return type immediately before the function name. Worth remembering before writing any further pass over GLSL text.
 
 ## PR 4 - Remove IoMapResolver, drop iomapper.h
 
 **Depends on:** nothing.
-**Required by:** PR 5c part 3. Shrinks the work in PR 7.
+**Required by:** PR 5c part 3, which it now fully unblocks. Shrinks the work in PR 7.
 
 Link all stages of a material into one `glslang::TProgram` and let glslang's default resolver assign coherent cross-stage bindings. `TProgram::mapIO(nullptr, nullptr)` is public API, so this needs no private header and no shader source churn. `TDefaultGlslIoResolver` keys its slot map by name across stages, which is exactly the sharing semantics the sentinels currently emulate.
 
@@ -130,11 +115,13 @@ Do not spend time on `setShiftUboBinding` and friends. `TDefaultIoResolver::reso
 
 ## PR 5c part 3 - Delete the header copy block
 
-**Depends on:** PR 3 and PR 4, both of them.
+**Depends on:** PR 4 alone.
 
-`TShaderIRUtils.cpp` and `GlslangWrapper.cpp` are now the only consumers of the 14 remaining copies. Delete the block and the two surviving `mkdir -p` guards at `scripts/common-functions.sh:1092-1109`, plus the comment at 1077-1081.
+`GlslangWrapper.cpp` is the only remaining consumer of all 13 copies. It includes just `iomapper.h` and `LiveTraverser.h` directly and reaches the other eleven through them, so removing the `TIoMapResolver` subclass retires the lot at once. Delete the block and the two surviving `mkdir -p` guards at `scripts/common-functions.sh:1092-1108`, plus the comment at 1077-1082.
 
-Unlike the two copies dropped in part 2, these 14 genuinely are not installed by glslang, so removing them really will take them out of the prefix. **Verify with a full deps rebuild**; the headers are already in the prefix, so an incremental build will mask the failure.
+PR 3 was expected to take three of these and took one, `Include/InfoSink.h`. The rest survived because `LiveTraverser.h`, which PR 0a gave `GlslangWrapper.cpp` a direct include of, pulls in `Common.h`, `reflection.h`, `localintermediate.h` and `gl_types.h`, with `intermediate.h` and the rest of `Include/` behind those.
+
+Unlike the two copies dropped in part 2, these 13 genuinely are not installed by glslang, so removing them really will take them out of the prefix. **Verify with a full deps rebuild**; the headers are already in the prefix, so an incremental build will mask the failure.
 
 ## PR 5d - Raise the instance to Vulkan 1.4 (optional)
 
@@ -154,6 +141,8 @@ Take it only if something else comes to need 1.4, and confirm the supported-driv
 **Required by:** PRs 7 and 8+.
 
 Purely additive. `ShaderManager.h:315` holds a concrete `GlslangWrapperUqPtr glslang_wrapper_`. Introduce a `ShaderCompilerBackend` interface covering compile and reflect, add a Slang implementation selectable by flag, keep glslang the default. Map `GlslangIncluder` onto a Slang `ISlangFileSystem` over `Library`. Nothing changes for existing callers.
+
+That file system is not optional detail: per the PR 3 findings above, the assembled source carries `#include` directives rather than their text, so a Slang backend without it sees shaders whose functions are largely undefined.
 
 ## PR 7 - Switch the default to Slang, delete ShaderRedecorator
 
