@@ -269,119 +269,157 @@ std::string add_line_numbers(const std::string& code,
 }  // namespace
 #endif
 
-GlslangWrapper::CompileResult GlslangWrapper::glslToSpirv(
-    const std::string& pretty_name,
-    const std::string& shader_source,
-    const std::string& entry_point,
-    const ShaderStage in_shader_stage) {
+GlslangWrapper::CompileResults GlslangWrapper::glslToSpirv(
+    const std::vector<StageSource>& stages) {
   // These may become function parameters in the future so using constexpr
   // instead of #defines
   constexpr bool dump_AST = false;
   constexpr bool dump_spv_build_log = false;
 
-  auto glslang_shader_stage = shader_stage_to_glslang_enum(in_shader_stage);
-  auto shader = std::make_unique<glslang::TShader>(glslang_shader_stage);
-
-  auto const* src_c_str = shader_source.c_str();
-  auto str_len = static_cast<int>(shader_source.size());
-  spirv_t rtn_spirv;
-  std::string error_string;
-
-  shader->setStringsWithLengths(&src_c_str, &str_len, 1);
-  if (!entry_point.empty()) {
-    // These both need to be set if source language is GLSL (HLSL is different)
-    shader->setEntryPoint(entry_point.c_str());
-    shader->setSourceEntryPoint(entry_point.c_str());
-  }
+  CompileResults results;
+  results.stages.resize(stages.size());
 
   EShMessages messages = static_cast<EShMessages>(EShMsgSpvRules | EShMsgVulkanRules);
   if (dump_AST) {
     messages = (EShMessages)(messages | EShMsgAST);
   }
 
-  shader->setAutoMapBindings(true);
-  shader->setAutoMapLocations(true);
-  shader->setEnvInput(
-      glslang::EShSourceGlsl, glslang_shader_stage, glslang::EShClientVulkan, 100);
-  // Matches kMinVulkanDeviceApiVersion, the floor every device we accept
-  // already clears. SPIR-V 1.6 is core in Vulkan 1.3, and is also the highest
-  // version Vulkan 1.4 accepts, so this is the ceiling either way.
-  shader->setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_3);
-  shader->setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_6);
+  // A program holds pointers into its shaders, so it has to be destroyed first. The
+  // declaration order below gives that for free on every exit from this function. Both
+  // are held until the end rather than per stage because the shared resolver reads the
+  // glslang objects as it assigns, so they all have to outlive the whole material.
+  std::vector<TShaderUqPtr> shaders;
+  std::vector<TProgramUqPtr> programs;
+  shaders.reserve(stages.size());
+  programs.reserve(stages.size());
 
-  if (!shader->parse(&resources_, 100, ECoreProfile, false, false, messages, includer_)) {
-    // Just log the error but don't throw yet. This allows ShaderManager to save
-    // artifacts and handle the error
-    std::string info_log(shader->getInfoLog());
-    error_string = "Error parsing shader \"" + pretty_name + "\":\n" + info_log;
+  // A shader keeps the arrays it is handed rather than copying them, so these have to
+  // outlive it, not merely the parse call below
+  std::vector<const char*> source_pointers(stages.size());
+  std::vector<int> source_lengths(stages.size());
+
+  // Parse every stage before anything else, so that the shaders array stays aligned
+  // with the stages array even where one fails
+  bool parsed_all{true};
+  for (size_t i = 0; i < stages.size(); ++i) {
+    auto const& stage = stages[i];
+    auto const glslang_shader_stage = shader_stage_to_glslang_enum(stage.shader_stage);
+    auto& shader =
+        *shaders.emplace_back(std::make_unique<glslang::TShader>(glslang_shader_stage));
+
+    source_pointers[i] = stage.source.c_str();
+    source_lengths[i] = static_cast<int>(stage.source.size());
+    shader.setStringsWithLengths(&source_pointers[i], &source_lengths[i], 1);
+    if (!stage.entry_point.empty()) {
+      // These both need to be set if source language is GLSL (HLSL is different)
+      shader.setEntryPoint(stage.entry_point.c_str());
+      shader.setSourceEntryPoint(stage.entry_point.c_str());
+    }
+
+    shader.setAutoMapBindings(true);
+    shader.setAutoMapLocations(true);
+    shader.setEnvInput(
+        glslang::EShSourceGlsl, glslang_shader_stage, glslang::EShClientVulkan, 100);
+    // Matches kMinVulkanDeviceApiVersion, the floor every device we accept
+    // already clears. SPIR-V 1.6 is core in Vulkan 1.3, and is also the highest
+    // version Vulkan 1.4 accepts, so this is the ceiling either way.
+    shader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_3);
+    shader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_6);
+
+    if (!shader.parse(
+            &resources_, 100, ECoreProfile, false, false, messages, includer_)) {
+      // Just log the error but don't throw yet. This allows ShaderManager to save
+      // artifacts and handle the error
+      std::string info_log(shader.getInfoLog());
+      auto& error_string = results.stages[i].second;
+      error_string = "Error parsing shader \"" + stage.pretty_name + "\":\n" + info_log;
 #ifndef NDEBUG
-    auto const error_line_nums = find_error_line_numbers(info_log);
-    error_string += "Shader Source:\n" +
-                    add_line_numbers(shader_source, error_line_nums) +
-                    "End Shader Source\n";
+      auto const error_line_nums = find_error_line_numbers(info_log);
+      error_string += "Shader Source:\n" +
+                      add_line_numbers(stage.source, error_line_nums) +
+                      "End Shader Source\n";
 #endif
-    return {std::move(rtn_spirv), std::move(error_string)};
+      // Report it against the material too, so that the stages which did parse have
+      // something better than a bare "no spirv" to offer
+      results.material_error += error_string;
+      parsed_all = false;
+    }
   }
 
-  auto program = std::make_unique<glslang::TProgram>();
-
-  program->addShader(shader.get());
-
-  // From this point on the Program must be destroyed before Shaders so we'll
-  // explicitly null it before returning but just let TShaders go out of scope
-
-  if (!program->link(messages)) {
-    error_string = "Error merging shader IR for shader \"" + pretty_name + "\":\n" +
-                   program->getInfoLog();
-    program = nullptr;
-    return {rtn_spirv, error_string};
+  // The stages share a resolver, so assigning bindings from an incomplete material
+  // would assign the wrong ones. One parse failure therefore ends the whole compile.
+  if (!parsed_all) {
+    return results;
   }
 
-  if (!program->getIntermediate(glslang_shader_stage)) {
-    error_string =
-        "Error getting IR for shader \"" + pretty_name + "\":\n" + program->getInfoLog();
-    program = nullptr;
-    return {rtn_spirv, error_string};
+  // One program per stage, since a material may hold two shaders of the same stage and
+  // a program has room for only one intermediate per stage
+  for (size_t i = 0; i < stages.size(); ++i) {
+    auto const& stage = stages[i];
+    auto& program = *programs.emplace_back(std::make_unique<glslang::TProgram>());
+    program.addShader(shaders[i].get());
+
+    if (!program.link(messages)) {
+      results.stages[i].second = "Error merging shader IR for shader \"" +
+                                 stage.pretty_name + "\":\n" + program.getInfoLog();
+      return results;
+    }
+
+    if (!program.getIntermediate(shader_stage_to_glslang_enum(stage.shader_stage))) {
+      results.stages[i].second = "Error getting IR for shader \"" + stage.pretty_name +
+                                 "\":\n" + program.getInfoLog();
+      return results;
+    }
   }
 
+  // Shared across the stages so that a resource appearing in more than one of them is
+  // assigned the same binding in each. Declared after the programs so that it is
+  // destroyed before them: a resolver that remembers anything by name remembers it in
+  // a glslang TString, which belongs to the pool of whichever program was current when
+  // it was recorded.
   IoMapResolver io_map_resolver;
-  glslang::TGlslIoMapper glsl_io_mapper;
-  if (!program->mapIO(&io_map_resolver, &glsl_io_mapper)) {
-    error_string =
-        "Error mapping I/O for shader \"" + pretty_name + "\":\n" + program->getInfoLog();
-    program = nullptr;
-    return {rtn_spirv, error_string};
+
+  for (size_t i = 0; i < stages.size(); ++i) {
+    auto const& stage = stages[i];
+    auto& program = *programs[i];
+
+    glslang::TGlslIoMapper glsl_io_mapper;
+    if (!program.mapIO(&io_map_resolver, &glsl_io_mapper)) {
+      results.stages[i].second = "Error mapping I/O for shader \"" + stage.pretty_name +
+                                 "\":\n" + program.getInfoLog();
+      return results;
+    }
+
+    if (!program.buildReflection()) {
+      results.stages[i].second = "Error building reflection for shader \"" +
+                                 stage.pretty_name + "\":\n" + program.getInfoLog();
+      return results;
+    }
+
+    if (dump_AST) {
+      LOG(INFO) << program.getInfoDebugLog();
+    }
+
+    spv::SpvBuildLogger spv_logger;
+    auto& spirv = results.stages[i].first;
+    glslang::GlslangToSpv(
+        *program.getIntermediate(shader_stage_to_glslang_enum(stage.shader_stage)),
+        spirv,
+        &spv_logger);
+
+    if (spirv.empty()) {
+      results.stages[i].second = "Spirv generation from IR failed for shader \"" +
+                                 stage.pretty_name + "\":\n" +
+                                 spv_logger.getAllMessages();
+    }
+
+    if (dump_spv_build_log) {
+      LOG(INFO) << "Spirv build log for \"" << stage.pretty_name << "\":";
+      LOG(INFO) << spv_logger.getAllMessages();
+    }
   }
 
-  if (!program->buildReflection()) {
-    error_string = "Error building reflection for shader \"" + pretty_name + "\":\n" +
-                   program->getInfoLog();
-    program = nullptr;
-    return {rtn_spirv, error_string};
-  }
-
-  if (dump_AST) {
-    LOG(INFO) << program->getInfoDebugLog();
-  }
-
-  spv::SpvBuildLogger spv_logger;
-  glslang::GlslangToSpv(
-      *program->getIntermediate(glslang_shader_stage), rtn_spirv, &spv_logger);
-
-  if (rtn_spirv.empty()) {
-    error_string = "Spirv generation from IR failed for shader \"" + pretty_name +
-                   "\":\n" + spv_logger.getAllMessages();
-  }
-
-  if (dump_spv_build_log) {
-    LOG(INFO) << "Spirv build log:";
-    LOG(INFO) << spv_logger.getAllMessages();
-  }
-
-  // cleanup and check result before returning
-  program = nullptr;
-
-  return {rtn_spirv, error_string};
+  return results;
 }
 
 }  // namespace gfx

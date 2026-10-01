@@ -332,10 +332,11 @@ class ShaderManager : boost::noncopyable {
   void rebindSubroutineCalls(Builder& builder, const SubroutineMap& rebind_map) const;
 
   // Process operators, invoke glslang, and return a spirv binary suitable for final
-  // specialization
-  std::unique_ptr<ShaderCache> buildSpirv(Builder& builder,
-                                          ShaderRedecorator* shader_redecorator,
-                                          bool save_artifacts = false) const;
+  // specialization, for every stage of one material. The stages are compiled together
+  // because glslang assigns their I/O across the material rather than per stage.
+  ShaderCacheShPtrVector buildSpirv(BuilderUqPtrVector& builders,
+                                    ShaderRedecorator* shader_redecorator,
+                                    bool save_artifacts = false) const;
 
   struct Serializer;
   void serializeBuilder(const Builder& builder, const std::string& filename) const;
