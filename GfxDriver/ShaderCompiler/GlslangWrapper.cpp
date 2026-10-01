@@ -305,8 +305,11 @@ GlslangWrapper::CompileResult GlslangWrapper::glslToSpirv(
   shader->setAutoMapLocations(true);
   shader->setEnvInput(
       glslang::EShSourceGlsl, glslang_shader_stage, glslang::EShClientVulkan, 100);
-  shader->setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_2);
-  shader->setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_4);
+  // Matches kMinVulkanDeviceApiVersion, the floor every device we accept
+  // already clears. SPIR-V 1.6 is core in Vulkan 1.3, and is also the highest
+  // version Vulkan 1.4 accepts, so this is the ceiling either way.
+  shader->setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_3);
+  shader->setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_6);
 
   if (!shader->parse(&resources_, 100, ECoreProfile, false, false, messages, includer_)) {
     // Just log the error but don't throw yet. This allows ShaderManager to save

@@ -80,11 +80,12 @@ VulkanPhysicalDevice::VulkanPhysicalDevice(const VkPhysicalDevice device,
       break;
   }
 
-  // Require Vulkan 1.2 API support as a minimum
-  bool is_vk_1_2 = (VK_VERSION_MAJOR(properties_.base.apiVersion) > 1 ||
-                    VK_VERSION_MINOR(properties_.base.apiVersion) > 1);
-
-  if (!is_vk_1_2) {
+  // apiVersion packs variant, major, minor and patch into one integer, ordered
+  // by precedence, so compare it whole rather than picking the fields apart.
+  // Everything below this point chains Vulkan 1.3 structs, so this threshold
+  // has to be the 1.3 the rest of the driver already requires, not the 1.2 it
+  // used to test for.
+  if (properties_.base.apiVersion < kMinVulkanDeviceApiVersion) {
     // This is logged in VulkanPlatform
     return;
   }
