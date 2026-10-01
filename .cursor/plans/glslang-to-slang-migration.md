@@ -1,6 +1,6 @@
 ---
 name: glslang to slang migration
-overview: Replace glslang with Slang and upgrade to Vulkan 1.4, sequenced as independently shippable PRs that each preserve full functionality, starting with a test safety net and ending with optional shader source migration. Originally eight; PR 5 has since split into 5a, 5b and 5c, and the SDK bump moved to the front after it turned out not to be gated.
+overview: Replace glslang with Slang, sequenced as independently shippable PRs that each preserve full functionality, starting with a test safety net and ending with optional shader source migration. Originally eight; PR 5 has since split into 5a, 5b, 5c and 5d, and the SDK bump moved to the front after it turned out not to be gated. The "upgrade to Vulkan 1.4" goal is now satisfied in the toolchain and parked in the instance, since the 1.4 instance bump costs driver-matrix headroom and gains nothing; see PR 5d.
 todos:
   - id: spike-sdk
     content: "PR 0a: Spike the SDK bump to collect actual errors. Done: the tree builds and runs correctly on Vulkan SDK 1.4.363.0 with glslang 16.6.0, with the private headers still in place"
@@ -24,10 +24,13 @@ todos:
     content: "PR 5a: Move the dependency tree to Vulkan SDK 1.4.363.0 with Slang built alongside glslang. Done ahead of PRs 3 and 4, which turned out not to gate it"
     status: completed
   - id: version-retarget
-    content: "PR 5b: Retarget the compiler to Vulkan 1.3 / SPIR-V 1.6, which is free since the device floor is already 1.3, and normalize the VulkanPhysicalDevice version comparison. The instance bump to 1.4 is a separate deployment decision that raises the driver floor and gains the compiler nothing; nothing 1.4 promotes is used here"
-    status: pending
+    content: "PR 5b: Retarget the compiler to Vulkan 1.3 / SPIR-V 1.6, split VULKAN_API_VERSION into separate instance and device-minimum constants, and normalize the VulkanPhysicalDevice version gate, which turned out to be checking 1.2 while chaining 1.3 structs. Landed as 4752a50653, no golden changed"
+    status: completed
   - id: drop-private-headers
     content: "PR 5c: After PRs 3 and 4, delete the private-header copy block from common-functions.sh and swap glslang's disassemble.h for the SPIRV-Tools disassembler"
+    status: pending
+  - id: instance-1.4
+    content: "PR 5d: Raise the instance to Vulkan 1.4. Now a one-line change, but a deployment decision rather than a code one: it lifts the NVIDIA driver floor from 535 to roughly R570 and gains the compiler nothing, since 1.4 also tops out at SPIR-V 1.6. Take it only if something else needs 1.4"
     status: pending
   - id: backend-seam
     content: "PR 6: Introduce ShaderCompilerBackend interface behind ShaderManager's concrete GlslangWrapperUqPtr and add a flag-gated Slang implementation with ISlangFileSystem over Library"
@@ -41,7 +44,7 @@ todos:
 isProject: false
 ---
 
-# Replacing glslang with Slang and upgrading to Vulkan 1.4
+# Replacing glslang with Slang and upgrading the Vulkan SDK
 
 ## Context
 
@@ -265,14 +268,26 @@ Two loose ends it deliberately left:
 
 ## PR 5b - Retarget the compiler to SPIR-V 1.6, still on glslang
 
-Independent of PRs 3 and 4. Now that the SDK supports it, this is the remaining version work, and it is the risk-bearing half: PR 5a changed which toolchain compiles the shaders, while this changes what the toolchain is asked to emit and what the driver advertises.
+**Landed as 4752a50653.** The free half of the version work. The instance stays at 1.3 and became PR 5d.
 
-- Resolve the existing mismatch: the instance requests `VK_API_VERSION_1_3` (`GfxDriver/Drivers/Vulkan/VulkanPlatform.cpp:39`) while the compiler targets `EShTargetVulkan_1_2` / `EShTargetSpv_1_4` (`GlslangWrapper.cpp:308-309`). Not a correctness bug, just capability left on the table: targeting lower is conservative and runs fine on a 1.3 device.
-- Separate the two halves, because only one is free. The **compiler** retarget to `EShTargetVulkan_1_3` / `EShTargetSpv_1_6` costs nothing: `VULKAN_API_VERSION` doubles as a hard minimum device version (`VulkanPlatform.cpp:514-515` rejects anything lower), so the device floor is already Vulkan 1.3, and SPIR-V 1.6 is core in 1.3. The **instance** bump to 1.4 is a deployment decision: it raises the NVIDIA driver floor from the currently enforced 535 (`VulkanPlatform.cpp:556`) to whatever first reported Vulkan 1.4, around R570, and buys the shader compiler nothing because Vulkan 1.4 also tops out at SPIR-V 1.6. Confirm the supported-driver matrix before taking it, and keep it revertible on its own.
-- Adopt what 1.4 promotes out of the optional capability extension handling in `VulkanPlatform.cpp:66-94`. Checked: **nothing to do here.** Every extension the driver requests (external memory and semaphore FD, swapchain, mesh shader, fragment shading rate, fragment shader interlock, ray tracing pipeline, acceleration structure, deferred host operations, ray query, memory budget, debug utils, validation features) stays an extension in 1.4. What 1.4 promotes, such as push descriptor, maintenance5, map memory2, index type uint8 and host image copy, this codebase does not use. Keep the bullet only as a record that it was checked.
-- Normalize `GfxDriver/Drivers/Vulkan/VulkanPhysicalDevice.cpp:84-85`, where "is at least 1.2" is spelled `major > 1 || minor > 1`.
+### What was done
 
-Recommended split: take the compiler retarget and the comparison fix as PR 5b, and leave the instance bump to 1.4 as a separate PR to be scheduled against the driver matrix. Doing so means the plan's Vulkan 1.4 goal is reached in the toolchain immediately and in the instance only when deployment allows.
+- Retargeted glslang from `EShTargetVulkan_1_2` / `EShTargetSpv_1_4` to `EShTargetVulkan_1_3` / `EShTargetSpv_1_6` (`GlslangWrapper.cpp:311-312`). Free, because `VULKAN_API_VERSION` already doubled as a hard device minimum so the floor was 1.3 before the change, and SPIR-V 1.6 is core in 1.3. Nothing about which devices are accepted moved.
+- Split `VULKAN_API_VERSION` into `kVulkanInstanceApiVersion` and `kMinVulkanDeviceApiVersion` in [GfxDriver/Drivers/Vulkan/VulkanPlatformUtils.h](GfxDriver/Drivers/Vulkan/VulkanPlatformUtils.h), both still `VK_API_VERSION_1_3`. One `#define` was standing in for two decisions that only happen to share a value.
+- Normalized the `VulkanPhysicalDevice` version gate to `apiVersion < kMinVulkanDeviceApiVersion` (`VulkanPhysicalDevice.cpp:88`), comparing the packed integer whole instead of `major > 1 || minor > 1`.
+- Pointed `optimize_spirv` at `SPV_ENV_VULKAN_1_3` instead of `SPV_ENV_OPENGL_4_5`. Unverified: it sits behind `USE_SPIRV_OPT`, which is `false`, so it has never been compiled.
+
+### What it found
+
+The gate normalization was supposed to be cosmetic and turned up a real defect. `VulkanPhysicalDevice`'s constructor gated on Vulkan **1.2**, but everything below that gate chains `VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES` and the matching features struct unconditionally, which is invalid usage on a 1.2 device and would be flagged by the validation layers. No supported hardware reaches it, since `isDeviceSuitable` rejects sub-1.3 devices, but that rejection happens *after* the constructor has run on every enumerated device. The gate is now 1.3. `properties_.base` is filled before it, so the early return still leaves apiVersion, name, UUID, type and vendor valid for the rejection path to log.
+
+### Why the constant split was worth doing here
+
+Fused, the eventual instance bump to 1.4 would silently drag the device floor up with it, which is the opposite of the "revertible on its own" property PR 5d needs. Split, PR 5d is a one-line change.
+
+### Verified
+
+No `.reflect` golden moved, which is the expected result since reflection records names, bindings, offsets and block sizes, all of which derive from the GLSL declarations and the std430/scalar layout rules rather than the SPIR-V version. PR 1's `spirv_target_env_for` reads the version word from each blob and maps `0x0106` to `SPV_ENV_VULKAN_1_3`, so every `ShaderCompilerTest` case now validates under Vulkan 1.3 rules instead of the laxer `SPV_ENV_VULKAN_1_1_SPIRV_1_4` it got before, and all pass. Validation tightening was the main failure mode, and catching it is what PR 1 was built for.
 
 ## PR 5c - Drop the private headers
 
@@ -282,6 +297,16 @@ Pure cleanup, unblocked only once PRs 3 and 4 have removed the last consumers. T
 - Replace `glslang/SPIRV/disassemble.h` in [GfxDriver/ShaderCompiler/SpirvArtifacts.cpp](GfxDriver/ShaderCompiler/SpirvArtifacts.cpp) line 11 with the SPIRV-Tools disassembler. This one is already independent of PRs 3 and 4 and could ride along with either.
 
 Verify by confirming a deps build with the block removed still produces a tree the renderer compiles against; the headers are copied into the prefix, so a stale prefix will mask the failure.
+
+## PR 5d - Raise the instance to Vulkan 1.4
+
+Split out of PR 5b because it is a deployment decision, not a code change, and gains the shader compiler nothing. Now a one-line change to `kVulkanInstanceApiVersion`, plus `kMinVulkanDeviceApiVersion` if the device floor is meant to move with it.
+
+- It raises the NVIDIA driver floor from the currently enforced 535 (`VulkanPlatform.cpp:556`) to whatever first reported Vulkan 1.4, around R570. **Confirm the supported-driver matrix before taking it.**
+- No compiler benefit: Vulkan 1.4 also tops out at SPIR-V 1.6, which PR 5b already targets.
+- Nothing 1.4 promotes to core is used here, so the optional capability extension handling in `VulkanPlatform.cpp:65-93` needs no change. Checked: every extension the driver requests (external memory and semaphore FD, swapchain, mesh shader, fragment shading rate, fragment shader interlock, ray tracing pipeline, acceleration structure, deferred host operations, ray query, memory budget, debug utils, validation features) stays an extension in 1.4, and what 1.4 does promote (push descriptor, maintenance5, map memory2, index type uint8, host image copy) this codebase does not use.
+
+Given no technical upside and a real driver-floor cost, the recommendation is to take this only if something else comes to need Vulkan 1.4. The plan's title has already been reworded from "upgrading to Vulkan 1.4" to "upgrading the Vulkan SDK" to reflect that: the SDK moved in PR 5a, the toolchain targets everything 1.4 could offer it, and only the advertised instance version is still open.
 
 ## PR 6 - Introduce a compiler backend seam, add Slang alongside glslang
 
