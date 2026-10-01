@@ -1963,6 +1963,33 @@ TEST_F(Itas, ItasOrderLimitOffset) {
   sql("DELETE FROM ITAS_TARGET;");
 }
 
+TEST_F(Itas, FilteredProjectionAcrossSourceFragments) {
+  const std::array<std::string, 2> table_names{"ITAS_FRAGMENT_SOURCE",
+                                               "ITAS_FRAGMENT_TARGET"};
+  ScopeGuard drop_tables = [&table_names] {
+    for (const auto& table_name : table_names) {
+      sql("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  for (const auto& table_name : table_names) {
+    sql("DROP TABLE IF EXISTS " + table_name + ";");
+  }
+
+  sql("CREATE TABLE ITAS_FRAGMENT_SOURCE (id INT, keep_row BOOLEAN) "
+      "WITH (FRAGMENT_SIZE=4);");
+  sql("CREATE TABLE ITAS_FRAGMENT_TARGET (id INT, SHARD KEY(id)) "
+      "WITH (SHARD_COUNT=2);");
+  sql("INSERT INTO ITAS_FRAGMENT_SOURCE VALUES "
+      "(0, TRUE), (1, FALSE), (2, FALSE), (3, FALSE), "
+      "(4, TRUE), (5, TRUE), (6, TRUE), (7, TRUE), "
+      "(8, TRUE), (9, TRUE), (10, FALSE), (11, FALSE);");
+
+  sql("INSERT INTO ITAS_FRAGMENT_TARGET "
+      "SELECT id FROM ITAS_FRAGMENT_SOURCE WHERE keep_row = TRUE;");
+  sqlAndCompareResult("SELECT id FROM ITAS_FRAGMENT_TARGET ORDER BY id;",
+                      {{i(0)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}, {i(9)}});
+}
+
 class Export : public DBHandlerTestFixture {
  public:
   void SetUp() override {

@@ -72,7 +72,8 @@ RegisteredQueryHint get_query_hint_for_work_unit(const RelAlgDag* query_dag,
                                                  const RelAlgNode* body);
 
 std::string estimator_cache_context(const CompilationOptions& co,
-                                    const Executor* executor) {
+                                    const Executor* executor,
+                                    const std::vector<size_t>& outer_fragment_indices) {
   CHECK(executor);
   std::ostringstream context;
   context << "device=" << ::toString(co.device_type)
@@ -86,6 +87,17 @@ std::string estimator_cache_context(const CompilationOptions& co,
     }
   } else {
     context << ",slab=" << executor->maxCpuSlabSize();
+  }
+  if (!outer_fragment_indices.empty()) {
+    auto normalized_fragment_indices = outer_fragment_indices;
+    std::sort(normalized_fragment_indices.begin(), normalized_fragment_indices.end());
+    normalized_fragment_indices.erase(std::unique(normalized_fragment_indices.begin(),
+                                                  normalized_fragment_indices.end()),
+                                      normalized_fragment_indices.end());
+    context << ",outer_fragments=";
+    for (const auto fragment_idx : normalized_fragment_indices) {
+      context << fragment_idx << ',';
+    }
   }
   return context.str();
 }
@@ -655,7 +667,8 @@ void RelAlgExecutor::addTemporaryTableSourceNodes(
     TableIdToNodeMap& table_id_to_node_map) const {
   for (const auto& [node_id, source_node] : temporary_table_source_nodes_) {
     if (source_node) {
-      table_id_to_node_map.emplace(shared::TableKey{0, -node_id}, source_node.get());
+      table_id_to_node_map.insert_or_assign(shared::TableKey{0, -node_id},
+                                            source_node.get());
     }
   }
 }
@@ -6322,7 +6335,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
   }
   CardinalityCacheKey cache_key{
-      ra_exe_unit, estimator_cache_context(co, executor_), &temporary_table_source_info_};
+      ra_exe_unit,
+      estimator_cache_context(co, executor_, eo.outer_fragment_indices),
+      &temporary_table_source_info_};
   try {
     auto cached_cardinality = executor_->getCachedCardinality(cache_key);
     auto card = cached_cardinality.second;
@@ -6559,7 +6574,7 @@ std::optional<size_t> RelAlgExecutor::getFilteredCountAll(
   const auto count_all_exe_unit = ra_exe_unit.createCountAllExecutionUnit(count.get());
   const CardinalityCacheKey filtered_count_cache_key{
       count_all_exe_unit,
-      estimator_cache_context(co, executor_),
+      estimator_cache_context(co, executor_, eo.outer_fragment_indices),
       &temporary_table_source_info_};
   if (!(eo.just_validate || eo.just_explain)) {
     const auto cached_filtered_count =

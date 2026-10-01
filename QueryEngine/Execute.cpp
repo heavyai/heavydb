@@ -2101,16 +2101,6 @@ std::optional<DeviceBaselineHashReductionSlot::Op> baseline_gpu_reduction_op(
   }
 }
 
-size_t rowwise_agg_payload_width(const TargetInfo& target_info,
-                                 const size_t padded_slot_width) {
-  CHECK_GT(padded_slot_width, size_t(0));
-  if (takes_float_argument(target_info) && target_info.agg_kind != kAVG) {
-    CHECK_GE(padded_slot_width, sizeof(float));
-    return sizeof(float);
-  }
-  return padded_slot_width;
-}
-
 std::optional<int64_t> checked_scale_decimal_value(const int64_t value,
                                                    const unsigned scale) {
   const auto unsigned_factor = exp_to_scale(scale);
@@ -2215,7 +2205,7 @@ std::optional<DeviceResultSetEntryComparison> make_device_entry_comparison(
       return std::nullopt;
     }
     const auto payload_width =
-        rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+        get_rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
     if (payload_width != sizeof(int8_t) && payload_width != sizeof(int16_t) &&
         payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
       return std::nullopt;
@@ -2348,8 +2338,8 @@ std::optional<std::vector<DeviceBaselineHashReductionSlot>> make_rowwise_group_b
       if (slot_width != sizeof(int32_t) && slot_width != sizeof(int64_t)) {
         return reject("unsupported slot width " + std::to_string(slot_width));
       }
-      const auto payload_width =
-          rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+      const auto payload_width = get_rowwise_agg_payload_width(
+          target_info, static_cast<size_t>(slot_width), target_slot_idx);
       if (payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
         return reject("unsupported payload width " + std::to_string(payload_width));
       }
@@ -2460,7 +2450,7 @@ size_t keyless_marker_read_width(const QueryMemoryDescriptor& query_mem_desc,
   if (!owner || owner->first_slot_idx != marker_slot_idx) {
     return read_width;
   }
-  return rowwise_agg_payload_width(targets[owner->target_idx], read_width);
+  return get_rowwise_agg_payload_width(targets[owner->target_idx], read_width);
 }
 
 int64_t init_value_for_read_width(const int64_t init_val, const size_t read_width) {
@@ -2609,8 +2599,8 @@ std::optional<RowwiseColumnPublishSpec> get_rowwise_column_publish_spec(
       return std::nullopt;
     }
     source_offset = query_mem_desc.getColOffInBytes(slot_idx);
-    source_width =
-        rowwise_agg_payload_width(target_info, static_cast<size_t>(padded_slot_width));
+    source_width = get_rowwise_agg_payload_width(target_info,
+                                                 static_cast<size_t>(padded_slot_width));
   }
   const auto output_width = static_cast<size_t>(elem_size);
   const bool allow_column_width_conversion =

@@ -90,16 +90,6 @@ inline size_t coalesced_size(const QueryMemoryDescriptor& query_mem_desc,
 }
 
 #ifdef HAVE_CUDA
-size_t rowwise_agg_payload_width(const TargetInfo& target_info,
-                                 const size_t padded_slot_width) {
-  CHECK_GT(padded_slot_width, size_t(0));
-  if (takes_float_argument(target_info) && target_info.agg_kind != kAVG) {
-    CHECK_GE(padded_slot_width, sizeof(float));
-    return sizeof(float);
-  }
-  return padded_slot_width;
-}
-
 std::optional<int64_t> checked_scale_decimal_value(const int64_t value,
                                                    const unsigned scale) {
   const auto unsigned_factor = exp_to_scale(scale);
@@ -202,7 +192,7 @@ std::optional<DeviceResultSetEntryComparison> make_device_entry_comparison(
       return std::nullopt;
     }
     const auto payload_width =
-        rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+        get_rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
     if (payload_width != sizeof(int8_t) && payload_width != sizeof(int16_t) &&
         payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
       return std::nullopt;
@@ -389,8 +379,8 @@ make_baseline_gpu_reduction_slots(const QueryMemoryDescriptor& query_mem_desc,
       if (slot_width != sizeof(int32_t) && slot_width != sizeof(int64_t)) {
         return std::nullopt;
       }
-      const auto payload_width =
-          rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+      const auto payload_width = get_rowwise_agg_payload_width(
+          target_info, static_cast<size_t>(slot_width), target_slot_idx);
       if (payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
         return std::nullopt;
       }

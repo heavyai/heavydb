@@ -10,6 +10,7 @@
 #include "Logger/Logger.h"
 #include "OutputBufferInitialization.h"
 #include "QueryEngine/QueryEngine.h"
+#include "ResultSetBufferAccessors.h"
 #include "Shared/checked_alloc.h"
 #include "StreamingTopN.h"
 #include "Utils/FlatBuffer.h"
@@ -153,16 +154,6 @@ std::optional<size_t> target_init_val_index_for_slot(
   return init_val_idx;
 }
 
-size_t rowwise_agg_payload_width(const TargetInfo& target_info,
-                                 const size_t padded_slot_width) {
-  CHECK_GT(padded_slot_width, size_t(0));
-  if (takes_float_argument(target_info) && target_info.agg_kind != kAVG) {
-    CHECK_GE(padded_slot_width, sizeof(float));
-    return sizeof(float);
-  }
-  return padded_slot_width;
-}
-
 bool baseline_gpu_reduction_targets_supported(const RelAlgExecutionUnit& ra_exe_unit,
                                               const QueryMemoryDescriptor& query_mem_desc,
                                               const std::vector<int64_t>& init_vals) {
@@ -185,7 +176,9 @@ bool baseline_gpu_reduction_targets_supported(const RelAlgExecutionUnit& ra_exe_
     if (col_slots.size() != expected_slot_count) {
       return false;
     }
-    for (const auto slot_idx : col_slots) {
+    for (size_t target_slot_idx = 0; target_slot_idx < col_slots.size();
+         ++target_slot_idx) {
+      const auto slot_idx = col_slots[target_slot_idx];
       if (query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx)) {
         return false;
       }
@@ -193,8 +186,8 @@ bool baseline_gpu_reduction_targets_supported(const RelAlgExecutionUnit& ra_exe_
       if (slot_width != sizeof(int32_t) && slot_width != sizeof(int64_t)) {
         return false;
       }
-      const auto payload_width =
-          rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+      const auto payload_width = get_rowwise_agg_payload_width(
+          target_info, static_cast<size_t>(slot_width), target_slot_idx);
       if (payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
         return false;
       }
@@ -263,7 +256,9 @@ bool can_retain_perfect_hash_rowwise_for_gpu_reduction(
     if (col_slots.size() != expected_slot_count) {
       return false;
     }
-    for (const auto slot_idx : col_slots) {
+    for (size_t target_slot_idx = 0; target_slot_idx < col_slots.size();
+         ++target_slot_idx) {
+      const auto slot_idx = col_slots[target_slot_idx];
       if (query_mem_desc.checkSlotUsesFlatBufferFormat(slot_idx)) {
         return false;
       }
@@ -271,8 +266,8 @@ bool can_retain_perfect_hash_rowwise_for_gpu_reduction(
       if (slot_width != sizeof(int32_t) && slot_width != sizeof(int64_t)) {
         return false;
       }
-      const auto payload_width =
-          rowwise_agg_payload_width(target_info, static_cast<size_t>(slot_width));
+      const auto payload_width = get_rowwise_agg_payload_width(
+          target_info, static_cast<size_t>(slot_width), target_slot_idx);
       if (payload_width != sizeof(int32_t) && payload_width != sizeof(int64_t)) {
         return false;
       }
@@ -1876,8 +1871,8 @@ bool publish_group_by_device_columns_from_rowwise(
         continue;
       }
       source_offset = layout_query_mem_desc.getColOffInBytes(slot_idx);
-      source_width =
-          rowwise_agg_payload_width(target_info, static_cast<size_t>(padded_slot_width));
+      source_width = get_rowwise_agg_payload_width(
+          target_info, static_cast<size_t>(padded_slot_width));
     }
     const auto output_width = static_cast<size_t>(elem_size);
     const auto allow_column_width_conversion =
