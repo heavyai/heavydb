@@ -924,7 +924,7 @@ TEST_F(RaytracingTest, BLASMultiMeshTest) {
   //
   device.getCommandList()
       .setPushConstants(*pipeline,
-                        "push constants",
+                        "CLOSEST_HIT_PUSH_CONSTANTS",
                         ShaderStageBits::kClosestHit,
                         &push_constants,
                         sizeof(push_constants))

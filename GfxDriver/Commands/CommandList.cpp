@@ -9,6 +9,7 @@
 
 #include "GfxDriver/Commands/CommandExecutor.h"
 #include "GfxDriver/Commands/CommandImpls.h"
+#include "GfxDriver/Pipeline/Material.h"
 #include "GfxDriver/Pipeline/Pipeline.h"
 #include "GfxDriver/RenderError.h"
 #include "GfxDriver/RenderLogger.h"
@@ -363,6 +364,7 @@ CommandList& CommandList::setPushConstantUInt32(Pipeline& pipeline,
                                                 ShaderStageBits shader_stages,
                                                 uint32_t value,
                                                 uint32_t offset) {
+  pipeline.getMaterial().validatePushConstantRange(name, offset, sizeof(uint32_t));
   addCommand<CmdSetPushConstantUInt32>(pipeline, name, shader_stages, value, offset);
   return *this;
 }
@@ -373,6 +375,7 @@ CommandList& CommandList::setPushConstants(Pipeline& pipeline,
                                            const void* values,
                                            uint32_t num_bytes,
                                            uint32_t offset) {
+  pipeline.getMaterial().validatePushConstantRange(name, offset, num_bytes);
   addCommand<CmdSetPushConstants>(
       pipeline, name, shader_stages, values, num_bytes, offset);
   return *this;

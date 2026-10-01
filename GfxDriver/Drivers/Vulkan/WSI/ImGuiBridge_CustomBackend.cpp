@@ -203,7 +203,7 @@ void ImGuiBridge_CustomBackend::draw(ImDrawData* draw_data,
   PushConstants.scale = glm::vec2(2.0f / io.DisplaySize.x, 2.0f / io.DisplaySize.y);
   PushConstants.translate = glm::vec2(-1.0f);
   cmd_list.setPushConstants(*pipeline_,
-                            "ImGui",
+                            "uPushConstant",
                             ShaderStageBits::kVertex,
                             &PushConstants,
                             sizeof(PushConstants));

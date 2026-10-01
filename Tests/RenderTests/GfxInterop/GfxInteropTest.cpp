@@ -447,7 +447,7 @@ struct ImportCudaBufferTestExecutor : public InteropTest {
       auto& cmd_list = device->getCommandList();
       cmd_list.beginRenderPass(*render_pass, *framebuffer)
           .setPushConstants(*pipeline,
-                            "Buffer Addresses",
+                            "Registers",
                             gfx::ShaderStageBits::kVertex,
                             &push_constants,
                             sizeof(PushConstants))

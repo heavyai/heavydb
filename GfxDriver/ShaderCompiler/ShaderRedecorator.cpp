@@ -426,6 +426,63 @@ void ShaderRedecorator::redecorateInternal(const spirv_t& spirv,
         }
       };
 
+  // A push constant block has neither a set nor a binding, so it claims nothing and
+  // does not go through claim_binding. It is reflected so that CommandList can check a
+  // push against what the shader declares: the ranges handed to pipeline creation are
+  // written out by hand at each call site, and nothing has ever verified that they
+  // agree with the shader.
+  auto reflect_push_constants = [&]() {
+    // One block per entry point is a Vulkan rule, not a simplification here
+    CHECK_LE(resources.push_constant_buffers.size(), 1U)
+        << "  Shader '" << shader_name_ << "' declares "
+        << resources.push_constant_buffers.size() << " push constant blocks";
+
+    for (auto const& block : resources.push_constant_buffers) {
+      auto const& block_type = compiler.get_type(block.base_type_id);
+      uint32_t const member_count = block_type.member_types.size();
+      CHECK_GT(member_count, 0U)
+          << "  Push constant block '" << block.name << "' has no members";
+
+      // The block's own span, rather than its declared size, which would count the
+      // padding before a member given an explicit offset. A caller pushing into the
+      // block is allowed this range and no more, and it is what the hand-written
+      // PushConstantRange at the call site is meant to match.
+      uint32_t block_begin = 0;
+      uint32_t block_end = 0;
+      for (uint32_t i = 0; i < member_count; i++) {
+        auto const member_offset = compiler.type_struct_member_offset(block_type, i);
+        auto const member_size = static_cast<uint32_t>(
+            compiler.get_declared_struct_member_size(block_type, i));
+        auto const& member_name = compiler.get_member_name(block_type.self, i);
+
+        LOG_IF(INFO, DEBUG_LOG_REFLECTION)
+            << "    Push Constant '" << member_name << "' at offset " << member_offset
+            << " has size " << member_size;
+        reflection.addPushConstantAttr(member_name, member_offset, member_size);
+
+        block_begin = i == 0 ? member_offset : std::min(block_begin, member_offset);
+        block_end = std::max(block_end, member_offset + member_size);
+      }
+      // SPIRV-Cross names a push constant block after its variable, so block.name is
+      // the instance name the shader body uses. That is worth knowing because it is
+      // not what it does elsewhere: a uniform block is named by its type, which is why
+      // the uniform_buffers section of a .reflect file reads "SLAB_ADDRESS_TABLE_UBO"
+      // and not "slab_address_table". Record both, since a caller has no reason to
+      // know which of the two names this particular category happens to report.
+      //
+      // Either may be absent. A block declared without an instance name has no
+      // variable name to report, and an empty one must not be recorded: it would put
+      // an unnamed entry in the reflection and make a lookup on "" succeed.
+      auto const& type_name = compiler.get_name(block.base_type_id);
+      if (!block.name.empty()) {
+        reflection.addPushConstant(block.name, block_begin, block_end - block_begin);
+      }
+      if (!type_name.empty() && type_name != block.name) {
+        reflection.addPushConstant(type_name, block_begin, block_end - block_begin);
+      }
+    }
+  };
+
   // One pass now, rather than reserving the explicit bindings before allocating the
   // rest, because every binding arrives already assigned
   reflect_buffers(resources.uniform_buffers, ResourceType::kUniformBuffer);
@@ -434,6 +491,7 @@ void ShaderRedecorator::redecorateInternal(const spirv_t& spirv,
   reflect_opaque_uniforms(resources.storage_images, ResourceType::kStorageImage);
   reflect_opaque_uniforms(resources.acceleration_structures,
                           ResourceType::kAccelerationStructure);
+  reflect_push_constants();
 
   // Vulkan things that we shouldn't see with our shaders (yet)
   CHECK_EQ(resources.separate_images.size(), 0U);
