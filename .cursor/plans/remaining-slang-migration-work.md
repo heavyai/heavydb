@@ -1,6 +1,6 @@
 ---
 name: Remaining Slang migration work
-overview: A standalone working document for the eight pieces of the glslang-to-Slang migration that have not yet landed, with the dependencies between them made explicit. The completed work is summarised only briefly; the full archaeology stays in the existing plan.
+overview: A standalone working document for the pieces of the glslang-to-Slang migration that have not yet landed, with the dependencies between them made explicit. Six remain, plus one unscheduled cleanup; four items originally filed under PR 7 needed nothing from Slang and landed separately. The completed work is summarised only briefly, except where it established something a later PR has to reproduce; the full archaeology stays in the existing plan.
 todos:
   - id: osrb
     content: Slang OSRB approval and attribution. External gate on merging PR 6 onward; start now, independent of all code work
@@ -32,6 +32,21 @@ todos:
   - id: shader-migration
     content: "PR 8+: Migrate shader sources to Slang modules and generics incrementally behind the PR 6 flag, retiring the string-splicing Builder and superseding PR 3's textual subroutine pass"
     status: pending
+  - id: varying-check
+    content: "Non-Slang: Reject an inter-stage varying with no explicit location. Landed as f335583933. Three exemptions were needed, each of which rejected real shaders before it was added: vertex inputs and fragment outputs, built-in members of gl_PerVertex, and blocks carrying one location for the whole block"
+    status: completed
+  - id: createcache-test
+    content: "Non-Slang: Cover ShaderManager::createCache. Landed as cb950d202f, pinning the empty reflection as the documented contract rather than making it populate one"
+    status: completed
+  - id: reflect-array-dim
+    content: "Non-Slang: Let ShaderReflection express an array dimension on a buffer member. Landed as b4c9acc131. Found a live two-dimensional member, PPLL's batch_stats, which is flattened to element count and element stride to match how PPLLRender reads it back"
+    status: completed
+  - id: reflect-push-constants
+    content: "Non-Slang: Reflect push constants and check every push against them. Landed as 02527b6f9b. The dead name parameter on setPushConstants became the key. Deriving the pipeline-creation ranges from reflection is left to PR 7"
+    status: completed
+  - id: dead-accum-composite
+    content: "Cleanup, unscheduled: delete the dead accumulationComposite.frag. It is in QueryRenderer/ShaderManifest.json and compiles into the library, but no C++ creates a material from it; only accumulationCompositePeer.frag is instantiated, which is why its never-pushed push constant block went unnoticed"
+    status: pending
 isProject: false
 ---
 
@@ -50,6 +65,15 @@ Companion to [.cursor/plans/glslang-to-slang-migration.md](.cursor/plans/glslang
 - **PR 3** (`9b8be38b08`) - Deleted `TShaderIRUtils` and moved subroutine resolution to a textual pass in `ShaderManager`, run before glslang sees the source. Took the copy block from 14 files to 13.
 - **PR 4a** (`d2fbb038a8`) - Restructured `glslToSpirv` and `buildSpirv` to take a whole material at a time, giving each stage its own `glslang::TProgram` but sharing one I/O resolver between them. Pure plumbing: the resolver is still our stateless `IoMapResolver`, so no behaviour changed and no golden moved.
 - **PR 4b** (`f0bea7b8b7`) - Handed binding and location assignment to `glslang::TDefaultGlslIoResolver`, reducing `ShaderRedecorator` to reflection extraction plus a clash check and deleting the sentinels, the allocator and the SPIR-V patching. Two of the nine goldens moved. Corrected a long-standing bug in which an array of resources was given one binding per element rather than a single binding with a descriptor count.
+
+### Four items taken outside the PR sequence
+
+Each was filed under PR 7 but needs nothing from Slang, and each is better as its own commit than as a line in PR 7's diff: the golden movement stays attributable, and the behaviour is pinned by tests before Slang has to reproduce it. All four have landed.
+
+- **Varying locations** (`f335583933`) - Rejects an inter-stage varying that arrives without an explicit location, which glslang would otherwise match across stages only by luck of declaration order. Three exemptions were needed and each one rejected real shaders before it was added: vertex inputs and fragment outputs, which are matched against the reflection rather than another stage; built-in members of the implicit `gl_PerVertex` block, which is what made the first attempt reject all five vertex shaders; and blocks carrying one location for the whole block, the form every mesh and task shader uses.
+- **`createCache` coverage** (`cb950d202f`) - Pins the empty reflection as the documented contract rather than making the method populate one. Its only caller, `saveArtifacts`, reads just the GLSL and SPIR-V, so a regression would have shown up as missing artifacts rather than a failing test.
+- **Array dimensions** (`b4c9acc131`) - `ItemInfo` gained `array_length` and `array_stride`, so element *i* of a buffer member is at `offset + i * array_stride`. See below for the two-dimensional member this turned up.
+- **Push constants** (`02527b6f9b`) - Reflected into new `push_constants` and `push_constant_attrs` sections, and every push is now checked against them. See below.
 
 ## How the remaining pieces depend on each other
 
@@ -70,11 +94,12 @@ flowchart TD
     PR7 --> PR5c3
 ```
 
-What is left is one track, plus one standalone item:
+What is left is one track, plus two standalone items:
 
 - **Migration track: PRs 0b, 6, 7, 8+.** The actual replacement. Gated at the front by the spike and by OSRB approval.
 - **Cleanup tail: PR 5c part 3.** Now the last thing rather than an independent track, because only PR 7 can retire the private headers. See below.
 - **Standalone: PR 5d.** Independent of everything, and optional.
+- **Standalone: deleting the dead `accumulationComposite.frag`.** Unscheduled and independent. It sits in `QueryRenderer/ShaderManifest.json` and compiles into the library, but no C++ creates a material from it; only `accumulationCompositePeer.frag` is instantiated. That is why nobody noticed its push constant block is never pushed, which the push range check would otherwise have caught.
 
 The cleanup track no longer exists as a separate thing. It was meant to be PRs 3, 4a and 4b retiring the private headers between them; all three have landed and the headers are still there. PR 3 took one of the thirteen and PR 4b took none, because handing assignment to glslang needs more of `iomapper.h` than subclassing it did, not less.
 
@@ -124,7 +149,19 @@ Four findings, three of them constraints on anything that touches this code agai
 
 Two things stayed true as planned. Clash detection could not be delegated: `reserveSlot` explicitly "tolerate[s] aliasing, by not double-recording aliases", and the only clash glslang reports is one name carrying different explicit bindings across stages, which is the opposite of what `ShaderRedecoratorClashTest` exercises. And `setShiftUboBinding` and friends remain a dead end, since `resolveBinding` adds the shift base to explicitly declared bindings too.
 
-Only two of the nine goldens moved, rather than all of them as predicted, because most of the corpus binds explicitly. `createCache` remains unverified: its one live caller, `saveArtifacts`, passes `nullptr` as the redecorator, so no test has exercised it since PR 1 moved the `FromFile` cases onto `createCacheVector`.
+Only two of the nine goldens moved, rather than all of them as predicted, because most of the corpus binds explicitly. PR 4b also left `createCache` unverified, its one live caller `saveArtifacts` passing `nullptr` as the redecorator; `cb950d202f` has since covered it, pinning the empty reflection as the contract `ShaderManager.h` already documented.
+
+## What the four non-Slang items established, which PR 7 inherits
+
+All four are reflection behaviour, so PR 7 has to reproduce them from Slang rather than inherit them. The tests pin each one, so PR 7 will find out quickly, but the reimplementation surface is larger than PR 7's section below originally claimed.
+
+**There is a live two-dimensional array member, and nothing had ever reflected it.** `PPLL_BATCH_STAT_COUNTERS_SSBO` declares `PPLLFragmentStats batch_stats[maxNumBatches][numTiles]`. The array-dimension work initially rejected multi-dimensional members with a `CHECK`, on the assumption that `slabs[64]` was the only array case; `QueryRendererTest` aborted on the first run. It is now flattened to total element count and element stride, which is how `PPLLRender` actually consumes it: the buffer is read back into one flat `std::vector<PPLLFragmentStats>` and indexed linearly. Flattening is only valid if the dimensions are tightly packed, so the exact division is checked. Two further cases are rejected because each would be a silently wrong number: a dimension given by a specialization constant, which SPIRV-Cross stores as that constant's id rather than its value, and a runtime-sized array with inner dimensions, which has no element count to divide by.
+
+**SPIRV-Cross names a push constant block after its variable and a uniform block after its type.** This asymmetry cost a round trip. Reasoning from the uniform case is what produces the wrong answer: a `.reflect` file says `SLAB_ADDRESS_TABLE_UBO` rather than `slab_address_table`, so the type name looks like the universal rule, but `push_constant_buffers` entries carry the instance name instead. Both names are now recorded, since no call site should have to know which one a category reports, and either may be absent - a block declared without an instance name has no variable name, and an empty one must not be recorded or a lookup on `""` would succeed.
+
+**A push constant block's range is its members' span, not its declared size.** The declared size always starts at zero, however the first member is offset. The fragment half of `PolyMark`'s split block begins at 4, and 4 is what the call site declares, so the span is the only definition that matches the hand-written ranges. Only the test shader covers this: both goldens that have push constants hold a single member at offset 0.
+
+**`setPushConstants`'s `name` parameter was dead.** It was threaded through `CommandList`, the command struct and the executor, then dropped at `vkCmdPushConstants`. It is now the key into the reflection, and the pushed range must fall inside whatever it resolves to. Five call sites passed prose that could never resolve and now name the block or the member they cover. Stage bits are deliberately not checked, since the stage mask must match the pipeline layout and Vulkan enforces that itself.
 
 ## PR 5c part 3 - Delete the header copy block
 
@@ -168,13 +205,19 @@ That file system is not optional detail: per the PR 3 findings above, the assemb
 
 Slang assigns descriptor sets and bindings across a composed program with multiple entry points and reports them through reflection, so the remaining reflection extraction and `ResourceLimits` / `TBuiltInResource` go away rather than being ported. PR 4b already removed the SPIRV-Cross patching via `get_binary_offset_for_decoration`. This also closes the never-completed TODO in `GlslangWrapper.cpp` about sourcing limits from the device, since limit validation moves to the driver.
 
-Keep `ShaderReflection` unchanged and populate it from Slang reflection. Five behaviours need deliberate reimplementation:
+Keep `ShaderReflection` unchanged and populate it from Slang reflection. Seven behaviours need deliberate reimplementation, four of them newly pinned by the non-Slang commits rather than merely desirable:
 
 - Clash diagnostics quality from `recordBinding`, which is all that is left of the old allocator and still carries the message `ShaderRedecoratorClashTest` pins.
-- The struct-flattening naming convention: the block at `ShaderRedecorator.cpp:303-352` and the rule itself at 325-331. Dotted names for nested UBO members, bare names for SSBO members, depended on verbatim by `Material` and the Vega property writers.
+- The struct-flattening naming convention: the block in `reflect_buffers` and the rule stated with it. Dotted names for nested UBO members, bare names for SSBO members, depended on verbatim by `Material` and the Vega property writers.
 - `validate_buffer_attr_type`, which whitelists only scalar int/uint/int64/uint64/float/double. Decide whether to carry the restriction forward.
-- The array-dimension gap. `ShaderReflection` cannot express an array dimension on a buffer member and silently drops it: `SlabAddressTableEntry slabs[64]` reflects as two attrs at offsets 0 and 8 with a `block_size` of 1024, as though the array were one element. Harmless today because that block is bound whole, but Slang will report it properly. Decide whether to represent it. Either way the `pointTemplate.vert` golden moves, and that diff is expected.
-- Push constants, currently hand-maintained in [GfxDriver/Pipeline/PushConstantRanges.cpp](GfxDriver/Pipeline/PushConstantRanges.cpp) and absent from reflection, come free here.
+- **Array dimensions**, now `array_length` and `array_stride` on `ItemInfo`. The flattening rule for multi-dimensional members and the three cases it rejects are described above and asserted by `ShaderRedecoratorTest`.
+- **Push constant reflection**, now `push_constants` and `push_constant_attrs`. The span rule, the dual naming and the anonymous-block case are all asserted.
+- **The push range check** in `Material::validatePushConstantRange`, which every `setPushConstants` call now goes through. Whatever replaces the reflection has to keep resolving a name to a block or a member, or every push in the tree throws.
+- **Explicit varying locations**, rejected in `GlslangWrapper.cpp` rather than in the redecorator, so this one moves with the backend rather than with `ShaderRedecorator`. Its three exemptions are the part to preserve; each was arrived at by a shader failing.
+
+Two things that were on this list are no longer: the array-dimension gap and push constants both landed separately, so their golden movement is already absorbed rather than arriving inside PR 7's diff.
+
+A better end state exists for push constants than what landed, and PR 7 is where it belongs: derive the ranges from reflection at pipeline creation and delete the hand-written ones at the eight call sites. That is the version where the shader and the range cannot disagree at all, rather than one where disagreement is caught at the push. It was not done now because it is a change to pipeline creation, not to reflection.
 
 Hard constraint carried over from PR 1: the shader library declares its uniform blocks `layout(std430)`, legal only because `uniformBufferStandardLayout` and `scalarBlockLayout` are hard device requirements. Slang needs the equivalent of `-fvk-use-scalar-layout` or per-block layout attributes rather than its defaults, or `spirv-val` will reject the output.
 
@@ -191,3 +234,5 @@ Largest effort, biggest payoff, safely deferrable. Slang interfaces plus generic
 - **Whether glslang's resolver assigns coherently across stages.** Closed by PR 4b. A shared `TDefaultGlslIoResolver` keys its slot maps by name and nothing clears them between stages, and the render suite passes on its numbering. Vertex attribute locations do still start at 0.
 - **Sentinel fragility.** Closed by PR 4b, which deleted them. They were derived from glslang's internal `layout*End` markers and survived 1.3.275 to 16.6.0 unchanged, so the exposure was latent rather than active, but it is now gone.
 - **Private-header reach.** PRs 3, 4a and 4b were each expected to reduce our dependence on glslang's private headers and collectively retired one of thirteen. Treat any future estimate of this kind sceptically: the headers come as a transitive closure behind `LiveTraverser.h` and `iomapper.h`, so nothing short of dropping both includes changes the count at all.
+- **PR 7's reimplementation surface keeps growing.** It started at five behaviours and is now seven, the four non-Slang commits having pinned as tests things that were previously undefined or simply absent. That is the right direction, since each is now specified rather than accidental, but PR 7 is not getting smaller in the way PR 4b's reduction of `ShaderRedecorator` suggested. Read the section above before scoping it.
+- **Reasoning about SPIRV-Cross and glslang from one case.** Three errors this session came from generalising a single observation: that `slabs[64]` was the only array member, that resource names are always type names, and that nine goldens were ten. Each was caught by a build or a test within one cycle, so the exposure is cost rather than risk, but the pattern is worth naming - these libraries are not uniform across resource categories, and the cheap move is to check the category in question rather than infer it from a neighbour.
