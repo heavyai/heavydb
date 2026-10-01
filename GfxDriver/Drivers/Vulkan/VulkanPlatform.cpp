@@ -36,7 +36,6 @@
 //
 
 #define DEBUG_BUILD_VALIDATION_MODE ValidationMode::kFailAlways
-#define VULKAN_API_VERSION VK_API_VERSION_1_3
 
 namespace gfx {
 
@@ -235,7 +234,7 @@ void VulkanPlatform::createInstance() {
   app_info.applicationVersion = app_version;
   app_info.pEngineName = "heavydb";
   app_info.engineVersion = app_version;
-  app_info.apiVersion = VULKAN_API_VERSION;
+  app_info.apiVersion = kVulkanInstanceApiVersion;
 
   VkInstanceCreateInfo create_info = {};
   create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -511,7 +510,7 @@ bool VulkanPlatform::isDeviceSuitable(const VulkanPhysicalDevice& device,
   // This is theoretically redundant with the driver version check
   // but play it safe
   //
-  static constexpr auto min_api_version = VULKAN_API_VERSION;
+  static constexpr auto min_api_version = kMinVulkanDeviceApiVersion;
   if (device.getApiVersion() < min_api_version) {
     VLOG(1) << "  Incompatible Vulkan API version detected. Driver supports "
             << vulkan_version_to_string(device.getApiVersion()) << " but "

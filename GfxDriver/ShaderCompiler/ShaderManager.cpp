@@ -728,7 +728,10 @@ std::string library_item_to_filename(const Library::Item& item) {
 spirv_t optimize_spirv(const spirv_t& spirv_in) {
   spirv_t opt_spv;
   LOG(INFO) << "Optimizing Spir-V";
-  spv_target_env env = SPV_ENV_OPENGL_4_5;
+  // Must track what GlslangWrapper asks glslang to emit. This whole function is
+  // behind USE_SPIRV_OPT, which is false, so the OpenGL target it carried until
+  // now had never been exercised against a Vulkan blob.
+  spv_target_env env = SPV_ENV_VULKAN_1_3;
   auto log_spv_msg = [](spv_message_level_t level,
                         const char* source,
                         const spv_position_t&,
