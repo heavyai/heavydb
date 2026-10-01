@@ -5,6 +5,7 @@
 
 #include "GfxDriver/ShaderCompiler/ShaderRedecorator.h"
 
+#include <algorithm>
 #include <string_view>
 
 #include <spirv_cross/spirv.hpp>
@@ -212,113 +213,187 @@ void ShaderRedecorator::redecorateInternal(const spirv_t& spirv,
     return assigned_binding;
   };
 
-  auto reflect_buffers = [&](const spirv_cross::SmallVector<spirv_cross::Resource>&
-                                 buffers,
-                             ResourceType resource_type) {
-    LOG_IF(INFO, DEBUG_LOG_REFLECTION)
-        << "  " << buffers.size() << " " << resource_type_to_string(resource_type) << "s";
-    for (auto& buffer : buffers) {
-      auto const buffer_binding = claim_binding(buffer, resource_type);
-      auto const num_bindings = get_resource_count(buffer.type_id);
+  auto reflect_buffers =
+      [&](const spirv_cross::SmallVector<spirv_cross::Resource>& buffers,
+          ResourceType resource_type) {
+        LOG_IF(INFO, DEBUG_LOG_REFLECTION)
+            << "  " << buffers.size() << " " << resource_type_to_string(resource_type)
+            << "s";
+        for (auto& buffer : buffers) {
+          auto const buffer_binding = claim_binding(buffer, resource_type);
+          auto const num_bindings = get_resource_count(buffer.type_id);
 
-      // capture buffer attributes
-      auto& buffer_type = compiler.get_type(buffer.base_type_id);
-      size_t buffer_size = compiler.get_declared_struct_size(buffer_type);
-      uint32_t buffer_member_count = buffer_type.member_types.size();
+          // capture buffer attributes
+          auto& buffer_type = compiler.get_type(buffer.base_type_id);
+          size_t buffer_size = compiler.get_declared_struct_size(buffer_type);
+          uint32_t buffer_member_count = buffer_type.member_types.size();
 
-      // and store in reflection
-      int reflection_set = static_cast<int>(kDescriptorSet);
-      if (resource_type == ResourceType::kShaderStorageBuffer) {
-        reflection.addShaderStorageBuffer(
-            buffer.name, reflection_set, buffer_binding, buffer_size);
-      } else {
-        reflection.addUniformBuffer(
-            buffer.name, reflection_set, buffer_binding, buffer_size);
-      }
-
-      // log
-      LOG_IF(INFO, DEBUG_LOG_REFLECTION)
-          << "    " << resource_type_to_string(resource_type) << " '" << buffer.name
-          << array_suffix(num_bindings) << "' has binding " << buffer_binding
-          << ", requires " << buffer_size << " bytes and has " << buffer_member_count
-          << " members";
-
-      // iterate members
-      for (uint32_t i = 0; i < buffer_member_count; i++) {
-        auto const& member_type = compiler.get_type(buffer_type.member_types[i]);
-        auto const& member_name = compiler.get_member_name(buffer_type.self, i);
-        auto const member_offset = compiler.type_struct_member_offset(buffer_type, i);
-        auto const member_size = compiler.get_declared_struct_member_size(buffer_type, i);
-
-        if (member_type.basetype == spirv_cross::SPIRType::Struct) {
-          LOG_IF(INFO, DEBUG_LOG_REFLECTION)
-              << "      Struct '" << member_name << "' has total size " << member_size;
-
-          // iterate children and flatten
-          uint32_t struct_member_count = member_type.member_types.size();
-          for (uint32_t j = 0; j < struct_member_count; j++) {
-            // get child
-            auto const& child_member_type =
-                compiler.get_type(member_type.member_types[j]);
-            auto const& child_member_name = compiler.get_member_name(member_type.self, j);
-            auto const child_member_offset =
-                compiler.type_struct_member_offset(member_type, j);
-            auto const child_member_size =
-                compiler.get_declared_struct_member_size(member_type, j);
-
-            // validate type
-            CHECK(child_member_type.basetype != spirv_cross::SPIRType::Struct)
-                << "Nested structs not supported in UBO/SSBO";
-            validate_buffer_attr_type(child_member_type.basetype);
-
-            // full name and offset
-            // add prefix only for UBO elements
-            // SSBO elements are referred to only by child name
-            std::string child_full_name = child_member_name;
-            if (resource_type == ResourceType::kUniformBuffer) {
-              child_full_name = member_name + "." + child_full_name;
-            }
-            uint32_t child_full_offset = member_offset + child_member_offset;
-
-            // store in reflection
-            if (resource_type == ResourceType::kShaderStorageBuffer) {
-              reflection.addShaderStorageBufferAttr(child_full_name,
-                                                    reflection_set,
-                                                    buffer_binding,
-                                                    child_full_offset,
-                                                    child_member_size);
-            } else {
-              reflection.addUniformBufferAttr(child_full_name,
-                                              reflection_set,
-                                              buffer_binding,
-                                              child_full_offset,
-                                              child_member_size);
-            }
-
-            LOG_IF(INFO, DEBUG_LOG_REFLECTION)
-                << "        '" << child_full_name << "' has offset "
-                << child_member_offset << ", size " << child_member_size;
-          }
-        } else {
-          // validate type
-          validate_buffer_attr_type(member_type.basetype);
-
-          // store in reflection
+          // and store in reflection
+          int reflection_set = static_cast<int>(kDescriptorSet);
           if (resource_type == ResourceType::kShaderStorageBuffer) {
-            reflection.addShaderStorageBufferAttr(
-                member_name, reflection_set, buffer_binding, member_offset, member_size);
+            reflection.addShaderStorageBuffer(
+                buffer.name, reflection_set, buffer_binding, buffer_size);
           } else {
-            reflection.addUniformBufferAttr(
-                member_name, reflection_set, buffer_binding, member_offset, member_size);
+            reflection.addUniformBuffer(
+                buffer.name, reflection_set, buffer_binding, buffer_size);
           }
 
+          // log
           LOG_IF(INFO, DEBUG_LOG_REFLECTION)
-              << "      '" << member_name << "' has offset " << member_offset << ", size "
-              << member_size;
+              << "    " << resource_type_to_string(resource_type) << " '" << buffer.name
+              << array_suffix(num_bindings) << "' has binding " << buffer_binding
+              << ", requires " << buffer_size << " bytes and has " << buffer_member_count
+              << " members";
+
+          // iterate members
+          for (uint32_t i = 0; i < buffer_member_count; i++) {
+            auto const& member_type = compiler.get_type(buffer_type.member_types[i]);
+            auto const& member_name = compiler.get_member_name(buffer_type.self, i);
+            auto const member_offset = compiler.type_struct_member_offset(buffer_type, i);
+            auto const member_size =
+                compiler.get_declared_struct_member_size(buffer_type, i);
+
+            // Everything derived from an array member below describes element zero only,
+            // its offsets being that element's. These two are what reach the rest:
+            // element i is at offset + i * stride. A runtime-sized array reports a length
+            // of 0, which SPIRV-Cross gives as its single dimension and which is a real
+            // answer, distinct from the -1 meaning not an array at all.
+            //
+            // An array of arrays is flattened to the element count and the element
+            // stride, rather than keeping its shape. That loses the inner extent, but it
+            // is how the only multi-dimensional member we have is actually used:
+            // PPLL_BATCH_STAT_COUNTERS_SSBO is declared [batches][tiles] and read back
+            // into one flat vector by PPLLRender.
+            int array_length = -1;
+            int array_stride = -1;
+            if (!member_type.array.empty()) {
+              // A dimension given by a specialization constant is stored as that
+              // constant's id rather than as a size, so reading it as one would record a
+              // plausible-looking wrong number. Nothing declares one today, every
+              // dimension in the shader library being a literal or a textual
+              // substitution made before compilation.
+              CHECK(std::all_of(member_type.array_size_literal.begin(),
+                                member_type.array_size_literal.end(),
+                                [](auto const literal) { return literal; }))
+                  << "Array member '" << member_name
+                  << "' is sized by a specialization constant, which cannot be reflected";
+
+              // SPIRV-Cross stores the dimensions innermost first, so the stride
+              // decorating the member's own type is the one belonging to array.back()
+              auto const outer_stride =
+                  compiler.type_struct_member_array_stride(buffer_type, i);
+              auto const total_bytes = member_type.array.back() * outer_stride;
+              uint32_t element_count = 1;
+              for (auto const dimension : member_type.array) {
+                element_count *= dimension;
+              }
+
+              if (element_count == 0) {
+                // Runtime-sized. Only the outermost dimension may be, and with no element
+                // count to divide by, the outer stride is already the element stride.
+                CHECK_EQ(member_type.array.size(), 1u)
+                    << "Runtime-sized array member '" << member_name
+                    << "' also has inner dimensions, whose extent is lost by flattening";
+                array_length = 0;
+                array_stride = static_cast<int>(outer_stride);
+              } else {
+                // Only holds if every dimension is tightly packed, which is the sole
+                // reason a flattened stride can address an inner element at all
+                CHECK_EQ(total_bytes % element_count, 0u)
+                    << "Array member '" << member_name
+                    << "' is padded between dimensions and cannot be flattened: "
+                    << total_bytes << " bytes over " << element_count << " elements";
+                array_length = static_cast<int>(element_count);
+                array_stride = static_cast<int>(total_bytes / element_count);
+              }
+            }
+
+            if (member_type.basetype == spirv_cross::SPIRType::Struct) {
+              LOG_IF(INFO, DEBUG_LOG_REFLECTION) << "      Struct '" << member_name
+                                                 << "' has total size " << member_size;
+
+              // iterate children and flatten
+              uint32_t struct_member_count = member_type.member_types.size();
+              for (uint32_t j = 0; j < struct_member_count; j++) {
+                // get child
+                auto const& child_member_type =
+                    compiler.get_type(member_type.member_types[j]);
+                auto const& child_member_name =
+                    compiler.get_member_name(member_type.self, j);
+                auto const child_member_offset =
+                    compiler.type_struct_member_offset(member_type, j);
+                auto const child_member_size =
+                    compiler.get_declared_struct_member_size(member_type, j);
+
+                // validate type
+                CHECK(child_member_type.basetype != spirv_cross::SPIRType::Struct)
+                    << "Nested structs not supported in UBO/SSBO";
+                validate_buffer_attr_type(child_member_type.basetype);
+
+                // full name and offset
+                // add prefix only for UBO elements
+                // SSBO elements are referred to only by child name
+                std::string child_full_name = child_member_name;
+                if (resource_type == ResourceType::kUniformBuffer) {
+                  child_full_name = member_name + "." + child_full_name;
+                }
+                uint32_t child_full_offset = member_offset + child_member_offset;
+
+                // store in reflection
+                // The array shape belongs to the member, not to the child: slabs[64].cuda
+                // is one uint64_t repeated 64 times at the member's stride
+                if (resource_type == ResourceType::kShaderStorageBuffer) {
+                  reflection.addShaderStorageBufferAttr(child_full_name,
+                                                        reflection_set,
+                                                        buffer_binding,
+                                                        child_full_offset,
+                                                        child_member_size,
+                                                        array_length,
+                                                        array_stride);
+                } else {
+                  reflection.addUniformBufferAttr(child_full_name,
+                                                  reflection_set,
+                                                  buffer_binding,
+                                                  child_full_offset,
+                                                  child_member_size,
+                                                  array_length,
+                                                  array_stride);
+                }
+
+                LOG_IF(INFO, DEBUG_LOG_REFLECTION)
+                    << "        '" << child_full_name << "' has offset "
+                    << child_member_offset << ", size " << child_member_size;
+              }
+            } else {
+              // validate type
+              validate_buffer_attr_type(member_type.basetype);
+
+              // store in reflection
+              if (resource_type == ResourceType::kShaderStorageBuffer) {
+                reflection.addShaderStorageBufferAttr(member_name,
+                                                      reflection_set,
+                                                      buffer_binding,
+                                                      member_offset,
+                                                      member_size,
+                                                      array_length,
+                                                      array_stride);
+              } else {
+                reflection.addUniformBufferAttr(member_name,
+                                                reflection_set,
+                                                buffer_binding,
+                                                member_offset,
+                                                member_size,
+                                                array_length,
+                                                array_stride);
+              }
+
+              LOG_IF(INFO, DEBUG_LOG_REFLECTION)
+                  << "      '" << member_name << "' has offset " << member_offset
+                  << ", size " << member_size;
+            }
+          }
         }
-      }
-    }
-  };
+      };
 
   auto reflect_opaque_uniforms =
       [&](const spirv_cross::SmallVector<spirv_cross::Resource>& resources,

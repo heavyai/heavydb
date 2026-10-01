@@ -1,6 +1,6 @@
 vertex_attrs 0
 samplers 1
-  "colorTex" set=0 binding=0 offset=-1 array_size=1
+  "colorTex" set=0 binding=0 offset=-1 array_size=1 array_length=-1 array_stride=-1
 storage_images 0
 uniform_buffers 0
 shader_storage_buffers 0
