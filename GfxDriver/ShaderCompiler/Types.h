@@ -34,9 +34,6 @@ enum class ShaderStage : uint8_t {
   kTask
 };
 
-// must be kept in sync with enum
-static constexpr int kShaderStageCount = 8;
-
 // Stage bits - add stages as needed
 enum class ShaderStageBits {
   kVertex = 1 << 0,

@@ -8,13 +8,9 @@
 #include <algorithm>
 #include <ostream>
 
-#include "Logger/Logger.h"
-
 namespace gfx {
 
 const ShaderReflection::ItemInfo ShaderReflection::NameToItemInfoMap::kDefaultItemInfo;
-
-ShaderReflection::ShaderReflection() {}
 
 void ShaderReflection::initialize() {
   clear();
@@ -29,22 +25,7 @@ void ShaderReflection::clear() {
   acceleration_structures_.clear();
   uniform_buffer_attrs_.clear();
   shader_storage_buffer_attrs_.clear();
-}
-
-ShaderReflection& ShaderReflection::operator=(const ShaderReflection& rhs) {
-  vertex_attr_locations_ = rhs.vertex_attr_locations_;
-  samplers_ = rhs.samplers_;
-  storage_images_ = rhs.storage_images_;
-  uniform_buffers_ = rhs.uniform_buffers_;
-  shader_storage_buffers_ = rhs.shader_storage_buffers_;
-  acceleration_structures_ = rhs.acceleration_structures_;
-  uniform_buffer_attrs_ = rhs.uniform_buffer_attrs_;
-  shader_storage_buffer_attrs_ = rhs.shader_storage_buffer_attrs_;
-  return *this;
-}
-
-void ShaderReflection::validateSet(int set) {
-  CHECK_NE(set, -1);
+  fragment_shader_output_locations_.clear();
 }
 
 void ShaderReflection::addVertexAttr(std::string_view name,
@@ -58,7 +39,6 @@ void ShaderReflection::addSampler(std::string_view name,
                                   int set,
                                   int binding,
                                   int array_size) {
-  validateSet(set);
   samplers_.insert_unless_different(name, {set, binding, -1, array_size}, "Sampler");
 }
 
@@ -66,7 +46,6 @@ void ShaderReflection::addStorageImage(std::string_view name,
                                        int set,
                                        int binding,
                                        int array_size) {
-  validateSet(set);
   storage_images_.insert_unless_different(
       name, {set, binding, -1, array_size}, "Storage Image");
 }
@@ -75,7 +54,6 @@ void ShaderReflection::addUniformBuffer(std::string_view name,
                                         int set,
                                         int binding,
                                         int block_size) {
-  validateSet(set);
   uniform_buffers_.insert_unless_different(
       name, {set, binding, -1, block_size}, "Uniform Buffer");
 }
@@ -84,7 +62,6 @@ void ShaderReflection::addShaderStorageBuffer(std::string_view name,
                                               int set,
                                               int binding,
                                               int block_size) {
-  validateSet(set);
   shader_storage_buffers_.insert_unless_different(
       name, {set, binding, -1, block_size}, "Shader Storage Buffer");
 }
@@ -93,7 +70,6 @@ void ShaderReflection::addAccelerationStructure(std::string_view name,
                                                 int set,
                                                 int binding,
                                                 int size) {
-  validateSet(set);
   acceleration_structures_.insert_unless_different(
       name, {set, binding, -1, size}, "Acceleration Structure");
 }
@@ -103,7 +79,6 @@ void ShaderReflection::addUniformBufferAttr(std::string_view name,
                                             int binding,
                                             int offset,
                                             int size) {
-  validateSet(set);
   uniform_buffer_attrs_.insert_unless_different(
       name, {set, binding, offset, size}, "Uniform Buffer Attr");
 }
@@ -113,7 +88,6 @@ void ShaderReflection::addShaderStorageBufferAttr(std::string_view name,
                                                   int binding,
                                                   int offset,
                                                   int size) {
-  validateSet(set);
   shader_storage_buffer_attrs_.insert_unless_different(
       name, {set, binding, offset, size}, "Shader Storage Buffer Attr");
 }

@@ -5,8 +5,12 @@
 
 #include "GfxDriver/ShaderCompiler/GlslangWrapper.h"
 
+#include <charconv>
 #include <iomanip>
+#include <optional>
+#include <set>
 #include <sstream>
+#include <string_view>
 
 // LiveTraverser.h must precede iomapper.h, which no longer includes it and
 // relies on its callers to have brought in the glslang AST types.
@@ -210,29 +214,59 @@ GlslangWrapper::~GlslangWrapper() {
 
 #ifndef NDEBUG
 namespace {
-int find_error_line_number(const std::string& info_log) {
-  // Extract line number from a message formatted:
-  // ERROR: 0:129: '' :  syntax error...
-  // Where 129 is the line number
-  auto start = info_log.find(":", 7);  // skip "ERROR: 0" where 0 is string #
-  CHECK_NE(start, std::string::npos);
-  auto end = info_log.find(":", start + 1);  // find ":" after line #
-  CHECK_NE(end, std::string::npos);
-  auto substr = info_log.substr(start + 1, end - start - 1);
-  return std::atoi(substr.c_str());
+
+// Reads a run of decimal digits terminated by ':', advancing cursor past that
+// colon. Returns nullopt if the text at cursor is not that shape, in which case
+// cursor is left unspecified.
+std::optional<int> parse_colon_terminated_number(const std::string& text,
+                                                 size_t& cursor) {
+  auto const* const first = text.data() + cursor;
+  auto const* const last = text.data() + text.size();
+  int value{};
+  auto const [end, error] = std::from_chars(first, last, value);
+  if (error != std::errc{} || end == last || *end != ':') {
+    return std::nullopt;
+  }
+  cursor = static_cast<size_t>(end - text.data()) + 1;
+  return value;
 }
 
-std::string add_line_numbers(const std::string& code, int error_line_num) {
+// glslang exposes diagnostics only as log text, formatted
+// "ERROR: <string#>:<line>: ...", for example "ERROR: 0:129: '' : syntax error".
+// Entries not matching that shape are skipped rather than asserted on. The
+// format is not contractual, and the log also carries summary lines such as
+// "ERROR: 1 compilation errors." that legitimately have no line number, so a
+// format change should cost us the source annotation rather than abort the
+// process while it is trying to report a shader bug.
+std::set<int> find_error_line_numbers(const std::string& info_log) {
+  constexpr std::string_view kPrefix = "ERROR: ";
+  std::set<int> line_numbers;
+  for (auto pos = info_log.find(kPrefix); pos != std::string::npos;
+       pos = info_log.find(kPrefix, pos + kPrefix.size())) {
+    auto cursor = pos + kPrefix.size();
+    if (!parse_colon_terminated_number(info_log, cursor)) {
+      continue;  // the string number, whose value we never need
+    }
+    if (auto const line_number = parse_colon_terminated_number(info_log, cursor)) {
+      line_numbers.insert(*line_number);
+    }
+  }
+  return line_numbers;
+}
+
+std::string add_line_numbers(const std::string& code,
+                             const std::set<int>& error_line_nums) {
   std::stringstream ss;
   std::istringstream input;
   input.str(code);
   int line_num = 1;
   for (std::string line; std::getline(input, line); ++line_num) {
-    ss << (line_num == error_line_num ? "-->" : "   ");
+    ss << (error_line_nums.count(line_num) ? "-->" : "   ");
     ss << std::right << std::setw(5) << line_num << "  " << line << "\n";
   }
   return ss.str();
 }
+
 }  // namespace
 #endif
 
@@ -280,8 +314,9 @@ GlslangWrapper::CompileResult GlslangWrapper::glslToSpirv(
     std::string info_log(shader->getInfoLog());
     error_string = "Error parsing shader \"" + pretty_name + "\":\n" + info_log;
 #ifndef NDEBUG
-    auto error_line_num = find_error_line_number(info_log);
-    error_string += "Shader Source:\n" + add_line_numbers(shader_source, error_line_num) +
+    auto const error_line_nums = find_error_line_numbers(info_log);
+    error_string += "Shader Source:\n" +
+                    add_line_numbers(shader_source, error_line_nums) +
                     "End Shader Source\n";
 #endif
     return {std::move(rtn_spirv), std::move(error_string)};

@@ -109,9 +109,8 @@ std::string decoration_to_string(spv::Decoration decoration) {
 void ShaderRedecorator::redecorate(spirv_t& spirv,
                                    ShaderReflection& reflection,
                                    const std::string& template_name) {
-  int set = 0;
   try {
-    redecorateInternal(spirv, set, reflection);
+    redecorateInternal(spirv, reflection);
   } catch (spirv_cross::CompilerError& e) {
     THROW_RUNTIME_EX("Failure during redecoration of shader '" + template_name +
                      "' (SPIRV-Cross exception: " + e.what() + ")");
@@ -121,9 +120,7 @@ void ShaderRedecorator::redecorate(spirv_t& spirv,
   }
 }
 
-void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
-                                           int set,
-                                           ShaderReflection& reflection) {
+void ShaderRedecorator::redecorateInternal(spirv_t& spirv, ShaderReflection& reflection) {
   // pass the blob to a compiler and get the resources
   spirv_cross::CompilerGLSL compiler(spirv);
   spirv_cross::ShaderResources resources = compiler.get_shader_resources();
@@ -227,8 +224,7 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
           // reserve?
           if (existing_binding != kUninitializedBinding) {
             auto const num_bindings = get_resource_count(resource.type_id);
-            reserveBindings(
-                set, existing_binding, num_bindings, resource_type, resource.name);
+            reserveBindings(existing_binding, num_bindings, resource_type, resource.name);
           }
         }
       };
@@ -237,7 +233,7 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
       [&](const spirv_cross::SmallVector<spirv_cross::Resource>& buffers,
           ResourceType resource_type) {
         for (auto& buffer : buffers) {
-          // validate set (Vulkan only) and binding
+          // validate set and binding
           auto const existing_set = check_has_decoration(
               buffer.id, resource_type, buffer.name, spv::DecorationDescriptorSet);
           auto const existing_binding = check_has_decoration(
@@ -246,17 +242,18 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
           // how many bindings?
           auto const num_bindings = get_resource_count(buffer.type_id);
 
-          // allocate new set and binding(s) or keep existing
-          uint32_t buffer_set{0U}, buffer_binding{0U};
-          if (existing_set == kUninitializedSet) {
-            CHECK_GE(set, 0);
-            buffer_set = static_cast<uint32_t>(set);
-          } else {
-            buffer_set = existing_set;
-          }
+          // No shader declares an explicit set, so this is always the sentinel
+          // and the resource always lands in kDescriptorSet. Assert instead of
+          // branching, so that a shader which does declare one fails loudly
+          // rather than taking a path nothing exercises.
+          CHECK_EQ(existing_set, kUninitializedSet)
+              << "    " << resource_type_to_string(resource_type) << " '" << buffer.name
+              << "' declares an explicit descriptor set, which is not supported";
+
+          // allocate new binding(s) or keep existing
+          uint32_t buffer_binding{0U};
           if (existing_binding == kUninitializedBinding) {
-            buffer_binding =
-                allocateBindings(set, num_bindings, resource_type, buffer.name);
+            buffer_binding = allocateBindings(num_bindings, resource_type, buffer.name);
           } else {
             buffer_binding = existing_binding;
           }
@@ -266,7 +263,7 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
                             resource_type,
                             buffer.name,
                             spv::DecorationDescriptorSet,
-                            buffer_set);
+                            kDescriptorSet);
           update_decoration(buffer.id,
                             resource_type,
                             buffer.name,
@@ -279,7 +276,7 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
           uint32_t buffer_member_count = buffer_type.member_types.size();
 
           // and store in reflection
-          int reflection_set = static_cast<int>(buffer_set);
+          int reflection_set = static_cast<int>(kDescriptorSet);
           if (resource_type == ResourceType::kShaderStorageBuffer) {
             reflection.addShaderStorageBuffer(
                 buffer.name, reflection_set, buffer_binding, buffer_size);
@@ -392,17 +389,16 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
           // how many bindings?
           auto const num_bindings = get_resource_count(resource.type_id);
 
-          // allocate new set and binding(s) or keep existing
-          uint32_t uniform_set{0U}, uniform_binding{0U};
-          if (existing_set == kUninitializedSet) {
-            CHECK_GE(set, 0);
-            uniform_set = static_cast<uint32_t>(set);
-          } else {
-            uniform_set = existing_set;
-          }
+          // see the equivalent assertion in the buffer case above
+          CHECK_EQ(existing_set, kUninitializedSet)
+              << "    " << resource_type_to_string(resource_type) << " '" << resource.name
+              << "' declares an explicit descriptor set, which is not supported";
+
+          // allocate new binding(s) or keep existing
+          uint32_t uniform_binding{0U};
           if (existing_binding == kUninitializedBinding) {
             uniform_binding =
-                allocateBindings(set, num_bindings, resource_type, resource.name);
+                allocateBindings(num_bindings, resource_type, resource.name);
           } else {
             uniform_binding = existing_binding;
           }
@@ -419,7 +415,7 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
                             resource_type,
                             resource.name,
                             spv::DecorationDescriptorSet,
-                            uniform_set);
+                            kDescriptorSet);
           update_decoration(resource.id,
                             resource_type,
                             resource.name,
@@ -427,7 +423,7 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
                             uniform_binding);
 
           // and store in reflection
-          int reflection_set = static_cast<int>(uniform_set);
+          int reflection_set = static_cast<int>(kDescriptorSet);
           if (resource_type == ResourceType::kSampledImage) {
             reflection.addSampler(
                 resource.name, reflection_set, uniform_binding, num_bindings);
@@ -468,34 +464,20 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
   CHECK_EQ(resources.subpass_inputs.size(), 0U);
 }
 
-ShaderRedecorator::ReservedBindings& ShaderRedecorator::getReservedBindings(
-    int set,
-    ResourceType resource_type) {
-  // otherwise we're in in Vulkan mode, and all the bindings are in one map per set
-  // find or create an entry for this set and return it
-  auto const itr = reserved_vulkan_bindings_.try_emplace(set, ReservedBindings()).first;
-  CHECK(itr != reserved_vulkan_bindings_.end());
-  return (*itr).second;
-}
-
-void ShaderRedecorator::reserveBindings(int set,
-                                        uint32_t first_binding,
+void ShaderRedecorator::reserveBindings(uint32_t first_binding,
                                         uint32_t num_bindings,
                                         ResourceType resource_type,
                                         const std::string& resource_name) {
   // will the whole range fit?
   CHECK_LE(first_binding + num_bindings, kMaxBindingsPerSet)
-      << "Binding overflow (set " << set
+      << "Binding overflow (set " << kDescriptorSet
       << ", " + resource_type_to_string(resource_type) + " '" << resource_name
       << "', shader '" << shader_name_ << "')";
-
-  // find or create the reserved bindings map for this set
-  auto& reserved_bindings = getReservedBindings(set, resource_type);
 
   // reserve the range, unless there's a clash
   for (uint32_t i = first_binding; i < first_binding + num_bindings; i++) {
     ReservedBindingEntry new_entry{resource_type, resource_name, i - first_binding};
-    auto const [itr, inserted] = reserved_bindings.try_emplace(i, new_entry);
+    auto const [itr, inserted] = reserved_bindings_.try_emplace(i, new_entry);
     if (!inserted && new_entry != itr->second) {
       std::string range_msg = (num_bindings > 1u)
                                   ? "in range " + std::to_string(first_binding) + " to " +
@@ -504,41 +486,37 @@ void ShaderRedecorator::reserveBindings(int set,
       auto const existing_type = std::get<0>(itr->second);
       auto const existing_name = std::get<1>(itr->second);
       uint32_t max_index{0u};
-      for (auto const& entry : reserved_bindings) {
+      for (auto const& entry : reserved_bindings_) {
         max_index = std::max(max_index, std::get<2>(entry.second));
       }
       auto const first_available_binding = first_binding + max_index + 1;
-      THROW_RUNTIME_EX("Binding clash " + range_msg + ", Set " + std::to_string(set) +
-                       ", Shader '" + shader_name_ + "', " +
-                       resource_type_to_string(resource_type) + " '" + resource_name +
-                       "' clashes with " + resource_type_to_string(existing_type) + " '" +
-                       existing_name + "'. Next available binding is " +
-                       std::to_string(first_available_binding));
+      THROW_RUNTIME_EX(
+          "Binding clash " + range_msg + ", Set " + std::to_string(kDescriptorSet) +
+          ", Shader '" + shader_name_ + "', " + resource_type_to_string(resource_type) +
+          " '" + resource_name + "' clashes with " +
+          resource_type_to_string(existing_type) + " '" + existing_name +
+          "'. Next available binding is " + std::to_string(first_available_binding));
     }
   }
 }
 
-uint32_t ShaderRedecorator::allocateBindings(int set,
-                                             uint32_t num_bindings,
+uint32_t ShaderRedecorator::allocateBindings(uint32_t num_bindings,
                                              ResourceType resource_type,
                                              const std::string& resource_name) {
-  // find or create the reserved bindings map for this set
-  auto& reserved_bindings = getReservedBindings(set, resource_type);
-
   // find available binding range
   uint32_t first_binding{0U};
   while (first_binding < kMaxBindingsPerSet) {
     // will the whole range fit?
     CHECK_LE(first_binding + num_bindings, kMaxBindingsPerSet)
-        << "Binding overflow (set " << set
+        << "Binding overflow (set " << kDescriptorSet
         << ", " + resource_type_to_string(resource_type) + " '" << resource_name
         << "', shader '" << shader_name_ << "')";
 
     // check the required range of bindings is available
     bool range_available{true};
     uint32_t first_unavailable{0U};
-    auto const itr = reserved_bindings.lower_bound(first_binding);
-    if (itr != reserved_bindings.end() && itr->first < first_binding + num_bindings) {
+    auto const itr = reserved_bindings_.lower_bound(first_binding);
+    if (itr != reserved_bindings_.end() && itr->first < first_binding + num_bindings) {
       range_available = false;
       first_unavailable = itr->first;
     }
@@ -547,7 +525,7 @@ uint32_t ShaderRedecorator::allocateBindings(int set,
     // otherwise restart search after first unavailable
     if (range_available) {
       for (uint32_t j = first_binding; j < first_binding + num_bindings; j++) {
-        CHECK(reserved_bindings
+        CHECK(reserved_bindings_
                   .try_emplace(
                       j, std::make_tuple(resource_type, resource_name, j - first_binding))
                   .second);
@@ -560,7 +538,7 @@ uint32_t ShaderRedecorator::allocateBindings(int set,
 
   // unavailable
   THROW_RUNTIME_EX("Failed to allocate " + std::to_string(num_bindings) +
-                   " bindings (set " + std::to_string(set) + ", " +
+                   " bindings (set " + std::to_string(kDescriptorSet) + ", " +
                    resource_type_to_string(resource_type) + " '" + resource_name +
                    "', shader '" + shader_name_ + "')");
 }
