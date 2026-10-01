@@ -1135,124 +1135,170 @@ void ShaderManager::processOperators(Builder& builder,
 // encapsulates both the kReplaceFuncCall operator and subroutines. The map is applied
 // textually to the assembled source, so glslang is handed GLSL that already calls the
 // right functions.
-std::unique_ptr<ShaderCache> ShaderManager::buildSpirv(
-    Builder& builder,
-    ShaderRedecorator* shader_redecorator,
-    bool save_artifacts) const {
+//
+// Every stage of the material is assembled first and then compiled in one call, so
+// that glslang can assign bindings and locations consistently across the stages
+// instead of each stage being resolved as though it were alone.
+ShaderCacheShPtrVector ShaderManager::buildSpirv(BuilderUqPtrVector& builders,
+                                                 ShaderRedecorator* shader_redecorator,
+                                                 bool save_artifacts) const {
 #if GENERATE_COMPILE_STATS
   auto start_time = timer_start();
+  std::vector<uint64_t> operator_times;
+  operator_times.reserve(builders.size());
 #endif
-  // Seed a unified function call replacement map to handle both subroutine
-  // call rebinding and plain replacement operators. This can all be cleaned up once
-  // we commit to Spirv exclusively and ditch the pure GLSL path.
-  SubroutineMap func_rebind_map(builder.subroutine_map_.begin(),
-                                builder.subroutine_map_.end());
 
-  // Build GLSL string and function bindings
-  // TODO(scb): multi-string support in glslangWrapper
-  processOperators(builder, &func_rebind_map, false);
+  // Assemble the GLSL for every stage before compiling any of it, since glslang needs
+  // to see the whole material at once to assign its I/O across the stages
+  std::vector<GlslangWrapper::StageSource> stage_sources;
+  stage_sources.reserve(builders.size());
+  for (auto& builder_ptr : builders) {
+    auto& builder = *builder_ptr;
+#if GENERATE_COMPILE_STATS
+    start_time = timer_start();
+#endif
+    // Seed a unified function call replacement map to handle both subroutine
+    // call rebinding and plain replacement operators. This can all be cleaned up once
+    // we commit to Spirv exclusively and ditch the pure GLSL path.
+    SubroutineMap func_rebind_map(builder.subroutine_map_.begin(),
+                                  builder.subroutine_map_.end());
 
-  // Apply the bindings to the assembled source, before glslang ever sees it
-  rebindSubroutineCalls(builder, func_rebind_map);
+    // Build GLSL string and function bindings
+    // TODO(scb): multi-string support in glslangWrapper
+    processOperators(builder, &func_rebind_map, false);
+
+    // Apply the bindings to the assembled source, before glslang ever sees it
+    rebindSubroutineCalls(builder, func_rebind_map);
 
 #if GENERATE_COMPILE_STATS
-  auto operator_time = timer_stop_microseconds(start_time);
+    operator_times.push_back(timer_stop_microseconds(start_time));
+#endif
+
+    stage_sources.push_back({library_item_to_filename(builder.root_item_),
+                             builder.processed_code_,
+                             builder.entry_point_,
+                             builder.shader_stage_});
+  }
+
+#if GENERATE_COMPILE_STATS
   start_time = timer_start();
 #endif
 
   // Generate spirv
-  std::string pretty_name = library_item_to_filename(builder.root_item_);
-  auto compile_result = glslang_wrapper_->glslToSpirv(
-      pretty_name, builder.processed_code_, builder.entry_point_, builder.shader_stage_);
+  auto compile_results = glslang_wrapper_->glslToSpirv(stage_sources);
+  CHECK_EQ(compile_results.stages.size(), builders.size());
 
 #if GENERATE_COMPILE_STATS
+  // One compile now covers the whole material, so there is no per stage figure to
+  // report and each is charged the same total
   auto glsl_time = timer_stop_microseconds(start_time);
 #endif
 
-  // default reflection
-  ShaderReflection reflection;
+  ShaderCacheShPtrVector caches;
+  caches.reserve(builders.size());
 
-  // populate reflection here?
-  if (shader_redecorator && !compile_result.first.empty()) {
-    // build reflection
-    shader_redecorator->redecorate(
-        compile_result.first, reflection, builder.getTemplateName());
+  for (size_t stage_index = 0; stage_index < builders.size(); ++stage_index) {
+    auto& builder = *builders[stage_index];
+    auto& compile_result = compile_results.stages[stage_index];
+    auto const& pretty_name = stage_sources[stage_index].pretty_name;
+    // Whether to save this stage's artifacts, which a failure forces on regardless of
+    // what the caller asked for. Per stage, so one failure does not alter the others.
+    auto stage_save_artifacts = save_artifacts;
 
-    // validate presence of specified external uniform buffers
-    for (auto const& name : builder.external_uniform_buffer_names_) {
-      CHECK(reflection.getUniformBufferBinding(name) >= 0)
-          << "Shader '" << builder.getTemplateName()
-          << "' does not contain specified external uniform buffer '" << name << "'";
+    // default reflection
+    ShaderReflection reflection;
+
+    // populate reflection here?
+    if (shader_redecorator && !compile_result.first.empty()) {
+      // build reflection
+      shader_redecorator->redecorate(
+          compile_result.first, reflection, builder.getTemplateName());
+
+      // validate presence of specified external uniform buffers
+      for (auto const& name : builder.external_uniform_buffer_names_) {
+        CHECK(reflection.getUniformBufferBinding(name) >= 0)
+            << "Shader '" << builder.getTemplateName()
+            << "' does not contain specified external uniform buffer '" << name << "'";
+      }
     }
-  }
 
 #if GENERATE_COMPILE_STATS
-  g_stats_reporter.addBuildSpirvStats(
-      builder.getShaderStage(), builder.getTemplateName(), operator_time, glsl_time);
+    g_stats_reporter.addBuildSpirvStats(builder.getShaderStage(),
+                                        builder.getTemplateName(),
+                                        operator_times[stage_index],
+                                        glsl_time);
 #endif
 
-  spirv_t opt_spirv;
+    spirv_t opt_spirv;
 
-  spirv_t spirv;
-  // Check if the spirv blob is empty
-  if (!compile_result.first.empty()) {
-    // TODO(scb): formalize spirv-opt pass / reflection
+    spirv_t spirv;
+    // Check if the spirv blob is empty
+    if (!compile_result.first.empty()) {
+      // TODO(scb): formalize spirv-opt pass / reflection
 #if USE_SPIRV_OPT
-    // TODO(scb): decide if we want to keep both the vanilla and optimized spirv around.
-    // For now we only keep one, and just return vanilla vs optimized based on the
-    // build flag.
-    // Will resolve this with formal support for spirv-opt [BE-2779]
-    spirv = optimize_spirv(std::move(compile_result.first));
+      // TODO(scb): decide if we want to keep both the vanilla and optimized spirv
+      // around. For now we only keep one, and just return vanilla vs optimized based on
+      // the build flag.
+      // Will resolve this with formal support for spirv-opt [BE-2779]
+      spirv = optimize_spirv(std::move(compile_result.first));
 #else
-    spirv = std::move(compile_result.first);
+      spirv = std::move(compile_result.first);
 #endif
-  } else {
-    // Write all artifacts on error with debug builds
-    save_artifacts = true;
-  }
-
-  // Save artifacts
-  if (can_save_artifacts_) {
-    ShaderArtifactTypeBits artifacts_to_save;
-
-    if (save_artifacts ||
-        any_bits_set(builder.requirements_ & Builder::Requirements::kSaveArtifacts)) {
-      artifacts_to_save = ShaderArtifactTypeBits::kAll;
     } else {
-      artifacts_to_save = always_save_artifacts_;
+      // Write all artifacts on error with debug builds
+      stage_save_artifacts = true;
     }
 
-    if (artifacts_to_save) {
+    // Save artifacts
+    if (can_save_artifacts_) {
+      ShaderArtifactTypeBits artifacts_to_save;
+
+      if (stage_save_artifacts ||
+          any_bits_set(builder.requirements_ & Builder::Requirements::kSaveArtifacts)) {
+        artifacts_to_save = ShaderArtifactTypeBits::kAll;
+      } else {
+        artifacts_to_save = always_save_artifacts_;
+      }
+
+      if (artifacts_to_save) {
 #if GENERATE_COMPILE_STATS
-      static bool did_warn = false;
-      if (!did_warn) {
-        LOG(ERROR) << "Shader artifacts and GENERATE_COMPILE_STATS logging enabled. "
-                      "Skipping shader artifact save";
-        did_warn = true;
-      }
+        static bool did_warn = false;
+        if (!did_warn) {
+          LOG(ERROR) << "Shader artifacts and GENERATE_COMPILE_STATS logging enabled. "
+                        "Skipping shader artifact save";
+          did_warn = true;
+        }
 #else
-      auto basename = library_item_to_filename(builder.root_item_);
-      if (ShaderArtifactTypeBits::kBuilder & artifacts_to_save) {
-        serializeBuilder(builder, basename);
-      }
+        auto basename = library_item_to_filename(builder.root_item_);
+        if (ShaderArtifactTypeBits::kBuilder & artifacts_to_save) {
+          serializeBuilder(builder, basename);
+        }
 
-      write_spirv_artifacts(builder.processed_code_,
-                            spirv,
-                            opt_spirv,
-                            reflection,
-                            basename,
-                            artifacts_to_save);
+        write_spirv_artifacts(builder.processed_code_,
+                              spirv,
+                              opt_spirv,
+                              reflection,
+                              basename,
+                              artifacts_to_save);
 #endif
+      }
     }
-  }
 
-  // Check if the spirv is empty. We do this last so we can save any useful artifacts
-  // for debugging first. CompileResult should contain useful error log info, but handle
-  // the empty case too.
-  RUNTIME_EX_ASSERT(!spirv.empty(),
-                    compile_result.second.empty()
-                        ? "Error generating Spir-V for \"" + pretty_name + "\""
-                        : compile_result.second);
+    // Check if the spirv is empty. We do this last so we can save any useful artifacts
+    // for debugging first.
+    if (spirv.empty()) {
+      // CompileResult should contain useful error log info, but handle the empty case
+      // too. A failure anywhere in the material stops every stage of it, so the reason
+      // may belong to a stage other than this one.
+      std::string error_message = compile_result.second;
+      if (error_message.empty()) {
+        error_message = compile_results.material_error;
+      }
+      if (error_message.empty()) {
+        error_message = "Error generating Spir-V for \"" + pretty_name + "\"";
+      }
+      RUNTIME_EX_ASSERT(false, error_message);
+    }
 
 #if 0
   // print cache size
@@ -1261,15 +1307,18 @@ std::unique_ptr<ShaderCache> ShaderManager::buildSpirv(
   std::cout << "  glsl:     " << builder.cache_.glsl.size() << "\n";
 #endif
 
-  return std::make_unique<ShaderCache>(
-      std::move(spirv),
-      std::move(builder.processed_code_),
-      std::move(reflection),
-      builder.shader_stage_,
-      builder.entry_point_.empty() ? "main" : std::move(builder.entry_point_),
-      library_item_to_filename(builder.root_item_),
-      std::move(builder.external_uniform_buffer_names_),
-      builder.raytracing_hit_group_index_);
+    caches.push_back(std::make_unique<ShaderCache>(
+        std::move(spirv),
+        std::move(builder.processed_code_),
+        std::move(reflection),
+        builder.shader_stage_,
+        builder.entry_point_.empty() ? "main" : std::move(builder.entry_point_),
+        library_item_to_filename(builder.root_item_),
+        std::move(builder.external_uniform_buffer_names_),
+        builder.raytracing_hit_group_index_));
+  }
+
+  return caches;
 }
 
 namespace {
@@ -1346,18 +1395,17 @@ ShaderCacheShPtrVector ShaderManager::createCacheVector(BuilderUqPtrVector&& bui
   std::unordered_map<std::string, std::pair<ShaderReflection::ItemInfo, std::string>>
       ubo_duplicates_map, ssbo_duplicates_map;
 
-  ShaderCacheShPtrVector caches;
 #if GENERATE_COMPILE_STATS
   auto start_time = timer_start();
 #endif
-  for (auto& builder : builders) {
-    // now compile from a builder to a cache
-    caches.push_back(buildSpirv(*builder, &shader_redecorator, save_artifacts));
+  // now compile the builders to caches, all of the material's stages together
+  auto caches = buildSpirv(builders, &shader_redecorator, save_artifacts);
 
+  for (size_t stage_index = 0; stage_index < builders.size(); ++stage_index) {
     // reject duplicate UBO or SSBO attr names across shader stages
     // unless their buffer is shared (ItemInfo is identical)
-    auto const& template_name = builder->getTemplateName();
-    auto const& reflection = caches.back()->getReflection();
+    auto const& template_name = builders[stage_index]->getTemplateName();
+    auto const& reflection = caches[stage_index]->getReflection();
     auto cache_ubo_attr_names = reflection.getAllUniformBufferAttrNames();
     auto cache_ssbo_attr_names = reflection.getAllShaderStorageBufferAttrNames();
     for (auto const& name : cache_ubo_attr_names) {
@@ -1398,8 +1446,13 @@ ShaderCacheShPtr ShaderManager::createCache(BuilderUqPtr&& builder,
   auto shader_name = builder->getTemplateName();
 #endif
 
-  // now compile from a builder to a cache
-  auto rtn = buildSpirv(*builder, nullptr, save_artifacts);
+  // now compile from a builder to a cache. A lone builder is still a whole material as
+  // far as the compiler is concerned, so it goes through the same path.
+  BuilderUqPtrVector builders;
+  builders.push_back(std::move(builder));
+  auto caches = buildSpirv(builders, nullptr, save_artifacts);
+  CHECK_EQ(caches.size(), 1u);
+  auto rtn = std::move(caches.front());
 
 #if GENERATE_COMPILE_STATS
   auto cache_time = timer_stop_microseconds(start_time);

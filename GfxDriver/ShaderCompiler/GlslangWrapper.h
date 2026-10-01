@@ -7,6 +7,7 @@
 
 #include <set>
 #include <string>
+#include <vector>
 
 #include <glslang/Public/ShaderLang.h>
 
@@ -43,13 +44,32 @@ class GlslangWrapper {
  public:
   using CompileResult = std::pair<spirv_t, std::string>;
 
+  // One stage's worth of input to a material's compile
+  struct StageSource {
+    std::string pretty_name;
+    std::string source;
+    std::string entry_point;
+    ShaderStage shader_stage;
+  };
+
+  struct CompileResults {
+    // One per input stage, in the order given
+    std::vector<CompileResult> stages;
+    // A failure in any one stage stops the whole material, so this carries the reason
+    // for the benefit of the stages that had nothing wrong with them
+    std::string material_error;
+  };
+
   explicit GlslangWrapper(const Library& library);
   ~GlslangWrapper();
 
-  CompileResult glslToSpirv(const std::string& pretty_name,
-                            const std::string& source,
-                            const std::string& entry_point,
-                            const ShaderStage shader_stage);
+  // Compiles every stage of one material in a single call. The stages get a glslang
+  // program each, because a material may hold two shaders of the same stage and one
+  // program has room for only one intermediate per stage. They do share a single I/O
+  // resolver, which is the only thing here that sees the whole material, and so the
+  // only place bindings can be assigned consistently across it.
+  CompileResults glslToSpirv(const std::vector<StageSource>& stages);
+
   GlslangWrapper() = delete;
   GlslangWrapper(const GlslangWrapper&) = delete;
   GlslangWrapper& operator=(const GlslangWrapper&) = delete;
