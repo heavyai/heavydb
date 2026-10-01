@@ -9,6 +9,8 @@
 // TODO(scb) std::filesystem all the things
 #include <pwd.h>
 
+#include <algorithm>
+#include <cctype>
 #include <fstream>
 #include <functional>
 #include <utility>
@@ -633,6 +635,68 @@ namespace {
 using str_itr = std::string::iterator;
 using str_itr_range = boost::iterator_range<str_itr>;
 
+bool is_identifier_char(char c) {
+  return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+}
+
+// The identifier immediately before `pos`, ignoring whitespace. Empty if whatever
+// precedes it is punctuation or an operator.
+std::string preceding_identifier(const std::string& code_str, size_t pos) {
+  while (pos > 0 && std::isspace(static_cast<unsigned char>(code_str[pos - 1])) != 0) {
+    --pos;
+  }
+  auto const end = pos;
+  while (pos > 0 && is_identifier_char(code_str[pos - 1])) {
+    --pos;
+  }
+  return code_str.substr(pos, end - pos);
+}
+
+// Every place `func_name` is named and then opens an argument or parameter list.
+//
+// A definition names its return type immediately before the function name and
+// nothing else does, bar a `return`. That is the whole test. Neither the parameter
+// list nor what follows it can be relied on, because a list may carry preprocessor
+// directives: quantitativeScaleTemplate.vert picks the type of the last parameter
+// with an #if, and in one case leaves the body on the far side of the #endif.
+struct FunctionReference {
+  size_t position;
+  bool is_definition;
+};
+
+std::vector<FunctionReference> find_function_references(const std::string& code_str,
+                                                        const std::string& func_name) {
+  // Keywords that can stand where a return type otherwise would
+  static const std::set<std::string> kNotATypeName = {"return", "else", "do", "case"};
+
+  std::vector<FunctionReference> references;
+  for (auto pos = code_str.find(func_name); pos != std::string::npos;
+       pos = code_str.find(func_name, pos + func_name.size())) {
+    if (pos > 0 && is_identifier_char(code_str[pos - 1])) {
+      continue;  // a longer name that merely ends with this one
+    }
+    auto after = pos + func_name.size();
+    while (after < code_str.size() &&
+           (code_str[after] == ' ' || code_str[after] == '\t')) {
+      ++after;
+    }
+    if (after >= code_str.size() || code_str[after] != '(') {
+      continue;  // named but not called, so nothing to retarget
+    }
+    auto const preceding = preceding_identifier(code_str, pos);
+    references.push_back(
+        {pos, !preceding.empty() && kNotATypeName.count(preceding) == 0});
+  }
+  return references;
+}
+
+bool has_function_definition(const std::string& code_str, const std::string& func_name) {
+  auto const references = find_function_references(code_str, func_name);
+  return std::any_of(references.begin(),
+                     references.end(),
+                     [](const FunctionReference& ref) { return ref.is_definition; });
+}
+
 str_itr_range get_function_bounds(std::string& code_str, const std::string& func_name) {
   std::string regex_str = R"(\h*\w+\h+)" + func_name + R"(\h*\([\w\h\v,]*\)\h*\v*\{)";
   boost::regex func_signature_regex(regex_str);
@@ -667,6 +731,31 @@ str_itr_range get_function_bounds(std::string& code_str, const std::string& func
   }
 
   return str_itr_range(signature_range.begin(), last_itr);
+}
+
+// Finds every call to `func_name`, leaving its own definition alone so that
+// retargeting the calls leaves the definition behind. glslang drops it during dead
+// code elimination once nothing reaches it, which is what the AST pass this replaced
+// relied on too.
+std::vector<size_t> find_call_sites(const std::string& code_str,
+                                    const std::string& func_name) {
+  std::vector<size_t> call_positions;
+  for (auto const& reference : find_function_references(code_str, func_name)) {
+    if (!reference.is_definition) {
+      call_positions.push_back(reference.position);
+    }
+  }
+  return call_positions;
+}
+
+void replace_call_sites(std::string& code_str,
+                        const std::vector<size_t>& call_positions,
+                        size_t call_name_length,
+                        const std::string& target_name) {
+  // Back to front, so each replacement leaves the earlier offsets valid
+  for (auto itr = call_positions.rbegin(); itr != call_positions.rend(); ++itr) {
+    code_str.replace(*itr, call_name_length, target_name);
+  }
 }
 
 // TODO: GLSL version constant. See also spirv-opt and spirv-cross usages
@@ -820,31 +909,24 @@ const std::string& ShaderManager::getTemplate(const std::string& internal_path) 
   return library_->get(internal_path).code;
 }
 
-std::string ShaderManager::buildExtensionAndIncludesString(Builder& builder) const {
-  // Build sets of unique extensions and includes used by all templates in Builder
-  std::set<uint32_t> extensions_set;      // unique extensions (order irrelevant)
-  std::set<uint32_t> includes_set;        // used to maintain uniqueness
-  std::vector<uint32_t> includes_vector;  // includes in depth first order
-
-  // Get the unique extensions and includes for all Library::Items referenced
-  // by the builder
-
-  std::string extension_and_include_str{spirv_shader_header};
+ShaderManager::TemplateDependencies ShaderManager::collectTemplateDependencies(
+    const Builder& builder) const {
+  TemplateDependencies dependencies;
+  std::set<uint32_t> seen_includes;  // used to maintain uniqueness
 
   // Recursive function to process a Library::Item
   std::function<void(uint32_t)> process_item = [&](uint32_t item_index) {
     auto const& item = library_->get(item_index);
-    extensions_set.insert(item.extension_indices.begin(), item.extension_indices.end());
+    dependencies.extension_indices.insert(item.extension_indices.begin(),
+                                          item.extension_indices.end());
 
     for (auto include_index : item.include_indices) {
-      auto result = includes_set.insert(include_index);
-      if (result.second) {
+      if (seen_includes.insert(include_index).second) {
         // Get include name from dictionary
         auto const& dict_entry = library_->getInclude(include_index);
-        // Call self on new Item
+        // Call self on new Item, so an include's own includes precede it
         process_item(dict_entry.item->index);
-        // Now add this index to vector
-        includes_vector.push_back(include_index);
+        dependencies.include_indices.push_back(include_index);
       }
     }
   };
@@ -853,19 +935,73 @@ std::string ShaderManager::buildExtensionAndIncludesString(Builder& builder) con
   for (auto index : builder.item_indices_) {
     process_item(index);
   }
+  return dependencies;
+}
 
-  if (!extensions_set.empty()) {
-    for (auto index : extensions_set) {
-      absl::StrAppend(&extension_and_include_str, library_->getExtension(index).str);
-    }
+std::string ShaderManager::buildExtensionAndIncludesString(Builder& builder) const {
+  auto const dependencies = collectTemplateDependencies(builder);
+
+  std::string extension_and_include_str{spirv_shader_header};
+  for (auto index : dependencies.extension_indices) {
+    absl::StrAppend(&extension_and_include_str, library_->getExtension(index).str);
   }
-
-  if (!includes_vector.empty()) {
-    for (auto index : includes_vector) {
-      absl::StrAppend(&extension_and_include_str, library_->getInclude(index).str);
-    }
+  for (auto index : dependencies.include_indices) {
+    absl::StrAppend(&extension_and_include_str, library_->getInclude(index).str);
   }
   return extension_and_include_str;
+}
+
+// Retargets subroutine and function-call bindings in the assembled GLSL, replacing
+// the glslang AST pass that used to do this after parsing.
+//
+// A binding only takes effect if its target is actually defined, which is how an
+// optional binding stays a no-op when its target was never generated. The assembled
+// source holds #include directives rather than the included text, so targets living
+// in an include, as the colour conversion subroutines do, have to be looked up
+// through the Library instead.
+void ShaderManager::rebindSubroutineCalls(Builder& builder,
+                                          const SubroutineMap& rebind_map) const {
+  if (rebind_map.empty()) {
+    return;
+  }
+
+  auto& final_glsl = builder.processed_code_;
+
+  std::vector<const std::string*> include_sources;
+  for (auto index : collectTemplateDependencies(builder).include_indices) {
+    include_sources.push_back(&library_->getInclude(index).item->code);
+  }
+
+  auto const is_defined = [&](const std::string& target_name) {
+    return has_function_definition(final_glsl, target_name) ||
+           std::any_of(include_sources.begin(),
+                       include_sources.end(),
+                       [&target_name](const std::string* source) {
+                         return has_function_definition(*source, target_name);
+                       });
+  };
+
+  for (auto const& [call_name, binding] : rebind_map) {
+    auto const& [target_name, is_required] = binding;
+
+    // The AST pass this replaced walked call sites rather than bindings, so a binding
+    // nothing calls was never checked. Keep that: an unused one must not fail a build
+    auto const call_positions = find_call_sites(final_glsl, call_name);
+    if (call_positions.empty()) {
+      continue;
+    }
+
+    // An empty target name would make the definition regex match any function at all,
+    // so reject it here rather than rebinding every call to the first one found
+    if (target_name.empty() || !is_defined(target_name)) {
+      RUNTIME_EX_ASSERT(
+          !is_required,
+          "Failed to rebind required shader function \'" + target_name + "\'");
+      continue;
+    }
+
+    replace_call_sites(final_glsl, call_positions, call_name.size(), target_name);
+  }
 }
 
 void ShaderManager::processOperators(Builder& builder,
@@ -996,9 +1132,9 @@ void ShaderManager::processOperators(Builder& builder,
 }
 
 // For Spirv, we generate a Glsl string and a function call replace map. This
-// encapsulates both the kReplaceFuncCall operator and subroutines. These get passed
-// to glslang which first parses the GLSL into parse trees. We then traverse those
-// replacing function call nodes with their new targets.
+// encapsulates both the kReplaceFuncCall operator and subroutines. The map is applied
+// textually to the assembled source, so glslang is handed GLSL that already calls the
+// right functions.
 std::unique_ptr<ShaderCache> ShaderManager::buildSpirv(
     Builder& builder,
     ShaderRedecorator* shader_redecorator,
@@ -1016,6 +1152,9 @@ std::unique_ptr<ShaderCache> ShaderManager::buildSpirv(
   // TODO(scb): multi-string support in glslangWrapper
   processOperators(builder, &func_rebind_map, false);
 
+  // Apply the bindings to the assembled source, before glslang ever sees it
+  rebindSubroutineCalls(builder, func_rebind_map);
+
 #if GENERATE_COMPILE_STATS
   auto operator_time = timer_stop_microseconds(start_time);
   start_time = timer_start();
@@ -1023,11 +1162,8 @@ std::unique_ptr<ShaderCache> ShaderManager::buildSpirv(
 
   // Generate spirv
   std::string pretty_name = library_item_to_filename(builder.root_item_);
-  auto compile_result = glslang_wrapper_->glslToSpirv(pretty_name,
-                                                      builder.processed_code_,
-                                                      builder.entry_point_,
-                                                      builder.shader_stage_,
-                                                      func_rebind_map);
+  auto compile_result = glslang_wrapper_->glslToSpirv(
+      pretty_name, builder.processed_code_, builder.entry_point_, builder.shader_stage_);
 
 #if GENERATE_COMPILE_STATS
   auto glsl_time = timer_stop_microseconds(start_time);

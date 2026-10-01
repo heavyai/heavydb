@@ -1088,7 +1088,6 @@ function install_vulkan() {
   # glslang 14 tightened which headers it installs, so the destinations may not exist
   mkdir -p ${ARCH}/include/glslang/Include
   mkdir -p ${ARCH}/include/glslang/MachineIndependent
-  \cp source/glslang/glslang/Include/InfoSink.h ${ARCH}/include/glslang/Include
   \cp source/glslang/glslang/Include/intermediate.h ${ARCH}/include/glslang/Include
   \cp source/glslang/glslang/Include/Common.h ${ARCH}/include/glslang/Include
   \cp source/glslang/glslang/Include/arrays.h ${ARCH}/include/glslang/Include

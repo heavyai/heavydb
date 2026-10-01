@@ -49,8 +49,7 @@ class GlslangWrapper {
   CompileResult glslToSpirv(const std::string& pretty_name,
                             const std::string& source,
                             const std::string& entry_point,
-                            const ShaderStage shader_stage,
-                            const SubroutineMap& func_rebind_map);
+                            const ShaderStage shader_stage);
   GlslangWrapper() = delete;
   GlslangWrapper(const GlslangWrapper&) = delete;
   GlslangWrapper& operator=(const GlslangWrapper&) = delete;

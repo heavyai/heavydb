@@ -22,7 +22,6 @@
 #include "GfxDriver/ShaderCompiler/Library.h"
 #include "GfxDriver/ShaderCompiler/ResourceLimits.h"
 #include "GfxDriver/ShaderCompiler/ShaderRedecorator.h"
-#include "GfxDriver/ShaderCompiler/TShaderIRUtils.h"
 
 namespace gfx {
 
@@ -274,8 +273,7 @@ GlslangWrapper::CompileResult GlslangWrapper::glslToSpirv(
     const std::string& pretty_name,
     const std::string& shader_source,
     const std::string& entry_point,
-    const ShaderStage in_shader_stage,
-    const SubroutineMap& func_rebind_map) {
+    const ShaderStage in_shader_stage) {
   // These may become function parameters in the future so using constexpr
   // instead of #defines
   constexpr bool dump_AST = false;
@@ -323,10 +321,6 @@ GlslangWrapper::CompileResult GlslangWrapper::glslToSpirv(
                     "End Shader Source\n";
 #endif
     return {std::move(rtn_spirv), std::move(error_string)};
-  }
-
-  if (!func_rebind_map.empty()) {
-    rebind_tshader_function_calls(*shader, func_rebind_map);
   }
 
   auto program = std::make_unique<glslang::TProgram>();
