@@ -8,10 +8,6 @@
 #include <iomanip>
 #include <string>
 
-// spirv-cross does not have a version define
-// use glslang version as we update them together anyway
-#include <glslang/build_info.h>
-
 namespace gfx {
 
 namespace {

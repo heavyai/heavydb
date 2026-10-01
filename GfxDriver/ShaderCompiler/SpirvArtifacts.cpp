@@ -8,7 +8,7 @@
 #include <fstream>
 #include <functional>
 
-#include <glslang/SPIRV/disassemble.h>
+#include <spirv-tools/libspirv.hpp>
 
 #include <spirv_cross/spirv_glsl.hpp>
 #include <spirv_cross/spirv_parser.hpp>
@@ -109,6 +109,33 @@ void write_to_file(const std::string& filename,
   }
 }
 
+namespace {
+
+// Replaces glslang's spv::Disassemble, which came from a private header.
+// Friendly names reproduce what that one did by default, printing OpName
+// strings in place of raw result ids. The target environment has to track what
+// GlslangWrapper asks glslang to emit, or newer opcodes fail to disassemble.
+void write_disassembly(std::ostream& stream, const spirv_t& spirv) {
+  spvtools::SpirvTools tools(SPV_ENV_VULKAN_1_3);
+  tools.SetMessageConsumer([](spv_message_level_t,
+                              const char*,
+                              const spv_position_t& position,
+                              const char* message) {
+    LOG(WARNING) << "Failed to disassemble spir-v artifact at word " << position.index
+                 << ": " << message;
+  });
+
+  std::string text;
+  if (tools.Disassemble(
+          spirv,
+          &text,
+          SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES | SPV_BINARY_TO_TEXT_OPTION_INDENT)) {
+    stream << text;
+  }
+}
+
+}  // namespace
+
 void write_spirv_artifacts(const std::string& glsl_string,
                            const spirv_t& spv,
                            const spirv_t& opt_spv,
@@ -163,13 +190,13 @@ void write_spirv_artifacts(const std::string& glsl_string,
       if (ShaderArtifactTypeBits::kSpvDis & artifacts) {
         // unoptimized spirv
         std::string filename = pathed_name + ".spvdis";
-        write_to_file(filename, false, [&](auto& file) { spv::Disassemble(file, spv); });
+        write_to_file(filename, false, [&](auto& file) { write_disassembly(file, spv); });
 
         // optimized spirv
         if (!opt_spv.empty()) {
           std::string filename = pathed_name + ".opt.spvdis";
           write_to_file(
-              filename, false, [&](auto& file) { spv::Disassemble(file, opt_spv); });
+              filename, false, [&](auto& file) { write_disassembly(file, opt_spv); });
         }
       }
 
