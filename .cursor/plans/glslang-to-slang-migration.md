@@ -27,7 +27,7 @@ todos:
     content: "PR 5b: Retarget the compiler to Vulkan 1.3 / SPIR-V 1.6, split VULKAN_API_VERSION into separate instance and device-minimum constants, and normalize the VulkanPhysicalDevice version gate, which turned out to be checking 1.2 while chaining 1.3 structs. Landed as 4752a50653, no golden changed"
     status: completed
   - id: drop-private-headers
-    content: "PR 5c: After PRs 3 and 4, delete the private-header copy block from common-functions.sh and swap glslang's disassemble.h for the SPIRV-Tools disassembler"
+    content: "PR 5c: Three parts with different dependencies. Parts 1 and 2 landed as d4019d84e6, deleting the dead build_info.h include and swapping glslang's disassembler for the SPIRV-Tools one, and took the two copy lines they freed with them after those turned out to have been redundant all along. Part 3, deleting the remaining 14-header copy block from common-functions.sh, still needs PRs 3 and 4"
     status: pending
   - id: instance-1.4
     content: "PR 5d: Raise the instance to Vulkan 1.4. Now a one-line change, but a deployment decision rather than a code one: it lifts the NVIDIA driver floor from 535 to roughly R570 and gains the compiler nothing, since 1.4 also tops out at SPIR-V 1.6. Take it only if something else needs 1.4"
@@ -67,7 +67,7 @@ flowchart TD
 
 ## The gating constraint, as resolved by PR 0a
 
-**This section's original premise was wrong, and the correction re-sequences the plan.** It assumed the SDK was pinned at 1.3.275.0 *because* of the 15 hand-copied glslang private headers, and that PRs 3 and 4 both had to land before the SDK could move. The PR 0a spike disproved that: the tree now builds and runs correctly on SDK 1.4.363.0 with glslang 16.6.0, private headers and all. Total adaptation cost was two commits:
+**This section's original premise was wrong, and the correction re-sequences the plan.** It assumed the SDK was pinned at 1.3.275.0 *because* of the hand-copied glslang private headers, and that PRs 3 and 4 both had to land before the SDK could move. The PR 0a spike disproved that: the tree now builds and runs correctly on SDK 1.4.363.0 with glslang 16.6.0, private headers and all. Total adaptation cost was two commits:
 
 - `GlslangWrapper.cpp` needed `MachineIndependent/LiveTraverser.h` included ahead of `iomapper.h`, which no longer pulls in the AST types itself
 - `SpirvCrossUtils.cpp` needed new `case` arms for SPIRV-Cross base types added since 1.3.275 (`CoopVecNV`, `MeshGridProperties`, `BFloat16`, `FloatE4M3`, `FloatE5M2`, `Tensor`, `DescriptorHeapBuffer`)
@@ -77,7 +77,7 @@ flowchart TD
 What this means for the rest of the plan:
 
 - The private headers are **technical debt, not a blocker**. PRs 3 and 4 remain worth doing, because the sentinel values are derived from glslang internals and `ShaderRedecorator` is the bulk of what Slang replaces, but they no longer hold back an SDK upgrade and can be sequenced on their own merits.
-- Removing the copy block from `common-functions.sh` and dropping `glslang/SPIRV/disassemble.h` becomes a cleanup pass *after* PRs 3 and 4, tracked as PR 5c, rather than a precondition for the bump.
+- Removing the copy block from `common-functions.sh` and dropping `glslang/SPIRV/disassemble.h` becomes a cleanup pass tracked as PR 5c, rather than a precondition for the bump. Only the copy-block removal itself waits on PRs 3 and 4; the rest of 5c has since landed as d4019d84e6.
 - The bump also supplied the second thing the migration needs: `slangc` and `slang.h` are now installed in the deps prefix, so the PR 0b spike is unblocked.
 
 For the record, the two dependencies that drive PRs 3 and 4:
@@ -226,7 +226,7 @@ Two deliberate departures, both recorded in the commit message:
 
 ## PR 3 - Remove TShaderIRUtils, resolve subroutines textually
 
-Retires 3 of the 15 private headers: `Include/InfoSink.h`, `Include/intermediate.h` and `MachineIndependent/localintermediate.h`. Note it does **not** retire `MachineIndependent/LiveTraverser.h`, despite that being listed against `TShaderIRUtils` above, because PR 0a had to add a direct include of it to `GlslangWrapper.cpp`. Verify `iomapper.h` does not pull `localintermediate.h` in transitively before assuming even those three go.
+Retires at most 3 of the 14 copied headers: `Include/InfoSink.h`, `Include/intermediate.h` and `MachineIndependent/localintermediate.h`. Note it does **not** retire `MachineIndependent/LiveTraverser.h`, despite that being listed against `TShaderIRUtils` above, because PR 0a had to add a direct include of it to `GlslangWrapper.cpp`. "At most" because `iomapper.h` survives until PR 4 and probably pulls `localintermediate.h` in transitively; verify before assuming even those three go. See PR 5c for the full consumer map.
 
 Delete [GfxDriver/ShaderCompiler/TShaderIRUtils.cpp](GfxDriver/ShaderCompiler/TShaderIRUtils.cpp) and its header, and drop the `rebind_tshader_function_calls` call from `glslToSpirv`.
 
@@ -291,12 +291,47 @@ No `.reflect` golden moved, which is the expected result since reflection record
 
 ## PR 5c - Drop the private headers
 
-Pure cleanup, unblocked only once PRs 3 and 4 have removed the last consumers. Tracked separately so the debt does not get forgotten now that it no longer blocks anything.
+Pure cleanup in three parts with different dependencies. **Parts 1 and 2 landed as d4019d84e6**, taking two of the copies with them; only part 3 is gated on PRs 3 and 4.
 
-- Delete the header-copying block and the `mkdir -p` guards at `scripts/common-functions.sh:1091-1111`, and the accompanying comment at 1077-1080.
-- Replace `glslang/SPIRV/disassemble.h` in [GfxDriver/ShaderCompiler/SpirvArtifacts.cpp](GfxDriver/ShaderCompiler/SpirvArtifacts.cpp) line 11 with the SPIRV-Tools disassembler. This one is already independent of PRs 3 and 4 and could ride along with either.
+### Who actually consumes the copied headers
+
+`scripts/common-functions.sh` copied **16** files before this PR, not the 15 that earlier versions of this plan called "private headers"; the sixteenth was `build_info.h`, which is generated rather than private. Grepping for direct includes of each gave four consumers:
+
+| Consumer | Headers | Removed by |
+|---|---|---|
+| `TShaderIRUtils.cpp` | `Include/InfoSink.h`, `Include/intermediate.h`, `MachineIndependent/LiveTraverser.h`, `MachineIndependent/localintermediate.h` | PR 3 |
+| `GlslangWrapper.cpp` | `MachineIndependent/iomapper.h`, `MachineIndependent/LiveTraverser.h` | PR 4 |
+| `SpirvArtifacts.cpp` | `SPIRV/disassemble.h` | part 2, done |
+| `SpirvCrossUtils.cpp` | `build_info.h` | part 1, done |
+
+The other nine (`Common.h`, `arrays.h`, `BaseTypes.h`, `Types.h`, `PoolAlloc.h`, `SpirvIntrinsics.h`, `ConstantUnion.h`, `gl_types.h`, `reflection.h`) have no direct include anywhere in the tree and are there purely as transitive dependencies of the four above.
+
+### Part 1: delete the dead `build_info.h` include (done)
+
+`SpirvCrossUtils.cpp` included `<glslang/build_info.h>` under the comment "spirv-cross does not have a version define, use glslang version as we update them together anyway", and then used nothing from it: no `GLSLANG_VERSION_MAJOR`, no version-gating macro, no version in its output. Either the code that stamped a version was removed or it was never written. No `GLSLANG_VERSION` token appears anywhere in the tree, so this was a pure deletion, and it is the consumer no other PR would have caught.
+
+### Part 2: swap the disassembler (done)
+
+`spv::Disassemble` in [GfxDriver/ShaderCompiler/SpirvArtifacts.cpp](GfxDriver/ShaderCompiler/SpirvArtifacts.cpp) is now `spvtools::SpirvTools::Disassemble`, behind a local `write_disassembly`. `SPV_BINARY_TO_TEXT_OPTION_FRIENDLY_NAMES` reproduces glslang's default of printing `OpName` strings in place of raw result ids; `INDENT` is new and affects whitespace only.
+
+- No CMake change was needed. `FindGlslang.cmake` already appends `glslang::SPIRV-Tools` and `glslang::SPIRV-Tools-opt` to `Glslang_LIBRARIES`, and the headers share the prefix.
+- The `.spvdis` text is not byte-identical to glslang's, because it is a different disassembler. Nothing compares it: `.spvdis` is written only under the `kSpvDis` artifact bit, and the goldens the tests check are `.reflect` files.
+- Failure handling changed shape. glslang's entry point returned `void` and could not report trouble; SPIRV-Tools reports through a message consumer and a bool, so a failure now logs the word offset and leaves an empty file, `write_to_file` having already opened it. Non-fatal either way, since artifact writing is diagnostic.
+- `SPV_ENV_VULKAN_1_3` is now hardcoded in two places, here and in `optimize_spirv`, and both have to track what `GlslangWrapper` asks glslang to emit or newer opcodes fail. Worth folding into one named constant in PR 7, when the target stops being a glslang question.
+
+### Part 3: delete the copy block — needs PRs 3 and 4
+
+**14 copies remain**, down from 16. Delete the block and the two surviving `mkdir -p` guards at `scripts/common-functions.sh:1092-1109`, along with the comment at 1077-1081. `TShaderIRUtils.cpp` and `GlslangWrapper.cpp` are now the only consumers, so this needs exactly PRs 3 and 4 and nothing else.
 
 Verify by confirming a deps build with the block removed still produces a tree the renderer compiles against; the headers are copied into the prefix, so a stale prefix will mask the failure.
+
+### Resolved: glslang installs two of the sixteen itself
+
+This section previously asked whether glslang installs `build_info.h`, noting that the built prefix could not answer because our own copy writes to the same path. Answered instead by inspecting SDK trees the script never touched, for 1.3.275, 1.3.296 and 1.4.363 alike: each contains `build_info.h` and `SPIRV/disassemble.h` while its `Include/` and `MachineIndependent/` hold only glslang's own headers and none of our private copies.
+
+Those two copy lines were therefore redundant from the start, and removing them changed nothing in the prefix. That is why part 2 could drop them immediately rather than waiting for the deps-build verification part 3 needs. The `mkdir -p` for `include/glslang/SPIRV` went with them: glslang creates and populates that directory, which is how `GlslangWrapper` has always resolved `<glslang/SPIRV/GlslangToSpv.h>`, and the mkdir only ever existed to guarantee a destination for our copy of `disassemble.h`. The `Include` and `MachineIndependent` mkdirs stay, since those still receive nine and five files respectively.
+
+The corollary matters for part 3: the remaining 14 genuinely are not installed by glslang, so unlike these two, deleting their copies really will take them out of the prefix. That is the case the deps rebuild has to confirm.
 
 ## PR 5d - Raise the instance to Vulkan 1.4
 
