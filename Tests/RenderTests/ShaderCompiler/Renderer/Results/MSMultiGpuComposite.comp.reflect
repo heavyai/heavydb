@@ -19,4 +19,6 @@ uniform_buffer_attrs 4
   "shouldComp" set=0 binding=8 offset=4 size=4 array_length=-1 array_stride=-1
   "useIds" set=0 binding=8 offset=0 size=4 array_length=-1 array_stride=-1
 shader_storage_buffer_attrs 0
+push_constants 0
+push_constant_attrs 0
 fragment_output_locations 0

@@ -25,6 +25,8 @@ void ShaderReflection::clear() {
   acceleration_structures_.clear();
   uniform_buffer_attrs_.clear();
   shader_storage_buffer_attrs_.clear();
+  push_constants_.clear();
+  push_constant_attrs_.clear();
   fragment_shader_output_locations_.clear();
 }
 
@@ -98,6 +100,15 @@ void ShaderReflection::addShaderStorageBufferAttr(std::string_view name,
       name,
       {set, binding, offset, size, array_length, array_stride},
       "Shader Storage Buffer Attr");
+}
+
+void ShaderReflection::addPushConstant(std::string_view name, int offset, int size) {
+  push_constants_.insert_unless_different(name, {-1, -1, offset, size}, "Push Constant");
+}
+
+void ShaderReflection::addPushConstantAttr(std::string_view name, int offset, int size) {
+  push_constant_attrs_.insert_unless_different(
+      name, {-1, -1, offset, size}, "Push Constant Attr");
 }
 
 void ShaderReflection::addFragmentShaderOutputLocation(int location) {
@@ -219,6 +230,17 @@ const ShaderReflection::ItemInfo& ShaderReflection::getShaderStorageBufferAttrIt
   return shader_storage_buffer_attrs_.find_or_default(name);
 }
 
+const ShaderReflection::ItemInfo& ShaderReflection::getPushConstantItemInfo(
+    std::string_view name) const {
+  // Members first. The two cannot collide, GLSL not allowing a block and one of
+  // its own members to share a name, so the order is arbitrary.
+  auto const& attr = push_constant_attrs_.find_or_default(name);
+  if (attr.offset >= 0) {
+    return attr;
+  }
+  return push_constants_.find_or_default(name);
+}
+
 const ShaderReflection::NameVector ShaderReflection::getAllUniformBufferNames() const {
   NameVector names;
   for (auto const& uniform_buffer : uniform_buffers_.the_map()) {
@@ -275,6 +297,22 @@ const ShaderReflection::NameVector ShaderReflection::getAllShaderStorageBufferAt
   NameVector names;
   for (auto const& shader_storage_buffer_attr : shader_storage_buffer_attrs_.the_map()) {
     names.emplace_back(shader_storage_buffer_attr.first);
+  }
+  return names;
+}
+
+const ShaderReflection::NameVector ShaderReflection::getAllPushConstantNames() const {
+  NameVector names;
+  for (auto const& push_constant : push_constants_.the_map()) {
+    names.emplace_back(push_constant.first);
+  }
+  return names;
+}
+
+const ShaderReflection::NameVector ShaderReflection::getAllPushConstantAttrNames() const {
+  NameVector names;
+  for (auto const& push_constant_attr : push_constant_attrs_.the_map()) {
+    names.emplace_back(push_constant_attr.first);
   }
   return names;
 }
@@ -347,6 +385,9 @@ void ShaderReflection::serialize(std::ostream& stream) const {
                 "shader_storage_buffer_attrs",
                 shader_storage_buffer_attrs_.the_map(),
                 kBindingAndSize);
+  write_section(stream, "push_constants", push_constants_.the_map(), kBindingAndSize);
+  write_section(
+      stream, "push_constant_attrs", push_constant_attrs_.the_map(), kBindingAndSize);
 
   // std::set iterates in order, so no explicit sort needed here
   stream << "fragment_output_locations " << fragment_shader_output_locations_.size()

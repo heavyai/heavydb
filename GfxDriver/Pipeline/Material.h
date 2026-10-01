@@ -82,6 +82,18 @@ class Material {
   bool hasVertexAttribute(std::string_view attr_name) const;
   uint32_t getVertexAttributeLocation(std::string_view attr_name) const;
 
+  // Throws unless some stage of this material declares `name` as its push constant
+  // block or as a member of it, covering the whole of the given range. The pushed
+  // range is what a caller passes to CommandList::setPushConstants, and the shader's
+  // is what it declares, the two having had nothing to tie them together until now.
+  //
+  // Stages are not distinguished. The stage mask a caller pushes with has to match
+  // the pipeline layout, which Vulkan itself enforces, so the thing left unchecked
+  // was the range.
+  void validatePushConstantRange(std::string_view name,
+                                 uint32_t offset,
+                                 uint32_t num_bytes) const;
+
   void setViewportAttributes(uint32_t x, uint32_t y, uint32_t width, uint32_t height);
 
  protected:
