@@ -1097,8 +1097,12 @@ std::unique_ptr<ShaderCache> ShaderManager::buildSpirv(
         serializeBuilder(builder, basename);
       }
 
-      write_spirv_artifacts(
-          builder.processed_code_, spirv, opt_spirv, basename, artifacts_to_save);
+      write_spirv_artifacts(builder.processed_code_,
+                            spirv,
+                            opt_spirv,
+                            reflection,
+                            basename,
+                            artifacts_to_save);
 #endif
     }
   }
@@ -1161,6 +1165,7 @@ void ShaderManager::saveArtifacts(const Builder& builder,
       write_spirv_artifacts(artifact_shader_cache->getGlsl(),
                             artifact_shader_cache->getSpirv(),
                             spirv_t(),
+                            artifact_shader_cache->getReflection(),
                             basename,
                             type);
     }
@@ -1178,6 +1183,7 @@ void ShaderManager::saveArtifacts(const ShaderCache& artifact_shader_cache,
       write_spirv_artifacts(artifact_shader_cache.getGlsl(),
                             artifact_shader_cache.getSpirv(),
                             spirv_t(),
+                            artifact_shader_cache.getReflection(),
                             basename,
                             type);
     }

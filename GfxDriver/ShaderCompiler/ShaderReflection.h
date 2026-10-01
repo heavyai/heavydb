@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <iosfwd>
 #include <set>
 #include <string>
 #include <string_view>
@@ -98,6 +99,12 @@ class ShaderReflection {
 
   const ItemInfo& getUniformBufferAttrItemInfo(std::string_view name) const;
   const ItemInfo& getShaderStorageBufferAttrItemInfo(std::string_view name) const;
+
+  // Writes every entry in name-sorted order, so the output is stable across runs
+  // and reviewable as a diff. ShaderCompilerTest stores this form as its golden
+  // expectation, so the format is load-bearing: changing it invalidates every
+  // checked-in .reflect file.
+  void serialize(std::ostream& stream) const;
 
   using NameVector = std::vector<std::string_view>;
   const NameVector getAllUniformBufferNames() const;

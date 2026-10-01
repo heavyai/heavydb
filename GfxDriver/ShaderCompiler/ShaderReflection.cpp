@@ -5,6 +5,9 @@
 
 #include "GfxDriver/ShaderCompiler/ShaderReflection.h"
 
+#include <algorithm>
+#include <ostream>
+
 #include "Logger/Logger.h"
 
 namespace gfx {
@@ -292,6 +295,82 @@ const ShaderReflection::NameVector ShaderReflection::getAllShaderStorageBufferAt
     names.emplace_back(shader_storage_buffer_attr.first);
   }
   return names;
+}
+
+namespace {
+
+// ItemInfo reuses two of its fields for different things depending on the
+// category, so each section supplies its own labels for them.
+struct ItemLabels {
+  const char* binding_or_location;
+  const char* block_or_array_size;
+};
+
+constexpr ItemLabels kLocationAndArraySize{"location", "array_size"};
+constexpr ItemLabels kBindingAndArraySize{"binding", "array_size"};
+constexpr ItemLabels kBindingAndBlockSize{"binding", "block_size"};
+constexpr ItemLabels kBindingAndSize{"binding", "size"};
+
+using ItemMap = std::unordered_map<std::string, ShaderReflection::ItemInfo>;
+
+// Every field is printed, including the ones a category leaves at -1, so that a
+// field which unexpectedly acquires a value shows up as a golden diff rather
+// than passing unnoticed.
+void write_section(std::ostream& stream,
+                   const char* title,
+                   const ItemMap& items,
+                   const ItemLabels& labels) {
+  stream << title << ' ' << items.size() << '\n';
+
+  std::vector<const ItemMap::value_type*> entries;
+  entries.reserve(items.size());
+  for (auto const& item : items) {
+    entries.push_back(&item);
+  }
+  std::sort(entries.begin(), entries.end(), [](auto const* lhs, auto const* rhs) {
+    return lhs->first < rhs->first;
+  });
+
+  for (auto const* entry : entries) {
+    auto const& info = entry->second;
+    stream << "  \"" << entry->first << "\" set=" << info.set << ' '
+           << labels.binding_or_location << '=' << info.binding_or_location
+           << " offset=" << info.offset << ' ' << labels.block_or_array_size << '='
+           << info.block_or_array_size << '\n';
+  }
+}
+
+}  // namespace
+
+void ShaderReflection::serialize(std::ostream& stream) const {
+  write_section(
+      stream, "vertex_attrs", vertex_attr_locations_.the_map(), kLocationAndArraySize);
+  write_section(stream, "samplers", samplers_.the_map(), kBindingAndArraySize);
+  write_section(
+      stream, "storage_images", storage_images_.the_map(), kBindingAndArraySize);
+  write_section(
+      stream, "uniform_buffers", uniform_buffers_.the_map(), kBindingAndBlockSize);
+  write_section(stream,
+                "shader_storage_buffers",
+                shader_storage_buffers_.the_map(),
+                kBindingAndBlockSize);
+  write_section(stream,
+                "acceleration_structures",
+                acceleration_structures_.the_map(),
+                kBindingAndBlockSize);
+  write_section(
+      stream, "uniform_buffer_attrs", uniform_buffer_attrs_.the_map(), kBindingAndSize);
+  write_section(stream,
+                "shader_storage_buffer_attrs",
+                shader_storage_buffer_attrs_.the_map(),
+                kBindingAndSize);
+
+  // std::set iterates in order, so no explicit sort needed here
+  stream << "fragment_output_locations " << fragment_shader_output_locations_.size()
+         << '\n';
+  for (auto const location : fragment_shader_output_locations_) {
+    stream << "  " << location << '\n';
+  }
 }
 
 }  // namespace gfx

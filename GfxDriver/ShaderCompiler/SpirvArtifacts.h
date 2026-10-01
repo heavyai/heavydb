@@ -21,6 +21,7 @@ inline constexpr bool shader_artifacts_enabled_in_build() {
 void write_spirv_artifacts(const std::string& glsl_string,
                            const spirv_t& spv,
                            const spirv_t& opt_spv,
+                           const ShaderReflection& reflection,
                            const std::string& base_name,
                            ShaderArtifactTypeBits artifacts);
 

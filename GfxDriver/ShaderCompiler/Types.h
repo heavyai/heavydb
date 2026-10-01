@@ -60,7 +60,7 @@ enum ShaderArtifactTypeBits {
   kSpvBin = 0x04,      // spirv binary blob
   kSpvDis = 0x08,      // spirv disassembly
   kSpvGlsl = 0x10,     // glsl output from spirv-cross
-  kSpvReflect = 0x20,  // reflection information from spir-cross
+  kSpvReflect = 0x20,  // our ShaderReflection, plus spirv-cross's own reflection
   kAll = 0xFFFF
 };
 
