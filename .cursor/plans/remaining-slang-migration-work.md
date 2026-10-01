@@ -1,6 +1,6 @@
 ---
 name: Remaining Slang migration work
-overview: A standalone working document for the pieces of the glslang-to-Slang migration that have not yet landed, with the dependencies between them made explicit. Six remain, plus one unscheduled cleanup; four items originally filed under PR 7 needed nothing from Slang and landed separately. The completed work is summarised only briefly, except where it established something a later PR has to reproduce; the full archaeology stays in the existing plan.
+overview: A standalone working document for the pieces of the glslang-to-Slang migration that have not yet landed, with the dependencies between them made explicit. Six remain. Four items originally filed under PR 7 needed nothing from Slang and landed separately, as did one unscheduled cleanup they turned up. The completed work is summarised only briefly, except where it established something a later PR has to reproduce; the full archaeology stays in the existing plan.
 todos:
   - id: osrb
     content: Slang OSRB approval and attribution. External gate on merging PR 6 onward; start now, independent of all code work
@@ -45,8 +45,8 @@ todos:
     content: "Non-Slang: Reflect push constants and check every push against them. Landed as 02527b6f9b. The dead name parameter on setPushConstants became the key. Deriving the pipeline-creation ranges from reflection is left to PR 7"
     status: completed
   - id: dead-accum-composite
-    content: "Cleanup, unscheduled: delete the dead accumulationComposite.frag. It is in QueryRenderer/ShaderManifest.json and compiles into the library, but no C++ creates a material from it; only accumulationCompositePeer.frag is instantiated, which is why its never-pushed push constant block went unnoticed"
-    status: pending
+    content: "Cleanup: delete the dead accumulationComposite.frag. Landed as 31cc64861c, two files and 25 deletions. Its last consumer went with distributed mode in f20941c8ef, leaving only the source and its ShaderManifest.json entry"
+    status: completed
 isProject: false
 ---
 
@@ -75,6 +75,12 @@ Each was filed under PR 7 but needs nothing from Slang, and each is better as it
 - **Array dimensions** (`b4c9acc131`) - `ItemInfo` gained `array_length` and `array_stride`, so element *i* of a buffer member is at `offset + i * array_stride`. See below for the two-dimensional member this turned up.
 - **Push constants** (`02527b6f9b`) - Reflected into new `push_constants` and `push_constant_attrs` sections, and every push is now checked against them. See below.
 
+### One cleanup they turned up
+
+- **Deleted the dead `accumulationComposite.frag`** (`31cc64861c`) - Found while reflecting push constants, as a block nothing ever pushes. Its last consumer was `DistributedCompositor::initResources`, so removing distributed mode in `f20941c8ef` deleted the caller and dropped `distributedCompositor.frag` from the manifest but left this one compiling into the shader library with no material to instantiate it. `MultiGpuCompositor` had been its other consumer until `5612fa7547` removed the compositor-side accum texture array in 2021; the live sibling there is the peer variant. Two files, the source and its `ShaderManifest.json` entry, that file being the only thing that decides what enters the library.
+
+  Worth carrying into PR 8's sweeps: the name is a prefix of `accumulationCompositePeer.frag`, so a plain search for it matches the live sibling and it reads as referenced when it is not. Anything that walks the library looking for dead shaders needs a word-boundary match, not a substring one.
+
 ## How the remaining pieces depend on each other
 
 ```mermaid
@@ -94,12 +100,11 @@ flowchart TD
     PR7 --> PR5c3
 ```
 
-What is left is one track, plus two standalone items:
+What is left is one track, plus one standalone item:
 
 - **Migration track: PRs 0b, 6, 7, 8+.** The actual replacement. Gated at the front by the spike and by OSRB approval.
 - **Cleanup tail: PR 5c part 3.** Now the last thing rather than an independent track, because only PR 7 can retire the private headers. See below.
 - **Standalone: PR 5d.** Independent of everything, and optional.
-- **Standalone: deleting the dead `accumulationComposite.frag`.** Unscheduled and independent. It sits in `QueryRenderer/ShaderManifest.json` and compiles into the library, but no C++ creates a material from it; only `accumulationCompositePeer.frag` is instantiated. That is why nobody noticed its push constant block is never pushed, which the push range check would otherwise have caught.
 
 The cleanup track no longer exists as a separate thing. It was meant to be PRs 3, 4a and 4b retiring the private headers between them; all three have landed and the headers are still there. PR 3 took one of the thirteen and PR 4b took none, because handing assignment to glslang needs more of `iomapper.h` than subclassing it did, not less.
 
@@ -113,7 +118,7 @@ Compile the shader corpus through `slangc -allow-glsl` and classify each file th
 Two things make the raw-source version of this spike misleading:
 
 - Stage files are not independently compilable. They depend on the `#include` dictionary assembled at runtime by `buildExtensionAndIncludesString` and on the `processOperators` substitutions. Either run over assembled `final_glsl` captured from a real run via the `ShaderArtifactTypeBits` hooks, or treat a raw pass as a lower bound only.
-- Report test and non-test counts separately. Of 161 shader sources, **85 live under `Tests/`**, so more than half the corpus is fixtures that can be rewritten or deleted freely. Only the 76 outside `Tests/` are load-bearing.
+- Report test and non-test counts separately. Of 163 shader sources, **88 live under `Tests/`**, so more than half the corpus is fixtures that can be rewritten or deleted freely. Only the 75 outside `Tests/` are load-bearing. Recount rather than trusting those figures: the test half grows as coverage is added, and the non-test half shrank by one when `accumulationComposite.frag` went.
 
 ## What PR 3 established, which the rest inherits
 
@@ -217,7 +222,7 @@ Keep `ShaderReflection` unchanged and populate it from Slang reflection. Seven b
 
 Two things that were on this list are no longer: the array-dimension gap and push constants both landed separately, so their golden movement is already absorbed rather than arriving inside PR 7's diff.
 
-A better end state exists for push constants than what landed, and PR 7 is where it belongs: derive the ranges from reflection at pipeline creation and delete the hand-written ones at the eight call sites. That is the version where the shader and the range cannot disagree at all, rather than one where disagreement is caught at the push. It was not done now because it is a change to pipeline creation, not to reflection.
+A better end state exists for push constants than what landed, and PR 7 is where it belongs: derive the ranges from reflection at pipeline creation and delete the nine hand-written ones. They reach a pipeline three different ways, by `setPushConstantRanges` on a descriptor, as an argument to `createComputePipeline`, and as one to the graphics and raytracing creators, so search for `PushConstantRange` rather than for any one of those. That is the version where the shader and the range cannot disagree at all, rather than one where disagreement is caught at the push. It was not done now because it is a change to pipeline creation, not to reflection.
 
 Hard constraint carried over from PR 1: the shader library declares its uniform blocks `layout(std430)`, legal only because `uniformBufferStandardLayout` and `scalarBlockLayout` are hard device requirements. Slang needs the equivalent of `-fvk-use-scalar-layout` or per-block layout attributes rather than its defaults, or `spirv-val` will reject the output.
 
