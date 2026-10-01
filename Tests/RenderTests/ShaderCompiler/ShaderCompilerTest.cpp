@@ -571,6 +571,34 @@ TEST_F(GeneralShaderCompilerTest, ShaderRedecoratorClashTest) {
   }
 }
 
+TEST_F(GeneralShaderCompilerTest, UnlocatedVaryingTest) {
+  // Compile a pair of shaders whose out_colour and in_colour have no explicit
+  // location. glslang assigns one from a counter, so the two stages agree only by luck
+  // of declaration order and nothing downstream would notice a mismatch, the renderer
+  // simply reading the wrong varying. So this has to fail the compile.
+  try {
+    this->shaderMgr->createCacheVectorFromTemplate(
+        {{"ShaderCompilerTests/unlocatedVaryingTest.vert"},
+         {"ShaderCompilerTests/unlocatedVaryingTest.frag"}});
+    FAIL() << "Expected the unlocated varying to throw";
+  } catch (const std::runtime_error& e) {
+    // The message has to name the varying, since that is the whole of the fix
+    std::string const message(e.what());
+    EXPECT_NE(message.find("without an explicit location"), std::string::npos) << message;
+    EXPECT_NE(message.find("out_colour"), std::string::npos) << message;
+
+    // Both shaders also leave a location off in_position and color, which are exempt:
+    // a vertex input and a fragment output are matched against the reflection rather
+    // than against another stage. Reporting either would be a false positive, and the
+    // vertex case would reject most of the shader library.
+    EXPECT_EQ(message.find("in_position"), std::string::npos) << message;
+
+    // The implicit output block of every vertex shader. Its members are built-in and
+    // declare no locations, so reporting it would reject every vertex shader there is.
+    EXPECT_EQ(message.find("gl_PerVertex"), std::string::npos) << message;
+  }
+}
+
 }  // namespace ShaderCompilerTests
 
 int main(int argc, char* argv[]) {
