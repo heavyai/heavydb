@@ -15,10 +15,10 @@ todos:
     content: "PR 4a: Give glslToSpirv and buildSpirv a whole material at a time, with a program per stage and one shared I/O resolver. Landed as d2fbb038a8, no behaviour change and no golden moved. Established that one TProgram cannot span the stages, because a material may hold two shaders of the same stage"
     status: completed
   - id: remove-iomapresolver
-    content: "PR 4b: Replace IoMapResolver with glslang's TDefaultGlslIoResolver, delete the three sentinels and ShaderRedecorator's allocation and SPIR-V patching, and re-aim the clash check at verifying glslang's output. Expect every .reflect golden to regenerate. Needs PR 4a; the sole remaining blocker of PR 5c part 3"
-    status: pending
+    content: "PR 4b: Replace IoMapResolver with glslang's TDefaultGlslIoResolver, delete the three sentinels and ShaderRedecorator's allocation and SPIR-V patching, and re-aim the clash check at verifying glslang's output. Landed as f0bea7b8b7. Two of the nine goldens moved, and it corrected a long-standing bug that gave an array of resources one binding per element. Did not unblock PR 5c part 3 after all"
+    status: completed
   - id: drop-copy-block
-    content: "PR 5c part 3: Delete the 13-header copy block and the two mkdir guards from common-functions.sh. Needs PR 4b alone, since GlslangWrapper.cpp is the only remaining consumer. Verify with a full deps rebuild, since these 13 are genuinely not installed by glslang"
+    content: "PR 5c part 3: Delete the 13-header copy block and the two mkdir guards from common-functions.sh. Now needs PR 7, not PR 4b: GlslangWrapper.cpp still includes iomapper.h for TGlslIoMapper and TDefaultGlslIoResolver, which are declared nowhere public. Verify with a full deps rebuild, since these 13 are genuinely not installed by glslang"
     status: pending
   - id: instance-1.4
     content: "PR 5d (optional): Raise kVulkanInstanceApiVersion to Vulkan 1.4. No dependencies and nothing depends on it. No technical upside; costs the NVIDIA driver floor rising from 535 to roughly R570. Take only if something else needs 1.4"
@@ -27,7 +27,7 @@ todos:
     content: "PR 6: Introduce a ShaderCompilerBackend interface behind ShaderManager.h:315's concrete GlslangWrapperUqPtr and add a flag-gated Slang implementation with ISlangFileSystem over Library. Needs PR 0b for scoping and OSRB to merge"
     status: pending
   - id: slang-default
-    content: "PR 7: Switch the default to Slang, delete ShaderRedecorator and ResourceLimits, populate ShaderReflection from Slang reflection, and reimplement clash diagnostics, struct-flattening names, the type whitelist, array dimensions and push constants. Needs PR 6; much smaller if PR 4b landed first"
+    content: "PR 7: Switch the default to Slang, delete ShaderRedecorator and ResourceLimits, populate ShaderReflection from Slang reflection, and reimplement clash diagnostics, struct-flattening names, the type whitelist, array dimensions and push constants. Needs PR 6; smaller now that PR 4b has landed. Also required by PR 5c part 3"
     status: pending
   - id: shader-migration
     content: "PR 8+: Migrate shader sources to Slang modules and generics incrementally behind the PR 6 flag, retiring the string-splicing Builder and superseding PR 3's textual subroutine pass"
@@ -49,6 +49,7 @@ Companion to [.cursor/plans/glslang-to-slang-migration.md](.cursor/plans/glslang
 - **PR 5c parts 1 and 2** (`d4019d84e6`) - Deleted the dead `build_info.h` include and swapped glslang's disassembler for the SPIRV-Tools one. The copy block in `scripts/common-functions.sh` is down from 16 files to 14.
 - **PR 3** (`9b8be38b08`) - Deleted `TShaderIRUtils` and moved subroutine resolution to a textual pass in `ShaderManager`, run before glslang sees the source. Took the copy block from 14 files to 13.
 - **PR 4a** (`d2fbb038a8`) - Restructured `glslToSpirv` and `buildSpirv` to take a whole material at a time, giving each stage its own `glslang::TProgram` but sharing one I/O resolver between them. Pure plumbing: the resolver is still our stateless `IoMapResolver`, so no behaviour changed and no golden moved.
+- **PR 4b** (`f0bea7b8b7`) - Handed binding and location assignment to `glslang::TDefaultGlslIoResolver`, reducing `ShaderRedecorator` to reflection extraction plus a clash check and deleting the sentinels, the allocator and the SPIR-V patching. Two of the nine goldens moved. Corrected a long-standing bug in which an array of resources was given one binding per element rather than a single binding with a descriptor count.
 
 ## How the remaining pieces depend on each other
 
@@ -56,28 +57,26 @@ Companion to [.cursor/plans/glslang-to-slang-migration.md](.cursor/plans/glslang
 flowchart TD
     OSRB["Slang OSRB approval (external, start now)"]
     PR0b["PR 0b: slangc -allow-glsl spike"]
-    PR4b["PR 4b: delete IoMapResolver"]
     PR5c3["PR 5c part 3: delete the 13-header copy block"]
     PR5d["PR 5d: instance to Vulkan 1.4 (optional)"]
     PR6["PR 6: ShaderCompilerBackend seam, Slang alongside"]
     PR7["PR 7: Slang becomes the default"]
     PR8["PR 8+: migrate shaders to Slang modules"]
 
-    PR4b --> PR5c3
     PR0b --> PR6
     OSRB --> PR6
     PR6 --> PR7
     PR6 --> PR8
-    PR4b -.->|"shrinks PR 7's deletion surface"| PR7
+    PR7 --> PR5c3
 ```
 
-There are two tracks that do not touch each other, plus one standalone item:
+What is left is one track, plus one standalone item:
 
-- **Cleanup track: PRs 4b and 5c part 3.** Retires the last glslang private headers. Nothing in the Slang track waits on it.
 - **Migration track: PRs 0b, 6, 7, 8+.** The actual replacement. Gated at the front by the spike and by OSRB approval.
+- **Cleanup tail: PR 5c part 3.** Now the last thing rather than an independent track, because only PR 7 can retire the private headers. See below.
 - **Standalone: PR 5d.** Independent of everything, and optional.
 
-PR 3 was expected to share this cleanup with PR 4 but retired only one header, so PR 4b is now the whole of it.
+The cleanup track no longer exists as a separate thing. It was meant to be PRs 3, 4a and 4b retiring the private headers between them; all three have landed and the headers are still there. PR 3 took one of the thirteen and PR 4b took none, because handing assignment to glslang needs more of `iomapper.h` than subclassing it did, not less.
 
 ## PR 0b - Spike slangc's GLSL compatibility mode
 
@@ -111,29 +110,31 @@ The original plan for PR 4 was to link every stage of a material into one `glsla
 
 **Lifetime constraint that swap must respect.** A stateful resolver remembers names in a `TString`, which belongs to the pool of whichever `TProgram` was current when it was recorded, and that pool dies with its program. `glslToSpirv` holds all the shaders and programs for the whole call and declares the resolver after the programs so that it is destroyed first. Do not reorder those declarations.
 
-## PR 4b - Remove IoMapResolver, drop iomapper.h
+## What PR 4b established, which PR 7 inherits
 
-**Depends on:** PR 4a (`d2fbb038a8`).
-**Required by:** PR 5c part 3, which it fully unblocks. Shrinks the work in PR 7.
+Four findings, three of them constraints on anything that touches this code again.
 
-Replace the `IoMapResolver` instance in `glslToSpirv` with a `glslang::TDefaultGlslIoResolver`, constructed from the first stage's intermediate once all the stages have linked. `resolveBinding` honours an explicit `layout(binding=)` through `reserveSlot` and otherwise looks the resource up by name in the program-shared `resourceSlotMap`, which is the sharing the sentinels currently emulate. `resolveSet` returns 0 absent an explicit set, matching `kDescriptorSet`, and as long as `setBindingsPerResourceType` is left alone all resources share one binding space, as ours do.
+**glslang is built without RTTI, so none of its classes can be subclassed.** The typeinfo a derived class's own typeinfo refers to was never emitted, and the link fails with `undefined reference to typeinfo for glslang::TDefaultGlslIoResolver` on every target. The tell is that *constructing* the class links fine: the vtable is there, only the typeinfo is missing. The pre-4b `IoMapResolver` got away with deriving from `TIoMapResolver` only because that class is pure-abstract with no out-of-line virtual to anchor its typeinfo, so the compiler emits it weakly on our side. `IoMapResolver` therefore holds a `TDefaultGlslIoResolver` and forwards nineteen methods to it. **Check this first if PR 6 finds itself wanting to subclass anything in Slang.**
 
-- Delete `IoMapResolver`, the three sentinel constants, and `ShaderRedecorator`'s `reserveBindings` / `allocateBindings` and the SPIRV-Cross `get_binary_offset_for_decoration` patching. `ShaderRedecorator` reduces to reflection extraction plus a clash check.
-- **Clash detection cannot be delegated.** `reserveSlot` explicitly "tolerate[s] aliasing, by not double-recording aliases", and the only clash glslang reports is one name carrying different explicit bindings across stages. `ShaderRedecoratorClashTest` exercises the opposite case, two different resources on one binding, which glslang accepts silently. Keep our check, re-aimed at verifying glslang's output rather than guarding our own allocator, and keep the `kMaxBindingsPerSet` overflow checks.
-- Vertex attribute locations need confirming rather than assuming. `ShaderRedecorator` reassigns them unconditionally from 0 and `ShaderCompilerTest` pins `in_position` at 0; `TDefaultGlslIoResolver::resolveInOutLocation` assigns from a free slot instead, so whether it starts at 0 is an empirical question the goldens will answer.
-- `createCache` still goes through the same path, wrapping its lone builder in a vector. It has one live caller, `saveArtifacts`, and passes `nullptr` as the redecorator, so no test exercises it since PR 1 moved the `FromFile` cases onto `createCacheVector`. Treat changes to it as unverified.
+**An array of resources is one binding, not one per element.** `ShaderRedecorator` had always claimed a binding per element, so arrays left gaps after them. `VulkanMaterial` has meanwhile always built a single `VkDescriptorSetLayoutBinding` with `descriptorCount` set to the array size, so the runtime only ever used the first binding of each array and the rest were silently wasted. glslang assigns the Vulkan way, which is what surfaced it: `numBindings` in `TDefaultGlslIoResolver::resolveBinding` is the cumulative array size only when the target is OpenGL. The array size still belongs in the reflection, which is where the descriptor count comes from; it just has nothing to do with occupancy.
 
-Expect **every `.reflect` golden to need regeneration**, since bindings will differ and the goldens record absolute numbers. That is the mechanism working: the diff is the review artifact, and what matters is that names, block sizes and array sizes stay put while only the numbers move. All runtime consumers are reflection-driven. PR 4a deliberately moved no golden, so anything that moves here is attributable to the resolver swap alone.
+**Inter-stage varyings must declare explicit locations, and blocks must declare them per member.** Both are already true of the whole shader library, and both are now load-bearing. A block whose members carry locations must not also get one on the block variable, which is why `IoMapResolver::resolveInOutLocation` declines to assign to structs; glslang only skips blocks whose first member is a built-in, and the Vulkan path in `TDefaultIoResolverBase` behaves the same way. Separately, glslang's own comment on that Vulkan path is that it "does not do proper cross-stage lining up", so a varying *without* an explicit location would be matched across stages only by luck of declaration order. Nothing checks for that; adding a check is cheap if it ever seems worth it.
 
-Fallback if the swap proves unworkable: declare the sentinels explicitly in shader source behind macros, keeping `ShaderRedecorator` byte-identical. That touches 162 declarations across 55 files outside `Tests/`, and needs confirmation that glslang accepts out-of-range values as explicit qualifiers.
+**glslang assigns only to resources it considers live.** `resolveBinding` auto-assigns when `ent.live && doAutoBindingMapping()`, and the shader library routinely declares resources a given stage never reads. Since `ShaderReflection` is what `VulkanMaterial` binds descriptors from, an unassigned resource is both missing from the reflection and liable to collide, every unassigned one defaulting to binding zero. `IoMapResolver` forces the liveness flag, restoring the one behaviour the old resolver had that glslang's does not. This is the only liveness gate that matters; `resolveInOutLocation` has none.
 
-Do not spend time on `setShiftUboBinding` and friends. `TDefaultIoResolver::resolveBinding` adds the shift base to explicitly declared bindings too, so both kinds land in the shifted range and stay indistinguishable.
+Two things stayed true as planned. Clash detection could not be delegated: `reserveSlot` explicitly "tolerate[s] aliasing, by not double-recording aliases", and the only clash glslang reports is one name carrying different explicit bindings across stages, which is the opposite of what `ShaderRedecoratorClashTest` exercises. And `setShiftUboBinding` and friends remain a dead end, since `resolveBinding` adds the shift base to explicitly declared bindings too.
+
+Only two of the nine goldens moved, rather than all of them as predicted, because most of the corpus binds explicitly. `createCache` remains unverified: its one live caller, `saveArtifacts`, passes `nullptr` as the redecorator, so no test has exercised it since PR 1 moved the `FromFile` cases onto `createCacheVector`.
 
 ## PR 5c part 3 - Delete the header copy block
 
-**Depends on:** PR 4b alone.
+**Depends on:** PR 7. This was expected to depend on PR 4b alone, and does not.
 
-`GlslangWrapper.cpp` is the only remaining consumer of all 13 copies. It includes just `iomapper.h` and `LiveTraverser.h` directly and reaches the other eleven through them, so removing the `TIoMapResolver` subclass retires the lot at once. Delete the block and the two surviving `mkdir -p` guards at `scripts/common-functions.sh:1092-1108`, plus the comment at 1077-1082.
+`GlslangWrapper.cpp` is the only consumer of all 13 copies. It includes just `iomapper.h` and `LiveTraverser.h` directly and reaches the other eleven through them, so whatever retires those two includes retires the lot at once.
+
+PR 4b was supposed to be that, by removing the `TIoMapResolver` subclass. It had the opposite effect: `IoMapResolver` now needs `TGlslIoMapper` and `TDefaultGlslIoResolver` by name, and both are declared only in the private `iomapper.h`. The public `ShaderLang.h` has `TIoMapResolver`, and 16.6.0 did promote `TVarEntryInfo` into it, which is what made this look tractable, but it declares neither mapper nor any concrete resolver. The only concrete resolver in the private header is the OpenGL one; the Vulkan `TDefaultIoResolver` is defined inside `iomapper.cpp` and is unreachable by design, which is why `mapIO(nullptr, nullptr)` has to construct it internally.
+
+So the headers survive until glslang itself goes, in PR 7. Delete the block and the two surviving `mkdir -p` guards at `scripts/common-functions.sh:1092-1108`, plus the comment at 1077-1082.
 
 PR 3 was expected to take three of these and took one, `Include/InfoSink.h`. The rest survived because `LiveTraverser.h`, which PR 0a gave `GlslangWrapper.cpp` a direct include of, pulls in `Common.h`, `reflection.h`, `localintermediate.h` and `gl_types.h`, with `intermediate.h` and the rest of `Include/` behind those.
 
@@ -162,13 +163,14 @@ That file system is not optional detail: per the PR 3 findings above, the assemb
 
 ## PR 7 - Switch the default to Slang, delete ShaderRedecorator
 
-**Depends on:** PR 6. Much easier after PR 4b, which reduces `ShaderRedecorator` to reflection extraction.
+**Depends on:** PR 6. Smaller now that PR 4b has reduced `ShaderRedecorator` to reflection extraction plus a clash check.
+**Required by:** PR 5c part 3, which only this can unblock.
 
-Slang assigns descriptor sets and bindings across a composed program with multiple entry points and reports them through reflection, so the remaining redecoration, the SPIRV-Cross patching via `get_binary_offset_for_decoration`, and `ResourceLimits` / `TBuiltInResource` all go away rather than being ported. This also closes the never-completed TODO at `GlslangWrapper.cpp:205` about sourcing limits from the device, since limit validation moves to the driver.
+Slang assigns descriptor sets and bindings across a composed program with multiple entry points and reports them through reflection, so the remaining reflection extraction and `ResourceLimits` / `TBuiltInResource` go away rather than being ported. PR 4b already removed the SPIRV-Cross patching via `get_binary_offset_for_decoration`. This also closes the never-completed TODO in `GlslangWrapper.cpp` about sourcing limits from the device, since limit validation moves to the driver.
 
 Keep `ShaderReflection` unchanged and populate it from Slang reflection. Five behaviours need deliberate reimplementation:
 
-- Clash diagnostics quality from `reserveBindings` / `allocateBindings`.
+- Clash diagnostics quality from `recordBinding`, which is all that is left of the old allocator and still carries the message `ShaderRedecoratorClashTest` pins.
 - The struct-flattening naming convention: the block at `ShaderRedecorator.cpp:303-352` and the rule itself at 325-331. Dotted names for nested UBO members, bare names for SSBO members, depended on verbatim by `Material` and the Vega property writers.
 - `validate_buffer_attr_type`, which whitelists only scalar int/uint/int64/uint64/float/double. Decide whether to carry the restriction forward.
 - The array-dimension gap. `ShaderReflection` cannot express an array dimension on a buffer member and silently drops it: `SlabAddressTableEntry slabs[64]` reflects as two attrs at offsets 0 and 8 with a `block_size` of 1024, as though the array were one element. Harmless today because that block is bound whole, but Slang will report it properly. Decide whether to represent it. Either way the `pointTemplate.vert` golden moves, and that diff is expected.
@@ -186,5 +188,6 @@ Largest effort, biggest payoff, safely deferrable. Slang interfaces plus generic
 
 - **Slang OSRB approval.** Not technical, entirely outside this plan's control, and a hard gate on shipping anything from PR 6 onward. Start it now rather than when the code is ready.
 - **How much of the corpus clears Slang's GLSL subset.** Gates PR 6 onward; PR 0b measures it.
-- **Whether glslang's resolver assigns coherently across stages.** No longer open. `TDefaultGlslIoResolver` keys its program-shared slot maps by name and nothing clears them between stages, so a shared instance is coherent by construction; the detail is under PR 4a above. What remains unverified is only whether its numbering matches ours closely enough that the golden diff is readable, and whether vertex attribute locations still start at 0.
-- **Sentinel fragility.** The values are derived from glslang's internal `layout*End` markers. They survived 1.3.275 to 16.6.0 unchanged, so this is latent rather than active, but nothing guarantees the next bump is as kind. PR 4b removes the exposure.
+- **Whether glslang's resolver assigns coherently across stages.** Closed by PR 4b. A shared `TDefaultGlslIoResolver` keys its slot maps by name and nothing clears them between stages, and the render suite passes on its numbering. Vertex attribute locations do still start at 0.
+- **Sentinel fragility.** Closed by PR 4b, which deleted them. They were derived from glslang's internal `layout*End` markers and survived 1.3.275 to 16.6.0 unchanged, so the exposure was latent rather than active, but it is now gone.
+- **Private-header reach.** PRs 3, 4a and 4b were each expected to reduce our dependence on glslang's private headers and collectively retired one of thirteen. Treat any future estimate of this kind sceptically: the headers come as a transitive closure behind `LiveTraverser.h` and `iomapper.h`, so nothing short of dropping both includes changes the count at all.
