@@ -21,7 +21,6 @@
 #include "GfxDriver/RenderError.h"
 #include "GfxDriver/ShaderCompiler/Library.h"
 #include "GfxDriver/ShaderCompiler/ResourceLimits.h"
-#include "GfxDriver/ShaderCompiler/ShaderRedecorator.h"
 
 namespace gfx {
 
@@ -116,83 +115,86 @@ void GlslangIncluder::releaseInclude(glslang::TShader::Includer::IncludeResult* 
 // IoMapResolver
 //
 
+// glslang's own resolver does all the work here, with one thing changed: it assigns a
+// binding only to a resource the stage actually uses, and we need one for every resource
+// the shader declares. Our shader library routinely declares resources a given stage
+// never reads, and ShaderReflection is what Material binds descriptors from, so an
+// unassigned resource is both missing from the reflection and liable to collide, every
+// unassigned one being left to default to binding zero. Forcing the liveness flag is the
+// one behaviour the hand-written resolver this replaced had that glslang's does not.
+//
+// It is held rather than derived from because glslang is built without RTTI, so the
+// typeinfo that a class derived from it would refer to was never emitted and the link
+// fails. Deriving from TIoMapResolver is fine by contrast: it has no out-of-line virtual
+// to anchor its typeinfo, so the compiler emits that here instead. Hence the forwarding
+// below, which is otherwise uninteresting.
 class IoMapResolver : public glslang::TIoMapResolver {
  public:
-  ~IoMapResolver() override = default;
+  explicit IoMapResolver(const glslang::TIntermediate& intermediate)
+      : resolver_{intermediate} {}
 
-  bool validateBinding(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
-    return true;
-  }
+  // Set by the resolver itself rather than reported through the mapper's return value
+  bool hasError() const { return resolver_.hasError; }
 
   int resolveBinding(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
-    if (!ent.symbol->getType().getQualifier().hasBinding()) {
-      return ent.newBinding = ShaderRedecorator::kUninitializedBinding;
-    }
-    return -1;
+    ent.live = true;
+    return resolver_.resolveBinding(stage, ent);
   }
 
+  bool validateBinding(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
+    return resolver_.validateBinding(stage, ent);
+  }
   int resolveSet(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
-    if (!ent.symbol->getType().getQualifier().hasSet()) {
-      return ent.newSet = ShaderRedecorator::kUninitializedSet;
-    }
-    return -1;
+    return resolver_.resolveSet(stage, ent);
   }
-
   int resolveUniformLocation(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
-    // we have no regular (non-opaque) uniforms
-    // opaque uniforms (samplers, images) have binding, not location
-    return -1;
+    return resolver_.resolveUniformLocation(stage, ent);
   }
-
   bool validateInOut(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
-    return true;
+    return resolver_.validateInOut(stage, ent);
   }
-
+  // Our inter-stage interface blocks declare a location on each member, and giving the
+  // block variable one as well is what spirv-val rejects as a member location. glslang
+  // only declines to assign to a block whose first member is a built-in, so decline for
+  // the rest of them here. Plain variables still get one, which vertex inputs rely on.
   int resolveInOutLocation(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
-    // assign only non-built-in vertex shader pipeline inputs
-    auto const& type = ent.symbol->getType();
-    if (!type.getQualifier().hasLocation()) {
-      auto const& name = ent.symbol->getName();
-      if (stage == EShLangVertex && type.getQualifier().isPipeInput() && !name.empty() &&
-          std::string(name).substr(0, 3) != "gl_") {
-        return ent.newLocation = ShaderRedecorator::kUninitializedLocation;
-      }
+    if (ent.symbol->getType().isStruct()) {
+      return ent.newLocation = -1;
     }
-    return ent.newLocation = -1;
+    return resolver_.resolveInOutLocation(stage, ent);
   }
-
   int resolveInOutComponent(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
-    // do not assign
-    return -1;
+    return resolver_.resolveInOutComponent(stage, ent);
   }
-
   int resolveInOutIndex(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
-    // do not assign
-    return -1;
+    return resolver_.resolveInOutIndex(stage, ent);
+  }
+  void notifyBinding(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
+    resolver_.notifyBinding(stage, ent);
+  }
+  void notifyInOut(EShLanguage stage, glslang::TVarEntryInfo& ent) override {
+    resolver_.notifyInOut(stage, ent);
+  }
+  void beginNotifications(EShLanguage stage) override {
+    resolver_.beginNotifications(stage);
+  }
+  void endNotifications(EShLanguage stage) override { resolver_.endNotifications(stage); }
+  void beginResolve(EShLanguage stage) override { resolver_.beginResolve(stage); }
+  void endResolve(EShLanguage stage) override { resolver_.endResolve(stage); }
+  void beginCollect(EShLanguage stage) override { resolver_.beginCollect(stage); }
+  void endCollect(EShLanguage stage) override { resolver_.endCollect(stage); }
+  void reserverStorageSlot(glslang::TVarEntryInfo& ent, TInfoSink& info_sink) override {
+    resolver_.reserverStorageSlot(ent, info_sink);
+  }
+  void reserverResourceSlot(glslang::TVarEntryInfo& ent, TInfoSink& info_sink) override {
+    resolver_.reserverResourceSlot(ent, info_sink);
+  }
+  void addStage(EShLanguage stage, glslang::TIntermediate& intermediate) override {
+    resolver_.addStage(stage, intermediate);
   }
 
-  // all the rest, do nothing
-  void notifyBinding(EShLanguage stage, glslang::TVarEntryInfo& ent) override {}
-  void notifyInOut(EShLanguage stage, glslang::TVarEntryInfo& ent) override {}
-  void endNotifications(EShLanguage stage) override {}
-  void beginNotifications(EShLanguage stage) override {}
-  void beginResolve(EShLanguage stage) override {}
-  void endResolve(EShLanguage stage) override {}
-
-  // Added with update to 7.12.3352
-  // These facilitate auto-mapping of sets / bindings / locations across multiple stages
-
-  // Called by mapIO when it starts its symbol collect for teh given stage
-  void beginCollect(EShLanguage stage) override {}
-  // Called by mapIO when it has finished the symbol collect
-  void endCollect(EShLanguage stage) override {}
-  // Called by TSlotCollector to resolve storage locations or bindings
-  void reserverStorageSlot(glslang::TVarEntryInfo& ent, TInfoSink& infoSink) override {}
-  // Called by TSlotCollector to resolve resource locations or bindings
-  void reserverResourceSlot(glslang::TVarEntryInfo& ent, TInfoSink& infoSink) override {}
-  // Called by mapIO.addStage to set shader stage mask to mark a stage be added to this
-  // pipeline
-  void addStage(EShLanguage stage, glslang::TIntermediate& stageIntermediate) override {}
+ private:
+  glslang::TDefaultGlslIoResolver resolver_;
 };
 
 //
@@ -278,6 +280,9 @@ GlslangWrapper::CompileResults GlslangWrapper::glslToSpirv(
 
   CompileResults results;
   results.stages.resize(stages.size());
+  if (stages.empty()) {
+    return results;
+  }
 
   EShMessages messages = static_cast<EShMessages>(EShMsgSpvRules | EShMsgVulkanRules);
   if (dump_AST) {
@@ -373,11 +378,15 @@ GlslangWrapper::CompileResults GlslangWrapper::glslToSpirv(
   }
 
   // Shared across the stages so that a resource appearing in more than one of them is
-  // assigned the same binding in each. Declared after the programs so that it is
-  // destroyed before them: a resolver that remembers anything by name remembers it in
-  // a glslang TString, which belongs to the pool of whichever program was current when
-  // it was recorded.
-  IoMapResolver io_map_resolver;
+  // assigned the same binding in each: the resolver keeps its slot maps keyed by
+  // resource name and nothing clears them between stages. Declared after the programs
+  // so that it is destroyed before them, because those names are glslang TStrings and
+  // belong to the pool of whichever program was current when they were recorded.
+  //
+  // The reference intermediate only supplies settings that are identical across our
+  // stages, such as the client and the auto-map flags, so any stage's will do.
+  auto const first_stage = shader_stage_to_glslang_enum(stages.front().shader_stage);
+  IoMapResolver io_map_resolver(*programs.front()->getIntermediate(first_stage));
 
   for (size_t i = 0; i < stages.size(); ++i) {
     auto const& stage = stages[i];
@@ -386,6 +395,16 @@ GlslangWrapper::CompileResults GlslangWrapper::glslToSpirv(
     glslang::TGlslIoMapper glsl_io_mapper;
     if (!program.mapIO(&io_map_resolver, &glsl_io_mapper)) {
       results.stages[i].second = "Error mapping I/O for shader \"" + stage.pretty_name +
+                                 "\":\n" + program.getInfoLog();
+      return results;
+    }
+
+    // The resolver carries its own error flag, which the mapper's return value does
+    // not report: TGlslIoMapper::addStage returns its own hadError, while a resource
+    // whose explicit binding disagrees with the one it was given in another stage sets
+    // hasError on the resolver. Without this the message only reaches the info log.
+    if (io_map_resolver.hasError()) {
+      results.stages[i].second = "Error resolving I/O for shader \"" + stage.pretty_name +
                                  "\":\n" + program.getInfoLog();
       return results;
     }

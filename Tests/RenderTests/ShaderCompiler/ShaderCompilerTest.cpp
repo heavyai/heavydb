@@ -377,14 +377,21 @@ TEST_F(GeneralShaderCompilerTest, DISABLED_SubBuilderTest) {
 TEST_F(GeneralShaderCompilerTest, ShaderRedecoratorTest) {
   // create and decorate
   ShaderCacheShPtrVector caches;
-  EXPECT_NO_THROW(caches = this->shaderMgr->createCacheVectorFromTemplate(
+  // Assert rather than expect: everything below indexes into caches, so carrying on
+  // after a failure here segfaults instead of reporting
+  ASSERT_NO_THROW(caches = this->shaderMgr->createCacheVectorFromTemplate(
                       {{"ShaderCompilerTests/shaderRedecoratorTest.vert"},
                        {"ShaderCompilerTests/shaderRedecoratorTest.frag"}}));
 
-  // Vulkan vert, Vulkan frag
+  // Vulkan vert, Vulkan frag. The explicitly bound resources keep the bindings the
+  // shaders ask for, and the shared ones keep the same binding in both stages, which are
+  // the two properties this test exists for. The rest run 5 through 13 for the vert and
+  // 14 through 20 for the frag: one binding per resource with no gaps, an array of
+  // resources taking a single binding with a descriptor count rather than one binding
+  // per element.
   static constexpr int kExpectedBindings[2][14] = {
-      {0, 9, 1, 10, 3, 6, 4, 7, 11, 14, 12, 15, 2, 17},
-      {0, 18, 1, 19, 3, 6, 4, 7, 20, 23, 21, 24, 2, 26}};
+      {0, 5, 1, 8, 3, 6, 4, 7, 10, 12, 11, 13, 2, 9},
+      {0, 14, 1, 15, 3, 6, 4, 7, 17, 19, 18, 20, 2, 16}};
 
   // check vert shader bindings
   auto const& vert_refl = caches[0]->getReflection();
