@@ -62,6 +62,8 @@ std::string to_string(const SPIRType& type) {
       return "AccelerationStructure";
     case spt::RayQuery:
       return "RayQuery";
+    case spt::CoopVecNV:
+      return "CoopVecNV";
 
     // spirv-cross internal
     case spt::ControlPointArray:
@@ -70,6 +72,18 @@ std::string to_string(const SPIRType& type) {
       return "Interpolant";
     case spt::Char:
       return "Char";
+    case spt::MeshGridProperties:
+      return "MeshGridProperties";
+    case spt::BFloat16:
+      return "BFloat16";
+    case spt::FloatE4M3:
+      return "FloatE4M3";
+    case spt::FloatE5M2:
+      return "FloatE5M2";
+    case spt::Tensor:
+      return "Tensor";
+    case spt::DescriptorHeapBuffer:
+      return "DescriptorHeapBuffer";
   }
   return "Invalid base type";
 }
