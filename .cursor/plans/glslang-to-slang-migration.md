@@ -12,8 +12,8 @@ todos:
     content: "PR 1: Replace byte-exact SPIR-V golden comparison in ShaderCompilerTest.cpp with ShaderReflection text goldens plus spirv-val; add reflection-dump artifact via existing kSpvReflect hook. Landed as 95fb438ec0, all 9 goldens generated and the suite passes"
     status: completed
   - id: hygiene
-    content: "PR 2: Fix kShaderStageCount, harden glslang error-log scraping, remove vestigial multi-set scaffolding in ShaderRedecorator and ShaderReflection::validateSet, and fix the three ShaderReflection defects found during PR 1 (clear and operator= both skip fragment_shader_output_locations_, and the suppressed move constructor)"
-    status: pending
+    content: "PR 2: Remove kShaderStageCount, harden glslang error-log scraping, collapse the vestigial multi-set scaffolding in ShaderRedecorator and delete ShaderReflection::validateSet, and fix the three ShaderReflection defects found during PR 1 by restoring the rule of zero. Landed as 34eed87b9a, no golden changed"
+    status: completed
   - id: remove-tshaderirutils
     content: "PR 3: Delete TShaderIRUtils and reimplement subroutine binding as a post-assembly textual pass over final_glsl, after includes are prepended"
     status: pending
@@ -100,7 +100,7 @@ An explicit `binding = N` means "this resource is shared across the stages of th
 
 ## Verified facts that shape the plan
 
-- No shader declares an explicit `set =` anywhere, so all set-handling branches in `ShaderRedecorator` guard a case that never occurs, consistent with the hardcoded `int set = 0` in `redecorateInternal`. Only the binding distinction is real. Re-verified during PR 1 against all 161 shader sources, and now enforced rather than merely observed: `ShaderRedecoratorTest` asserts every reflected resource reports set 0.
+- No shader declares an explicit `set =` anywhere, so only the binding distinction is real. Re-verified during PR 1 against all 161 shader sources, and now enforced twice over rather than merely observed: `ShaderRedecoratorTest` asserts every reflected resource reports set 0, and PR 2 replaced the dead set-handling branches with `CHECK_EQ(existing_set, kUninitializedSet)` so a shader that ever declares one fails loudly instead of being silently rebound. Everything lands in `ShaderRedecorator::kDescriptorSet`.
 - Vertex attribute locations are reassigned unconditionally; the location sentinel is never tested, only the presence of a `Location` decoration matters. This makes `kUninitializedLocation` far easier to eliminate than the binding sentinel.
 - The sentinel values are "one less than `glslang::TQualifier::layout*End`" per the comment in `ShaderRedecorator.h:22-29`, that is, derived from glslang's internal "undefined" markers. They are therefore inherently version-fragile. PR 0a showed the values happened to survive 1.3.275 to 16.6.0 unchanged, so this is a latent hazard rather than an active one, but nothing guarantees the next bump is as kind.
 - `replaceFunctionCall` has no live callers; it is only reachable via builder deserialization at `ShaderManager.cpp:354`. The only live producer of the rebind map is `addSubroutineBinding`, keyed on bare function names
@@ -200,13 +200,26 @@ Reviewing the generated baseline also turned up the reflection array-dimension g
 
 ## PR 2 - Hygiene and dead code
 
-No behaviour change; makes later diffs readable.
+**Landed as 34eed87b9a.** No behaviour change, verified by the PR 1 suite: every `.reflect` golden is unchanged, which is the meaningful check since binding allocation order, the bindings map and the descriptor set number all stayed put. Net 24 lines removed across 6 files.
 
-- `kShaderStageCount = 8` in [GfxDriver/ShaderCompiler/Types.h](GfxDriver/ShaderCompiler/Types.h) is marked "must be kept in sync with enum" but `ShaderStage` has 14 entries. Currently unreferenced, so latent.
-- `find_error_line_number` in `GlslangWrapper.cpp:213-235` scrapes glslang's log format and `CHECK_NE`s on it, hard-crashing debug builds if the format changes, and reports only the first error.
-- `ShaderRedecorator::getReservedBindings` ignores its `resource_type` parameter; `redecorateInternal` is always called with `set = 0`. Delete the vestigial multi-set scaffolding (including `ShaderReflection::validateSet`, which only checks `!= -1`) or document why it stays.
-- `ShaderReflection::clear` does not clear `fragment_shader_output_locations_`, and `ShaderReflection::operator=` does not copy it. Both are latent rather than live: `clear` is only reached via `initialize()` on a freshly constructed object in `redecorate`, and `operator=` has no callers. The field itself is live, though, since `VulkanGraphicsPipeline.cpp:133` uses it to decide blend attachment state, so fix both rather than leaving the trap armed. Found while writing PR 1.
-- `ShaderReflection` declares a destructor and a copy-assignment operator, which suppresses its implicit move constructor, so the `std::move(reflection)` into the `ShaderCache` constructor at `ShaderManager.cpp:1125` silently copies. Harmless today, and the copy is what currently saves the `operator=` bug above from being live, but the two interact and should be fixed together.
+### What was done
+
+- Deleted `kShaderStageCount` from [GfxDriver/ShaderCompiler/Types.h](GfxDriver/ShaderCompiler/Types.h) rather than correcting it. It claimed "must be kept in sync with enum" at 8 while `ShaderStage` has 14 entries, and nothing referenced it.
+- Replaced `find_error_line_number` with `find_error_line_numbers`, returning a `std::set<int>`. The two `CHECK_NE`s are gone, so a log-format change costs the source annotation rather than aborting a debug build mid-diagnostic; parsing goes through `std::from_chars` so a non-numeric field is rejected instead of becoming 0 via `atoi`; and every error line is marked, not just the first. Still debug-only.
+- Collapsed the multi-set scaffolding in `ShaderRedecorator`. `reserved_vulkan_bindings_` was an `unordered_map<int, ReservedBindings>` holding only key 0, so it became a plain `ReservedBindings`. `getReservedBindings` is gone outright. The `set` parameter is gone from `redecorateInternal`, `reserveBindings` and `allocateBindings`, replaced by a `kDescriptorSet` constant. `ShaderReflection::validateSet` went with them.
+- Restored the rule of zero on `ShaderReflection`, deleting its hand-written `operator=`, its `= default` destructor and the redundant `NameToItemInfoMap::operator=`. That fixes the dropped `fragment_shader_output_locations_` and the suppressed move constructor together, and means the next member added cannot reintroduce the same class of bug. `clear()` still needs a line per member, so the missing one was added.
+- Dropped the now-unused `Logger/Logger.h` include from `ShaderReflection.cpp` and swapped `ShaderRedecorator.h`'s unused `<unordered_map>` for the `<tuple>` it had been getting transitively.
+
+### Where it diverged from the original plan
+
+Two deliberate departures, both recorded in the commit message:
+
+- The plan said to fix `kShaderStageCount`; it was deleted instead. Setting it to 14 preserves a hand-maintained invariant with no user to keep it honest, and the self-maintaining alternative needs a sentinel enumerator that would cost `-Wswitch` coverage on `to_string(ShaderStage)`. Re-adding a correct one is a single line if a need appears.
+- The plan said to delete the set-handling branches; the read was kept and the two `if (existing_set == kUninitializedSet) ... else ...` blocks became `CHECK_EQ(existing_set, kUninitializedSet)`. Deleting the read entirely would silently rebind a shader that did declare a set to set 0. This converts an unreachable branch into a stated invariant, and is what PR 4 has to reason about when it removes the sentinels.
+
+### Verified in passing
+
+`write_spirv_artifacts` consumes the reflection at `ShaderManager.cpp:1100`, before the `std::move(reflection)` into `ShaderCache` at 1128. Checked before restoring the move constructor: had the order been reversed, turning the silent copy into a real move would have started emitting empty `.reflection` artifacts. Any future reordering of `buildSpirv` needs to preserve this.
 
 ## PR 3 - Remove TShaderIRUtils, resolve subroutines textually
 
@@ -254,7 +267,7 @@ Two loose ends it deliberately left:
 
 Independent of PRs 3 and 4. Now that the SDK supports it, this is the remaining version work, and it is the risk-bearing half: PR 5a changed which toolchain compiles the shaders, while this changes what the toolchain is asked to emit and what the driver advertises.
 
-- Resolve the existing mismatch: the instance requests `VK_API_VERSION_1_3` (`GfxDriver/Drivers/Vulkan/VulkanPlatform.cpp:39`) while the compiler targets `EShTargetVulkan_1_2` / `EShTargetSpv_1_4` (`GlslangWrapper.cpp:274-275`). Not a correctness bug, just capability left on the table: targeting lower is conservative and runs fine on a 1.3 device.
+- Resolve the existing mismatch: the instance requests `VK_API_VERSION_1_3` (`GfxDriver/Drivers/Vulkan/VulkanPlatform.cpp:39`) while the compiler targets `EShTargetVulkan_1_2` / `EShTargetSpv_1_4` (`GlslangWrapper.cpp:308-309`). Not a correctness bug, just capability left on the table: targeting lower is conservative and runs fine on a 1.3 device.
 - Separate the two halves, because only one is free. The **compiler** retarget to `EShTargetVulkan_1_3` / `EShTargetSpv_1_6` costs nothing: `VULKAN_API_VERSION` doubles as a hard minimum device version (`VulkanPlatform.cpp:514-515` rejects anything lower), so the device floor is already Vulkan 1.3, and SPIR-V 1.6 is core in 1.3. The **instance** bump to 1.4 is a deployment decision: it raises the NVIDIA driver floor from the currently enforced 535 (`VulkanPlatform.cpp:556`) to whatever first reported Vulkan 1.4, around R570, and buys the shader compiler nothing because Vulkan 1.4 also tops out at SPIR-V 1.6. Confirm the supported-driver matrix before taking it, and keep it revertible on its own.
 - Adopt what 1.4 promotes out of the optional capability extension handling in `VulkanPlatform.cpp:66-94`. Checked: **nothing to do here.** Every extension the driver requests (external memory and semaphore FD, swapchain, mesh shader, fragment shading rate, fragment shader interlock, ray tracing pipeline, acceleration structure, deferred host operations, ray query, memory budget, debug utils, validation features) stays an extension in 1.4. What 1.4 promotes, such as push descriptor, maintenance5, map memory2, index type uint8 and host image copy, this codebase does not use. Keep the bullet only as a record that it was checked.
 - Normalize `GfxDriver/Drivers/Vulkan/VulkanPhysicalDevice.cpp:84-85`, where "is at least 1.2" is spelled `major > 1 || minor > 1`.
@@ -278,12 +291,12 @@ Scope depends on spike 0b. Also needs Slang OSRB approval before it can merge, c
 
 ## PR 7 - Switch the default to Slang, delete ShaderRedecorator
 
-Slang assigns descriptor sets and bindings across a composed program with multiple entry points and reports them through reflection, so the remaining redecoration, SPIRV-Cross patching via `get_binary_offset_for_decoration`, and `ResourceLimits` / `TBuiltInResource` all go away rather than being ported. This also resolves the never-completed TODO at `GlslangWrapper.cpp:201` about sourcing limits from the device, since limit validation moves to the driver.
+Slang assigns descriptor sets and bindings across a composed program with multiple entry points and reports them through reflection, so the remaining redecoration, SPIRV-Cross patching via `get_binary_offset_for_decoration`, and `ResourceLimits` / `TBuiltInResource` all go away rather than being ported. This also resolves the never-completed TODO at `GlslangWrapper.cpp:205` about sourcing limits from the device, since limit validation moves to the driver.
 
 Keep `ShaderReflection` unchanged and populate it from Slang reflection. Four behaviours need deliberate reimplementation:
 
 - Clash diagnostics quality from `reserveBindings` / `allocateBindings`
-- The struct-flattening naming convention at `ShaderRedecorator.cpp:306-355`: dotted names for nested UBO members, bare names for SSBO members, depended on verbatim by `Material` and the Vega property writers
+- The struct-flattening naming convention, the flattening block at `ShaderRedecorator.cpp:303-352` and the naming rule itself at 325-331: dotted names for nested UBO members, bare names for SSBO members, depended on verbatim by `Material` and the Vega property writers
 - `validate_buffer_attr_type`, which whitelists only scalar int/uint/int64/uint64/float/double; decide whether to carry the restriction forward
 - `ShaderReflection` cannot express an array dimension on a buffer member, and silently drops it. `SLAB_ADDRESS_TABLE_UBO` declares `SlabAddressTableEntry slabs[64]` ([QueryRenderer/Marks/shaders/slabAddressTable.glsl](QueryRenderer/Marks/shaders/slabAddressTable.glsl)), and the reflection records a `block_size` of 1024 alongside exactly two attrs, `slabs.cuda` at offset 0 and `slabs.vulkan` at offset 8, as though the array were a single element. Harmless today only because that block is bound whole via `bindExternalUniformBufferToBlock`, so nothing consumes the per-member offsets. Slang reflection will report the array properly, so decide deliberately whether to represent it or keep discarding it; either way the PR 1 golden for `pointTemplate.vert` changes, and that diff is expected rather than a regression. The same gap applies to `uDomains_x_x`, a `double[2]` reported as one 16-byte attr.
 - Push constants, currently hand-maintained in [GfxDriver/Pipeline/PushConstantRanges.cpp](GfxDriver/Pipeline/PushConstantRanges.cpp) and absent from reflection, come free here
@@ -300,4 +313,4 @@ Largest effort, biggest long-term payoff, safely deferrable. Slang interfaces pl
 
 Retired: the SDK bump itself, which PR 0a landed.
 
-PRs 1 through 3 are worth doing regardless of how spike 0b resolves.
+PR 3 is still worth doing regardless of how spike 0b resolves, as PRs 1 and 2 were before they landed.
