@@ -29,15 +29,31 @@ class ShaderReflection {
     int binding_or_location;
     int offset;
     int block_or_array_size;
-    ItemInfo(int set, int binding_or_location, int offset, int block_or_array_size)
+
+    // Buffer members only, and only where the member is an array. The offset above is
+    // then element zero's, and these two are what reach the rest of them: element i
+    // lives at offset + i * array_stride. A length of 0 means a runtime-sized array,
+    // which is a real answer and distinct from the -1 meaning not an array at all.
+    int array_length;
+    int array_stride;
+
+    ItemInfo(int set,
+             int binding_or_location,
+             int offset,
+             int block_or_array_size,
+             int array_length = -1,
+             int array_stride = -1)
         : set{set}
         , binding_or_location{binding_or_location}
         , offset{offset}
-        , block_or_array_size{block_or_array_size} {}
+        , block_or_array_size{block_or_array_size}
+        , array_length{array_length}
+        , array_stride{array_stride} {}
     ItemInfo() : ItemInfo(-1, -1, -1, -1) {}
     bool operator==(const ItemInfo& rhs) const {
       return set == rhs.set && binding_or_location == rhs.binding_or_location &&
-             offset == rhs.offset && block_or_array_size == rhs.block_or_array_size;
+             offset == rhs.offset && block_or_array_size == rhs.block_or_array_size &&
+             array_length == rhs.array_length && array_stride == rhs.array_stride;
     }
   };
 
@@ -56,16 +72,22 @@ class ShaderReflection {
                               int set,
                               int binding,
                               int block_size);
+  // array_length and array_stride describe an array member, and stay at -1 otherwise.
+  // See ItemInfo above for what they mean.
   void addUniformBufferAttr(std::string_view name,
                             int set,
                             int binding,
                             int offset,
-                            int size);
+                            int size,
+                            int array_length = -1,
+                            int array_stride = -1);
   void addShaderStorageBufferAttr(std::string_view name,
                                   int set,
                                   int binding,
                                   int offset,
-                                  int size);
+                                  int size,
+                                  int array_length = -1,
+                                  int array_stride = -1);
   void addFragmentShaderOutputLocation(int location);
 
   bool hasVertexAttr(std::string_view name) const;

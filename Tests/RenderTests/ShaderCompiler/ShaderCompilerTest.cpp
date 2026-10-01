@@ -165,6 +165,8 @@ void expect_item_info_eq(const ShaderReflection::ItemInfo& actual,
   EXPECT_EQ(actual.offset, expected.offset) << description << " offset";
   EXPECT_EQ(actual.block_or_array_size, expected.block_or_array_size)
       << description << " block/array size";
+  EXPECT_EQ(actual.array_length, expected.array_length) << description << " array length";
+  EXPECT_EQ(actual.array_stride, expected.array_stride) << description << " array stride";
 }
 
 ShaderManager::BuilderUqPtr deserialize_builder(const std::string& filename,
@@ -466,6 +468,20 @@ TEST_F(GeneralShaderCompilerTest, ShaderRedecoratorTest) {
   EXPECT_EQ(frag_refl.getAllUniformBufferAttrNames().size(), size_t(3));
   EXPECT_EQ(vert_refl.getAllShaderStorageBufferAttrNames().size(), size_t(2));
   EXPECT_EQ(frag_refl.getAllShaderStorageBufferAttrNames().size(), size_t(2));
+
+  // The SSBO members here are runtime-sized arrays, which report a length of 0 and a
+  // stride. No .reflect golden covers a buffer attr that is an array, so this is the
+  // only check on the array shape of one.
+  auto const& ssbo_attr =
+      vert_refl.getShaderStorageBufferAttrItemInfo("vert_ssbo_values");
+  EXPECT_EQ(ssbo_attr.array_length, 0);
+  EXPECT_EQ(ssbo_attr.array_stride, 4) << "a float array strides by its element size";
+
+  // A member that is not an array leaves both at -1, so that the two cases stay
+  // distinguishable from a runtime-sized array of length 0
+  auto const& scalar_attr = vert_refl.getUniformBufferAttrItemInfo("viewTM");
+  EXPECT_EQ(scalar_attr.array_length, -1);
+  EXPECT_EQ(scalar_attr.array_stride, -1);
 
   // Array size is the array extent of the declaration, not the layering of the
   // sampler itself: sampler2DArray is one descriptor, sampler2D[2] is two

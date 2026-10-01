@@ -78,18 +78,26 @@ void ShaderReflection::addUniformBufferAttr(std::string_view name,
                                             int set,
                                             int binding,
                                             int offset,
-                                            int size) {
+                                            int size,
+                                            int array_length,
+                                            int array_stride) {
   uniform_buffer_attrs_.insert_unless_different(
-      name, {set, binding, offset, size}, "Uniform Buffer Attr");
+      name,
+      {set, binding, offset, size, array_length, array_stride},
+      "Uniform Buffer Attr");
 }
 
 void ShaderReflection::addShaderStorageBufferAttr(std::string_view name,
                                                   int set,
                                                   int binding,
                                                   int offset,
-                                                  int size) {
+                                                  int size,
+                                                  int array_length,
+                                                  int array_stride) {
   shader_storage_buffer_attrs_.insert_unless_different(
-      name, {set, binding, offset, size}, "Shader Storage Buffer Attr");
+      name,
+      {set, binding, offset, size, array_length, array_stride},
+      "Shader Storage Buffer Attr");
 }
 
 void ShaderReflection::addFragmentShaderOutputLocation(int location) {
@@ -310,7 +318,8 @@ void write_section(std::ostream& stream,
     stream << "  \"" << entry->first << "\" set=" << info.set << ' '
            << labels.binding_or_location << '=' << info.binding_or_location
            << " offset=" << info.offset << ' ' << labels.block_or_array_size << '='
-           << info.block_or_array_size << '\n';
+           << info.block_or_array_size << " array_length=" << info.array_length
+           << " array_stride=" << info.array_stride << '\n';
   }
 }
 

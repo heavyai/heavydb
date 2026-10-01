@@ -1,41 +1,41 @@
 vertex_attrs 4
-  "id" set=-1 location=3 offset=-1 array_size=1
-  "key" set=-1 location=0 offset=-1 array_size=1
-  "x" set=-1 location=1 offset=-1 array_size=1
-  "y" set=-1 location=2 offset=-1 array_size=1
+  "id" set=-1 location=3 offset=-1 array_size=1 array_length=-1 array_stride=-1
+  "key" set=-1 location=0 offset=-1 array_size=1 array_length=-1 array_stride=-1
+  "x" set=-1 location=1 offset=-1 array_size=1 array_length=-1 array_stride=-1
+  "y" set=-1 location=2 offset=-1 array_size=1 array_length=-1 array_stride=-1
 samplers 0
 storage_images 0
 uniform_buffers 5
-  "POINT_VERT_UBO_TYPE" set=0 binding=1 offset=-1 block_size=68
-  "QUANTITATIVE_SCALE_UBO_TYPE_x_x" set=0 binding=4 offset=-1 block_size=40
-  "QUANTITATIVE_SCALE_UBO_TYPE_y_y" set=0 binding=2 offset=-1 block_size=40
-  "SHARED_VIEWPORT_UBO" set=0 binding=0 offset=-1 block_size=16
-  "SLAB_ADDRESS_TABLE_UBO" set=0 binding=3 offset=-1 block_size=1024
+  "POINT_VERT_UBO_TYPE" set=0 binding=1 offset=-1 block_size=68 array_length=-1 array_stride=-1
+  "QUANTITATIVE_SCALE_UBO_TYPE_x_x" set=0 binding=4 offset=-1 block_size=40 array_length=-1 array_stride=-1
+  "QUANTITATIVE_SCALE_UBO_TYPE_y_y" set=0 binding=2 offset=-1 block_size=40 array_length=-1 array_stride=-1
+  "SHARED_VIEWPORT_UBO" set=0 binding=0 offset=-1 block_size=16 array_length=-1 array_stride=-1
+  "SLAB_ADDRESS_TABLE_UBO" set=0 binding=3 offset=-1 block_size=1024 array_length=-1 array_stride=-1
 shader_storage_buffers 0
 acceleration_structures 0
 uniform_buffer_attrs 23
-  "fillColor" set=0 binding=1 offset=48 size=16
-  "fillOpacity" set=0 binding=1 offset=40 size=4
-  "invalidKey" set=0 binding=1 offset=24 size=8
-  "nullDomainVal_x_x" set=0 binding=4 offset=16 size=8
-  "nullDomainVal_y_y" set=0 binding=2 offset=16 size=8
-  "nullRangeVal_x_x" set=0 binding=4 offset=32 size=4
-  "nullRangeVal_y_y" set=0 binding=2 offset=32 size=4
-  "opacity" set=0 binding=1 offset=64 size=4
-  "propCompressionBits" set=0 binding=1 offset=32 size=4
-  "size" set=0 binding=1 offset=36 size=4
-  "slabs.cuda" set=0 binding=3 offset=0 size=8
-  "slabs.vulkan" set=0 binding=3 offset=8 size=8
-  "uDomains_x_x" set=0 binding=4 offset=0 size=16
-  "uDomains_y_y" set=0 binding=2 offset=0 size=16
-  "uExponent_x_x" set=0 binding=4 offset=36 size=4
-  "uExponent_y_y" set=0 binding=2 offset=36 size=4
-  "uRanges_x_x" set=0 binding=4 offset=24 size=8
-  "uRanges_y_y" set=0 binding=2 offset=24 size=8
-  "uViewProjMatrix" set=0 binding=1 offset=0 size=24
-  "viewport.height" set=0 binding=0 offset=12 size=4
-  "viewport.width" set=0 binding=0 offset=8 size=4
-  "viewport.x" set=0 binding=0 offset=0 size=4
-  "viewport.y" set=0 binding=0 offset=4 size=4
+  "fillColor" set=0 binding=1 offset=48 size=16 array_length=-1 array_stride=-1
+  "fillOpacity" set=0 binding=1 offset=40 size=4 array_length=-1 array_stride=-1
+  "invalidKey" set=0 binding=1 offset=24 size=8 array_length=-1 array_stride=-1
+  "nullDomainVal_x_x" set=0 binding=4 offset=16 size=8 array_length=-1 array_stride=-1
+  "nullDomainVal_y_y" set=0 binding=2 offset=16 size=8 array_length=-1 array_stride=-1
+  "nullRangeVal_x_x" set=0 binding=4 offset=32 size=4 array_length=-1 array_stride=-1
+  "nullRangeVal_y_y" set=0 binding=2 offset=32 size=4 array_length=-1 array_stride=-1
+  "opacity" set=0 binding=1 offset=64 size=4 array_length=-1 array_stride=-1
+  "propCompressionBits" set=0 binding=1 offset=32 size=4 array_length=-1 array_stride=-1
+  "size" set=0 binding=1 offset=36 size=4 array_length=-1 array_stride=-1
+  "slabs.cuda" set=0 binding=3 offset=0 size=8 array_length=64 array_stride=16
+  "slabs.vulkan" set=0 binding=3 offset=8 size=8 array_length=64 array_stride=16
+  "uDomains_x_x" set=0 binding=4 offset=0 size=16 array_length=2 array_stride=8
+  "uDomains_y_y" set=0 binding=2 offset=0 size=16 array_length=2 array_stride=8
+  "uExponent_x_x" set=0 binding=4 offset=36 size=4 array_length=-1 array_stride=-1
+  "uExponent_y_y" set=0 binding=2 offset=36 size=4 array_length=-1 array_stride=-1
+  "uRanges_x_x" set=0 binding=4 offset=24 size=8 array_length=2 array_stride=4
+  "uRanges_y_y" set=0 binding=2 offset=24 size=8 array_length=2 array_stride=4
+  "uViewProjMatrix" set=0 binding=1 offset=0 size=24 array_length=-1 array_stride=-1
+  "viewport.height" set=0 binding=0 offset=12 size=4 array_length=-1 array_stride=-1
+  "viewport.width" set=0 binding=0 offset=8 size=4 array_length=-1 array_stride=-1
+  "viewport.x" set=0 binding=0 offset=0 size=4 array_length=-1 array_stride=-1
+  "viewport.y" set=0 binding=0 offset=4 size=4 array_length=-1 array_stride=-1
 shader_storage_buffer_attrs 0
 fragment_output_locations 0
