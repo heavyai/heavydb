@@ -8,6 +8,9 @@
 #include <iomanip>
 #include <sstream>
 
+// LiveTraverser.h must precede iomapper.h, which no longer includes it and
+// relies on its callers to have brought in the glslang AST types.
+#include <glslang/MachineIndependent/LiveTraverser.h>
 #include <glslang/MachineIndependent/iomapper.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
 
