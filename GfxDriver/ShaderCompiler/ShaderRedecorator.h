@@ -6,7 +6,7 @@
 #pragma once
 
 #include <map>
-#include <unordered_map>
+#include <tuple>
 
 #include "GfxDriver/ShaderCompiler/Types.h"
 
@@ -45,28 +45,27 @@ class ShaderRedecorator {
                   const std::string& template_name);
 
  private:
+  // Every resource lands in this one set. No shader in the library declares an
+  // explicit set, so there is never a second one to allocate into.
+  static constexpr uint32_t kDescriptorSet = 0U;
+
   static constexpr uint32_t kMaxBindingsPerSet = kUninitializedBinding - 1U;
   using ReservedBindingEntry = std::tuple<ResourceType, std::string, uint32_t>;
   using ReservedBindings = std::map<uint32_t, ReservedBindingEntry>;
-  using VulkanReservedBindings = std::unordered_map<int, ReservedBindings>;
 
-  void redecorateInternal(spirv_t& spirv, int set, ShaderReflection& reflection);
+  void redecorateInternal(spirv_t& spirv, ShaderReflection& reflection);
 
-  ReservedBindings& getReservedBindings(int set, ResourceType resource_type);
-
-  void reserveBindings(int set,
-                       uint32_t first_binding,
+  void reserveBindings(uint32_t first_binding,
                        uint32_t num_bindings,
                        ResourceType resource_type,
                        const std::string& resource_name);
 
-  uint32_t allocateBindings(int set,
-                            uint32_t num_bindings,
+  uint32_t allocateBindings(uint32_t num_bindings,
                             ResourceType resource_type,
                             const std::string& resource_name);
 
   std::string shader_name_;
-  VulkanReservedBindings reserved_vulkan_bindings_;
+  ReservedBindings reserved_bindings_;
   uint32_t num_vertex_attr_locations_;
 };
 

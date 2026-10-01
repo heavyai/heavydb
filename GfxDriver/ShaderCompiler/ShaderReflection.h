@@ -18,12 +18,12 @@ namespace gfx {
 
 // POD for API-agnostic reflection results for shaders created by a Builder
 // initially an instance of this will be in BuilderImpl::Cache
-
+//
+// Declare no destructor and no copy or move operations here. Hand-written ones
+// have to enumerate every member, which is how they drift when a member is
+// added, and declaring any of them costs the implicit move constructor.
 class ShaderReflection {
  public:
-  ShaderReflection();
-  ~ShaderReflection() = default;
-
   struct ItemInfo {
     int set;
     int binding_or_location;
@@ -43,7 +43,6 @@ class ShaderReflection {
 
   void initialize();
   void clear();
-  ShaderReflection& operator=(const ShaderReflection& rhs);
 
   void addVertexAttr(std::string_view name, int location, int array_size);
   void addSampler(std::string_view name, int set, int binding, int array_size);
@@ -138,10 +137,6 @@ class ShaderReflection {
           map_.try_emplace(std::string(name), value).second,
           std::string(type_name) + " \'" + std::string(name) + "\' repeated");
     }
-    NameToItemInfoMap& operator=(const NameToItemInfoMap& rhs) {
-      map_ = rhs.map_;
-      return *this;
-    }
 
    private:
     MapType map_;
@@ -157,8 +152,6 @@ class ShaderReflection {
   NameToItemInfoMap uniform_buffer_attrs_;
   NameToItemInfoMap shader_storage_buffer_attrs_;
   std::set<int> fragment_shader_output_locations_;
-
-  void validateSet(int set);
 };
 
 }  // namespace gfx
