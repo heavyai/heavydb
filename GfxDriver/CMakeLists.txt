@@ -116,7 +116,6 @@ find_package(Glslang REQUIRED)
 add_definitions(-DNV_EXTENSIONS -DAMD_EXTENSIONS)
 list(APPEND GFXDRIVER_SOURCES
   ShaderCompiler/GlslangWrapper.cpp
-  ShaderCompiler/TShaderIRUtils.cpp
   ShaderCompiler/ResourceLimits.cpp)
 list(APPEND GFXDRIVER_LIBS ${Glslang_LIBRARIES})
 

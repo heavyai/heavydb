@@ -5,8 +5,10 @@
 
 #pragma once
 
+#include <set>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <boost/noncopyable.hpp>
 
@@ -318,7 +320,16 @@ class ShaderManager : boost::noncopyable {
                         SubroutineMap* rebind_map,
                         bool is_sub_builder) const;
 
+  // The templates a Builder references pull in extensions and includes transitively.
+  struct TemplateDependencies {
+    std::set<uint32_t> extension_indices;   // order irrelevant
+    std::vector<uint32_t> include_indices;  // depth first order
+  };
+  TemplateDependencies collectTemplateDependencies(const Builder& builder) const;
+
   std::string buildExtensionAndIncludesString(Builder& builder) const;
+
+  void rebindSubroutineCalls(Builder& builder, const SubroutineMap& rebind_map) const;
 
   // Process operators, invoke glslang, and return a spirv binary suitable for final
   // specialization
