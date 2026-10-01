@@ -11502,6 +11502,9 @@ TEST_F(Select, GroupByPerfectHash) {
 TEST_F(Select, GroupByBaselineHash) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    c("SELECT CAST(x AS DOUBLE) AS key, AVG(CAST(y AS FLOAT)) FROM gpu_sort_test "
+      "GROUP BY key ORDER BY key;",
+      dt);
     c("SELECT cast(x1 as double) as key, COUNT(*), SUM(x2), MIN(x3), MAX(x4) FROM "
       "random_test"
       " GROUP BY key ORDER BY key;",
