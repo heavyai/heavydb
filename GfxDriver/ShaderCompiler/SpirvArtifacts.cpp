@@ -16,6 +16,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 
+#include "GfxDriver/ShaderCompiler/ShaderReflection.h"
 #include "GfxDriver/ShaderCompiler/SpirvCrossUtils.h"
 #include "Logger/Logger.h"
 
@@ -111,6 +112,7 @@ void write_to_file(const std::string& filename,
 void write_spirv_artifacts(const std::string& glsl_string,
                            const spirv_t& spv,
                            const spirv_t& opt_spv,
+                           const ShaderReflection& reflection,
                            const std::string& base_name,
                            ShaderArtifactTypeBits artifacts) {
   if (shader_artifacts_enabled_in_build()) {
@@ -128,6 +130,16 @@ void write_spirv_artifacts(const std::string& glsl_string,
     }
 
     if (!spv.empty()) {
+      if (ShaderArtifactTypeBits::kSpvReflect & artifacts) {
+        // Our own reflection, which is what Material consumes. Written in the
+        // same format ShaderCompilerTest uses for its goldens, so an artifact
+        // from a failing run can be diffed directly against a .reflect file.
+        // The SPIRV-Cross dump below is complementary: it carries member types
+        // and strides, which ShaderReflection does not model.
+        std::string filename = pathed_name + ".reflection";
+        write_to_file(filename, false, [&](auto& file) { reflection.serialize(file); });
+      }
+
       if (ShaderArtifactTypeBits::kSpvBin & artifacts) {
         // unoptimized spirv
         std::string filename = pathed_name + ".spv";

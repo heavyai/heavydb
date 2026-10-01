@@ -36,6 +36,10 @@ ShaderReflection& ShaderCache::getReflection() {
   return reflection_;
 }
 
+const ShaderReflection& ShaderCache::getReflection() const {
+  return reflection_;
+}
+
 const ShaderStage ShaderCache::getShaderStage() const {
   return stage_;
 }
