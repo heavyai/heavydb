@@ -10,7 +10,7 @@ This repository has long been a limited open source version of the core HeavyDB,
 
 This project now includes the core HeavyDB capabilities along with:
 - The Immerse user interface with advanced visualization and dashboard creation capabilities.
-- Advanced rendering capabilities to generate the complex geospatial visualization elements on the server side using the power of the GPU and delivers these images to the browser.
+- The HeavyAI platform includes an advanced  GPU-accelerated back-end Renderer that generates point/symbol/line/polygon/heatmap/raster images that are  composited by the front-end over a map background in the included Immerse UI.  This capability is based on Vega which allows it to be connected to other custom front end applications as well.
 - HeavyRF provides simulation capabilities for RF propagation for advanced wireless network planning use cases.  These capabilities exploit GPU performance to combine fast simulation calculations with the ability to process complex geospatial data including ground clutter, terrain data, tower data, and other business relevant data in a single view.
 - HeavyConnect exposes external data through foreign tables that you can analyze with HeavyDB simplifying ETL workflows.  Supported adapters include CSV/delimited files, Parquet, and regex-parsed logs on local storage or Amazon S3. ODBC database connectivity and raster data sources.
 - Build tools and utilities to make the install process very easy.  Getting up and running with entire platform can now be done with a few simple steps.
