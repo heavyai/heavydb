@@ -849,13 +849,11 @@ TEST(KernelPerFragmentGroupByDispatch, KeepsSmallFragmentedTempGroupByMultifrag)
 
   const auto large_table_unit = makeSyntheticGroupByUnit(/*db_id=*/1, /*table_id=*/1);
   constexpr size_t row_width = 2 * sizeof(int64_t);
-  const auto small_entry_threshold =
-      std::max(executor->maxGpuSlabSize() / size_t(64), row_width) / row_width;
-  // The KPF heuristic compares against the per-device batch upper bound, not only
-  // the per-fragment bound. Keep this synthetic table safely above both the small
-  // global-buffer threshold and the minimum global-to-fragment ratio.
-  const auto large_group_count =
-      std::max(small_entry_threshold * size_t(16), size_t(1024));
+  ASSERT_GE(executor->maxGpuSlabSize(), row_width * size_t(16));
+  // Model a global result buffer at the slab limit while keeping each of the 16
+  // fragment buffers small enough to fit. This remains a KPF candidate on a single
+  // GPU, where the per-device batch upper bound otherwise covers the whole table.
+  const auto large_group_count = executor->maxGpuSlabSize() / row_width;
   const std::vector<InputTableInfo> large_table_infos{
       makeFragmentedTableInfo(/*db_id=*/1,
                               /*table_id=*/1,
