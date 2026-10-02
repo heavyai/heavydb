@@ -337,7 +337,9 @@ std::pair<key_t, void*> get_shm(size_t shmsz) {
 }
 
 std::pair<key_t, std::shared_ptr<arrow::Buffer>> get_shm_buffer(size_t size) {
-  auto [key, ipc_ptr] = get_shm(size);
+  auto shm = get_shm(size);
+  auto key = shm.first;
+  auto ipc_ptr = shm.second;
   std::shared_ptr<arrow::Buffer> buffer(
       new arrow::MutableBuffer(static_cast<uint8_t*>(ipc_ptr), size),
       [ipc_ptr](arrow::Buffer* buffer) {
