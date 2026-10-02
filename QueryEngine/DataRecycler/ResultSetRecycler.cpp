@@ -61,7 +61,7 @@ ResultSetPtr ResultSetRecycler::getItemFromCache(
     decltype(std::chrono::steady_clock::now()) ts1, ts2;
     ts1 = std::chrono::steady_clock::now();
     // we need to copy cached resultset to support resultset recycler with concurrency
-    auto copied_rs = candidate_resultset->copy();
+    auto copied_rs = candidate_resultset->copyForCacheRetrieval();
     CHECK(copied_rs);
     copied_rs->setCached(true);
     copied_rs->initStatus();
@@ -174,15 +174,20 @@ void ResultSetRecycler::putItemToCache(QueryPlanHash key,
                 << required_size << " bytes) to cache a new resultset";
       cleanupCacheForInsertion(item_type, device_identifier, required_size, lock);
     }
+    auto cache_item_ptr = item_ptr;
+    if (item_ptr->hasDeviceBufferOwnership()) {
+      cache_item_ptr = item_ptr->copyForCacheInsertion();
+      CHECK(cache_item_ptr);
+    }
     auto new_cache_metric_ptr = metric_tracker.putNewCacheItemMetric(
         key, device_identifier, item_size, compute_time);
     CHECK_EQ(item_size, new_cache_metric_ptr->getMemSize());
-    item_ptr->setCached(true);
-    item_ptr->initStatus();
+    cache_item_ptr->setCached(true);
+    cache_item_ptr->initStatus();
     VLOG(1) << "[" << item_type << ", "
             << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
             << "] Put query resultset to cache (key: " << key << ")";
-    resultset_cache->emplace_back(key, item_ptr, new_cache_metric_ptr, meta_info);
+    resultset_cache->emplace_back(key, cache_item_ptr, new_cache_metric_ptr, meta_info);
     if (!meta_info->input_table_keys.empty()) {
       addQueryPlanDagForTableKeys(key, meta_info->input_table_keys, lock);
     }

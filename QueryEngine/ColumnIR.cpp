@@ -181,26 +181,29 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     }
     return codegen(hash_join_lhs.get(), fetch_column, co);
   }
+  const auto& col_ti = col_var->get_type_info();
+  const InputColDescriptor col_desc(column_key.column_id,
+                                    column_key.table_id,
+                                    column_key.db_id,
+                                    col_var->get_rte_idx());
   auto pos_arg = posArg(col_var);
   if (window_func_context) {
     pos_arg = codegenWindowPosition(window_func_context, pos_arg);
   }
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
+  if (update_query_plan && fetch_column &&
+      plan_state_->canUseSegmentedColumnFetch(col_desc, col_ti, co.device_type)) {
+    plan_state_->addColumnToFetchSegmented(col_desc);
+  }
+  const bool use_segmented_column_fetch =
+      fetch_column && plan_state_->isColumnToFetchSegmented(col_desc) &&
+      !col_ti.is_varlen() && !col_ti.usesFlatBuffer() && col_ti.get_size() > 0;
   if (plan_state_->isLazyFetchColumn(col_var)) {
     if (update_query_plan) {
       plan_state_->addColumnToNotFetch(col_var->getColumnKey());
     }
-    if (rte_idx > 0) {
-      const auto offset = cgen_state_->frag_offsets_[rte_idx];
-      if (offset) {
-        return {cgen_state_->ir_builder_.CreateAdd(pos_arg, offset)};
-      } else {
-        return {pos_arg};
-      }
-    }
-    return {pos_arg};
+    return {codegenLazyFetchRowId(col_var, pos_arg)};
   }
-  const auto& col_ti = col_var->get_type_info();
   if (col_ti.is_string() && col_ti.get_compression() == kENCODING_NONE) {
     const auto varlen_str_column_lvs =
         codegenVariableLengthStringColVar(col_byte_stream, pos_arg);
@@ -221,8 +224,24 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     return {codegenFixedLengthColVarInWindow(
         col_var, col_byte_stream, pos_arg, co, window_func_context)};
   }
+  llvm::Value* decode_byte_stream = col_byte_stream;
+  llvm::Value* decode_pos = pos_arg;
+  if (fetch_column &&
+      plan_state_->isColumnToFetchSelectedDense(col_var->getColumnKey())) {
+    auto* dense_pos = get_arg_by_name(cgen_state_->row_func_, "dense_pos");
+    CHECK(dense_pos->getType()->isIntegerTy(64));
+    decode_pos = dense_pos;
+  }
+  if (use_segmented_column_fetch) {
+    decode_byte_stream = cgen_state_->emitCall(
+        "segmented_column_ptr",
+        {col_byte_stream,
+         cgen_state_->castToTypeIn(pos_arg, 64),
+         cgen_state_->llInt(static_cast<int64_t>(col_ti.get_size()))});
+    decode_pos = cgen_state_->llInt(int64_t(0));
+  }
   const auto fixed_length_column_lv =
-      codegenFixedLengthColVar(col_var, col_byte_stream, pos_arg);
+      codegenFixedLengthColVar(col_var, decode_byte_stream, decode_pos);
   auto it_ok = cgen_state_->fetch_cache_.insert(
       std::make_pair(col_var_hash, std::vector<llvm::Value*>{fixed_length_column_lv}));
   return {it_ok.first->second};
@@ -418,6 +437,31 @@ llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
     rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, start_rowid_lv);
   }
   return rowid_lv;
+}
+
+llvm::Value* CodeGenerator::codegenLazyFetchRowId(const Analyzer::ColumnVar* col_var,
+                                                  llvm::Value* pos_arg) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  const int rte_idx = adjusted_range_table_index(col_var);
+  CHECK_LT(static_cast<size_t>(rte_idx), cgen_state_->frag_offsets_.size());
+
+  const auto offset_lv = cgen_state_->frag_offsets_[rte_idx];
+  if (offset_lv) {
+    return cgen_state_->ir_builder_.CreateAdd(pos_arg, offset_lv);
+  }
+
+  if (rte_idx <= 0) {
+    return pos_arg;
+  }
+
+  auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
+  auto input_off_ptr = cgen_state_->ir_builder_.CreateGEP(
+      frag_off_ptr->getType()->getScalarType()->getPointerElementType(),
+      frag_off_ptr,
+      cgen_state_->llInt(int32_t(rte_idx)));
+  auto rowid_offset_lv = cgen_state_->ir_builder_.CreateLoad(
+      input_off_ptr->getType()->getPointerElementType(), input_off_ptr);
+  return cgen_state_->ir_builder_.CreateAdd(pos_arg, rowid_offset_lv);
 }
 
 namespace {

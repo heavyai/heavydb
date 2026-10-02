@@ -3913,17 +3913,22 @@ Detector::Detector(const boost::filesystem::path& fp, CopyParams& cp)
 inline auto open_parquet_table(const std::string& file_path,
                                std::shared_ptr<arrow::io::ReadableFile>& infile,
                                std::unique_ptr<parquet::arrow::FileReader>& reader,
-                               std::shared_ptr<arrow::Table>& table) {
+                               std::shared_ptr<arrow::Schema>& schema) {
   using namespace parquet::arrow;
   auto file_result = arrow::io::ReadableFile::Open(file_path);
   PARQUET_THROW_NOT_OK(file_result.status());
   infile = file_result.ValueOrDie();
 
   PARQUET_THROW_NOT_OK(OpenFile(infile, arrow::default_memory_pool(), &reader));
-  PARQUET_THROW_NOT_OK(reader->ReadTable(&table));
+  PARQUET_THROW_NOT_OK(reader->GetSchema(&schema));
+  reader->set_use_threads(true);
+  const auto metadata = reader->parquet_reader()->metadata();
+  if (!metadata) {
+    throw std::runtime_error("Missing Parquet file metadata for " + file_path);
+  }
   const auto num_row_groups = reader->num_row_groups();
-  const auto num_columns = table->num_columns();
-  const auto num_rows = table->num_rows();
+  const auto num_columns = schema->num_fields();
+  const auto num_rows = metadata->num_rows();
   LOG(INFO) << "File " << file_path << " has " << num_rows << " rows and " << num_columns
             << " columns in " << num_row_groups << " groups.";
   return std::make_tuple(num_row_groups, num_columns, num_rows);
@@ -3934,11 +3939,11 @@ void Detector::import_local_parquet(const std::string& file_path,
   /*Skip interrupt checking in detector*/
   std::shared_ptr<arrow::io::ReadableFile> infile;
   std::unique_ptr<parquet::arrow::FileReader> reader;
-  std::shared_ptr<arrow::Table> table;
+  std::shared_ptr<arrow::Schema> schema;
   int num_row_groups, num_columns;
   int64_t num_rows;
   std::tie(num_row_groups, num_columns, num_rows) =
-      open_parquet_table(file_path, infile, reader, table);
+      open_parquet_table(file_path, infile, reader, schema);
   // make up header line if not yet
   if (0 == raw_data.size()) {
     copy_params.has_header = ImportHeaderRow::kHasHeader;
@@ -3952,24 +3957,26 @@ void Detector::import_local_parquet(const std::string& file_path,
       if (c) {
         raw_data += copy_params.delimiter;
       }
-      raw_data += table->ColumnNames().at(c);
+      raw_data += schema->field_names().at(c);
     }
     raw_data += copy_params.line_delim;
   }
   // make up raw data... rowwize...
   const ColumnDescriptor cd;
   for (int g = 0; g < num_row_groups; ++g) {
+    std::shared_ptr<arrow::Table> row_group_table;
+    PARQUET_THROW_NOT_OK(reader->ReadRowGroup(g, &row_group_table));
     // data is columnwise
     std::vector<std::shared_ptr<arrow::ChunkedArray>> arrays;
     std::vector<VarValue (*)(const Array&, const int64_t)> getters;
     arrays.resize(num_columns);
     for (int c = 0; c < num_columns; ++c) {
-      PARQUET_THROW_NOT_OK(reader->RowGroup(g)->Column(c)->Read(&arrays[c]));
+      arrays[c] = row_group_table->column(c);
       for (auto chunk : arrays[c]->chunks()) {
         getters.push_back(value_getter(*chunk, nullptr, nullptr));
       }
     }
-    for (int r = 0; r < num_rows; ++r) {
+    for (int64_t r = 0; r < row_group_table->num_rows(); ++r) {
       for (int c = 0; c < num_columns; ++c) {
         import_export::vector<std::string> buffer;
         for (auto chunk : arrays[c]->chunks()) {
@@ -4002,11 +4009,11 @@ void Importer::import_local_parquet(const std::string& file_path,
                                     const Catalog_Namespace::SessionInfo* session_info) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
   std::unique_ptr<parquet::arrow::FileReader> reader;
-  std::shared_ptr<arrow::Table> table;
+  std::shared_ptr<arrow::Schema> schema;
   int num_row_groups, num_columns;
   int64_t nrow_in_file;
   std::tie(num_row_groups, num_columns, nrow_in_file) =
-      open_parquet_table(file_path, infile, reader, table);
+      open_parquet_table(file_path, infile, reader, schema);
   // column_list has no $deleted
   const auto& column_list = get_column_descs();
   // for now geo columns expect a wkt or wkb hex string
@@ -4079,13 +4086,16 @@ void Importer::import_local_parquet(const std::string& file_path,
         bad_rows_tracker.row_group = slice;
         bad_rows_tracker.importer = this;
       }
+      std::shared_ptr<arrow::Table> row_group_table;
+      PARQUET_THROW_NOT_OK(reader->ReadRowGroup(row_group, &row_group_table));
+      arrow_throw_if(
+          row_group_table->num_columns() != num_columns,
+          "Parquet row group column count changed while importing " + file_path + ".");
       // process arrow arrays to import buffers
       for (int logic_col_idx = 0; logic_col_idx < num_columns; ++logic_col_idx) {
         const auto physical_col_idx = get_physical_col_idx(logic_col_idx);
         const auto cd = cds[physical_col_idx];
-        std::shared_ptr<arrow::ChunkedArray> array;
-        PARQUET_THROW_NOT_OK(
-            reader->RowGroup(row_group)->Column(logic_col_idx)->Read(&array));
+        const auto array = row_group_table->column(logic_col_idx);
         const size_t array_size = array->length();
         const size_t slice_size = (array_size + num_slices - 1) / num_slices;
         ThreadController_NS::SimpleThreadController<void> thread_controller(num_slices);

@@ -16,6 +16,7 @@
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
 
 #include <iostream>
+#include <limits>
 #include <list>
 #include <map>
 #include <mutex>
@@ -84,6 +85,7 @@ struct MemoryData {
   uint32_t touch;
   ChunkKey chunk_key;
   MemStatus mem_status;
+  unsigned int pin_count;
 };
 
 struct MemoryInfo {
@@ -93,6 +95,33 @@ struct MemoryInfo {
   bool is_allocation_capped;
   std::vector<MemoryData> node_memory_data;
 };
+
+inline size_t get_reclaimable_num_pages(const MemoryInfo& memory_info) {
+  size_t reclaimable_pages = 0;
+  if (memory_info.max_num_pages > memory_info.num_page_allocated) {
+    reclaimable_pages += memory_info.max_num_pages - memory_info.num_page_allocated;
+  }
+  for (const auto& memory_data : memory_info.node_memory_data) {
+    if (memory_data.mem_status == FREE ||
+        (memory_data.mem_status == USED && memory_data.pin_count == 0)) {
+      if (memory_data.num_pages >
+          std::numeric_limits<size_t>::max() - reclaimable_pages) {
+        return std::numeric_limits<size_t>::max();
+      }
+      reclaimable_pages += memory_data.num_pages;
+    }
+  }
+  return reclaimable_pages;
+}
+
+inline size_t get_reclaimable_size_bytes(const MemoryInfo& memory_info) {
+  const auto reclaimable_pages = get_reclaimable_num_pages(memory_info);
+  if (memory_info.page_size != 0 &&
+      reclaimable_pages > std::numeric_limits<size_t>::max() / memory_info.page_size) {
+    return std::numeric_limits<size_t>::max();
+  }
+  return reclaimable_pages * memory_info.page_size;
+}
 
 /**
  * @class   BufferMgr
@@ -142,6 +171,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   /// Returns the a pointer to the chunk with the specified key.
   AbstractBuffer* getBuffer(const ChunkKey& key, const size_t num_bytes = 0) override;
+  std::vector<AbstractBuffer*> getBuffers(
+      const std::vector<Data_Namespace::BufferFetchRequest>& requests) override;
 
   /**
    * @brief Puts the contents of d into the Buffer with ChunkKey key.
@@ -177,6 +208,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
  protected:
   virtual Buffer* createBuffer(BufferList::iterator seg_it, size_t page_size) = 0;
+  AbstractBufferMgr* getParentMgr() const { return parent_mgr_; }
 
   const size_t
       max_buffer_pool_size_;    /// max number of bytes allocated for the buffer pool

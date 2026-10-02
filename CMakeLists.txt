@@ -215,6 +215,11 @@ option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   enable_language(CUDA)
   include_directories(${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+  foreach(CUDA_TOOLKIT_INCLUDE_DIR ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
+    if(EXISTS "${CUDA_TOOLKIT_INCLUDE_DIR}/cccl")
+      include_directories("${CUDA_TOOLKIT_INCLUDE_DIR}/cccl")
+    endif()
+  endforeach()
   include_directories(ThirdParty/warpcore/include)
   include_directories(ThirdParty/hpc_helpers/include)
   list(APPEND CUDA_LIBRARIES cuda)
@@ -723,14 +728,43 @@ if(ENABLE_IMPORT_PARQUET)
     message(STATUS "Parquet not found. Disabling Parquet Importer support.")
   else()
     add_definitions("-DENABLE_IMPORT_PARQUET")
-    # when we found libparquet it means we're using arrow 11+
-    # and deps scripts must have built parquet as well as snappy
-    find_package(Snappy REQUIRED)
   endif()
 endif()
 
+# Native storage compression uses Snappy independently of Parquet import support.
+find_package(Snappy REQUIRED)
 find_library(lz4_LIBRARY lz4 REQUIRED)
 find_library(bz2_LIBRARY bz2 REQUIRED)
+
+find_path(nvcomp_cpu_INCLUDE_DIR
+          nvcomp/native/gdeflate_cpu.h
+          PATHS /usr/include/nvcomp_13)
+find_library(nvcomp_cpu_LIBRARY
+             nvcomp_cpu
+             PATHS /usr/lib/x86_64-linux-gnu/nvcomp/13)
+if(nvcomp_cpu_INCLUDE_DIR AND nvcomp_cpu_LIBRARY)
+  message(STATUS "Found nvCOMP CPU codecs: ${nvcomp_cpu_LIBRARY}")
+else()
+  unset(nvcomp_cpu_INCLUDE_DIR CACHE)
+  unset(nvcomp_cpu_LIBRARY CACHE)
+  message(STATUS "nvCOMP CPU codecs not found. Native GDeflate storage disabled.")
+endif()
+
+if(ENABLE_CUDA)
+  find_path(nvcomp_INCLUDE_DIR nvcomp/lz4.h PATHS /usr/include/nvcomp_13)
+  find_library(nvcomp_LIBRARY nvcomp PATHS /usr/lib/x86_64-linux-gnu/nvcomp/13)
+  set(nvcomp_BITCOMP_FOUND FALSE)
+  if(nvcomp_INCLUDE_DIR AND nvcomp_LIBRARY)
+    message(STATUS "Found nvCOMP: ${nvcomp_LIBRARY}")
+    if(EXISTS "${nvcomp_INCLUDE_DIR}/nvcomp/bitcomp.h" AND
+       EXISTS "${nvcomp_INCLUDE_DIR}/nvcomp/native/bitcomp.h")
+      set(nvcomp_BITCOMP_FOUND TRUE)
+      message(STATUS "Found nvCOMP Bitcomp support")
+    endif()
+  else()
+    message(STATUS "nvCOMP not found. Native storage GPU decompression disabled.")
+  endif()
+endif()
 
 list(APPEND Arrow_LIBRARIES ${lz4_LIBRARY} ${Snappy_LIBRARIES} ${bz2_LIBRARY}) # zstd linked elsewhere for GDAL
 if(ENABLE_AWS_S3)
@@ -910,6 +944,7 @@ if(ENABLE_RENDERING)
 endif()
 
 find_package(CPR REQUIRED)
+include_directories(SYSTEM ${CPR_INCLUDE_DIRS})
 
 if(ENABLE_RUNTIME_LIBS)
   if(ENABLE_TORCH_TFS)
@@ -960,6 +995,7 @@ if(ENABLE_RENDERING)
   list(APPEND MAPD_LIBRARIES ${MAPD_RENDERING_LIBRARIES})
 endif()
 
+set(MAPD_INTERNAL_LIBRARIES ${MAPD_LIBRARIES})
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 if(ENABLE_PDAL)
@@ -1076,14 +1112,74 @@ add_custom_target(get_git_hash ALL
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/heavyai_git_hash.txt)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/MapDRelease.h)
 
+# mold performs a single pass over static archives. HeavyDB's core libraries have
+# circular dependencies, so group them for repeated scanning when linking a static
+# build with mold (the linker forced for GCC builds on aarch64).
+set(HEAVYDB_CORE_LINK_LIBRARIES mapd_thrift thrift_handler)
+set(HEAVYDB_MAPD_LINK_LIBRARIES ${MAPD_LIBRARIES})
+if(PREFER_STATIC_LIBS AND "${USE_ALTERNATE_LINKER}" STREQUAL "mold")
+  list(APPEND HEAVYDB_CORE_LINK_LIBRARIES ${MAPD_INTERNAL_LIBRARIES})
+  foreach(HEAVYDB_TRANSITIVE_TARGET IN ITEMS
+      token_completion_hints
+      UdfCompiler
+      StringDictionary
+      Utils
+      UtilsStandalone
+      QueryParsing
+      ThriftClient
+      calciteserver_thrift
+      LdapServer
+      SamlServer
+      CudaMgr
+      RowToColumn
+      RuntimeLibManager
+      ExecuteRenderInterface
+      QueryRenderer
+      GfxInterop
+      GfxDriver
+      GfxImGui
+      rg3_bcrypt
+      muparserx)
+    if(TARGET ${HEAVYDB_TRANSITIVE_TARGET})
+      list(APPEND HEAVYDB_CORE_LINK_LIBRARIES ${HEAVYDB_TRANSITIVE_TARGET})
+    endif()
+  endforeach()
+  list(REMOVE_DUPLICATES HEAVYDB_CORE_LINK_LIBRARIES)
+  list(JOIN HEAVYDB_CORE_LINK_LIBRARIES "," HEAVYDB_CORE_LINK_GROUP)
+  set(HEAVYDB_CORE_LINK_LIBRARIES
+      "$<LINK_GROUP:RESCAN,${HEAVYDB_CORE_LINK_GROUP}>")
+  list(REMOVE_ITEM HEAVYDB_MAPD_LINK_LIBRARIES ${MAPD_INTERNAL_LIBRARIES})
+endif()
+
 # note if aws isn't enabled Aws_CURL_SUPPORT is empty
-target_link_libraries(heavydb mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+target_link_libraries(heavydb
+    ${HEAVYDB_CORE_LINK_LIBRARIES} ${HEAVYDB_MAPD_LINK_LIBRARIES}
+    ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
     ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT})
 
-target_link_libraries(initheavy mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+target_link_libraries(initheavy
+    ${HEAVYDB_CORE_LINK_LIBRARIES} ${HEAVYDB_MAPD_LINK_LIBRARIES}
+    ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
     ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT})
+
+# CUDA transfer benchmarks construct CudaMgr and therefore pull in the same circular
+# static-library closure as the server. Reuse the production link group for mold rather
+# than maintaining an incomplete archive list in each benchmark target.
+if(PREFER_STATIC_LIBS AND "${USE_ALTERNATE_LINKER}" STREQUAL "mold")
+  foreach(HEAVYDB_CUDA_BENCHMARK_TARGET IN ITEMS
+      DeviceToDeviceBenchmark
+      JumpBufferBenchmark)
+    if(TARGET ${HEAVYDB_CUDA_BENCHMARK_TARGET})
+      target_link_libraries(${HEAVYDB_CUDA_BENCHMARK_TARGET}
+          ${HEAVYDB_CORE_LINK_LIBRARIES} ${HEAVYDB_MAPD_LINK_LIBRARIES}
+          ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+          ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
+          ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT})
+    endif()
+  endforeach()
+endif()
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")

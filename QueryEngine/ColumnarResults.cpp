@@ -13,13 +13,35 @@
 #include "Shared/likely.h"
 #include "Shared/sqltypes.h"
 #include "Shared/thread_count.h"
+#include "Shared/threading.h"
+#include "StringDictionary/StringDictionary.h"
 
 #include <tbb/parallel_reduce.h>
 #include <atomic>
 #include <future>
+#include <limits>
 #include <numeric>
+#include <optional>
 
 namespace {
+
+size_t checked_size_add(const size_t lhs,
+                        const size_t rhs,
+                        const char* const description) {
+  if (rhs > std::numeric_limits<size_t>::max() - lhs) {
+    throw std::overflow_error(description);
+  }
+  return lhs + rhs;
+}
+
+size_t checked_size_multiply(const size_t lhs,
+                             const size_t rhs,
+                             const char* const description) {
+  if (lhs != 0 && rhs > std::numeric_limits<size_t>::max() / lhs) {
+    throw std::overflow_error(description);
+  }
+  return lhs * rhs;
+}
 
 inline int64_t fixed_encoding_nullable_val(const int64_t val,
                                            const SQLTypeInfo& type_info) {
@@ -32,6 +54,33 @@ inline int64_t fixed_encoding_nullable_val(const int64_t val,
     }
   }
   return val;
+}
+
+inline int64_t direct_columnar_nullable_val(const int64_t val,
+                                            const SQLTypeInfo& type_info,
+                                            const ResultSet& rows,
+                                            const size_t target_idx) {
+  const auto translated_null_key =
+      rows.getQueryMemDesc().getTranslatedGroupbyNullForTarget(target_idx);
+  if (translated_null_key && val == *translated_null_key) {
+    return inline_int_null_val(type_info);
+  }
+  if (type_info.is_string() && type_info.get_compression() == kENCODING_DICT) {
+    const auto null_val = inline_fixed_encoding_null_val(type_info);
+    if (val == StringDictionary::INVALID_STR_ID ||
+        val == inline_int_null_val(type_info)) {
+      return null_val;
+    }
+    if (val >= 0) {
+      const auto string_dict_proxy =
+          rows.getStringDictionaryProxy(type_info.getStringDictKey());
+      if (val > std::numeric_limits<int32_t>::max() ||
+          !string_dict_proxy->canDecodeStringId(static_cast<int32_t>(val))) {
+        return null_val;
+      }
+    }
+  }
+  return fixed_encoding_nullable_val(val, type_info);
 }
 
 std::vector<size_t> get_padded_target_sizes(
@@ -62,6 +111,81 @@ std::vector<size_t> get_padded_target_sizes(
         padded_slot_width == 0UL ? target_types[col_idx].get_size() : padded_slot_width);
   }
   return padded_target_sizes;
+}
+
+size_t get_columnar_padded_width(const ResultSet& rows, const size_t col_idx) {
+  const auto col_context = rows.getQueryMemDesc().getColSlotContext();
+  const auto slot_idx = col_context.getSlotsForCol(col_idx).front();
+  return static_cast<size_t>(rows.getPaddedSlotWidthBytes(slot_idx));
+}
+
+bool can_zero_copy_columnar_result(const ResultSet& rows,
+                                   const size_t col_idx,
+                                   const SQLTypeInfo& target_type) {
+  const auto& query_mem_desc = rows.getQueryMemDesc();
+  if (col_idx < query_mem_desc.targetGroupbyIndicesSize() &&
+      query_mem_desc.getTargetGroupbyIndex(col_idx) >= 0) {
+    return false;
+  }
+  if (!rows.isZeroCopyColumnarConversionPossible(col_idx)) {
+    return false;
+  }
+  if (target_type.usesFlatBuffer()) {
+    return true;
+  }
+  return get_columnar_padded_width(rows, col_idx) ==
+         static_cast<size_t>(target_type.get_size());
+}
+
+bool requires_raw_columnar_copy_normalization(const SQLTypeInfo& target_type) {
+  return !target_type.get_notnull() && target_type.get_compression() == kENCODING_FIXED;
+}
+
+bool can_use_direct_columnar_conversion(const ResultSet& rows,
+                                        const std::vector<SQLTypeInfo>& target_types) {
+  if (!rows.isDirectColumnarConversionPossible()) {
+    return false;
+  }
+  const auto query_type = rows.getQueryDescriptionType();
+  const bool dense_result = rows.rowCount() == rows.entryCount();
+  if (query_type == QueryDescriptionType::TableFunction) {
+    return dense_result &&
+           std::any_of(
+               target_types.begin(), target_types.end(), [](const auto& target_type) {
+                 return target_type.usesFlatBuffer();
+               });
+  }
+  const bool raw_columnar_copy_query = query_type == QueryDescriptionType::Projection;
+  if (raw_columnar_copy_query && !dense_result) {
+    return false;
+  }
+  if (raw_columnar_copy_query &&
+      std::any_of(target_types.begin(), target_types.end(), [](const auto& target_type) {
+        return requires_raw_columnar_copy_normalization(target_type);
+      })) {
+    return false;
+  }
+  return true;
+}
+
+void copy_dense_columnar_buffer(const ResultSet& rows,
+                                const size_t col_idx,
+                                const SQLTypeInfo& target_type,
+                                int8_t* output_buffer) {
+  CHECK(output_buffer);
+  CHECK(!target_type.usesFlatBuffer());
+  CHECK(rows.isZeroCopyColumnarConversionPossible(col_idx));
+  const auto source_width = get_columnar_padded_width(rows, col_idx);
+  const auto target_width = static_cast<size_t>(target_type.get_size());
+  CHECK_GT(target_width, size_t(0));
+  CHECK_GE(source_width, target_width);
+  const auto source_buffer = rows.getColumnarBuffer(col_idx);
+  CHECK(source_buffer);
+  for (size_t row_idx = 0; row_idx < rows.entryCount(); ++row_idx) {
+    std::memcpy(output_buffer + row_idx * target_width,
+                source_buffer + row_idx * source_width,
+                target_width);
+  }
 }
 
 int64_t toBuffer(const TargetValue& col_val, const SQLTypeInfo& type_info, int8_t* buf) {
@@ -248,15 +372,20 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
                                  const std::vector<SQLTypeInfo>& target_types,
                                  const size_t executor_id,
                                  const size_t thread_idx,
-                                 const bool is_parallel_execution_enforced)
+                                 const bool is_parallel_execution_enforced,
+                                 const RowOrderMode row_order_mode,
+                                 const std::optional<size_t> selected_column_idx,
+                                 const std::vector<size_t>& selected_column_indices)
     : column_buffers_(num_columns)
-    , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible())
-    , num_rows_(direct_columnar_conversion_ ? rows.entryCount() : rows.rowCount())
+    , direct_columnar_conversion_(can_use_direct_columnar_conversion(rows, target_types))
+    , num_rows_(rows.entryCount())
     , target_types_(target_types)
     , parallel_conversion_(is_parallel_execution_enforced ||
                            result_set::use_parallel_algorithms(rows))
     , thread_idx_(thread_idx)
-    , padded_target_sizes_(get_padded_target_sizes(rows, target_types)) {
+    , padded_target_sizes_(get_padded_target_sizes(rows, target_types))
+    , row_order_mode_(row_order_mode)
+    , selected_column_idx_(selected_column_idx) {
   auto timer = DEBUG_TIMER(__func__);
   column_buffers_.resize(num_columns);
   executor_ = Executor::getExecutor(executor_id);
@@ -266,15 +395,34 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
           << ", parallel conversion? " << ::toString(parallel_conversion_);
   CHECK(executor_);
   CHECK_EQ(padded_target_sizes_.size(), target_types.size());
+  CHECK(selected_column_indices.empty() || !selected_column_idx_);
+  if (selected_column_idx_) {
+    CHECK_LT(*selected_column_idx_, num_columns);
+    CHECK(direct_columnar_conversion_);
+    CHECK_EQ(rows.getQueryDescriptionType(), QueryDescriptionType::Projection);
+  }
+  if (!selected_column_indices.empty()) {
+    CHECK(!direct_columnar_conversion_);
+    CHECK_EQ(rows.getQueryDescriptionType(), QueryDescriptionType::Projection);
+    selected_columns_.assign(num_columns, false);
+    for (const auto column_idx : selected_column_indices) {
+      CHECK_LT(column_idx, num_columns);
+      selected_columns_[column_idx] = true;
+    }
+  }
 
   for (size_t i = 0; i < num_columns; ++i) {
+    if ((selected_column_idx_ && i != *selected_column_idx_) ||
+        (!selected_columns_.empty() && !selected_columns_[i])) {
+      continue;
+    }
     const auto& src_ti = rows.getColType(i);
     // ti is initialized in columnarize_result() function in
     // ColumnFetcher.cpp and it may differ from src_ti with respect to
     // uses_flatbuffer attribute
     const auto& ti = target_types_[i];
 
-    if (rows.isZeroCopyColumnarConversionPossible(i)) {
+    if (direct_columnar_conversion_ && can_zero_copy_columnar_result(rows, i, ti)) {
       CHECK_EQ(ti.usesFlatBuffer(), src_ti.usesFlatBuffer());
       // The column buffer will be assigned in
       // ColumnarResults::copyAllNonLazyColumns.
@@ -373,7 +521,9 @@ ColumnarResults::ColumnarResults(std::shared_ptr<RowSetMemoryOwner> row_set_mem_
     }
   }
 
-  if (isDirectColumnarConversionPossible() && rows.entryCount() > 0) {
+  if (!selected_columns_.empty()) {
+    materializeSelectedColumnsThroughIteration(rows, num_columns);
+  } else if (isDirectColumnarConversionPossible() && rows.entryCount() > 0) {
     materializeAllColumnsDirectly(rows, num_columns);
   } else {
     materializeAllColumnsThroughIteration(rows, num_columns);
@@ -463,6 +613,78 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
   return merged_results;
 }
 
+std::unique_ptr<ColumnarResults> ColumnarResults::mergeColumnBuffers(
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const std::vector<const int8_t*>& column_buffers,
+    const std::vector<size_t>& row_counts,
+    const SQLTypeInfo& target_type,
+    const size_t thread_idx) {
+  CHECK_EQ(column_buffers.size(), row_counts.size());
+  const bool is_varlen =
+      target_type.is_array() ||
+      (target_type.is_string() && target_type.get_compression() == kENCODING_NONE) ||
+      target_type.is_geometry();
+  if (is_varlen) {
+    throw ColumnarConversionNotSupported();
+  }
+
+  size_t total_row_count{0};
+  for (const auto row_count : row_counts) {
+    total_row_count =
+        checked_size_add(total_row_count, row_count, "Merged column row count overflow");
+  }
+  if (!total_row_count) {
+    return nullptr;
+  }
+
+  if (target_type.get_size() <= 0) {
+    throw std::invalid_argument("Merged column type must have a fixed positive width");
+  }
+  const auto byte_width = static_cast<size_t>(target_type.get_size());
+  std::unique_ptr<ColumnarResults> merged_results(
+      new ColumnarResults(total_row_count, {target_type}, {byte_width}));
+  const auto buf_size = checked_size_multiply(
+      byte_width, total_row_count, "Merged column buffer size overflow");
+  auto write_base = row_set_mem_owner->allocate(buf_size, thread_idx);
+  merged_results->column_buffers_.push_back(write_base);
+
+  std::vector<size_t> byte_offsets(row_counts.size());
+  std::vector<size_t> byte_sizes(row_counts.size());
+  size_t running_offset = 0;
+  for (size_t i = 0; i < row_counts.size(); ++i) {
+    byte_offsets[i] = running_offset;
+    byte_sizes[i] = checked_size_multiply(
+        row_counts[i], byte_width, "Merged column fragment size overflow");
+    running_offset = checked_size_add(
+        running_offset, byte_sizes[i], "Merged column fragment offset overflow");
+  }
+  CHECK_EQ(running_offset, buf_size);
+
+  const size_t worker_count = std::max<size_t>(
+      1,
+      std::min({column_buffers.size(), static_cast<size_t>(cpu_threads()), size_t(32)}));
+  for (size_t batch_begin = 0; batch_begin < column_buffers.size();
+       batch_begin += worker_count) {
+    std::vector<std::future<void>> workers;
+    const size_t batch_end = std::min(batch_begin + worker_count, column_buffers.size());
+    workers.reserve(batch_end - batch_begin);
+    for (size_t i = batch_begin; i < batch_end; ++i) {
+      workers.push_back(std::async(std::launch::async, [&, i] {
+        if (!row_counts[i]) {
+          return;
+        }
+        CHECK(column_buffers[i]);
+        std::memcpy(write_base + byte_offsets[i], column_buffers[i], byte_sizes[i]);
+      }));
+    }
+    for (auto& worker : workers) {
+      worker.get();
+    }
+  }
+
+  return merged_results;
+}
+
 /**
  * This function iterates through the result set (using the getRowAtNoTranslation and
  * getNextRow family of functions) and writes back the results into output column buffers.
@@ -477,15 +699,165 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
     }
   }
   if (isParallelConversion()) {
-    std::atomic<size_t> row_idx{0};
     const size_t worker_count = cpu_threads();
-    std::vector<std::future<void>> conversion_threads;
+    const auto entry_count = rows.entryCount();
+    const auto logical_row_count = rows.rowCount();
+    struct ConversionInterval {
+      size_t begin;
+      size_t end;
+    };
+    std::vector<ConversionInterval> intervals;
+    for (const auto interval : makeIntervals(size_t(0), entry_count, worker_count)) {
+      intervals.push_back(ConversionInterval{interval.begin, interval.end});
+    }
     std::mutex write_mutex;
-    const auto do_work =
-        [num_columns, &rows, &row_idx, &write_mutex, this](const size_t i) {
+
+    if (logical_row_count == entry_count) {
+      num_rows_ = entry_count;
+      std::vector<threading::future<void>> conversion_threads;
+      conversion_threads.reserve(intervals.size());
+      const auto do_work = [num_columns, &rows, &intervals, &write_mutex, this](
+                               const size_t interval_idx) {
+        const auto interval = intervals[interval_idx];
+        for (size_t i = interval.begin; i < interval.end; ++i) {
+          if (g_enable_non_kernel_time_query_interrupt) {
+            checkInterruption(i);
+          }
           const auto crt_row = rows.getRowAtNoTranslations(i);
-          if (!crt_row.empty()) {
-            auto cur_row_idx = row_idx.fetch_add(1);
+          CHECK(!crt_row.empty());
+          for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+            auto& type_info = target_types_[col_idx];
+            writeBackCell(
+                crt_row[col_idx], i, type_info, column_buffers_[col_idx], &write_mutex);
+          }
+        }
+      };
+      for (size_t interval_idx = 0; interval_idx < intervals.size(); ++interval_idx) {
+        conversion_threads.push_back(threading::async(do_work, interval_idx));
+      }
+      try {
+        for (auto& child : conversion_threads) {
+          child.get();
+        }
+      } catch (QueryExecutionError& e) {
+        if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
+        }
+        throw;
+      } catch (...) {
+        throw;
+      }
+      rows.setCachedRowCount(num_rows_);
+      return;
+    }
+
+    if (row_order_mode_ == RowOrderMode::Unordered) {
+      std::atomic<size_t> row_idx{0};
+      std::vector<threading::future<void>> conversion_threads;
+      conversion_threads.reserve(intervals.size());
+      const auto do_work =
+          [num_columns, &rows, &row_idx, &write_mutex, this](const size_t i) {
+            const auto crt_row = rows.getRowAtNoTranslations(i);
+            if (!crt_row.empty()) {
+              const auto cur_row_idx = row_idx.fetch_add(1);
+              for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+                auto& type_info = target_types_[col_idx];
+                writeBackCell(crt_row[col_idx],
+                              cur_row_idx,
+                              type_info,
+                              column_buffers_[col_idx],
+                              &write_mutex);
+              }
+            }
+          };
+      for (const auto interval : intervals) {
+        conversion_threads.push_back(threading::async(
+            [&do_work, this](const size_t start, const size_t end) {
+              if (g_enable_non_kernel_time_query_interrupt) {
+                size_t local_idx = 0;
+                for (size_t i = start; i < end; ++i, ++local_idx) {
+                  checkInterruption(local_idx);
+                  do_work(i);
+                }
+              } else {
+                for (size_t i = start; i < end; ++i) {
+                  do_work(i);
+                }
+              }
+            },
+            interval.begin,
+            interval.end));
+      }
+      try {
+        for (auto& child : conversion_threads) {
+          child.get();
+        }
+      } catch (QueryExecutionError& e) {
+        if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+          throw QueryExecutionError(ErrorCode::INTERRUPTED);
+        }
+        throw;
+      } catch (...) {
+        throw;
+      }
+      num_rows_ = row_idx.load();
+      CHECK_EQ(num_rows_, logical_row_count);
+      rows.setCachedRowCount(num_rows_);
+      return;
+    }
+
+    std::vector<std::vector<size_t>> row_indices(intervals.size());
+    std::vector<threading::future<void>> count_threads;
+    count_threads.reserve(intervals.size());
+    for (size_t interval_idx = 0; interval_idx < intervals.size(); ++interval_idx) {
+      count_threads.push_back(
+          threading::async([&rows, &row_indices, &intervals, interval_idx, this]() {
+            auto& local_row_indices = row_indices[interval_idx];
+            const auto interval = intervals[interval_idx];
+            for (size_t i = interval.begin; i < interval.end; ++i) {
+              if (g_enable_non_kernel_time_query_interrupt) {
+                checkInterruption(i);
+              }
+              if (!rows.isRowAtEmpty(i)) {
+                local_row_indices.push_back(i);
+              }
+            }
+          }));
+    }
+    try {
+      for (auto& child : count_threads) {
+        child.get();
+      }
+    } catch (QueryExecutionError& e) {
+      if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
+        throw QueryExecutionError(ErrorCode::INTERRUPTED);
+      }
+      throw;
+    } catch (...) {
+      throw;
+    }
+    std::vector<size_t> row_counts(intervals.size(), 0);
+    for (size_t interval_idx = 0; interval_idx < intervals.size(); ++interval_idx) {
+      row_counts[interval_idx] = row_indices[interval_idx].size();
+    }
+    std::vector<size_t> row_offsets(row_counts.size() + 1, 0);
+    std::partial_sum(row_counts.begin(), row_counts.end(), row_offsets.begin() + 1);
+    num_rows_ = row_offsets.back();
+    CHECK_EQ(num_rows_, logical_row_count);
+
+    std::vector<threading::future<void>> conversion_threads;
+    conversion_threads.reserve(intervals.size());
+    const auto do_work =
+        [num_columns, &rows, &row_indices, &row_offsets, &write_mutex, this](
+            const size_t interval_idx) {
+          auto cur_row_idx = row_offsets[interval_idx];
+          for (const auto i : row_indices[interval_idx]) {
+            if (g_enable_non_kernel_time_query_interrupt) {
+              checkInterruption(i);
+            }
+            const auto crt_row = rows.getRowAtNoTranslations(i);
+            CHECK(!crt_row.empty());
+            CHECK_LT(cur_row_idx, row_offsets[interval_idx + 1]);
             for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
               auto& type_info = target_types_[col_idx];
               writeBackCell(crt_row[col_idx],
@@ -494,31 +866,17 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
                             column_buffers_[col_idx],
                             &write_mutex);
             }
+            ++cur_row_idx;
           }
+          CHECK_EQ(cur_row_idx, row_offsets[interval_idx + 1]);
         };
-    for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
-      conversion_threads.push_back(std::async(
-          std::launch::async,
-          [&do_work, this](const size_t start, const size_t end) {
-            if (g_enable_non_kernel_time_query_interrupt) {
-              size_t local_idx = 0;
-              for (size_t i = start; i < end; ++i, ++local_idx) {
-                checkInterruption(local_idx);
-                do_work(i);
-              }
-            } else {
-              for (size_t i = start; i < end; ++i) {
-                do_work(i);
-              }
-            }
-          },
-          interval.begin,
-          interval.end));
+    for (size_t interval_idx = 0; interval_idx < intervals.size(); ++interval_idx) {
+      conversion_threads.push_back(threading::async(do_work, interval_idx));
     }
 
     try {
       for (auto& child : conversion_threads) {
-        child.wait();
+        child.get();
       }
     } catch (QueryExecutionError& e) {
       if (e.hasErrorCode(ErrorCode::INTERRUPTED)) {
@@ -529,7 +887,6 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
       throw;
     }
 
-    num_rows_ = row_idx;
     rows.setCachedRowCount(num_rows_);
     return;
   }
@@ -558,7 +915,110 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
     }
   }
 
+  num_rows_ = row_idx;
+  rows.setCachedRowCount(num_rows_);
   rows.moveToBegin();
+}
+
+void ColumnarResults::materializeSelectedColumnsThroughIteration(
+    const ResultSet& rows,
+    const size_t num_columns) {
+  CHECK(!selected_columns_.empty());
+  CHECK_EQ(selected_columns_.size(), num_columns);
+  CHECK(!isDirectColumnarConversionPossible());
+
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    if (selected_columns_[col_idx] && !rows.isEmpty()) {
+      CHECK(column_buffers_[col_idx]) << "Columnarization buffer for " << col_idx
+                                      << "-th selected column is not initialized";
+    }
+  }
+
+  const auto worker_count = isParallelConversion() ? cpu_threads() : size_t(1);
+  const auto entry_count = rows.entryCount();
+  struct ConversionInterval {
+    size_t begin;
+    size_t end;
+  };
+  std::vector<ConversionInterval> intervals;
+  for (const auto interval : makeIntervals(size_t(0), entry_count, worker_count)) {
+    intervals.push_back(ConversionInterval{interval.begin, interval.end});
+  }
+  std::vector<std::vector<size_t>> row_indices(intervals.size());
+  std::vector<std::future<void>> workers;
+  workers.reserve(intervals.size());
+  for (size_t interval_idx = 0; interval_idx < intervals.size(); ++interval_idx) {
+    workers.push_back(std::async(
+        std::launch::async, [&rows, &row_indices, &intervals, interval_idx, this]() {
+          auto& local_row_indices = row_indices[interval_idx];
+          const auto interval = intervals[interval_idx];
+          for (size_t entry_idx = interval.begin; entry_idx < interval.end; ++entry_idx) {
+            if (g_enable_non_kernel_time_query_interrupt) {
+              checkInterruption(entry_idx - interval.begin);
+            }
+            if (!rows.isRowAtEmpty(entry_idx)) {
+              local_row_indices.push_back(entry_idx);
+            }
+          }
+        }));
+  }
+  for (auto& worker : workers) {
+    worker.get();
+  }
+
+  std::vector<size_t> row_offsets(row_indices.size() + 1, 0);
+  for (size_t interval_idx = 0; interval_idx < row_indices.size(); ++interval_idx) {
+    row_offsets[interval_idx + 1] =
+        row_offsets[interval_idx] + row_indices[interval_idx].size();
+  }
+  num_rows_ = row_offsets.back();
+  CHECK_EQ(num_rows_, rows.rowCount());
+
+  std::vector<bool> targets_to_skip(num_columns, true);
+  for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+    targets_to_skip[col_idx] = !selected_columns_[col_idx];
+  }
+
+  std::mutex write_mutex;
+  workers.clear();
+  workers.reserve(intervals.size());
+  for (size_t interval_idx = 0; interval_idx < intervals.size(); ++interval_idx) {
+    workers.push_back(std::async(
+        std::launch::async,
+        [&rows,
+         &row_indices,
+         &row_offsets,
+         &targets_to_skip,
+         &write_mutex,
+         interval_idx,
+         num_columns,
+         this]() {
+          auto output_row_idx = row_offsets[interval_idx];
+          for (const auto entry_idx : row_indices[interval_idx]) {
+            if (g_enable_non_kernel_time_query_interrupt) {
+              checkInterruption(output_row_idx - row_offsets[interval_idx]);
+            }
+            const auto row = rows.getRowAtNoTranslations(entry_idx, targets_to_skip);
+            CHECK_EQ(row.size(), num_columns);
+            for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+              if (!selected_columns_[col_idx]) {
+                continue;
+              }
+              writeBackCell(row[col_idx],
+                            output_row_idx,
+                            target_types_[col_idx],
+                            column_buffers_[col_idx],
+                            &write_mutex);
+            }
+            ++output_row_idx;
+          }
+          CHECK_EQ(output_row_idx, row_offsets[interval_idx + 1]);
+        }));
+  }
+  for (auto& worker : workers) {
+    worker.get();
+  }
+  rows.setCachedRowCount(num_rows_);
 }
 
 template <size_t NDIM,
@@ -988,9 +1448,11 @@ void ColumnarResults::writeBackCellDirect(const ResultSet& rows,
                                           const size_t target_idx,
                                           const size_t slot_idx,
                                           const ReadFunction& read_from_function) {
-  const auto val = static_cast<DATA_TYPE>(fixed_encoding_nullable_val(
-      read_from_function(rows, input_buffer_entry_idx, target_idx, slot_idx),
-      target_types_[target_idx]));
+  const auto raw_val =
+      read_from_function(rows, input_buffer_entry_idx, target_idx, slot_idx);
+  const auto normalized_val =
+      direct_columnar_nullable_val(raw_val, target_types_[target_idx], rows, target_idx);
+  const auto val = static_cast<DATA_TYPE>(normalized_val);
   reinterpret_cast<DATA_TYPE*>(column_buffers_[target_idx])[output_buffer_entry_idx] =
       val;
 }
@@ -1120,13 +1582,14 @@ void ColumnarResults::copyAllNonLazyColumns(
   // parallelized by assigning each column to a thread
   std::vector<std::future<void>> direct_copy_threads;
   for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-    if (rows.isZeroCopyColumnarConversionPossible(col_idx)) {
+    if (selected_column_idx_ && col_idx != *selected_column_idx_) {
+      continue;
+    }
+    if (can_zero_copy_columnar_result(rows, col_idx, target_types_[col_idx])) {
       CHECK(!column_buffers_[col_idx]);
       // The name of the method implies a copy but this is not a copy!!
       column_buffers_[col_idx] = const_cast<int8_t*>(rows.getColumnarBuffer(col_idx));
     } else if (is_column_non_lazily_fetched(col_idx)) {
-      CHECK(!(rows.query_mem_desc_.getQueryDescriptionType() ==
-              QueryDescriptionType::TableFunction));
       if (rows.getColType(col_idx).usesFlatBuffer() &&
           target_types_[col_idx].usesFlatBuffer()) {
         // If both source and target result sets use FlatBuffer
@@ -1137,16 +1600,25 @@ void ColumnarResults::copyAllNonLazyColumns(
       direct_copy_threads.push_back(std::async(
           std::launch::async,
           [&rows, this](const size_t column_index) {
-            size_t column_size = rows.getColumnarBufferSize(column_index);
-            rows.copyColumnIntoBuffer(
-                column_index, column_buffers_[column_index], column_size);
+            const auto& target_type = target_types_[column_index];
+            if (!target_type.usesFlatBuffer() &&
+                rows.isZeroCopyColumnarConversionPossible(column_index) &&
+                get_columnar_padded_width(rows, column_index) !=
+                    static_cast<size_t>(target_type.get_size())) {
+              copy_dense_columnar_buffer(
+                  rows, column_index, target_type, column_buffers_[column_index]);
+            } else {
+              size_t column_size = rows.getColumnarBufferSize(column_index);
+              rows.copyColumnIntoBuffer(
+                  column_index, column_buffers_[column_index], column_size);
+            }
           },
           col_idx));
     }
   }
 
   for (auto& child : direct_copy_threads) {
-    child.wait();
+    child.get();
   }
 }
 
@@ -1224,12 +1696,31 @@ void ColumnarResults::materializeAllLazyColumns(
     return;
   }
 
+  if (selected_column_idx_) {
+    if (!lazy_fetch_info[*selected_column_idx_].is_lazily_fetched) {
+      return;
+    }
+    rows.materializeDeferredLazyFetchColumnsForOutputRows({*selected_column_idx_});
+  } else {
+    std::vector<size_t> lazy_column_indices;
+    lazy_column_indices.reserve(num_columns);
+    for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+      if (lazy_fetch_info[col_idx].is_lazily_fetched) {
+        lazy_column_indices.push_back(col_idx);
+      }
+    }
+    rows.materializeDeferredLazyFetchColumnsForOutputRows(lazy_column_indices);
+  }
+
   const size_t worker_count =
       result_set::use_parallel_algorithms(rows) ? cpu_threads() : 1;
   std::vector<std::future<void>> conversion_threads;
 
-  const bool has_lazy_fetched_flat_buffer_col = has_lazy_fetched_flat_buffer_column(
-      lazy_fetch_info, rows, target_types_, num_columns);
+  const bool has_lazy_fetched_flat_buffer_col =
+      selected_column_idx_ ? rows.getColType(*selected_column_idx_).usesFlatBuffer() ||
+                                 target_types_[*selected_column_idx_].usesFlatBuffer()
+                           : has_lazy_fetched_flat_buffer_column(
+                                 lazy_fetch_info, rows, target_types_, num_columns);
 
   if (has_lazy_fetched_flat_buffer_col) {
     // Use the slower logic for flat buffers
@@ -1276,14 +1767,15 @@ void ColumnarResults::materializeAllLazyColumns(
     const auto do_work = [this, &rows, &lazy_fetch_info, num_columns](const size_t start,
                                                                       const size_t end) {
       for (size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-        if (lazy_fetch_info[col_idx].is_lazily_fetched) {
+        if (lazy_fetch_info[col_idx].is_lazily_fetched &&
+            (!selected_column_idx_ || col_idx == *selected_column_idx_)) {
           const auto& type_info = target_types_[col_idx];
           const size_t col_width = type_info.get_size();
           const auto sql_type = type_info.get_type();
           int8_t* col_buffer = column_buffers_[col_idx];
           switch (sql_type) {
             case SQLTypes::kBOOLEAN:
-              fetchAndCheckInterruption<bool>(
+              fetchAndCheckInterruption<int8_t>(
                   start, end, col_idx, col_width, col_buffer, rows);
               break;
             case SQLTypes::kTINYINT:
@@ -1379,6 +1871,8 @@ void ColumnarResults::materializeAllColumnsGroupBy(const ResultSet& rows,
 
   locateAndCountEntries(
       rows, bitmap, non_empty_per_thread, entry_count, num_threads, size_per_thread);
+  num_rows_ = std::accumulate(
+      non_empty_per_thread.begin(), non_empty_per_thread.end(), size_t(0));
 
   // step 2: go through the generated bitmap and copy/decode corresponding entries
   // into the output buffer
@@ -1436,12 +1930,12 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
         non_empty_per_thread[thread_idx] = total_non_empty;
       };
 
-  std::vector<std::future<void>> conversion_threads;
+  std::vector<threading::future<void>> conversion_threads;
   for (size_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
     const size_t start_entry = thread_idx * size_per_thread;
     const size_t end_entry = std::min(start_entry + size_per_thread, entry_count);
-    conversion_threads.push_back(std::async(
-        std::launch::async, locate_and_count_func, start_entry, end_entry, thread_idx));
+    conversion_threads.push_back(
+        threading::async(locate_and_count_func, start_entry, end_entry, thread_idx));
   }
 
   try {
@@ -1617,12 +2111,12 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
     }
   };
 
-  std::vector<std::future<void>> compaction_threads;
+  std::vector<threading::future<void>> compaction_threads;
   for (size_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
     const size_t start_entry = thread_idx * size_per_thread;
     const size_t end_entry = std::min(start_entry + size_per_thread, entry_count);
-    compaction_threads.push_back(std::async(
-        std::launch::async, compact_buffer_func, start_entry, end_entry, thread_idx));
+    compaction_threads.push_back(
+        threading::async(compact_buffer_func, start_entry, end_entry, thread_idx));
   }
 
   try {
@@ -1717,12 +2211,12 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
     }
   };
 
-  std::vector<std::future<void>> compaction_threads;
+  std::vector<threading::future<void>> compaction_threads;
   for (size_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
     const size_t start_entry = thread_idx * size_per_thread;
     const size_t end_entry = std::min(start_entry + size_per_thread, entry_count);
-    compaction_threads.push_back(std::async(
-        std::launch::async, compact_buffer_func, start_entry, end_entry, thread_idx));
+    compaction_threads.push_back(
+        threading::async(compact_buffer_func, start_entry, end_entry, thread_idx));
   }
 
   try {
@@ -1951,6 +2445,43 @@ std::vector<ColumnarResults::ReadFunction> ColumnarResults::initReadFunctions(
       continue;
     }
 
+    if (QUERY_TYPE == QueryDescriptionType::GroupByPerfectHash &&
+        target_idx < rows.query_mem_desc_.targetGroupbyIndicesSize() &&
+        rows.query_mem_desc_.getTargetGroupbyIndex(target_idx) >= 0) {
+      if (target_types_[target_idx].is_fp()) {
+        switch (target_types_[target_idx].get_size()) {
+          case 8:
+            read_functions.emplace_back(read_double_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
+            break;
+          case 4:
+            read_functions.emplace_back(read_float_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
+            break;
+          default:
+            UNREACHABLE() << "Invalid data type encountered (perfect hash fp key).";
+            break;
+        }
+      } else {
+        switch (target_types_[target_idx].get_size()) {
+          case 8:
+            read_functions.emplace_back(read_int64_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
+            break;
+          case 4:
+            read_functions.emplace_back(read_int32_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
+            break;
+          case 2:
+            read_functions.emplace_back(read_int16_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
+            break;
+          case 1:
+            read_functions.emplace_back(read_int8_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
+            break;
+          default:
+            UNREACHABLE() << "Invalid data type encountered (perfect hash integer key).";
+            break;
+        }
+      }
+      continue;
+    }
+
     if (QUERY_TYPE == QueryDescriptionType::GroupByBaselineHash) {
       if (rows.getPaddedSlotWidthBytes(slot_idx_per_target_idx[target_idx]) == 0) {
         // for key columns only
@@ -2034,9 +2565,9 @@ ColumnarResults::initAllConversionFunctions(
     const ResultSet& rows,
     const std::vector<size_t>& slot_idx_per_target_idx,
     const std::vector<bool>& targets_to_skip) {
-  CHECK(isDirectColumnarConversionPossible() &&
-        (rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
-         rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash));
+  CHECK(isDirectColumnarConversionPossible());
+  CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
+        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
 
   const auto write_functions = initWriteFunctions(rows, targets_to_skip);
   if (rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash) {
@@ -2052,6 +2583,7 @@ ColumnarResults::initAllConversionFunctions(
               rows, slot_idx_per_target_idx, targets_to_skip));
     }
   } else {
+    CHECK_EQ(rows.getQueryDescriptionType(), QueryDescriptionType::GroupByBaselineHash);
     if (rows.didOutputColumnar()) {
       return std::make_tuple(
           std::move(write_functions),

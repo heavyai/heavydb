@@ -268,7 +268,8 @@ FileBuffer* CachingFileMgr::createBufferUnlocked(const ChunkKey& key,
 FileBuffer* CachingFileMgr::createBufferFromHeaders(
     const ChunkKey& key,
     const std::vector<HeaderInfo>::const_iterator& startIt,
-    const std::vector<HeaderInfo>::const_iterator& endIt) {
+    const std::vector<HeaderInfo>::const_iterator& endIt,
+    const std::vector<int8_t>* metadataPayload) {
   if (startIt->pageId != -1) {
     // If the first pageId is not -1 then there is no metadata page for the
     // current key (which means it was never checkpointed), so we should skip.
@@ -277,7 +278,7 @@ FileBuffer* CachingFileMgr::createBufferFromHeaders(
   touchKey(key);
   auto [db_id, tb_id] = get_table_prefix(key);
   createTableFileMgrIfNoneExists(db_id, tb_id);
-  auto buffer = FileMgr::createBufferFromHeaders(key, startIt, endIt);
+  auto buffer = FileMgr::createBufferFromHeaders(key, startIt, endIt, metadataPayload);
   if (buffer->isMissingPages()) {
     // Detect the case where a page is missing by comparing the amount of pages read
     // with the metadata size.  If data are missing, discard the chunk.
@@ -341,8 +342,9 @@ CachingFileBuffer* CachingFileMgr::allocateBuffer(const size_t page_size,
 CachingFileBuffer* CachingFileMgr::allocateBuffer(
     const ChunkKey& key,
     const std::vector<HeaderInfo>::const_iterator& headerStartIt,
-    const std::vector<HeaderInfo>::const_iterator& headerEndIt) {
-  return new CachingFileBuffer(this, key, headerStartIt, headerEndIt);
+    const std::vector<HeaderInfo>::const_iterator& headerEndIt,
+    const std::vector<int8_t>* metadataPayload) {
+  return new CachingFileBuffer(this, key, headerStartIt, headerEndIt, metadataPayload);
 }
 
 // Checks if a page should be deleted or recovered.  Returns true if page was deleted.

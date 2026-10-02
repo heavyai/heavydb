@@ -8,6 +8,8 @@
 #include "DataMgr/FileMgr/CachingGlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/CachingForeignStorageMgr.h"
 
+extern bool g_enable_gpu_input_cpu_buffer_bypass;
+
 PersistentStorageMgr::PersistentStorageMgr(
     const std::string& data_dir,
     const size_t num_reader_threads,
@@ -61,9 +63,35 @@ AbstractBuffer* PersistentStorageMgr::getBuffer(const ChunkKey& chunk_key,
   return getStorageMgrForTableKey(chunk_key)->getBuffer(chunk_key, num_bytes);
 }
 
+AbstractBuffer* PersistentStorageMgr::getBufferIfNativeStorage(const ChunkKey& chunk_key,
+                                                               const size_t num_bytes) {
+  if (g_enable_gpu_input_cpu_buffer_bypass) {
+    auto table_lock = getTableReadAccessLock(chunk_key);
+    if (isForeignStorage(chunk_key)) {
+      return nullptr;
+    }
+    return global_file_mgr_->getBuffer(chunk_key, num_bytes);
+  }
+  auto table_lock = getTableAccessLock(chunk_key);
+  if (isForeignStorage(chunk_key)) {
+    return nullptr;
+  }
+  return global_file_mgr_->getBuffer(chunk_key, num_bytes);
+}
+
 void PersistentStorageMgr::fetchBuffer(const ChunkKey& chunk_key,
                                        AbstractBuffer* destination_buffer,
                                        const size_t num_bytes) {
+  if (g_enable_gpu_input_cpu_buffer_bypass) {
+    // Native FileMgr lookup and payload reads have their own shared synchronization,
+    // and positional reads write into independent destination buffers. Keep table
+    // mutations exclusive while allowing those read-only fetches to overlap.
+    auto table_lock = getTableReadAccessLock(chunk_key);
+    if (!isForeignStorage(chunk_key)) {
+      global_file_mgr_->fetchBuffer(chunk_key, destination_buffer, num_bytes);
+      return;
+    }
+  }
   auto table_lock = getTableAccessLock(chunk_key);
   getStorageMgrForTableKey(chunk_key)->fetchBuffer(
       chunk_key, destination_buffer, num_bytes);
@@ -199,12 +227,18 @@ foreign_storage::ForeignStorageCache* PersistentStorageMgr::getDiskCache() const
   return disk_cache_ ? disk_cache_.get() : nullptr;
 }
 
-std::unique_lock<std::mutex> PersistentStorageMgr::getTableAccessLock(
+heavyai::unique_lock<heavyai::shared_mutex> PersistentStorageMgr::getTableAccessLock(
     const ChunkKey& table_key) {
-  return std::unique_lock<std::mutex>(getTableAccessMutex(table_key));
+  return heavyai::unique_lock<heavyai::shared_mutex>(getTableAccessMutex(table_key));
 }
 
-std::mutex& PersistentStorageMgr::getTableAccessMutex(const ChunkKey& table_key) {
+heavyai::shared_lock<heavyai::shared_mutex> PersistentStorageMgr::getTableReadAccessLock(
+    const ChunkKey& table_key) {
+  return heavyai::shared_lock<heavyai::shared_mutex>(getTableAccessMutex(table_key));
+}
+
+heavyai::shared_mutex& PersistentStorageMgr::getTableAccessMutex(
+    const ChunkKey& table_key) {
   CHECK(has_table_prefix(table_key));
 
   std::lock_guard<std::mutex> lock(table_access_mutex_map_mutex_);

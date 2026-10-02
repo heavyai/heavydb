@@ -23,6 +23,8 @@
 #include "Shared/checked_alloc.h"
 #include "StringDictionary/StringDictionaryProxy.h"
 
+#include <sstream>
+
 #ifdef HAVE_TBB
 #include <tbb/parallel_for.h>
 #endif  // HAVE_TBB
@@ -38,6 +40,26 @@ bool one_or_more_string_ops_is_null(
   }
   return false;
 }
+
+namespace {
+#ifdef HAVE_CUDA
+std::string translation_device_buffer_cache_key(
+    const shared::StringDictKey& source_string_dict_key,
+    const shared::StringDictKey& dest_string_dict_key,
+    const bool translate_intersection_only,
+    const SQLTypeInfo& output_ti,
+    const std::vector<StringOps_Namespace::StringOpInfo>& string_op_infos,
+    const bool dest_type_is_string) {
+  std::ostringstream oss;
+  oss << "{source_dict_key:" << source_string_dict_key
+      << ", dest_dict_key:" << dest_string_dict_key
+      << ", intersection_only:" << translate_intersection_only
+      << ", dest_type_is_string:" << dest_type_is_string << ", output_ti:" << output_ti
+      << ", StringOps:" << string_op_infos << "}";
+  return oss.str();
+}
+#endif
+}  // namespace
 
 StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
     const shared::StringDictKey& source_string_dict_key,
@@ -141,21 +163,43 @@ void StringDictionaryTranslationMgr::createKernelBuffers() {
 #ifdef HAVE_CUDA
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     const size_t translation_map_size_bytes = mapSize();
+    const auto cache_key =
+        translation_device_buffer_cache_key(source_string_dict_key_,
+                                            dest_string_dict_key_,
+                                            translate_intersection_only_,
+                                            output_ti_,
+                                            string_op_infos_,
+                                            dest_type_is_string_);
+    const auto row_set_mem_owner = executor_->getRowSetMemoryOwner();
     for (auto device_id : device_ids_) {
-      device_buffers_.emplace(device_id,
-                              CudaAllocator::allocGpuAbstractBuffer(
-                                  data_mgr_, translation_map_size_bytes, device_id));
-      auto device_buffer =
-          reinterpret_cast<int8_t*>(device_buffers_[device_id]->getMemoryPtr());
       auto cuda_stream = executor_->getCudaStream(device_id);
-      copy_to_nvidia_gpu(data_mgr_,
-                         cuda_stream,
-                         reinterpret_cast<CUdeviceptr>(device_buffer),
-                         data(),
-                         translation_map_size_bytes,
-                         device_id,
-                         "Dictionary translation buffer");
-      kernel_translation_maps_.emplace(device_id, device_buffer);
+      auto initialize_device_buffer = [&](Data_Namespace::AbstractBuffer* buffer) {
+        auto device_buffer = reinterpret_cast<int8_t*>(buffer->getMemoryPtr());
+        copy_to_nvidia_gpu(data_mgr_,
+                           cuda_stream,
+                           reinterpret_cast<CUdeviceptr>(device_buffer),
+                           data(),
+                           translation_map_size_bytes,
+                           device_id,
+                           "Dictionary translation buffer");
+      };
+
+      Data_Namespace::AbstractBuffer* abstract_buffer{nullptr};
+      if (row_set_mem_owner) {
+        abstract_buffer = row_set_mem_owner->getOrAddStringProxyTranslationDeviceBuffer(
+            cache_key,
+            device_id,
+            translation_map_size_bytes,
+            data_mgr_,
+            initialize_device_buffer);
+      } else {
+        abstract_buffer = CudaAllocator::allocGpuAbstractBuffer(
+            data_mgr_, translation_map_size_bytes, device_id);
+        initialize_device_buffer(abstract_buffer);
+        device_buffers_.emplace(device_id, abstract_buffer);
+      }
+      kernel_translation_maps_.emplace(
+          device_id, reinterpret_cast<int8_t*>(abstract_buffer->getMemoryPtr()));
     }
 
     if (source_string_dict_key_.db_id < 0) {

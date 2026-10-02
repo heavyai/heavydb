@@ -124,14 +124,28 @@ void TargetExprCodegen::codegen(
   const auto agg_fn_names = agg_fn_base_names(target_info, varlen_projection);
   const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
   WindowProjectNodeContext::resetWindowFunctionContext(executor);
+  const auto& target_expr_ti = target_expr->get_type_info();
+  const auto column_projection_target =
+      dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+  const auto materialized_projection_target =
+      !target_info.is_agg && !column_projection_target && !target_expr_ti.is_geometry() &&
+      !target_expr_ti.is_buffer() &&
+      query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
+      (query_mem_desc.targetGroupbyIndicesSize() == 0 ||
+       query_mem_desc.getTargetGroupbyIndex(target_idx) < 0);
   auto target_lvs =
       window_func
           ? std::vector<llvm::Value*>{executor->codegenWindowFunction(target_idx, co)}
-          : group_by_and_agg->codegenAggArg(target_expr, co);
-  const auto window_row_ptr = window_func
-                                  ? group_by_and_agg->codegenWindowRowPointer(
-                                        window_func, query_mem_desc, co, diamond_codegen)
-                                  : nullptr;
+          : group_by_and_agg->codegenAggArg(
+                target_expr, co, materialized_projection_target);
+  const auto window_func_context =
+      window_func ? WindowProjectNodeContext::getActiveWindowFunctionContext(executor)
+                  : nullptr;
+  const auto window_row_ptr =
+      window_func && !(window_func_context && window_func_context->hasPrecomputedOutput())
+          ? group_by_and_agg->codegenWindowRowPointer(
+                window_func, query_mem_desc, co, diamond_codegen)
+          : nullptr;
   if (window_row_ptr) {
     agg_out_ptr_w_idx =
         std::make_tuple(window_row_ptr, std::get<1>(agg_out_ptr_w_idx_in));
@@ -361,11 +375,9 @@ void TargetExprCodegen::codegenAggregate(
     const auto chosen_bytes =
         static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(slot_index));
     const auto& chosen_type = get_compact_type(target_info);
-    const auto& arg_type =
-        ((arg_expr && arg_expr->get_type_info().get_type() != kNULLT) &&
-         !target_info.is_distinct)
-            ? target_info.agg_arg_type
-            : target_info.sql_type;
+    const auto& arg_type = (arg_expr && arg_expr->get_type_info().get_type() != kNULLT)
+                               ? target_info.agg_arg_type
+                               : target_info.sql_type;
     const bool is_fp_arg =
         !lazy_fetched && arg_type.get_type() != kNULLT && arg_type.is_fp();
     if (is_group_by) {
@@ -583,44 +595,46 @@ void TargetExprCodegen::codegenAggregate(
         window_function_requires_peer_handling(window_func)) {
       const auto window_func_context =
           WindowProjectNodeContext::getActiveWindowFunctionContext(executor);
-      const auto pending_outputs =
-          LL_INT(window_func_context->aggregateStatePendingOutputs());
-      executor->cgen_state_->emitExternalCall("add_window_pending_output",
-                                              llvm::Type::getVoidTy(LL_CONTEXT),
-                                              {agg_args.front(), pending_outputs});
-      const auto& window_func_ti = window_func->get_type_info();
-      std::string apply_window_pending_outputs_name = "apply_window_pending_outputs";
-      switch (window_func_ti.get_type()) {
-        case kFLOAT: {
-          apply_window_pending_outputs_name += "_float";
-          if (query_mem_desc.didOutputColumnar()) {
-            apply_window_pending_outputs_name += "_columnar";
+      if (!window_func_context->hasPrecomputedOutput()) {
+        const auto pending_outputs =
+            LL_INT(window_func_context->aggregateStatePendingOutputs());
+        executor->cgen_state_->emitExternalCall("add_window_pending_output",
+                                                llvm::Type::getVoidTy(LL_CONTEXT),
+                                                {agg_args.front(), pending_outputs});
+        const auto& window_func_ti = window_func->get_type_info();
+        std::string apply_window_pending_outputs_name = "apply_window_pending_outputs";
+        switch (window_func_ti.get_type()) {
+          case kFLOAT: {
+            apply_window_pending_outputs_name += "_float";
+            if (query_mem_desc.didOutputColumnar()) {
+              apply_window_pending_outputs_name += "_columnar";
+            }
+            break;
           }
-          break;
-        }
-        case kDOUBLE: {
-          apply_window_pending_outputs_name += "_double";
-          break;
-        }
-        default: {
-          apply_window_pending_outputs_name += "_int";
-          if (query_mem_desc.didOutputColumnar()) {
-            apply_window_pending_outputs_name +=
-                std::to_string(window_func_ti.get_size() * 8);
-          } else {
-            apply_window_pending_outputs_name += "64";
+          case kDOUBLE: {
+            apply_window_pending_outputs_name += "_double";
+            break;
           }
-          break;
+          default: {
+            apply_window_pending_outputs_name += "_int";
+            if (query_mem_desc.didOutputColumnar()) {
+              apply_window_pending_outputs_name +=
+                  std::to_string(window_func_ti.get_size() * 8);
+            } else {
+              apply_window_pending_outputs_name += "64";
+            }
+            break;
+          }
         }
+        const auto partition_end = LL_INT(reinterpret_cast<int64_t>(
+            window_func_context->getPartitionEndBitmapBuf(ExecutorDeviceType::CPU)));
+        executor->cgen_state_->emitExternalCall(apply_window_pending_outputs_name,
+                                                llvm::Type::getVoidTy(LL_CONTEXT),
+                                                {pending_outputs,
+                                                 target_lvs.front(),
+                                                 partition_end,
+                                                 code_generator.posArg(nullptr)});
       }
-      const auto partition_end = LL_INT(reinterpret_cast<int64_t>(
-          window_func_context->getPartitionEndBitmapBuf(ExecutorDeviceType::CPU)));
-      executor->cgen_state_->emitExternalCall(apply_window_pending_outputs_name,
-                                              llvm::Type::getVoidTy(LL_CONTEXT),
-                                              {pending_outputs,
-                                               target_lvs.front(),
-                                               partition_end,
-                                               code_generator.posArg(nullptr)});
     }
 
     ++slot_index;

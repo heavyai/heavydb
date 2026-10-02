@@ -44,20 +44,20 @@ void apply_permutation_cpu(int64_t* val_buff,
                            int64_t* tmp_buff,
                            const uint32_t chosen_bytes) {
 #ifdef HAVE_CUDA
-  switch (chosen_bytes) {
-    case 1:
-    case 2:
-    case 4:
-    case 8:
-      apply_permutation_on_cpu(val_buff, idx_buff, entry_count, tmp_buff, chosen_bytes);
-      break;
-    default:
-      CHECK(false);
-  }
+  apply_permutation_on_cpu(val_buff, idx_buff, entry_count, tmp_buff, chosen_bytes);
 #endif
 }
 
 namespace {
+
+size_t get_single_slot_for_target(const QueryMemoryDescriptor& query_mem_desc,
+                                  const size_t target_idx) {
+  if (query_mem_desc.targetGroupbyIndicesSize() > 0 &&
+      target_idx < query_mem_desc.targetGroupbyIndicesSize()) {
+    CHECK_LT(query_mem_desc.getTargetGroupbyIndex(target_idx), 0);
+  }
+  return static_cast<size_t>(query_mem_desc.getSlotIndexForSingleSlotCol(target_idx));
+}
 
 void sort_groups_gpu(int64_t* val_buff,
                      int32_t* idx_buff,
@@ -88,17 +88,8 @@ void apply_permutation_gpu(int64_t* val_buff,
                            ThrustAllocator& alloc,
                            CUstream cuda_stream) {
 #ifdef HAVE_CUDA
-  switch (chosen_bytes) {
-    case 1:
-    case 2:
-    case 4:
-    case 8:
-      apply_permutation_on_gpu(
-          val_buff, idx_buff, entry_count, chosen_bytes, alloc, cuda_stream);
-      break;
-    default:
-      CHECK(false);
-  }
+  apply_permutation_on_gpu(
+      val_buff, idx_buff, entry_count, chosen_bytes, alloc, cuda_stream);
 #endif
 }
 
@@ -117,9 +108,10 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
                         align_to_int64(query_mem_desc.getEntryCount() * sizeof(int32_t));
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
+    const auto sort_slot_idx = get_single_slot_for_target(query_mem_desc, target_idx);
     const auto val_buff =
-        group_by_buffers.data + query_mem_desc.getColOffInBytes(target_idx);
-    const auto chosen_bytes = query_mem_desc.getPaddedSlotWidthBytes(target_idx);
+        group_by_buffers.data + query_mem_desc.getColOffInBytes(sort_slot_idx);
+    const auto chosen_bytes = query_mem_desc.getPaddedSlotWidthBytes(sort_slot_idx);
     sort_groups_gpu(reinterpret_cast<int64_t*>(val_buff),
                     reinterpret_cast<int32_t*>(idx_buff),
                     query_mem_desc.getEntryCount(),
@@ -137,7 +129,7 @@ void inplace_sort_gpu(const std::list<Analyzer::OrderEntry>& order_entries,
     }
     for (size_t target_idx = 0; target_idx < query_mem_desc.getSlotCount();
          ++target_idx) {
-      if (static_cast<int>(target_idx) == order_entry.tle_no - 1) {
+      if (target_idx == sort_slot_idx) {
         continue;
       }
       const auto chosen_bytes = query_mem_desc.getPaddedSlotWidthBytes(target_idx);

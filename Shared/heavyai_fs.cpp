@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#if defined(__linux__) && !defined(_GNU_SOURCE)
+#define _GNU_SOURCE
+#endif
+
 #include "Shared/heavyai_fs.h"
 
 #include <fcntl.h>
@@ -38,6 +42,15 @@ void* checked_mmap(const int fd, const size_t sz) {
 #endif
   return ptr;
 }
+
+#ifdef __linux__
+void* checked_mremap(void* old_address, size_t old_size, size_t new_size) {
+  // Preserve the existing pages while allowing the mapping to move as it grows.
+  auto ptr = mremap(old_address, old_size, new_size, MREMAP_MAYMOVE);
+  CHECK(ptr != MAP_FAILED);
+  return ptr;
+}
+#endif
 
 void checked_munmap(void* addr, size_t length) {
   CHECK_EQ(0, munmap(addr, length));

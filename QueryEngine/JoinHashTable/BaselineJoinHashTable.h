@@ -28,8 +28,11 @@
 
 class Executor;
 
-using StrProxyTranslationMapsPtrsAndOffsets =
-    std::pair<std::vector<const int32_t*>, std::vector<int32_t>>;
+struct StrProxyTranslationMapsPtrsAndOffsets {
+  std::vector<const int32_t*> maps;
+  std::vector<int32_t> min_inner_elems;
+  std::vector<int32_t> max_inner_elems;
+};
 
 // Representation for a hash table using the baseline layout: an open-addressing
 // hash with a fill rate of 50%. It is used for equi-joins on multiple columns and

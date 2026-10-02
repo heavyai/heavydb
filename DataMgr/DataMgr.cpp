@@ -210,9 +210,23 @@ namespace {
 size_t get_slab_size(size_t initial_slab_size,
                      size_t buffer_pool_size,
                      size_t page_size) {
-  auto slab_size = std::min(initial_slab_size, buffer_pool_size);
+  CHECK_GT(page_size, size_t(0));
+  const auto capped_slab_size = std::min(initial_slab_size, buffer_pool_size);
+  auto slab_size = capped_slab_size;
   slab_size = (slab_size / page_size) * page_size;
+  if (slab_size == 0 && capped_slab_size > 0 && buffer_pool_size >= page_size) {
+    slab_size = page_size;
+  }
   return slab_size;
+}
+
+size_t align_page_size(size_t page_size, size_t alignment) {
+  CHECK_GT(page_size, size_t(0));
+  CHECK_GT(alignment, size_t(0));
+  if (page_size > std::numeric_limits<size_t>::max() - (alignment - 1)) {
+    throw std::overflow_error("Buffer page-size alignment overflow");
+  }
+  return ((page_size + alignment - 1) / alignment) * alignment;
 }
 }  // namespace
 
@@ -272,18 +286,19 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
     // CPU memory level
     levelSizes_.push_back(1);
     auto num_gpus = cudaMgr_->getDeviceCount();
+    const auto gpu_page_size = align_page_size(page_size, alignof(int64_t));
     for (int gpu_num = 0; gpu_num < num_gpus; ++gpu_num) {
       auto gpu_max_mem_size =
           system_parameters.gpu_buffer_mem_bytes != 0
               ? system_parameters.gpu_buffer_mem_bytes
               : (cudaMgr_->getDeviceProperties(gpu_num)->globalMem) - (reservedGpuMem_);
-      gpu_max_mem_size = (gpu_max_mem_size / page_size) * page_size;
-      auto min_gpu_slab_size =
-          get_slab_size(system_parameters.min_gpu_slab_size, gpu_max_mem_size, page_size);
-      auto max_gpu_slab_size =
-          get_slab_size(system_parameters.max_gpu_slab_size, gpu_max_mem_size, page_size);
+      gpu_max_mem_size = (gpu_max_mem_size / gpu_page_size) * gpu_page_size;
+      auto min_gpu_slab_size = get_slab_size(
+          system_parameters.min_gpu_slab_size, gpu_max_mem_size, gpu_page_size);
+      auto max_gpu_slab_size = get_slab_size(
+          system_parameters.max_gpu_slab_size, gpu_max_mem_size, gpu_page_size);
       auto default_gpu_slab_size = get_slab_size(
-          system_parameters.default_gpu_slab_size, gpu_max_mem_size, page_size);
+          system_parameters.default_gpu_slab_size, gpu_max_mem_size, gpu_page_size);
       LOG(INFO) << "Min GPU Slab size for GPU " << gpu_num << " is "
                 << float(min_gpu_slab_size) / (1024 * 1024) << "MB";
       LOG(INFO) << "Max GPU Slab size for GPU " << gpu_num << " is "
@@ -299,7 +314,7 @@ void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                                                  min_gpu_slab_size,
                                                  max_gpu_slab_size,
                                                  default_gpu_slab_size,
-                                                 page_size,
+                                                 gpu_page_size,
                                                  bufferMgrs_[1][0]));
     }
     // GPU memory level
@@ -474,6 +489,31 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
   CHECK_LT(level, levelSizes_.size());     // make sure we have a legit buffermgr
   CHECK_LT(deviceId, levelSizes_[level]);  // make sure we have a legit buffermgr
   return bufferMgrs_[level][deviceId]->getBuffer(key, numBytes);
+}
+
+AbstractBuffer* DataMgr::cacheCpuChunkBuffer(const ChunkKey& key,
+                                             AbstractBuffer* sourceBuffer,
+                                             const size_t numBytes) {
+  auto global_lock = getGlobalLockIfEnabled();
+  constexpr auto level = static_cast<size_t>(CPU_LEVEL);
+  CHECK_LT(level, levelSizes_.size());
+  CHECK_GT(levelSizes_[level], 0);
+  CHECK(sourceBuffer);
+  auto* buffer = bufferMgrs_[level][0]->putBuffer(key, sourceBuffer, numBytes);
+  CHECK(buffer);
+  buffer->clearDirtyBits();
+  return buffer;
+}
+
+std::vector<AbstractBuffer*> DataMgr::getChunkBuffers(
+    const std::vector<BufferFetchRequest>& requests,
+    const MemoryLevel memoryLevel,
+    const int deviceId) {
+  auto global_lock = getGlobalLockIfEnabled();
+  const auto level = static_cast<size_t>(memoryLevel);
+  CHECK_LT(level, levelSizes_.size());     // make sure we have a legit buffermgr
+  CHECK_LT(deviceId, levelSizes_[level]);  // make sure we have a legit buffermgr
+  return bufferMgrs_[level][deviceId]->getBuffers(requests);
 }
 
 void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix) {

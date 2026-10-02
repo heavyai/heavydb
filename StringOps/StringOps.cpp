@@ -510,6 +510,17 @@ NullableStrType Substring::operator()(const std::string& str) const {
   return str.substr(capped_start, length_);
 }
 
+std::optional<std::string_view> Substring::tryStringViewEval(
+    const std::string_view str) const {
+  // If start_ is negative then we start abs(start_) characters from the end
+  // of the string
+  const int64_t str_len = str.size();
+  const int64_t wrapped_start = start_ >= 0 ? start_ : str_len + start_;
+  const size_t capped_start =
+      wrapped_start > str_len ? str_len : (wrapped_start < 0 ? 0 : wrapped_start);
+  return str.substr(capped_start, length_);
+}
+
 NullableStrType Overlay::operator()(const std::string& base_str) const {
   // If start_ is negative then we start abs(start_) characters from the end
   // of the string
@@ -1149,6 +1160,16 @@ std::string_view StringOps::operator()(const std::string_view sv,
   }
   sv_storage = nullable_str.str;
   return sv_storage;
+}
+
+std::string_view StringOps::evalViewOrCopy(const std::string_view sv,
+                                           std::string& sv_storage) const {
+  if (string_ops_.size() == 1) {
+    if (const auto view_result = string_ops_.front()->tryStringViewEval(sv)) {
+      return *view_result;
+    }
+  }
+  return operator()(sv, sv_storage);
 }
 
 Datum StringOps::numericEval(const std::string_view str) const {

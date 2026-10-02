@@ -362,6 +362,7 @@ struct TTableDetails {
   11: TTableRefreshInfo refresh_info;
   12: string sharded_column_name;
   13: optional string comment;
+  14: optional i64 num_rows;
 }
 
 struct TDatabasePermissions {

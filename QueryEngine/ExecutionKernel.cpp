@@ -5,7 +5,9 @@
 
 #include "QueryEngine/ExecutionKernel.h"
 
+#include <algorithm>
 #include <mutex>
+#include <numeric>
 #include <vector>
 
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
@@ -15,6 +17,10 @@
 #include "QueryEngine/ExternalExecutor.h"
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/SerializeToSql.h"
+
+#ifdef HAVE_TBB
+#include <tbb/task_arena.h>
+#endif
 
 namespace {
 
@@ -28,6 +34,39 @@ inline bool query_has_inner_join(const RelAlgExecutionUnit& ra_exe_unit) {
                         [](const auto& join_condition) {
                           return join_condition.type == JoinType::INNER;
                         }) > 0);
+}
+
+inline bool projection_output_bounded_by_outer_table(
+    const RelAlgExecutionUnit& ra_exe_unit) {
+  return !ra_exe_unit.join_quals.empty() &&
+         std::all_of(ra_exe_unit.join_quals.begin(),
+                     ra_exe_unit.join_quals.end(),
+                     [](const auto& join_condition) {
+                       return join_condition.type == JoinType::SEMI ||
+                              join_condition.type == JoinType::ANTI;
+                     });
+}
+
+inline int64_t outer_table_rows(
+    const std::vector<std::vector<int64_t>>& fragment_num_rows) {
+  return std::accumulate(
+      fragment_num_rows.begin(),
+      fragment_num_rows.end(),
+      int64_t(0),
+      [](const int64_t total_rows, const std::vector<int64_t>& fragment_rows) {
+        return total_rows + (fragment_rows.empty() ? int64_t(0) : fragment_rows.front());
+      });
+}
+
+inline int64_t all_input_rows(
+    const std::vector<std::vector<int64_t>>& fragment_num_rows) {
+  return std::accumulate(
+      fragment_num_rows.begin(),
+      fragment_num_rows.end(),
+      int64_t(0),
+      [](const int64_t total_rows, const std::vector<int64_t>& fragment_rows) {
+        return std::accumulate(fragment_rows.begin(), fragment_rows.end(), total_rows);
+      });
 }
 
 // column is part of the target expressions, result set iteration needs it alive.
@@ -86,6 +125,33 @@ bool need_to_hold_chunk(const std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk
   return false;
 }
 
+RelAlgExecutionUnit make_ra_exe_unit_for_kernel_launch(const ExecutionKernel& kernel) {
+  auto ra_exe_unit = kernel.ra_exe_unit_;
+  if (kernel.applyDeferredSparseBaselineFilterBeforeCopy()) {
+    ra_exe_unit.apply_deferred_sparse_baseline_filter_before_copy = true;
+    ra_exe_unit.deferred_sparse_baseline_preserved_keys =
+        kernel.deferredSparseBaselinePreservedKeys();
+  }
+  return ra_exe_unit;
+}
+
+[[noreturn]] void throw_query_execution_error(
+    const int32_t err,
+    const heavyai::QueryDescriptionType query_type,
+    const bool was_multifrag_kernel_launch) {
+  if (err == static_cast<int32_t>(ErrorCode::OUT_OF_GPU_MEM)) {
+    throw QueryExecutionError(
+        ErrorCode::OUT_OF_GPU_MEM,
+        QueryExecutionProperties{query_type, was_multifrag_kernel_launch});
+  }
+  if (err == static_cast<int32_t>(ErrorCode::OUT_OF_CPU_MEM)) {
+    throw QueryExecutionError(
+        ErrorCode::OUT_OF_CPU_MEM,
+        QueryExecutionProperties{query_type, was_multifrag_kernel_launch});
+  }
+  throw QueryExecutionError(err);
+}
+
 }  // namespace
 
 const std::vector<uint64_t>& SharedKernelContext::getFragOffsets() {
@@ -105,14 +171,41 @@ void SharedKernelContext::addDeviceResults(ResultSetPtr&& device_results,
                                            std::vector<size_t> outer_table_fragment_ids) {
   std::lock_guard<std::mutex> lock(reduce_mutex_);
   if (!needs_skip_result(device_results)) {
-    all_fragment_results_.emplace_back(std::move(device_results),
-                                       outer_table_fragment_ids);
+    if (result_consumer_) {
+      result_consumer_(std::move(device_results), std::move(outer_table_fragment_ids));
+    } else {
+      all_fragment_results_.emplace_back(std::move(device_results),
+                                         std::move(outer_table_fragment_ids));
+    }
   }
 }
 
 std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>&
 SharedKernelContext::getFragmentResults() {
   return all_fragment_results_;
+}
+
+void SharedKernelContext::setResultConsumer(ResultConsumer result_consumer) {
+  std::lock_guard<std::mutex> lock(reduce_mutex_);
+  CHECK(!result_consumer_);
+  CHECK(all_fragment_results_.empty());
+  result_consumer_ = std::move(result_consumer);
+}
+
+void SharedKernelContext::clearResultConsumer() {
+  std::lock_guard<std::mutex> lock(reduce_mutex_);
+  result_consumer_ = nullptr;
+}
+
+bool SharedKernelContext::hasResultConsumer() {
+  std::lock_guard<std::mutex> lock(reduce_mutex_);
+  return static_cast<bool>(result_consumer_);
+}
+
+void ExecutionKernel::setDeferredSparseBaselineFilterBeforeCopy(
+    std::vector<int64_t> preserved_keys) {
+  apply_deferred_sparse_baseline_filter_before_copy_ = true;
+  deferred_sparse_baseline_preserved_keys_ = std::move(preserved_keys);
 }
 
 void ExecutionKernel::run(Executor* executor,
@@ -132,6 +225,17 @@ void ExecutionKernel::run(Executor* executor,
     ErrorCode const ec = chosen_device_type == ExecutorDeviceType::GPU
                              ? ErrorCode::OUT_OF_GPU_MEM
                              : ErrorCode::OUT_OF_CPU_MEM;
+    LOG(WARNING) << "Kernel execution memory failure: device="
+                 << (chosen_device_type == ExecutorDeviceType::GPU ? "GPU" : "CPU") << ":"
+                 << chosen_device_id << " dispatch="
+                 << (kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel
+                         ? "multifragment"
+                         : "kernel-per-fragment")
+                 << " qmd_type=" << query_mem_desc.queryDescTypeToString()
+                 << " entry_count=" << query_mem_desc.getEntryCount() << " row_size="
+                 << (query_mem_desc.didOutputColumnar() ? size_t(0)
+                                                        : query_mem_desc.getRowSize())
+                 << " error=" << e.what();
     throw QueryExecutionError(
         ec,
         e.what(),
@@ -176,6 +280,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                               const size_t thread_idx,
                               SharedKernelContext& shared_context) {
   CHECK(executor);
+  const auto ra_exe_unit_for_launch = make_ra_exe_unit_for_kernel_launch(*this);
   const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
                                 ? Data_Namespace::GPU_LEVEL
                                 : Data_Namespace::CPU_LEVEL;
@@ -210,11 +315,11 @@ void ExecutionKernel::runImpl(Executor* executor,
   try {
     std::map<shared::TableKey, const TableFragments*> all_tables_fragments;
     QueryFragmentDescriptor::computeAllTablesFragments(
-        all_tables_fragments, ra_exe_unit_, shared_context.getQueryInfos());
+        all_tables_fragments, ra_exe_unit_for_launch, shared_context.getQueryInfos());
 
     *fetch_result = ra_exe_unit_.union_all
                         ? executor->fetchUnionChunks(column_fetcher,
-                                                     ra_exe_unit_,
+                                                     ra_exe_unit_for_launch,
                                                      chosen_device_id,
                                                      memory_level,
                                                      all_tables_fragments,
@@ -225,7 +330,7 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                      thread_idx,
                                                      eo.allow_runtime_query_interrupt)
                         : executor->fetchChunks(column_fetcher,
-                                                ra_exe_unit_,
+                                                ra_exe_unit_for_launch,
                                                 chosen_device_id,
                                                 memory_level,
                                                 all_tables_fragments,
@@ -234,7 +339,8 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                 chunks,
                                                 device_allocator,
                                                 thread_idx,
-                                                eo.allow_runtime_query_interrupt);
+                                                eo.allow_runtime_query_interrupt,
+                                                eo.materializes_for_later_step);
     if (fetch_result->fragment_info.num_rows.empty()) {
       return;
     }
@@ -246,10 +352,22 @@ void ExecutionKernel::runImpl(Executor* executor,
                 << std::to_string(eo.dynamic_watchdog_time_limit) << "ms, "
                 << std::to_string(cycle_budget) << " cycles";
     }
-  } catch (const OutOfMemory&) {
+  } catch (const OutOfMemory& e) {
+    LOG(WARNING) << "Kernel fetch memory failure: device="
+                 << (memory_level == Data_Namespace::GPU_LEVEL ? "GPU" : "CPU") << ":"
+                 << chosen_device_id << " dispatch="
+                 << (kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel
+                         ? "multifragment"
+                         : "kernel-per-fragment")
+                 << " qmd_type=" << query_mem_desc.queryDescTypeToString()
+                 << " entry_count=" << query_mem_desc.getEntryCount() << " row_size="
+                 << (query_mem_desc.didOutputColumnar() ? size_t(0)
+                                                        : query_mem_desc.getRowSize())
+                 << " error=" << e.what();
     throw QueryExecutionError(
         memory_level == Data_Namespace::GPU_LEVEL ? ErrorCode::OUT_OF_GPU_MEM
                                                   : ErrorCode::OUT_OF_CPU_MEM,
+        e.what(),
         QueryExecutionProperties{
             query_mem_desc.getQueryDescriptionType(),
             kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel});
@@ -266,7 +384,8 @@ void ExecutionKernel::runImpl(Executor* executor,
                                                ra_exe_unit_,
                                                shared_context.getQueryInfos(),
                                                executor->row_set_mem_owner_,
-                                               std::nullopt);
+                                               std::nullopt,
+                                               eo.with_watchdog);
     const auto query_mem_desc =
         group_by_and_aggregate.initQueryMemoryDescriptor(false, 0, 8, nullptr, false);
     device_results_ = run_query_external(
@@ -287,14 +406,12 @@ void ExecutionKernel::runImpl(Executor* executor,
   int64_t total_num_input_rows{-1};
   if (kernel_dispatch_mode == ExecutorDispatchMode::KernelPerFragment &&
       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
-    total_num_input_rows = 0;
-    std::for_each(fetch_result->fragment_info.num_rows.begin(),
-                  fetch_result->fragment_info.num_rows.end(),
-                  [&total_num_input_rows](const std::vector<int64_t>& frag_row_count) {
-                    total_num_input_rows = std::accumulate(frag_row_count.begin(),
-                                                           frag_row_count.end(),
-                                                           total_num_input_rows);
-                  });
+    if (projection_output_bounded_by_outer_table(ra_exe_unit_) &&
+        !fetch_result->fragment_info.num_rows.empty()) {
+      total_num_input_rows = outer_table_rows(fetch_result->fragment_info.num_rows);
+    } else {
+      total_num_input_rows = all_input_rows(fetch_result->fragment_info.num_rows);
+    }
     VLOG(2) << "total_num_input_rows=" << total_num_input_rows;
     // TODO(adb): we may want to take this early out for all queries, but we are most
     // likely to see this query pattern on the kernel per fragment path (e.g. with HAVING
@@ -376,7 +493,7 @@ void ExecutionKernel::runImpl(Executor* executor,
       // has std::unique_ptr<ResultSetStorage> storage_
       // which are initialized and possibly allocated here.
       query_exe_context_owned = query_mem_desc.getQueryExecutionContext(
-          ra_exe_unit_,
+          ra_exe_unit_for_launch,
           executor,
           chosen_device_type,
           kernel_dispatch_mode,
@@ -384,18 +501,23 @@ void ExecutionKernel::runImpl(Executor* executor,
           outer_table_key,
           total_num_input_rows,
           fetch_result->col_buffers,
+          fetch_result->col_buffer_layouts,
+          fetch_result->selected_rowids,
           fetch_result->fragment_info.frag_offsets,
           executor->getRowSetMemoryOwner(),
           compilation_result.output_columnar,
           query_mem_desc.sortOnGpu(),
           thread_idx,
-          do_render ? render_info_ : nullptr);
+          do_render ? render_info_ : nullptr,
+          eo.defer_gpu_result_cpu_materialization);
     } catch (const OutOfHostMemory& e) {
       throw QueryExecutionError(ErrorCode::OUT_OF_CPU_MEM);
     }
   }
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   CHECK(query_exe_context);
+  query_exe_context->setDeferredLazyFetchChunks(fetch_result->deferred_lazy_fetch_chunks);
+  query_exe_context->setLazyFetchSourceMetadata(fetch_result->lazy_fetch_source_metadata);
   int32_t err{0};
   bool optimize_cuda_block_and_grid_sizes =
       chosen_device_type == ExecutorDeviceType::GPU &&
@@ -403,12 +525,12 @@ void ExecutionKernel::runImpl(Executor* executor,
 
   executor->logSystemCPUMemoryStatus("After Query Memory Initialization", thread_idx);
 
-  if (ra_exe_unit_.groupby_exprs.empty()) {
-    err = executor->executePlanWithoutGroupBy(ra_exe_unit_,
+  if (ra_exe_unit_for_launch.groupby_exprs.empty()) {
+    err = executor->executePlanWithoutGroupBy(ra_exe_unit_for_launch,
                                               compilation_result,
                                               query_comp_desc.hoistLiterals(),
                                               &device_results_,
-                                              ra_exe_unit_.target_exprs,
+                                              ra_exe_unit_for_launch.target_exprs,
                                               chosen_device_type,
                                               fetch_result->col_buffers,
                                               query_exe_context,
@@ -416,7 +538,9 @@ void ExecutionKernel::runImpl(Executor* executor,
                                               data_mgr,
                                               chosen_device_id,
                                               start_rowid,
-                                              ra_exe_unit_.input_descs.size(),
+                                              ra_exe_unit_for_launch.input_descs.size(),
+                                              eo.with_dynamic_watchdog,
+                                              eo.dynamic_watchdog_time_limit,
                                               eo.allow_runtime_query_interrupt,
                                               do_render ? render_info_ : nullptr,
                                               optimize_cuda_block_and_grid_sizes);
@@ -425,7 +549,7 @@ void ExecutionKernel::runImpl(Executor* executor,
       VLOG(1) << "outer_table_key=" << outer_table_key
               << " ra_exe_unit_.scan_limit=" << ra_exe_unit_.scan_limit;
     }
-    err = executor->executePlanWithGroupBy(ra_exe_unit_,
+    err = executor->executePlanWithGroupBy(ra_exe_unit_for_launch,
                                            compilation_result,
                                            query_comp_desc.hoistLiterals(),
                                            &device_results_,
@@ -437,9 +561,11 @@ void ExecutionKernel::runImpl(Executor* executor,
                                            data_mgr,
                                            chosen_device_id,
                                            outer_table_key,
-                                           ra_exe_unit_.scan_limit,
+                                           ra_exe_unit_for_launch.scan_limit,
                                            start_rowid,
-                                           ra_exe_unit_.input_descs.size(),
+                                           ra_exe_unit_for_launch.input_descs.size(),
+                                           eo.with_dynamic_watchdog,
+                                           eo.dynamic_watchdog_time_limit,
                                            eo.allow_runtime_query_interrupt,
                                            do_render ? render_info_ : nullptr,
                                            optimize_cuda_block_and_grid_sizes);
@@ -460,7 +586,10 @@ void ExecutionKernel::runImpl(Executor* executor,
     VLOG(1) << "null device_results.";
   }
   if (err) {
-    throw QueryExecutionError(err);
+    throw_query_execution_error(
+        err,
+        query_mem_desc.getQueryDescriptionType(),
+        kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel);
   }
   shared_context.addDeviceResults(std::move(device_results_), outer_tab_frag_ids);
   executor->logSystemCPUMemoryStatus("After Query Execution", thread_idx);
@@ -484,6 +613,19 @@ void KernelSubtask::run(Executor* executor) {
     ErrorCode const ec = kernel_.chosen_device_type == ExecutorDeviceType::GPU
                              ? ErrorCode::OUT_OF_GPU_MEM
                              : ErrorCode::OUT_OF_CPU_MEM;
+    LOG(WARNING)
+        << "Kernel subtask memory failure: device="
+        << (kernel_.chosen_device_type == ExecutorDeviceType::GPU ? "GPU" : "CPU") << ":"
+        << kernel_.chosen_device_id << " dispatch="
+        << (kernel_.kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel
+                ? "multifragment"
+                : "kernel-per-fragment")
+        << " qmd_type=" << kernel_.query_mem_desc.queryDescTypeToString()
+        << " entry_count=" << kernel_.query_mem_desc.getEntryCount() << " row_size="
+        << (kernel_.query_mem_desc.didOutputColumnar()
+                ? size_t(0)
+                : kernel_.query_mem_desc.getRowSize())
+        << " error=" << e.what();
     throw QueryExecutionError(
         ec,
         e.what(),
@@ -502,13 +644,41 @@ void KernelSubtask::run(Executor* executor) {
 }
 
 void KernelSubtask::runImpl(Executor* executor) {
-  auto& query_exe_context_owned = shared_context_.getTlsExecutionContext().local();
+  const auto ra_exe_unit_for_launch = make_ra_exe_unit_for_kernel_launch(kernel_);
+  const auto arena_thread_idx = tbb::this_task_arena::current_thread_index();
+  const size_t query_thread_idx =
+      arena_thread_idx >= 0 ? static_cast<size_t>(arena_thread_idx) : thread_idx_;
+  const bool collect_results_per_subtask =
+      kernel_.query_mem_desc.getQueryDescriptionType() ==
+          QueryDescriptionType::Projection &&
+      !ra_exe_unit_for_launch.estimator;
+  auto subtask_query_mem_desc = kernel_.query_mem_desc;
+  if (collect_results_per_subtask) {
+    size_t subtask_entry_count = num_rows_to_process_;
+    if (query_has_inner_join(ra_exe_unit_for_launch)) {
+      subtask_entry_count *= ra_exe_unit_for_launch.input_descs.size();
+    }
+    if (ra_exe_unit_for_launch.scan_limit != 0) {
+      subtask_entry_count =
+          std::max(subtask_query_mem_desc.getEntryCount(), subtask_entry_count);
+    }
+    subtask_query_mem_desc.setEntryCount(std::max(size_t(1), subtask_entry_count));
+  }
+  const auto& query_mem_desc =
+      collect_results_per_subtask ? subtask_query_mem_desc : kernel_.query_mem_desc;
+  std::unique_ptr<QueryExecutionContext> subtask_query_exe_context_owned;
+  auto& thread_query_exe_context_owned =
+      shared_context_.getExecutionContextForThread(query_thread_idx);
+  auto& query_exe_context_owned = collect_results_per_subtask
+                                      ? subtask_query_exe_context_owned
+                                      : thread_query_exe_context_owned;
   const bool do_render = kernel_.render_info_ && kernel_.render_info_->isInSitu();
   const CompilationResult& compilation_result =
       kernel_.query_comp_desc.getCompilationResult();
   const shared::TableKey& outer_table_key =
-      kernel_.ra_exe_unit_.union_all ? kernel_.frag_list[0].table_key
-                                     : kernel_.ra_exe_unit_.input_descs[0].getTableKey();
+      ra_exe_unit_for_launch.union_all
+          ? kernel_.frag_list[0].table_key
+          : ra_exe_unit_for_launch.input_descs[0].getTableKey();
 
   if (!query_exe_context_owned) {
     try {
@@ -517,11 +687,15 @@ void KernelSubtask::runImpl(Executor* executor) {
       std::vector<std::vector<const int8_t*>> col_buffers(
           fetch_result_->col_buffers.size(),
           std::vector<const int8_t*>(fetch_result_->col_buffers[0].size()));
+      ColumnBufferLayouts col_buffer_layouts(
+          col_buffers.size(),
+          std::vector<ColumnBufferLayout>(col_buffers[0].size(),
+                                          ColumnBufferLayout::Fragment));
       std::vector<std::vector<uint64_t>> frag_offsets(
           fetch_result_->fragment_info.frag_offsets.size(),
           std::vector<uint64_t>(fetch_result_->fragment_info.frag_offsets[0].size()));
-      query_exe_context_owned = kernel_.query_mem_desc.getQueryExecutionContext(
-          kernel_.ra_exe_unit_,
+      query_exe_context_owned = query_mem_desc.getQueryExecutionContext(
+          ra_exe_unit_for_launch,
           executor,
           kernel_.chosen_device_type,
           kernel_.kernel_dispatch_mode,
@@ -529,13 +703,15 @@ void KernelSubtask::runImpl(Executor* executor) {
           outer_table_key,
           total_num_input_rows_,
           col_buffers,
+          col_buffer_layouts,
+          std::vector<std::vector<const int64_t*>>{},
           frag_offsets,
           executor->getRowSetMemoryOwner(),
           compilation_result.output_columnar,
-          kernel_.query_mem_desc.sortOnGpu(),
-          // TODO: use TBB thread id to choose allocator
-          thread_idx_,
-          do_render ? kernel_.render_info_ : nullptr);
+          query_mem_desc.sortOnGpu(),
+          query_thread_idx,
+          do_render ? kernel_.render_info_ : nullptr,
+          kernel_.eo.defer_gpu_result_cpu_materialization);
     } catch (const OutOfHostMemory& e) {
       throw QueryExecutionError(ErrorCode::OUT_OF_CPU_MEM);
     }
@@ -545,15 +721,17 @@ void KernelSubtask::runImpl(Executor* executor) {
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   CHECK(query_exe_context);
   int32_t err{0};
+  ResultSetPtr subtask_results;
+  auto subtask_results_ptr = collect_results_per_subtask ? &subtask_results : nullptr;
   bool optimize_cuda_block_and_grid_sizes =
       kernel_.chosen_device_type == ExecutorDeviceType::GPU &&
       kernel_.eo.optimize_cuda_block_and_grid_sizes;
-  if (kernel_.ra_exe_unit_.groupby_exprs.empty()) {
-    err = executor->executePlanWithoutGroupBy(kernel_.ra_exe_unit_,
+  if (ra_exe_unit_for_launch.groupby_exprs.empty()) {
+    err = executor->executePlanWithoutGroupBy(ra_exe_unit_for_launch,
                                               compilation_result,
                                               kernel_.query_comp_desc.hoistLiterals(),
-                                              nullptr,
-                                              kernel_.ra_exe_unit_.target_exprs,
+                                              subtask_results_ptr,
+                                              ra_exe_unit_for_launch.target_exprs,
                                               kernel_.chosen_device_type,
                                               fetch_result_->col_buffers,
                                               query_exe_context,
@@ -561,16 +739,20 @@ void KernelSubtask::runImpl(Executor* executor) {
                                               executor->getDataMgr(),
                                               kernel_.chosen_device_id,
                                               start_rowid_,
-                                              kernel_.ra_exe_unit_.input_descs.size(),
+                                              ra_exe_unit_for_launch.input_descs.size(),
+                                              kernel_.eo.with_dynamic_watchdog,
+                                              kernel_.eo.dynamic_watchdog_time_limit,
                                               kernel_.eo.allow_runtime_query_interrupt,
                                               do_render ? kernel_.render_info_ : nullptr,
                                               optimize_cuda_block_and_grid_sizes,
                                               start_rowid_ + num_rows_to_process_);
   } else {
-    err = executor->executePlanWithGroupBy(kernel_.ra_exe_unit_,
+    const auto scan_limit =
+        collect_results_per_subtask ? int64_t(0) : ra_exe_unit_for_launch.scan_limit;
+    err = executor->executePlanWithGroupBy(ra_exe_unit_for_launch,
                                            compilation_result,
                                            kernel_.query_comp_desc.hoistLiterals(),
-                                           nullptr,
+                                           subtask_results_ptr,
                                            kernel_.chosen_device_type,
                                            fetch_result_->col_buffers,
                                            outer_tab_frag_ids,
@@ -579,9 +761,11 @@ void KernelSubtask::runImpl(Executor* executor) {
                                            executor->getDataMgr(),
                                            kernel_.chosen_device_id,
                                            outer_table_key,
-                                           kernel_.ra_exe_unit_.scan_limit,
+                                           scan_limit,
                                            start_rowid_,
-                                           kernel_.ra_exe_unit_.input_descs.size(),
+                                           ra_exe_unit_for_launch.input_descs.size(),
+                                           kernel_.eo.with_dynamic_watchdog,
+                                           kernel_.eo.dynamic_watchdog_time_limit,
                                            kernel_.eo.allow_runtime_query_interrupt,
                                            do_render ? kernel_.render_info_ : nullptr,
                                            optimize_cuda_block_and_grid_sizes,
@@ -589,7 +773,13 @@ void KernelSubtask::runImpl(Executor* executor) {
   }
 
   if (err) {
-    throw QueryExecutionError(err);
+    throw_query_execution_error(
+        err,
+        kernel_.query_mem_desc.getQueryDescriptionType(),
+        kernel_.kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel);
+  }
+  if (subtask_results) {
+    shared_context_.addDeviceResults(std::move(subtask_results), outer_tab_frag_ids);
   }
 }
 
