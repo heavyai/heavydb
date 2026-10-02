@@ -6,16 +6,32 @@
 
 HeavyDB is an in-memory, column store, SQL relational database designed from the ground up to run on GPUs.
 
+This repository has long been a limited open source version of the core HeavyDB, but as of October 2027, this project now includes all of the functionality of the entire HeavyAI platform.  This includes the functionality that was previously only available as an enterprise product.  NVIDIA is now releaseing the entire platform as open source.
+
+This project now includes the core HeavyDB capabilities along with:
+- The Immerse user interface with advanced visualization and dashboard creation capabilities.
+- Advanced rendering capabilities to generate the complex geospatial visualization elements on the server side using the power of the GPU and delivers these images to the browser.
+- HeavyRF provides simulation capabilities for RF propagation for advanced wireless network planning use cases.  These capabilities exploit GPU performance to combine fast simulation calculations with the ability to process complex geospatial data including ground clutter, terrain data, tower data, and other business relevant data in a single view.
+- HeavyConnect exposes external data through foreign tables that you can analyze with HeavyDB simplifying ETL workflows.  Supported adapters include CSV/delimited files, Parquet, and regex-parsed logs on local storage or Amazon S3. ODBC database connectivity and raster data sources.
+- Build tools and utilities to make the install process very easy.  Getting up and running with entire platform can now be done with a few simple steps.
+
+All of this plus the power and speed of HeavyDB are all completely open source and available in this repository.
+
+# Quick Start Guide
+For new users, the process of getting started can be quite simple.  Developers that have access to GPU resources can quickly and easily get started either on-prem or in cloud providers.
+
+Follow the instructions noted in [Build From Source](https://docs.nvidia.com/heavyai/installation-and-configuration/installation/build-from-source). This will build the entire HeavyAI platform which includes Immerse, WebServer, GEOS DSOs, and HeavyDB into a usable docker image.
+
+
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
 
 ***
 
-# Developing HeavyDB: Table of Contents
+# Developing Details for HeavyDB: Table of Contents
 
 - [Links](#links)
 - [License](#license)
 - [Contributing](#contributing)
-- [Building](#building)
 - [Code Style](#code-style)
 - [Dependencies](#dependencies)
 - [Security](#security)
@@ -36,10 +52,6 @@ The repository includes a number of third party packages provided under separate
 # Contributing
 
 Follow the instructions noted in [CONTRIBUTIONING.md](https://github.com/heavyai/heavydb/blob/master/CONTRIBUTING.md)
-
-# Building
-
-Follow the instructions noted in [Build From Source](https://docs.nvidia.com/heavyai/installation-and-configuration/installation/build-from-source). This will build the entire HeavyAI platform which includes Immerse, WebServer, GEOS DSOs, and HeavyDB into a usable docker image.
 
 # Code Style
 
