@@ -44,9 +44,8 @@ Array<TextEncodingDict> strtok_to_array(RowFunctionManager& mgr,
 
     Note
     ----
-    <delimiters> argument is optional on snowflake but HeavyDB dont' support
-    default values on UDFs at the moment. See:
-    https://github.com/heavyai/heavydb/pull/6651
+    <delimiters> argument is optional on snowflake but HeavyDB doesn't
+    yet support default values on UDFs.
 
     Examples
     --------
