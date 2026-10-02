@@ -13390,15 +13390,21 @@ TEST_F(Select, DisabledResultReductionPipelineDoesNotExposeDeviceFragments) {
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
 
-  ScopeGuard restore_reduction_pipeline = [original =
-                                               g_enable_result_reduction_pipeline] {
-    g_enable_result_reduction_pipeline = original;
+  ScopeGuard restore_query_modes = [reduction_pipeline =
+                                        g_enable_result_reduction_pipeline,
+                                    shared_mem_group_by = g_enable_smem_group_by] {
+    g_enable_result_reduction_pipeline = reduction_pipeline;
+    g_enable_smem_group_by = shared_mem_group_by;
   };
   g_enable_result_reduction_pipeline = false;
+  g_enable_smem_group_by = false;
 
-  const auto rows = run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY x * 10000;", dt);
+  // The fixture's x values differ by one. Scale that range above the 10,000-bin
+  // block-sharing threshold without relying on shared-memory group-by.
+  const auto rows = run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY x * 20000;", dt);
   ASSERT_EQ(QueryDescriptionType::GroupByPerfectHash,
             rows->getQueryMemDesc().getQueryDescriptionType());
+  ASSERT_FALSE(rows->getQueryMemDesc().isGpuSharedMemoryUsed());
   ASSERT_TRUE(rows->getQueryMemDesc().hasKeylessHash());
   ASSERT_GT(rows->getQueryMemDesc().getEntryCount(), size_t(4096));
   ASSERT_TRUE(rows->getQueryMemDesc().blocksShareMemory());
@@ -13413,7 +13419,7 @@ TEST_F(Select, DisabledResultReductionPipelineDoesNotExposeDeviceFragments) {
       rows->getDeviceColumnarBufferFragments(0, sizeof(int64_t), columnar_fragments));
 
   const auto projected_group_key_rows =
-      run_multiple_agg("SELECT x * 10000, COUNT(*) FROM test GROUP BY x * 10000;", dt);
+      run_multiple_agg("SELECT x * 20000, COUNT(*) FROM test GROUP BY x * 20000;", dt);
   ASSERT_EQ(QueryDescriptionType::GroupByPerfectHash,
             projected_group_key_rows->getQueryMemDesc().getQueryDescriptionType());
   EXPECT_TRUE(projected_group_key_rows->getQueryMemDesc().hasKeylessHash());
