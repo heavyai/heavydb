@@ -71,6 +71,12 @@ function install_required_rockylinux_packages() {
   sudo dnf install -y \
       jq \
       pxz
+
+  # nvCOMP ships in the NVIDIA CUDA repo, not the Rocky repos. The metapackage
+  # pulls the devel package, which provides the /usr/include/nvcomp headers and
+  # the /usr/lib64/libnvcomp{,_cpu}_static.a archives that CMakeLists.txt links.
+  sudo dnf install -y \
+      nvcomp-cuda-12
 }
 
 function install_gcc_rocky() {
@@ -263,6 +269,12 @@ function install_required_ubuntu_packages() {
       openjdk-21-jdk-headless \
       openjdk-21-jre \
       openjdk-21-jre-headless
+
+  # nvCOMP ships in the NVIDIA CUDA repo, not the Ubuntu archive. The
+  # metapackage pulls the dev package, which provides the /usr/include/nvcomp
+  # headers and the libnvcomp{,_cpu}_static.a archives that CMakeLists.txt links.
+  DEBIAN_FRONTEND=noninteractive sudo apt install -y \
+      nvcomp-cuda-12
 
   if [ "$LIBRARY_TYPE" != "static" ]; then
     DEBIAN_FRONTEND=noninteractive sudo apt install -y \

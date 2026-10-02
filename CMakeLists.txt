@@ -736,12 +736,13 @@ find_package(Snappy REQUIRED)
 find_library(lz4_LIBRARY lz4 REQUIRED)
 find_library(bz2_LIBRARY bz2 REQUIRED)
 
-find_path(nvcomp_cpu_INCLUDE_DIR
-          nvcomp/native/gdeflate_cpu.h
-          PATHS /usr/include/nvcomp_13)
-find_library(nvcomp_cpu_LIBRARY
-             nvcomp_cpu
-             PATHS /usr/lib/x86_64-linux-gnu/nvcomp/13)
+# nvCOMP is linked statically so that the deployment images need no nvCOMP
+# runtime package. The archives are named nvcomp_static / nvcomp_cpu_static, so
+# PREFER_STATIC_LIBS cannot select them by suffix alone. The nvcomp-cuda-12
+# metapackage installs to the default search paths, so no path hints are used:
+# a versioned hint could silently match nvCOMP built for another CUDA major.
+find_path(nvcomp_cpu_INCLUDE_DIR nvcomp/native/gdeflate_cpu.h)
+find_library(nvcomp_cpu_LIBRARY nvcomp_cpu_static)
 if(nvcomp_cpu_INCLUDE_DIR AND nvcomp_cpu_LIBRARY)
   message(STATUS "Found nvCOMP CPU codecs: ${nvcomp_cpu_LIBRARY}")
 else()
@@ -751,8 +752,8 @@ else()
 endif()
 
 if(ENABLE_CUDA)
-  find_path(nvcomp_INCLUDE_DIR nvcomp/lz4.h PATHS /usr/include/nvcomp_13)
-  find_library(nvcomp_LIBRARY nvcomp PATHS /usr/lib/x86_64-linux-gnu/nvcomp/13)
+  find_path(nvcomp_INCLUDE_DIR nvcomp/lz4.h)
+  find_library(nvcomp_LIBRARY nvcomp_static)
   set(nvcomp_BITCOMP_FOUND FALSE)
   if(nvcomp_INCLUDE_DIR AND nvcomp_LIBRARY)
     message(STATUS "Found nvCOMP: ${nvcomp_LIBRARY}")
