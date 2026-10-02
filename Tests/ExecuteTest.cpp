@@ -13087,7 +13087,7 @@ TEST_F(Select, SelectedFixedColumnsFromVarlenRowwiseProjectionFeedGpuJoin) {
 }
 
 #ifdef HAVE_CUDA
-TEST_F(Select, SelectedDeferredPayloadRowsBypassCpuChunkMaterialization) {
+TEST_F(Select, SelectedDeferredPayloadRowsUseAvailableDecompressionPath) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
@@ -13182,9 +13182,13 @@ TEST_F(Select, SelectedDeferredPayloadRowsBypassCpuChunkMaterialization) {
   ASSERT_NO_FATAL_FAILURE(assertSingleRowAggregateResult(
       run_multiple_agg(query, dt), int64_t(8), int64_t(111320)));
 
-  // Selective frame reads use the native FileBuffer directly. Installing this chunk in
-  // the CPU buffer pool would mean the intermediate boundary fetched the full column.
+  // nvCOMP can decode the compressed payload directly on GPU. Without it, the supported
+  // fallback decompresses through the CPU buffer pool before transferring to GPU.
+#ifdef HAVE_NVCOMP
   EXPECT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+#else
+  EXPECT_TRUE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+#endif
 
   QR::get()->clearGpuMemory();
   QR::get()->clearCpuMemory();
