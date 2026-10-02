@@ -31,11 +31,18 @@ uniform sampler2DArray frag_sampler_array;
 layout(binding = 7) uniform sampler2DArray shared_array_of_sampler_arrays[2];
 uniform sampler2DArray frag_array_of_sampler_arrays[2];
 
+// Declared with no instance name, unlike the vert's block, so that one of the pair
+// covers each form. Its range also differs from the vert's, which is the shape a real
+// material has when two stages split one push constant budget between them.
+layout(push_constant) uniform FRAG_PUSH_CONSTANTS {
+  layout(offset = 16) uint frag_item_index;
+};
+
 layout(location = 0) in float in_depth;
 layout(location = 1) in vec3 in_color;
 
 layout(location = 0) out vec4 color;
 
 void main() {
-  color = vec4(in_color * in_depth * frag_x, float(frag_y));
+  color = vec4(in_color * in_depth * frag_x, float(frag_y + int(frag_item_index)));
 }

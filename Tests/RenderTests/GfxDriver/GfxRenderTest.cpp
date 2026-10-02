@@ -538,6 +538,25 @@ TEST_F(RenderTest, PushConstantTest) {
   EXPECT_TRUE(this->golden_image_->compare(
       *framebuffer, Framebuffer::Attachment::kColor0, "push_constant_test"));
 
+  // A push is now checked against what the shader declares, the name identifying
+  // either the block or one of its members. The shader's block is a single uint32_t
+  // at offset 0, so each of these asks for something it does not have.
+  EXPECT_THROW(cmd_list.setPushConstantUInt32(
+                   *pipeline, "no_such_name", ShaderStageBits::kVertex, 0u),
+               std::runtime_error)
+      << "a name the shader does not declare";
+  EXPECT_THROW(cmd_list.setPushConstantUInt32(
+                   *pipeline, "index", ShaderStageBits::kVertex, 0u, 4u),
+               std::runtime_error)
+      << "an offset past the end of the block";
+  EXPECT_THROW(cmd_list.setPushConstants(*pipeline,
+                                         "index",
+                                         ShaderStageBits::kVertex,
+                                         vertex_data.data(),
+                                         sizeof(uint32_t) * 2),
+               std::runtime_error)
+      << "more bytes than the block holds";
+
   // destroy resources
   resource_mgr.destroyPipeline(std::move(pipeline));
   material = nullptr;
@@ -626,7 +645,7 @@ TEST_F(RenderTest, DepthTest) {
   // Draw a single sphere
   auto draw_sphere = [&](const glm::vec3* translation, ClearControlFlags clear_flag) {
     cmd_list.setPushConstants(
-        *pipeline, "DepthTest", ShaderStageBits::kVertex, translation, sizeof(glm::vec3));
+        *pipeline, "translate", ShaderStageBits::kVertex, translation, sizeof(glm::vec3));
     cmd_list.drawIndexed(
         *pipeline, *mesh_data.vbo, *mesh_data.ibo, mesh_data.num_indices);
   };
@@ -2159,7 +2178,7 @@ TEST_F(VulkanRenderTest, BufferDeviceAddressTest) {
   const uint32_t group_count_x = (kNumRows + subgroup_size - 1) / subgroup_size;
   device.getCommandList()
       .setPushConstants(*pipeline,
-                        "Push Constants",
+                        "Registers",
                         ShaderStageBits::kCompute,
                         &push_constants,
                         sizeof(PushConstants))

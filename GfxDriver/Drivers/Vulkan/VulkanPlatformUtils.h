@@ -12,6 +12,23 @@
 namespace gfx {
 
 /**
+ * Vulkan API versions
+ *
+ * These are two separate decisions that happen to share a value. The instance
+ * version is what we advertise to the loader, and raising it is a deployment
+ * choice because it raises the driver version customers need. The device
+ * minimum is what the code actually depends on: VulkanPhysicalDevice chains the
+ * Vulkan 1.3 property and feature structs unconditionally, so a device below
+ * that cannot be probed, let alone used.
+ *
+ * Keep them separate even while they agree, so that moving one does not
+ * silently move the other.
+ **/
+
+constexpr uint32_t kVulkanInstanceApiVersion = VK_API_VERSION_1_3;
+constexpr uint32_t kMinVulkanDeviceApiVersion = VK_API_VERSION_1_3;
+
+/**
  * version and driver id stringifiers
  **/
 
