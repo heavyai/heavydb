@@ -427,6 +427,33 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
   return {};
 }
 
+JoinInputColumn join_output_to_input_column(const RelJoin* join,
+                                            const size_t join_local_index) {
+  CHECK(join);
+  CHECK_EQ(size_t(2), join->inputCount());
+  CHECK_LT(join_local_index, join->size());
+  auto const* lhs = join->getInput(0);
+  auto const lhs_size = lhs->size();
+  if (join_local_index < lhs_size) {
+    return {lhs, join_local_index, 0};
+  }
+  return {join->getInput(1), join_local_index - lhs_size, 1};
+}
+
+std::optional<size_t> input_column_to_join_output(const RelJoin* join,
+                                                  const RelAlgNode* input,
+                                                  const size_t input_index) {
+  CHECK(join);
+  CHECK_EQ(size_t(2), join->inputCount());
+  if (input == join->getInput(0)) {
+    return input_index;
+  }
+  if (input == join->getInput(1)) {
+    return input_index + join->getInput(0)->size();
+  }
+  return std::nullopt;
+}
+
 bool RelProject::isIdentity() const {
   if (!isSimple()) {
     return false;

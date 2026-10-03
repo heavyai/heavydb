@@ -216,6 +216,50 @@ TEST_F(RelScanTreeTest, RowIdFromRightSideOfJoin) {
   expect_resolves_to_rowid(*rel_scan_tree, *rowid_idx, "rst_lookup");
 }
 
+// Direct coverage of the conversion helpers that the RelScanTree walk shares with the
+// RelAlgOptimizer passes, exercised against a real Calcite join rather than a stub.
+TEST_F(RelScanTreeTest, JoinIndexConversionRoundTrips) {
+  auto rel_alg_dag = build_unoptimized_dag(
+      "SELECT a.lon, b.weight FROM rst_events a INNER JOIN rst_lookup b ON a.grp = "
+      "b.grp;");
+  auto rel_scan_tree = RelScanTree::create(*rel_alg_dag);
+  ASSERT_TRUE(rel_scan_tree) << node_str(&rel_alg_dag->getRootNode());
+
+  auto const& root_project = rel_scan_tree->getRootProjectNode();
+  auto const* join = dynamic_cast<const RelJoin*>(root_project.getInput(0));
+  ASSERT_TRUE(join) << node_str(root_project.getInput(0));
+
+  auto const* lhs = join->getInput(0);
+  auto const* rhs = join->getInput(1);
+  auto const lhs_size = lhs->size();
+  ASSERT_GT(lhs_size, size_t(0));
+  ASSERT_GT(rhs->size(), size_t(0));
+  ASSERT_EQ(join->size(), lhs_size + rhs->size());
+
+  for (size_t i = 0; i < join->size(); ++i) {
+    auto const column = join_output_to_input_column(join, i);
+    if (i < lhs_size) {
+      EXPECT_EQ(column.node, lhs) << "join-local index " << i;
+      EXPECT_EQ(column.index, i) << "join-local index " << i;
+      EXPECT_EQ(column.input_ordinal, size_t(0)) << "join-local index " << i;
+    } else {
+      EXPECT_EQ(column.node, rhs) << "join-local index " << i;
+      EXPECT_EQ(column.index, i - lhs_size) << "join-local index " << i;
+      EXPECT_EQ(column.input_ordinal, size_t(1)) << "join-local index " << i;
+    }
+    EXPECT_EQ(input_column_to_join_output(join, column.node, column.index),
+              std::optional<size_t>(i))
+        << "join-local index " << i;
+  }
+
+  // A node that is not one of the join's inputs is reported rather than asserted on, so
+  // that callers on the render path can throw a diagnostic instead of aborting. The
+  // join itself is not one of its own inputs: an index already join-local is the
+  // caller's business, not the helper's.
+  EXPECT_FALSE(input_column_to_join_output(join, &root_project, 0).has_value());
+  EXPECT_FALSE(input_column_to_join_output(join, join, 0).has_value());
+}
+
 // The query from the original bug report. Calcite 1.41 now leaves an extra RelProject
 // between the root project and the join, carrying the decorrelation's grp0/max_ts/$f2
 // columns, so the root project's RexInputs source that intermediate project rather than
