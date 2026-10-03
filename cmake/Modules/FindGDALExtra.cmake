@@ -108,5 +108,8 @@ include(FindPackageHandleStandardArgs)
 if(PREFER_STATIC_LIBS)
   find_package_handle_standard_args(GDALExtra REQUIRED_VARS EXPAT_LIBRARY KMLDOM_LIBRARY MINIZIP_LIBRARY KMLENGINE_LIBRARY KMLBASE_LIBRARY URIPARSER_LIBRARY PROJ_LIBRARY BLOSC_LIBRARY NETCDF_LIBRARY HDF5_LIBRARY HDF5_HL_LIBRARY)
 else()
-  find_package_handle_standard_args(GDALExtra)
+  # Nothing to find: when GDAL is linked dynamically its dependencies are
+  # resolved through libgdal.so itself.
+  set(GDALExtra_NO_EXTRA_LIBS TRUE)
+  find_package_handle_standard_args(GDALExtra REQUIRED_VARS GDALExtra_NO_EXTRA_LIBS)
 endif()
