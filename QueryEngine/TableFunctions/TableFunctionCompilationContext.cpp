@@ -13,16 +13,18 @@
 #include <boost/algorithm/string.hpp>
 
 #include "QueryEngine/CodeGenerator.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/IRCodegenUtils.h"
 #include "QueryEngine/QueryEngine.h"
 
 namespace {
 
 llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   auto& ctx = cgen_state->context_;
-  const auto pi8_type = llvm::PointerType::get(get_int_type(8, ctx), 0);
-  const auto ppi8_type = llvm::PointerType::get(pi8_type, 0);
-  const auto pi64_type = llvm::PointerType::get(get_int_type(64, ctx), 0);
-  const auto ppi64_type = llvm::PointerType::get(pi64_type, 0);
+  const auto pi8_type = typed_ptr_ty(get_int_type(8, ctx), 0);
+  const auto ppi8_type = typed_ptr_ty(pi8_type, 0);
+  const auto pi64_type = typed_ptr_ty(get_int_type(64, ctx), 0);
+  const auto ppi64_type = typed_ptr_ty(pi64_type, 0);
   const auto i32_type = get_int_type(32, ctx);
 
   const auto func_type = llvm::FunctionType::get(
@@ -81,7 +83,7 @@ void initialize_ptr_member(llvm::Value* member_ptr,
                            llvm::Value* value_ptr,
                            llvm::IRBuilder<>& ir_builder) {
   if (value_ptr != nullptr) {
-    if (value_ptr->getType() == member_llvm_type->getPointerElementType()) {
+    if (value_ptr->getType() == member_llvm_type) {
       ir_builder.CreateStore(value_ptr, member_ptr);
     } else {
       auto tmp = ir_builder.CreateBitCast(value_ptr, member_llvm_type);
@@ -90,6 +92,11 @@ void initialize_ptr_member(llvm::Value* member_ptr,
   } else {
     ir_builder.CreateStore(llvm::Constant::getNullValue(member_llvm_type), member_ptr);
   }
+}
+
+llvm::Value* load_alloca_struct(llvm::Value* alloca_ptr, llvm::IRBuilder<>& ir_builder) {
+  auto* alloca = llvm::cast<llvm::AllocaInst>(alloca_ptr);
+  return typed_load(ir_builder, alloca->getAllocatedType(), alloca_ptr);
 }
 
 template <typename T>
@@ -101,12 +108,21 @@ void initialize_int_member(llvm::Value* member_ptr,
   llvm::Value* val = nullptr;
   if (value != nullptr) {
     auto value_type = value->getType();
+    const auto target_width = static_cast<unsigned>(sizeof(T) * 8);
     if (value_type->isPointerTy()) {
-      CHECK(value_type->getPointerElementType()->isIntegerTy(sizeof(T) * 8));
-      val = ir_builder.CreateLoad(value->getType()->getPointerElementType(), value);
+      CHECK(get_int_type(target_width, ctx)->isIntegerTy(target_width));
+      val = typed_load(ir_builder, get_int_type(target_width, ctx), value);
+    } else if (value_type->isIntegerTy()) {
+      const auto value_width = value_type->getIntegerBitWidth();
+      if (value_width == target_width) {
+        val = value;
+      } else if (value_width > target_width) {
+        val = ir_builder.CreateTrunc(value, get_int_type(target_width, ctx));
+      } else {
+        val = ir_builder.CreateZExt(value, get_int_type(target_width, ctx));
+      }
     } else {
-      CHECK(value_type->isIntegerTy(sizeof(T) * 8));
-      val = value;
+      LOG(FATAL) << "initialize_int_member: expected integer or pointer value type";
     }
     ir_builder.CreateStore(val, member_ptr);
   } else {
@@ -146,9 +162,9 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
     col_struct_type = llvm::StructType::get(
         ctx,
         {
-            data_ptr_llvm_type,           /* T* ptr */
-            llvm::Type::getInt64Ty(ctx),  /* int64_t sz */
-            llvm::Type::getInt8PtrTy(ctx) /* int8_t* string_dictionary_ptr */
+            data_ptr_llvm_type,                   /* T* ptr */
+            llvm::Type::getInt64Ty(ctx),          /* int64_t sz */
+            typed_ptr_ty(get_int_type(8, ctx), 0) /* int8_t* string_dictionary_ptr */
         });
   } else {
     std::vector<llvm::Type*> types{
@@ -179,8 +195,7 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
   if (data_target_info.is_text_encoding_none()) {
     auto is_null_ptr = ir_builder.CreateStructGEP(col_struct_type, col, 2);
     is_null_ptr->setName(col_name + ".is_null");
-    llvm::Value* col_size_lv =
-        ir_builder.CreateLoad(col_sz_ptr->getType()->getPointerElementType(), col_sz_ptr);
+    llvm::Value* col_size_lv = typed_load(ir_builder, get_int_type(64, ctx), col_sz_ptr);
     llvm::Value* is_null_str_lv = ir_builder.CreateICmpEQ(
         col_size_lv, llvm::ConstantInt::get(llvm::Type::getInt64Ty(ctx), 0));
     auto i8_type = llvm::Type::getInt8Ty(ctx);
@@ -192,12 +207,11 @@ std::tuple<llvm::Value*, llvm::Value*> alloc_column(std::string col_name,
   }
   if (is_text_encoding_dict_type) {
     initialize_ptr_member(col_str_dict_ptr,
-                          llvm::Type::getInt8PtrTy(ctx),
+                          typed_ptr_ty(get_int_type(8, ctx), 0),
                           data_str_dict_proxy_ptr,
                           ir_builder);
   }
-  auto col_ptr = ir_builder.CreatePointerCast(
-      col_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
+  auto col_ptr = ir_builder.CreatePointerCast(col_ptr_ptr, get_int_ptr_type(8, ctx));
   col_ptr->setName(col_name + "_ptr");
   return {col, col_ptr};
 }
@@ -216,7 +230,7 @@ llvm::Value* alloc_column_list(std::string col_list_name,
     values) then the corresponding members are initialized with NULL
     and -1, respectively.
    */
-  llvm::Type* data_ptrs_llvm_type = llvm::Type::getInt8PtrTy(ctx);
+  llvm::Type* data_ptrs_llvm_type = typed_ptr_ty(get_int_type(8, ctx), 0);
   const bool is_text_encoding_dict_type =
       data_target_info.is_string() &&
       data_target_info.get_compression() == kENCODING_DICT;
@@ -271,8 +285,8 @@ llvm::Value* alloc_column_list(std::string col_list_name,
                           ir_builder);
   }
 
-  auto col_list_ptr = ir_builder.CreatePointerCast(
-      col_list_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
+  auto col_list_ptr =
+      ir_builder.CreatePointerCast(col_list_ptr_ptr, get_int_ptr_type(8, ctx));
   col_list_ptr->setName(col_list_name + "_ptrs");
   return col_list_ptr;
 }
@@ -316,8 +330,7 @@ llvm::Value* alloc_array(std::string arr_name,
   initialize_ptr_member(arr_ptr_ptr, data_ptr_llvm_type, data_ptr, ir_builder);
   initialize_int_member<int64_t>(arr_sz_ptr, data_size, -1, ctx, ir_builder);
   initialize_int_member<int8_t>(arr_is_null_ptr, data_is_null, -1, ctx, ir_builder);
-  auto arr_ptr = ir_builder.CreatePointerCast(
-      arr_ptr_ptr, llvm::PointerType::get(llvm::Type::getInt8Ty(ctx), 0));
+  auto arr_ptr = ir_builder.CreatePointerCast(arr_ptr_ptr, get_int_ptr_type(8, ctx));
   arr_ptr->setName(arr_name + "_pointer");
   return arr_ptr;
 }
@@ -329,6 +342,32 @@ std::string exprsKey(const std::vector<Analyzer::Expr*>& exprs) {
     result += ti.to_string() + ", ";
   }
   return result;
+}
+
+llvm::Value* load_scalar_as_single_field_struct(llvm::Value* col_head,
+                                                llvm::Type* field_ty,
+                                                llvm::LLVMContext& ctx,
+                                                llvm::IRBuilder<>& ir_builder,
+                                                const std::string& name) {
+  // UDTF C++ ABI: some Thrift/extension scalar types are POD structs in generated IR,
+  // not bare i64/fp values. load_scalar_as_single_field_struct wraps a column-head
+  // scalar in a single-field struct for the UDTF entry point.
+  //
+  // Types that require struct wrapping (pass via this helper, not plain loaded scalar):
+  //   - TIMESTAMP, TIME (is_timestamp)
+  //   - DAYTIMEINTERVAL, YEARMONTHINTERVAL (is_timeinterval)
+  //
+  // Types passed as plain loaded scalars (see generateEntryPoint input arg loop):
+  //   - integer / boolean (is_integer, is_boolean)
+  //   - float / double (is_fp)
+  //
+  // Composite / varlen inputs use alloc_column, alloc_column_list, or alloc_array and
+  // are passed by reference per UDTF clang ABI (rbc issues 200 and 289).
+  const auto field_width = field_ty->isIntegerTy() ? field_ty->getIntegerBitWidth() : 64;
+  auto r = ir_builder.CreateBitCast(col_head, get_int_ptr_type(field_width, ctx));
+  llvm::Value* scalar = typed_load(ir_builder, field_ty, r, name);
+  const auto struct_ty = llvm::StructType::get(ctx, std::vector<llvm::Type*>{field_ty});
+  return ir_builder.CreateInsertValue(llvm::UndefValue::get(struct_ty), scalar, {0});
 }
 
 }  // namespace
@@ -366,6 +405,15 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
 #endif
     return *cached_code;
   }
+#ifdef HAVE_CUDA
+  if (co_.device_type == ExecutorDeviceType::GPU && !emit_only_preflight_fn &&
+      !exe_unit.table_func.isGPU()) {
+    // HOST-only UDTFs (e.g. *_cpu_only, *__cpu__*) are not in CudaTableFunctions.a.
+    // Fall back to CPU without attempting NVPTX link (QE-374).
+    QueryEngine::getInstance()->tf_code_accessor->erase(key);
+    throw QueryMustRunOnCpu();
+  }
+#endif
   auto compile_start = timer_start();
   auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
@@ -485,18 +533,26 @@ void TableFunctionCompilationContext::generateEntryPoint(
   cgen_state->ir_builder_.CreateBr(func_body_bb);
 
   cgen_state->ir_builder_.SetInsertPoint(func_body_bb);
-  auto col_heads = generate_column_heads_load(
-      exe_unit.input_exprs.size(), input_cols_arg, cgen_state->ir_builder_, ctx);
+  const auto pi8_type = typed_ptr_ty(get_int_type(8, ctx), 0);
+  auto col_heads = generate_column_heads_load(exe_unit.input_exprs.size(),
+                                              input_cols_arg,
+                                              cgen_state->ir_builder_,
+                                              ctx,
+                                              pi8_type);
   CHECK_EQ(exe_unit.input_exprs.size(), col_heads.size());
-  auto row_count_heads = generate_column_heads_load(
-      exe_unit.input_exprs.size(), input_row_counts_arg, cgen_state->ir_builder_, ctx);
+  auto row_count_heads = generate_column_heads_load(exe_unit.input_exprs.size(),
+                                                    input_row_counts_arg,
+                                                    cgen_state->ir_builder_,
+                                                    ctx,
+                                                    get_int_type(64, ctx));
 
   auto input_str_dict_proxy_heads = std::vector<llvm::Value*>();
   if (co_.device_type == ExecutorDeviceType::CPU) {
     input_str_dict_proxy_heads = generate_column_heads_load(exe_unit.input_exprs.size(),
                                                             input_str_dict_proxies_arg,
                                                             cgen_state->ir_builder_,
-                                                            ctx);
+                                                            ctx,
+                                                            pi8_type);
   }
   // The column arguments of C++ UDTFs processed by clang must be
   // passed by reference, see rbc issues 200 and 289.
@@ -518,29 +574,40 @@ void TableFunctionCompilationContext::generateEntryPoint(
     if (ti.is_fp()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], get_fp_ptr_type(get_bit_width(ti), ctx));
-      llvm::LoadInst* scalar_fp = cgen_state->ir_builder_.CreateLoad(
-          r->getType()->getPointerElementType(),
-          r,
-          "input_scalar_fp." + std::to_string(func_arg_index));
+      llvm::LoadInst* scalar_fp = llvm::cast<llvm::LoadInst>(
+          typed_load(cgen_state->ir_builder_,
+                     get_fp_type(get_bit_width(ti), ctx),
+                     r,
+                     "input_scalar_fp." + std::to_string(func_arg_index)));
       func_args.push_back(scalar_fp);
       CHECK_EQ(col_index, -1);
-    } else if (ti.is_integer() || ti.is_boolean() || ti.is_timestamp() ||
-               ti.is_timeinterval()) {
+    } else if (ti.is_timestamp() || ti.is_timeinterval()) {
+      // Timestamp and interval scalars are POD structs in UDTF IR ({ i64 }), not plain
+      // i64. Passing i64 breaks NVPTX linking for GPU table functions.
+      func_args.push_back(load_scalar_as_single_field_struct(
+          col_heads[i],
+          get_int_type(get_bit_width(ti), ctx),
+          ctx,
+          cgen_state->ir_builder_,
+          "input_scalar_ts." + std::to_string(func_arg_index)));
+      CHECK_EQ(col_index, -1);
+    } else if (ti.is_integer() || ti.is_boolean()) {
       auto r = cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], get_int_ptr_type(get_bit_width(ti), ctx));
-      llvm::LoadInst* scalar_int = cgen_state->ir_builder_.CreateLoad(
-          r->getType()->getPointerElementType(),
-          r,
-          "input_scalar_int." + std::to_string(func_arg_index));
+      llvm::LoadInst* scalar_int = llvm::cast<llvm::LoadInst>(
+          typed_load(cgen_state->ir_builder_,
+                     get_int_type(get_bit_width(ti), ctx),
+                     r,
+                     "input_scalar_int." + std::to_string(func_arg_index)));
       func_args.push_back(scalar_int);
       CHECK_EQ(col_index, -1);
     } else if (ti.is_text_encoding_none()) {
       auto varchar_size =
           cgen_state->ir_builder_.CreateBitCast(col_heads[i], get_int_ptr_type(64, ctx));
-      auto varchar_ptr = cgen_state->ir_builder_.CreateGEP(
-          col_heads[i]->getType()->getScalarType()->getPointerElementType(),
-          col_heads[i],
-          cgen_state->llInt(8));
+      auto varchar_ptr = typed_gep(cgen_state->ir_builder_,
+                                   get_int_type(8, ctx),
+                                   col_heads[i],
+                                   cgen_state->llInt(8));
       auto [varchar_struct, varchar_struct_ptr] = alloc_column(
           std::string("input_varchar_literal.") + std::to_string(func_arg_index),
           i,
@@ -552,8 +619,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
           cgen_state->ir_builder_);
       func_args.push_back(
           (pass_column_by_value
-               ? cgen_state->ir_builder_.CreateLoad(
-                     varchar_struct->getType()->getPointerElementType(), varchar_struct)
+               ? load_alloca_struct(varchar_struct, cgen_state->ir_builder_)
                : varchar_struct_ptr));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column()) {
@@ -568,8 +634,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
           ctx,
           cgen_state->ir_builder_);
       func_args.push_back((pass_column_by_value
-                               ? cgen_state->ir_builder_.CreateLoad(
-                                     col->getType()->getPointerElementType(), col)
+                               ? load_alloca_struct(col, cgen_state->ir_builder_)
                                : col_ptr));
       CHECK_EQ(col_index, -1);
     } else if (ti.is_column_list()) {
@@ -604,17 +669,17 @@ void TableFunctionCompilationContext::generateEntryPoint(
        */
       auto array_size =
           cgen_state->ir_builder_.CreateBitCast(col_heads[i], get_int_ptr_type(64, ctx));
-      auto array_is_null_ptr = cgen_state->ir_builder_.CreateGEP(
-          col_heads[i]->getType()->getScalarType()->getPointerElementType(),
-          col_heads[i],
-          cgen_state->llInt(8));
-      auto array_is_null = cgen_state->ir_builder_.CreateLoad(
-          array_is_null_ptr->getType()->getPointerElementType(), array_is_null_ptr);
+      auto array_is_null_ptr = typed_gep(cgen_state->ir_builder_,
+                                         get_int_type(8, ctx),
+                                         col_heads[i],
+                                         cgen_state->llInt(8));
+      auto array_is_null =
+          typed_load(cgen_state->ir_builder_, get_int_type(64, ctx), array_is_null_ptr);
 
-      auto array_ptr = cgen_state->ir_builder_.CreateGEP(
-          col_heads[i]->getType()->getScalarType()->getPointerElementType(),
-          col_heads[i],
-          cgen_state->llInt(16));
+      auto array_ptr = typed_gep(cgen_state->ir_builder_,
+                                 get_int_type(8, ctx),
+                                 col_heads[i],
+                                 cgen_state->llInt(16));
       array_size->setName(std::string("array_size.") + std::to_string(func_arg_index));
       array_is_null->setName(std::string("array_is_null.") +
                              std::to_string(func_arg_index));
@@ -645,17 +710,15 @@ void TableFunctionCompilationContext::generateEntryPoint(
           ? (generate_column_heads_load(exe_unit.target_exprs.size(),
                                         output_str_dict_proxies_arg,
                                         cgen_state->ir_builder_,
-                                        ctx))
+                                        ctx,
+                                        pi8_type))
           : std::vector<llvm::Value*>();
 
   std::vector<llvm::Value*> output_col_args;
   for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
-    auto* gep = cgen_state->ir_builder_.CreateGEP(
-        output_buffers_arg->getType()->getScalarType()->getPointerElementType(),
-        output_buffers_arg,
-        cgen_state->llInt(i));
-    auto output_load =
-        cgen_state->ir_builder_.CreateLoad(gep->getType()->getPointerElementType(), gep);
+    auto* gep = typed_gep(
+        cgen_state->ir_builder_, pi8_type, output_buffers_arg, cgen_state->llInt(i));
+    auto output_load = typed_load(cgen_state->ir_builder_, pi8_type, gep);
     const auto& expr = exe_unit.target_exprs[i];
     const auto& ti = expr->get_type_info();
     CHECK(!ti.is_column());       // UDTF output column type is its data type
@@ -694,17 +757,14 @@ void TableFunctionCompilationContext::generateEntryPoint(
         "TableFunctionManager_set_output_row_size",
         llvm::Type::getVoidTy(ctx),
         {mgr_ptr,
-         cgen_state->ir_builder_.CreateLoad(
-             output_row_count_ptr->getType()->getPointerElementType(),
-             output_row_count_ptr)});
+         typed_load(
+             cgen_state->ir_builder_, get_int_type(64, ctx), output_row_count_ptr)});
   }
 
   if (!emit_only_preflight_fn) {
     for (auto& col : output_col_args) {
-      func_args.push_back((pass_column_by_value
-                               ? cgen_state->ir_builder_.CreateLoad(
-                                     col->getType()->getPointerElementType(), col)
-                               : col));
+      func_args.push_back((
+          pass_column_by_value ? load_alloca_struct(col, cgen_state->ir_builder_) : col));
     }
   }
 
@@ -733,7 +793,7 @@ void TableFunctionCompilationContext::generateGpuKernel() {
   auto& ctx = cgen_state->context_;
 
   std::vector<llvm::Type*> wrapper_arg_types(arg_types.size() + 1);
-  wrapper_arg_types[0] = llvm::PointerType::get(get_int_type(32, ctx), 0);
+  wrapper_arg_types[0] = typed_ptr_ty(get_int_type(32, ctx), 0);
   wrapper_arg_types[1] = arg_types[0];
 
   for (size_t i = 1; i < arg_types.size(); ++i) {

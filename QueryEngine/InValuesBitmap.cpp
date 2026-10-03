@@ -106,8 +106,7 @@ InValuesBitmap::BitIsSetParams InValuesBitmap::prepareBitIsSetParams(
     std::unordered_map<int, std::shared_ptr<const Analyzer::Constant>> const&
         constant_owned) const {
   BitIsSetParams params;
-  auto pi8_ty =
-      llvm::PointerType::get(get_int_type(8, executor->cgen_state_->context_), 0);
+  auto pi8_ty = get_int_ptr_type(8, executor->cgen_state_->context_);
   CodeGenerator code_generator(executor);
   params.null_val_lv =
       CodegenUtil::hoistLiteral(&code_generator,

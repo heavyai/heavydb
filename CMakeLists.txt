@@ -595,7 +595,7 @@ include_directories(${CMAKE_SOURCE_DIR}
 ## Dependencies
 
 # LLVM
-find_package(LLVM CONFIG REQUIRED)
+find_package(LLVM 21.1.8 EXACT CONFIG REQUIRED)
 if (TARGET LLVM)
   get_target_property(LLVM_LIB LLVM IMPORTED_LOCATION_RELEASE)
 endif()
@@ -620,7 +620,7 @@ message(STATUS "Using CLANG_LIB: ${CLANG_LIB}")
 
 # Deps builds use separate libs for each clang component, while some distros now bundle into a single lib
 if (NOT LLVM_LIB)
-  set(LLVM_COMPONENTS support mcjit core irreader option linker)
+  set(LLVM_COMPONENTS support mcjit core irreader option linker passes)
   option(ENABLE_INTEL_JIT_LISTENER "Enable Intel Vtune JIT Listener" OFF)
   if(ENABLE_INTEL_JIT_LISTENER)
     list(APPEND LLVM_COMPONENTS inteljitevents)

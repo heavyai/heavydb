@@ -61,4 +61,27 @@ class Codegen {
 
 std::string suffix(SQLTypes type);
 
+// WKT / GeoConstant array lengths are i64 (size_t via llInt); column array_size is i32.
+// Hand-rolled ST_Centroid / ST_Area / ST_Perimeter take int32_t sizes, so truncate
+// before emitExternalCall. Odd slots in operand_lvs are sizes (ptr, size, ptr, size,
+// ...).
+inline llvm::Value* narrow_geo_size_to_i32(llvm::IRBuilder<>& builder,
+                                           llvm::Value* size_lv) {
+  CHECK(size_lv);
+  CHECK(size_lv->getType()->isIntegerTy());
+  auto* const i32_ty = llvm::Type::getInt32Ty(builder.getContext());
+  if (size_lv->getType() == i32_ty) {
+    return size_lv;
+  }
+  CHECK(size_lv->getType()->isIntegerTy(64));
+  return builder.CreateTrunc(size_lv, i32_ty);
+}
+
+inline void narrow_geo_size_slots_to_i32(llvm::IRBuilder<>& builder,
+                                         std::vector<llvm::Value*>& operand_lvs) {
+  for (size_t i = 1; i < operand_lvs.size(); i += 2) {
+    operand_lvs[i] = narrow_geo_size_to_i32(builder, operand_lvs[i]);
+  }
+}
+
 }  // namespace spatial_type

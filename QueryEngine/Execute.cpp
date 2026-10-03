@@ -4370,8 +4370,10 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
       cgen_state_->frag_offsets_.push_back(nullptr);
     } else {
       if (frag_count > 1) {
-        cgen_state_->frag_offsets_.push_back(cgen_state_->ir_builder_.CreateLoad(
-            frag_off_ptr->getType()->getPointerElementType(), frag_off_ptr));
+        cgen_state_->frag_offsets_.push_back(
+            typed_load(cgen_state_->ir_builder_,
+                       get_int_type(64, cgen_state_->context_),
+                       frag_off_ptr));
       } else {
         cgen_state_->frag_offsets_.push_back(nullptr);
       }
@@ -4506,25 +4508,12 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
   AUTOMATIC_IR_METADATA(cgen_state_.get());
   CHECK(val->getType()->isPointerTy());
 
-  const auto val_ptr_type = static_cast<llvm::PointerType*>(val->getType());
-  const auto val_type = val_ptr_type->getPointerElementType();
-  size_t val_width = 0;
-  if (val_type->isIntegerTy()) {
-    val_width = val_type->getIntegerBitWidth();
-  } else {
-    if (val_type->isFloatTy()) {
-      val_width = 32;
-    } else {
-      CHECK(val_type->isDoubleTy());
-      val_width = 64;
-    }
-  }
-  CHECK_LT(size_t(0), val_width);
-  if (bitWidth == val_width) {
+  const auto target_ptr_ty =
+      typed_ptr_ty(get_int_type(bitWidth, cgen_state_->context_), 0);
+  if (val->getType() == target_ptr_ty) {
     return val;
   }
-  return cgen_state_->ir_builder_.CreateBitCast(
-      val, llvm::PointerType::get(get_int_type(bitWidth, cgen_state_->context_), 0));
+  return cgen_state_->ir_builder_.CreateBitCast(val, target_ptr_ty);
 }
 
 #define EXECUTE_INCLUDE

@@ -9,6 +9,7 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/Module.h>
 
+#include <cstdint>
 #include <memory>
 
 class CompilationContext {
@@ -44,6 +45,13 @@ class ExecutionEngineWrapper {
   llvm::ExecutionEngine* operator->() { return execution_engine_.get(); }
   const llvm::ExecutionEngine* operator->() const { return execution_engine_.get(); }
 
+  void* getFunctionPointer(llvm::Function* function) const {
+    const uint64_t addr =
+        execution_engine_->getFunctionAddress(function->getName().str());
+    CHECK(addr);
+    return reinterpret_cast<void*>(static_cast<uintptr_t>(addr));
+  }
+
  private:
   std::unique_ptr<llvm::ExecutionEngine> execution_engine_;
   std::unique_ptr<llvm::JITEventListener> intel_jit_listener_;
@@ -62,8 +70,7 @@ class CpuCompilationContext : public CompilationContext {
   const std::string& name() const { return name_; }
 
   void setFunctionPointer(llvm::Function* function) {
-    func_ = execution_engine_->getPointerToFunction(function);
-    CHECK(func_);
+    func_ = execution_engine_.getFunctionPointer(function);
     name_ = function->getName().str();
     execution_engine_->removeModule(function->getParent());
   }
