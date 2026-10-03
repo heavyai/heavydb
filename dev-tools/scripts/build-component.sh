@@ -439,7 +439,7 @@ Options:
                          Default: parent directory of this repo.
   --output-dir=<path>    Where to write the artifact.
                          Default: build/components/ inside the repo.
-  --distro=ubuntu22.04|rockylinux8
+  --distro=ubuntu22.04|ubuntu24.04|rockylinux8
                          Distro variant. For HeavyIQ: selects build_prod.sh vs
                          build_prod_rhel.sh. Also filters deps image auto-detection
                          when --deps-image is not given. Default: ubuntu22.04

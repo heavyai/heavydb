@@ -34,7 +34,7 @@ Common options (see ``dev-tools/dev.sh build --help``):
 
 .. code-block:: text
 
-    --distro=ubuntu22.04|rockylinux8   # default ubuntu22.04
+    --distro=ubuntu22.04|ubuntu24.04|rockylinux8   # default ubuntu22.04
     --compiler=gcc|clang
     --cuda | --cpu
     --static | --shared

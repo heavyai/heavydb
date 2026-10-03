@@ -258,11 +258,21 @@ function install_required_ubuntu_packages() {
       wget \
       zlib1g-dev
 
+  # JDK21 is default on 24.04
+  JAVA_BASE="default"
+  if [[ $VERSION_ID != "24.04" ]]; then
+    ## install JDK 21 on 20.04 and 22.04
+    JAVA_BASE="openjdk-21"
+  fi
   DEBIAN_FRONTEND=noninteractive sudo apt install -y \
-      openjdk-21-jdk \
-      openjdk-21-jdk-headless \
-      openjdk-21-jre \
-      openjdk-21-jre-headless
+      ${JAVA_BASE}-jdk \
+      ${JAVA_BASE}-jdk-headless \
+      ${JAVA_BASE}-jre \
+      ${JAVA_BASE}-jre-headless
+
+  if [[ "${VERSION_ID}" == "24.04" ]]; then
+    DEBIAN_FRONTEND=noninteractive sudo apt install -y libwayland-dev
+  fi
 
   if [ "$LIBRARY_TYPE" != "static" ]; then
     DEBIAN_FRONTEND=noninteractive sudo apt install -y \
@@ -856,6 +866,11 @@ function install_gdal_and_pdal() {
     pushd PDAL-${PDAL_VERSION}-src
     patch -p1 < $SCRIPTS_DIR/pdal-asan-leak-4be888818861d34145aca262014a00ee39c90b29.patch
     patch -p1 < $SCRIPTS_DIR/pdal-gdal-3.7.2-const-ogrspatialreference.patch
+    if [[ "${VERSION_ID}" == "24.04" ]]; then
+      # patches for GCC 13
+      patch -p1 < $SCRIPTS_DIR/pdal-gcc13-patch1.patch
+      patch -p1 < $SCRIPTS_DIR/pdal-gcc13-patch2.patch
+    fi
     if [ "$LIBRARY_TYPE" == "static" ] ; then
       # Build static libraries
       build_static_libs=$(printf "/%s/c %s%s" \
@@ -894,7 +909,7 @@ function install_gdal_and_pdal() {
     check_artifact_cleanup PDAL-${PDAL_VERSION}-src.tar.bz2 PDAL-${PDAL_VERSION}-src
 }
 
-GEOS_VERSION=3.11.1
+GEOS_VERSION=3.11.5
 
 function install_geos() {
     download https://download.osgeo.org/geos/geos-${GEOS_VERSION}.tar.bz2
@@ -1027,16 +1042,21 @@ function install_tbb() {
   pushd oneTBB-${TBB_VERSION}
   mkdir -p build
   pushd build
+  EXTRA_FLAGS=""
+  if [[ "${VERSION_ID}" == "24.04" ]]; then
+    # avoid GCC13 error (uxlfoundation/oneTBB#843)
+    EXTRA_FLAGS=" -Wno-error=stringop-overflow"
+  fi
   if [ "$TSAN" == "false" ]; then
     TBB_CFLAGS=""
     TBB_CXXFLAGS=""
     TBB_TSAN=""
   elif [ "$TSAN" = "true" ]; then
     TBB_CFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
-    TBB_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer"
+    TBB_CXXFLAGS="-fPIC -fsanitize=thread -fPIC -O1 -fno-omit-frame-pointer -Wno-error=stringop-overflow"
     TBB_TSAN="-DTBB_SANITIZE=thread"
   fi
-  cmake -E env CFLAGS="$TBB_CFLAGS" CXXFLAGS="$TBB_CXXFLAGS" \
+  cmake -E env CFLAGS="${TBB_CFLAGS}${EXTRA_FLAGS}" CXXFLAGS="${TBB_CXXFLAGS}${EXTRA_FLAGS}" \
   cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
@@ -1179,6 +1199,9 @@ function install_onedal() {
   # remove c++ standard override in cmake
   # remove unnecessary template params from contructor decls (gcc fix)
   patch -p1 < $SCRIPTS_DIR/patch-onedal-cpp20.patch
+
+  # fix GCC 13 -Werror=dangling-reference false positives (uxlfoundation/oneDAL#2922)
+  patch -p1 < $SCRIPTS_DIR/patch-onedal-gcc13.patch
 
   # these exports will only be valid in the subshell that builds oneDAL
   (export TBBROOT=${PREFIX}; \

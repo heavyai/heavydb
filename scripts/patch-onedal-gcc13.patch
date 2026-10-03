@@ -1,0 +1,39 @@
+diff --git a/cpp/oneapi/dal/algo/knn/detail/distance.hpp b/cpp/oneapi/dal/algo/knn/detail/distance.hpp
+index 5303a60a1ef..c43d05af9e8 100755
+--- a/cpp/oneapi/dal/algo/knn/detail/distance.hpp
++++ b/cpp/oneapi/dal/algo/knn/detail/distance.hpp
+@@ -96,7 +96,7 @@ struct distance_accessor {
+ 
+ template <typename Descriptor>
+ distance_impl* get_distance_impl(Descriptor&& desc) {
+-    const auto& distance = distance_accessor{}.get_distance_impl(std::forward<Descriptor>(desc));
++    const auto distance = distance_accessor{}.get_distance_impl(std::forward<Descriptor>(desc));
+     return distance ? distance->get_impl() : nullptr;
+ }
+ 
+diff --git a/cpp/oneapi/dal/algo/objective_function/detail/objective.hpp b/cpp/oneapi/dal/algo/objective_function/detail/objective.hpp
+index 076db42e051..3eeda675b15 100644
+--- a/cpp/oneapi/dal/algo/objective_function/detail/objective.hpp
++++ b/cpp/oneapi/dal/algo/objective_function/detail/objective.hpp
+@@ -71,7 +71,7 @@ struct objective_accessor {
+ 
+ template <typename Descriptor>
+ objective_impl* get_objective_impl(Descriptor&& desc) {
+-    const auto& objective = objective_accessor{}.get_objective_impl(std::forward<Descriptor>(desc));
++    const auto objective = objective_accessor{}.get_objective_impl(std::forward<Descriptor>(desc));
+     return objective ? objective->get_impl() : nullptr;
+ }
+ 
+diff --git a/cpp/oneapi/dal/algo/svm/detail/kernel_function.hpp b/cpp/oneapi/dal/algo/svm/detail/kernel_function.hpp
+index 9e4096753c7..0512a34bff2 100644
+--- a/cpp/oneapi/dal/algo/svm/detail/kernel_function.hpp
++++ b/cpp/oneapi/dal/algo/svm/detail/kernel_function.hpp
+@@ -143,7 +143,7 @@ struct kernel_function_accessor {
+ 
+ template <typename Descriptor>
+ kernel_function_impl* get_kernel_function_impl(Descriptor&& desc) {
+-    const auto& kernel = kernel_function_accessor{}.get_kernel_impl(std::forward<Descriptor>(desc));
++    const auto kernel = kernel_function_accessor{}.get_kernel_impl(std::forward<Descriptor>(desc));
+     return kernel ? kernel->get_impl() : nullptr;
+ }
+ 
