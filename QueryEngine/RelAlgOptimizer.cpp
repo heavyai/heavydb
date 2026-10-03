@@ -620,7 +620,7 @@ size_t pick_always_live_col_idx(const RelAlgNode* node) {
     if (auto lhs_idx = pick_always_live_col_idx(join->getInput(0))) {
       return lhs_idx;
     }
-    if (auto rhs_idx = pick_always_live_col_idx(join->getInput(0))) {
+    if (auto rhs_idx = pick_always_live_col_idx(join->getInput(1))) {
       return rhs_idx + join->getInput(0)->size();
     }
   } else if (auto sort = dynamic_cast<const RelSort*>(node)) {
