@@ -807,14 +807,20 @@ std::set<std::pair<const RelAlgNode*, int>> get_equiv_cols(const RelAlgNode* nod
       if (auto input = dynamic_cast<const RexInput*>(project->getProjectAt(curr_col))) {
         const auto join_source = dynamic_cast<const RelJoin*>(only_source);
         if (join_source) {
-          CHECK_EQ(size_t(2), join_source->inputCount());
-          auto lhs = join_source->getInput(0);
-          CHECK((input->getIndex() < lhs->size() && lhs == input->getSourceNode()) ||
-                join_source->getInput(1) == input->getSourceNode());
+          // The RexInput is sourced at one of the join's inputs, so re-key it onto the
+          // join before the walk steps there. Left as input-local, a left column k and
+          // a right column k would both record (join, k), letting two different sort
+          // keys intersect and compare as equivalent collations.
+          const auto join_idx = input_column_to_join_output(
+              join_source, input->getSourceNode(), input->getIndex());
+          CHECK(join_idx) << "RexInput is not sourced at an input of the join below the "
+                             "project";
+          CHECK_LT(*join_idx, join_source->size());
+          curr_col = *join_idx;
         } else {
           CHECK_EQ(input->getSourceNode(), only_source);
+          curr_col = input->getIndex();
         }
-        curr_col = input->getIndex();
       } else {
         break;
       }
