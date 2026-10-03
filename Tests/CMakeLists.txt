@@ -636,6 +636,27 @@ list(APPEND SANITY_TEST_PROGRAMS ReadOnlyTest)
 
 ##########
 
+# RelScanTree lives in ExecuteRenderInterface, which is only built when rendering is
+# enabled, but RelScanTree.{h,cpp} depend on nothing beyond QueryEngine/RelAlgDag.h.
+# Compile that one translation unit directly in a non-render build so this test is not
+# confined to the render CI job (which configures with ENABLE_TESTS=OFF). When
+# rendering is on, link the library instead: ExecuteRenderInterface is in
+# MAPD_LIBRARIES then, and compiling the source in as well would offer the linker two
+# definitions. Name the library explicitly even so, because mold (used on aarch64 and
+# in the render builds) links in a single pass and does not re-scan archives.
+if(ENABLE_RENDERING)
+  add_executable(RelScanTreeTest RelScanTreeTest.cpp)
+  target_link_libraries(RelScanTreeTest ExecuteRenderInterface ${THRIFT_HANDLER_TEST_LIBRARIES})
+else()
+  add_executable(RelScanTreeTest RelScanTreeTest.cpp
+    ${CMAKE_SOURCE_DIR}/ExecuteRenderInterface/RenderQueryUtils/RelScanTree.cpp)
+  target_link_libraries(RelScanTreeTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+endif()
+add_test(RelScanTreeTest RelScanTreeTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS RelScanTreeTest)
+
+##########
+
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
 target_link_libraries(ResultSetBaselineRadixSortTest ${EXECUTE_TEST_LIBS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
