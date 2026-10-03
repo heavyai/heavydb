@@ -1,0 +1,15 @@
+---
+title: ct_string_concat__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_string_concat__cpu_(
+    TableFunctionManager &mgr,
+    const ColumnList<TextEncodingDict> &input_strings,
+    const TextEncodingNone &separator,
+    Column<TextEncodingDict> &concatted_string
+)
+```
+</CodeBlock>

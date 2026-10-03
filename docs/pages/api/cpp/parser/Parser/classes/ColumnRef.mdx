@@ -1,0 +1,105 @@
+---
+title: Parser::ColumnRef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### ColumnRef [#columnref]
+
+<Tabs>
+<Tab title="From raw pointer">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"ColumnRef": "columnref"}}>
+```cpp showLineNumbers={false}
+Parser::ColumnRef::ColumnRef(
+    std::string *n1
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ColumnRef": "columnref"}}>
+```cpp showLineNumbers={false}
+Parser::ColumnRef::ColumnRef(
+    std::string *n1,
+    std::string *n2
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_table [#gettable]
+
+<CodeBlock links={{"ColumnRef": "columnref"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::ColumnRef::get_table() const
+```
+</CodeBlock>
+
+### get_column [#getcolumn]
+
+<CodeBlock links={{"ColumnRef": "columnref"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::ColumnRef::get_column() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"ColumnRef": "columnref"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::ColumnRef::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"ColumnRef": "columnref"}}>
+```cpp showLineNumbers={false}
+std::string Parser::ColumnRef::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `column_` | `std::unique_ptr< std::string >` | |

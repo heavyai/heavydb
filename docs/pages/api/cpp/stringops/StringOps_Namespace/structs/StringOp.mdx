@@ -1,0 +1,197 @@
+---
+title: StringOps_Namespace::StringOp
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+---
+
+## Constructors
+
+### StringOp [#stringop]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"StringOp": "stringop", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::StringOp::StringOp(
+    const SqlStringOpKind op_kind,
+    const std::optional<std::string> &var_str_optional_literal,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"StringOp": "stringop", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::StringOp::StringOp(
+    const SqlStringOpKind op_kind,
+    const SQLTypeInfo &return_ti,
+    const std::optional<std::string> &var_str_optional_literal,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~StringOp
+
+<CodeBlock links={{"StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual StringOps_Namespace::StringOp::~StringOp() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (1 params)">
+
+<CodeBlock links={{"StringOp": "stringop", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::StringOp::operator()(
+    std::string const &
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StringOp": "stringop", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::StringOp::operator()(
+    const std::string &str1,
+    const std::string &str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (0 params)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StringOp": "stringop", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::StringOp::operator()() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### numericEval [#numericeval]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::StringOp::numericEval(
+    const std::string_view str
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<CodeBlock links={{"StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::StringOp::numericEval(
+    const std::string_view str1,
+    const std::string_view str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::StringOp::numericEval() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getReturnType [#getreturntype]
+
+<CodeBlock links={{"StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual const SQLTypeInfo & StringOps_Namespace::StringOp::getReturnType() const
+```
+</CodeBlock>
+
+### getVarStringLiteral [#getvarstringliteral]
+
+<CodeBlock links={{"StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const std::string & StringOps_Namespace::StringOp::getVarStringLiteral() const
+```
+</CodeBlock>
+
+### hasVarStringLiteral [#hasvarstringliteral]
+
+<CodeBlock links={{"StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::StringOp::hasVarStringLiteral() const
+```
+</CodeBlock>
+
+### getOpInfo [#getopinfo]
+
+<CodeBlock links={{"StringOp": "stringop", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+const StringOpInfo & StringOps_Namespace::StringOp::getOpInfo() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generateRegex [#generateregex]
+
+<CodeBlock links={{"StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+boost::regex StringOps_Namespace::StringOp::generateRegex(
+    const std::string &op_name,
+    const std::string &regex_pattern,
+    const std::string &regex_params,
+    const bool supports_sub_matches
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `op_kind_` | `const SqlStringOpKind` | |
+| `return_ti_` | `const SQLTypeInfo` | |
+| `has_var_str_literal_` | `const bool` | |
+| `var_str_literal_` | `const NullableStrType` | |
+| `string_op_info_` | `const StringOpInfo` | |

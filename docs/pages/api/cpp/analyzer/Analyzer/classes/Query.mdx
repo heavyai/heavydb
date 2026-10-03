@@ -1,0 +1,380 @@
+---
+title: Analyzer::Query
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+---
+
+## Constructors
+
+### Query [#query]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+Analyzer::Query::Query()
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~Query
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+Analyzer::Query::~Query()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_distinct [#getisdistinct]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Query::get_is_distinct() const
+```
+</CodeBlock>
+
+### get_num_aggs [#getnumaggs]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+int Analyzer::Query::get_num_aggs() const
+```
+</CodeBlock>
+
+### get_targetlist [#gettargetlist]
+
+<CodeBlock links={{"Query": "query", "TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<TargetEntry>> & Analyzer::Query::get_targetlist() const
+```
+</CodeBlock>
+
+### get_targetlist_nonconst [#gettargetlistnonconst]
+
+<CodeBlock links={{"Query": "query", "TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<TargetEntry>> & Analyzer::Query::get_targetlist_nonconst()
+```
+</CodeBlock>
+
+### get_values_lists [#getvalueslists]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"Query": "query", "TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+std::vector<std::vector<std::shared_ptr<TargetEntry>>> & Analyzer::Query::get_values_lists()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"Query": "query", "TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::vector<std::shared_ptr<TargetEntry>>> & Analyzer::Query::get_values_lists() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_rangetable [#getrangetable]
+
+<CodeBlock links={{"Query": "query", "RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+const std::vector<RangeTableEntry *> & Analyzer::Query::get_rangetable() const
+```
+</CodeBlock>
+
+### get_where_predicate [#getwherepredicate]
+
+<CodeBlock links={{"Query": "query", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::Query::get_where_predicate() const
+```
+</CodeBlock>
+
+### get_group_by [#getgroupby]
+
+<CodeBlock links={{"Query": "query", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::list<std::shared_ptr<Analyzer::Expr>> & Analyzer::Query::get_group_by() const
+```
+</CodeBlock>
+
+### get_having_predicate [#gethavingpredicate]
+
+<CodeBlock links={{"Query": "query", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::Query::get_having_predicate() const
+```
+</CodeBlock>
+
+### get_order_by [#getorderby]
+
+<CodeBlock links={{"Query": "query", "OrderEntry": "../structs/orderentry"}}>
+```cpp showLineNumbers={false}
+const std::list<OrderEntry> * Analyzer::Query::get_order_by() const
+```
+</CodeBlock>
+
+### get_next_query [#getnextquery]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+const Query * Analyzer::Query::get_next_query() const
+```
+</CodeBlock>
+
+### get_stmt_type [#getstmttype]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+SQLStmtType Analyzer::Query::get_stmt_type() const
+```
+</CodeBlock>
+
+### get_is_unionall [#getisunionall]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Query::get_is_unionall() const
+```
+</CodeBlock>
+
+### get_result_table_id [#getresulttableid]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+int Analyzer::Query::get_result_table_id() const
+```
+</CodeBlock>
+
+### get_result_col_list [#getresultcollist]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+const std::list<int> & Analyzer::Query::get_result_col_list() const
+```
+</CodeBlock>
+
+### set_result_col_list [#setresultcollist]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_result_col_list(
+    const std::list<int> &col_list
+)
+```
+</CodeBlock>
+
+### set_result_table_id [#setresulttableid]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_result_table_id(
+    int id
+)
+```
+</CodeBlock>
+
+### set_is_distinct [#setisdistinct]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_is_distinct(
+    bool d
+)
+```
+</CodeBlock>
+
+### set_where_predicate [#setwherepredicate]
+
+<CodeBlock links={{"Query": "query", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_where_predicate(
+    std::shared_ptr<Analyzer::Expr> p
+)
+```
+</CodeBlock>
+
+### set_group_by [#setgroupby]
+
+<CodeBlock links={{"Query": "query", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_group_by(
+    std::list<std::shared_ptr<Analyzer::Expr>> &g
+)
+```
+</CodeBlock>
+
+### set_having_predicate [#sethavingpredicate]
+
+<CodeBlock links={{"Query": "query", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_having_predicate(
+    std::shared_ptr<Analyzer::Expr> p
+)
+```
+</CodeBlock>
+
+### set_order_by [#setorderby]
+
+<CodeBlock links={{"Query": "query", "OrderEntry": "../structs/orderentry"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_order_by(
+    std::list<OrderEntry> *o
+)
+```
+</CodeBlock>
+
+### set_next_query [#setnextquery]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_next_query(
+    Query *q
+)
+```
+</CodeBlock>
+
+### set_is_unionall [#setisunionall]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_is_unionall(
+    bool u
+)
+```
+</CodeBlock>
+
+### set_stmt_type [#setstmttype]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_stmt_type(
+    SQLStmtType t
+)
+```
+</CodeBlock>
+
+### set_num_aggs [#setnumaggs]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_num_aggs(
+    int a
+)
+```
+</CodeBlock>
+
+### get_rte_idx [#getrteidx]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+int Analyzer::Query::get_rte_idx(
+    const std::string &range_var_name
+) const
+```
+</CodeBlock>
+
+### get_rte [#getrte]
+
+<CodeBlock links={{"Query": "query", "RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+RangeTableEntry * Analyzer::Query::get_rte(
+    int rte_idx
+) const
+```
+</CodeBlock>
+
+### add_rte [#addrte]
+
+<CodeBlock links={{"Query": "query", "RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::add_rte(
+    RangeTableEntry *rte
+)
+```
+</CodeBlock>
+
+### add_tle [#addtle]
+
+<CodeBlock links={{"Query": "query", "TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::add_tle(
+    std::shared_ptr<TargetEntry> tle
+)
+```
+</CodeBlock>
+
+### get_limit [#getlimit]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+int64_t Analyzer::Query::get_limit() const
+```
+</CodeBlock>
+
+### set_limit [#setlimit]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_limit(
+    int64_t l
+)
+```
+</CodeBlock>
+
+### get_offset [#getoffset]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+int64_t Analyzer::Query::get_offset() const
+```
+</CodeBlock>
+
+### set_offset [#setoffset]
+
+<CodeBlock links={{"Query": "query"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Query::set_offset(
+    int64_t o
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_distinct` | `bool` | |
+| `targetlist` | `std::vector< std::shared_ptr< TargetEntry > >` | |
+| `rangetable` | `std::vector< RangeTableEntry * >` | |
+| `where_predicate` | `std::shared_ptr< Analyzer::Expr >` | |
+| `group_by` | `std::list< std::shared_ptr< Analyzer::Expr > >` | |
+| `having_predicate` | `std::shared_ptr< Analyzer::Expr >` | |
+| `order_by` | `std::list< OrderEntry > *` | |
+| `next_query` | `Query *` | |
+| `is_unionall` | `bool` | |
+| `stmt_type` | `SQLStmtType` | |
+| `num_aggs` | `int` | |
+| `result_table_id` | `int` | |
+| `result_col_list` | `std::list< int >` | |
+| `values_lists` | `std::vector< std::vector< std::shared_ptr< TargetEntry > > >` | |
+| `limit` | `int64_t` | |
+| `offset` | `int64_t` | |

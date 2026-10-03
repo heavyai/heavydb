@@ -1,0 +1,12 @@
+---
+title: UpdateTriggeredCacheInvalidator
+description: "External cache invalidators clear caches not managed by the Buffer Manager (i.e."
+---
+
+External cache invalidators clear caches not managed by the Buffer Manager (i.e.
+
+```cpp showLineNumbers={false}
+using UpdateTriggeredCacheInvalidator = CacheInvalidator<BoundingBoxIntersectJoinHashTable, BaselineJoinHashTable, PerfectJoinHashTable>;
+```
+
+external to the buffer manager).

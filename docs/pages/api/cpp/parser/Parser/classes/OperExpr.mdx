@@ -1,0 +1,135 @@
+---
+title: Parser::OperExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### OperExpr [#operexpr]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"OperExpr": "operexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::OperExpr::OperExpr(
+    SQLOps t,
+    Expr *l,
+    Expr *r
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"OperExpr": "operexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::OperExpr::OperExpr(
+    SQLOps t,
+    SQLQualifier q,
+    Expr *l,
+    Expr *r
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_optype [#getoptype]
+
+<CodeBlock links={{"OperExpr": "operexpr"}}>
+```cpp showLineNumbers={false}
+SQLOps Parser::OperExpr::get_optype() const
+```
+</CodeBlock>
+
+### get_left [#getleft]
+
+<CodeBlock links={{"OperExpr": "operexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::OperExpr::get_left() const
+```
+</CodeBlock>
+
+### get_right [#getright]
+
+<CodeBlock links={{"OperExpr": "operexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::OperExpr::get_right() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"OperExpr": "operexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::OperExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"OperExpr": "operexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::OperExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### normalize [#normalize]
+
+<CodeBlock links={{"OperExpr": "operexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::OperExpr::normalize(
+    const SQLOps optype,
+    const SQLQualifier qual,
+    std::shared_ptr<Analyzer::Expr> left_expr,
+    std::shared_ptr<Analyzer::Expr> right_expr,
+    const Executor *executor = nullptr
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `optype_` | `SQLOps` | |
+| `opqualifier_` | `SQLQualifier` | |
+| `left_` | `std::unique_ptr< Expr >` | |
+| `right_` | `std::unique_ptr< Expr >` | |

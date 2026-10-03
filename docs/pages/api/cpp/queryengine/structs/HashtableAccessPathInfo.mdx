@@ -1,0 +1,32 @@
+---
+title: HashtableAccessPathInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashtableRecycler.h>
+```
+
+---
+
+## Constructors
+
+### HashtableAccessPathInfo [#hashtableaccesspathinfo]
+
+<CodeBlock links={{"HashtableAccessPathInfo": "hashtableaccesspathinfo"}}>
+```cpp showLineNumbers={false}
+HashtableAccessPathInfo::HashtableAccessPathInfo(
+    std::set<int> const &device_ids
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `hashed_query_plan_dag` | `std::unordered_map< int, QueryPlanHash >` | |
+| `meta_info` | `HashtableCacheMetaInfo` | |
+| `table_keys` | `std::unordered_set< size_t >` | |

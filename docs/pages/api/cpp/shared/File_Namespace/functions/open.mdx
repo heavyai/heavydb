@@ -1,0 +1,39 @@
+---
+title: File_Namespace::open
+description: "Opens the file with the given id; fatal crash on error."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+FILE * File_Namespace::open(
+    int file_id
+)
+```
+</CodeBlock>
+
+Opens the file with the given id; fatal crash on error.
+
+**Returns:** FILE* A pointer to a FILE pointer; cannot be null.
+
+**Parameters**
+
+<ParamField path="file_id" type="int">
+The id of the file to open.
+</ParamField>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+FILE * File_Namespace::open(
+    const std::string &path
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

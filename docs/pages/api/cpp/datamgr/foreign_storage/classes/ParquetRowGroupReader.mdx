@@ -1,0 +1,63 @@
+---
+title: foreign_storage::ParquetRowGroupReader
+description: ""
+---
+
+---
+
+## Constructors
+
+### ParquetRowGroupReader [#parquetrowgroupreader]
+
+<CodeBlock links={{"ParquetRowGroupReader": "parquetrowgroupreader", "ParquetEncoder": "parquetencoder"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetRowGroupReader::ParquetRowGroupReader(
+    std::shared_ptr<parquet::ColumnReader> col_reader,
+    const ColumnDescriptor *column_descriptor,
+    const parquet::ColumnDescriptor *parquet_column_descriptor,
+    ParquetEncoder *encoder,
+    InvalidRowGroupIndices &invalid_indices,
+    const int row_group_index,
+    const int parquet_column_index,
+    const parquet::ParquetFileReader *parquet_reader
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### readAndValidateRowGroup [#readandvalidaterowgroup]
+
+<CodeBlock links={{"ParquetRowGroupReader": "parquetrowgroupreader"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetRowGroupReader::readAndValidateRowGroup()
+```
+</CodeBlock>
+
+### eraseInvalidRowGroupData [#eraseinvalidrowgroupdata]
+
+<CodeBlock links={{"ParquetRowGroupReader": "parquetrowgroupreader"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetRowGroupReader::eraseInvalidRowGroupData(
+    const InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `col_reader_` | `std::shared_ptr< parquet::ColumnReader >` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `parquet_column_descriptor_` | `const parquet::ColumnDescriptor *` | |
+| `encoder_` | `ParquetEncoder *` | |
+| `import_encoder` | `ParquetImportEncoder *` | |
+| `invalid_indices_` | `InvalidRowGroupIndices &` | |
+| `row_group_index_` | `const int` | |
+| `parquet_column_index_` | `const int` | |
+| `parquet_reader_` | `const parquet::ParquetFileReader *` | |

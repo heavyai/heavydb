@@ -1,0 +1,50 @@
+---
+title: ShowDatabasesCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### ShowDatabasesCommand [#showdatabasescommand]
+
+<CodeBlock links={{"ShowDatabasesCommand": "showdatabasescommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+ShowDatabasesCommand::ShowDatabasesCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"ShowDatabasesCommand": "showdatabasescommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult ShowDatabasesCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

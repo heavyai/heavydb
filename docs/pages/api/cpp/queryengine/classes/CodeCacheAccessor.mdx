@@ -1,0 +1,164 @@
+---
+title: CodeCacheAccessor
+description: ""
+---
+
+<CodeBlock id="CodeCacheAccessor" links={{"CodeCacheAccessor": "codecacheaccessor"}}>
+```cpp showLineNumbers={false}
+template <typename CompilationContext>
+class CodeCacheAccessor
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <CodeCacheAccessor.h>
+```
+
+**Template parameters**
+
+<ParamField path="CompilationContext" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### CodeCacheAccessor [#codecacheaccessor]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor"}}>
+```cpp showLineNumbers={false}
+CodeCacheAccessor<CompilationContext>::CodeCacheAccessor(
+    EvictionMetricType eviction_metric_type,
+    size_t max_cache_size,
+    std::string name
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_value [#getvalue]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor", "CompilationContext": "compilationcontext"}}>
+```cpp showLineNumbers={false}
+CodeCacheVal<CompilationContext> CodeCacheAccessor<CompilationContext>::get_value(
+    const CodeCacheKey &key
+)
+```
+</CodeBlock>
+
+### put [#put]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor", "CompilationContext": "compilationcontext"}}>
+```cpp showLineNumbers={false}
+bool CodeCacheAccessor<CompilationContext>::put(
+    const CodeCacheKey &key,
+    CodeCacheVal<CompilationContext> &value
+)
+```
+</CodeBlock>
+
+### get_or_wait [#getorwait]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor", "CompilationContext": "compilationcontext"}}>
+```cpp showLineNumbers={false}
+CodeCacheVal<CompilationContext> * CodeCacheAccessor<CompilationContext>::get_or_wait(
+    const CodeCacheKey &key
+)
+```
+</CodeBlock>
+
+### reset [#reset]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor", "CompilationContext": "compilationcontext"}}>
+```cpp showLineNumbers={false}
+void CodeCacheAccessor<CompilationContext>::reset(
+    const CodeCacheKey &key,
+    CodeCacheVal<CompilationContext> value
+)
+```
+</CodeBlock>
+
+### erase [#erase]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor"}}>
+```cpp showLineNumbers={false}
+void CodeCacheAccessor<CompilationContext>::erase(
+    const CodeCacheKey &key
+)
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor"}}>
+```cpp showLineNumbers={false}
+void CodeCacheAccessor<CompilationContext>::clear()
+```
+</CodeBlock>
+
+### computeNumEntriesToEvict [#computenumentriestoevict]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor"}}>
+```cpp showLineNumbers={false}
+size_t CodeCacheAccessor<CompilationContext>::computeNumEntriesToEvict(
+    const float fraction
+)
+```
+</CodeBlock>
+
+### evictEntries [#evictentries]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor"}}>
+```cpp showLineNumbers={false}
+void CodeCacheAccessor<CompilationContext>::evictEntries(
+    const size_t n
+)
+```
+</CodeBlock>
+
+### getCacheSize [#getcachesize]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor"}}>
+```cpp showLineNumbers={false}
+size_t CodeCacheAccessor<CompilationContext>::getCacheSize()
+```
+</CodeBlock>
+
+### resetCache [#resetcache]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor"}}>
+```cpp showLineNumbers={false}
+void CodeCacheAccessor<CompilationContext>::resetCache(
+    size_t new_max_size
+)
+```
+</CodeBlock>
+
+### getCodeCacheMetric [#getcodecachemetric]
+
+<CodeBlock links={{"CodeCacheAccessor": "codecacheaccessor", "CodeCacheMetric": "../structs/codecachemetric"}}>
+```cpp showLineNumbers={false}
+CodeCacheMetric CodeCacheAccessor<CompilationContext>::getCodeCacheMetric()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `code_cache_` | `CodeCache< CompilationContext >` | |
+| `eviction_metric_type_` | `EvictionMetricType const` | |
+| `get_count_` | `int64_t` | |
+| `found_count_` | `int64_t` | |
+| `put_count_` | `int64_t` | |
+| `ignore_count_` | `int64_t` | |
+| `overwrite_count_` | `int64_t` | |
+| `evict_count_` | `int64_t` | |
+| `name_` | `const std::string` | |
+| `code_cache_mutex_` | `std::mutex` | |
+| `compilation_cv_` | `std::condition_variable` | |

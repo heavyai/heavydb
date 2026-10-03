@@ -1,0 +1,64 @@
+---
+title: Catalog_Namespace::cat_init_lock
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/RWLocks.h>
+```
+
+**Inherits from:** `Catalog_Namespace::cat_lock< SysCatalog >` (public)
+
+---
+
+## Constructors
+
+### cat_init_lock [#catinitlock]
+
+<CodeBlock links={{"cat_init_lock": "catinitlock", "SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::cat_init_lock::cat_init_lock(
+    const SysCatalog *cat
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~cat_init_lock
+
+<CodeBlock links={{"cat_init_lock": "catinitlock"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::cat_init_lock::~cat_init_lock()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### lock [#lock]
+
+<CodeBlock links={{"cat_init_lock": "catinitlock"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::cat_init_lock::lock() override
+```
+</CodeBlock>
+
+### unlock [#unlock]
+
+<CodeBlock links={{"cat_init_lock": "catinitlock"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::cat_init_lock::unlock() override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `lock_` | `heavyai::unique_lock< heavyai::shared_mutex >` | |
+| `cat_` | `const SysCatalog *` | |
+| `holds_lock_` | `bool` | |

@@ -1,0 +1,195 @@
+---
+title: foreign_storage::TextFileBufferParser
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/TextFileBufferParser.h>
+```
+
+---
+
+## Methods
+
+### parseBuffer [#parsebuffer]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser", "ParseBufferRequest": "../structs/parsebufferrequest", "ParseBufferResult": "../structs/parsebufferresult"}}>
+```cpp showLineNumbers={false}
+virtual ParseBufferResult foreign_storage::TextFileBufferParser::parseBuffer(
+    ParseBufferRequest &request,
+    bool convert_data_blocks,
+    bool columns_are_pre_filtered = false,
+    bool skip_dict_encoding = false
+) const
+```
+</CodeBlock>
+
+Parses a given file buffer and returns data blocks for each column in the file along with metadata related to rows and row offsets within the buffer.
+
+**Parameters**
+
+<ParamField path="convert_data_blocks" type="bool">
+- Convert import buffers to data blocks
+</ParamField>
+
+<ParamField path="columns_are_pre_filtered" type="bool" default="false">
+- File buffer passed into parse_buffer only has the necessary columns that are being requested, not all columns.
+</ParamField>
+
+<ParamField path="skip_dict_encoding" type="bool" default="false">
+- Skip dictionary encoding for encoded strings; the encoding will be required to happen later in processing
+</ParamField>
+
+### validateAndGetCopyParams [#validateandgetcopyparams]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+virtual import_export::CopyParams foreign_storage::TextFileBufferParser::validateAndGetCopyParams(
+    const ForeignTable *foreign_table
+) const
+```
+</CodeBlock>
+
+Validates foreign table parse options and returns a CopyParams object upon successful validation.
+
+An exception is thrown if validation fails.
+
+### findRowEndPosition [#findrowendposition]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::TextFileBufferParser::findRowEndPosition(
+    size_t &alloc_size,
+    std::unique_ptr<char[]> &buffer,
+    size_t &buffer_size,
+    const import_export::CopyParams &copy_params,
+    const size_t buffer_first_row_index,
+    unsigned int &num_rows_in_buffer,
+    FileReader *file_reader
+) const
+```
+</CodeBlock>
+
+Finds and returns the offset of the end of the last row in the given buffer.
+
+If the buffer does not contain at least one row, the buffer is extended with more content from the file until a row is read. An exception is thrown if the buffer is extended to a maximum threshold and at least one row has still not been read.
+
+### validateFiles [#validatefiles]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::TextFileBufferParser::validateFiles(
+    const FileReader *file_reader,
+    const ForeignTable *foreign_table
+) const
+```
+</CodeBlock>
+
+Performs basic validation of files to be parsed.
+
+### optionallyRemoveBadFiles [#optionallyremovebadfiles]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::TextFileBufferParser::optionallyRemoveBadFiles(
+    MultiFileReader *file_reader
+) const
+```
+</CodeBlock>
+
+May remove files that violate parsing rules.
+
+Does nothing by default.
+
+### processInvalidGeoColumn [#processinvalidgeocolumn]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TextFileBufferParser::processInvalidGeoColumn(
+    std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>> &import_buffers,
+    size_t &col_idx,
+    const import_export::CopyParams &copy_params,
+    const ColumnDescriptor *cd,
+    std::shared_ptr<Catalog_Namespace::Catalog> catalog
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### convertImportBuffersToDataBlocks [#convertimportbufferstodatablocks]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+std::map<int, DataBlockPtr> foreign_storage::TextFileBufferParser::convertImportBuffersToDataBlocks(
+    const std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>> &import_buffers,
+    const bool skip_dict_encoding = false
+)
+```
+</CodeBlock>
+
+### isCoordinateScalar [#iscoordinatescalar]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::TextFileBufferParser::isCoordinateScalar(
+    const std::string_view datum
+)
+```
+</CodeBlock>
+
+### processGeoColumn [#processgeocolumn]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TextFileBufferParser::processGeoColumn(
+    std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>> &import_buffers,
+    size_t &col_idx,
+    const import_export::CopyParams &copy_params,
+    std::list<const ColumnDescriptor *>::iterator &cd_it,
+    std::vector<std::string_view> &row,
+    size_t &import_idx,
+    bool is_null,
+    size_t first_row_index,
+    size_t row_index_plus_one,
+    std::shared_ptr<Catalog_Namespace::Catalog> catalog
+)
+```
+</CodeBlock>
+
+### fillRejectedRowWithInvalidData [#fillrejectedrowwithinvaliddata]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser", "ParseBufferRequest": "../structs/parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TextFileBufferParser::fillRejectedRowWithInvalidData(
+    const std::list<const ColumnDescriptor *> &columns,
+    std::list<const ColumnDescriptor *>::iterator &cd_it,
+    const size_t col_idx,
+    ParseBufferRequest &request
+)
+```
+</CodeBlock>
+
+Fill the current row of the `request` with invalid (null) data as row will be marked as rejected.
+
+### isNullDatum [#isnulldatum]
+
+<CodeBlock links={{"TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::TextFileBufferParser::isNullDatum(
+    const std::string_view datum,
+    const ColumnDescriptor *column,
+    const std::string &null_indicator
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `BUFFER_SIZE_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |

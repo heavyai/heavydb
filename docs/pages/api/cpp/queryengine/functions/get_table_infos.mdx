@@ -1,0 +1,31 @@
+---
+title: get_table_infos
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"InputDescriptor": "../classes/inputdescriptor", "Executor": "../classes/executor", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<InputTableInfo> get_table_infos(
+    const std::vector<InputDescriptor> &input_descs,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelAlgExecutionUnit": "../structs/relalgexecutionunit", "Executor": "../classes/executor", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<InputTableInfo> get_table_infos(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

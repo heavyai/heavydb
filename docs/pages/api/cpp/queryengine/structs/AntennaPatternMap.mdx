@@ -1,0 +1,31 @@
+---
+title: AntennaPatternMap
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <AntennaPattern.h>
+```
+
+---
+
+## Methods
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"AntennaPatternMap": "antennapatternmap", "AntennaPattern": "antennapattern"}}>
+```cpp showLineNumbers={false}
+const AntennaPattern & AntennaPatternMap::operator[](
+    int64_t index
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `antenna_patterns_storage` | `std::vector< AntennaPattern >` | |
+| `antenna_pattern_map` | `std::vector< int64_t >` | |

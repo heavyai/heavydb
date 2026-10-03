@@ -1,0 +1,48 @@
+---
+title: query_state::SessionData
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <query_state/QueryState.h>
+```
+
+---
+
+## Constructors
+
+### SessionData [#sessiondata]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"SessionData": "sessiondata"}}>
+```cpp showLineNumbers={false}
+query_state::SessionData::SessionData() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"SessionData": "sessiondata"}}>
+```cpp showLineNumbers={false}
+query_state::SessionData::SessionData(
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> const &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `session_info` | `std::weak_ptr< Catalog_Namespace::SessionInfo const  >` | |
+| `db_name` | `std::string` | |
+| `user_name` | `std::string` | |
+| `public_session_id` | `std::string` | |

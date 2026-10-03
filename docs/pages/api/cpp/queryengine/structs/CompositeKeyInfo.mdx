@@ -1,0 +1,18 @@
+---
+title: CompositeKeyInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashJoin.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `sd_inner_proxy_per_key` | `std::vector< const void * >` | |
+| `sd_outer_proxy_per_key` | `std::vector< void * >` | |
+| `cache_key_chunks` | `std::unordered_map< int, ChunkKey >` | |

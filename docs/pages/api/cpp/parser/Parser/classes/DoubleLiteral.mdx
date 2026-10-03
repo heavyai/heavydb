@@ -1,0 +1,76 @@
+---
+title: Parser::DoubleLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Literal` (public)
+
+---
+
+## Constructors
+
+### DoubleLiteral [#doubleliteral]
+
+<CodeBlock links={{"DoubleLiteral": "doubleliteral"}}>
+```cpp showLineNumbers={false}
+Parser::DoubleLiteral::DoubleLiteral(
+    double d
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_doubleval [#getdoubleval]
+
+<CodeBlock links={{"DoubleLiteral": "doubleliteral"}}>
+```cpp showLineNumbers={false}
+double Parser::DoubleLiteral::get_doubleval() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"DoubleLiteral": "doubleliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::DoubleLiteral::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"DoubleLiteral": "doubleliteral"}}>
+```cpp showLineNumbers={false}
+std::string Parser::DoubleLiteral::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `doubleval_` | `double` | |

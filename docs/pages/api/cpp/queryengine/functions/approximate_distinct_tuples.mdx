@@ -1,0 +1,17 @@
+---
+title: approximate_distinct_tuples
+description: ""
+---
+
+<CodeBlock links={{"JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+void approximate_distinct_tuples(
+    uint8_t *hll_buffer_all_cpus,
+    const uint32_t b,
+    const size_t padded_size_bytes,
+    const std::vector<JoinColumn> &join_column_per_key,
+    const std::vector<JoinColumnTypeInfo> &type_info_per_key,
+    const int thread_count
+)
+```
+</CodeBlock>

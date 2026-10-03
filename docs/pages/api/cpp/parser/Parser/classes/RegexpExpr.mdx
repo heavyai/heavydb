@@ -1,0 +1,145 @@
+---
+title: Parser::RegexpExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### RegexpExpr [#regexpexpr]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::RegexpExpr::RegexpExpr(
+    bool n,
+    Expr *a,
+    Expr *p,
+    Expr *e
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_not [#getisnot]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr"}}>
+```cpp showLineNumbers={false}
+bool Parser::RegexpExpr::get_is_not() const
+```
+</CodeBlock>
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::RegexpExpr::get_arg() const
+```
+</CodeBlock>
+
+### get_pattern_string [#getpatternstring]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::RegexpExpr::get_pattern_string() const
+```
+</CodeBlock>
+
+### get_escape_string [#getescapestring]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::RegexpExpr::get_escape_string() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::RegexpExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::RegexpExpr::to_string() const override
+```
+</CodeBlock>
+
+### check_pattern_expr [#checkpatternexpr]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr"}}>
+```cpp showLineNumbers={false}
+void Parser::RegexpExpr::check_pattern_expr(
+    const std::string &pattern_str,
+    char escape_char
+)
+```
+</CodeBlock>
+
+### translate_to_like_pattern [#translatetolikepattern]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr"}}>
+```cpp showLineNumbers={false}
+bool Parser::RegexpExpr::translate_to_like_pattern(
+    std::string &pattern_str,
+    char escape_char
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### get [#get]
+
+<CodeBlock links={{"RegexpExpr": "regexpexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::RegexpExpr::get(
+    std::shared_ptr<Analyzer::Expr> arg_expr,
+    std::shared_ptr<Analyzer::Expr> pattern_expr,
+    std::shared_ptr<Analyzer::Expr> escape_expr,
+    const bool is_not
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_not_` | `bool` | |
+| `arg_` | `std::unique_ptr< Expr >` | |
+| `pattern_string_` | `std::unique_ptr< Expr >` | |
+| `escape_string_` | `std::unique_ptr< Expr >` | |

@@ -1,0 +1,42 @@
+---
+title: File_Namespace::read
+description: "Reads the specified number of bytes from the offset position in file f into buf."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+size_t File_Namespace::read(
+    FILE *f,
+    const size_t offset,
+    const size_t size,
+    int8_t *buf,
+    const std::string &file_path
+)
+```
+</CodeBlock>
+
+Reads the specified number of bytes from the offset position in file f into buf.
+
+**Returns:** size_t The number of bytes read.
+
+**Parameters**
+
+<ParamField path="f" type="FILE *">
+Pointer to the FILE.
+</ParamField>
+
+<ParamField path="offset" type="const size_t">
+The location within the file from which to read.
+</ParamField>
+
+<ParamField path="size" type="const size_t">
+The number of bytes to be read.
+</ParamField>
+
+<ParamField path="buf" type="int8_t *">
+The destination buffer to where data is being read from the file.
+</ParamField>
+
+<ParamField path="file_path" type="const std::string &">
+Path of file to read from.
+</ParamField>

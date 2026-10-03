@@ -1,0 +1,63 @@
+---
+title: ExecutionOptions
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CompilationOptions.h>
+```
+
+---
+
+## Methods
+
+### setNoExplainExecutionOptions [#setnoexplainexecutionoptions]
+
+<CodeBlock links={{"ExecutionOptions": "executionoptions"}}>
+```cpp showLineNumbers={false}
+void ExecutionOptions::setNoExplainExecutionOptions(
+    bool no_validation = false
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### defaults [#defaults]
+
+<CodeBlock links={{"ExecutionOptions": "executionoptions"}}>
+```cpp showLineNumbers={false}
+static ExecutionOptions ExecutionOptions::defaults()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `output_columnar_hint` | `bool` | |
+| `keep_result` | `bool` | |
+| `allow_multifrag` | `bool` | |
+| `just_explain` | `bool` | |
+| `allow_loop_joins` | `bool` | |
+| `with_watchdog` | `bool` | |
+| `jit_debug` | `bool` | |
+| `just_validate` | `bool` | |
+| `with_dynamic_watchdog` | `bool` | |
+| `dynamic_watchdog_time_limit` | `unsigned` | |
+| `find_push_down_candidates` | `bool` | |
+| `just_calcite_explain` | `bool` | |
+| `gpu_input_mem_limit_percent` | `double` | |
+| `allow_runtime_query_interrupt` | `bool` | |
+| `running_query_interrupt_freq` | `double` | |
+| `pending_query_interrupt_freq` | `unsigned` | |
+| `optimize_cuda_block_and_grid_sizes` | `bool` | |
+| `table_reordering` | `bool` | |
+| `estimate_output_cardinality` | `bool` | |
+| `max_join_hash_table_size` | `size_t` | |
+| `executor_type` | `ExecutorType` | |
+| `outer_fragment_indices` | `std::vector< size_t >` | |

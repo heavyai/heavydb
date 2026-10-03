@@ -1,0 +1,379 @@
+---
+title: foreign_storage::TypedParquetStorageBuffer
+description: ""
+---
+
+<CodeBlock id="TypedParquetStorageBuffer" links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+template <typename Type>
+class TypedParquetStorageBuffer
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/TypedParquetStorageBuffer.h>
+```
+
+**Template parameters**
+
+<ParamField path="Type" type="typename">
+</ParamField>
+
+**Inherits from:** `Data_Namespace::AbstractBuffer` (public)
+
+---
+
+## Constructors
+
+### TypedParquetStorageBuffer [#typedparquetstoragebuffer]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::TypedParquetStorageBuffer<Type>::TypedParquetStorageBuffer()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### read [#read]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer<Type>::read(
+    int8_t *const destination,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const Data_Namespace::MemoryLevel destination_buffer_type = Data_Namespace::CPU_LEVEL,
+    const int destination_device_id = -1
+) override
+```
+</CodeBlock>
+
+### write [#write]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer<Type>::write(
+    int8_t *source,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const Data_Namespace::MemoryLevel source_buffer_type = Data_Namespace::CPU_LEVEL,
+    const int source_device_id = -1
+) override
+```
+</CodeBlock>
+
+### reserve [#reserve]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer<Type>::reserve(
+    size_t additional_num_bytes
+) override
+```
+</CodeBlock>
+
+### append [#append]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer<Type>::append(
+    int8_t *source,
+    const size_t num_bytes,
+    const Data_Namespace::MemoryLevel source_buffer_type = Data_Namespace::CPU_LEVEL,
+    const int device_id = -1
+) override
+```
+</CodeBlock>
+
+### reserveNumElements [#reservenumelements]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer<Type>::reserveNumElements(
+    size_t additional_num_elements
+)
+```
+</CodeBlock>
+
+### appendElement [#appendelement]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer<Type>::appendElement(
+    const Type &element
+)
+```
+</CodeBlock>
+
+### getBufferPtr [#getbufferptr]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+std::vector<Type> * foreign_storage::TypedParquetStorageBuffer<Type>::getBufferPtr()
+```
+</CodeBlock>
+
+### getMemoryPtr [#getmemoryptr]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+int8_t * foreign_storage::TypedParquetStorageBuffer<Type>::getMemoryPtr() override
+```
+</CodeBlock>
+
+### pageCount [#pagecount]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::TypedParquetStorageBuffer<Type>::pageCount() const override
+```
+</CodeBlock>
+
+### pageSize [#pagesize]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::TypedParquetStorageBuffer<Type>::pageSize() const override
+```
+</CodeBlock>
+
+### reservedSize [#reservedsize]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::TypedParquetStorageBuffer<Type>::reservedSize() const override
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::MemoryLevel foreign_storage::TypedParquetStorageBuffer<Type>::getType() const override
+```
+</CodeBlock>
+
+### eraseInvalidData [#eraseinvaliddata]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+template <typename FindContainer>
+void foreign_storage::TypedParquetStorageBuffer<Type>::eraseInvalidData(
+    const FindContainer &invalid_indices
+)
+```
+</CodeBlock>
+
+### setMemoryPtr [#setmemoryptr]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::TypedParquetStorageBuffer::setMemoryPtr(
+    int8_t *new_ptr
+)
+```
+</CodeBlock>
+
+### pin [#pin]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int foreign_storage::TypedParquetStorageBuffer::pin()
+```
+</CodeBlock>
+
+### unPin [#unpin]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int foreign_storage::TypedParquetStorageBuffer::unPin()
+```
+</CodeBlock>
+
+### getPinCount [#getpincount]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int foreign_storage::TypedParquetStorageBuffer::getPinCount()
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::TypedParquetStorageBuffer::size() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+int foreign_storage::TypedParquetStorageBuffer::getDeviceId() const
+```
+</CodeBlock>
+
+### isDirty [#isdirty]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::TypedParquetStorageBuffer::isDirty() const
+```
+</CodeBlock>
+
+### isAppended [#isappended]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::TypedParquetStorageBuffer::isAppended() const
+```
+</CodeBlock>
+
+### isUpdated [#isupdated]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::TypedParquetStorageBuffer::isUpdated() const
+```
+</CodeBlock>
+
+### hasEncoder [#hasencoder]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::TypedParquetStorageBuffer::hasEncoder() const
+```
+</CodeBlock>
+
+### getSqlType [#getsqltype]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo foreign_storage::TypedParquetStorageBuffer::getSqlType() const
+```
+</CodeBlock>
+
+### setSqlType [#setsqltype]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::setSqlType(
+    const SQLTypeInfo &sql_type
+)
+```
+</CodeBlock>
+
+### getEncoder [#getencoder]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "Encoder": "../../classes/encoder", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+Encoder * foreign_storage::TypedParquetStorageBuffer::getEncoder() const
+```
+</CodeBlock>
+
+### setDirty [#setdirty]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::setDirty()
+```
+</CodeBlock>
+
+### setUpdated [#setupdated]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::setUpdated()
+```
+</CodeBlock>
+
+### setAppended [#setappended]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::setAppended()
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::setSize(
+    const size_t size
+)
+```
+</CodeBlock>
+
+### clearDirtyBits [#cleardirtybits]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::clearDirtyBits()
+```
+</CodeBlock>
+
+### initEncoder [#initencoder]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::initEncoder(
+    const SQLTypeInfo &tmp_sql_type
+)
+```
+</CodeBlock>
+
+### syncEncoder [#syncencoder]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::syncEncoder(
+    const AbstractBuffer *src_buffer
+)
+```
+</CodeBlock>
+
+### copyTo [#copyto]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::copyTo(
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes = 0
+)
+```
+</CodeBlock>
+
+### resetToEmpty [#resettoempty]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::resetToEmpty()
+```
+</CodeBlock>
+
+### setMetadata [#setmetadata]
+
+<CodeBlock links={{"TypedParquetStorageBuffer": "typedparquetstoragebuffer", "ChunkMetadata": "../../structs/chunkmetadata", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TypedParquetStorageBuffer::setMetadata(
+    const ChunkMetadata &meta
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buffer_` | `std::vector< Type >` | |
+| `encoder_` | `std::unique_ptr< Encoder >` | |
+| `sql_type_` | `SQLTypeInfo` | |
+| `size_` | `size_t` | |
+| `device_id_` | `int` | |

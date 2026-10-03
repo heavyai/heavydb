@@ -1,0 +1,109 @@
+---
+title: logger::JsonEncoder
+description: ""
+---
+
+**Inherits from:** `boost::static_visitor< rapidjson::Value >` (private)
+
+---
+
+## Constructors
+
+### JsonEncoder [#jsonencoder]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"JsonEncoder": "jsonencoder"}}>
+```cpp showLineNumbers={false}
+logger::JsonEncoder::JsonEncoder(
+    JsonEncoder &json_encoder,
+    DurationTreeNodes::const_iterator begin,
+    DurationTreeNodes::const_iterator end
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"JsonEncoder": "jsonencoder"}}>
+```cpp showLineNumbers={false}
+logger::JsonEncoder::JsonEncoder()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"JsonEncoder": "jsonencoder", "Duration": "duration"}}>
+```cpp showLineNumbers={false}
+rapidjson::Value logger::JsonEncoder::operator()(
+    Duration const &duration
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"JsonEncoder": "jsonencoder", "DurationTree": "durationtree"}}>
+```cpp showLineNumbers={false}
+rapidjson::Value logger::JsonEncoder::operator()(
+    DurationTree const &duration_tree
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### childNodes [#childnodes]
+
+<CodeBlock links={{"JsonEncoder": "jsonencoder"}}>
+```cpp showLineNumbers={false}
+rapidjson::Value logger::JsonEncoder::childNodes(
+    int const parent_depth
+)
+```
+</CodeBlock>
+
+### timer [#timer]
+
+<CodeBlock links={{"JsonEncoder": "jsonencoder"}}>
+```cpp showLineNumbers={false}
+rapidjson::Value logger::JsonEncoder::timer(
+    DurationTreeMap::const_reference kv_pair
+)
+```
+</CodeBlock>
+
+### str [#str]
+
+<CodeBlock links={{"JsonEncoder": "jsonencoder"}}>
+```cpp showLineNumbers={false}
+std::string logger::JsonEncoder::str(
+    DurationTreeMap::const_reference kv_pair
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `doc_` | `std::shared_ptr< rapidjson::Document >` | |
+| `alloc_` | `rapidjson::Document::AllocatorType &` | |
+| `begin_` | `DurationTreeNodes::const_iterator` | |
+| `end_` | `DurationTreeNodes::const_iterator` | |

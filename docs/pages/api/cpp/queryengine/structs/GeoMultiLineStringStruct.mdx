@@ -1,0 +1,82 @@
+---
+title: GeoMultiLineStringStruct
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Methods
+
+### getCoords [#getcoords]
+
+<CodeBlock links={{"GeoMultiLineStringStruct": "geomultilinestringstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int8_t * GeoMultiLineStringStruct::getCoords() const
+```
+</CodeBlock>
+
+### getCoordsSize [#getcoordssize]
+
+<CodeBlock links={{"GeoMultiLineStringStruct": "geomultilinestringstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoMultiLineStringStruct::getCoordsSize() const
+```
+</CodeBlock>
+
+### getLineStringSizes [#getlinestringsizes]
+
+<CodeBlock links={{"GeoMultiLineStringStruct": "geomultilinestringstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int8_t * GeoMultiLineStringStruct::getLineStringSizes()
+```
+</CodeBlock>
+
+### getNumLineStrings [#getnumlinestrings]
+
+<CodeBlock links={{"GeoMultiLineStringStruct": "geomultilinestringstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoMultiLineStringStruct::getNumLineStrings() const
+```
+</CodeBlock>
+
+### getCompression [#getcompression]
+
+<CodeBlock links={{"GeoMultiLineStringStruct": "geomultilinestringstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoMultiLineStringStruct::getCompression() const
+```
+</CodeBlock>
+
+### getInputSrid [#getinputsrid]
+
+<CodeBlock links={{"GeoMultiLineStringStruct": "geomultilinestringstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoMultiLineStringStruct::getInputSrid() const
+```
+</CodeBlock>
+
+### getOutputSrid [#getoutputsrid]
+
+<CodeBlock links={{"GeoMultiLineStringStruct": "geomultilinestringstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoMultiLineStringStruct::getOutputSrid() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr` | `int8_t *` | |
+| `sz` | `int32_t` | |
+| `linestring_sizes` | `int8_t *` | |
+| `num_linestrings` | `int32_t` | |
+| `compression` | `int32_t` | |
+| `input_srid` | `int32_t` | |
+| `output_srid` | `int32_t` | |

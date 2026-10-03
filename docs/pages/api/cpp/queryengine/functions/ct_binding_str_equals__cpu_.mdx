@@ -1,0 +1,14 @@
+---
+title: ct_binding_str_equals__cpu_
+description: ""
+---
+
+<CodeBlock links={{"ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_binding_str_equals__cpu_(
+    const ColumnList<TextEncodingDict> &input_strings,
+    Column<TextEncodingDict> &string_if_equal,
+    Column<bool> &strings_are_equal
+)
+```
+</CodeBlock>

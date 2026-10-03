@@ -1,0 +1,45 @@
+---
+title: foreign_storage::RemoteColumnDescription
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/odbc_utils.h>
+```
+
+---
+
+## Methods
+
+### isMappingAllowed [#ismappingallowed]
+
+<CodeBlock links={{"RemoteColumnDescription": "remotecolumndescription"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::RemoteColumnDescription::isMappingAllowed(
+    const SQLTypeInfo &omnisci_typeinfo
+) const
+```
+</CodeBlock>
+
+### getDecimalPrecision [#getdecimalprecision]
+
+<CodeBlock links={{"RemoteColumnDescription": "remotecolumndescription"}}>
+```cpp showLineNumbers={false}
+int32_t foreign_storage::RemoteColumnDescription::getDecimalPrecision() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `omnisci_type` | `SQLTypes` | |
+| `decimal_digits` | `int32_t` | |
+| `odbc_octet_transfer_size` | `int32_t` | |
+| `omnisci_type_name` | `std::string` | |
+| `column_name` | `std::string` | |
+| `omnisci_column_id` | `int` | |
+| `is_unsigned` | `bool` | |
+| `odbc_base_type` | `int32_t` | |

@@ -1,0 +1,98 @@
+---
+title: shared::StringDictKey
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <shared/DbObjectKeys.h>
+```
+
+---
+
+## Constructors
+
+### StringDictKey [#stringdictkey]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"StringDictKey": "stringdictkey"}}>
+```cpp showLineNumbers={false}
+shared::StringDictKey::StringDictKey()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"StringDictKey": "stringdictkey"}}>
+```cpp showLineNumbers={false}
+shared::StringDictKey::StringDictKey(
+    int32_t db_id,
+    int32_t dict_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"StringDictKey": "stringdictkey"}}>
+```cpp showLineNumbers={false}
+bool shared::StringDictKey::operator==(
+    const StringDictKey &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"StringDictKey": "stringdictkey"}}>
+```cpp showLineNumbers={false}
+bool shared::StringDictKey::operator!=(
+    const StringDictKey &other
+) const
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"StringDictKey": "stringdictkey"}}>
+```cpp showLineNumbers={false}
+bool shared::StringDictKey::operator<(
+    const StringDictKey &other
+) const
+```
+</CodeBlock>
+
+### hash [#hash]
+
+<CodeBlock links={{"StringDictKey": "stringdictkey"}}>
+```cpp showLineNumbers={false}
+size_t shared::StringDictKey::hash() const
+```
+</CodeBlock>
+
+### isTransientDict [#istransientdict]
+
+<CodeBlock links={{"StringDictKey": "stringdictkey"}}>
+```cpp showLineNumbers={false}
+bool shared::StringDictKey::isTransientDict() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `kTransientDictKey` <Badge intent="note" minimal>static</Badge> | `const StringDictKey` | |
+| `db_id` | `int32_t` | |
+| `dict_id` | `int32_t` | |

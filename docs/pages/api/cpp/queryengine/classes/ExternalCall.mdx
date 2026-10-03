@@ -1,0 +1,117 @@
+---
+title: ExternalCall
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### ExternalCall [#externalcall]
+
+<CodeBlock links={{"ExternalCall": "externalcall", "Value": "value"}}>
+```cpp showLineNumbers={false}
+ExternalCall::ExternalCall(
+    const std::string &callee_name,
+    const Type ret_type,
+    const std::vector<const Value *> &arguments,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### external [#external]
+
+<CodeBlock links={{"ExternalCall": "externalcall"}}>
+```cpp showLineNumbers={false}
+bool ExternalCall::external() const
+```
+</CodeBlock>
+
+### callee_name [#calleename]
+
+<CodeBlock links={{"ExternalCall": "externalcall"}}>
+```cpp showLineNumbers={false}
+const std::string & ExternalCall::callee_name() const
+```
+</CodeBlock>
+
+### arguments [#arguments]
+
+<CodeBlock links={{"ExternalCall": "externalcall", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const std::vector<const Value *> & ExternalCall::arguments() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"ExternalCall": "externalcall", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void ExternalCall::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### cached_callee [#cachedcallee]
+
+<CodeBlock links={{"ExternalCall": "externalcall"}}>
+```cpp showLineNumbers={false}
+void * ExternalCall::cached_callee() const
+```
+</CodeBlock>
+
+### set_cached_callee [#setcachedcallee]
+
+<CodeBlock links={{"ExternalCall": "externalcall"}}>
+```cpp showLineNumbers={false}
+void ExternalCall::set_cached_callee(
+    void *cached_callee
+) const
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"ExternalCall": "externalcall", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"ExternalCall": "externalcall", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"ExternalCall": "externalcall", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `callee_name_` | `const std::string` | |
+| `arguments_` | `const std::vector< const Value * >` | |
+| `cached_callee_` | `void *` | |

@@ -1,0 +1,63 @@
+---
+title: foreign_storage::create_proxy_fsi_objects
+description: "Create proxy fsi objects for use outside FSI."
+---
+
+<Tabs>
+<Tab title="Create proxy fsi objects for use outside FSI">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>, std::unique_ptr<foreign_storage::UserMapping>, std::unique_ptr<foreign_storage::ForeignTable>> foreign_storage::create_proxy_fsi_objects(
+    const std::string &copy_from_source,
+    const import_export::CopyParams &copy_params,
+    const int db_id,
+    const TableDescriptor *table,
+    const int32_t user_id
+)
+```
+</CodeBlock>
+
+Create proxy fsi objects for use outside FSI.
+
+**Returns:** tuple of FSI objects that can be used for particular use case (for example import or detect)
+
+**Parameters**
+
+<ParamField path="copy_from_source" type="const std::string &">
+- The source that will be copied
+</ParamField>
+
+<ParamField path="copy_params" type="const import_export::CopyParams &">
+- CopyParams that specify parameters around use case
+</ParamField>
+
+<ParamField path="db_id" type="const int">
+- Db id of database in use case
+</ParamField>
+
+<ParamField path="table" type="const TableDescriptor *">
+- The table descriptor of the table in use case
+</ParamField>
+
+<ParamField path="user_id" type="const int32_t">
+- The user id of user in use case
+</ParamField>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::tuple<std::unique_ptr<foreign_storage::ForeignServer>, std::unique_ptr<foreign_storage::UserMapping>, std::unique_ptr<foreign_storage::ForeignTable>> foreign_storage::create_proxy_fsi_objects(
+    const std::string &copy_from_source,
+    const import_export::CopyParams &copy_params,
+    const TableDescriptor *table
+)
+```
+</CodeBlock>
+
+Create proxy fsi objects for use outside FSI NOTE: parameters mirror function above.
+
+</Tab>
+</Tabs>

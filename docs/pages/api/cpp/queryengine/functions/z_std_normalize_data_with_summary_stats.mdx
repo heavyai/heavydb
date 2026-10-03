@@ -1,0 +1,44 @@
+---
+title: z_std_normalize_data_with_summary_stats
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ZStdNormalizationSummaryStats": "../structs/zstdnormalizationsummarystats"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+ZStdNormalizationSummaryStats<T> z_std_normalize_data_with_summary_stats(
+    const std::vector<T *> &input_data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ZStdNormalizationSummaryStats": "../structs/zstdnormalizationsummarystats"}}>
+```cpp showLineNumbers={false}
+template ZStdNormalizationSummaryStats<float> z_std_normalize_data_with_summary_stats(
+    const std::vector<float *> &input_data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ZStdNormalizationSummaryStats": "../structs/zstdnormalizationsummarystats"}}>
+```cpp showLineNumbers={false}
+template ZStdNormalizationSummaryStats<double> z_std_normalize_data_with_summary_stats(
+    const std::vector<double *> &input_data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

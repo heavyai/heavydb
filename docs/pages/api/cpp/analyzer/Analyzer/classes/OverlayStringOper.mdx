@@ -1,0 +1,454 @@
+---
+title: Analyzer::OverlayStringOper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::StringOper` (public)
+
+---
+
+## Constructors
+
+### OverlayStringOper [#overlaystringoper]
+
+<Tabs>
+<Tab title="Copy (with operand and replacing str and start pos)">
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::OverlayStringOper::OverlayStringOper(
+    const std::shared_ptr<Analyzer::Expr> &operand,
+    const std::shared_ptr<Analyzer::Expr> &replacing_str,
+    const std::shared_ptr<Analyzer::Expr> &start_pos
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with operand and replacing str and start pos and replacing length)">
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::OverlayStringOper::OverlayStringOper(
+    const std::shared_ptr<Analyzer::Expr> &operand,
+    const std::shared_ptr<Analyzer::Expr> &replacing_str,
+    const std::shared_ptr<Analyzer::Expr> &start_pos,
+    const std::shared_ptr<Analyzer::Expr> &replacing_length
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with string oper)">
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+Analyzer::OverlayStringOper::OverlayStringOper(
+    const std::shared_ptr<Analyzer::StringOper> &string_oper
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with operands)">
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::OverlayStringOper::OverlayStringOper(
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &operands
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::OverlayStringOper::deep_copy() const override
+```
+</CodeBlock>
+
+### getMinArgs [#getminargs]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::OverlayStringOper::getMinArgs() const override
+```
+</CodeBlock>
+
+### getExpectedTypeFamilies [#getexpectedtypefamilies]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<OperandTypeFamily> Analyzer::OverlayStringOper::getExpectedTypeFamilies() const override
+```
+</CodeBlock>
+
+### getArgNames [#getargnames]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Analyzer::OverlayStringOper::getArgNames() const override
+```
+</CodeBlock>
+
+### get_kind [#getkind]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+SqlStringOpKind Analyzer::OverlayStringOper::get_kind() const
+```
+</CodeBlock>
+
+### getArity [#getarity]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::OverlayStringOper::getArity() const
+```
+</CodeBlock>
+
+### getLiteralsArity [#getliteralsarity]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::OverlayStringOper::getLiteralsArity() const
+```
+</CodeBlock>
+
+### getNonLiteralsArity [#getnonliteralsarity]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::OverlayStringOper::getNonLiteralsArity() const
+```
+</CodeBlock>
+
+### getArg [#getarg]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::OverlayStringOper::getArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getOwnArg [#getownarg]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::OverlayStringOper::getOwnArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getOwnArgs [#getownargs]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> Analyzer::OverlayStringOper::getOwnArgs() const
+```
+</CodeBlock>
+
+### getChainedStringOpExprs [#getchainedstringopexprs]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> Analyzer::OverlayStringOper::getChainedStringOpExprs() const
+```
+</CodeBlock>
+
+### requiresPerRowTranslation [#requiresperrowtranslation]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::OverlayStringOper::requiresPerRowTranslation() const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::OverlayStringOper::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "ColumnVar": "columnvar", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::OverlayStringOper::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### hasNoneEncodedTextArg [#hasnoneencodedtextarg]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::OverlayStringOper::hasNoneEncodedTextArg() const
+```
+</CodeBlock>
+
+### hasSingleDictEncodedColInput [#hassingledictencodedcolinput]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::OverlayStringOper::hasSingleDictEncodedColInput() const
+```
+</CodeBlock>
+
+returns whether we have one and only one column involved in this [StringOper](stringoper) and all its descendents, and that that column is a dictionary-encoded text type
+
+**Returns:** std::vector&lt;SqlTypeInfo&gt;
+
+### getLiteralArgIndexes [#getliteralargindexes]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<size_t> Analyzer::OverlayStringOper::getLiteralArgIndexes() const
+```
+</CodeBlock>
+
+### getLiteralArgs [#getliteralargs]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+LiteralArgMap Analyzer::OverlayStringOper::getLiteralArgs() const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::OverlayStringOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::OverlayStringOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::OverlayStringOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::OverlayStringOper::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::OverlayStringOper::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::OverlayStringOper::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::OverlayStringOper::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::Expr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Expr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::Expr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"OverlayStringOper": "overlaystringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `LiteralArgMap` | `std::map< size_t, std::pair< SQLTypes, Datum > >` |
+
+### OperandTypeFamily
+
+| Name | Value | Description |
+|---|---|---|
+| `STRING_FAMILY` | | |
+| `INT_FAMILY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

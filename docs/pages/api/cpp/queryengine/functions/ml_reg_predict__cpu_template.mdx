@@ -1,0 +1,117 @@
+---
+title: ml_reg_predict__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t ml_reg_predict__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<K> &input_ids,
+    const ColumnList<T> &input_features,
+    const TextEncodingNone &preferred_ml_framework_str,
+    Column<K> &output_ids,
+    Column<T> &output_predictions
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t ml_reg_predict__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<K> &input_ids,
+    const ColumnList<TextEncodingDict> &input_cat_features,
+    const ColumnList<T> &input_numeric_features,
+    const TextEncodingNone &preferred_ml_framework_str,
+    Column<K> &output_ids,
+    Column<T> &output_predictions
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t ml_reg_predict__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<K> &input_ids,
+    const ColumnList<TextEncodingDict> &input_cat_features,
+    const TextEncodingNone &preferred_ml_framework_str,
+    Column<K> &output_ids,
+    Column<T> &output_predictions
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t ml_reg_predict__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &model_name,
+    const Column<K> &input_ids,
+    const ColumnList<T> &input_features,
+    const TextEncodingNone &preferred_ml_framework_str,
+    Column<K> &output_ids,
+    Column<T> &output_predictions
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t ml_reg_predict__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &model_name,
+    const Column<K> &input_ids,
+    const ColumnList<TextEncodingDict> &input_cat_features,
+    const ColumnList<T> &input_numeric_features,
+    const TextEncodingNone &preferred_ml_framework_str,
+    Column<K> &output_ids,
+    Column<T> &output_predictions
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t ml_reg_predict__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &model_name,
+    const Column<K> &input_ids,
+    const ColumnList<TextEncodingDict> &input_cat_features,
+    const TextEncodingNone &preferred_ml_framework_str,
+    Column<K> &output_ids,
+    Column<T> &output_predictions
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

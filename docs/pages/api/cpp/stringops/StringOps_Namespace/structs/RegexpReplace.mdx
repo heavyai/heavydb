@@ -1,0 +1,191 @@
+---
+title: StringOps_Namespace::RegexpReplace
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+**Inherits from:** `StringOps_Namespace::StringOp` (public)
+
+---
+
+## Constructors
+
+### RegexpReplace [#regexpreplace]
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::RegexpReplace::RegexpReplace(
+    const std::optional<std::string> &var_str_optional_literal,
+    const std::string &regex_pattern,
+    const std::string &replacement,
+    const int64_t start_pos,
+    const int64_t occurrence,
+    const std::string &regex_params,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+NullableStrType StringOps_Namespace::RegexpReplace::operator()(
+    const std::string &str
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::RegexpReplace::operator()(
+    const std::string &str1,
+    const std::string &str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::RegexpReplace::operator()() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### numericEval [#numericeval]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::RegexpReplace::numericEval(
+    const std::string_view str
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::RegexpReplace::numericEval(
+    const std::string_view str1,
+    const std::string_view str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::RegexpReplace::numericEval() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getReturnType [#getreturntype]
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual const SQLTypeInfo & StringOps_Namespace::RegexpReplace::getReturnType() const
+```
+</CodeBlock>
+
+### getVarStringLiteral [#getvarstringliteral]
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const std::string & StringOps_Namespace::RegexpReplace::getVarStringLiteral() const
+```
+</CodeBlock>
+
+### hasVarStringLiteral [#hasvarstringliteral]
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::RegexpReplace::hasVarStringLiteral() const
+```
+</CodeBlock>
+
+### getOpInfo [#getopinfo]
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "StringOpInfo": "stringopinfo", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const StringOpInfo & StringOps_Namespace::RegexpReplace::getOpInfo() const
+```
+</CodeBlock>
+
+### get_nth_regex_match [#getnthregexmatch]
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> StringOps_Namespace::RegexpReplace::get_nth_regex_match(
+    const std::string &str,
+    const size_t start_pos,
+    const boost::regex &regex_pattern,
+    const int64_t occurrence
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generateRegex [#generateregex]
+
+<CodeBlock links={{"RegexpReplace": "regexpreplace", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+boost::regex StringOps_Namespace::RegexpReplace::generateRegex(
+    const std::string &op_name,
+    const std::string &regex_pattern,
+    const std::string &regex_params,
+    const bool supports_sub_matches
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `regex_pattern_str_` | `const std::string` | |
+| `regex_pattern_` | `const boost::regex` | |
+| `replacement_` | `const std::string` | |
+| `start_pos_` | `const int64_t` | |
+| `occurrence_` | `const int64_t` | |
+| `op_kind_` | `const SqlStringOpKind` | |
+| `return_ti_` | `const SQLTypeInfo` | |
+| `has_var_str_literal_` | `const bool` | |
+| `var_str_literal_` | `const NullableStrType` | |
+| `string_op_info_` | `const StringOpInfo` | |

@@ -1,0 +1,277 @@
+---
+title: Analyzer::InIntegerSet
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### InIntegerSet [#inintegerset]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::InIntegerSet::InIntegerSet(
+    const std::shared_ptr<const Analyzer::Expr> a,
+    const std::vector<int64_t> &values,
+    const bool not_null
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::InIntegerSet::get_arg() const
+```
+</CodeBlock>
+
+### get_value_list [#getvaluelist]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset"}}>
+```cpp showLineNumbers={false}
+const std::vector<int64_t> & Analyzer::InIntegerSet::get_value_list() const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::InIntegerSet::deep_copy() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::InIntegerSet::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::InIntegerSet::toString() const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::InIntegerSet::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::InIntegerSet::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::InIntegerSet::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::InIntegerSet::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::InIntegerSet::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::InIntegerSet::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::InIntegerSet::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::InIntegerSet::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::InIntegerSet::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::InIntegerSet::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "ColumnVar": "columnvar", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::InIntegerSet::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::InIntegerSet::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::InIntegerSet::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::InIntegerSet::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::InIntegerSet::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::InIntegerSet::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::InIntegerSet::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::InIntegerSet::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::InIntegerSet::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"InIntegerSet": "inintegerset", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::InIntegerSet::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `arg` | `const std::shared_ptr< const Analyzer::Expr >` | |
+| `value_list` | `const std::vector< int64_t >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

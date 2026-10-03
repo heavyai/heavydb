@@ -1,0 +1,43 @@
+---
+title: SpeculativeTopNBlacklist
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <SpeculativeTopN.h>
+```
+
+---
+
+## Methods
+
+### add [#add]
+
+<CodeBlock links={{"SpeculativeTopNBlacklist": "speculativetopnblacklist"}}>
+```cpp showLineNumbers={false}
+void SpeculativeTopNBlacklist::add(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    const bool desc
+)
+```
+</CodeBlock>
+
+### contains [#contains]
+
+<CodeBlock links={{"SpeculativeTopNBlacklist": "speculativetopnblacklist"}}>
+```cpp showLineNumbers={false}
+bool SpeculativeTopNBlacklist::contains(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    const bool desc
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `mutex_` | `std::mutex` | |
+| `blacklist_` | `std::vector< std::pair< std::shared_ptr< Analyzer::Expr >, bool > >` | |

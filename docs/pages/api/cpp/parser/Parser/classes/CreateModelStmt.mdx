@@ -1,0 +1,122 @@
+---
+title: Parser::CreateModelStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### CreateModelStmt [#createmodelstmt]
+
+<CodeBlock links={{"CreateModelStmt": "createmodelstmt"}}>
+```cpp showLineNumbers={false}
+Parser::CreateModelStmt::CreateModelStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_model_name [#getmodelname]
+
+<CodeBlock links={{"CreateModelStmt": "createmodelstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::CreateModelStmt::get_model_name() const
+```
+</CodeBlock>
+
+### get_select_query [#getselectquery]
+
+<CodeBlock links={{"CreateModelStmt": "createmodelstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::CreateModelStmt::get_select_query() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"CreateModelStmt": "createmodelstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateModelStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### train_model [#trainmodel]
+
+<CodeBlock links={{"CreateModelStmt": "createmodelstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateModelStmt::train_model(
+    const Catalog_Namespace::SessionInfo &session
+)
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"CreateModelStmt": "createmodelstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateModelStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+### check_model_exists [#checkmodelexists]
+
+<CodeBlock links={{"CreateModelStmt": "createmodelstmt"}}>
+```cpp showLineNumbers={false}
+bool Parser::CreateModelStmt::check_model_exists()
+```
+</CodeBlock>
+
+### parse_model_options [#parsemodeloptions]
+
+<CodeBlock links={{"CreateModelStmt": "createmodelstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateModelStmt::parse_model_options()
+```
+</CodeBlock>
+
+### build_model_query [#buildmodelquery]
+
+<CodeBlock links={{"CreateModelStmt": "createmodelstmt"}}>
+```cpp showLineNumbers={false}
+std::string Parser::CreateModelStmt::build_model_query(
+    const std::shared_ptr<Catalog_Namespace::SessionInfo> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `model_type_` | `MLModelType` | |
+| `model_name_` | `std::string` | |
+| `select_query_` | `std::string` | |
+| `replace_` | `bool` | |
+| `if_not_exists_` | `bool` | |
+| `model_options_` | `std::list< std::unique_ptr< NameValueAssign > >` | |
+| `options_oss_` | `std::ostringstream` | |
+| `num_options_` | `size_t` | |
+| `data_split_train_fraction_` | `double` | |
+| `data_split_eval_fraction_` | `double` | |
+| `model_predicted_var_` | `std::string` | |
+| `model_feature_vars_` | `std::vector< std::string >` | |
+| `feature_permutations_` | `std::vector< int64_t >` | |

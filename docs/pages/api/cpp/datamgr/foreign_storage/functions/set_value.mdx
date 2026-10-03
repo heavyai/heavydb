@@ -1,0 +1,33 @@
+---
+title: foreign_storage::set_value
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"FileRegion": "../structs/fileregion"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::set_value(
+    rapidjson::Value &json_val,
+    const FileRegion &file_region,
+    rapidjson::Document::AllocatorType &allocator
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RowGroupInterval": "../structs/rowgroupinterval"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::set_value(
+    rapidjson::Value &json_val,
+    const RowGroupInterval &value,
+    rapidjson::Document::AllocatorType &allocator
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

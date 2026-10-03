@@ -1,0 +1,121 @@
+---
+title: DateTimeParser
+description: "Set format_type_ and parse date/time/timestamp strings into (s,ms,us,ns) since the epoch based on given dim in (0,3,6,9) respectively."
+---
+
+Set format_type_ and parse date/time/timestamp strings into (s,ms,us,ns) since the epoch based on given dim in (0,3,6,9) respectively.
+
+Basic idea is to parse given string by matching to formats ("%Y-%m-%d", "%m/%d/%Y", ...) until a valid parse is found. Save parsed values into a [DateTime](#datetime) dt_ struct from which the final epoch-based int64_t value is calculated.
+
+```cpp showLineNumbers={false}
+#include <DateTimeParser.h>
+```
+
+---
+
+## Methods
+
+### parse [#parse]
+
+<CodeBlock links={{"DateTimeParser": "datetimeparser"}}>
+```cpp showLineNumbers={false}
+std::optional<int64_t> DateTimeParser::parse(
+    std::string_view const,
+    unsigned dim
+)
+```
+</CodeBlock>
+
+### setFormatType [#setformattype]
+
+<CodeBlock links={{"DateTimeParser": "datetimeparser"}}>
+```cpp showLineNumbers={false}
+void DateTimeParser::setFormatType(
+    FormatType
+)
+```
+</CodeBlock>
+
+### unparsed [#unparsed]
+
+<CodeBlock links={{"DateTimeParser": "datetimeparser"}}>
+```cpp showLineNumbers={false}
+std::string_view DateTimeParser::unparsed() const
+```
+</CodeBlock>
+
+### parseWithFormat [#parsewithformat]
+
+<CodeBlock links={{"DateTimeParser": "datetimeparser"}}>
+```cpp showLineNumbers={false}
+bool DateTimeParser::parseWithFormat(
+    std::string_view format,
+    std::string_view &str
+)
+```
+</CodeBlock>
+
+### resetDateTime [#resetdatetime]
+
+<CodeBlock links={{"DateTimeParser": "datetimeparser"}}>
+```cpp showLineNumbers={false}
+void DateTimeParser::resetDateTime()
+```
+</CodeBlock>
+
+### updateDateTimeAndStr [#updatedatetimeandstr]
+
+<CodeBlock links={{"DateTimeParser": "datetimeparser"}}>
+```cpp showLineNumbers={false}
+bool DateTimeParser::updateDateTimeAndStr(
+    char const field,
+    std::string_view &
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### FormatType
+
+| Name | Value | Description |
+|---|---|---|
+| `Date` | | |
+| `Time` | | |
+| `Timezone` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dt_` | `DateTime` | |
+| `format_type_` | `FormatType` | |
+| `unparsed_` | `std::string_view` | |
+
+---
+
+## Inner classes
+
+### DateTime
+
+<CodeBlock links={{"DateTimeParser": "datetimeparser"}}>
+```cpp showLineNumbers={false}
+struct DateTimeParser::DateTime
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `Y` | `int64_t` | |
+| `m` | `unsigned` | |
+| `d` | `unsigned` | |
+| `H` | `unsigned` | |
+| `M` | `unsigned` | |
+| `S` | `unsigned` | |
+| `n` | `unsigned` | |
+| `z` | `int` | |
+| `p` | `std::optional< bool >` | |

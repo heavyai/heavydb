@@ -1,0 +1,69 @@
+---
+title: foreign_storage::FileRegion
+description: "Data structure containing details about a CSV file region (subset of rows within a CSV file)."
+---
+
+Data structure containing details about a CSV file region (subset of rows within a CSV file).
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/FileRegions.h>
+```
+
+---
+
+## Constructors
+
+### FileRegion [#fileregion]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"FileRegion": "fileregion"}}>
+```cpp showLineNumbers={false}
+foreign_storage::FileRegion::FileRegion(
+    std::string path,
+    size_t first_row_offset,
+    size_t first_row_idx,
+    size_t row_cnt,
+    size_t region_sz
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"FileRegion": "fileregion"}}>
+```cpp showLineNumbers={false}
+foreign_storage::FileRegion::FileRegion()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"FileRegion": "fileregion"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::FileRegion::operator<(
+    const FileRegion &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `file_path` | `std::string` | |
+| `first_row_file_offset` | `size_t` | |
+| `first_row_index` | `size_t` | |
+| `row_count` | `size_t` | |
+| `region_size` | `size_t` | |

@@ -1,0 +1,16 @@
+---
+title: foreign_storage::resize_buffer_if_needed
+description: "Optionally resizes the given buffer if the buffer size is less than the current buffer allocation size."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void foreign_storage::resize_buffer_if_needed(
+    std::unique_ptr<char[]> &buffer,
+    size_t &buffer_size,
+    const size_t alloc_size
+)
+```
+</CodeBlock>
+
+Optionally resizes the given buffer if the buffer size is less than the current buffer allocation size.

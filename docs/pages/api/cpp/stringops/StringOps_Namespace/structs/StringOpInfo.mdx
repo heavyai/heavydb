@@ -1,0 +1,164 @@
+---
+title: StringOps_Namespace::StringOpInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOpInfo.h>
+```
+
+---
+
+## Constructors
+
+### StringOpInfo [#stringopinfo]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::StringOpInfo::StringOpInfo(
+    const SqlStringOpKind op_kind,
+    const SQLTypeInfo &return_ti,
+    const LiteralArgMap &literal_arg_map
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getOpKind [#getopkind]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+const SqlStringOpKind & StringOps_Namespace::StringOpInfo::getOpKind() const
+```
+</CodeBlock>
+
+### getLiteralArgMap [#getliteralargmap]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+const LiteralArgMap & StringOps_Namespace::StringOpInfo::getLiteralArgMap() const
+```
+</CodeBlock>
+
+### numLiterals [#numliterals]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+size_t StringOps_Namespace::StringOpInfo::numLiterals() const
+```
+</CodeBlock>
+
+### hasVarStringLiteral [#hasvarstringliteral]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::StringOpInfo::hasVarStringLiteral() const
+```
+</CodeBlock>
+
+### intLiteralArgAtIdxExists [#intliteralargatidxexists]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::StringOpInfo::intLiteralArgAtIdxExists(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### stringLiteralArgAtIdxExists [#stringliteralargatidxexists]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::StringOpInfo::stringLiteralArgAtIdxExists(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### numNonVariableLiterals [#numnonvariableliterals]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+size_t StringOps_Namespace::StringOpInfo::numNonVariableLiterals() const
+```
+</CodeBlock>
+
+### getReturnType [#getreturntype]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & StringOps_Namespace::StringOpInfo::getReturnType() const
+```
+</CodeBlock>
+
+### hasNullLiteralArg [#hasnullliteralarg]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::StringOpInfo::hasNullLiteralArg() const
+```
+</CodeBlock>
+
+### getStringLiteral [#getstringliteral]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+std::string StringOps_Namespace::StringOpInfo::getStringLiteral(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### getIntLiteral [#getintliteral]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+int64_t StringOps_Namespace::StringOpInfo::getIntLiteral(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+std::string StringOps_Namespace::StringOpInfo::toString() const
+```
+</CodeBlock>
+
+### isLiteralArgNull [#isliteralargnull]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::StringOpInfo::isLiteralArgNull(
+    const SQLTypes datum_type,
+    const Datum &datum
+)
+```
+</CodeBlock>
+
+### calcNumNullLiteralArgs [#calcnumnullliteralargs]
+
+<CodeBlock links={{"StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+size_t StringOps_Namespace::StringOpInfo::calcNumNullLiteralArgs(
+    const LiteralArgMap &literal_arg_map
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `op_kind_` | `const SqlStringOpKind` | |
+| `return_ti_` | `const SQLTypeInfo` | |
+| `literal_arg_map_` | `const LiteralArgMap` | |
+| `num_null_literals_` | `const size_t` | |

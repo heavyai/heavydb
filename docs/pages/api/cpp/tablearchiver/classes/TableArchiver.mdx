@@ -1,0 +1,80 @@
+---
+title: TableArchiver
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableArchiver.h>
+```
+
+---
+
+## Constructors
+
+### TableArchiver [#tablearchiver]
+
+<CodeBlock links={{"TableArchiver": "tablearchiver"}}>
+```cpp showLineNumbers={false}
+TableArchiver::TableArchiver(
+    Catalog_Namespace::Catalog *cat
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### dumpTable [#dumptable]
+
+<CodeBlock links={{"TableArchiver": "tablearchiver"}}>
+```cpp showLineNumbers={false}
+void TableArchiver::dumpTable(
+    const TableDescriptor *td,
+    const std::string &archive_path,
+    const std::string &compression
+)
+```
+</CodeBlock>
+
+### restoreTable [#restoretable]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableArchiver": "tablearchiver"}}>
+```cpp showLineNumbers={false}
+void TableArchiver::restoreTable(
+    const Catalog_Namespace::SessionInfo &session,
+    const std::string &table_name,
+    const std::string &archive_path,
+    const std::string &compression,
+    const shared::S3Config &s3_options
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableArchiver": "tablearchiver"}}>
+```cpp showLineNumbers={false}
+void TableArchiver::restoreTable(
+    const Catalog_Namespace::SessionInfo &session,
+    const TableDescriptor *td,
+    const std::string &archive_path,
+    const std::string &compression
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cat_` | `Catalog_Namespace::Catalog *` | |

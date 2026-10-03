@@ -1,0 +1,101 @@
+---
+title: table_functions::TableFunctionsFactory
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <table_functions/TableFunctionsFactory.h>
+```
+
+---
+
+## Static methods
+
+### add [#add]
+
+<CodeBlock links={{"TableFunctionsFactory": "tablefunctionsfactory", "TableFunctionOutputRowSizer": "../structs/tablefunctionoutputrowsizer"}}>
+```cpp showLineNumbers={false}
+void table_functions::TableFunctionsFactory::add(
+    const std::string &name,
+    const TableFunctionOutputRowSizer sizer,
+    const std::vector<ExtArgumentType> &input_args,
+    const std::vector<ExtArgumentType> &output_args,
+    const std::vector<ExtArgumentType> &sql_args,
+    const std::vector<std::map<std::string, std::string>> &annotations,
+    bool is_runtime = false
+)
+```
+</CodeBlock>
+
+### get_table_funcs [#gettablefuncs]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionsFactory": "tablefunctionsfactory", "TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::vector<TableFunction> table_functions::TableFunctionsFactory::get_table_funcs(
+    const std::string &name,
+    const bool is_gpu
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionsFactory": "tablefunctionsfactory", "TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::vector<TableFunction> table_functions::TableFunctionsFactory::get_table_funcs(
+    const std::string &name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionsFactory": "tablefunctionsfactory", "TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::vector<TableFunction> table_functions::TableFunctionsFactory::get_table_funcs(
+    const bool is_runtime
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"TableFunctionsFactory": "tablefunctionsfactory", "TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::vector<TableFunction> table_functions::TableFunctionsFactory::get_table_funcs()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### init [#init]
+
+<CodeBlock links={{"TableFunctionsFactory": "tablefunctionsfactory"}}>
+```cpp showLineNumbers={false}
+template <const char * filename>
+static void table_functions::TableFunctionsFactory::init()
+```
+</CodeBlock>
+
+### reset [#reset]
+
+<CodeBlock links={{"TableFunctionsFactory": "tablefunctionsfactory"}}>
+```cpp showLineNumbers={false}
+void table_functions::TableFunctionsFactory::reset()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `functions_` <Badge intent="note" minimal>static</Badge> | `std::unordered_map< std::string, TableFunction >` | |

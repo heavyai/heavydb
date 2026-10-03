@@ -1,0 +1,95 @@
+---
+title: Parser::GrantRoleStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### GrantRoleStmt [#grantrolestmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"GrantRoleStmt": "grantrolestmt"}}>
+```cpp showLineNumbers={false}
+Parser::GrantRoleStmt::GrantRoleStmt(
+    std::list<std::string *> *r,
+    std::list<std::string *> *g
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"GrantRoleStmt": "grantrolestmt"}}>
+```cpp showLineNumbers={false}
+Parser::GrantRoleStmt::GrantRoleStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_roles [#getroles]
+
+<CodeBlock links={{"GrantRoleStmt": "grantrolestmt"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & Parser::GrantRoleStmt::get_roles() const
+```
+</CodeBlock>
+
+### get_grantees [#getgrantees]
+
+<CodeBlock links={{"GrantRoleStmt": "grantrolestmt"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & Parser::GrantRoleStmt::get_grantees() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"GrantRoleStmt": "grantrolestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::GrantRoleStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"GrantRoleStmt": "grantrolestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::GrantRoleStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `roles_` | `std::vector< std::string >` | |
+| `grantees_` | `std::vector< std::string >` | |

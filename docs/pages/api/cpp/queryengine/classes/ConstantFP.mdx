@@ -1,0 +1,69 @@
+---
+title: ConstantFP
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Constant` (public)
+
+---
+
+## Constructors
+
+### ConstantFP [#constantfp]
+
+<CodeBlock links={{"ConstantFP": "constantfp"}}>
+```cpp showLineNumbers={false}
+ConstantFP::ConstantFP(
+    const double value,
+    const Type target
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### value [#value]
+
+<CodeBlock links={{"ConstantFP": "constantfp"}}>
+```cpp showLineNumbers={false}
+double ConstantFP::value() const
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"ConstantFP": "constantfp", "Constant": "constant"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"ConstantFP": "constantfp", "Constant": "constant"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"ConstantFP": "constantfp", "Constant": "constant"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `value_` | `const double` | |

@@ -1,0 +1,40 @@
+---
+title: query_state::StdLogData
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <query_state/QueryState.h>
+```
+
+---
+
+## Constructors
+
+### StdLogData [#stdlogdata]
+
+<CodeBlock links={{"StdLogData": "stdlogdata"}}>
+```cpp showLineNumbers={false}
+template <typename... Pairs>
+query_state::StdLogData::StdLogData(
+    char const *file,
+    unsigned line,
+    char const *func,
+    Pairs &&... pairs
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `s_match` <Badge intent="note" minimal>static</Badge> | `std::atomic< int64_t >` | |
+| `file_` | `std::string const` | |
+| `line_` | `unsigned const` | |
+| `func_` | `char const  *const` | |
+| `start_` | `Clock::time_point const` | |
+| `match_` | `int64_t const` | |
+| `name_value_pairs_` | `std::list< std::string >` | |

@@ -1,0 +1,111 @@
+---
+title: JoinLoop
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <JoinLoop.h>
+```
+
+---
+
+## Constructors
+
+### JoinLoop [#joinloop]
+
+<CodeBlock links={{"JoinLoop": "joinloop", "JoinLoopDomain": "../structs/joinloopdomain"}}>
+```cpp showLineNumbers={false}
+JoinLoop::JoinLoop(
+    const JoinLoopKind,
+    const JoinType,
+    const std::function<JoinLoopDomain(const std::vector<llvm::Value *> &)> &iteration_domain_codegen,
+    const std::function<llvm::Value *(const std::vector<llvm::Value *> &)> &outer_condition_match,
+    const std::function<void(llvm::Value *)> &found_outer_matches,
+    const HoistedFiltersCallback &hoisted_filters,
+    const std::function<llvm::Value *(const std::vector<llvm::Value *> &prev_iters, llvm::Value *)> &is_deleted,
+    const bool nested_loop_join = false,
+    const std::string &name = ""
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### kind [#kind]
+
+<CodeBlock links={{"JoinLoop": "joinloop"}}>
+```cpp showLineNumbers={false}
+JoinLoopKind JoinLoop::kind() const
+```
+</CodeBlock>
+
+### isNestedLoopJoin [#isnestedloopjoin]
+
+<CodeBlock links={{"JoinLoop": "joinloop"}}>
+```cpp showLineNumbers={false}
+bool JoinLoop::isNestedLoopJoin() const
+```
+</CodeBlock>
+
+### evaluateOuterJoinCondition [#evaluateouterjoincondition]
+
+<CodeBlock links={{"JoinLoop": "joinloop", "JoinLoopDomain": "../structs/joinloopdomain", "CgenState": "../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+std::pair<llvm::BasicBlock *, llvm::Value *> JoinLoop::evaluateOuterJoinCondition(
+    const JoinLoop &join_loop,
+    const JoinLoopDomain &iteration_domain,
+    const std::vector<llvm::Value *> &iterators,
+    llvm::Value *iteration_counter,
+    llvm::Value *have_more_inner_rows,
+    llvm::Value *found_an_outer_match_ptr,
+    llvm::Value *current_condition_match_ptr,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### codegen [#codegen]
+
+<CodeBlock links={{"JoinLoop": "joinloop", "CgenState": "../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::BasicBlock * JoinLoop::codegen(
+    const std::vector<JoinLoop> &join_loops,
+    const std::function<llvm::BasicBlock *(const std::vector<llvm::Value *> &)> &body_codegen,
+    llvm::Value *outer_iter,
+    llvm::BasicBlock *exit_bb,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `HoistedFiltersCallback` | `std::function< llvm::BasicBlock *(llvm::BasicBlock *, llvm::BasicBlock *, const std::string &, llvm::Function *, CgenState *)>` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `kind_` | `const JoinLoopKind` | |
+| `type_` | `const JoinType` | |
+| `iteration_domain_codegen_` | `const std::function< JoinLoopDomain(const std::vector< llvm::Value * > &)>` | |
+| `outer_condition_match_` | `const std::function< llvm::Value *(const std::vector< llvm::Value * > &)>` | |
+| `found_outer_matches_` | `const std::function< void(llvm::Value *)>` | |
+| `hoisted_filters_` | `const HoistedFiltersCallback` | |
+| `is_deleted_` | `const std::function< llvm::Value *(const std::vector< llvm::Value * > &prev_iters, llvm::Value *)>` | |
+| `nested_loop_join_` | `const bool` | |
+| `name_` | `const std::string` | |

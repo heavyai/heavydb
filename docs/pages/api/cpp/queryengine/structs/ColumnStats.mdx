@@ -1,0 +1,45 @@
+---
+title: ColumnStats
+description: ""
+---
+
+<CodeBlock id="ColumnStats" links={{"ColumnStats": "columnstats"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct ColumnStats
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TableFunctionsStats.hpp>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### ColumnStats [#columnstats]
+
+<CodeBlock links={{"ColumnStats": "columnstats"}}>
+```cpp showLineNumbers={false}
+ColumnStats<T>::ColumnStats()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `total_count` | `int64_t` | |
+| `non_null_or_filtered_count` | `int64_t` | |
+| `min` | `T` | |
+| `max` | `T` | |
+| `sum` | `T` | |
+| `mean` | `double` | |

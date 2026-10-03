@@ -1,0 +1,46 @@
+---
+title: Parser::Expr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public)
+
+---
+
+## Methods
+
+### analyze [#analyze]
+
+<CodeBlock links={{"Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Parser::Expr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::string Parser::Expr::to_string() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |

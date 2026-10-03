@@ -1,0 +1,18 @@
+---
+title: ct_cursor_named_args__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_cursor_named_args__cpu_(
+    TableFunctionManager &mgr,
+    const Column<int32_t> &input_arg1,
+    const Column<int32_t> &input_arg2,
+    const int32_t arg1,
+    const int32_t arg2,
+    Column<int32_t> &out1,
+    Column<int32_t> &out2
+)
+```
+</CodeBlock>

@@ -1,0 +1,33 @@
+---
+title: checked_single_agg_id_float_shared
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ int32_t checked_single_agg_id_float_shared(
+    int32_t *agg,
+    const float val,
+    const float null_val
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+NEVER_INLINE int32_t checked_single_agg_id_float_shared(
+    int32_t *agg,
+    const float val,
+    const float null_val
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

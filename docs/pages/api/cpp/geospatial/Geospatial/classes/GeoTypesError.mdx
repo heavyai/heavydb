@@ -1,0 +1,57 @@
+---
+title: Geospatial::GeoTypesError
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Geospatial/Types.h>
+```
+
+**Inherits from:** `std::runtime_error` (public)
+
+---
+
+## Constructors
+
+### GeoTypesError [#geotypeserror]
+
+<Tabs>
+<Tab title="Copy (with ogr err)">
+
+<CodeBlock links={{"GeoTypesError": "geotypeserror"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoTypesError::GeoTypesError(
+    const std::string &type,
+    const int ogr_err
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with err)">
+
+<CodeBlock links={{"GeoTypesError": "geotypeserror"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoTypesError::GeoTypesError(
+    const std::string &type,
+    const std::string &err
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### OGRErrorToStr [#ogrerrortostr]
+
+<CodeBlock links={{"GeoTypesError": "geotypeserror"}}>
+```cpp showLineNumbers={false}
+std::string Geospatial::GeoTypesError::OGRErrorToStr(
+    const int ogr_err
+)
+```
+</CodeBlock>

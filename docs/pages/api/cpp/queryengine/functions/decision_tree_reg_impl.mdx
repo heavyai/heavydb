@@ -1,0 +1,22 @@
+---
+title: decision_tree_reg_impl
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t decision_tree_reg_impl(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<T> &input_labels,
+    const ColumnList<T> &input_features,
+    const std::vector<std::vector<std::string>> &cat_feature_keys,
+    const int64_t max_tree_depth,
+    const int64_t min_observations_per_leaf_node,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>

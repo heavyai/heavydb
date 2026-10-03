@@ -1,0 +1,14 @@
+---
+title: managed_memory::vector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+template <typename T>
+using vector = std::vector<T, CpuMgrStdAllocator<T>>;
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>

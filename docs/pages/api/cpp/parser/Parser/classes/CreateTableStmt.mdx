@@ -1,0 +1,115 @@
+---
+title: Parser::CreateTableStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::CreateTableBaseStmt` (public)
+
+---
+
+## Constructors
+
+### CreateTableStmt [#createtablestmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CreateTableStmt": "createtablestmt", "TableElement": "tableelement", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::CreateTableStmt::CreateTableStmt(
+    std::string *tab,
+    const std::string *storage,
+    std::list<TableElement *> *table_elems,
+    bool is_temporary,
+    bool if_not_exists,
+    std::list<NameValueAssign *> *s
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"CreateTableStmt": "createtablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::CreateTableStmt::CreateTableStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_table [#gettable]
+
+<CodeBlock links={{"CreateTableStmt": "createtablestmt"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::CreateTableStmt::get_table() const override
+```
+</CodeBlock>
+
+### get_table_element_list [#gettableelementlist]
+
+<CodeBlock links={{"CreateTableStmt": "createtablestmt", "TableElement": "tableelement"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<TableElement>> & Parser::CreateTableStmt::get_table_element_list() const override
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"CreateTableStmt": "createtablestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateTableStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### executeDryRun [#executedryrun]
+
+<CodeBlock links={{"CreateTableStmt": "createtablestmt", "SharedDictionaryDef": "shareddictionarydef"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateTableStmt::executeDryRun(
+    const Catalog_Namespace::SessionInfo &session,
+    TableDescriptor &td,
+    std::list<ColumnDescriptor> &columns,
+    std::vector<SharedDictionaryDef> &shared_dict_defs
+)
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"CreateTableStmt": "createtablestmt", "ColumnDef": "columndef", "CreateTableBaseStmt": "createtablebasestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DDLStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `table_element_list_` | `std::list< std::unique_ptr< TableElement > >` | |
+| `is_temporary_` | `bool` | |
+| `if_not_exists_` | `bool` | |
+| `storage_options_` | `std::list< std::unique_ptr< NameValueAssign > >` | |

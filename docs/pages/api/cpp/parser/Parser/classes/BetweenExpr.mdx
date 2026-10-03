@@ -1,0 +1,106 @@
+---
+title: Parser::BetweenExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### BetweenExpr [#betweenexpr]
+
+<CodeBlock links={{"BetweenExpr": "betweenexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::BetweenExpr::BetweenExpr(
+    bool n,
+    Expr *a,
+    Expr *l,
+    Expr *u
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_not [#getisnot]
+
+<CodeBlock links={{"BetweenExpr": "betweenexpr"}}>
+```cpp showLineNumbers={false}
+bool Parser::BetweenExpr::get_is_not() const
+```
+</CodeBlock>
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"BetweenExpr": "betweenexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::BetweenExpr::get_arg() const
+```
+</CodeBlock>
+
+### get_lower [#getlower]
+
+<CodeBlock links={{"BetweenExpr": "betweenexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::BetweenExpr::get_lower() const
+```
+</CodeBlock>
+
+### get_upper [#getupper]
+
+<CodeBlock links={{"BetweenExpr": "betweenexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::BetweenExpr::get_upper() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"BetweenExpr": "betweenexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::BetweenExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"BetweenExpr": "betweenexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::BetweenExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_not_` | `bool` | |
+| `arg_` | `std::unique_ptr< Expr >` | |
+| `lower_` | `std::unique_ptr< Expr >` | |
+| `upper_` | `std::unique_ptr< Expr >` | |

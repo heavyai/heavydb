@@ -1,0 +1,308 @@
+---
+title: VectorView
+description: "Manage externally allocated memory ranges with a vector-like interface."
+---
+
+<CodeBlock id="VectorView" links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class VectorView
+```
+</CodeBlock>
+
+Manage externally allocated memory ranges with a vector-like interface.
+
+```cpp showLineNumbers={false}
+#include <VectorView.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### VectorView [#vectorview]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+VectorView<T>::VectorView() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+VectorView<T>::VectorView(
+    T *data,
+    size_type const size,
+    size_type const capacity
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+VectorView<T>::VectorView(
+    T *data,
+    size_type const size
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### back [#back]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T & VectorView<T>::back()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T const  & VectorView<T>::back() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### begin [#begin]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T * VectorView<T>::begin() const
+```
+</CodeBlock>
+
+### capacity [#capacity]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+size_type VectorView<T>::capacity() const
+```
+</CodeBlock>
+
+### cbegin [#cbegin]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T const  * VectorView<T>::cbegin() const
+```
+</CodeBlock>
+
+### cend [#cend]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T const  * VectorView<T>::cend() const
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+void VectorView<T>::clear()
+```
+</CodeBlock>
+
+### data [#data]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T * VectorView<T>::data()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T const  * VectorView<T>::data() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### empty [#empty]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+bool VectorView<T>::empty() const
+```
+</CodeBlock>
+
+### end [#end]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T * VectorView<T>::end() const
+```
+</CodeBlock>
+
+### full [#full]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+bool VectorView<T>::full() const
+```
+</CodeBlock>
+
+### front [#front]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T & VectorView<T>::front()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T const  & VectorView<T>::front() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator[] [#operator_subscript]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T & VectorView<T>::operator[](
+    size_type const i
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+T const  & VectorView<T>::operator[](
+    size_type const i
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### push_back [#pushback]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+void VectorView<T>::push_back(
+    T const &value
+)
+```
+</CodeBlock>
+
+### resize [#resize]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+void VectorView<T>::resize(
+    size_type const size
+)
+```
+</CodeBlock>
+
+### set [#set]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+void VectorView<T>::set(
+    T *data,
+    size_type const size
+)
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"VectorView": "vectorview"}}>
+```cpp showLineNumbers={false}
+size_type VectorView<T>::size() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `value_type` | `T` |
+| `size_type` | `std::size_t` |
+| `difference_type` | `std::ptrdiff_t` |
+| `reference` | `value_type &` |
+| `const_reference` | `value_type const  &` |
+| `pointer` | `value_type *` |
+| `const_pointer` | `value_type const  *` |
+| `iterator` | `pointer` |
+| `const_iterator` | `const_pointer` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `data_` | `T *` | |
+| `size_` | `size_type` | |
+| `capacity_` | `size_type` | |

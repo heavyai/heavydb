@@ -1,0 +1,251 @@
+instances:
+- url: heavyai-heavydb.docs.buildwithfern.com/heavyai/heavydb
+  custom-domain: docs.nvidia.com/heavyai/heavydb
+  multi-source: true
+
+title: HeavyDB Documentation
+
+global-theme: nvidia
+
+navbar-links:
+  - type: github
+    value: https://github.com/heavyai/heavydb
+
+navigation:
+- page: Introduction
+  path: ../docs/pages/introduction.mdx
+- section: System Architecture
+  contents:
+  - page: Overview
+    path: ../docs/pages/overview/index.mdx
+  - section: Quickstart
+    contents:
+    - page: Getting Started
+      path: ../docs/pages/quickstart/getting-started.mdx
+    - page: Start
+      path: ../docs/pages/quickstart/start.mdx
+    - page: Dependencies
+      path: ../docs/pages/quickstart/deps.mdx
+    - page: Build
+      path: ../docs/pages/quickstart/build.mdx
+  - page: Catalog
+    path: ../docs/pages/catalog/index.mdx
+  - section: Data Model
+    contents:
+    - page: Overview
+      path: ../docs/pages/data-model/index.mdx
+    - page: Physical Layout
+      path: ../docs/pages/data-model/physical-layout.mdx
+    - page: Columnar Layout
+      path: ../docs/pages/data-model/columnar-layout.mdx
+    - page: Memory Layout
+      path: ../docs/pages/data-model/memory-layout.mdx
+    - page: Types
+      path: ../docs/pages/data-model/types.mdx
+    - page: Dump / Restore
+      path: ../docs/pages/data-model/dump-restore.mdx
+    - page: External API
+      path: ../docs/pages/data-model/api.mdx
+  - page: Data Flow
+    path: ../docs/pages/flow/data.mdx
+  - page: Calcite Parser
+    path: ../docs/pages/calcite/calcite-parser.mdx
+  - section: Query Execution
+    contents:
+    - page: Overview
+      path: ../docs/pages/execution/index.mdx
+    - page: Execution Overview
+      path: ../docs/pages/execution/overview.mdx
+    - page: Optimizer
+      path: ../docs/pages/execution/optimizer.mdx
+    - page: Hash Joins
+      path: ../docs/pages/execution/hash-joins.mdx
+    - page: Kernels
+      path: ../docs/pages/execution/kernels.mdx
+    - page: Scheduler
+      path: ../docs/pages/execution/scheduler.mdx
+    - page: Code Generation
+      path: ../docs/pages/execution/codegen.mdx
+    - page: Results
+      path: ../docs/pages/execution/results.mdx
+  - page: Foreign Storage Interface (FSI)
+    path: ../docs/pages/foreign-storage/index.mdx
+  - page: Table Functions
+    path: ../docs/pages/table-functions/index.mdx
+  - page: ML Models
+    path: ../docs/pages/ml-models/index.mdx
+  - page: Row Level Security
+    path: ../docs/pages/security/row-level-security.mdx
+  - page: Runtime
+    path: ../docs/pages/runtime/index.mdx
+  - page: Configuration
+    path: ../docs/pages/configuration/index.mdx
+- section: C++ API Reference
+  contents:
+  - folder: ../docs/pages/api/cpp/analyzer
+  - folder: ../docs/pages/api/cpp/archive
+  - folder: ../docs/pages/api/cpp/calcite
+  - folder: ../docs/pages/api/cpp/catalog
+  - folder: ../docs/pages/api/cpp/cudamgr
+  - folder: ../docs/pages/api/cpp/datamgr
+  - folder: ../docs/pages/api/cpp/fragmenter
+  - folder: ../docs/pages/api/cpp/geospatial
+  - folder: ../docs/pages/api/cpp/importexport
+  - folder: ../docs/pages/api/cpp/lockmgr
+  - folder: ../docs/pages/api/cpp/logger
+  - folder: ../docs/pages/api/cpp/migrationmgr
+  - folder: ../docs/pages/api/cpp/parser
+  - folder: ../docs/pages/api/cpp/queryengine
+  - folder: ../docs/pages/api/cpp/queryrunner
+  - folder: ../docs/pages/api/cpp/shared
+  - folder: ../docs/pages/api/cpp/sqliteconnector
+  - folder: ../docs/pages/api/cpp/stringdictionary
+  - folder: ../docs/pages/api/cpp/stringops
+  - folder: ../docs/pages/api/cpp/tablearchiver
+  - folder: ../docs/pages/api/cpp/thrifthandler
+  - folder: ../docs/pages/api/cpp/utils
+- section: Additional Resources
+  contents:
+  - page: Glossary
+    path: ../docs/pages/glossary/index.mdx
+- section: Detailed Class Information
+  contents:
+  - page: Logger
+    path: ../docs/pages/components/logger.mdx
+  - page: QueryState
+    path: ../docs/pages/components/query-state.mdx
+
+
+libraries:
+  heavydb-analyzer:
+    lang: cpp
+    input:
+      path: ../Analyzer
+    output:
+      path: ../docs/pages/api/cpp/analyzer
+  heavydb-archive:
+    lang: cpp
+    input:
+      path: ../Archive
+    output:
+      path: ../docs/pages/api/cpp/archive
+  heavydb-calcite:
+    lang: cpp
+    input:
+      path: ../Calcite
+    output:
+      path: ../docs/pages/api/cpp/calcite
+  heavydb-catalog:
+    lang: cpp
+    input:
+      path: ../Catalog
+    output:
+      path: ../docs/pages/api/cpp/catalog
+  heavydb-cudamgr:
+    lang: cpp
+    input:
+      path: ../CudaMgr
+    output:
+      path: ../docs/pages/api/cpp/cudamgr
+  heavydb-datamgr:
+    lang: cpp
+    input:
+      path: ../DataMgr
+    output:
+      path: ../docs/pages/api/cpp/datamgr
+  heavydb-fragmenter:
+    lang: cpp
+    input:
+      path: ../Fragmenter
+    output:
+      path: ../docs/pages/api/cpp/fragmenter
+  heavydb-geospatial:
+    lang: cpp
+    input:
+      path: ../Geospatial
+    output:
+      path: ../docs/pages/api/cpp/geospatial
+  heavydb-importexport:
+    lang: cpp
+    input:
+      path: ../ImportExport
+    output:
+      path: ../docs/pages/api/cpp/importexport
+  heavydb-lockmgr:
+    lang: cpp
+    input:
+      path: ../LockMgr
+    output:
+      path: ../docs/pages/api/cpp/lockmgr
+  heavydb-logger:
+    lang: cpp
+    input:
+      path: ../Logger
+    output:
+      path: ../docs/pages/api/cpp/logger
+  heavydb-migrationmgr:
+    lang: cpp
+    input:
+      path: ../MigrationMgr
+    output:
+      path: ../docs/pages/api/cpp/migrationmgr
+  heavydb-parser:
+    lang: cpp
+    input:
+      path: ../Parser
+    output:
+      path: ../docs/pages/api/cpp/parser
+  heavydb-queryengine:
+    lang: cpp
+    input:
+      path: ../QueryEngine
+    output:
+      path: ../docs/pages/api/cpp/queryengine
+  heavydb-queryrunner:
+    lang: cpp
+    input:
+      path: ../QueryRunner
+    output:
+      path: ../docs/pages/api/cpp/queryrunner
+  heavydb-shared:
+    lang: cpp
+    input:
+      path: ../Shared
+    output:
+      path: ../docs/pages/api/cpp/shared
+  heavydb-sqliteconnector:
+    lang: cpp
+    input:
+      path: ../SqliteConnector
+    output:
+      path: ../docs/pages/api/cpp/sqliteconnector
+  heavydb-stringdictionary:
+    lang: cpp
+    input:
+      path: ../StringDictionary
+    output:
+      path: ../docs/pages/api/cpp/stringdictionary
+  heavydb-stringops:
+    lang: cpp
+    input:
+      path: ../StringOps
+    output:
+      path: ../docs/pages/api/cpp/stringops
+  heavydb-tablearchiver:
+    lang: cpp
+    input:
+      path: ../TableArchiver
+    output:
+      path: ../docs/pages/api/cpp/tablearchiver
+  heavydb-thrifthandler:
+    lang: cpp
+    input:
+      path: ../ThriftHandler
+    output:
+      path: ../docs/pages/api/cpp/thrifthandler
+  heavydb-utils:
+    lang: cpp
+    input:
+      path: ../Utils
+    output:
+      path: ../docs/pages/api/cpp/utils

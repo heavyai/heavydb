@@ -1,0 +1,17 @@
+---
+title: convert_bbox_intersect_join
+description: ""
+---
+
+<CodeBlock links={{"InputDescriptor": "../classes/inputdescriptor", "RelAlgNode": "../classes/relalgnode", "InputColDescriptor": "../classes/inputcoldescriptor", "Executor": "../classes/executor", "BoundingBoxIntersectJoinTranslationInfo": "../structs/boundingboxintersectjointranslationinfo"}}>
+```cpp showLineNumbers={false}
+BoundingBoxIntersectJoinTranslationInfo convert_bbox_intersect_join(
+    JoinQualsPerNestingLevel const &join_quals,
+    std::vector<InputDescriptor> &input_descs,
+    std::unordered_map<const RelAlgNode *, int> &input_to_nest_level,
+    std::vector<size_t> &input_permutation,
+    std::list<std::shared_ptr<const InputColDescriptor>> &input_col_desc,
+    Executor const *executor
+)
+```
+</CodeBlock>

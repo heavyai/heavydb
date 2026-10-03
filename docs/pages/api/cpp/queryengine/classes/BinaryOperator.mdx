@@ -1,0 +1,110 @@
+---
+title: BinaryOperator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### BinaryOperator [#binaryoperator]
+
+<CodeBlock links={{"BinaryOperator": "binaryoperator", "Value": "value"}}>
+```cpp showLineNumbers={false}
+BinaryOperator::BinaryOperator(
+    const BinaryOp op,
+    const Value *lhs,
+    const Value *rhs,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### op [#op]
+
+<CodeBlock links={{"BinaryOperator": "binaryoperator"}}>
+```cpp showLineNumbers={false}
+BinaryOp BinaryOperator::op() const
+```
+</CodeBlock>
+
+### lhs [#lhs]
+
+<CodeBlock links={{"BinaryOperator": "binaryoperator", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * BinaryOperator::lhs() const
+```
+</CodeBlock>
+
+### rhs [#rhs]
+
+<CodeBlock links={{"BinaryOperator": "binaryoperator", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * BinaryOperator::rhs() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"BinaryOperator": "binaryoperator", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void BinaryOperator::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"BinaryOperator": "binaryoperator", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"BinaryOperator": "binaryoperator", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"BinaryOperator": "binaryoperator", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### BinaryOp
+
+| Name | Value | Description |
+|---|---|---|
+| `Add` | | |
+| `Mul` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `op_` | `const BinaryOp` | |
+| `lhs_` | `const Value *` | |
+| `rhs_` | `const Value *` | |

@@ -1,0 +1,26 @@
+---
+title: foreign_storage::dispatch_scan_requests
+description: "Reads from a text file iteratively and dispatches metadata scan requests that are processed by worker threads."
+---
+
+<CodeBlock links={{"FileReader": "../classes/filereader", "MetadataScanMultiThreadingParams": "../structs/metadatascanmultithreadingparams", "TextFileBufferParser": "../classes/textfilebufferparser", "IterativeFileScanParameters": "../structs/iterativefilescanparameters", "ResidualBuffer": "../classes/abstracttextfiledatawrapper#residualbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::dispatch_scan_requests(
+    const foreign_storage::ForeignTable *table,
+    const size_t &buffer_size,
+    const std::string &file_path,
+    FileReader &file_reader,
+    const import_export::CopyParams &copy_params,
+    MetadataScanMultiThreadingParams &multi_threading_params,
+    size_t &first_row_index_in_buffer,
+    size_t &current_file_offset,
+    const TextFileBufferParser &parser,
+    const foreign_storage::IterativeFileScanParameters *file_scan_param,
+    foreign_storage::AbstractTextFileDataWrapper::ResidualBuffer &iterative_residual_buffer,
+    const bool is_first_file_scan_call,
+    int &iterative_scan_last_fragment_id
+)
+```
+</CodeBlock>
+
+Reads from a text file iteratively and dispatches metadata scan requests that are processed by worker threads.

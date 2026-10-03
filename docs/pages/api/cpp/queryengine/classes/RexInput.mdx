@@ -1,0 +1,193 @@
+---
+title: RexInput
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RexAbstractInput` (public)
+
+---
+
+## Constructors
+
+### RexInput [#rexinput]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+RexInput::RexInput()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RexInput": "rexinput", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RexInput::RexInput(
+    const RelAlgNode *node,
+    const unsigned in_index
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexInput": "rexinput", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexInput::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexInput": "rexinput", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexInput::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### getSourceNode [#getsourcenode]
+
+<CodeBlock links={{"RexInput": "rexinput", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RexInput::getSourceNode() const
+```
+</CodeBlock>
+
+### setSourceNode [#setsourcenode]
+
+<CodeBlock links={{"RexInput": "rexinput", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RexInput::setSourceNode(
+    const RelAlgNode *node
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+bool RexInput::operator==(
+    const RexInput &that
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexInput": "rexinput", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexInput::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RexInput> RexInput::deepCopy() const
+```
+</CodeBlock>
+
+### getIndex [#getindex]
+
+<CodeBlock links={{"RexInput": "rexinput", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+unsigned RexInput::getIndex() const
+```
+</CodeBlock>
+
+### setIndex [#setindex]
+
+<CodeBlock links={{"RexInput": "rexinput", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+void RexInput::setIndex(
+    const unsigned in_index
+) const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexInput": "rexinput", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+virtual size_t Rex::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexInput": "rexinput", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+size_t Rex::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexInput": "rexinput", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexInput": "rexinput", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexInput": "rexinput", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+size_t RexInput::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `node_` | `const RelAlgNode *` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

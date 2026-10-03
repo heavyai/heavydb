@@ -1,0 +1,167 @@
+---
+title: InternalTargetValue
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetValue.h>
+```
+
+---
+
+## Constructors
+
+### InternalTargetValue [#internaltargetvalue]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+InternalTargetValue::InternalTargetValue(
+    const int64_t i1_
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+InternalTargetValue::InternalTargetValue(
+    const int64_t i1_,
+    const int64_t i2_
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer (with s)">
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+InternalTargetValue::InternalTargetValue(
+    const std::string *s
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer (with v)">
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+InternalTargetValue::InternalTargetValue(
+    const std::vector<int64_t> *v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+InternalTargetValue::InternalTargetValue()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### strVal [#strval]
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+std::string InternalTargetValue::strVal() const
+```
+</CodeBlock>
+
+### arrVal [#arrval]
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+std::vector<int64_t> InternalTargetValue::arrVal() const
+```
+</CodeBlock>
+
+### isInt [#isint]
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+bool InternalTargetValue::isInt() const
+```
+</CodeBlock>
+
+### isPair [#ispair]
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+bool InternalTargetValue::isPair() const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+bool InternalTargetValue::isNull() const
+```
+</CodeBlock>
+
+### isStr [#isstr]
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+bool InternalTargetValue::isStr() const
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+bool InternalTargetValue::operator<(
+    const InternalTargetValue &other
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"InternalTargetValue": "internaltargetvalue"}}>
+```cpp showLineNumbers={false}
+bool InternalTargetValue::operator==(
+    const InternalTargetValue &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### ITVType
+
+| Name | Value | Description |
+|---|---|---|
+| `Int` | | |
+| `Pair` | | |
+| `Str` | | |
+| `Arr` | | |
+| `Null` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `i1` | `int64_t` | |
+| `i2` | `int64_t` | |
+| `ty` | `ITVType` | |

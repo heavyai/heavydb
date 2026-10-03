@@ -1,0 +1,293 @@
+---
+title: Analyzer::GeoConstant
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::GeoExpr` (public)
+
+---
+
+## Constructors
+
+### GeoConstant [#geoconstant]
+
+<CodeBlock links={{"GeoConstant": "geoconstant"}}>
+```cpp showLineNumbers={false}
+Analyzer::GeoConstant::GeoConstant(
+    std::unique_ptr<Geospatial::GeoBase> &&geo,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoConstant::deep_copy() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"GeoConstant": "geoconstant"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::GeoConstant::toString() const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::GeoConstant::operator==(
+    const Expr &
+) const
+```
+</CodeBlock>
+
+### physicalCols [#physicalcols]
+
+<CodeBlock links={{"GeoConstant": "geoconstant"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::GeoConstant::physicalCols() const
+```
+</CodeBlock>
+
+### makePhysicalConstant [#makephysicalconstant]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Constant": "constant"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Constant> Analyzer::GeoConstant::makePhysicalConstant(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoConstant::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### getWKTString [#getwktstring]
+
+<CodeBlock links={{"GeoConstant": "geoconstant"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::GeoConstant::getWKTString() const
+```
+</CodeBlock>
+
+### getChildExprs [#getchildexprs]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<Analyzer::Expr *> Analyzer::GeoConstant::getChildExprs() const
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::Expr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Expr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "ColumnVar": "columnvar", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::Expr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "TargetEntry": "targetentry", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "TargetEntry": "targetentry", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "TargetEntry": "targetentry", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "Expr": "expr", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"GeoConstant": "geoconstant", "GeoExpr": "geoexpr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `geo_` | `std::unique_ptr< Geospatial::GeoBase >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

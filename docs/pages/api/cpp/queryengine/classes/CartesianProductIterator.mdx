@@ -1,0 +1,130 @@
+---
+title: CartesianProductIterator
+description: "Class iterating over the Cartesian product of a forward iterable container of forward iterable containers"
+---
+
+<CodeBlock id="CartesianProductIterator" links={{"CartesianProductIterator": "cartesianproductiterator"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class CartesianProductIterator
+```
+</CodeBlock>
+
+Class iterating over the Cartesian product of a forward iterable container of forward iterable containers
+
+```cpp showLineNumbers={false}
+#include <CartesianProduct.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+**Inherits from:** `boost::iterator_facade< CartesianProductIterator< T >, std::vector< T::value_type::value_type > const, boost::forward_traversal_tag >` (public)
+
+---
+
+## Constructors
+
+### CartesianProductIterator [#cartesianproductiterator]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"CartesianProductIterator": "cartesianproductiterator"}}>
+```cpp showLineNumbers={false}
+CartesianProductIterator<T>::CartesianProductIterator(
+    T const &structure,
+    std::size_t pos
+)
+```
+</CodeBlock>
+
+Constructor setting the underlying iterator and position.
+
+**Parameters**
+
+<ParamField path="structure" type="T const &">
+The underlying structure
+</ParamField>
+
+<ParamField path="pos" type="std::size_t">
+The position the iterator should be initialized to. std::numeric_limits&lt;std::size_t&gt;::max()stands for the end, the position after the last element.
+</ParamField>
+
+</Tab>
+<Tab title="Deleted overload 1">
+
+<CodeBlock links={{"CartesianProductIterator": "cartesianproductiterator"}}>
+```cpp showLineNumbers={false}
+CartesianProductIterator<T>::CartesianProductIterator() = delete
+```
+</CodeBlock>
+
+Delete default constructor.
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### increment [#increment]
+
+<CodeBlock links={{"CartesianProductIterator": "cartesianproductiterator"}}>
+```cpp showLineNumbers={false}
+void CartesianProductIterator<T>::increment()
+```
+</CodeBlock>
+
+Increment iterator.
+
+### equal [#equal]
+
+<CodeBlock links={{"CartesianProductIterator": "cartesianproductiterator"}}>
+```cpp showLineNumbers={false}
+bool CartesianProductIterator<T>::equal(
+    CartesianProductIterator<T> const &other
+) const
+```
+</CodeBlock>
+
+Check for equality.
+
+### dereference [#dereference]
+
+<CodeBlock links={{"CartesianProductIterator": "cartesianproductiterator"}}>
+```cpp showLineNumbers={false}
+std::vector<typename T::value_type::value_type> const  & CartesianProductIterator<T>::dereference() const
+```
+</CodeBlock>
+
+Dereference iterator.
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition | Description |
+|---|---|---|
+| `OuterContainer` | `T` | Give types more descriptive names. |
+| `Container` | `typename T::value_type` | |
+| `Content` | `typename T::value_type::value_type` | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `structure_` | `OuterContainer const  &` | The part we are iterating over. |
+| `position_` | `std::vector< typename Container::const_iterator >` | The position in the Cartesian product. |
+| `absolutePosition_` | `std::size_t` | The position just indexed by an integer. |
+| `cbegins_` | `std::vector< typename Container::const_iterator >` | The begin iterators, saved for convenience and performance. |
+| `cends_` | `std::vector< typename Container::const_iterator >` | The end iterators, saved for convenience and performance. |
+| `result_` | `std::vector< std::vector< Content > >` | Used for returning references. |
+| `size_` | `std::size_t` | The size of the instance of OuterContainer. |

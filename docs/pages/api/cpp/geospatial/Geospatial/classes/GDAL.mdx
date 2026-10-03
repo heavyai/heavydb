@@ -1,0 +1,149 @@
+---
+title: Geospatial::GDAL
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Geospatial/GDAL.h>
+```
+
+---
+
+## Static methods
+
+### init [#init]
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+void Geospatial::GDAL::init()
+```
+</CodeBlock>
+
+### supportsDriver [#supportsdriver]
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GDAL::supportsDriver(
+    const std::string &driver_name
+)
+```
+</CodeBlock>
+
+### setAuthorizationTokens [#setauthorizationtokens]
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+void Geospatial::GDAL::setAuthorizationTokens(
+    const shared::S3Config &creds
+)
+```
+</CodeBlock>
+
+### openDataSource [#opendatasource]
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+GDAL::DataSourceUqPtr Geospatial::GDAL::openDataSource(
+    const std::string &name,
+    const import_export::SourceType source_type
+)
+```
+</CodeBlock>
+
+### getDataSourceType [#getdatasourcetype]
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+import_export::SourceType Geospatial::GDAL::getDataSourceType(
+    const std::string &name
+)
+```
+</CodeBlock>
+
+### unpackMetadata [#unpackmetadata]
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Geospatial::GDAL::unpackMetadata(
+    char **metadata
+)
+```
+</CodeBlock>
+
+### logMetadata [#logmetadata]
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+void Geospatial::GDAL::logMetadata(
+    GDALMajorObject *object
+)
+```
+</CodeBlock>
+
+### getMetadataString [#getmetadatastring]
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+std::string Geospatial::GDAL::getMetadataString(
+    char **metadata,
+    const std::string &key
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DataSourceUqPtr` | `std::unique_ptr< OGRDataSource, DataSourceDeleter >` |
+| `FeatureUqPtr` | `std::unique_ptr< OGRFeature, FeatureDeleter >` |
+| `SpatialReferenceUqPtr` | `std::unique_ptr< OGRSpatialReference, SpatialReferenceDeleter >` |
+| `CoordinateTransformationUqPtr` | `std::unique_ptr< OGRCoordinateTransformation, CoordinateTransformationDeleter >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `initialized_` <Badge intent="note" minimal>static</Badge> | `bool` | |
+
+---
+
+## Inner classes
+
+### DataSourceDeleter
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+struct Geospatial::GDAL::DataSourceDeleter
+```
+</CodeBlock>
+
+### FeatureDeleter
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+struct Geospatial::GDAL::FeatureDeleter
+```
+</CodeBlock>
+
+### SpatialReferenceDeleter
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+struct Geospatial::GDAL::SpatialReferenceDeleter
+```
+</CodeBlock>
+
+### CoordinateTransformationDeleter
+
+<CodeBlock links={{"GDAL": "gdal"}}>
+```cpp showLineNumbers={false}
+struct Geospatial::GDAL::CoordinateTransformationDeleter
+```
+</CodeBlock>

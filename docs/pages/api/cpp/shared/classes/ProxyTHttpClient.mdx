@@ -1,0 +1,81 @@
+---
+title: ProxyTHttpClient
+description: ""
+---
+
+**Inherits from:** `THttpClient` (public)
+
+---
+
+## Constructors
+
+### ProxyTHttpClient [#proxythttpclient]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ProxyTHttpClient": "proxythttpclient"}}>
+```cpp showLineNumbers={false}
+ProxyTHttpClient::ProxyTHttpClient(
+    std::shared_ptr<TTransport> transport,
+    std::string host,
+    std::string path
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ProxyTHttpClient": "proxythttpclient"}}>
+```cpp showLineNumbers={false}
+ProxyTHttpClient::ProxyTHttpClient(
+    std::string host,
+    int port,
+    std::string path
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~ProxyTHttpClient
+
+<CodeBlock links={{"ProxyTHttpClient": "proxythttpclient"}}>
+```cpp showLineNumbers={false}
+ProxyTHttpClient::~ProxyTHttpClient() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### parseHeader [#parseheader]
+
+<CodeBlock links={{"ProxyTHttpClient": "proxythttpclient"}}>
+```cpp showLineNumbers={false}
+void ProxyTHttpClient::parseHeader(
+    char *header
+) override
+```
+</CodeBlock>
+
+### flush [#flush]
+
+<CodeBlock links={{"ProxyTHttpClient": "proxythttpclient"}}>
+```cpp showLineNumbers={false}
+void ProxyTHttpClient::flush() override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cookies_` | `std::vector< std::string >` | |

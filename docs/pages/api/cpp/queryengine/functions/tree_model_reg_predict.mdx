@@ -1,0 +1,18 @@
+---
+title: tree_model_reg_predict
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+ALWAYS_INLINE DEVICE double tree_model_reg_predict(
+    const double *regressor_inputs,
+    const int64_t decision_tree_table_handle,
+    const int64_t decision_tree_offsets_handle,
+    const int32_t num_regressors,
+    const int32_t num_trees,
+    const bool compute_avg,
+    const double null_value
+)
+```
+</CodeBlock>

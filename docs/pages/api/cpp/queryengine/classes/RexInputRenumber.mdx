@@ -1,0 +1,153 @@
+---
+title: RexInputRenumber
+description: ""
+---
+
+<CodeBlock id="RexInputRenumber" links={{"RexInputRenumber": "rexinputrenumber"}}>
+```cpp showLineNumbers={false}
+template <bool bAllowMissing>
+class RexInputRenumber
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <RexVisitor.h>
+```
+
+**Template parameters**
+
+<ParamField path="bAllowMissing" type="bool">
+</ParamField>
+
+**Inherits from:** `RexDeepCopyVisitor` (public)
+
+---
+
+## Constructors
+
+### RexInputRenumber [#rexinputrenumber]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber"}}>
+```cpp showLineNumbers={false}
+RexInputRenumber<bAllowMissing>::RexInputRenumber(
+    const std::unordered_map<size_t, size_t> &new_numbering
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### visitInput [#visitinput]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+RetType RexInputRenumber<bAllowMissing>::visitInput(
+    const RexInput *input
+) const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber", "RexScalar": "rexscalar", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unique_ptr<const RexScalar> RexVisitorBase<std::unique_ptr<const RexScalar>>::visit(
+    const RexScalar *rex_scalar
+) const
+```
+</CodeBlock>
+
+### visitLiteral [#visitliteral]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber", "RexLiteral": "rexliteral", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType RexInputRenumber::visitLiteral(
+    const RexLiteral *literal
+) const override
+```
+</CodeBlock>
+
+### visitSubQuery [#visitsubquery]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber", "RexSubQuery": "rexsubquery", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType RexInputRenumber::visitSubQuery(
+    const RexSubQuery *subquery
+) const override
+```
+</CodeBlock>
+
+### visitRef [#visitref]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber", "RexRef": "rexref", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType RexInputRenumber::visitRef(
+    const RexRef *ref
+) const override
+```
+</CodeBlock>
+
+### visitOperator [#visitoperator]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber", "RexOperator": "rexoperator", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType RexInputRenumber::visitOperator(
+    const RexOperator *rex_operator
+) const override
+```
+</CodeBlock>
+
+### visitWindowFunctionOperator [#visitwindowfunctionoperator]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber", "RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType RexInputRenumber::visitWindowFunctionOperator(
+    const RexWindowFunctionOperator *rex_window_function_operator
+) const
+```
+</CodeBlock>
+
+### visitCase [#visitcase]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber", "RexCase": "rexcase", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType RexInputRenumber::visitCase(
+    const RexCase *rex_case
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### copy [#copy]
+
+<CodeBlock links={{"RexInputRenumber": "rexinputrenumber", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+static std::vector<RowValues> RexInputRenumber::copy(
+    std::vector<RowValues> const &rhs
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `RetType` | `std::unique_ptr< const RexScalar >` |
+| `RowValues` | `std::vector< std::unique_ptr< const RexScalar > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `old_to_new_idx_` | `const std::unordered_map< size_t, size_t > &` | |

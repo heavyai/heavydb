@@ -1,0 +1,16 @@
+---
+title: get_scan_output_slot
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE DEVICE int64_t * get_scan_output_slot(
+    int64_t *output_buffer,
+    const uint32_t output_buffer_entry_count,
+    const uint32_t pos,
+    const int64_t offset_in_fragment,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>

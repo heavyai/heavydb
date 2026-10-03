@@ -1,0 +1,195 @@
+---
+title: details::RelAlgDispatcher
+description: ""
+---
+
+---
+
+## Constructors
+
+### RelAlgDispatcher [#relalgdispatcher]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher"}}>
+```cpp showLineNumbers={false}
+details::RelAlgDispatcher::RelAlgDispatcher()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### run [#run]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelAlgDag": "../../classes/relalgdag", "RelAlgNode": "../../classes/relalgnode"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<RelAlgNode>> details::RelAlgDispatcher::run(
+    const rapidjson::Value &rels,
+    RelAlgDag &root_dag
+)
+```
+</CodeBlock>
+
+### dispatchTableScan [#dispatchtablescan]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelScan": "../../classes/relscan"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelScan> details::RelAlgDispatcher::dispatchTableScan(
+    const rapidjson::Value &scan_ra
+)
+```
+</CodeBlock>
+
+### dispatchProject [#dispatchproject]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelAlgDag": "../../classes/relalgdag", "RelProject": "../../classes/relproject"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelProject> details::RelAlgDispatcher::dispatchProject(
+    const rapidjson::Value &proj_ra,
+    RelAlgDag &root_dag
+)
+```
+</CodeBlock>
+
+### dispatchFilter [#dispatchfilter]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelAlgDag": "../../classes/relalgdag", "RelFilter": "../../classes/relfilter"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelFilter> details::RelAlgDispatcher::dispatchFilter(
+    const rapidjson::Value &filter_ra,
+    RelAlgDag &root_dag
+)
+```
+</CodeBlock>
+
+### dispatchAggregate [#dispatchaggregate]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelAggregate": "../../classes/relaggregate"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAggregate> details::RelAlgDispatcher::dispatchAggregate(
+    const rapidjson::Value &agg_ra
+)
+```
+</CodeBlock>
+
+### dispatchJoin [#dispatchjoin]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelAlgDag": "../../classes/relalgdag", "RelJoin": "../../classes/reljoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelJoin> details::RelAlgDispatcher::dispatchJoin(
+    const rapidjson::Value &join_ra,
+    RelAlgDag &root_dag
+)
+```
+</CodeBlock>
+
+### dispatchSort [#dispatchsort]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelSort": "../../classes/relsort"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelSort> details::RelAlgDispatcher::dispatchSort(
+    const rapidjson::Value &sort_ra
+)
+```
+</CodeBlock>
+
+### dispatchModify [#dispatchmodify]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelModify": "../../classes/relmodify"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelModify> details::RelAlgDispatcher::dispatchModify(
+    const rapidjson::Value &logical_modify_ra
+)
+```
+</CodeBlock>
+
+### dispatchTableFunction [#dispatchtablefunction]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelAlgDag": "../../classes/relalgdag", "RelTableFunction": "../../classes/reltablefunction"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelTableFunction> details::RelAlgDispatcher::dispatchTableFunction(
+    const rapidjson::Value &table_func_ra,
+    RelAlgDag &root_dag
+)
+```
+</CodeBlock>
+
+### dispatchLogicalValues [#dispatchlogicalvalues]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelLogicalValues": "../../classes/rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelLogicalValues> details::RelAlgDispatcher::dispatchLogicalValues(
+    const rapidjson::Value &logical_values_ra
+)
+```
+</CodeBlock>
+
+### dispatchUnion [#dispatchunion]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelLogicalUnion": "../../classes/rellogicalunion"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelLogicalUnion> details::RelAlgDispatcher::dispatchUnion(
+    const rapidjson::Value &logical_union_ra
+)
+```
+</CodeBlock>
+
+### getRelAlgInputs [#getrelalginputs]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher"}}>
+```cpp showLineNumbers={false}
+RelAlgInputs details::RelAlgDispatcher::getRelAlgInputs(
+    const rapidjson::Value &node
+)
+```
+</CodeBlock>
+
+### getKVOptionPair [#getkvoptionpair]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher"}}>
+```cpp showLineNumbers={false}
+std::pair<std::string, std::string> details::RelAlgDispatcher::getKVOptionPair(
+    std::string &str,
+    size_t &pos
+)
+```
+</CodeBlock>
+
+### parseHintString [#parsehintstring]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "ExplainedQueryHint": "../../classes/explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+ExplainedQueryHint details::RelAlgDispatcher::parseHintString(
+    std::string &hint_string
+)
+```
+</CodeBlock>
+
+### getRelAlgHints [#getrelalghints]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelAlgNode": "../../classes/relalgnode"}}>
+```cpp showLineNumbers={false}
+void details::RelAlgDispatcher::getRelAlgHints(
+    const rapidjson::Value &json_node,
+    std::shared_ptr<RelAlgNode> node
+)
+```
+</CodeBlock>
+
+### prev [#prev]
+
+<CodeBlock links={{"RelAlgDispatcher": "relalgdispatcher", "RelAlgNode": "../../classes/relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> details::RelAlgDispatcher::prev(
+    const rapidjson::Value &crt_node
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `nodes_` | `std::vector< std::shared_ptr< RelAlgNode > >` | |

@@ -1,0 +1,511 @@
+---
+title: RelAggregate
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public)
+
+---
+
+## Constructors
+
+### RelAggregate [#relaggregate]
+
+<Tabs>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+RelAggregate::RelAggregate()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RexAgg": "rexagg", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RelAggregate::RelAggregate(
+    const size_t groupby_count,
+    std::vector<std::unique_ptr<const RexAgg>> &agg_exprs,
+    const std::vector<std::string> &fields,
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+RelAggregate::RelAggregate(
+    RelAggregate const &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelAggregate::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelAggregate::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+size_t RelAggregate::size() const override
+```
+</CodeBlock>
+
+### getGroupByCount [#getgroupbycount]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+const size_t RelAggregate::getGroupByCount() const
+```
+</CodeBlock>
+
+### getAggExprsCount [#getaggexprscount]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+const size_t RelAggregate::getAggExprsCount() const
+```
+</CodeBlock>
+
+### getFields [#getfields]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & RelAggregate::getFields() const
+```
+</CodeBlock>
+
+### setFields [#setfields]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::setFields(
+    std::vector<std::string> &&new_fields
+)
+```
+</CodeBlock>
+
+### getFieldName [#getfieldname]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+const std::string RelAggregate::getFieldName(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getAggregatesAndRelease [#getaggregatesandrelease]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+std::vector<const RexAgg *> RelAggregate::getAggregatesAndRelease()
+```
+</CodeBlock>
+
+### getAggExprsAndRelease [#getaggexprsandrelease]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+std::vector<std::unique_ptr<const RexAgg>> RelAggregate::getAggExprsAndRelease()
+```
+</CodeBlock>
+
+### getAggExprs [#getaggexprs]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::unique_ptr<const RexAgg>> & RelAggregate::getAggExprs() const
+```
+</CodeBlock>
+
+### setAggExprs [#setaggexprs]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::setAggExprs(
+    std::vector<std::unique_ptr<const RexAgg>> &agg_exprs
+)
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelAggregate::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelAggregate::deepCopy() const override
+```
+</CodeBlock>
+
+### addHint [#addhint]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::addHint(
+    const ExplainedQueryHint &hint_explained
+)
+```
+</CodeBlock>
+
+### hasHintEnabled [#hashintenabled]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+const bool RelAggregate::hasHintEnabled(
+    QueryHint candidate_hint
+) const
+```
+</CodeBlock>
+
+### getHintInfo [#gethintinfo]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+const ExplainedQueryHint & RelAggregate::getHintInfo(
+    QueryHint hint
+) const
+```
+</CodeBlock>
+
+### hasDeliveredHint [#hasdeliveredhint]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+bool RelAggregate::hasDeliveredHint()
+```
+</CodeBlock>
+
+### getDeliveredHints [#getdeliveredhints]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+Hints * RelAggregate::getDeliveredHints()
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::string RelAggregate::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelAggregate::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelAggregate::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+unsigned RelAggregate::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelAggregate::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelAggregate::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const size_t RelAggregate::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelAggregate::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelAggregate::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelAggregate::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelAggregate::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelAggregate::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelAggregate::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelAggregate::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelAggregate::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+size_t RelAggregate::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelAggregate": "relaggregate", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAggregate::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `groupby_count_` | `size_t` | |
+| `agg_exprs_` | `std::vector< std::unique_ptr< const RexAgg > >` | |
+| `fields_` | `std::vector< std::string >` | |
+| `hint_applied_` | `bool` | |
+| `hints_` | `std::unique_ptr< Hints >` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

@@ -1,0 +1,98 @@
+---
+title: MemCpy
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### MemCpy [#memcpy]
+
+<CodeBlock links={{"MemCpy": "memcpy", "Value": "value"}}>
+```cpp showLineNumbers={false}
+MemCpy::MemCpy(
+    const Value *dest,
+    const Value *source,
+    const Value *size
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### dest [#dest]
+
+<CodeBlock links={{"MemCpy": "memcpy", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * MemCpy::dest() const
+```
+</CodeBlock>
+
+### source [#source]
+
+<CodeBlock links={{"MemCpy": "memcpy", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * MemCpy::source() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"MemCpy": "memcpy", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * MemCpy::size() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"MemCpy": "memcpy", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void MemCpy::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"MemCpy": "memcpy", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"MemCpy": "memcpy", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"MemCpy": "memcpy", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dest_` | `const Value *` | |
+| `source_` | `const Value *` | |
+| `size_` | `const Value *` | |

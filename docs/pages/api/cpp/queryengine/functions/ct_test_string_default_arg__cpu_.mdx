@@ -1,0 +1,15 @@
+---
+title: ct_test_string_default_arg__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t ct_test_string_default_arg__cpu_(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &inp,
+    const TextEncodingNone &suffix,
+    Column<TextEncodingDict> &out
+)
+```
+</CodeBlock>

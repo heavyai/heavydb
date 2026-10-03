@@ -1,0 +1,249 @@
+---
+title: DictionaryValueConverter
+description: ""
+---
+
+<CodeBlock id="DictionaryValueConverter" links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+template <typename TARGET_TYPE>
+struct DictionaryValueConverter
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TargetValueConvertersImpl.h>
+```
+
+**Template parameters**
+
+<ParamField path="TARGET_TYPE" type="typename">
+</ParamField>
+
+**Inherits from:** `NumericValueConverter< int64_t, TARGET_TYPE >` (public)
+
+---
+
+## Constructors
+
+### DictionaryValueConverter [#dictionaryvalueconverter]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+DictionaryValueConverter<TARGET_TYPE>::DictionaryValueConverter(
+    const shared::StringDictKey &source_dict_key,
+    const ColumnDescriptor *targetDescriptor,
+    const Catalog_Namespace::Catalog &target_cat,
+    size_t num_rows,
+    TARGET_TYPE nullValue,
+    int64_t nullCheckValue,
+    bool doNullCheck,
+    StringDictionaryProxy *literals_dict,
+    StringDictionaryProxy *source_dict_proxy
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~DictionaryValueConverter
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+DictionaryValueConverter<TARGET_TYPE>::~DictionaryValueConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateColumnarBuffer [#allocatecolumnarbuffer]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+ElementsBufferColumnPtr DictionaryValueConverter<TARGET_TYPE>::allocateColumnarBuffer(
+    size_t num_rows
+)
+```
+</CodeBlock>
+
+### convertElementToColumnarFormat [#convertelementtocolumnarformat]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+void DictionaryValueConverter<TARGET_TYPE>::convertElementToColumnarFormat(
+    size_t row,
+    typename ElementsBufferColumnPtr::pointer columnBuffer,
+    const ScalarTargetValue *scalarValue
+)
+```
+</CodeBlock>
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+void DictionaryValueConverter<TARGET_TYPE>::convertToColumnarFormat(
+    size_t row,
+    const ScalarTargetValue *scalarValue
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+void DictionaryValueConverter<TARGET_TYPE>::convertToColumnarFormat(
+    size_t row,
+    const TargetValue *value
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### convertTransientStringIdToPermanentId [#converttransientstringidtopermanentid]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+int32_t DictionaryValueConverter<TARGET_TYPE>::convertTransientStringIdToPermanentId(
+    int32_t &transient_string_id
+)
+```
+</CodeBlock>
+
+### processBuffer [#processbuffer]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter", "NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr DictionaryValueConverter<TARGET_TYPE>::processBuffer(
+    ElementsBufferColumnPtr buffer
+)
+```
+</CodeBlock>
+
+### processArrayBuffer [#processarraybuffer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+void DictionaryValueConverter<TARGET_TYPE>::processArrayBuffer(
+    std::unique_ptr<std::vector<std::pair<size_t, ElementsBufferColumnPtr>>> &array_buffer,
+    std::unique_ptr<std::vector<ArrayDatum>>::pointer arrayData
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter", "NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<int64_t, TARGET_TYPE>::processArrayBuffer(
+    std::unique_ptr<std::vector<std::pair<size_t, ElementsBufferColumnPtr>>> &array_buffer,
+    std::unique_ptr<std::vector<ArrayDatum>>::pointer arrayData
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### finalizeDataBlocksForInsertData [#finalizedatablocksforinsertdata]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter"}}>
+```cpp showLineNumbers={false}
+void DictionaryValueConverter<TARGET_TYPE>::finalizeDataBlocksForInsertData() override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter", "InsertData": "../fragmenternamespace/structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void DictionaryValueConverter<TARGET_TYPE>::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+### setValueCaster [#setvaluecaster]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter", "NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<int64_t, TARGET_TYPE>::setValueCaster(
+    CasterFunc caster
+)
+```
+</CodeBlock>
+
+### populateFixedArrayNullSentinel [#populatefixedarraynullsentinel]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter", "NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<int64_t, TARGET_TYPE>::populateFixedArrayNullSentinel(
+    size_t num_rows
+)
+```
+</CodeBlock>
+
+### allocateColumnarData [#allocatecolumnardata]
+
+<CodeBlock links={{"DictionaryValueConverter": "dictionaryvalueconverter", "NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<int64_t, TARGET_TYPE>::allocateColumnarData(
+    size_t num_rows
+) override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ElementsDataColumnPtr` | `typename NumericValueConverter< int64_t, TARGET_TYPE >::ColumnDataPtr` |
+| `ElementsBufferColumnPtr` | `std::unique_ptr< std::vector< int32_t > >` |
+| `ColumnDataPtr` | `std::unique_ptr< TARGET_TYPE, CheckedMallocDeleter< TARGET_TYPE > >` |
+| `CasterFunc` | `std::function< TARGET_TYPE(int64_t, bool, TARGET_TYPE)>` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_buffer_` | `ElementsBufferColumnPtr` | |
+| `target_dict_desc_` | `const DictDescriptor *` | |
+| `source_dict_desc_` | `const DictDescriptor *` | |
+| `source_dict_proxy_` | `StringDictionaryProxy *` | |
+| `buffer_null_sentinal_` | `const int32_t` | |
+| `literals_dict_` | `const StringDictionaryProxy *` | |
+| `literals_lookup_` | `std::unordered_map< int32_t, int32_t >` | |
+| `use_literals_` | `bool` | |
+| `column_data_` | `ColumnDataPtr` | |
+| `null_value_` | `TARGET_TYPE` | |
+| `null_check_value_` | `int64_t` | |
+| `do_null_check_` | `bool` | |
+| `fixed_array_null_value_` | `TARGET_TYPE` | |
+| `checked_caster_` | `CasterFunc` | |
+| `SOURCE_TYPE_ACCESSOR` | `boost_variant_accessor< int64_t >` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `SCALAR_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ScalarTargetValue >` | |
+| `ARRAY_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ArrayTargetValue >` | |
+| `GEO_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `NULLABLE_STRING_ACCESSOR` | `boost_variant_accessor< NullableString >` | |
+| `STRING_ACCESSOR` | `boost_variant_accessor< std::string >` | |
