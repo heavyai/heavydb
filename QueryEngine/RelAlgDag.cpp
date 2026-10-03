@@ -489,13 +489,8 @@ bool isRenamedInput(const RelAlgNode* node,
                     const std::string& new_name) {
   CHECK_LT(index, node->size());
   if (auto join = dynamic_cast<const RelJoin*>(node)) {
-    CHECK_EQ(size_t(2), join->inputCount());
-    const auto lhs_size = join->getInput(0)->size();
-    if (index < lhs_size) {
-      return isRenamedInput(join->getInput(0), index, new_name);
-    }
-    CHECK_GE(index, lhs_size);
-    return isRenamedInput(join->getInput(1), index - lhs_size, new_name);
+    const auto input_column = join_output_to_input_column(join, index);
+    return isRenamedInput(input_column.node, input_column.index, new_name);
   }
 
   if (auto scan = dynamic_cast<const RelScan*>(node)) {
