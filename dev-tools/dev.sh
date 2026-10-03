@@ -31,6 +31,9 @@ SCRIPTS_DIR="$REPO_ROOT/scripts"
 CONFIGS_DIR="$SCRIPTS_DIR/ci/configs"
 GHCR_OWNER="heavyai"
 GHCR_REPO="heavydb"
+# Set to 1 by 'build --verbose'; read by _run_logged. Defined here so the
+# helpers also work when dev.sh is sourced rather than run through cmd_build.
+_BUILD_VERBOSE=0
 # NODE_VERSION and GO_VERSION are read from the respective external repos at
 # build time (.nvmrc in immerse, toolchain directive in webserver/go.mod).
 # They must not be pinned here — bump them in the source repo instead.
@@ -365,16 +368,37 @@ _clean_repo_artifacts() {
     bash -c "rm -rf $(printf '%s ' "${args[@]}")"
 }
 
-# Runs <cmd> [args...], redirecting all stdout+stderr to <log_file>.
-# Prints "  → log: <log_file>" before starting. On failure, tails the last 50
-# lines of the log to stderr and returns the non-zero exit code so the caller's
-# set -euo pipefail fires exactly as if the command had been run inline.
+# Runs <cmd> [args...], capturing all stdout+stderr in <log_file>.
+# Prints "  → log: <log_file>" before starting and, while the command runs, a
+# dot every 5 seconds so the shell stays readable. On failure, tails the last
+# 50 lines of the log to stderr.
+#
+# With _BUILD_VERBOSE=1 (dev.sh build --verbose) the output is streamed to the
+# shell as it is produced instead of the dots; the log file is still written,
+# and the failure path skips the tail since the output is already on screen.
+#
+# Either way the non-zero exit code is returned so the caller's set -euo
+# pipefail fires exactly as if the command had been run inline.
 _run_logged() {
   local label="$1" log_file="$2"
   shift 2
-  echo "  → log: $log_file" >&2
 
   local rc=0
+  if [ "$_BUILD_VERBOSE" -eq 1 ]; then
+    echo "  → log: $log_file (also streaming below)" >&2
+    # PIPESTATUS[0] is the command's own status; tee would otherwise mask it.
+    set +e
+    "$@" 2>&1 | tee "$log_file" >&2
+    rc=${PIPESTATUS[0]}
+    set -e
+    if [ "$rc" -ne 0 ]; then
+      echo "ERROR: $label failed (exit $rc). Full output above; log: $log_file" >&2
+      return "$rc"
+    fi
+    return 0
+  fi
+
+  echo "  → log: $log_file" >&2
   "$@" >"$log_file" 2>&1 &
   local pid=$!
   while kill -0 "$pid" 2>/dev/null; do

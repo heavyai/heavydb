@@ -223,6 +223,8 @@ HeavyDB options (same as build heavydb):
                           After building, run the test suite via test sanity:
                           'sanity' runs the sanity_tests target, 'all' the
                           all_tests target. (default: none)
+  --verbose, -v           Stream build output to the shell as well as the log
+                          file, instead of printing progress dots
 EOF
       return 0 ;;
     esac
@@ -231,6 +233,18 @@ EOF
 }
 
 cmd_build() {
+  # --verbose applies to every target, so consume it here rather than in each
+  # per-target option parser. Stripping it before the target is read also means
+  # it can appear before or after the target name.
+  local args=()
+  for arg in "$@"; do
+    case "$arg" in
+      --verbose|-v) _BUILD_VERBOSE=1 ;;
+      *)            args+=("$arg") ;;
+    esac
+  done
+  set -- "${args[@]}"
+
   local target="${1:-}"
   case "$target" in
     --help|-h)
@@ -249,6 +263,11 @@ Targets:
   image               Build a product Docker image from a pre-existing tarball
   deps                Build the deps container image
   ci <config>         Run a CI-style build
+
+Common options (accepted by every target):
+  --verbose, -v       Stream build output to the shell as it is produced, in
+                      addition to writing the log file. Without it, each step
+                      logs to a file and prints a dot every 5 seconds.
 
 All options from build heavydb and build <component> are accepted where relevant.
 Run "dev-tools/dev.sh build <target> --help" for target-specific options.
