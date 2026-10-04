@@ -1,0 +1,17 @@
+---
+title: Fragmenter_Namespace::set_chunk_stats
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+static void Fragmenter_Namespace::set_chunk_stats(
+    const SQLTypeInfo &col_type,
+    int8_t *data_addr,
+    bool &has_null,
+    T &min,
+    T &max
+)
+```
+</CodeBlock>

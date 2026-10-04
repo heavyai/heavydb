@@ -1,0 +1,459 @@
+---
+title: Analyzer::ConcatStringOper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::StringOper` (public)
+
+---
+
+## Constructors
+
+### ConcatStringOper [#concatstringoper]
+
+<Tabs>
+<Tab title="Copy (with left operand and right operand)">
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::ConcatStringOper::ConcatStringOper(
+    const std::shared_ptr<Analyzer::Expr> &left_operand,
+    const std::shared_ptr<Analyzer::Expr> &right_operand
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with operands)">
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::ConcatStringOper::ConcatStringOper(
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &operands
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with string oper)">
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+Analyzer::ConcatStringOper::ConcatStringOper(
+    const std::shared_ptr<Analyzer::StringOper> &string_oper
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::ConcatStringOper::deep_copy() const override
+```
+</CodeBlock>
+
+### getMinArgs [#getminargs]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::ConcatStringOper::getMinArgs() const override
+```
+</CodeBlock>
+
+### getExpectedTypeFamilies [#getexpectedtypefamilies]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<OperandTypeFamily> Analyzer::ConcatStringOper::getExpectedTypeFamilies() const override
+```
+</CodeBlock>
+
+### getArgNames [#getargnames]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Analyzer::ConcatStringOper::getArgNames() const override
+```
+</CodeBlock>
+
+### get_kind [#getkind]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+SqlStringOpKind Analyzer::ConcatStringOper::get_kind() const
+```
+</CodeBlock>
+
+### getArity [#getarity]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::ConcatStringOper::getArity() const
+```
+</CodeBlock>
+
+### getLiteralsArity [#getliteralsarity]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::ConcatStringOper::getLiteralsArity() const
+```
+</CodeBlock>
+
+### getNonLiteralsArity [#getnonliteralsarity]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::ConcatStringOper::getNonLiteralsArity() const
+```
+</CodeBlock>
+
+### getArg [#getarg]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::ConcatStringOper::getArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getOwnArg [#getownarg]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::ConcatStringOper::getOwnArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getOwnArgs [#getownargs]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> Analyzer::ConcatStringOper::getOwnArgs() const
+```
+</CodeBlock>
+
+### getChainedStringOpExprs [#getchainedstringopexprs]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> Analyzer::ConcatStringOper::getChainedStringOpExprs() const
+```
+</CodeBlock>
+
+### requiresPerRowTranslation [#requiresperrowtranslation]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::ConcatStringOper::requiresPerRowTranslation() const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::ConcatStringOper::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "ColumnVar": "columnvar", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::ConcatStringOper::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### hasNoneEncodedTextArg [#hasnoneencodedtextarg]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::ConcatStringOper::hasNoneEncodedTextArg() const
+```
+</CodeBlock>
+
+### hasSingleDictEncodedColInput [#hassingledictencodedcolinput]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::ConcatStringOper::hasSingleDictEncodedColInput() const
+```
+</CodeBlock>
+
+returns whether we have one and only one column involved in this [StringOper](stringoper) and all its descendents, and that that column is a dictionary-encoded text type
+
+**Returns:** std::vector&lt;SqlTypeInfo&gt;
+
+### getLiteralArgIndexes [#getliteralargindexes]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<size_t> Analyzer::ConcatStringOper::getLiteralArgIndexes() const
+```
+</CodeBlock>
+
+### getLiteralArgs [#getliteralargs]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+LiteralArgMap Analyzer::ConcatStringOper::getLiteralArgs() const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::ConcatStringOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::ConcatStringOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::ConcatStringOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::ConcatStringOper::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::ConcatStringOper::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::ConcatStringOper::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::ConcatStringOper::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::Expr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Expr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::Expr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+### get_concat_ordered_kind [#getconcatorderedkind]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+SqlStringOpKind Analyzer::ConcatStringOper::get_concat_ordered_kind(
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &operands
+)
+```
+</CodeBlock>
+
+### normalize_operands [#normalizeoperands]
+
+<CodeBlock links={{"ConcatStringOper": "concatstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> Analyzer::ConcatStringOper::normalize_operands(
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &operands
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `LiteralArgMap` | `std::map< size_t, std::pair< SQLTypes, Datum > >` |
+
+### OperandTypeFamily
+
+| Name | Value | Description |
+|---|---|---|
+| `STRING_FAMILY` | | |
+| `INT_FAMILY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

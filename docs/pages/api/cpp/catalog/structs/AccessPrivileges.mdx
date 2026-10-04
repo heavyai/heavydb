@@ -1,0 +1,131 @@
+---
+title: AccessPrivileges
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DBObject.h>
+```
+
+---
+
+## Constructors
+
+### AccessPrivileges [#accessprivileges]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"AccessPrivileges": "accessprivileges"}}>
+```cpp showLineNumbers={false}
+AccessPrivileges::AccessPrivileges()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"AccessPrivileges": "accessprivileges"}}>
+```cpp showLineNumbers={false}
+AccessPrivileges::AccessPrivileges(
+    int64_t priv
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### reset [#reset]
+
+<CodeBlock links={{"AccessPrivileges": "accessprivileges"}}>
+```cpp showLineNumbers={false}
+void AccessPrivileges::reset()
+```
+</CodeBlock>
+
+### hasAny [#hasany]
+
+<CodeBlock links={{"AccessPrivileges": "accessprivileges"}}>
+```cpp showLineNumbers={false}
+bool AccessPrivileges::hasAny() const
+```
+</CodeBlock>
+
+### hasPermission [#haspermission]
+
+<CodeBlock links={{"AccessPrivileges": "accessprivileges"}}>
+```cpp showLineNumbers={false}
+bool AccessPrivileges::hasPermission(
+    int permission
+) const
+```
+</CodeBlock>
+
+### add [#add]
+
+<CodeBlock links={{"AccessPrivileges": "accessprivileges"}}>
+```cpp showLineNumbers={false}
+void AccessPrivileges::add(
+    AccessPrivileges newprivs
+)
+```
+</CodeBlock>
+
+### remove [#remove]
+
+<CodeBlock links={{"AccessPrivileges": "accessprivileges"}}>
+```cpp showLineNumbers={false}
+void AccessPrivileges::remove(
+    AccessPrivileges newprivs
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `privileges` | `int64_t` | |
+| `NONE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALL_DATABASE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `VIEW_SQL_EDITOR` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ACCESS` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALL_TABLE_MIGRATE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALL_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `CREATE_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `DROP_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `SELECT_FROM_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `INSERT_INTO_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `UPDATE_IN_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `DELETE_FROM_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `TRUNCATE_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALTER_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALL_COLUMN` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `SELECT_COLUMN_FROM_TABLE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALL_DASHBOARD_MIGRATE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALL_DASHBOARD` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `CREATE_DASHBOARD` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `VIEW_DASHBOARD` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `EDIT_DASHBOARD` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `DELETE_DASHBOARD` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALL_VIEW_MIGRATE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALL_VIEW` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `CREATE_VIEW` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `DROP_VIEW` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `SELECT_FROM_VIEW` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `INSERT_INTO_VIEW` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `UPDATE_IN_VIEW` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `DELETE_FROM_VIEW` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `TRUNCATE_VIEW` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALL_SERVER` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `CREATE_SERVER` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `DROP_SERVER` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `ALTER_SERVER` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |
+| `SERVER_USAGE` <Badge intent="note" minimal>static</Badge> | `const AccessPrivileges` | |

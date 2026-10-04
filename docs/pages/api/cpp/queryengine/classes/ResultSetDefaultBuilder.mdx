@@ -1,0 +1,71 @@
+---
+title: ResultSetDefaultBuilder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetBuilder.h>
+```
+
+**Inherits from:** `ResultSetBuilder` (public)
+
+---
+
+## Constructors
+
+### ResultSetDefaultBuilder [#resultsetdefaultbuilder]
+
+<CodeBlock links={{"ResultSetDefaultBuilder": "resultsetdefaultbuilder", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+ResultSetDefaultBuilder::ResultSetDefaultBuilder(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### build [#build]
+
+<CodeBlock links={{"ResultSetDefaultBuilder": "resultsetdefaultbuilder", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSet * ResultSetDefaultBuilder::build() override
+```
+</CodeBlock>
+
+### makeResultSet [#makeresultset]
+
+<CodeBlock links={{"ResultSetDefaultBuilder": "resultsetdefaultbuilder", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner", "Executor": "executor", "ResultSet": "resultset", "ResultSetBuilder": "resultsetbuilder"}}>
+```cpp showLineNumbers={false}
+ResultSet * ResultSetDefaultBuilder::makeResultSet(
+    const std::vector<TargetInfo> &targets,
+    const ExecutorDeviceType device_type,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### addVarlenBuffer [#addvarlenbuffer]
+
+<CodeBlock links={{"ResultSetDefaultBuilder": "resultsetdefaultbuilder", "ResultSet": "resultset", "ResultSetBuilder": "resultsetbuilder"}}>
+```cpp showLineNumbers={false}
+void ResultSetDefaultBuilder::addVarlenBuffer(
+    ResultSet *result_set,
+    std::vector<std::string> &varlen_storage
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_mem_desc` | `const QueryMemoryDescriptor &` | |
+| `row_set_mem_owner` | `const std::shared_ptr< RowSetMemoryOwner >` | |

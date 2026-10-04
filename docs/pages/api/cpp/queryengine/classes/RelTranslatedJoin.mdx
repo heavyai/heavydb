@@ -1,0 +1,496 @@
+---
+title: RelTranslatedJoin
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public)
+
+---
+
+## Constructors
+
+### RelTranslatedJoin [#reltranslatedjoin]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+RelTranslatedJoin::RelTranslatedJoin(
+    const RelAlgNode *lhs,
+    const RelAlgNode *rhs,
+    const std::vector<const Analyzer::ColumnVar *> lhs_join_cols,
+    const std::vector<const Analyzer::ColumnVar *> rhs_join_cols,
+    const std::vector<std::shared_ptr<const Analyzer::Expr>> filter_ops,
+    const RexScalar *outer_join_cond,
+    const bool nested_loop,
+    const JoinType join_type,
+    const std::string &op_type,
+    const std::string &qualifier,
+    const std::string &op_typeinfo
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelTranslatedJoin::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelTranslatedJoin::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelTranslatedJoin::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### getLHS [#getlhs]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelTranslatedJoin::getLHS() const
+```
+</CodeBlock>
+
+### getRHS [#getrhs]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelTranslatedJoin::getRHS() const
+```
+</CodeBlock>
+
+### getFilterCondSize [#getfiltercondsize]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+size_t RelTranslatedJoin::getFilterCondSize() const
+```
+</CodeBlock>
+
+### getFilterCond [#getfiltercond]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<const Analyzer::Expr>> RelTranslatedJoin::getFilterCond() const
+```
+</CodeBlock>
+
+### getOuterJoinCond [#getouterjoincond]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelTranslatedJoin::getOuterJoinCond() const
+```
+</CodeBlock>
+
+### getOpType [#getoptype]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+std::string RelTranslatedJoin::getOpType() const
+```
+</CodeBlock>
+
+### getQualifier [#getqualifier]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+std::string RelTranslatedJoin::getQualifier() const
+```
+</CodeBlock>
+
+### getOpTypeInfo [#getoptypeinfo]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+std::string RelTranslatedJoin::getOpTypeInfo() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+size_t RelTranslatedJoin::size() const override
+```
+</CodeBlock>
+
+### getJoinType [#getjointype]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+JoinType RelTranslatedJoin::getJoinType() const
+```
+</CodeBlock>
+
+### getCondition [#getcondition]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelTranslatedJoin::getCondition() const
+```
+</CodeBlock>
+
+### getAndReleaseCondition [#getandreleasecondition]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelTranslatedJoin::getAndReleaseCondition() const
+```
+</CodeBlock>
+
+### setCondition [#setcondition]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::setCondition(
+    std::unique_ptr<const RexScalar> &condition
+)
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+) override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelTranslatedJoin::deepCopy() const override
+```
+</CodeBlock>
+
+### getFieldName [#getfieldname]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+std::string RelTranslatedJoin::getFieldName(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getJoinCols [#getjoincols]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+std::vector<const Analyzer::ColumnVar *> RelTranslatedJoin::getJoinCols(
+    bool lhs
+) const
+```
+</CodeBlock>
+
+### isNestedLoopQual [#isnestedloopqual]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+bool RelTranslatedJoin::isNestedLoopQual() const
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::string RelTranslatedJoin::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelTranslatedJoin::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelTranslatedJoin::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+unsigned RelTranslatedJoin::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelTranslatedJoin::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelTranslatedJoin::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const size_t RelTranslatedJoin::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelTranslatedJoin::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelTranslatedJoin::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelTranslatedJoin::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelTranslatedJoin::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelTranslatedJoin::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelTranslatedJoin::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelTranslatedJoin::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+size_t RelTranslatedJoin::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelTranslatedJoin": "reltranslatedjoin", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTranslatedJoin::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `lhs_` | `const RelAlgNode *` | |
+| `rhs_` | `const RelAlgNode *` | |
+| `lhs_join_cols_` | `const std::vector< const Analyzer::ColumnVar * >` | |
+| `rhs_join_cols_` | `const std::vector< const Analyzer::ColumnVar * >` | |
+| `filter_ops_` | `const std::vector< std::shared_ptr< const Analyzer::Expr > >` | |
+| `outer_join_cond_` | `const RexScalar *` | |
+| `nested_loop_` | `const bool` | |
+| `join_type_` | `const JoinType` | |
+| `op_type_` | `const std::string` | |
+| `qualifier_` | `const std::string` | |
+| `op_typeinfo_` | `const std::string` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

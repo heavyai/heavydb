@@ -1,0 +1,195 @@
+---
+title: RelAlgDag
+description: "Class defining an in-memory, easy-to-navigate internal representation of a relational algebra DAG interpreted from a JSON provided by Calcite."
+---
+
+Class defining an in-memory, easy-to-navigate internal representation of a relational algebra DAG interpreted from a JSON provided by Calcite.
+
+Must be built through the [RelAlgDagBuilder](../structs/relalgdagbuilder) interface.
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `boost::noncopyable` (public)
+
+---
+
+## Constructors
+
+### RelAlgDag [#relalgdag]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag"}}>
+```cpp showLineNumbers={false}
+RelAlgDag::RelAlgDag()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getBuildState [#getbuildstate]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag"}}>
+```cpp showLineNumbers={false}
+BuildState RelAlgDag::getBuildState() const
+```
+</CodeBlock>
+
+### eachNode [#eachnode]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDag::eachNode(
+    std::function<void(RelAlgNode const *)> const &
+) const
+```
+</CodeBlock>
+
+### getRootNode [#getrootnode]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode & RelAlgDag::getRootNode() const
+```
+</CodeBlock>
+
+Returns the root node of the DAG.
+
+### getRootNodeShPtr [#getrootnodeshptr]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelAlgDag::getRootNodeShPtr() const
+```
+</CodeBlock>
+
+### getNodes [#getnodes]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<RelAlgNode>> & RelAlgDag::getNodes()
+```
+</CodeBlock>
+
+### registerSubquery [#registersubquery]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+void RelAlgDag::registerSubquery(
+    std::shared_ptr<RexSubQuery> subquery
+)
+```
+</CodeBlock>
+
+Registers a subquery with a root DAG builder.
+
+Should only be called during DAG building and registration should only occur on the root.
+
+### getSubqueries [#getsubqueries]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<RexSubQuery>> & RelAlgDag::getSubqueries() const
+```
+</CodeBlock>
+
+Gets all registered subqueries.
+
+Only the root DAG can contain subqueries.
+
+### registerQueryHints [#registerqueryhints]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RelAlgNode": "relalgnode", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+void RelAlgDag::registerQueryHints(
+    std::shared_ptr<RelAlgNode> node,
+    Hints *hints_delivered,
+    RegisteredQueryHint &global_query_hint
+)
+```
+</CodeBlock>
+
+### registerQueryHint [#registerqueryhint]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RelAlgNode": "relalgnode", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+void RelAlgDag::registerQueryHint(
+    const RelAlgNode *node,
+    const RegisteredQueryHint &query_hint
+)
+```
+</CodeBlock>
+
+### getQueryHint [#getqueryhint]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RelAlgNode": "relalgnode", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+std::optional<RegisteredQueryHint> RelAlgDag::getQueryHint(
+    const RelAlgNode *node
+) const
+```
+</CodeBlock>
+
+### getQueryHints [#getqueryhints]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RelAlgNode": "relalgnode", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<const RelAlgNode *, std::unordered_map<unsigned, RegisteredQueryHint>> & RelAlgDag::getQueryHints()
+```
+</CodeBlock>
+
+### getGlobalHints [#getglobalhints]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+const RegisteredQueryHint & RelAlgDag::getGlobalHints() const
+```
+</CodeBlock>
+
+### setGlobalQueryHints [#setglobalqueryhints]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+void RelAlgDag::setGlobalQueryHints(
+    const RegisteredQueryHint &global_hints
+)
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelAlgDag": "relalgdag"}}>
+```cpp showLineNumbers={false}
+void RelAlgDag::resetQueryExecutionState()
+```
+</CodeBlock>
+
+Gets all registered subqueries.
+
+Only the root DAG can contain subqueries.
+
+---
+
+## Types
+
+### BuildState
+
+| Name | Value | Description |
+|---|---|---|
+| `kNotBuilt` | | |
+| `kBuiltNotOptimized` | | |
+| `kBuiltOptimized` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `build_state_` | `BuildState` | |
+| `nodes_` | `std::vector< std::shared_ptr< RelAlgNode > >` | |
+| `subqueries_` | `std::vector< std::shared_ptr< RexSubQuery > >` | |
+| `query_hint_` | `std::unordered_map< const RelAlgNode *, std::unordered_map< unsigned, RegisteredQueryHint > >` | |
+| `global_hints_` | `RegisteredQueryHint` | |

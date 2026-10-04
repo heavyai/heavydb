@@ -1,0 +1,86 @@
+---
+title: Analyzer::NDVEstimator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/CardinalityEstimator.h>
+```
+
+**Inherits from:** `Analyzer::Estimator` (public)
+
+---
+
+## Constructors
+
+### NDVEstimator [#ndvestimator]
+
+<CodeBlock links={{"NDVEstimator": "ndvestimator"}}>
+```cpp showLineNumbers={false}
+Analyzer::NDVEstimator::NDVEstimator(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &expr_tuple
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getArgument [#getargument]
+
+<CodeBlock links={{"NDVEstimator": "ndvestimator"}}>
+```cpp showLineNumbers={false}
+const std::list<std::shared_ptr<Analyzer::Expr>> & Analyzer::NDVEstimator::getArgument() const override
+```
+</CodeBlock>
+
+### getBufferSize [#getbuffersize]
+
+<CodeBlock links={{"NDVEstimator": "ndvestimator"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::NDVEstimator::getBufferSize() const override
+```
+</CodeBlock>
+
+### getRuntimeFunctionName [#getruntimefunctionname]
+
+<CodeBlock links={{"NDVEstimator": "ndvestimator"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::NDVEstimator::getRuntimeFunctionName() const override
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"NDVEstimator": "ndvestimator", "Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::NDVEstimator::deep_copy() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"NDVEstimator": "ndvestimator", "Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::NDVEstimator::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"NDVEstimator": "ndvestimator", "Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::NDVEstimator::toString() const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `expr_tuple_` | `const std::list< std::shared_ptr< Analyzer::Expr > >` | |

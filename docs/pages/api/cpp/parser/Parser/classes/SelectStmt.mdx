@@ -1,0 +1,69 @@
+---
+title: Parser::SelectStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DMLStmt` (public)
+
+---
+
+## Constructors
+
+### SelectStmt [#selectstmt]
+
+<CodeBlock links={{"SelectStmt": "selectstmt", "QueryExpr": "queryexpr", "OrderSpec": "orderspec"}}>
+```cpp showLineNumbers={false}
+Parser::SelectStmt::SelectStmt(
+    QueryExpr *q,
+    std::list<OrderSpec *> *o,
+    int64_t l,
+    int64_t f
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_query_expr [#getqueryexpr]
+
+<CodeBlock links={{"SelectStmt": "selectstmt", "QueryExpr": "queryexpr"}}>
+```cpp showLineNumbers={false}
+const QueryExpr * Parser::SelectStmt::get_query_expr() const
+```
+</CodeBlock>
+
+### get_orderby_clause [#getorderbyclause]
+
+<CodeBlock links={{"SelectStmt": "selectstmt", "OrderSpec": "orderspec"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<OrderSpec>> & Parser::SelectStmt::get_orderby_clause() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"SelectStmt": "selectstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::SelectStmt::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_expr_` | `std::unique_ptr< QueryExpr >` | |
+| `orderby_clause_` | `std::list< std::unique_ptr< OrderSpec > >` | |
+| `limit_` | `int64_t` | |
+| `offset_` | `int64_t` | |

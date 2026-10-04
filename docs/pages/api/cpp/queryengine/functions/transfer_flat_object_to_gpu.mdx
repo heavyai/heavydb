@@ -1,0 +1,15 @@
+---
+title: transfer_flat_object_to_gpu
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class T>
+T * transfer_flat_object_to_gpu(
+    const T &object,
+    DeviceAllocator &allocator,
+    std::string_view tag
+)
+```
+</CodeBlock>

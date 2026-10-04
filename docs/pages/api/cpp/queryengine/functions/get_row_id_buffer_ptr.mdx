@@ -1,0 +1,17 @@
+---
+title: get_row_id_buffer_ptr
+description: ""
+---
+
+<CodeBlock links={{"BufferRange": "../structs/bufferrange"}}>
+```cpp showLineNumbers={false}
+ALWAYS_INLINE DEVICE BufferRange get_row_id_buffer_ptr(
+    int64_t *hash_table_ptr,
+    const int64_t *key,
+    const int64_t key_component_count,
+    const int64_t entry_count,
+    const int64_t offset_buffer_ptr_offset,
+    const int64_t sub_buff_size
+)
+```
+</CodeBlock>

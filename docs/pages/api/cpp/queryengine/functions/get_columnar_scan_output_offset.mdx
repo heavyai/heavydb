@@ -1,0 +1,15 @@
+---
+title: get_columnar_scan_output_offset
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE DEVICE int32_t get_columnar_scan_output_offset(
+    int64_t *output_buffer,
+    const uint32_t output_buffer_entry_count,
+    const uint32_t pos,
+    const int64_t offset_in_fragment
+)
+```
+</CodeBlock>

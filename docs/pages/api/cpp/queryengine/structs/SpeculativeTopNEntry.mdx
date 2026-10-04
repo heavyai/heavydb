@@ -1,0 +1,42 @@
+---
+title: SpeculativeTopNEntry
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <SpeculativeTopN.h>
+```
+
+---
+
+## Methods
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"SpeculativeTopNEntry": "speculativetopnentry"}}>
+```cpp showLineNumbers={false}
+bool SpeculativeTopNEntry::operator<(
+    const SpeculativeTopNEntry &that
+) const
+```
+</CodeBlock>
+
+### operator&gt; [#operator_gt]
+
+<CodeBlock links={{"SpeculativeTopNEntry": "speculativetopnentry"}}>
+```cpp showLineNumbers={false}
+bool SpeculativeTopNEntry::operator>(
+    const SpeculativeTopNEntry &that
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `key` | `int64_t` | |
+| `val` | `size_t` | |
+| `unknown` | `bool` | |

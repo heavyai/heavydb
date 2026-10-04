@@ -1,0 +1,113 @@
+---
+title: CpuMgrBaseAllocator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CpuMgrArenaAllocator.h>
+```
+
+---
+
+## Constructors
+
+### CpuMgrBaseAllocator [#cpumgrbaseallocator]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"CpuMgrBaseAllocator": "cpumgrbaseallocator"}}>
+```cpp showLineNumbers={false}
+CpuMgrBaseAllocator::CpuMgrBaseAllocator()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<Badge intent="note" minimal>inline</Badge> <Badge intent="note" minimal>noexcept</Badge>
+
+<CodeBlock links={{"CpuMgrBaseAllocator": "cpumgrbaseallocator"}}>
+```cpp showLineNumbers={false}
+CpuMgrBaseAllocator::CpuMgrBaseAllocator(
+    const CpuMgrBaseAllocator &other
+) noexcept
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge> <Badge intent="note" minimal>noexcept</Badge>
+
+<CodeBlock links={{"CpuMgrBaseAllocator": "cpumgrbaseallocator"}}>
+```cpp showLineNumbers={false}
+CpuMgrBaseAllocator::CpuMgrBaseAllocator(
+    const CpuMgrBaseAllocator &&other
+) noexcept
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~CpuMgrBaseAllocator
+
+<CodeBlock links={{"CpuMgrBaseAllocator": "cpumgrbaseallocator"}}>
+```cpp showLineNumbers={false}
+CpuMgrBaseAllocator::~CpuMgrBaseAllocator()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocate [#allocate]
+
+<CodeBlock links={{"CpuMgrBaseAllocator": "cpumgrbaseallocator"}}>
+```cpp showLineNumbers={false}
+void * CpuMgrBaseAllocator::allocate(
+    const size_t num_bytes
+)
+```
+</CodeBlock>
+
+### deallocate [#deallocate]
+
+<CodeBlock links={{"CpuMgrBaseAllocator": "cpumgrbaseallocator"}}>
+```cpp showLineNumbers={false}
+void CpuMgrBaseAllocator::deallocate(
+    void *p
+)
+```
+</CodeBlock>
+
+### deallocateAll [#deallocateall]
+
+<CodeBlock links={{"CpuMgrBaseAllocator": "cpumgrbaseallocator"}}>
+```cpp showLineNumbers={false}
+void CpuMgrBaseAllocator::deallocateAll()
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"CpuMgrBaseAllocator": "cpumgrbaseallocator"}}>
+```cpp showLineNumbers={false}
+bool CpuMgrBaseAllocator::operator==(
+    const CpuMgrBaseAllocator &other
+) noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `allocated_buffers_` | `std::list< Data_Namespace::AbstractBuffer * >` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |

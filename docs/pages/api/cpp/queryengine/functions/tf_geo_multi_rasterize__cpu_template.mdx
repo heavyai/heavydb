@@ -1,0 +1,25 @@
+---
+title: tf_geo_multi_rasterize__cpu_template
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename Z>
+TEMPLATE_NOINLINE int32_t tf_geo_multi_rasterize__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<T> &input_x,
+    const Column<T> &input_y,
+    const ColumnList<Z> &input_z_cols,
+    const TextEncodingNone &agg_types_str,
+    const TextEncodingNone &fill_agg_types_str,
+    const T bin_dim_meters,
+    const bool geographic_coords,
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Array<Z>> &output_z
+)
+```
+</CodeBlock>

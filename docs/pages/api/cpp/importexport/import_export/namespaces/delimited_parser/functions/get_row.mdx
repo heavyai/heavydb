@@ -1,0 +1,103 @@
+---
+title: import_export::delimited_parser::get_row
+description: "Parses the first row in the given buffer and inserts fields into given vector."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CopyParams": "../../../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+const char * import_export::delimited_parser::get_row(
+    const char *buf,
+    const char *buf_end,
+    const char *entire_buf_end,
+    const import_export::CopyParams &copy_params,
+    const bool *is_array,
+    std::vector<T> &row,
+    std::vector<std::unique_ptr<char[]>> &tmp_buffers,
+    bool &try_single_thread,
+    bool filter_empty_lines
+)
+```
+</CodeBlock>
+
+Parses the first row in the given buffer and inserts fields into given vector.
+
+**Returns:** Pointer to the next row after the first row is parsed.
+
+**Parameters**
+
+<ParamField path="buf" type="const char *">
+Given buffer which has the rows in csv format. (NOT OWN)
+</ParamField>
+
+<ParamField path="buf_end" type="const char *">
+End of the sliced buffer for the thread. (NOT OWN)
+</ParamField>
+
+<ParamField path="entire_buf_end" type="const char *">
+End of the entire buffer. (NOT OWN)
+</ParamField>
+
+<ParamField path="copy_params" type="const import_export::CopyParams &">
+Copy params for the table.
+</ParamField>
+
+<ParamField path="is_array" type="const bool *">
+Array of bools which tells if a column is an array type.
+</ParamField>
+
+<ParamField path="row" type="std::vector<T> &">
+Given vector to be populated with parsed fields.
+</ParamField>
+
+<ParamField path="try_single_thread" type="bool &">
+In case of parse errors, this will tell if parsing should continue with single thread.
+</ParamField>
+
+<ParamField path="filter_empty_lines" type="bool">
+Whether to skip empty lines (used when parsing single columns returned by s3 select, as nulls may be encoded as empty lines)
+</ParamField>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CopyParams": "../../../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+template const char * import_export::delimited_parser::get_row(
+    const char *buf,
+    const char *buf_end,
+    const char *entire_buf_end,
+    const import_export::CopyParams &copy_params,
+    const bool *is_array,
+    std::vector<std::string> &row,
+    std::vector<std::unique_ptr<char[]>> &tmp_buffers,
+    bool &try_single_thread,
+    bool filter_empty_lines
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"CopyParams": "../../../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+template const char * import_export::delimited_parser::get_row(
+    const char *buf,
+    const char *buf_end,
+    const char *entire_buf_end,
+    const import_export::CopyParams &copy_params,
+    const bool *is_array,
+    std::vector<std::string_view> &row,
+    std::vector<std::unique_ptr<char[]>> &tmp_buffers,
+    bool &try_single_thread,
+    bool filter_empty_lines
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

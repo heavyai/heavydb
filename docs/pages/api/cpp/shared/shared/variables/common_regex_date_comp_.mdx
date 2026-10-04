@@ -1,0 +1,12 @@
+---
+title: shared::common_regex_date_comp_
+description: ""
+---
+
+```cpp showLineNumbers={false}
+const std::function<bool(const std::string &, const std::string &)> shared::common_regex_date_comp_ = [](const std::string& lhs, const std::string& rhs) -> bool {
+  int64_t lhs_t;
+  int64_t rhs_t;
+  try {
+    lhs_t =
+```

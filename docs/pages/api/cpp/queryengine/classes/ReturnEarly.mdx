@@ -1,0 +1,107 @@
+---
+title: ReturnEarly
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### ReturnEarly [#returnearly]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ReturnEarly": "returnearly", "Value": "value"}}>
+```cpp showLineNumbers={false}
+ReturnEarly::ReturnEarly(
+    const Value *cond,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ReturnEarly": "returnearly", "Value": "value"}}>
+```cpp showLineNumbers={false}
+ReturnEarly::ReturnEarly(
+    const Value *cond,
+    const Value *error_code,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### cond [#cond]
+
+<CodeBlock links={{"ReturnEarly": "returnearly", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * ReturnEarly::cond() const
+```
+</CodeBlock>
+
+### error_code [#errorcode]
+
+<CodeBlock links={{"ReturnEarly": "returnearly", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * ReturnEarly::error_code() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"ReturnEarly": "returnearly", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void ReturnEarly::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"ReturnEarly": "returnearly", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"ReturnEarly": "returnearly", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"ReturnEarly": "returnearly", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cond_` | `const Value *` | |
+| `error_code_` | `const Value *` | |

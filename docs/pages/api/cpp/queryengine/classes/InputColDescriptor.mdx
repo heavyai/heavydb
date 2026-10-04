@@ -1,0 +1,98 @@
+---
+title: InputColDescriptor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <InputDescriptors.h>
+```
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Constructors
+
+### InputColDescriptor [#inputcoldescriptor]
+
+<CodeBlock links={{"InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+InputColDescriptor::InputColDescriptor(
+    int32_t col_id,
+    int32_t table_id,
+    int32_t db_id,
+    int32_t nest_level
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+bool InputColDescriptor::operator==(
+    const InputColDescriptor &that
+) const
+```
+</CodeBlock>
+
+### getColId [#getcolid]
+
+<CodeBlock links={{"InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+int InputColDescriptor::getColId() const
+```
+</CodeBlock>
+
+### getScanDesc [#getscandesc]
+
+<CodeBlock links={{"InputColDescriptor": "inputcoldescriptor", "InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+const InputDescriptor & InputColDescriptor::getScanDesc() const
+```
+</CodeBlock>
+
+### getTableKey [#gettablekey]
+
+<CodeBlock links={{"InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+shared::TableKey InputColDescriptor::getTableKey() const
+```
+</CodeBlock>
+
+### getColumnKey [#getcolumnkey]
+
+<CodeBlock links={{"InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+shared::ColumnKey InputColDescriptor::getColumnKey() const
+```
+</CodeBlock>
+
+### hash [#hash]
+
+<CodeBlock links={{"InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+size_t InputColDescriptor::hash() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+std::string InputColDescriptor::toString() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `col_id_` | `const int` | |
+| `input_desc_` | `const InputDescriptor` | |

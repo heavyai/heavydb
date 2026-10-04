@@ -1,0 +1,78 @@
+---
+title: ct_test_int_default_arg__template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE DEVICE int32_t ct_test_int_default_arg__template(
+    const Column<T> &inp,
+    const T x,
+    const int32_t multiplier,
+    Column<T> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t ct_test_int_default_arg__template(
+    const Column<int8_t> &inp,
+    const int8_t x,
+    const int32_t multiplier,
+    Column<int8_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t ct_test_int_default_arg__template(
+    const Column<int16_t> &inp,
+    const int16_t x,
+    const int32_t multiplier,
+    Column<int16_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t ct_test_int_default_arg__template(
+    const Column<int32_t> &inp,
+    const int32_t x,
+    const int32_t multiplier,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t ct_test_int_default_arg__template(
+    const Column<int64_t> &inp,
+    const int64_t x,
+    const int32_t multiplier,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

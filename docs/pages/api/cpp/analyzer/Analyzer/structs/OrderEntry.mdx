@@ -1,0 +1,64 @@
+---
+title: Analyzer::OrderEntry
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+---
+
+## Constructors
+
+### OrderEntry [#orderentry]
+
+<CodeBlock links={{"OrderEntry": "orderentry"}}>
+```cpp showLineNumbers={false}
+Analyzer::OrderEntry::OrderEntry(
+    int t,
+    bool d,
+    bool nf
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~OrderEntry
+
+<CodeBlock links={{"OrderEntry": "orderentry"}}>
+```cpp showLineNumbers={false}
+Analyzer::OrderEntry::~OrderEntry()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### toString [#tostring]
+
+<CodeBlock links={{"OrderEntry": "orderentry"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::OrderEntry::toString() const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"OrderEntry": "orderentry"}}>
+```cpp showLineNumbers={false}
+void Analyzer::OrderEntry::print() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `tle_no` | `int` | |
+| `is_desc` | `bool` | |
+| `nulls_first` | `bool` | |

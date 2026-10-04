@@ -1,0 +1,201 @@
+---
+title: NumericValueConverter
+description: ""
+---
+
+<CodeBlock id="NumericValueConverter" links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+template <typename SOURCE_TYPE, typename TARGET_TYPE>
+struct NumericValueConverter
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TargetValueConvertersImpl.h>
+```
+
+**Template parameters**
+
+<ParamField path="SOURCE_TYPE" type="typename">
+</ParamField>
+
+<ParamField path="TARGET_TYPE" type="typename">
+</ParamField>
+
+**Inherits from:** `TargetValueConverter` (public)
+
+---
+
+## Constructors
+
+### NumericValueConverter [#numericvalueconverter]
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::NumericValueConverter(
+    const ColumnDescriptor *cd,
+    size_t num_rows,
+    TARGET_TYPE nullValue,
+    SOURCE_TYPE nullCheckValue,
+    bool doNullCheck
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~NumericValueConverter
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::~NumericValueConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setValueCaster [#setvaluecaster]
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::setValueCaster(
+    CasterFunc caster
+)
+```
+</CodeBlock>
+
+### populateFixedArrayNullSentinel [#populatefixedarraynullsentinel]
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::populateFixedArrayNullSentinel(
+    size_t num_rows
+)
+```
+</CodeBlock>
+
+### allocateColumnarData [#allocatecolumnardata]
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::allocateColumnarData(
+    size_t num_rows
+) override
+```
+</CodeBlock>
+
+### allocateColumnarBuffer [#allocatecolumnarbuffer]
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+ElementsBufferColumnPtr NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::allocateColumnarBuffer(
+    size_t num_rows
+)
+```
+</CodeBlock>
+
+### convertElementToColumnarFormat [#convertelementtocolumnarformat]
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::convertElementToColumnarFormat(
+    size_t row,
+    typename ElementsBufferColumnPtr::pointer columnData,
+    const ScalarTargetValue *scalarValue
+)
+```
+</CodeBlock>
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::convertToColumnarFormat(
+    size_t row,
+    const ScalarTargetValue *scalarValue
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::convertToColumnarFormat(
+    size_t row,
+    const TargetValue *value
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### processArrayBuffer [#processarraybuffer]
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::processArrayBuffer(
+    std::unique_ptr<std::vector<std::pair<size_t, ElementsBufferColumnPtr>>> &array_buffer,
+    std::unique_ptr<std::vector<ArrayDatum>>::pointer arrayData
+)
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter", "InsertData": "../fragmenternamespace/structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void NumericValueConverter<SOURCE_TYPE, TARGET_TYPE>::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+### finalizeDataBlocksForInsertData [#finalizedatablocksforinsertdata]
+
+<CodeBlock links={{"NumericValueConverter": "numericvalueconverter", "TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+virtual void NumericValueConverter::finalizeDataBlocksForInsertData()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ColumnDataPtr` | `std::unique_ptr< TARGET_TYPE, CheckedMallocDeleter< TARGET_TYPE > >` |
+| `ElementsBufferColumnPtr` | `ColumnDataPtr` |
+| `CasterFunc` | `std::function< TARGET_TYPE(SOURCE_TYPE, bool, TARGET_TYPE)>` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_data_` | `ColumnDataPtr` | |
+| `null_value_` | `TARGET_TYPE` | |
+| `null_check_value_` | `SOURCE_TYPE` | |
+| `do_null_check_` | `bool` | |
+| `fixed_array_null_value_` | `TARGET_TYPE` | |
+| `checked_caster_` | `CasterFunc` | |
+| `SOURCE_TYPE_ACCESSOR` | `boost_variant_accessor< SOURCE_TYPE >` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `SCALAR_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ScalarTargetValue >` | |
+| `ARRAY_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ArrayTargetValue >` | |
+| `GEO_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `NULLABLE_STRING_ACCESSOR` | `boost_variant_accessor< NullableString >` | |
+| `STRING_ACCESSOR` | `boost_variant_accessor< std::string >` | |

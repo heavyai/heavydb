@@ -1,0 +1,163 @@
+---
+title: "Column< GeoMultiPolygon >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+**Inherits from:** `flatbuffer::Column< Geo::MultiPolygon, GeoMultiPolygon >` (public)
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon", "Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoMultiPolygon> & Column<GeoMultiPolygon>::operator=(
+    const Column<GeoMultiPolygon> &other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### isNull [#isnull]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Column<Timestamp>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+### setNull [#setnull]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<Timestamp>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+### Column [#column]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoMultiPolygon>::Column(
+    GeoMultiPolygon *ptr,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoMultiPolygon & Column<GeoMultiPolygon>::operator[](
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### getPtr [#getptr]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoMultiPolygon * Column<GeoMultiPolygon>::getPtr() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t Column<GeoMultiPolygon>::size() const
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<GeoMultiPolygon>::setSize(
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon", "MultiPolygon": "../geo/structs/multipolygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE Geo::MultiPolygon flatbuffer::Column<Geo::MultiPolygon, GeoMultiPolygon>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoMultiPolygon flatbuffer::Column<Geo::MultiPolygon, GeoMultiPolygon>::operator()(
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### setItem [#setitem]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon", "MultiPolygon": "../geo/structs/multipolygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<Geo::MultiPolygon, GeoMultiPolygon>::setItem(
+    int64_t index,
+    const Geo::MultiPolygon &item
+)
+```
+</CodeBlock>
+
+### getNofValues [#getnofvalues]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+int64_t flatbuffer::Column<Geo::MultiPolygon, GeoMultiPolygon>::getNofValues() const
+```
+</CodeBlock>
+
+### concatItem [#concatitem]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon", "MultiPolygon": "../geo/structs/multipolygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<Geo::MultiPolygon, GeoMultiPolygon>::concatItem(
+    int64_t index,
+    const Geo::MultiPolygon &item
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"Column< GeoMultiPolygon >": "columngeomultipolygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::Column<Geo::MultiPolygon, GeoMultiPolygon>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr_` | `GeoMultiPolygon *` | |
+| `num_rows_` | `int64_t` | |
+| `flatbuffer_` | `int8_t *` | |

@@ -1,0 +1,25 @@
+---
+title: Contains_Polygon_Point_Impl
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T, EdgeBehavior TEdgeBehavior>
+DEVICE ALWAYS_INLINE bool Contains_Polygon_Point_Impl(
+    const int8_t *poly_coords,
+    const int64_t poly_coords_size,
+    const int32_t *poly_ring_sizes,
+    const int64_t poly_num_rings,
+    const double *poly_bounds,
+    const int64_t poly_bounds_size,
+    const int8_t *p,
+    const int64_t psize,
+    const int32_t ic1,
+    const int32_t isr1,
+    const int32_t ic2,
+    const int32_t isr2,
+    const int32_t osr
+)
+```
+</CodeBlock>

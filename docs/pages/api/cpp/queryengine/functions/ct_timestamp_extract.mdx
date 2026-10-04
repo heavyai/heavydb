@@ -1,0 +1,22 @@
+---
+title: ct_timestamp_extract
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_timestamp_extract(
+    TableFunctionManager &mgr,
+    const Column<Timestamp> &input,
+    Column<int64_t> &ns,
+    Column<int64_t> &us,
+    Column<int64_t> &ms,
+    Column<int64_t> &s,
+    Column<int64_t> &m,
+    Column<int64_t> &h,
+    Column<int64_t> &d,
+    Column<int64_t> &mo,
+    Column<int64_t> &y
+)
+```
+</CodeBlock>

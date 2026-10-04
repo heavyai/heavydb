@@ -1,0 +1,15 @@
+---
+title: ct_timestamp_add_offset_cpu_only
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column", "Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_timestamp_add_offset_cpu_only(
+    const Column<Timestamp> &input,
+    const int32_t multiplier,
+    const Timestamp offset,
+    Column<Timestamp> &out
+)
+```
+</CodeBlock>

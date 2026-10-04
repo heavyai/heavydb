@@ -1,0 +1,47 @@
+---
+title: tf_test_runtime_torch_template__template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+TEMPLATE_NOINLINE int32_t tf_test_runtime_torch_template__template(
+    TableFunctionManager &mgr,
+    const Column<T> &input,
+    Column<T> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template TEMPLATE_NOINLINE int32_t tf_test_runtime_torch_template__template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input,
+    Column<int64_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template TEMPLATE_NOINLINE int32_t tf_test_runtime_torch_template__template(
+    TableFunctionManager &mgr,
+    const Column<double> &input,
+    Column<double> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

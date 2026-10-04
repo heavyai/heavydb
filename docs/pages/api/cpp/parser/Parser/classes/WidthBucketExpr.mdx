@@ -1,0 +1,123 @@
+---
+title: Parser::WidthBucketExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### WidthBucketExpr [#widthbucketexpr]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::WidthBucketExpr::WidthBucketExpr(
+    Expr *t,
+    Expr *l,
+    Expr *u,
+    Expr *p
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_target_value [#gettargetvalue]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::WidthBucketExpr::get_target_value() const
+```
+</CodeBlock>
+
+### get_lower_bound [#getlowerbound]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::WidthBucketExpr::get_lower_bound() const
+```
+</CodeBlock>
+
+### get_upper_bound [#getupperbound]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::WidthBucketExpr::get_upper_bound() const
+```
+</CodeBlock>
+
+### get_partition_count [#getpartitioncount]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::WidthBucketExpr::get_partition_count() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::WidthBucketExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::WidthBucketExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### get [#get]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::WidthBucketExpr::get(
+    std::shared_ptr<Analyzer::Expr> target_value,
+    std::shared_ptr<Analyzer::Expr> lower_bound,
+    std::shared_ptr<Analyzer::Expr> upper_bound,
+    std::shared_ptr<Analyzer::Expr> partition_count
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `target_value_` | `std::unique_ptr< Expr >` | |
+| `lower_bound_` | `std::unique_ptr< Expr >` | |
+| `upper_bound_` | `std::unique_ptr< Expr >` | |
+| `partition_count_` | `std::unique_ptr< Expr >` | |

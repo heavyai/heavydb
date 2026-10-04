@@ -1,0 +1,134 @@
+---
+title: TableFunctionExecutionContext
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableFunctionExecutionContext.h>
+```
+
+---
+
+## Constructors
+
+### TableFunctionExecutionContext [#tablefunctionexecutioncontext]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionExecutionContext": "tablefunctionexecutioncontext", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+TableFunctionExecutionContext::TableFunctionExecutionContext(
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    gfx::GfxContext *gfx_context
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"TableFunctionExecutionContext": "tablefunctionexecutioncontext"}}>
+```cpp showLineNumbers={false}
+TableFunctionExecutionContext::TableFunctionExecutionContext(
+    const TableFunctionExecutionContext &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"TableFunctionExecutionContext": "tablefunctionexecutioncontext"}}>
+```cpp showLineNumbers={false}
+TableFunctionExecutionContext & TableFunctionExecutionContext::operator=(
+    const TableFunctionExecutionContext &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"TableFunctionExecutionContext": "tablefunctionexecutioncontext", "TableFunctionExecutionUnit": "../structs/tablefunctionexecutionunit", "InputTableInfo": "../structs/inputtableinfo", "CompilationContext": "compilationcontext", "ColumnFetcher": "columnfetcher", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr TableFunctionExecutionContext::execute(
+    const TableFunctionExecutionUnit &exe_unit,
+    const std::vector<InputTableInfo> &table_infos,
+    const std::shared_ptr<CompilationContext> &compilation_context,
+    const ColumnFetcher &column_fetcher,
+    const ExecutorDeviceType device_type,
+    Executor *executor,
+    bool is_pre_launch_udtf
+)
+```
+</CodeBlock>
+
+### launchPreCodeOnCpu [#launchprecodeoncpu]
+
+<CodeBlock links={{"TableFunctionExecutionContext": "tablefunctionexecutioncontext", "TableFunctionExecutionUnit": "../structs/tablefunctionexecutionunit", "CpuCompilationContext": "cpucompilationcontext", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void TableFunctionExecutionContext::launchPreCodeOnCpu(
+    const TableFunctionExecutionUnit &exe_unit,
+    const std::shared_ptr<CpuCompilationContext> &compilation_context,
+    std::vector<const int8_t *> &col_buf_ptrs,
+    std::vector<int64_t> &col_sizes,
+    std::vector<const int8_t *> &input_str_dict_proxy_ptrs,
+    const size_t elem_count,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### launchCpuCode [#launchcpucode]
+
+<CodeBlock links={{"TableFunctionExecutionContext": "tablefunctionexecutioncontext", "TableFunctionExecutionUnit": "../structs/tablefunctionexecutionunit", "CpuCompilationContext": "cpucompilationcontext", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
+    const TableFunctionExecutionUnit &exe_unit,
+    const std::shared_ptr<CpuCompilationContext> &compilation_context,
+    std::vector<const int8_t *> &col_buf_ptrs,
+    std::vector<int64_t> &col_sizes,
+    std::vector<const int8_t *> &input_str_dict_proxy_ptrs,
+    const size_t elem_count,
+    std::vector<int8_t *> &output_str_dict_proxy_ptrs,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### launchGpuCode [#launchgpucode]
+
+<CodeBlock links={{"TableFunctionExecutionContext": "tablefunctionexecutioncontext", "TableFunctionExecutionUnit": "../structs/tablefunctionexecutionunit", "GpuCompilationContext": "gpucompilationcontext", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
+    const TableFunctionExecutionUnit &exe_unit,
+    const std::shared_ptr<GpuCompilationContext> &compilation_context,
+    std::vector<const int8_t *> &col_buf_ptrs,
+    std::vector<int64_t> &col_sizes,
+    std::vector<const int8_t *> &input_str_dict_proxy_ptrs,
+    const size_t elem_count,
+    std::vector<int8_t *> &output_str_dict_proxy_ptrs,
+    const int device_id,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `row_set_mem_owner_` | `std::shared_ptr< RowSetMemoryOwner >` | |
+| `gfx_context_` | `gfx::GfxContext *` | |

@@ -1,0 +1,26 @@
+---
+title: OutOfRenderMemory
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RenderAllocator.h>
+```
+
+**Inherits from:** `std::runtime_error` (public)
+
+---
+
+## Constructors
+
+### OutOfRenderMemory [#outofrendermemory]
+
+<CodeBlock links={{"OutOfRenderMemory": "outofrendermemory"}}>
+```cpp showLineNumbers={false}
+OutOfRenderMemory::OutOfRenderMemory(
+    const size_t device_id,
+    const size_t total_bytes,
+    const size_t requested_bytes
+)
+```
+</CodeBlock>

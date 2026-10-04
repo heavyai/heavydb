@@ -1,0 +1,31 @@
+---
+title: "operator<<"
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const import_export::RasterImporter::PointType &point_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const import_export::RasterImporter::PointTransform &point_trans
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

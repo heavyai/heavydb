@@ -1,0 +1,148 @@
+---
+title: AggMode
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <AggMode.h>
+```
+
+---
+
+## Constructors
+
+### AggMode [#aggmode]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+AggMode::AggMode() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From size">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+AggMode::AggMode(
+    size_t const n
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+AggMode::AggMode(
+    Map &&map
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+AggMode & AggMode::operator=(
+    AggMode &&rhs
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### add [#add]
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+void AggMode::add(
+    Value const value
+)
+```
+</CodeBlock>
+
+### reduce [#reduce]
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+void AggMode::reduce(
+    AggMode &&rhs
+)
+```
+</CodeBlock>
+
+### mode [#mode]
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+std::optional<Value> AggMode::mode() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+size_t AggMode::size() const
+```
+</CodeBlock>
+
+### reduceMap [#reducemap]
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+void AggMode::reduceMap(
+    Map const &map
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Value` | `int64_t` |
+| `Count` | `uint64_t` |
+| `Map` | `robin_hood::unordered_map< ValueValue, Count >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `map_` | `Map` | |
+
+---
+
+## Inner classes
+
+### ByCount
+
+<CodeBlock links={{"AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+struct AggMode::ByCount
+```
+</CodeBlock>

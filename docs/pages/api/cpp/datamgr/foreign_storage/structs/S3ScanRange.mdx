@@ -1,0 +1,64 @@
+---
+title: foreign_storage::S3ScanRange
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/S3SelectClient.h>
+```
+
+---
+
+## Constructors
+
+### S3ScanRange [#s3scanrange]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"S3ScanRange": "s3scanrange"}}>
+```cpp showLineNumbers={false}
+foreign_storage::S3ScanRange::S3ScanRange(
+    std::string file_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"S3ScanRange": "s3scanrange"}}>
+```cpp showLineNumbers={false}
+foreign_storage::S3ScanRange::S3ScanRange(
+    std::string file_name,
+    size_t start,
+    size_t end
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"S3ScanRange": "s3scanrange"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::S3ScanRange::operator<(
+    const S3ScanRange &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `file_name` | `std::string` | |
+| `byte_range` | `std::optional< std::pair< size_t, size_t > >` | |

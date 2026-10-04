@@ -1,0 +1,431 @@
+---
+title: TransientDictIdVisitor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TransientStringLiteralsVisitor.h>
+```
+
+**Inherits from:** `ScalarExprVisitor< shared::StringDictKey >` (public)
+
+---
+
+## Methods
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor"}}>
+```cpp showLineNumbers={false}
+shared::StringDictKey TransientDictIdVisitor::visitUOper(
+    const Analyzer::UOper *uoper
+) const override
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor"}}>
+```cpp showLineNumbers={false}
+shared::StringDictKey TransientDictIdVisitor::visitCaseExpr(
+    const Analyzer::CaseExpr *case_expr
+) const override
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor"}}>
+```cpp showLineNumbers={false}
+shared::StringDictKey TransientDictIdVisitor::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor"}}>
+```cpp showLineNumbers={false}
+shared::StringDictKey TransientDictIdVisitor::defaultResult() const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitColumnVar(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *
+) const
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitConstant(
+    const Analyzer::Constant *
+) const
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual shared::StringDictKey ScalarExprVisitor<shared::StringDictKey>::aggregateResult(
+    const shared::StringDictKey &aggregate,
+    const shared::StringDictKey &next_result
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"TransientDictIdVisitor": "transientdictidvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<shared::StringDictKey>::visitBegin() const
+```
+</CodeBlock>

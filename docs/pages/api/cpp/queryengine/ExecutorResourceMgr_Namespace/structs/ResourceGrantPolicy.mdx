@@ -1,0 +1,83 @@
+---
+title: ExecutorResourceMgr_Namespace::ResourceGrantPolicy
+description: "Specifies the policy for granting a resource of a specific ResourceSubtype."
+---
+
+Specifies the policy for granting a resource of a specific [`ResourceSubtype`](../enums/resourcesubtype).
+
+Note that this policy only pertains to resource grants on an isolated basis, and that grant policy with respect to concurrent requests is controlled by [`ConcurrentResourceGrantPolicy`](concurrentresourcegrantpolicy).
+
+[`ExecutorResourcePool`](../classes/executorresourcepool) uses [`get_grant_quantity`](#getgrantquantity) to determine the maximum allowable grants for each type of resource (on a static basis) when being initialized.
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ResourceGrantPolicy.h>
+```
+
+---
+
+## Constructors
+
+### ResourceGrantPolicy [#resourcegrantpolicy]
+
+<Tabs>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ResourceGrantPolicy": "resourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ResourceGrantPolicy::ResourceGrantPolicy()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ResourceGrantPolicy": "resourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ResourceGrantPolicy::ResourceGrantPolicy(
+    const ResourceSubtype resource_subtype,
+    const ResourceGrantPolicySizeType policy_size_type,
+    const ResourceGrantSizeInfo size_info
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_grant_quantity [#getgrantquantity]
+
+<CodeBlock links={{"ResourceGrantPolicy": "resourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+size_t ExecutorResourceMgr_Namespace::ResourceGrantPolicy::get_grant_quantity(
+    const size_t total_resource_quantity
+) const
+```
+</CodeBlock>
+
+Used to calculate the maximum quantity that can be granted of the resource.
+
+If `policy_size_type` is a ratio, the max grantable quantity will be the ratio specified in the `size_info` union times the specified `total_resource_quantity`. If `policy_size_type` is a constant, the max grantable quantity will be that constant, regardless of what is specified by `total_resource_quantity`. If `policy_size_type` is unlimited, the max grantable quantity will be unlimited, specifically the max allowed number for the `size_t` type.
+
+**Returns:** size_t - The max quantity of the resource specified by `ResourceGrantPolicy::resource_subtype` that can be granted
+
+**Parameters**
+
+<ParamField path="total_resource_quantity" type="const size_t">
+- The total quantity available of the resource specified by `ResourceGrantPolicy::resource_subtype`
+</ParamField>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `resource_subtype` | `ResourceSubtype` | |
+| `policy_size_type` | `ResourceGrantPolicySizeType` | |
+| `size_info` | `ResourceGrantSizeInfo` | |

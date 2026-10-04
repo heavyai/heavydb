@@ -1,0 +1,32 @@
+---
+title: GeoPolyTargetValue
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetValue.h>
+```
+
+---
+
+## Constructors
+
+### GeoPolyTargetValue [#geopolytargetvalue]
+
+<CodeBlock links={{"GeoPolyTargetValue": "geopolytargetvalue"}}>
+```cpp showLineNumbers={false}
+GeoPolyTargetValue::GeoPolyTargetValue(
+    const std::vector<double> &coords,
+    const std::vector<int32_t> &ring_sizes
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `coords` | `std::shared_ptr< std::vector< double > >` | |
+| `ring_sizes` | `std::shared_ptr< std::vector< int32_t > >` | |

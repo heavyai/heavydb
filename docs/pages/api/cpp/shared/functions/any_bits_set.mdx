@@ -1,0 +1,13 @@
+---
+title: any_bits_set
+description: ""
+---
+
+<CodeBlock links={{"EnableBitmaskOps": "../structs/enablebitmaskops"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+std::enable_if_t<EnableBitmaskOps<T>::enable, bool> constexpr any_bits_set(
+    T t
+)
+```
+</CodeBlock>

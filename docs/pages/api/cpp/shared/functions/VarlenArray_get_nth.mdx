@@ -1,0 +1,36 @@
+---
+title: VarlenArray_get_nth
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void VarlenArray_get_nth(
+    int8_t *buf,
+    int n,
+    ArrayDatum *result,
+    bool *is_end
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"VarlenDatum": "../structs/varlendatum"}}>
+```cpp showLineNumbers={false}
+void VarlenArray_get_nth(
+    int8_t *buf,
+    int n,
+    bool uncompress,
+    VarlenDatum *result,
+    bool *is_end
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

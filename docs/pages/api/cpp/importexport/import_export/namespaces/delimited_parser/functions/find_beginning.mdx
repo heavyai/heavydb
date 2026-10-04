@@ -1,0 +1,37 @@
+---
+title: import_export::delimited_parser::find_beginning
+description: "Finds the closest possible row beginning in the given buffer."
+---
+
+<CodeBlock links={{"CopyParams": "../../../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+size_t import_export::delimited_parser::find_beginning(
+    const char *buffer,
+    size_t begin,
+    size_t end,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+Finds the closest possible row beginning in the given buffer.
+
+**Returns:** The position of the closest possible row beginning to the start of the given buffer.
+
+**Parameters**
+
+<ParamField path="buffer" type="const char *">
+Given buffer which has the rows in csv format. (NOT OWN)
+</ParamField>
+
+<ParamField path="begin" type="size_t">
+Start index of buffer to look for the beginning.
+</ParamField>
+
+<ParamField path="end" type="size_t">
+End index of buffer to look for the beginning.
+</ParamField>
+
+<ParamField path="copy_params" type="const CopyParams &">
+Copy params for the table.
+</ParamField>

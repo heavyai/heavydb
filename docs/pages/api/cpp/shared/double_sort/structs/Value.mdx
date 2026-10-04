@@ -1,0 +1,99 @@
+---
+title: double_sort::Value
+description: ""
+---
+
+<CodeBlock id="Value" links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+template <typename T0, typename T1>
+struct Value
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <double_sort/DoubleSort.h>
+```
+
+**Template parameters**
+
+<ParamField path="T0" type="typename">
+</ParamField>
+
+<ParamField path="T1" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### Value [#value]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+double_sort::Value<T0, T1>::Value(
+    T0 *ptr0,
+    T1 *ptr1
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+double_sort::Value<T0, T1>::Value(
+    Value &&b
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+Value & double_sort::Value<T0, T1>::operator=(
+    Value &&b
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### value0 [#value0]
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+T0 double_sort::Value<T0, T1>::value0() const
+```
+</CodeBlock>
+
+### value1 [#value1]
+
+<CodeBlock links={{"Value": "value"}}>
+```cpp showLineNumbers={false}
+T1 double_sort::Value<T0, T1>::value1() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `v0_` | `Variant< T0 >` | |
+| `v1_` | `Variant< T1 >` | |
+| `ref_` | `bool const` | |

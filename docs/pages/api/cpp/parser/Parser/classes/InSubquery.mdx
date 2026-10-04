@@ -1,0 +1,96 @@
+---
+title: Parser::InSubquery
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::InExpr` (public)
+
+---
+
+## Constructors
+
+### InSubquery [#insubquery]
+
+<CodeBlock links={{"InSubquery": "insubquery", "Expr": "expr", "SubqueryExpr": "subqueryexpr"}}>
+```cpp showLineNumbers={false}
+Parser::InSubquery::InSubquery(
+    bool n,
+    Expr *a,
+    SubqueryExpr *q
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_subquery [#getsubquery]
+
+<CodeBlock links={{"InSubquery": "insubquery", "SubqueryExpr": "subqueryexpr"}}>
+```cpp showLineNumbers={false}
+const SubqueryExpr * Parser::InSubquery::get_subquery() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"InSubquery": "insubquery"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::InSubquery::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"InSubquery": "insubquery"}}>
+```cpp showLineNumbers={false}
+std::string Parser::InSubquery::to_string() const override
+```
+</CodeBlock>
+
+### get_is_not [#getisnot]
+
+<CodeBlock links={{"InSubquery": "insubquery", "InExpr": "inexpr"}}>
+```cpp showLineNumbers={false}
+bool Parser::InSubquery::get_is_not() const
+```
+</CodeBlock>
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"InSubquery": "insubquery", "Expr": "expr", "InExpr": "inexpr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::InSubquery::get_arg() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `subquery_` | `std::unique_ptr< SubqueryExpr >` | |
+| `is_not_` | `bool` | |
+| `arg_` | `std::unique_ptr< Expr >` | |

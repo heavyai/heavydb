@@ -1,0 +1,57 @@
+---
+title: "lockmgr::TableInsertLockContainer< ReadLock >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgr.h>
+```
+
+**Inherits from:** `lockmgr::LockContainerImpl< const TableDescriptor *, ReadLock >` (public), `lockmgr::LockContainerImpl< const TableDescriptor *, ReadLock >` (public)
+
+---
+
+## Methods
+
+### TableInsertLockContainer [#tableinsertlockcontainer]
+
+<CodeBlock links={{"TableInsertLockContainer< ReadLock >": "tableinsertlockcontainerreadlock"}}>
+```cpp showLineNumbers={false}
+lockmgr::TableInsertLockContainer<ReadLock>::TableInsertLockContainer(
+    const TableDescriptor *obj,
+    ReadLock &&lock
+)
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"TableInsertLockContainer< ReadLock >": "tableinsertlockcontainerreadlock"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * lockmgr::LockContainerImpl<const TableDescriptor *, ReadLock>::operator()() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### acquire [#acquire]
+
+<CodeBlock links={{"TableInsertLockContainer< ReadLock >": "tableinsertlockcontainerreadlock"}}>
+```cpp showLineNumbers={false}
+static auto lockmgr::TableInsertLockContainer<ReadLock>::acquire(
+    const int db_id,
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `obj_` | `const TableDescriptor *` | |
+| `lock_` | `ReadLock` | |

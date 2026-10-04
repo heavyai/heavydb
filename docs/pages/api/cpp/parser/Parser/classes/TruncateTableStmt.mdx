@@ -1,0 +1,85 @@
+---
+title: Parser::TruncateTableStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### TruncateTableStmt [#truncatetablestmt]
+
+<Tabs>
+<Tab title="From raw pointer">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"TruncateTableStmt": "truncatetablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::TruncateTableStmt::TruncateTableStmt(
+    std::string *tab
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"TruncateTableStmt": "truncatetablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::TruncateTableStmt::TruncateTableStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_table [#gettable]
+
+<CodeBlock links={{"TruncateTableStmt": "truncatetablestmt"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::TruncateTableStmt::get_table() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"TruncateTableStmt": "truncatetablestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::TruncateTableStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"TruncateTableStmt": "truncatetablestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::TruncateTableStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |

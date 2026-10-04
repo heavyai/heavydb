@@ -1,0 +1,50 @@
+---
+title: HashJoinFail
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashJoin.h>
+```
+
+**Inherits from:** `std::runtime_error` (public)
+
+---
+
+## Constructors
+
+### HashJoinFail [#hashjoinfail]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"HashJoinFail": "hashjoinfail"}}>
+```cpp showLineNumbers={false}
+HashJoinFail::HashJoinFail(
+    const std::string &err_msg
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with qual decision)">
+
+<CodeBlock links={{"HashJoinFail": "hashjoinfail"}}>
+```cpp showLineNumbers={false}
+HashJoinFail::HashJoinFail(
+    const std::string &err_msg,
+    InnerQualDecision qual_decision
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `inner_qual_decision` | `InnerQualDecision` | |

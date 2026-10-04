@@ -1,0 +1,143 @@
+---
+title: foreign_storage::OdbcSelectDescriptor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/odbc_utils.h>
+```
+
+---
+
+## Constructors
+
+### OdbcSelectDescriptor [#odbcselectdescriptor]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor", "RemoteColumnDescription": "remotecolumndescription"}}>
+```cpp showLineNumbers={false}
+foreign_storage::OdbcSelectDescriptor::OdbcSelectDescriptor(
+    int64_t offset,
+    size_t limit,
+    std::string select_command,
+    std::string order_by_command,
+    const ColumnDescriptor &column,
+    const RemoteColumnDescription &remote_column
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor", "RemoteColumnDescription": "remotecolumndescription"}}>
+```cpp showLineNumbers={false}
+foreign_storage::OdbcSelectDescriptor::OdbcSelectDescriptor(
+    std::string select_command,
+    std::string order_by_command,
+    const ColumnDescriptor &column,
+    const RemoteColumnDescription &remote_column
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getSelectStmtFromType [#getselectstmtfromtype]
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OdbcSelectDescriptor::getSelectStmtFromType() const
+```
+</CodeBlock>
+
+### getSelectStmt [#getselectstmt]
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OdbcSelectDescriptor::getSelectStmt() const
+```
+</CodeBlock>
+
+### getSelectMaxLengthStmt [#getselectmaxlengthstmt]
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OdbcSelectDescriptor::getSelectMaxLengthStmt() const
+```
+</CodeBlock>
+
+### getCountNotNullStmt [#getcountnotnullstmt]
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OdbcSelectDescriptor::getCountNotNullStmt() const
+```
+</CodeBlock>
+
+### getMinValueStmt [#getminvaluestmt]
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OdbcSelectDescriptor::getMinValueStmt() const
+```
+</CodeBlock>
+
+### getMaxValueStmt [#getmaxvaluestmt]
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OdbcSelectDescriptor::getMaxValueStmt() const
+```
+</CodeBlock>
+
+### getExpectedNumResultRows [#getexpectednumresultrows]
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::OdbcSelectDescriptor::getExpectedNumResultRows() const
+```
+</CodeBlock>
+
+### getSelectStmtSubquery [#getselectstmtsubquery]
+
+<CodeBlock links={{"OdbcSelectDescriptor": "odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OdbcSelectDescriptor::getSelectStmtSubquery() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### SelectQueryType
+
+| Name | Value | Description |
+|---|---|---|
+| `kSelect` | `= 0` | |
+| `kMaxLength` | | |
+| `kCountNotNull` | | |
+| `kMinValue` | | |
+| `kMaxValue` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `offset` | `int64_t` | |
+| `limit` | `size_t` | |
+| `select_command` | `std::string` | |
+| `order_by_command` | `std::string` | |
+| `column` | `const ColumnDescriptor &` | |
+| `remote_column` | `const RemoteColumnDescription &` | |
+| `select_type` | `std::optional< SelectQueryType >` | |

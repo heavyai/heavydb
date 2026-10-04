@@ -1,0 +1,297 @@
+---
+title: Analyzer::ArrayExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### ArrayExpr [#arrayexpr]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr"}}>
+```cpp showLineNumbers={false}
+Analyzer::ArrayExpr::ArrayExpr(
+    SQLTypeInfo const &array_ti,
+    ExpressionPtrVector array_exprs,
+    bool is_null = false,
+    bool local_alloc = false
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr"}}>
+```cpp showLineNumbers={false}
+ExpressionPtr Analyzer::ArrayExpr::deep_copy() const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::ArrayExpr::toString() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::ArrayExpr::operator==(
+    Expr const &rhs
+) const override
+```
+</CodeBlock>
+
+### getElementCount [#getelementcount]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::ArrayExpr::getElementCount() const
+```
+</CodeBlock>
+
+### isLocalAlloc [#islocalalloc]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::ArrayExpr::isLocalAlloc() const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::ArrayExpr::isNull() const
+```
+</CodeBlock>
+
+### getElement [#getelement]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Analyzer::Expr * Analyzer::ArrayExpr::getElement(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::ArrayExpr::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::ArrayExpr::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::ArrayExpr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::ArrayExpr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::ArrayExpr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::ArrayExpr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::ArrayExpr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::ArrayExpr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::ArrayExpr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::ArrayExpr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::ArrayExpr::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::ArrayExpr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::ArrayExpr::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::ArrayExpr::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::ArrayExpr::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::ArrayExpr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::ArrayExpr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::ArrayExpr::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::ArrayExpr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"ArrayExpr": "arrayexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::ArrayExpr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `contained_expressions_` | `ExpressionPtrVector` | |
+| `local_alloc_` | `bool` | |
+| `is_null_` | `bool` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

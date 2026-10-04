@@ -1,0 +1,150 @@
+---
+title: foreign_storage::ForeignDataWrapperFactory
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ForeignDataWrapperFactory.h>
+```
+
+---
+
+## Static methods
+
+### create [#create]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ForeignDataWrapperFactory": "foreigndatawrapperfactory", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ForeignDataWrapper> foreign_storage::ForeignDataWrapperFactory::create(
+    const std::string &data_wrapper_type,
+    const int db_id,
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+Creates an instance of a [ForeignDataWrapper](foreigndatawrapper) for the given data wrapper type using provided database and foreign table details.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ForeignDataWrapperFactory": "foreigndatawrapperfactory", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ForeignDataWrapper> foreign_storage::ForeignDataWrapperFactory::create(
+    const std::string &data_wrapper_type,
+    const int db_id,
+    const ForeignTable *foreign_table,
+    const UserMapping *user_mapping
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### createUserMappingProxyIfApplicable [#createusermappingproxyifapplicable]
+
+<CodeBlock links={{"ForeignDataWrapperFactory": "foreigndatawrapperfactory"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<UserMapping> foreign_storage::ForeignDataWrapperFactory::createUserMappingProxyIfApplicable(
+    const int db_id,
+    const int user_id,
+    const std::string &file_path,
+    const import_export::CopyParams &copy_params,
+    const ForeignServer *server
+)
+```
+</CodeBlock>
+
+### createForeignServerProxy [#createforeignserverproxy]
+
+<CodeBlock links={{"ForeignDataWrapperFactory": "foreigndatawrapperfactory"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ForeignServer> foreign_storage::ForeignDataWrapperFactory::createForeignServerProxy(
+    const int db_id,
+    const int user_id,
+    const std::string &file_path,
+    const import_export::CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### createForeignTableProxy [#createforeigntableproxy]
+
+<CodeBlock links={{"ForeignDataWrapperFactory": "foreigndatawrapperfactory"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ForeignTable> foreign_storage::ForeignDataWrapperFactory::createForeignTableProxy(
+    const int db_id,
+    const TableDescriptor *table,
+    const std::string &file_path,
+    const import_export::CopyParams &copy_params,
+    const ForeignServer *server
+)
+```
+</CodeBlock>
+
+### createForImport [#createforimport]
+
+<CodeBlock links={{"ForeignDataWrapperFactory": "foreigndatawrapperfactory", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ForeignDataWrapper> foreign_storage::ForeignDataWrapperFactory::createForImport(
+    const std::string &data_wrapper_type,
+    const int db_id,
+    const ForeignTable *foreign_table,
+    const UserMapping *user_mapping
+)
+```
+</CodeBlock>
+
+Create for the import use-case.
+
+### createForGeneralImport [#createforgeneralimport]
+
+<CodeBlock links={{"ForeignDataWrapperFactory": "foreigndatawrapperfactory", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ForeignDataWrapper> foreign_storage::ForeignDataWrapperFactory::createForGeneralImport(
+    const import_export::CopyParams &copy_params,
+    const int db_id,
+    const ForeignTable *foreign_table,
+    const UserMapping *user_mapping
+)
+```
+</CodeBlock>
+
+### createForValidation [#createforvalidation]
+
+<CodeBlock links={{"ForeignDataWrapperFactory": "foreigndatawrapperfactory", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+const ForeignDataWrapper * foreign_storage::ForeignDataWrapperFactory::createForValidation(
+    const std::string &data_wrapper_type,
+    const ForeignTable *foreign_table = nullptr
+)
+```
+</CodeBlock>
+
+Creates an instance (or gets an existing instance) of an immutable [ForeignDataWrapper](foreigndatawrapper) to be used for validation purposes.
+
+Returned instance should not be used for any stateful operations, such as fetching foreign table data/metadata.
+
+### validateDataWrapperType [#validatedatawrappertype]
+
+<CodeBlock links={{"ForeignDataWrapperFactory": "foreigndatawrapperfactory"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignDataWrapperFactory::validateDataWrapperType(
+    const std::string &data_wrapper_type
+)
+```
+</CodeBlock>
+
+Checks that the given data wrapper type is valid.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `validation_data_wrappers_` <Badge intent="note" minimal>static</Badge> | `std::map< std::string, std::unique_ptr< ForeignDataWrapper > >` | |

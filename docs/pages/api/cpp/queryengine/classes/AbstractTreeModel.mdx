@@ -1,0 +1,128 @@
+---
+title: AbstractTreeModel
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <MLModel.h>
+```
+
+**Inherits from:** `AbstractMLModel` (public)
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~AbstractTreeModel
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel"}}>
+```cpp showLineNumbers={false}
+virtual AbstractTreeModel::~AbstractTreeModel() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getModelType [#getmodeltype]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel"}}>
+```cpp showLineNumbers={false}
+virtual MLModelType AbstractTreeModel::getModelType() const
+```
+</CodeBlock>
+
+### getModelTypeString [#getmodeltypestring]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel"}}>
+```cpp showLineNumbers={false}
+virtual std::string AbstractTreeModel::getModelTypeString() const
+```
+</CodeBlock>
+
+### getNumFeatures [#getnumfeatures]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel"}}>
+```cpp showLineNumbers={false}
+virtual int64_t AbstractTreeModel::getNumFeatures() const
+```
+</CodeBlock>
+
+### getNumTrees [#getnumtrees]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel"}}>
+```cpp showLineNumbers={false}
+virtual int64_t AbstractTreeModel::getNumTrees() const
+```
+</CodeBlock>
+
+### traverseDF [#traversedf]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel"}}>
+```cpp showLineNumbers={false}
+virtual void AbstractTreeModel::traverseDF(
+    const int64_t tree_idx,
+    TreeModelVisitor &tree_node_visitor
+) const
+```
+</CodeBlock>
+
+### getModelMetadataStr [#getmodelmetadatastr]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const std::string & AbstractTreeModel::getModelMetadataStr() const
+```
+</CodeBlock>
+
+### getModelMetadata [#getmodelmetadata]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel", "MLModelMetadata": "mlmodelmetadata", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+MLModelMetadata AbstractTreeModel::getModelMetadata() const
+```
+</CodeBlock>
+
+### getCatFeatureKeys [#getcatfeaturekeys]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::vector<std::string>> & AbstractTreeModel::getCatFeatureKeys() const
+```
+</CodeBlock>
+
+### getNumCatFeatures [#getnumcatfeatures]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t AbstractTreeModel::getNumCatFeatures() const
+```
+</CodeBlock>
+
+### getNumOneHotFeatures [#getnumonehotfeatures]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t AbstractTreeModel::getNumOneHotFeatures() const
+```
+</CodeBlock>
+
+### getNumLogicalFeatures [#getnumlogicalfeatures]
+
+<CodeBlock links={{"AbstractTreeModel": "abstracttreemodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t AbstractTreeModel::getNumLogicalFeatures() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `model_metadata_` | `std::string` | |
+| `cat_feature_keys_` | `std::vector< std::vector< std::string > >` | |

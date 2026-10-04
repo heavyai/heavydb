@@ -1,0 +1,58 @@
+---
+title: Parser::NullLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Literal` (public)
+
+---
+
+## Constructors
+
+### NullLiteral [#nullliteral]
+
+<CodeBlock links={{"NullLiteral": "nullliteral"}}>
+```cpp showLineNumbers={false}
+Parser::NullLiteral::NullLiteral()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### analyze [#analyze]
+
+<CodeBlock links={{"NullLiteral": "nullliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::NullLiteral::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"NullLiteral": "nullliteral"}}>
+```cpp showLineNumbers={false}
+std::string Parser::NullLiteral::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |

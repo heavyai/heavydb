@@ -1,0 +1,16 @@
+---
+title: logger::debug_timer_new_thread
+description: "Call this when a new thread is spawned that will have timers that need to be associated with timers on the parent thread."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void logger::debug_timer_new_thread(
+    ThreadId const parent_thread_id
+)
+```
+</CodeBlock>
+
+Call this when a new thread is spawned that will have timers that need to be associated with timers on the parent thread.
+
+Required: g_thread_local_ids.thread_id_ is not yet in g_duration_tree_map.

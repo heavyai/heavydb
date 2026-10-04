@@ -1,0 +1,95 @@
+---
+title: Parser::RevokeRoleStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### RevokeRoleStmt [#revokerolestmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RevokeRoleStmt": "revokerolestmt"}}>
+```cpp showLineNumbers={false}
+Parser::RevokeRoleStmt::RevokeRoleStmt(
+    std::list<std::string *> *r,
+    std::list<std::string *> *g
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"RevokeRoleStmt": "revokerolestmt"}}>
+```cpp showLineNumbers={false}
+Parser::RevokeRoleStmt::RevokeRoleStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_roles [#getroles]
+
+<CodeBlock links={{"RevokeRoleStmt": "revokerolestmt"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & Parser::RevokeRoleStmt::get_roles() const
+```
+</CodeBlock>
+
+### get_grantees [#getgrantees]
+
+<CodeBlock links={{"RevokeRoleStmt": "revokerolestmt"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & Parser::RevokeRoleStmt::get_grantees() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"RevokeRoleStmt": "revokerolestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RevokeRoleStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"RevokeRoleStmt": "revokerolestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RevokeRoleStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `roles_` | `std::vector< std::string >` | |
+| `grantees_` | `std::vector< std::string >` | |

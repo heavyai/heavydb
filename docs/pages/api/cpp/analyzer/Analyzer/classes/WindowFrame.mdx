@@ -1,0 +1,292 @@
+---
+title: Analyzer::WindowFrame
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### WindowFrame [#windowframe]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::WindowFrame::WindowFrame(
+    SqlWindowFrameBoundType bound_type,
+    const std::shared_ptr<Analyzer::Expr> bound_expr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getBoundType [#getboundtype]
+
+<CodeBlock links={{"WindowFrame": "windowframe"}}>
+```cpp showLineNumbers={false}
+SqlWindowFrameBoundType Analyzer::WindowFrame::getBoundType() const
+```
+</CodeBlock>
+
+### getBoundExpr [#getboundexpr]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Analyzer::Expr * Analyzer::WindowFrame::getBoundExpr() const
+```
+</CodeBlock>
+
+### hasTimestampTypeFrameBound [#hastimestamptypeframebound]
+
+<CodeBlock links={{"WindowFrame": "windowframe"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFrame::hasTimestampTypeFrameBound() const
+```
+</CodeBlock>
+
+### isCurrentRowBound [#iscurrentrowbound]
+
+<CodeBlock links={{"WindowFrame": "windowframe"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFrame::isCurrentRowBound() const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WindowFrame::deep_copy() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"WindowFrame": "windowframe"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFrame::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"WindowFrame": "windowframe"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::WindowFrame::toString() const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WindowFrame::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::WindowFrame::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WindowFrame::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFrame::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WindowFrame::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WindowFrame::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFrame::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::WindowFrame::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFrame::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFrame::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "ColumnVar": "columnvar", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFrame::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::WindowFrame::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::WindowFrame::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::WindowFrame::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::WindowFrame::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFrame::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WindowFrame::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFrame::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WindowFrame::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"WindowFrame": "windowframe", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFrame::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `bound_type_` | `SqlWindowFrameBoundType` | |
+| `bound_expr_` | `const std::shared_ptr< Analyzer::Expr >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

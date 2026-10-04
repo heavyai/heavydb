@@ -1,0 +1,16 @@
+---
+title: get_composite_key_index_impl
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+FORCE_INLINE DEVICE int64_t get_composite_key_index_impl(
+    const T *key,
+    const size_t key_component_count,
+    const T *composite_key_dict,
+    const size_t entry_count
+)
+```
+</CodeBlock>

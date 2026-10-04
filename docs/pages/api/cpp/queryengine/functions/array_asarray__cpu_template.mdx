@@ -1,0 +1,47 @@
+---
+title: array_asarray__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t array_asarray__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<T> &input,
+    Column<Array<T>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_asarray__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input,
+    Column<Array<int64_t>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_asarray__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input,
+    Column<Array<TextEncodingDict>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

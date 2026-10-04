@@ -1,0 +1,18 @@
+---
+title: foreign_storage::add_file_region
+description: "Creates a new file region based on metadata from parsed file buffers and adds the new region to the fragment id to file regions map."
+---
+
+<CodeBlock links={{"ParseBufferResult": "../structs/parsebufferresult"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::add_file_region(
+    std::map<int, FileRegions> &fragment_id_to_file_regions_map,
+    int fragment_id,
+    size_t first_row_index,
+    const ParseBufferResult &result,
+    const std::string &file_path
+)
+```
+</CodeBlock>
+
+Creates a new file region based on metadata from parsed file buffers and adds the new region to the fragment id to file regions map.

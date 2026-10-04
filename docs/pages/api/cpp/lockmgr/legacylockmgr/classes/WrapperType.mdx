@@ -1,0 +1,95 @@
+---
+title: legacylockmgr::WrapperType
+description: ""
+---
+
+<CodeBlock id="WrapperType" links={{"WrapperType": "wrappertype"}}>
+```cpp showLineNumbers={false}
+template <typename MutexType>
+class WrapperType
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <legacylockmgr/LegacyLockMgr.h>
+```
+
+**Template parameters**
+
+<ParamField path="MutexType" type="typename">
+</ParamField>
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Constructors
+
+### WrapperType [#wrappertype]
+
+<CodeBlock links={{"WrapperType": "wrappertype"}}>
+```cpp showLineNumbers={false}
+legacylockmgr::WrapperType<MutexType>::WrapperType()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### lock [#lock]
+
+<CodeBlock links={{"WrapperType": "wrappertype"}}>
+```cpp showLineNumbers={false}
+void legacylockmgr::WrapperType<MutexType>::lock()
+```
+</CodeBlock>
+
+### try_lock [#trylock]
+
+<CodeBlock links={{"WrapperType": "wrappertype"}}>
+```cpp showLineNumbers={false}
+bool legacylockmgr::WrapperType<MutexType>::try_lock()
+```
+</CodeBlock>
+
+### unlock [#unlock]
+
+<CodeBlock links={{"WrapperType": "wrappertype"}}>
+```cpp showLineNumbers={false}
+void legacylockmgr::WrapperType<MutexType>::unlock()
+```
+</CodeBlock>
+
+### lock_shared [#lockshared]
+
+<CodeBlock links={{"WrapperType": "wrappertype"}}>
+```cpp showLineNumbers={false}
+void legacylockmgr::WrapperType<MutexType>::lock_shared()
+```
+</CodeBlock>
+
+### try_lock_shared [#trylockshared]
+
+<CodeBlock links={{"WrapperType": "wrappertype"}}>
+```cpp showLineNumbers={false}
+bool legacylockmgr::WrapperType<MutexType>::try_lock_shared()
+```
+</CodeBlock>
+
+### unlock_shared [#unlockshared]
+
+<CodeBlock links={{"WrapperType": "wrappertype"}}>
+```cpp showLineNumbers={false}
+void legacylockmgr::WrapperType<MutexType>::unlock_shared()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `mutex_` | `MutexType` | |
+| `dmutex_` | `heavyai::DistributedSharedMutex` | |

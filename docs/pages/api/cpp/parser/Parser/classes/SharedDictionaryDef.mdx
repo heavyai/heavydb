@@ -1,0 +1,64 @@
+---
+title: Parser::SharedDictionaryDef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::TableConstraintDef` (public)
+
+---
+
+## Constructors
+
+### SharedDictionaryDef [#shareddictionarydef]
+
+<CodeBlock links={{"SharedDictionaryDef": "shareddictionarydef"}}>
+```cpp showLineNumbers={false}
+Parser::SharedDictionaryDef::SharedDictionaryDef(
+    const std::string &column,
+    const std::string &foreign_table,
+    const std::string foreign_column
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_column [#getcolumn]
+
+<CodeBlock links={{"SharedDictionaryDef": "shareddictionarydef"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::SharedDictionaryDef::get_column() const
+```
+</CodeBlock>
+
+### get_foreign_table [#getforeigntable]
+
+<CodeBlock links={{"SharedDictionaryDef": "shareddictionarydef"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::SharedDictionaryDef::get_foreign_table() const
+```
+</CodeBlock>
+
+### get_foreign_column [#getforeigncolumn]
+
+<CodeBlock links={{"SharedDictionaryDef": "shareddictionarydef"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::SharedDictionaryDef::get_foreign_column() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_` | `const std::string` | |
+| `foreign_table_` | `const std::string` | |
+| `foreign_column_` | `const std::string` | |

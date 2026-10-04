@@ -1,0 +1,50 @@
+---
+title: ct_overload_column_list_test__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t ct_overload_column_list_test__cpu_template(
+    const Column<K> &first_col,
+    const ColumnList<T> &col_list,
+    const Column<K> &last_col,
+    Column<K> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_overload_column_list_test__cpu_template(
+    const Column<int64_t> &first_col,
+    const ColumnList<int64_t> &col_list,
+    const Column<int64_t> &last_col,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_overload_column_list_test__cpu_template(
+    const Column<int64_t> &first_col,
+    const ColumnList<double> &col_list,
+    const Column<int64_t> &last_col,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

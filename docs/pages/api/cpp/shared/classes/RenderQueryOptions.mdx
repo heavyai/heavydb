@@ -1,0 +1,129 @@
+---
+title: RenderQueryOptions
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RenderQueryOptions.h>
+```
+
+---
+
+## Methods
+
+### shouldAlterRA [#shouldalterra]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+bool RenderQueryOptions::shouldAlterRA() const
+```
+</CodeBlock>
+
+### useLegacyHitTestLogic [#uselegacyhittestlogic]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+bool RenderQueryOptions::useLegacyHitTestLogic() const
+```
+</CodeBlock>
+
+### injectRowIdForHitTesting [#injectrowidforhittesting]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+bool RenderQueryOptions::injectRowIdForHitTesting() const
+```
+</CodeBlock>
+
+### isHitTestingEnabled [#ishittestingenabled]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+bool RenderQueryOptions::isHitTestingEnabled() const
+```
+</CodeBlock>
+
+### injectRowIdForPPLL [#injectrowidforppll]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+bool RenderQueryOptions::injectRowIdForPPLL() const
+```
+</CodeBlock>
+
+### requiresPhysicalTables [#requiresphysicaltables]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+bool RenderQueryOptions::requiresPhysicalTables() const
+```
+</CodeBlock>
+
+### setFlags [#setflags]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+void RenderQueryOptions::setFlags(
+    FlagBits flags_to_set
+)
+```
+</CodeBlock>
+
+### clearFlags [#clearflags]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+void RenderQueryOptions::clearFlags(
+    FlagBits flags_to_clear
+)
+```
+</CodeBlock>
+
+### clearAllFlags [#clearallflags]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+void RenderQueryOptions::clearAllFlags()
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+bool RenderQueryOptions::operator==(
+    const RenderQueryOptions &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"RenderQueryOptions": "renderqueryoptions"}}>
+```cpp showLineNumbers={false}
+bool RenderQueryOptions::operator!=(
+    const RenderQueryOptions &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### FlagBits
+
+| Name | Value | Description |
+|---|---|---|
+| `kLegacyHitTestLogic` | `= 1u << 0` | |
+| `kInjectRowIdForHitTesting` | `= 1u << 1` | |
+| `kRequiresPhysicalTables` | `= 1u << 2` | |
+| `kInjectRowIdForPPLL` | `= 1u << 3` | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `flags_` | `uint32_t` | |

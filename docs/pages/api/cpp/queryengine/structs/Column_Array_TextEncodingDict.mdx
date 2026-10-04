@@ -1,0 +1,179 @@
+---
+title: "Column< Array< TextEncodingDict > >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+**Inherits from:** `flatbuffer::Column< flatbuffer::Array< TextEncodingDict >, Array< TextEncodingDict > >` (public)
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict", "Column": "column", "Array": "array", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<Array<TextEncodingDict>> & Column<Array<TextEncodingDict>>::operator=(
+    const Column<Array<TextEncodingDict>> &other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### Column [#column]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict"}}>
+```cpp showLineNumbers={false}
+Column<Array<TextEncodingDict>>::Column(
+    int8_t *flatbuffer,
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+### getDictDbId [#getdictdbid]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t Column<Array<TextEncodingDict>>::getDictDbId() const
+```
+</CodeBlock>
+
+### getDictId [#getdictid]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t Column<Array<TextEncodingDict>>::getDictId() const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Column<Timestamp>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+### setNull [#setnull]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<Timestamp>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict", "Array": "array", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE Array<TextEncodingDict> & Column<Array<TextEncodingDict>>::operator[](
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### getPtr [#getptr]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict", "Array": "array", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE Array<TextEncodingDict> * Column<Array<TextEncodingDict>>::getPtr() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t Column<Array<TextEncodingDict>>::size() const
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<Array<TextEncodingDict>>::setSize(
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict", "Array": "../flatbuffer/structs/array", "TextEncodingDict": "textencodingdict", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE flatbuffer::Array<TextEncodingDict> flatbuffer::Column<flatbuffer::Array<TextEncodingDict>, Array<TextEncodingDict>>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict", "Array": "array", "TextEncodingDict": "textencodingdict", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE Array<TextEncodingDict> flatbuffer::Column<flatbuffer::Array<TextEncodingDict>, Array<TextEncodingDict>>::operator()(
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### setItem [#setitem]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict", "Array": "../flatbuffer/structs/array", "TextEncodingDict": "textencodingdict", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<flatbuffer::Array<TextEncodingDict>, Array<TextEncodingDict>>::setItem(
+    int64_t index,
+    const flatbuffer::Array<TextEncodingDict> &item
+)
+```
+</CodeBlock>
+
+### getNofValues [#getnofvalues]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+int64_t flatbuffer::Column<flatbuffer::Array<TextEncodingDict>, Array<TextEncodingDict>>::getNofValues() const
+```
+</CodeBlock>
+
+### concatItem [#concatitem]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict", "Array": "../flatbuffer/structs/array", "TextEncodingDict": "textencodingdict", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<flatbuffer::Array<TextEncodingDict>, Array<TextEncodingDict>>::concatItem(
+    int64_t index,
+    const flatbuffer::Array<TextEncodingDict> &item
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"Column< Array< TextEncodingDict > >": "columnarraytextencodingdict", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::Column<flatbuffer::Array<TextEncodingDict>, Array<TextEncodingDict>>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr_` | `Array< TextEncodingDict > *` | |
+| `num_rows_` | `int64_t` | |
+| `flatbuffer_` | `int8_t *` | |

@@ -1,0 +1,441 @@
+---
+title: ScalarExprVisitor
+description: ""
+---
+
+<CodeBlock id="ScalarExprVisitor" links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+template <class T>
+class ScalarExprVisitor
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <ScalarExprVisitor.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="class">
+</ParamField>
+
+---
+
+## Methods
+
+### visit [#visit]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+T ScalarExprVisitor<T>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitColumnVar(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *
+) const
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitConstant(
+    const Analyzer::Constant *
+) const
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitUOper(
+    const Analyzer::UOper *uoper
+) const
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::aggregateResult(
+    const T &aggregate,
+    const T &next_result
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<T>::visitBegin() const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T ScalarExprVisitor<T>::defaultResult() const
+```
+</CodeBlock>

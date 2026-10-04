@@ -1,0 +1,20 @@
+---
+title: compute_int16_t_greater_equal_current_row_idx_in_frame
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+C RUNTIME_EXPORT ALWAYS_INLINE int64_t compute_int16_t_greater_equal_current_row_idx_in_frame(
+    const int64_t num_elems,
+    const int64_t cur_row_idx,
+    const int16_t *col_buf,
+    const int32_t *partition_rowid_buf,
+    const int64_t *ordered_index_buf,
+    const int16_t null_val,
+    const bool nulls_first,
+    const int64_t null_start_pos,
+    const int64_t null_end_pos
+)
+```
+</CodeBlock>

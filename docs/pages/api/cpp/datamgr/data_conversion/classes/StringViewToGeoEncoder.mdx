@@ -1,0 +1,310 @@
+---
+title: data_conversion::StringViewToGeoEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <data_conversion/StringViewToGeoEncoder.h>
+```
+
+**Inherits from:** `data_conversion::BaseConvertEncoder` (public), `foreign_storage::GeospatialEncoder` (public)
+
+---
+
+## Constructors
+
+### StringViewToGeoEncoder [#stringviewtogeoencoder]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+data_conversion::StringViewToGeoEncoder::StringViewToGeoEncoder(
+    std::list<Chunk_NS::Chunk> &chunks,
+    std::list<std::unique_ptr<ChunkMetadata>> &chunk_metadata,
+    const bool error_tracking_enabled,
+    const bool geo_validate_geometry
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### encodeAndAppendData [#encodeandappenddata]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::encodeAndAppendData(
+    const int8_t *data,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+### initializeDeleteBuffer [#initializedeletebuffer]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::initializeDeleteBuffer(
+    const size_t size_hint
+)
+```
+</CodeBlock>
+
+### finalize [#finalize]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::StringViewToGeoEncoder::finalize(
+    const size_t rows_appended
+)
+```
+</CodeBlock>
+
+### getMetadata [#getmetadata]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<ChunkMetadata> data_conversion::StringViewToGeoEncoder::getMetadata(
+    const Chunk_NS::Chunk &chunk
+) const
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::StringViewToGeoEncoder::clear()
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+template <typename DataType>
+bool data_conversion::StringViewToGeoEncoder::isNull(
+    const DataType &typed_value
+)
+```
+</CodeBlock>
+
+### appendBaseDataAndUpdateMetadata [#appendbasedataandupdatemetadata]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::appendBaseDataAndUpdateMetadata(
+    const int64_t row_count
+)
+```
+</CodeBlock>
+
+### validateChunksSizing [#validatechunkssizing]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "Chunk": "../../chunkns/classes/chunk", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::validateChunksSizing(
+    const std::list<Chunk_NS::Chunk> &chunks
+) const
+```
+</CodeBlock>
+
+### validateMetadataSizing [#validatemetadatasizing]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "ChunkMetadata": "../../structs/chunkmetadata", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::validateMetadataSizing(
+    const std::list<std::unique_ptr<ChunkMetadata>> &chunk_metadata
+) const
+```
+</CodeBlock>
+
+### appendArrayDatumsToBufferAndUpdateMetadata [#appendarraydatumstobufferandupdatemetadata]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::appendArrayDatumsToBufferAndUpdateMetadata()
+```
+</CodeBlock>
+
+### appendToArrayEncoderAndUpdateMetadata [#appendtoarrayencoderandupdatemetadata]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "Encoder": "../../classes/encoder", "ChunkMetadata": "../../structs/chunkmetadata", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::appendToArrayEncoderAndUpdateMetadata(
+    const std::vector<ArrayDatum> &datum_parse_buffer,
+    Encoder *encoder,
+    ChunkMetadata *chunk_metadata
+) const
+```
+</CodeBlock>
+
+### processGeoElement [#processgeoelement]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::processGeoElement(
+    std::string_view geo_string_view
+)
+```
+</CodeBlock>
+
+### processNullGeoElement [#processnullgeoelement]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::processNullGeoElement()
+```
+</CodeBlock>
+
+### clearParseBuffers [#clearparsebuffers]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::clearParseBuffers()
+```
+</CodeBlock>
+
+### clearDatumBuffers [#cleardatumbuffers]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToGeoEncoder::clearDatumBuffers()
+```
+</CodeBlock>
+
+### getIteratorForGeoColumnType [#getiteratorforgeocolumntype]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+std::list<T>::iterator data_conversion::StringViewToGeoEncoder::getIteratorForGeoColumnType(
+    std::list<T> &list,
+    const SQLTypes column_type,
+    const GeoColumnType geo_column
+)
+```
+</CodeBlock>
+
+### initEncoderAndGetEncoderAndMetadata [#initencoderandgetencoderandmetadata]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata", "Encoder": "../../classes/encoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+std::tuple<Encoder *, ChunkMetadata *, const ColumnDescriptor *> data_conversion::StringViewToGeoEncoder::initEncoderAndGetEncoderAndMetadata(
+    std::list<Chunk_NS::Chunk> &chunks,
+    std::list<std::unique_ptr<ChunkMetadata>> &chunk_metadata,
+    const SQLTypes sql_type,
+    GeoColumnType geo_column_type
+)
+```
+</CodeBlock>
+
+### getColumnDescriptor [#getcolumndescriptor]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "Chunk": "../../chunkns/classes/chunk", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * data_conversion::StringViewToGeoEncoder::getColumnDescriptor(
+    std::list<Chunk_NS::Chunk> &chunks,
+    const SQLTypes sql_type,
+    GeoColumnType geo_column_type
+)
+```
+</CodeBlock>
+
+### hasBoundsColumn [#hasboundscolumn]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+bool data_conversion::StringViewToGeoEncoder::hasBoundsColumn() const
+```
+</CodeBlock>
+
+### hasRingOrLineSizesColumn [#hasringorlinesizescolumn]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+bool data_conversion::StringViewToGeoEncoder::hasRingOrLineSizesColumn() const
+```
+</CodeBlock>
+
+### hasPolyRingsColumn [#haspolyringscolumn]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+bool data_conversion::StringViewToGeoEncoder::hasPolyRingsColumn() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### throwMalformedGeoElement [#throwmalformedgeoelement]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+static void data_conversion::StringViewToGeoEncoder::throwMalformedGeoElement(
+    const std::string &omnisci_column_name
+)
+```
+</CodeBlock>
+
+### throwMismatchedGeoElement [#throwmismatchedgeoelement]
+
+<CodeBlock links={{"StringViewToGeoEncoder": "stringviewtogeoencoder", "BaseConvertEncoder": "baseconvertencoder", "GeospatialEncoder": "../../foreignstorage/classes/geospatialencoder"}}>
+```cpp showLineNumbers={false}
+static void data_conversion::StringViewToGeoEncoder::throwMismatchedGeoElement(
+    const std::string &omnisci_column_name
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### GeoColumnType
+
+| Name | Value | Description |
+|---|---|---|
+| `COORDS` | | |
+| `BOUNDS` | | |
+| `RING_OR_LINE_SIZES` | | |
+| `POLY_RINGS` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `delete_buffer_` | `std::optional< std::vector< bool > >` | |
+| `error_tracking_enabled_` | `const bool` | |
+| `has_nulls_` | `bool` | |
+| `num_elements_` | `size_t` | |
+| `geo_column_descriptor_` | `const ColumnDescriptor *` | |
+| `base_column_encoder_` | `StringNoneEncoder *` | |
+| `coords_column_encoder_` | `Encoder *` | |
+| `bounds_column_encoder_` | `Encoder *` | |
+| `ring_or_line_sizes_column_encoder_` | `Encoder *` | |
+| `poly_rings_column_encoder_` | `Encoder *` | |
+| `base_column_metadata_` | `ChunkMetadata *` | |
+| `coords_column_metadata_` | `ChunkMetadata *` | |
+| `bounds_column_metadata_` | `ChunkMetadata *` | |
+| `ring_or_line_sizes_column_metadata_` | `ChunkMetadata *` | |
+| `poly_rings_column_metadata_` | `ChunkMetadata *` | |
+| `coords_column_descriptor_` | `const ColumnDescriptor *` | |
+| `bounds_column_descriptor_` | `const ColumnDescriptor *` | |
+| `ring_or_line_sizes_column_descriptor_` | `const ColumnDescriptor *` | |
+| `poly_rings_column_descriptor_` | `const ColumnDescriptor *` | |
+| `base_values_` | `std::vector< std::string >` | |
+| `coords_parse_buffer_` | `std::vector< double >` | |
+| `bounds_parse_buffer_` | `std::vector< double >` | |
+| `ring_or_line_sizes_parse_buffer_` | `std::vector< int >` | |
+| `poly_rings_parse_buffer_` | `std::vector< int >` | |
+| `coords_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `bounds_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `ring_or_line_sizes_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `poly_rings_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `geo_validate_geometry_` | `bool` | |

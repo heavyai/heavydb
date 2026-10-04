@@ -1,0 +1,146 @@
+---
+title: data_conversion::TypedBaseConvertEncoder
+description: ""
+---
+
+<CodeBlock id="TypedBaseConvertEncoder" links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+template <typename DataType_, typename MetadataType_ = DataType_>
+class TypedBaseConvertEncoder
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <data_conversion/BaseConvertEncoder.h>
+```
+
+**Template parameters**
+
+<ParamField path="DataType_" type="typename">
+</ParamField>
+
+<ParamField path="MetadataType_" type="typename" default="DataType_">
+</ParamField>
+
+**Inherits from:** `data_conversion::BaseConvertEncoder` (public)
+
+---
+
+## Constructors
+
+### TypedBaseConvertEncoder [#typedbaseconvertencoder]
+
+<CodeBlock links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+data_conversion::TypedBaseConvertEncoder<DataType_, MetadataType_>::TypedBaseConvertEncoder(
+    const bool error_tracking_enabled
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getMetadata [#getmetadata]
+
+<CodeBlock links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> data_conversion::TypedBaseConvertEncoder<DataType_, MetadataType_>::getMetadata(
+    const Chunk_NS::Chunk &chunk
+) const override
+```
+</CodeBlock>
+
+### initializeDeleteBuffer [#initializedeletebuffer]
+
+<CodeBlock links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::TypedBaseConvertEncoder::initializeDeleteBuffer(
+    const size_t size_hint
+)
+```
+</CodeBlock>
+
+### finalize [#finalize]
+
+<CodeBlock links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::TypedBaseConvertEncoder::finalize(
+    const size_t rows_appended
+)
+```
+</CodeBlock>
+
+### encodeAndAppendData [#encodeandappenddata]
+
+<CodeBlock links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::TypedBaseConvertEncoder::encodeAndAppendData(
+    const int8_t *data,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+### getNull [#getnull]
+
+<CodeBlock links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+DataType data_conversion::TypedBaseConvertEncoder<DataType_, MetadataType_>::getNull() const
+```
+</CodeBlock>
+
+### updateMetadataStats [#updatemetadatastats]
+
+<CodeBlock links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::TypedBaseConvertEncoder<DataType_, MetadataType_>::updateMetadataStats(
+    const DataType &typed_value,
+    const bool is_date_in_days = false
+)
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::TypedBaseConvertEncoder::clear()
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"TypedBaseConvertEncoder": "typedbaseconvertencoder", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+template <typename DataType>
+bool data_conversion::TypedBaseConvertEncoder::isNull(
+    const DataType &typed_value
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DataType` | `DataType_` |
+| `MetadataType` | `MetadataType_` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `min_` | `MetadataType` | |
+| `max_` | `MetadataType` | |
+| `delete_buffer_` | `std::optional< std::vector< bool > >` | |
+| `error_tracking_enabled_` | `const bool` | |
+| `has_nulls_` | `bool` | |
+| `num_elements_` | `size_t` | |

@@ -1,0 +1,31 @@
+---
+title: VarlenOutputInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetStorage.h>
+```
+
+---
+
+## Methods
+
+### computeCpuOffset [#computecpuoffset]
+
+<CodeBlock links={{"VarlenOutputInfo": "varlenoutputinfo"}}>
+```cpp showLineNumbers={false}
+int8_t * VarlenOutputInfo::computeCpuOffset(
+    const int64_t gpu_offset_address
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `gpu_start_address` | `int64_t` | |
+| `cpu_buffer_ptr` | `int8_t *` | |

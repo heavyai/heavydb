@@ -1,0 +1,66 @@
+---
+title: UserMappingDdlCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### UserMappingDdlCommand [#usermappingddlcommand]
+
+<CodeBlock links={{"UserMappingDdlCommand": "usermappingddlcommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+UserMappingDdlCommand::UserMappingDdlCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"UserMappingDdlCommand": "usermappingddlcommand", "DdlCommand": "ddlcommand"}}>
+```cpp showLineNumbers={false}
+virtual ExecutionResult UserMappingDdlCommand::execute(
+    bool read_only_mode
+)
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+### getForeignServer [#getforeignserver]
+
+<CodeBlock links={{"UserMappingDdlCommand": "usermappingddlcommand", "ForeignServer": "../foreignstorage/structs/foreignserver"}}>
+```cpp showLineNumbers={false}
+const foreign_storage::ForeignServer * UserMappingDdlCommand::getForeignServer()
+```
+</CodeBlock>
+
+### getUserIdAndUserMappingType [#getuseridandusermappingtype]
+
+<CodeBlock links={{"UserMappingDdlCommand": "usermappingddlcommand"}}>
+```cpp showLineNumbers={false}
+std::pair<int32_t, std::string> UserMappingDdlCommand::getUserIdAndUserMappingType()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

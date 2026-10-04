@@ -1,0 +1,622 @@
+---
+title: foreign_storage::CachingForeignStorageMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/CachingForeignStorageMgr.h>
+```
+
+**Inherits from:** `foreign_storage::ForeignStorageMgr` (public)
+
+---
+
+## Constructors
+
+### CachingForeignStorageMgr [#cachingforeignstoragemgr]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageCache": "foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+foreign_storage::CachingForeignStorageMgr::CachingForeignStorageMgr(
+    ForeignStorageCache *cache
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### fetchBuffer [#fetchbuffer]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::fetchBuffer(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### getChunkMetadataVecForKeyPrefix [#getchunkmetadatavecforkeyprefix]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
+    ChunkMetadataVector &chunk_metadata,
+    const ChunkKey &chunk_key_prefix
+) override
+```
+</CodeBlock>
+
+### getChunkMetadataVecFromDataWrapper [#getchunkmetadatavecfromdatawrapper]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::getChunkMetadataVecFromDataWrapper(
+    ChunkMetadataVector &chunk_metadata,
+    const ChunkKey &chunk_key_prefix
+)
+```
+</CodeBlock>
+
+### removeTableRelatedDS [#removetablerelatedds]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::removeTableRelatedDS(
+    const int db_id,
+    const int table_id
+) override
+```
+</CodeBlock>
+
+### refreshTable [#refreshtable]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::refreshTable(
+    const ChunkKey &table_key,
+    const bool evict_cached_entries
+) override
+```
+</CodeBlock>
+
+### createDataWrapperIfNotExists [#createdatawrapperifnotexists]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CachingForeignStorageMgr::createDataWrapperIfNotExists(
+    const ChunkKey &chunk_key
+) override
+```
+</CodeBlock>
+
+### hasStoredDataWrapper [#hasstoreddatawrapper]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CachingForeignStorageMgr::hasStoredDataWrapper(
+    int32_t db,
+    int32_t tb
+) const
+```
+</CodeBlock>
+
+### createBuffer [#createbuffer]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::CachingForeignStorageMgr::createBuffer(
+    const ChunkKey &chunk_key,
+    const size_t page_size,
+    const size_t initial_size
+) override
+```
+</CodeBlock>
+
+### deleteBuffer [#deletebuffer]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::deleteBuffer(
+    const ChunkKey &chunk_key,
+    const bool purge
+) override
+```
+</CodeBlock>
+
+### deleteBuffersWithPrefix [#deletebufferswithprefix]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::deleteBuffersWithPrefix(
+    const ChunkKey &chunk_key_prefix,
+    const bool purge
+) override
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::CachingForeignStorageMgr::getBuffer(
+    const ChunkKey &chunk_key,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### putBuffer [#putbuffer]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::CachingForeignStorageMgr::putBuffer(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *source_buffer,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### isBufferOnDevice [#isbufferondevice]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CachingForeignStorageMgr::isBufferOnDevice(
+    const ChunkKey &chunk_key
+) override
+```
+</CodeBlock>
+
+### printSlabs [#printslabs]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::CachingForeignStorageMgr::printSlabs() override
+```
+</CodeBlock>
+
+### getMaxSize [#getmaxsize]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::CachingForeignStorageMgr::getMaxSize() const override
+```
+</CodeBlock>
+
+### getInUseSize [#getinusesize]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::CachingForeignStorageMgr::getInUseSize() const override
+```
+</CodeBlock>
+
+### getAllocated [#getallocated]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::CachingForeignStorageMgr::getAllocated() const override
+```
+</CodeBlock>
+
+### isAllocationCapped [#isallocationcapped]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CachingForeignStorageMgr::isAllocationCapped() const override
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::checkpoint() override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::checkpoint(
+    const int db_id,
+    const int tb_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### alloc [#alloc]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::CachingForeignStorageMgr::alloc(
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### free [#free]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::free(
+    AbstractBuffer *buffer
+) override
+```
+</CodeBlock>
+
+### getMgrType [#getmgrtype]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+MgrType foreign_storage::CachingForeignStorageMgr::getMgrType() override
+```
+</CodeBlock>
+
+### getStringMgrType [#getstringmgrtype]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::CachingForeignStorageMgr::getStringMgrType() override
+```
+</CodeBlock>
+
+### getNumChunks [#getnumchunks]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::CachingForeignStorageMgr::getNumChunks() override
+```
+</CodeBlock>
+
+### hasDataWrapperForChunk [#hasdatawrapperforchunk]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CachingForeignStorageMgr::hasDataWrapperForChunk(
+    const ChunkKey &chunk_key
+) const
+```
+</CodeBlock>
+
+### isDatawrapperRestored [#isdatawrapperrestored]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CachingForeignStorageMgr::isDatawrapperRestored(
+    const ChunkKey &chunk_key
+)
+```
+</CodeBlock>
+
+### setDataWrapper [#setdatawrapper]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "MockForeignDataWrapper": "mockforeigndatawrapper", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::setDataWrapper(
+    const ChunkKey &table_key,
+    std::shared_ptr<MockForeignDataWrapper> data_wrapper
+)
+```
+</CodeBlock>
+
+### getDataWrapper [#getdatawrapper]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignDataWrapper": "foreigndatawrapper", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ForeignDataWrapper> foreign_storage::CachingForeignStorageMgr::getDataWrapper(
+    const ChunkKey &chunk_key
+) const
+```
+</CodeBlock>
+
+### setParallelismHints [#setparallelismhints]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::setParallelismHints(
+    const std::map<ChunkKey, std::set<ParallelismHint>> &hints_per_table
+)
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+int Data_Namespace::AbstractBufferMgr::getDeviceId()
+```
+</CodeBlock>
+
+### refreshTableInCache [#refreshtableincache]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::refreshTableInCache(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### getHighestCachedFragId [#gethighestcachedfragid]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+int foreign_storage::CachingForeignStorageMgr::getHighestCachedFragId(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### refreshAppendTableInCache [#refreshappendtableincache]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::refreshAppendTableInCache(
+    const ChunkKey &table_key,
+    const std::vector<ChunkKey> &old_chunk_keys
+)
+```
+</CodeBlock>
+
+### refreshNonAppendTableInCache [#refreshnonappendtableincache]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::refreshNonAppendTableInCache(
+    const ChunkKey &table_key,
+    const std::vector<ChunkKey> &old_chunk_keys
+)
+```
+</CodeBlock>
+
+### refreshChunksInCacheByFragment [#refreshchunksincachebyfragment]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::refreshChunksInCacheByFragment(
+    const std::vector<ChunkKey> &old_chunk_keys,
+    int last_frag_id
+)
+```
+</CodeBlock>
+
+### populateChunkBuffersSafely [#populatechunkbufferssafely]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::populateChunkBuffersSafely(
+    ForeignDataWrapper &data_wrapper,
+    ChunkToBufferMap &required_buffers,
+    ChunkToBufferMap &optional_buffers
+)
+```
+</CodeBlock>
+
+### eraseDataWrapper [#erasedatawrapper]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::eraseDataWrapper(
+    const ChunkKey &key
+) override
+```
+</CodeBlock>
+
+### clearTable [#cleartable]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::clearTable(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### maxFetchSize [#maxfetchsize]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::CachingForeignStorageMgr::maxFetchSize(
+    int32_t db_id
+) const override
+```
+</CodeBlock>
+
+### hasMaxFetchSize [#hasmaxfetchsize]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CachingForeignStorageMgr::hasMaxFetchSize() const override
+```
+</CodeBlock>
+
+### getOptionalKeysWithinSizeLimit [#getoptionalkeyswithinsizelimit]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::set<ChunkKey> foreign_storage::CachingForeignStorageMgr::getOptionalKeysWithinSizeLimit(
+    const ChunkKey &chunk_key,
+    const std::set<ChunkKey, decltype(set_comp) *> &same_fragment_keys,
+    const std::set<ChunkKey, decltype(set_comp) *> &diff_fragment_keys
+) const override
+```
+</CodeBlock>
+
+### isChunkCached [#ischunkcached]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CachingForeignStorageMgr::isChunkCached(
+    const ChunkKey &chunk_key
+) const override
+```
+</CodeBlock>
+
+### evictChunkFromCache [#evictchunkfromcache]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::evictChunkFromCache(
+    const ChunkKey &chunk_key
+) override
+```
+</CodeBlock>
+
+### getBufferSize [#getbuffersize]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::CachingForeignStorageMgr::getBufferSize(
+    const ChunkKey &key
+) const
+```
+</CodeBlock>
+
+### getRequiredBuffersSize [#getrequiredbufferssize]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::CachingForeignStorageMgr::getRequiredBuffersSize(
+    const ChunkKey &chunk_key
+) const
+```
+</CodeBlock>
+
+### updateFragmenterMetadata [#updatefragmentermetadata]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::updateFragmenterMetadata(
+    const ChunkToBufferMap &
+) const
+```
+</CodeBlock>
+
+### createDataWrapperUnlocked [#createdatawrapperunlocked]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::createDataWrapperUnlocked(
+    int32_t db,
+    int32_t tb
+)
+```
+</CodeBlock>
+
+### fetchBufferIfTempBufferMapEntryExists [#fetchbufferiftempbuffermapentryexists]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::CachingForeignStorageMgr::fetchBufferIfTempBufferMapEntryExists(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes
+)
+```
+</CodeBlock>
+
+### allocateTempBuffersForChunks [#allocatetempbuffersforchunks]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+ChunkToBufferMap foreign_storage::CachingForeignStorageMgr::allocateTempBuffersForChunks(
+    const std::set<ChunkKey> &chunk_keys
+)
+```
+</CodeBlock>
+
+### clearTempChunkBufferMapEntriesForTable [#cleartempchunkbuffermapentriesfortable]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::clearTempChunkBufferMapEntriesForTable(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### clearTempChunkBufferMapEntriesForTableUnlocked [#cleartempchunkbuffermapentriesfortableunlocked]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::clearTempChunkBufferMapEntriesForTableUnlocked(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### getOptionalChunkKeySetAndNormalizeCache [#getoptionalchunkkeysetandnormalizecache]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::set<ChunkKey> foreign_storage::CachingForeignStorageMgr::getOptionalChunkKeySetAndNormalizeCache(
+    const ChunkKey &chunk_key,
+    const std::set<ChunkKey> &required_chunk_keys,
+    const ForeignDataWrapper::ParallelismLevel parallelism_level
+)
+```
+</CodeBlock>
+
+### getPrefetchSets [#getprefetchsets]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::pair<std::set<ChunkKey, decltype(
+    set_comp
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### checkIfS3NeedsToBeEnabled [#checkifs3needstobeenabled]
+
+<CodeBlock links={{"CachingForeignStorageMgr": "cachingforeignstoragemgr", "ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::CachingForeignStorageMgr::checkIfS3NeedsToBeEnabled(
+    const ChunkKey &chunk_key
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ParallelismHint` | `std::pair< int, int >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `disk_cache_` | `ForeignStorageCache *` | |
+| `data_wrapper_mutex_` | `std::shared_mutex` | |
+| `data_wrapper_map_` | `std::map< ChunkKey, std::shared_ptr< ForeignDataWrapper > >` | |
+| `mocked_wrapper_map_` | `std::map< ChunkKey, std::shared_ptr< MockForeignDataWrapper > >` | |
+| `temp_chunk_buffer_map_` | `std::map< ChunkKey, std::unique_ptr< AbstractBuffer > >` | |
+| `temp_chunk_buffer_map_mutex_` | `std::shared_mutex` | |
+| `parallelism_hints_mutex_` | `std::shared_mutex` | |
+| `parallelism_hints_per_table_` | `std::map< ChunkKey, std::set< ParallelismHint > >` | |
+| `parentMgr_` | `AbstractBufferMgr *` | |
+| `device_id_` | `int` | |

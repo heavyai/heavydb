@@ -1,0 +1,15 @@
+---
+title: run_query_external
+description: ""
+---
+
+<CodeBlock links={{"ExecutionUnitSql": "../structs/executionunitsql", "FetchResult": "../structs/fetchresult", "PlanState": "../structs/planstate", "ExternalQueryOutputSpec": "../structs/externalqueryoutputspec", "ResultSet": "../classes/resultset"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ResultSet> run_query_external(
+    const ExecutionUnitSql &sql,
+    const FetchResult &fetch_result,
+    const PlanState *plan_state,
+    const ExternalQueryOutputSpec &output_spec
+)
+```
+</CodeBlock>

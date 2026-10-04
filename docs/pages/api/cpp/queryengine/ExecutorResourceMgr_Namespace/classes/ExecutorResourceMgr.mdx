@@ -1,0 +1,593 @@
+---
+title: ExecutorResourceMgr_Namespace::ExecutorResourceMgr
+description: "ExecutorResourceMgr is the central manager for resources available to all executors in the system."
+---
+
+`ExecutorResourceMgr` is the central manager for resources available to all executors in the system.
+
+It manages an [`ExecutorResourcePool`](executorresourcepool) to keep track of available and allocated resources (currently CPU slots/threads, GPUs, CPU result memory, and CPU and GPU buffer pool memory). It also manages a thread queue which keeps requesting threads (from `Executor::launchKernelsViaResourceMgr`) waiting until there it can schedule them. At that point, it gives the calling executor thread a `ResourceHandle` detailing the resources granted to the query, which once it goes out of scope will return the granted resources to the [ExecutorResourcePool](executorresourcepool).
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ExecutorResourceMgr.h>
+```
+
+**Inherits from:** `std::enable_shared_from_this< ExecutorResourceMgr >` (public)
+
+---
+
+## Constructors
+
+### ExecutorResourceMgr [#executorresourcemgr]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "ConcurrentResourceGrantPolicy": "../structs/concurrentresourcegrantpolicy", "ResourceGrantPolicy": "../structs/resourcegrantpolicy", "CPUResultMemResourceType": "../structs/cpuresultmemresourcetype"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ExecutorResourceMgr::ExecutorResourceMgr(
+    const std::vector<std::pair<ResourceType, size_t>> &total_resources,
+    const std::vector<ConcurrentResourceGrantPolicy> &concurrent_resource_grant_policies,
+    const std::vector<ResourceGrantPolicy> &max_per_request_resource_grant_policies,
+    const double max_available_resource_use_ratio,
+    const CPUResultMemResourceType cpu_result_memory_resource_type
+)
+```
+</CodeBlock>
+
+The constructor instantiates an [`ExecutorResourcePool`](executorresourcepool) with the provided parameters, and starts the process queue by launching a thread to invoke process_queue_loop.
+
+### Destructor [#destructor]
+
+### ~ExecutorResourceMgr
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ExecutorResourceMgr::~ExecutorResourceMgr()
+```
+</CodeBlock>
+
+The destructor ensures that the process queue thread (`process_queue_thread`) is stopped and that any threads waiting for resources are joined.
+
+Currently only called on database shutdown.
+
+---
+
+## Methods
+
+### request_resources_with_timeout [#requestresourceswithtimeout]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "RequestInfo": "../structs/requestinfo", "ExecutorResourceHandle": "executorresourcehandle"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ExecutorResourceHandle> ExecutorResourceMgr_Namespace::ExecutorResourceMgr::request_resources_with_timeout(
+    const RequestInfo &request_info,
+    const size_t timeout_in_ms
+)
+```
+</CodeBlock>
+
+Requests resources from `ExecutorResourceMgr`, will throw if request takes longer than time specified by timeout_in_ms.
+
+**Returns:** std::unique_ptr&lt;ExecutorResourceHandle&gt; - The actual resource grant, whcih when it goes out of scope (and the destructor is called), will return the allocated resources to the [`ExecutorResourcePool`](executorresourcepool)
+
+**Parameters**
+
+<ParamField path="request_info" type="const RequestInfo &">
+- Details the resources requested
+</ParamField>
+
+<ParamField path="timeout_in_ms" type="const size_t">
+- Specifies the max time in ms the requesting thread should wait for a request before an exception is thrown
+</ParamField>
+
+### request_resources [#requestresources]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "RequestInfo": "../structs/requestinfo", "ExecutorResourceHandle": "executorresourcehandle"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ExecutorResourceHandle> ExecutorResourceMgr_Namespace::ExecutorResourceMgr::request_resources(
+    const RequestInfo &request_info
+)
+```
+</CodeBlock>
+
+Requests resources from `ExecutorResourceMgr`, with no timeout (unlike [`request_resources_with_timeout`](#requestresourceswithtimeout)).
+
+Internally calls [`request_resources_with_timeout`](#requestresourceswithtimeout) with 0 timeout, specifying no-timeout.
+
+**Returns:** std::unique_ptr&lt;ExecutorResourceHandle&gt; - The actual resource grant, which when it goes out of scope (and the destructor is called), will return the allocated resources to the [`ExecutorResourcePool`](executorresourcepool)
+
+**Parameters**
+
+<ParamField path="request_info" type="const RequestInfo &">
+- Details the resources requested
+</ParamField>
+
+### release_resources [#releaseresources]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "ResourceGrant": "../structs/resourcegrant"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::release_resources(
+    const RequestId request_id,
+    const ResourceGrant &resource_grant
+)
+```
+</CodeBlock>
+
+Instructs `ExecutorResourceMgr` that the resources held by the requestor with the given `request_id` can be freed/returned to the [`ExecutorResourcePool`](executorresourcepool).
+
+This method is only called automatically in the destructor of [`ExecutorResourceHandle`](executorresourcehandle) (i.e. when it goes out of scope along with the parent executor thread)
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) for the query step that requested the resources
+</ParamField>
+
+<ParamField path="resource_grant" type="const ResourceGrant &">
+- The resources that were granted from [`ExecutorResourcePool`](executorresourcepool) and that now will be freed/returned to the pool
+</ParamField>
+
+### get_executor_stats [#getexecutorstats]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "ExecutorStats": "../structs/executorstats"}}>
+```cpp showLineNumbers={false}
+ExecutorStats ExecutorResourceMgr_Namespace::ExecutorResourceMgr::get_executor_stats() const
+```
+</CodeBlock>
+
+Returns a copy of the [`ExecutorStats`](../structs/executorstats) struct held by `ExecutorResourceMgr`.
+
+Used for testing currently.
+
+### print_executor_stats [#printexecutorstats]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::print_executor_stats() const
+```
+</CodeBlock>
+
+Prints the [`ExecutorStats`](../structs/executorstats) struct.
+
+Use for debugging.
+
+### get_resource_info [#getresourceinfo]
+
+<Tabs>
+<Tab title="Const (with resource type)">
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> ExecutorResourceMgr_Namespace::ExecutorResourceMgr::get_resource_info(
+    const ResourceType resource_type
+) const
+```
+</CodeBlock>
+
+Returns the allocated and total available amount of the resource specified.
+
+Interally queries [`ExecutorResourcePool`](executorresourcepool)
+
+**Returns:** std::pair&lt;size_t, size_t&gt; - First member is the allocated amount of the resource, the second member is the total amount of the resource (including allocated and available)
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "ResourcePoolInfo": "../structs/resourcepoolinfo"}}>
+```cpp showLineNumbers={false}
+ResourcePoolInfo ExecutorResourceMgr_Namespace::ExecutorResourceMgr::get_resource_info() const
+```
+</CodeBlock>
+
+Returns a struct containing the total and allocated amounts of all resources tracked by `ExecutorResourceMgr`/[`ExecutorResourcePool`](executorresourcepool), as well as the number of outstanding requests (in total and by resource type).
+
+**Returns:** [ResourcePoolInfo](../structs/resourcepoolinfo) - Defined in `ExecutorResourcePool.h`, contains total and allocated amounts for all resources, and total requests outstanding and per type of resource
+
+</Tab>
+</Tabs>
+
+### set_resource [#setresource]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::set_resource(
+    const ResourceType resource_type,
+    const size_t resoure_quantity
+)
+```
+</CodeBlock>
+
+Used to change the total amount available of a specified resource after construction of `ExecutorResourceMgr`.
+
+Currently only used for testing, but could also be used to provide adminstrator DDL commands to change resource availability in a running server
+
+**Parameters**
+
+<ParamField path="resource_type" type="const ResourceType">
+- Type of resource to alter the quantity of
+</ParamField>
+
+<ParamField path="resoure_quantity" type="const size_t">
+- The new quantity available of the resource
+</ParamField>
+
+### get_concurrent_resource_grant_policy [#getconcurrentresourcegrantpolicy]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "ConcurrentResourceGrantPolicy": "../structs/concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+ConcurrentResourceGrantPolicy ExecutorResourceMgr_Namespace::ExecutorResourceMgr::get_concurrent_resource_grant_policy(
+    const ResourceType resource_type
+) const
+```
+</CodeBlock>
+
+Get the concurrent resource grant policy for a given resource type.
+
+Queries the [ExecutorResourcePool](executorresourcepool) for the current concurrency policies (including normal and oversubscribed) for a resource type
+
+**Returns:** const [ConcurrentResourceGrantPolicy](../structs/concurrentresourcegrantpolicy)& - Specifies the chosen concurrency policy for normal operation and when the specified resource is oversubscribed
+
+**Parameters**
+
+<ParamField path="resource_type" type="const ResourceType">
+- Type of resource to get the concurrency policy for
+</ParamField>
+
+### set_concurrent_resource_grant_policy [#setconcurrentresourcegrantpolicy]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "ConcurrentResourceGrantPolicy": "../structs/concurrentresourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::set_concurrent_resource_grant_policy(
+    const ConcurrentResourceGrantPolicy &concurrent_resource_grant_policy
+)
+```
+</CodeBlock>
+
+Set the concurrent resource grant policy for a given resource type (stored in [`ConcurrentResourceGrantPolicy`](../structs/concurrentresourcegrantpolicy)).
+
+**Parameters**
+
+<ParamField path="concurrent_resource_grant_policy" type="const ConcurrentResourceGrantPolicy &">
+- Object containing the resource type and the concurrency policies for when the resource is undersubscribed and oversubscribed
+</ParamField>
+
+### pause_process_queue [#pauseprocessqueue]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::pause_process_queue()
+```
+</CodeBlock>
+
+Pauses the process queue in a thread-safe manner, waiting for all queries in the executing stage to finish before yielding to the caller (ensuring that the [ExecutorResourcePool](executorresourcepool) has no outstanding allocations).
+
+If the process queue is already paused, the call is a no-op. This method is used to live-change parameters associated with [ExecutorResourcePool](executorresourcepool).
+
+Note that when the queue is fully paused, there will be no executing requests but there can be one or more queued requests.
+
+### resume_process_queue [#resumeprocessqueue]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::resume_process_queue()
+```
+</CodeBlock>
+
+Resumes the process queue in a thread-safe manner.
+
+If the process queue is already paused, the call is a no-op.
+
+### process_queue_loop [#processqueueloop]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::process_queue_loop()
+```
+</CodeBlock>
+
+Internal method: A thread is assigned to run this function in the constructor of `ExecutorResourceMgr`, where it loops continuously waiting for changes to the process queue (i.e.
+
+the introduction of a new resource request or the finish of an existing request).
+
+### get_request_for_id [#getrequestforid]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "RequestStats": "../structs/requeststats"}}>
+```cpp showLineNumbers={false}
+RequestStats ExecutorResourceMgr_Namespace::ExecutorResourceMgr::get_request_for_id(
+    const RequestId request_id
+) const
+```
+</CodeBlock>
+
+Internal method: Returns the [`RequestStats`](../structs/requeststats) for a request specified by `request_id`.
+
+Takes a read lock on `queue_stats_mutex_` for thread safety. Note this method should not be used in internal methods where a lock is already taken on `queue_stats_mutex_`.
+
+**Returns:** [RequestStats](../structs/requeststats) - The stats for the specified request, including resources granted
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- The [`RequestId`](../typedefs/requestid) for the request we want to retrieve stats for
+</ParamField>
+
+### mark_request_error [#markrequesterror]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::mark_request_error(
+    const RequestId request_id,
+    std::string error_msg
+)
+```
+</CodeBlock>
+
+### choose_next_request [#choosenextrequest]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+RequestId ExecutorResourceMgr_Namespace::ExecutorResourceMgr::choose_next_request()
+```
+</CodeBlock>
+
+Internal method: Invoked from `process_queue_loop`, chooses the next resource request to grant.
+
+Currently based on FIFO logic, choosing the oldest request in the queue that we have enough resources in [`ExecutorResourcePool`](executorresourcepool) to fulfill. Future variants could add more sophisticated logic for more optimal query scheduling (i.e. non-FIFO).
+
+**Returns:** [RequestId](../typedefs/requestid) - The id of the request we will grant resources for.
+
+### enqueue_request [#enqueuerequest]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "RequestInfo": "../structs/requestinfo", "ResourceGrant": "../structs/resourcegrant"}}>
+```cpp showLineNumbers={false}
+RequestId ExecutorResourceMgr_Namespace::ExecutorResourceMgr::enqueue_request(
+    const RequestInfo &request_info,
+    const size_t timeout_in_ms,
+    const ResourceGrant &min_resource_grant,
+    const ResourceGrant &max_resource_grant
+)
+```
+</CodeBlock>
+
+Internal method: Invoked from request_resource/request_resource_with_timeout, places request in the request queue where it will be wait to be granted the resources requested.
+
+Note that this method assigns a [`RequestId`](../typedefs/requestid) to the request, adds the request to the [`RequestStats`](../structs/requeststats), and adds the assigned request_id to the QUEUED stage, but does not actually notify the process queue or queue the request in the `OutstandQueueRequests` object. Those tasks are done subsequently to invocation of this method in the parent call ([`request_resources_with_timeout`](#requestresourceswithtimeout))
+
+**Returns:** [RequestId](../typedefs/requestid) - generated request id for this request
+
+**Parameters**
+
+<ParamField path="request_info" type="const RequestInfo &">
+- Info for the current resource request
+</ParamField>
+
+<ParamField path="timeout_in_ms" type="const size_t">
+- Request timeout
+</ParamField>
+
+<ParamField path="min_resource_grant" type="const ResourceGrant &">
+- Min allowable resource request, calculated in caller [`request_resources_with_timeout`](#requestresourceswithtimeout) method from request_info
+</ParamField>
+
+<ParamField path="max_resource_grant" type="const ResourceGrant &">
+- Max (ideal) resource request, calculated in caller [`request_resources_with_timeout`](#requestresourceswithtimeout) method from request_info
+</ParamField>
+
+### mark_request_dequed [#markrequestdequed]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::mark_request_dequed(
+    const RequestId request_id
+)
+```
+</CodeBlock>
+
+Internal method: Moves the request from the `QUEUED` stage to `EXECUTING` stage and performs other bookkeeping.
+
+Invoked by process_queue_loop after determing the next resource request to serve (via `choose_next_request`).
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) of the request being moved out of the request queue (to be executed)
+</ParamField>
+
+### mark_request_timed_out [#markrequesttimedout]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::mark_request_timed_out(
+    const RequestId request_id
+)
+```
+</CodeBlock>
+
+Internal method: Called if the request times out (i.e.
+
+request was made via [`request_resources_with_timeout`](#requestresourceswithtimeout)), moves request out of `QUEUED` stage and does other bookkeeping on the request's [`RequestStats`](../structs/requeststats) and on [`ExecutorStats`](../structs/executorstats).
+
+Invoked from [`request_resources_with_timeout`](#requestresourceswithtimeout) if a [`QueryTimedOutWaitingInQueue`](querytimedoutwaitinginqueue) exception is thrown
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) for the resource request that has timed out
+</ParamField>
+
+### mark_request_finished [#markrequestfinished]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::mark_request_finished(
+    const RequestId request_id
+)
+```
+</CodeBlock>
+
+Internal method: Invoked on successful completion of a query step from release_resources method, removes request from `EXECUTING` stage and performs various bookkeeping, including recording execution and final times in request_stats.
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) for the resource request that has finished executing
+</ParamField>
+
+### handle_resource_stat_error [#handleresourcestaterror]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::handle_resource_stat_error(
+    const RequestId request_id
+)
+```
+</CodeBlock>
+
+Internal method: Invoked when we have `ResourceStat` error in the middle of handling the request, removes request from `EXECUTING` stage and modify related executor_stats.
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) for the resource request that has finished executing
+</ParamField>
+
+### set_process_queue_flag [#setprocessqueueflag]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::set_process_queue_flag()
+```
+</CodeBlock>
+
+Internal method: Set the `should_process_queue_` flag to true, signifying that the queue should be processed.
+
+Protected by a lock on `processor_queue_mutex_`.
+
+Invoked in two places: 1) [`release_resources`](#releaseresources) (as the resources have been returned to the pool, potentially permitting granting of resources to another request) 2) After `enqueue_request`, as we have a new request to evaluate whether if it can be served
+
+### stop_process_queue_thread [#stopprocessqueuethread]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::stop_process_queue_thread()
+```
+</CodeBlock>
+
+Internal method: Invoked from `ExecutorResourceMgr` destructor, sets `stop_process_queue_thread_` to true (behind a lock on `processor_queue_mutex_`) and then attempts to join all threads left in the request queue on server shutdown.
+
+### get_requests_for_stage [#getrequestsforstage]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+std::vector<RequestId> ExecutorResourceMgr_Namespace::ExecutorResourceMgr::get_requests_for_stage(
+    const ExecutionRequestStage request_status
+) const
+```
+</CodeBlock>
+
+Internal method: Get the request ids for a given stage (`QUEUED` or `EXECUTING`).
+
+Invoked from `choose_next_request` to get all outstanding queued requests
+
+**Returns:** std::vector&lt;RequestId&gt; - vector of request ids in the requested stage
+
+**Parameters**
+
+<ParamField path="request_status" type="const ExecutionRequestStage">
+- Request stage type to fetch request ids for
+</ParamField>
+
+### add_request_to_stage [#addrequesttostage]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::add_request_to_stage(
+    const RequestId request_id,
+    const ExecutionRequestStage request_status
+)
+```
+</CodeBlock>
+
+Internal method: Adds the request specified by the provided `request_id` to the specified stage.
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- Request id to add to the specified stage
+</ParamField>
+
+<ParamField path="request_status" type="const ExecutionRequestStage">
+- Stage (`QUEUED` or `EXECUTING`) to add the specified request to
+</ParamField>
+
+### remove_request_from_stage [#removerequestfromstage]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ExecutorResourceMgr::remove_request_from_stage(
+    const RequestId request_id,
+    const ExecutionRequestStage request_status
+)
+```
+</CodeBlock>
+
+Internal method: Removes the request specified by the provided `request_id` from the specified stage.
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- Request id to remove from the specified stage
+</ParamField>
+
+<ParamField path="request_status" type="const ExecutionRequestStage">
+- Stage (`QUEUED` or `EXECUTING`) to remove the specified request from
+</ParamField>
+
+### get_chunk_request_info [#getchunkrequestinfo]
+
+<CodeBlock links={{"ExecutorResourceMgr": "executorresourcemgr", "ChunkRequestInfo": "../structs/chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+ChunkRequestInfo ExecutorResourceMgr_Namespace::ExecutorResourceMgr::get_chunk_request_info(
+    const RequestId request_id
+)
+```
+</CodeBlock>
+
+Get the `DataMgr` chunk ids and associated sizes pertaining to the input data needed by a request.
+
+**Returns:** [ChunkRequestInfo](../structs/chunkrequestinfo) - struct containing vector of [`ChunkKey`](../typedefs/chunkkey) and byte sizes as well as device memory space (CPU or GPU), total bytes, etc
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- Request id to fetch the needed chunks for
+</ParamField>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_resource_pool_` | `ExecutorResourcePool` | Keeps track of available resources for execution. |
+| `requests_count_` | `std::atomic< size_t >` | An atomic that is incremented with each incoming request, and used to assign `RequestIds` to incoming request. |
+| `executor_stats_` | `ExecutorStats` | Holds a single [`ExecutorStats`](../structs/executorstats) struct that pertains to cummulative stats for `ExecutorResourceMgr`, i.e. |
+| `ACTUALLY_QUEUED_MIN_MS` | `const size_t` | |
+| `process_queue_thread_` | `std::thread` | The thread started in the `ExecutorResourceMgr` constructor that continuously loops inside of `process_queue_loop` to determine the next resource request that should be granted. |
+| `processor_queue_mutex_` | `std::mutex` | RW mutex that protects access to `stop_process_queue_thread_` and `pause_processor_queue_`. |
+| `pause_processor_queue_mutex_` | `std::mutex` | |
+| `print_mutex_` | `std::mutex` | |
+| `queue_stats_mutex_` | `std::shared_mutex` | RW mutex that protects access to `executor_stats_` and `request_stats_`. |
+| `queued_set_mutex_` | `std::shared_mutex` | RW mutex that protects access to `queued_requests_`. |
+| `executing_set_mutex_` | `std::shared_mutex` | RW mutex that protects access to `executing_requests_`. |
+| `processor_queue_condition_` | `std::condition_variable` | |
+| `pause_processor_queue_condition_` | `std::condition_variable` | |
+| `should_process_queue_` | `bool` | |
+| `stop_process_queue_thread_` | `bool` | |
+| `pause_process_queue_` | `bool` | |
+| `process_queue_is_paused_` | `bool` | |
+| `process_queue_counter_` | `size_t` | |
+| `outstanding_queue_requests_` | `OutstandingQueueRequests` | Stores and manages a map of request ids to `BinarySemaphore` objects to allow threads waiting for resources to be selectively queued/blocked and then when they are choosen for resource grants/execution, woken. |
+| `queued_requests_` | `std::set< RequestId >` | Set of all request ids that are currently queued. |
+| `executing_requests_` | `std::set< RequestId >` | Set of all request ids that are currently executing (i.e. |
+| `requests_stats_` | `std::vector< RequestStats >` | Stores a vector of all requests that have been seen by `ExecutorResourceMgr`, with each incoming request appending a [`RequestStats`](../structs/requeststats) struct to this vector. |
+| `enable_stats_printing_` | `const bool` | |
+| `enable_debug_printing_` | `const bool` | |
+| `INVALID_REQUEST_ID` | `const RequestId` | |
+| `max_available_resource_use_ratio_` | `const double` | |

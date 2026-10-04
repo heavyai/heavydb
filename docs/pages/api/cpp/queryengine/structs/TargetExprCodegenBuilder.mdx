@@ -1,0 +1,141 @@
+---
+title: TargetExprCodegenBuilder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetExprBuilder.h>
+```
+
+---
+
+## Constructors
+
+### TargetExprCodegenBuilder [#targetexprcodegenbuilder]
+
+<CodeBlock links={{"TargetExprCodegenBuilder": "targetexprcodegenbuilder", "RelAlgExecutionUnit": "relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+TargetExprCodegenBuilder::TargetExprCodegenBuilder(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const bool is_group_by
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"TargetExprCodegenBuilder": "targetexprcodegenbuilder", "Executor": "../classes/executor", "QueryMemoryDescriptor": "../classes/querymemorydescriptor", "CompilationOptions": "compilationoptions"}}>
+```cpp showLineNumbers={false}
+void TargetExprCodegenBuilder::operator()(
+    const Analyzer::Expr *target_expr,
+    const Executor *executor,
+    QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegen [#codegen]
+
+<CodeBlock links={{"TargetExprCodegenBuilder": "targetexprcodegenbuilder", "GroupByAndAggregate": "../classes/groupbyandaggregate", "Executor": "../classes/executor", "QueryMemoryDescriptor": "../classes/querymemorydescriptor", "CompilationOptions": "compilationoptions", "GpuSharedMemoryContext": "../classes/gpusharedmemorycontext", "DiamondCodegen": "diamondcodegen"}}>
+```cpp showLineNumbers={false}
+void TargetExprCodegenBuilder::codegen(
+    GroupByAndAggregate *group_by_and_agg,
+    Executor *executor,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const GpuSharedMemoryContext &gpu_smem_context,
+    const std::tuple<llvm::Value *, llvm::Value *> &agg_out_ptr_w_idx,
+    const std::vector<llvm::Value *> &agg_out_vec,
+    llvm::Value *output_buffer_byte_stream,
+    llvm::Value *out_row_idx,
+    llvm::Value *varlen_output_buffer,
+    DiamondCodegen &diamond_codegen
+) const
+```
+</CodeBlock>
+
+### codegenSampleExpressions [#codegensampleexpressions]
+
+<CodeBlock links={{"TargetExprCodegenBuilder": "targetexprcodegenbuilder", "GroupByAndAggregate": "../classes/groupbyandaggregate", "Executor": "../classes/executor", "QueryMemoryDescriptor": "../classes/querymemorydescriptor", "CompilationOptions": "compilationoptions", "DiamondCodegen": "diamondcodegen"}}>
+```cpp showLineNumbers={false}
+void TargetExprCodegenBuilder::codegenSampleExpressions(
+    GroupByAndAggregate *group_by_and_agg,
+    Executor *executor,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const std::tuple<llvm::Value *, llvm::Value *> &agg_out_ptr_w_idx,
+    const std::vector<llvm::Value *> &agg_out_vec,
+    llvm::Value *output_buffer_byte_stream,
+    llvm::Value *out_row_idx,
+    DiamondCodegen &diamond_codegen
+) const
+```
+</CodeBlock>
+
+### codegenSingleSlotSampleExpression [#codegensingleslotsampleexpression]
+
+<CodeBlock links={{"TargetExprCodegenBuilder": "targetexprcodegenbuilder", "GroupByAndAggregate": "../classes/groupbyandaggregate", "Executor": "../classes/executor", "QueryMemoryDescriptor": "../classes/querymemorydescriptor", "CompilationOptions": "compilationoptions", "DiamondCodegen": "diamondcodegen"}}>
+```cpp showLineNumbers={false}
+void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
+    GroupByAndAggregate *group_by_and_agg,
+    Executor *executor,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const std::tuple<llvm::Value *, llvm::Value *> &agg_out_ptr_w_idx,
+    const std::vector<llvm::Value *> &agg_out_vec,
+    llvm::Value *output_buffer_byte_stream,
+    llvm::Value *out_row_idx,
+    DiamondCodegen &diamond_codegen
+) const
+```
+</CodeBlock>
+
+### codegenMultiSlotSampleExpressions [#codegenmultislotsampleexpressions]
+
+<CodeBlock links={{"TargetExprCodegenBuilder": "targetexprcodegenbuilder", "GroupByAndAggregate": "../classes/groupbyandaggregate", "Executor": "../classes/executor", "QueryMemoryDescriptor": "../classes/querymemorydescriptor", "CompilationOptions": "compilationoptions", "DiamondCodegen": "diamondcodegen"}}>
+```cpp showLineNumbers={false}
+void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
+    GroupByAndAggregate *group_by_and_agg,
+    Executor *executor,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const CompilationOptions &co,
+    const std::tuple<llvm::Value *, llvm::Value *> &agg_out_ptr_w_idx,
+    const std::vector<llvm::Value *> &agg_out_vec,
+    llvm::Value *output_buffer_byte_stream,
+    llvm::Value *out_row_idx,
+    DiamondCodegen &diamond_codegen
+) const
+```
+</CodeBlock>
+
+### codegenSlotEmptyKey [#codegenslotemptykey]
+
+<CodeBlock links={{"TargetExprCodegenBuilder": "targetexprcodegenbuilder", "Executor": "../classes/executor", "QueryMemoryDescriptor": "../classes/querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+llvm::Value * TargetExprCodegenBuilder::codegenSlotEmptyKey(
+    llvm::Value *agg_col_ptr,
+    std::vector<llvm::Value *> &target_lvs,
+    Executor *executor,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const int64_t init_val
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `target_index_counter` | `size_t` | |
+| `slot_index_counter` | `size_t` | |
+| `ra_exe_unit` | `const RelAlgExecutionUnit &` | |
+| `target_exprs_to_codegen` | `std::vector< TargetExprCodegen >` | |
+| `sample_exprs_to_codegen` | `std::vector< TargetExprCodegen >` | |
+| `is_group_by` | `bool` | |

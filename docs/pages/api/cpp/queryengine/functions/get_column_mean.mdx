@@ -1,0 +1,170 @@
+---
+title: get_column_mean
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST double get_column_mean(
+    const T *data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const int8_t *data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const int16_t *data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const int32_t *data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const int64_t *data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (6)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const float *data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (7)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const double *data,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST double get_column_mean(
+    const Column<T> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const Column<int8_t> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const Column<int16_t> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const Column<int32_t> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const Column<int64_t> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const Column<float> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_mean(
+    const Column<double> &col
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

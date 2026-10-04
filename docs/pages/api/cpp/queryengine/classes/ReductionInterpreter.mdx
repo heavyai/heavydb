@@ -1,0 +1,54 @@
+---
+title: ReductionInterpreter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionInterpreter.h>
+```
+
+---
+
+## Static methods
+
+### run [#run]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ReductionInterpreter": "reductioninterpreter", "Function": "function"}}>
+```cpp showLineNumbers={false}
+ReductionInterpreter::EvalValue ReductionInterpreter::run(
+    const size_t execution_id,
+    const Function *function,
+    const std::vector<EvalValue> &inputs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ReductionInterpreter": "reductioninterpreter", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+std::optional<ReductionInterpreter::EvalValue> ReductionInterpreter::run(
+    const size_t execution_id,
+    const std::vector<std::unique_ptr<Instruction>> &body,
+    const std::vector<EvalValue> &vars
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### MakeEvalValue [#makeevalvalue]
+
+<CodeBlock links={{"ReductionInterpreter": "reductioninterpreter"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+static EvalValue ReductionInterpreter::MakeEvalValue(
+    const T &val
+)
+```
+</CodeBlock>

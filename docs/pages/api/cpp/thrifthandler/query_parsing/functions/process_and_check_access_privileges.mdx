@@ -1,0 +1,18 @@
+---
+title: query_parsing::process_and_check_access_privileges
+description: ""
+---
+
+<CodeBlock links={{"QueryStateProxy": "../../querystate/classes/querystateproxy"}}>
+```cpp showLineNumbers={false}
+TPlanResult query_parsing::process_and_check_access_privileges(
+    Calcite *calcite,
+    query_state::QueryStateProxy query_state_proxy,
+    std::string sql_string,
+    const TQueryParsingOption &query_parsing_option,
+    const TOptimizationOption &optimization_option,
+    const bool check_privileges,
+    const std::string &calcite_session_id
+)
+```
+</CodeBlock>

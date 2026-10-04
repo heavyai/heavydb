@@ -1,0 +1,32 @@
+---
+title: foreign_storage::DataWrapperType
+description: "@type DataWrapperType"
+---
+
+@type `DataWrapperType`
+
+Encapsulates an enumeration of foreign data wrapper type strings
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ForeignDataWrapperFactory.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `CSV` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `PARQUET` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `REGEX_PARSER` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `INTERNAL_CATALOG` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `INTERNAL_MEMORY_STATS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `INTERNAL_STORAGE_STATS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `INTERNAL_EXECUTOR_STATS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `INTERNAL_ML_MODEL_METADATA` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `INTERNAL_LOGS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `RASTER` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `INTERNAL_DATA_WRAPPERS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array` | |
+| `IN_MEMORY_DATA_WRAPPERS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array` | |
+| `supported_data_wrapper_types` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array` | |

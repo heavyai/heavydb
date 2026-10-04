@@ -1,0 +1,141 @@
+---
+title: Parser::CopyTableStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### CopyTableStmt [#copytablestmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CopyTableStmt": "copytablestmt", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::CopyTableStmt::CopyTableStmt(
+    std::string *t,
+    std::string *f,
+    std::list<NameValueAssign *> *o
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"CopyTableStmt": "copytablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::CopyTableStmt::CopyTableStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CopyTableStmt": "copytablestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CopyTableStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CopyTableStmt": "copytablestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CopyTableStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode,
+    const std::function<std::unique_ptr<import_export::AbstractImporter>(Catalog_Namespace::Catalog &, const TableDescriptor *, const std::string &, const import_export::CopyParams &)> &importer_factory
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_table [#gettable]
+
+<CodeBlock links={{"CopyTableStmt": "copytablestmt"}}>
+```cpp showLineNumbers={false}
+std::string & Parser::CopyTableStmt::get_table() const
+```
+</CodeBlock>
+
+### get_success [#getsuccess]
+
+<CodeBlock links={{"CopyTableStmt": "copytablestmt"}}>
+```cpp showLineNumbers={false}
+bool Parser::CopyTableStmt::get_success() const
+```
+</CodeBlock>
+
+### was_deferred_copy_from [#wasdeferredcopyfrom]
+
+<CodeBlock links={{"CopyTableStmt": "copytablestmt"}}>
+```cpp showLineNumbers={false}
+bool Parser::CopyTableStmt::was_deferred_copy_from() const
+```
+</CodeBlock>
+
+### get_deferred_copy_from_payload [#getdeferredcopyfrompayload]
+
+<CodeBlock links={{"CopyTableStmt": "copytablestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CopyTableStmt::get_deferred_copy_from_payload(
+    std::string &table,
+    std::string &file_name,
+    import_export::CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"CopyTableStmt": "copytablestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CopyTableStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `return_message` | `std::unique_ptr< std::string >` | |
+| `table_` | `std::unique_ptr< std::string >` | |
+| `copy_from_source_pattern_` | `std::unique_ptr< std::string >` | |
+| `success_` | `bool` | |
+| `options_` | `std::list< std::unique_ptr< NameValueAssign > >` | |
+| `was_deferred_copy_from_` | `bool` | |
+| `deferred_copy_from_file_name_` | `std::string` | |
+| `deferred_copy_from_copy_params_` | `import_export::CopyParams` | |

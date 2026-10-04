@@ -1,0 +1,173 @@
+---
+title: spatial_type::PointN
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <spatial_type/PointN.h>
+```
+
+**Inherits from:** `spatial_type::Codegen` (public)
+
+---
+
+## Constructors
+
+### PointN [#pointn]
+
+<CodeBlock links={{"PointN": "pointn"}}>
+```cpp showLineNumbers={false}
+spatial_type::PointN::PointN(
+    const Analyzer::GeoOperator *geo_operator
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNullCheckCodegen [#getnullcheckcodegen]
+
+<CodeBlock links={{"PointN": "pointn", "CgenState": "../../structs/cgenstate", "Executor": "../../classes/executor", "NullCheckCodegen": "../../classes/codegenerator#nullcheckcodegen"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<CodeGenerator::NullCheckCodegen> spatial_type::PointN::getNullCheckCodegen(
+    llvm::Value *null_lv,
+    CgenState *cgen_state,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"PointN": "pointn"}}>
+```cpp showLineNumbers={false}
+size_t spatial_type::PointN::size() const
+```
+</CodeBlock>
+
+### getNullType [#getnulltype]
+
+<CodeBlock links={{"PointN": "pointn"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo spatial_type::PointN::getNullType() const
+```
+</CodeBlock>
+
+### codegenGeoSize [#codegengeosize]
+
+<CodeBlock links={{"PointN": "pointn", "CgenState": "../../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * spatial_type::PointN::codegenGeoSize(
+    CgenState *cgen_state,
+    SQLTypeInfo const &geo_ti,
+    const std::vector<llvm::Value *> &arg_lvs,
+    const std::vector<llvm::Value *> &pos_lvs
+)
+```
+</CodeBlock>
+
+### codegenIndexOutOfBoundCheck [#codegenindexoutofboundcheck]
+
+<CodeBlock links={{"PointN": "pointn", "CgenState": "../../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * spatial_type::PointN::codegenIndexOutOfBoundCheck(
+    CgenState *cgen_state,
+    llvm::Value *index_lv,
+    llvm::Value *geosize_lv
+)
+```
+</CodeBlock>
+
+### codegenLoads [#codegenloads]
+
+<CodeBlock links={{"PointN": "pointn", "CgenState": "../../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+std::tuple<std::vector<llvm::Value *>, llvm::Value *> spatial_type::PointN::codegenLoads(
+    const std::vector<llvm::Value *> &arg_lvs,
+    const std::vector<llvm::Value *> &pos_lvs,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+### codegen [#codegen]
+
+<CodeBlock links={{"PointN": "pointn", "NullCheckCodegen": "../../classes/codegenerator#nullcheckcodegen", "CgenState": "../../structs/cgenstate", "CompilationOptions": "../../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> spatial_type::PointN::codegen(
+    const std::vector<llvm::Value *> &args,
+    CodeGenerator::NullCheckCodegen *nullcheck_codegen,
+    CgenState *cgen_state,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### isNullable [#isnullable]
+
+<CodeBlock links={{"PointN": "pointn", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+auto spatial_type::PointN::isNullable() const
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"PointN": "pointn", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+auto spatial_type::PointN::getTypeInfo() const
+```
+</CodeBlock>
+
+### getName [#getname]
+
+<CodeBlock links={{"PointN": "pointn", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::string spatial_type::PointN::getName() const
+```
+</CodeBlock>
+
+### getOperand [#getoperand]
+
+<CodeBlock links={{"PointN": "pointn", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+const Analyzer::Expr * spatial_type::PointN::getOperand(
+    const size_t index
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### init [#init]
+
+<CodeBlock links={{"PointN": "pointn", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<Codegen> spatial_type::PointN::init(
+    const Analyzer::GeoOperator *geo_operator
+)
+```
+</CodeBlock>
+
+### pointIsNullFunctionName [#pointisnullfunctionname]
+
+<CodeBlock links={{"PointN": "pointn", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+char const  * spatial_type::PointN::pointIsNullFunctionName(
+    SQLTypeInfo const &
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `operator_` | `const Analyzer::GeoOperator *` | |
+| `is_nullable_` | `bool` | |

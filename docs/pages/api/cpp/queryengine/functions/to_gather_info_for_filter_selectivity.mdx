@@ -1,0 +1,14 @@
+---
+title: to_gather_info_for_filter_selectivity
+description: "The main purpose of this function is to prevent going through extra overhead of computing required statistics for finding the right candidates and then the actual push-down, unless the problem is large enough that such effort is potentially helpful."
+---
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+bool to_gather_info_for_filter_selectivity(
+    const std::vector<InputTableInfo> &table_infos
+)
+```
+</CodeBlock>
+
+The main purpose of this function is to prevent going through extra overhead of computing required statistics for finding the right candidates and then the actual push-down, unless the problem is large enough that such effort is potentially helpful.

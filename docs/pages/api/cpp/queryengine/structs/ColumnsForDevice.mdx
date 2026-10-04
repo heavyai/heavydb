@@ -1,0 +1,35 @@
+---
+title: ColumnsForDevice
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashJoin.h>
+```
+
+---
+
+## Methods
+
+### setBucketInfo [#setbucketinfo]
+
+<CodeBlock links={{"ColumnsForDevice": "columnsfordevice"}}>
+```cpp showLineNumbers={false}
+void ColumnsForDevice::setBucketInfo(
+    const std::vector<double> &bucket_sizes_for_dimension,
+    const std::vector<InnerOuter> inner_outer_pairs
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `join_columns` | `std::vector< JoinColumn >` | |
+| `join_column_types` | `std::vector< JoinColumnTypeInfo >` | |
+| `chunks_owner` | `std::vector< std::shared_ptr< Chunk_NS::Chunk > >` | |
+| `join_buckets` | `std::vector< JoinBucketInfo >` | |
+| `malloc_owner` | `std::vector< std::shared_ptr< void > >` | |

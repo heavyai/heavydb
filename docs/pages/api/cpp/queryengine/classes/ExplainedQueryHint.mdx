@@ -1,0 +1,174 @@
+---
+title: ExplainedQueryHint
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryHint.h>
+```
+
+---
+
+## Constructors
+
+### ExplainedQueryHint [#explainedqueryhint]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+ExplainedQueryHint::ExplainedQueryHint()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+ExplainedQueryHint::ExplainedQueryHint(
+    QueryHint hint,
+    bool global_hint,
+    bool is_marker,
+    bool has_kv_type_options
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+ExplainedQueryHint::ExplainedQueryHint(
+    QueryHint hint,
+    bool global_hint,
+    bool is_marker,
+    bool has_kv_type_options,
+    std::vector<std::string> &list_options
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+ExplainedQueryHint::ExplainedQueryHint(
+    QueryHint hint,
+    bool global_hint,
+    bool is_marker,
+    bool has_kv_type_options,
+    std::unordered_map<std::string, std::string> &kv_options
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### setListOptions [#setlistoptions]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+void ExplainedQueryHint::setListOptions(
+    std::vector<std::string> &list_options
+)
+```
+</CodeBlock>
+
+### setKVOptions [#setkvoptions]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+void ExplainedQueryHint::setKVOptions(
+    std::unordered_map<std::string, std::string> &kv_options
+)
+```
+</CodeBlock>
+
+### setInheritPaths [#setinheritpaths]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+void ExplainedQueryHint::setInheritPaths(
+    std::vector<int> &interit_paths
+)
+```
+</CodeBlock>
+
+### getListOptions [#getlistoptions]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & ExplainedQueryHint::getListOptions() const
+```
+</CodeBlock>
+
+### getInteritPath [#getinteritpath]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+const std::vector<int> & ExplainedQueryHint::getInteritPath() const
+```
+</CodeBlock>
+
+### getKVOptions [#getkvoptions]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+const std::unordered_map<std::string, std::string> & ExplainedQueryHint::getKVOptions() const
+```
+</CodeBlock>
+
+### getHint [#gethint]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+const QueryHint ExplainedQueryHint::getHint() const
+```
+</CodeBlock>
+
+### isGlobalHint [#isglobalhint]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+bool ExplainedQueryHint::isGlobalHint() const
+```
+</CodeBlock>
+
+### hasOptions [#hasoptions]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+bool ExplainedQueryHint::hasOptions() const
+```
+</CodeBlock>
+
+### hasKvOptions [#haskvoptions]
+
+<CodeBlock links={{"ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+bool ExplainedQueryHint::hasKvOptions() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `hint_` | `QueryHint` | |
+| `global_hint_` | `bool` | |
+| `is_marker_` | `bool` | |
+| `has_kv_type_options_` | `bool` | |
+| `inherit_paths_` | `std::vector< int >` | |
+| `list_options_` | `std::vector< std::string >` | |
+| `kv_options_` | `std::unordered_map< std::string, std::string >` | |

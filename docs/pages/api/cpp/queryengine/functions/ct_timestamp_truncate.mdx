@@ -1,0 +1,21 @@
+---
+title: ct_timestamp_truncate
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_timestamp_truncate(
+    TableFunctionManager &mgr,
+    const Column<Timestamp> &input,
+    Column<Timestamp> &y,
+    Column<Timestamp> &mo,
+    Column<Timestamp> &d,
+    Column<Timestamp> &h,
+    Column<Timestamp> &m,
+    Column<Timestamp> &s,
+    Column<Timestamp> &ms,
+    Column<Timestamp> &us
+)
+```
+</CodeBlock>

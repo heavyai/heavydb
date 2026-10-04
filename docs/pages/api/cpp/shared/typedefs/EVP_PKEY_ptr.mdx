@@ -1,0 +1,8 @@
+---
+title: EVP_PKEY_ptr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+using EVP_PKEY_ptr = std::unique_ptr<EVP_PKEY, std::function<void(EVP_PKEY *)>>;
+```

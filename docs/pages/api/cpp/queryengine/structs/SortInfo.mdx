@@ -1,0 +1,91 @@
+---
+title: SortInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgExecutionUnit.h>
+```
+
+---
+
+## Constructors
+
+### SortInfo [#sortinfo]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"SortInfo": "sortinfo"}}>
+```cpp showLineNumbers={false}
+SortInfo::SortInfo()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"SortInfo": "sortinfo"}}>
+```cpp showLineNumbers={false}
+SortInfo::SortInfo(
+    const std::list<Analyzer::OrderEntry> &oe,
+    const SortAlgorithm sa,
+    std::optional<size_t> l,
+    size_t o
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"SortInfo": "sortinfo"}}>
+```cpp showLineNumbers={false}
+SortInfo & SortInfo::operator=(
+    const SortInfo &other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### hashLimit [#hashlimit]
+
+<CodeBlock links={{"SortInfo": "sortinfo"}}>
+```cpp showLineNumbers={false}
+size_t SortInfo::hashLimit() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### createFromSortNode [#createfromsortnode]
+
+<CodeBlock links={{"SortInfo": "sortinfo", "RelSort": "../classes/relsort"}}>
+```cpp showLineNumbers={false}
+static SortInfo SortInfo::createFromSortNode(
+    const RelSort *sort_node
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `order_entries` | `std::list< Analyzer::OrderEntry >` | |
+| `algorithm` | `SortAlgorithm` | |
+| `limit` | `std::optional< size_t >` | |
+| `offset` | `size_t` | |

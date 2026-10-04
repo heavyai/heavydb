@@ -1,0 +1,78 @@
+---
+title: Parser::IsNullExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### IsNullExpr [#isnullexpr]
+
+<CodeBlock links={{"IsNullExpr": "isnullexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::IsNullExpr::IsNullExpr(
+    bool n,
+    Expr *a
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_not [#getisnot]
+
+<CodeBlock links={{"IsNullExpr": "isnullexpr"}}>
+```cpp showLineNumbers={false}
+bool Parser::IsNullExpr::get_is_not() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"IsNullExpr": "isnullexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::IsNullExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"IsNullExpr": "isnullexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::IsNullExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_not_` | `bool` | |
+| `arg_` | `std::unique_ptr< Expr >` | |

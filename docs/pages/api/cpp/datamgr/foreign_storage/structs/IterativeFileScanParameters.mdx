@@ -1,0 +1,34 @@
+---
+title: foreign_storage::IterativeFileScanParameters
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/IterativeScanParams.h>
+```
+
+---
+
+## Constructors
+
+### IterativeFileScanParameters [#iterativefilescanparameters]
+
+<CodeBlock links={{"IterativeFileScanParameters": "iterativefilescanparameters", "Chunk": "../../chunkns/classes/chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::IterativeFileScanParameters::IterativeFileScanParameters(
+    std::map<std::pair<int, int>, Chunk_NS::Chunk> &column_id_to_chunk_map,
+    int32_t fragment_id,
+    const std::vector<AbstractBuffer *> &delete_buffers
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_id_and_batch_id_to_chunk_map` | `std::map< std::pair< int, int >, Chunk_NS::Chunk > &` | |
+| `fragment_id` | `int32_t` | |
+| `delete_buffers` | `const std::vector< AbstractBuffer * > &` | |

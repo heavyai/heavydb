@@ -1,0 +1,19 @@
+---
+title: foreign_storage::ColumnRemoteData
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/odbc_utils.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `remote_column_description` | `RemoteColumnDescription` | |
+| `data_ptr` | `std::unique_ptr< int8_t[]>` | |
+| `null_or_strlen` | `std::vector< std::optional< size_t > >` | |
+| `row_count` | `size_t` | |

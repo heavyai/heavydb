@@ -1,0 +1,108 @@
+---
+title: logger::LocalIdsScopeGuard
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <logger/Logger.h>
+```
+
+---
+
+## Constructors
+
+### LocalIdsScopeGuard [#localidsscopeguard]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"LocalIdsScopeGuard": "localidsscopeguard"}}>
+```cpp showLineNumbers={false}
+logger::LocalIdsScopeGuard::LocalIdsScopeGuard(
+    LocalIdsScopeGuard const &
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"LocalIdsScopeGuard": "localidsscopeguard", "ThreadLocalIds": "../structs/threadlocalids"}}>
+```cpp showLineNumbers={false}
+logger::LocalIdsScopeGuard::LocalIdsScopeGuard(
+    ThreadLocalIds const prev_local_ids,
+    ThreadLocalIds const thread_local_ids
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"LocalIdsScopeGuard": "localidsscopeguard"}}>
+```cpp showLineNumbers={false}
+logger::LocalIdsScopeGuard::LocalIdsScopeGuard(
+    LocalIdsScopeGuard &&rhs
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~LocalIdsScopeGuard
+
+<CodeBlock links={{"LocalIdsScopeGuard": "localidsscopeguard"}}>
+```cpp showLineNumbers={false}
+logger::LocalIdsScopeGuard::~LocalIdsScopeGuard()
+```
+</CodeBlock>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<Tabs>
+<Tab title="Copy assign">
+
+<CodeBlock links={{"LocalIdsScopeGuard": "localidsscopeguard"}}>
+```cpp showLineNumbers={false}
+LocalIdsScopeGuard & logger::LocalIdsScopeGuard::operator=(
+    LocalIdsScopeGuard const &
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move assign">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"LocalIdsScopeGuard": "localidsscopeguard"}}>
+```cpp showLineNumbers={false}
+LocalIdsScopeGuard & logger::LocalIdsScopeGuard::operator=(
+    LocalIdsScopeGuard &&rhs
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `prev_local_ids_` | `ThreadLocalIds` | |
+| `thread_local_ids_` | `ThreadLocalIds` | |
+| `enabled_` | `bool` | |

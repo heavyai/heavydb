@@ -1,0 +1,32 @@
+---
+title: TableFunctions_Namespace::denull_data
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ColumnList": "../../structs/columnlist", "MaskedData": "../structs/maskeddata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+MaskedData<T> TableFunctions_Namespace::denull_data(
+    const ColumnList<T> &features
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../../structs/column", "ColumnList": "../../structs/columnlist", "MaskedData": "../structs/maskeddata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+MaskedData<T> TableFunctions_Namespace::denull_data(
+    const Column<T> &labels,
+    const ColumnList<T> &features
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

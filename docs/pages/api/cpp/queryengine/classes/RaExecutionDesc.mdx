@@ -1,0 +1,61 @@
+---
+title: RaExecutionDesc
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgExecutionDescriptor.h>
+```
+
+---
+
+## Constructors
+
+### RaExecutionDesc [#raexecutiondesc]
+
+<CodeBlock links={{"RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RaExecutionDesc::RaExecutionDesc(
+    const RelAlgNode *body
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getResult [#getresult]
+
+<CodeBlock links={{"RaExecutionDesc": "raexecutiondesc", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+const ExecutionResult & RaExecutionDesc::getResult() const
+```
+</CodeBlock>
+
+### setResult [#setresult]
+
+<CodeBlock links={{"RaExecutionDesc": "raexecutiondesc", "ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+void RaExecutionDesc::setResult(
+    const ExecutionResult &result
+)
+```
+</CodeBlock>
+
+### getBody [#getbody]
+
+<CodeBlock links={{"RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RaExecutionDesc::getBody() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `body_` | `const RelAlgNode *` | |
+| `result_` | `ExecutionResult` | |

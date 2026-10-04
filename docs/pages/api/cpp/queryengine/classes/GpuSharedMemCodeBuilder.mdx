@@ -1,0 +1,164 @@
+---
+title: GpuSharedMemCodeBuilder
+description: "This is a builder class for extra functions that are required to support GPU shared memory usage for GroupByPerfectHash query types."
+---
+
+This is a builder class for extra functions that are required to support GPU shared memory usage for GroupByPerfectHash query types.
+
+This class does not own its own LLVM module and uses a pointer to the global module provided to it as an argument during construction
+
+```cpp showLineNumbers={false}
+#include <GpuSharedMemoryUtils.h>
+```
+
+---
+
+## Constructors
+
+### GpuSharedMemCodeBuilder [#gpusharedmemcodebuilder]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+GpuSharedMemCodeBuilder::GpuSharedMemCodeBuilder(
+    llvm::Module *module,
+    llvm::LLVMContext &context,
+    const QueryMemoryDescriptor &qmd,
+    const std::vector<TargetInfo> &targets,
+    const std::vector<int64_t> &init_agg_values,
+    const size_t executor_id
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegen [#codegen]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+void GpuSharedMemCodeBuilder::codegen()
+```
+</CodeBlock>
+
+generates code for both the reduction and initialization steps required for shared memory usage
+
+### injectFunctionsInto [#injectfunctionsinto]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+void GpuSharedMemCodeBuilder::injectFunctionsInto(
+    llvm::Function *query_func
+)
+```
+</CodeBlock>
+
+Once the reduction and init functions are generated, this function takes the main query function and replaces the previous placeholders, which were inserted in the query template, with these new functions.
+
+### getReductionFunction [#getreductionfunction]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+llvm::Function * GpuSharedMemCodeBuilder::getReductionFunction() const
+```
+</CodeBlock>
+
+### getInitFunction [#getinitfunction]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+llvm::Function * GpuSharedMemCodeBuilder::getInitFunction() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+std::string GpuSharedMemCodeBuilder::toString() const
+```
+</CodeBlock>
+
+### codegenReduction [#codegenreduction]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+void GpuSharedMemCodeBuilder::codegenReduction()
+```
+</CodeBlock>
+
+Generates code for the reduction functionality (from shared memory into global memory).
+
+The reduction function is going to be used to reduce group by buffer stored in the shared memory, back into global memory buffer.
+
+The general procedure is very similar to the what we have [ResultSetReductionJIT](resultsetreductionjit), with some major differences that will be discussed below:
+
+The general procedure is as follows:
+
+1. the function takes three arguments: 1) dest_buffer_ptr which points to global memory group by buffer (what existed before), 2) src_buffer_ptr which points to the shared memory group by buffer, exclusively accessed by each specific GPU thread-block, 3) total buffer size.
+2. We assign each thread to a specific entry (all targets within that entry), so any thread with an index larger than max entries, will have an early return from this function
+3. It is assumed here that there are at least as many threads in the GPU as there are entries in the group by buffer. In practice, given the buffer sizes that we deal with, this is a reasonable asumption, but can be easily relaxed in the future if needed to: threads can form a loop and process all entries until all are finished. It should be noted that we currently don't use shared memory if there are more entries than number of threads.
+4. We loop over all slots corresponding to a specific entry, and use [ResultSetReductionJIT](resultsetreductionjit)'s reduce_one_entry_idx to reduce one slot from the destination buffer into source buffer. The only difference is that we should replace all agg_* funcitons within this code with their agg_*_shared counterparts, which use atomics operations and are used on the GPU.
+5. Once all threads are done, we return from the function.
+
+### codegenInitialization [#codegeninitialization]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+void GpuSharedMemCodeBuilder::codegenInitialization()
+```
+</CodeBlock>
+
+Generates code for the shared memory buffer initialization.
+
+This function generates code to initialize the shared memory buffer, the way we initialize the group by output buffer on the host.
+
+Similar to the reduction function, it is assumed that there are at least as many threads as there are entries in the buffer. Each entry is assigned to a single thread, and then all slots corresponding to that entry are initialized with aggregate init values.
+
+### createReductionFunction [#createreductionfunction]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+llvm::Function * GpuSharedMemCodeBuilder::createReductionFunction() const
+```
+</CodeBlock>
+
+Create the reduction function in the LLVM module, with predefined arguments and return type.
+
+### createInitFunction [#createinitfunction]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+llvm::Function * GpuSharedMemCodeBuilder::createInitFunction() const
+```
+</CodeBlock>
+
+Creates the initialization function in the LLVM module, with predefined arguments and return type.
+
+### getFunction [#getfunction]
+
+<CodeBlock links={{"GpuSharedMemCodeBuilder": "gpusharedmemcodebuilder"}}>
+```cpp showLineNumbers={false}
+llvm::Function * GpuSharedMemCodeBuilder::getFunction(
+    const std::string &func_name
+) const
+```
+</CodeBlock>
+
+Search for a particular funciton name in the module, and returns it if found.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_id_` | `size_t` | |
+| `module_` | `llvm::Module *` | |
+| `context_` | `llvm::LLVMContext &` | |
+| `reduction_func_` | `llvm::Function *` | |
+| `init_func_` | `llvm::Function *` | |
+| `query_mem_desc_` | `const QueryMemoryDescriptor` | |
+| `targets_` | `const std::vector< TargetInfo >` | |
+| `init_agg_values_` | `const std::vector< int64_t >` | |

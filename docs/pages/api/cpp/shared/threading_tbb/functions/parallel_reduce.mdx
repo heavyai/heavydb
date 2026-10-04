@@ -1,0 +1,13 @@
+---
+title: threading_tbb::parallel_reduce
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename... X>
+decltype(
+    tbb::parallel_reduce(std::forward<X>(x)...)
+)
+```
+</CodeBlock>

@@ -1,0 +1,27 @@
+---
+title: Contains_MultiPolygon_Point_Impl
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T, EdgeBehavior TEdgeBehavior>
+DEVICE ALWAYS_INLINE bool Contains_MultiPolygon_Point_Impl(
+    const int8_t *mpoly_coords,
+    const int64_t mpoly_coords_size,
+    const int32_t *mpoly_ring_sizes,
+    const int64_t mpoly_num_rings,
+    const int32_t *mpoly_poly_sizes,
+    const int64_t mpoly_num_polys,
+    const double *mpoly_bounds,
+    const int64_t mpoly_bounds_size,
+    const int8_t *p,
+    const int64_t psize,
+    const int32_t ic1,
+    const int32_t isr1,
+    const int32_t ic2,
+    const int32_t isr2,
+    const int32_t osr
+)
+```
+</CodeBlock>

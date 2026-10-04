@@ -1,0 +1,23 @@
+---
+title: fromWkb
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE bool fromWkb(
+    const uint8_t *wkb_ptr,
+    const size_t wkb_size,
+    int *result_type,
+    int8_t **result_coords,
+    int64_t *result_coords_size,
+    int32_t **result_meta1,
+    int64_t *result_meta1_size,
+    int32_t **result_meta2,
+    int64_t *result_meta2_size,
+    int32_t result_srid_in,
+    int32_t result_srid_out,
+    int32_t *best_planar_srid_ptr
+)
+```
+</CodeBlock>

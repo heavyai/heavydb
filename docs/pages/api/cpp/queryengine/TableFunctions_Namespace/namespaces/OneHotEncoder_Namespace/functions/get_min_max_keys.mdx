@@ -1,0 +1,22 @@
+---
+title: TableFunctions_Namespace::OneHotEncoder_Namespace::get_min_max_keys
+description: "Finds the minimum and maximum keys in a given vector of keys and returns them as a pair."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::pair<int32_t, int32_t> TableFunctions_Namespace::OneHotEncoder_Namespace::get_min_max_keys(
+    const std::vector<int32_t> &top_k_keys
+)
+```
+</CodeBlock>
+
+Finds the minimum and maximum keys in a given vector of keys and returns them as a pair.
+
+**Returns:** std::pair&lt;int32_t, int32_t&gt; - A pair representing the minimum and maximum key
+
+**Parameters**
+
+<ParamField path="top_k_keys" type="const std::vector<int32_t> &">
+- The top-k keys for a column
+</ParamField>

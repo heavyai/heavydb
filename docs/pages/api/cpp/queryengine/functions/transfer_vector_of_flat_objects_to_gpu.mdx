@@ -1,0 +1,15 @@
+---
+title: transfer_vector_of_flat_objects_to_gpu
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class T>
+T * transfer_vector_of_flat_objects_to_gpu(
+    const std::vector<T> &vec,
+    DeviceAllocator &allocator,
+    std::string_view tag
+)
+```
+</CodeBlock>

@@ -1,0 +1,560 @@
+---
+title: Encoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Encoder.h>
+```
+
+---
+
+## Constructors
+
+### Encoder [#encoder]
+
+<CodeBlock links={{"Encoder": "encoder", "AbstractBuffer": "../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+Encoder::Encoder(
+    Data_Namespace::AbstractBuffer *buffer
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~Encoder
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual Encoder::~Encoder()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNumElemsForBytesEncodedDataAtIndices [#getnumelemsforbytesencodeddataatindices]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual size_t Encoder::getNumElemsForBytesEncodedDataAtIndices(
+    const int8_t *index_data,
+    const std::vector<size_t> &selected_idx,
+    const size_t byte_limit
+)
+```
+</CodeBlock>
+
+Compute the maximum number of variable length encoded elements given a byte limit.
+
+NOTE: optional parameters above may be ignored by the implementation, but may or may not be required depending on the encoder type backing the implementation.
+
+**Returns:** the number of elements
+
+**Parameters**
+
+<ParamField path="index_data" type="const int8_t *">
+- (Optional) index data for the encoded type
+</ParamField>
+
+<ParamField path="selected_idx" type="const std::vector<size_t> &">
+- Which indices in the encoded data to consider
+</ParamField>
+
+<ParamField path="byte_limit" type="const size_t">
+- Byte limit that must be respected
+</ParamField>
+
+### appendEncodedDataAtIndices [#appendencodeddataatindices]
+
+<CodeBlock links={{"Encoder": "encoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<ChunkMetadata> Encoder::appendEncodedDataAtIndices(
+    const int8_t *index_data,
+    int8_t *data,
+    const std::vector<size_t> &selected_idx
+)
+```
+</CodeBlock>
+
+Append selected encoded data to the chunk buffer backing this encoder.
+
+NOTE: `index_data` must be non-null for varlen encoder types.
+
+**Returns:** updated chunk metadata for the chunk buffer backing this encoder
+
+**Parameters**
+
+<ParamField path="index_data" type="const int8_t *">
+- (Optional) the index data of data to append
+</ParamField>
+
+<ParamField path="data" type="int8_t *">
+- The data to append
+</ParamField>
+
+<ParamField path="selected_idx" type="const std::vector<size_t> &">
+- Which indices in the encoded data to append
+</ParamField>
+
+### appendEncodedData [#appendencodeddata]
+
+<CodeBlock links={{"Encoder": "encoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<ChunkMetadata> Encoder::appendEncodedData(
+    const int8_t *index_data,
+    int8_t *data,
+    const size_t start_idx,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+Append encoded data to the chunk buffer backing this encoder.
+
+NOTE: `index_data` must be non-null for varlen encoder types.
+
+**Returns:** updated chunk metadata for the chunk buffer backing this encoder
+
+**Parameters**
+
+<ParamField path="index_data" type="const int8_t *">
+- (Optional) the index data of data to append
+</ParamField>
+
+<ParamField path="data" type="int8_t *">
+- The data to append
+</ParamField>
+
+<ParamField path="start_idx" type="const size_t">
+- The position to start encoding from in the `data` array
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to encode from the `data` array
+</ParamField>
+
+### appendData [#appenddata]
+
+<CodeBlock links={{"Encoder": "encoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<ChunkMetadata> Encoder::appendData(
+    int8_t *&src_data,
+    const size_t num_elems_to_append,
+    const SQLTypeInfo &ti,
+    const bool replicating = false,
+    const int64_t offset = -1
+)
+```
+</CodeBlock>
+
+Append data to the chunk buffer backing this encoder.
+
+**Parameters**
+
+<ParamField path="src_data" type="int8_t *&">
+Source data for the append
+</ParamField>
+
+<ParamField path="num_elems_to_append" type="const size_t">
+Number of elements to append
+</ParamField>
+
+<ParamField path="ti" type="const SQLTypeInfo &">
+SQL Type Info for the column TODO(adb): used?
+</ParamField>
+
+<ParamField path="replicating" type="const bool" default="false">
+Pass one value and fill the chunk with it
+</ParamField>
+
+<ParamField path="offset" type="const int64_t" default="-1">
+Write data starting at a given offset. Default is -1 which indicates an append, an offset of 0 rewrites the chunk up to `num_elems_to_append`.
+</ParamField>
+
+### updateStats [#updatestats]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::updateStats(
+    const int64_t val,
+    const bool is_null
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::updateStats(
+    const double val,
+    const bool is_null
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Update statistics for data without appending">
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::updateStats(
+    const int8_t *const src_data,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+Update statistics for data without appending.
+
+**Parameters**
+
+<ParamField path="src_data" type="const int8_t *const">
+- The data with which to update statistics
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the data
+</ParamField>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::updateStats(
+    const std::vector<std::string> *const src_data,
+    const size_t start_idx,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+Update statistics for string data without appending.
+
+**Parameters**
+
+<ParamField path="src_data" type="const std::vector<std::string> *const">
+- The string data with which to update statistics
+</ParamField>
+
+<ParamField path="start_idx" type="const size_t">
+- The offset into `src_data` to start the update
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the string data
+</ParamField>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::updateStats(
+    const std::string *src_data,
+    const size_t start_idx,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Update statistics for array data without appending">
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::updateStats(
+    const std::vector<ArrayDatum> *const src_data,
+    const size_t start_idx,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+Update statistics for array data without appending.
+
+**Parameters**
+
+<ParamField path="src_data" type="const std::vector<ArrayDatum> *const">
+- The array data with which to update statistics
+</ParamField>
+
+<ParamField path="start_idx" type="const size_t">
+- The offset into `src_data` to start the update
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the array data
+</ParamField>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::updateStats(
+    const ArrayDatum *src_data,
+    const size_t start_idx,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### updateStatsEncoded [#updatestatsencoded]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::updateStatsEncoded(
+    const int8_t *const dst_data,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+Update statistics for encoded data without appending.
+
+**Parameters**
+
+<ParamField path="dst_data" type="const int8_t *const">
+- The data with which to update statistics
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the data
+</ParamField>
+
+### reduceStats [#reducestats]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::reduceStats(
+    const Encoder &
+)
+```
+</CodeBlock>
+
+### copyMetadata [#copymetadata]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void Encoder::copyMetadata(
+    const Encoder *copy_from_encoder
+)
+```
+</CodeBlock>
+
+### writeMetadata [#writemetadata]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void Encoder::writeMetadata(
+    FILE *f
+)
+```
+</CodeBlock>
+
+### readMetadata [#readmetadata]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void Encoder::readMetadata(
+    FILE *f,
+    int32_t version
+)
+```
+</CodeBlock>
+
+### getMetadata [#getmetadata]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"Encoder": "encoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+ChunkMetadata Encoder::getMetadata(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"Encoder": "encoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+ChunkMetadata Encoder::getMetadata() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### readChunkStats [#readchunkstats]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::readChunkStats(
+    FILE *f
+)
+```
+</CodeBlock>
+
+### writeChunkStats [#writechunkstats]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::writeChunkStats(
+    FILE *f
+)
+```
+</CodeBlock>
+
+### copyChunkStats [#copychunkstats]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::copyChunkStats(
+    const Encoder *copy_from_encoder
+)
+```
+</CodeBlock>
+
+### getChunkStats [#getchunkstats]
+
+<CodeBlock links={{"Encoder": "encoder", "ChunkStats": "../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+virtual ChunkStats Encoder::getChunkStats() const
+```
+</CodeBlock>
+
+### synthesizeChunkStats [#synthesizechunkstats]
+
+<CodeBlock links={{"Encoder": "encoder", "ChunkStats": "../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+virtual ChunkStats Encoder::synthesizeChunkStats(
+    const SQLTypeInfo &ti
+) const
+```
+</CodeBlock>
+
+### setChunkStats [#setchunkstats]
+
+<CodeBlock links={{"Encoder": "encoder", "ChunkStats": "../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+virtual bool Encoder::setChunkStats(
+    const ChunkStats &
+)
+```
+</CodeBlock>
+
+: Reset chunk level stats (min, max, nulls) using new values from the argument.
+
+**Returns:** : True if an update occurred and the chunk needs to be flushed. False otherwise. Default false if metadata update is unsupported. Only reset chunk stats if the incoming stats differ from the current stats.
+
+### resetChunkStats [#resetchunkstats]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void Encoder::resetChunkStats()
+```
+</CodeBlock>
+
+Resets chunk metadata stats to their default values.
+
+### getNumElems [#getnumelems]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+size_t Encoder::getNumElems() const
+```
+</CodeBlock>
+
+### setNumElems [#setnumelems]
+
+<CodeBlock links={{"Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void Encoder::setNumElems(
+    const size_t num_elems
+)
+```
+</CodeBlock>
+
+### getRasterTileInfo [#getrastertileinfo]
+
+<CodeBlock links={{"Encoder": "encoder", "RasterTileInfo": "../structs/rastertileinfo"}}>
+```cpp showLineNumbers={false}
+RasterTileInfo Encoder::getRasterTileInfo() const
+```
+</CodeBlock>
+
+### setRasterTileInfo [#setrastertileinfo]
+
+<CodeBlock links={{"Encoder": "encoder", "RasterTileInfo": "../structs/rastertileinfo"}}>
+```cpp showLineNumbers={false}
+void Encoder::setRasterTileInfo(
+    const RasterTileInfo &tile
+)
+```
+</CodeBlock>
+
+### setMetadata [#setmetadata]
+
+<CodeBlock links={{"Encoder": "encoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+void Encoder::setMetadata(
+    const ChunkMetadata &meta
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### Create [#create]
+
+<CodeBlock links={{"Encoder": "encoder", "AbstractBuffer": "../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+Encoder * Encoder::Create(
+    Data_Namespace::AbstractBuffer *buffer,
+    const SQLTypeInfo sqlType
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### MetadataVersion
+
+| Name | Value | Description |
+|---|---|---|
+| `kBase` | `= 0` | |
+| `kRaster` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `metadata_version_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `num_elems_` | `size_t` | |
+| `raster_tile_` | `RasterTileInfo` | |
+| `buffer_` | `Data_Namespace::AbstractBuffer *` | |
+| `decimal_overflow_validator_` | `DecimalOverflowValidator` | |
+| `date_days_overflow_validator_` | `DateDaysOverflowValidator` | |

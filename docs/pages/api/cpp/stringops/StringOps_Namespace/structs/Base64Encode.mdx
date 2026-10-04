@@ -1,0 +1,168 @@
+---
+title: StringOps_Namespace::Base64Encode
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+**Inherits from:** `StringOps_Namespace::StringOp` (public)
+
+---
+
+## Constructors
+
+### Base64Encode [#base64encode]
+
+<CodeBlock links={{"Base64Encode": "base64encode", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::Base64Encode::Base64Encode(
+    const std::optional<std::string> &var_str_optional_literal,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"Base64Encode": "base64encode", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+NullableStrType StringOps_Namespace::Base64Encode::operator()(
+    const std::string &str
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"Base64Encode": "base64encode", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::Base64Encode::operator()(
+    const std::string &str1,
+    const std::string &str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"Base64Encode": "base64encode", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::Base64Encode::operator()() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### numericEval [#numericeval]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"Base64Encode": "base64encode", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::Base64Encode::numericEval(
+    const std::string_view str
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<CodeBlock links={{"Base64Encode": "base64encode", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::Base64Encode::numericEval(
+    const std::string_view str1,
+    const std::string_view str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"Base64Encode": "base64encode", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::Base64Encode::numericEval() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getReturnType [#getreturntype]
+
+<CodeBlock links={{"Base64Encode": "base64encode", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual const SQLTypeInfo & StringOps_Namespace::Base64Encode::getReturnType() const
+```
+</CodeBlock>
+
+### getVarStringLiteral [#getvarstringliteral]
+
+<CodeBlock links={{"Base64Encode": "base64encode", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const std::string & StringOps_Namespace::Base64Encode::getVarStringLiteral() const
+```
+</CodeBlock>
+
+### hasVarStringLiteral [#hasvarstringliteral]
+
+<CodeBlock links={{"Base64Encode": "base64encode", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::Base64Encode::hasVarStringLiteral() const
+```
+</CodeBlock>
+
+### getOpInfo [#getopinfo]
+
+<CodeBlock links={{"Base64Encode": "base64encode", "StringOpInfo": "stringopinfo", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const StringOpInfo & StringOps_Namespace::Base64Encode::getOpInfo() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generateRegex [#generateregex]
+
+<CodeBlock links={{"Base64Encode": "base64encode", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+boost::regex StringOps_Namespace::Base64Encode::generateRegex(
+    const std::string &op_name,
+    const std::string &regex_pattern,
+    const std::string &regex_params,
+    const bool supports_sub_matches
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `op_kind_` | `const SqlStringOpKind` | |
+| `return_ti_` | `const SQLTypeInfo` | |
+| `has_var_str_literal_` | `const bool` | |
+| `var_str_literal_` | `const NullableStrType` | |
+| `string_op_info_` | `const StringOpInfo` | |

@@ -1,0 +1,62 @@
+---
+title: Parser::RenameColumnStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### RenameColumnStmt [#renamecolumnstmt]
+
+<CodeBlock links={{"RenameColumnStmt": "renamecolumnstmt"}}>
+```cpp showLineNumbers={false}
+Parser::RenameColumnStmt::RenameColumnStmt(
+    std::string *tab,
+    std::string *col,
+    std::string *new_col_name
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"RenameColumnStmt": "renamecolumnstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RenameColumnStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"RenameColumnStmt": "renamecolumnstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RenameColumnStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `column_` | `std::unique_ptr< std::string >` | |
+| `new_column_name_` | `std::unique_ptr< std::string >` | |

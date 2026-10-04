@@ -1,0 +1,69 @@
+---
+title: boost::serialization::save_construct_data
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExplainedQueryHint": "../../../../classes/explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::save_construct_data(
+    Archive &ar,
+    const ExplainedQueryHint *query_hint,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class RelAlgNodeType>
+void boost::serialization::save_construct_data(
+    boost::archive::text_oarchive &ar,
+    const RelAlgNodeType *node,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+Saves constructor data for TableDescriptor-dependent classes by saving out the table descriptor name.
+
+The table name seems like the best choice for a synchonization-independent descriptor. It was not immediately obvious whether the table id is the same across all nodes in a distributed cluster, for instance.
+
+NOTE: for proper overload resolution of [boost::serialization::save_construct_data](saveconstructdata) while maintaining templatization on [RelAlgNode](../../../../classes/relalgnode) type, this function is specialized on the Archive type, in this case boost::archive::text_oarchive. If other archive types are to be used, then they would need to have specializations added here.
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"SortField": "../../../../classes/sortfield"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::save_construct_data(
+    Archive &ar,
+    const SortField *sort_field,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"TargetMetaInfo": "../../../../classes/targetmetainfo"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::save_construct_data(
+    Archive &ar,
+    const TargetMetaInfo *target_meta,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

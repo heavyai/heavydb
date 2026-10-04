@@ -1,0 +1,609 @@
+---
+title: foreign_storage::AbstractTextFileDataWrapper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/AbstractTextFileDataWrapper.h>
+```
+
+**Inherits from:** `foreign_storage::AbstractFileStorageDataWrapper` (public)
+
+---
+
+## Constructors
+
+### AbstractTextFileDataWrapper [#abstracttextfiledatawrapper]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+foreign_storage::AbstractTextFileDataWrapper::AbstractTextFileDataWrapper()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+foreign_storage::AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
+    const int db_id,
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+foreign_storage::AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
+    const int db_id,
+    const ForeignTable *foreign_table,
+    const UserMapping *user_mapping,
+    const bool disable_cache
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+foreign_storage::AbstractTextFileDataWrapper::AbstractTextFileDataWrapper(
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### populateChunkMetadata [#populatechunkmetadata]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::populateChunkMetadata(
+    ChunkMetadataVector &chunk_metadata_vector
+) override
+```
+</CodeBlock>
+
+Populates provided chunk metadata vector with metadata for table specified in given chunk key.
+
+Metadata scan for text file(s) configured for foreign table occurs in parallel whenever appropriate. Parallel processing involves the main thread creating [ParseBufferRequest](../structs/parsebufferrequest) objects, which contain buffers with text content read from file and adding these request objects to a queue that is consumed by a fixed number of threads. After request processing, request objects are put back into a pool for reuse for subsequent requests in order to avoid unnecessary allocation of new buffers.
+
+**Parameters**
+
+<ParamField path="chunk_metadata_vector" type="ChunkMetadataVector &">
+- Vector to be populated with chunk metadata
+</ParamField>
+
+### populateChunkBuffers [#populatechunkbuffers]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::populateChunkBuffers(
+    const ChunkToBufferMap &required_buffers,
+    const ChunkToBufferMap &optional_buffers,
+    AbstractBuffer *delete_buffer
+) override
+```
+</CodeBlock>
+
+Populates given chunk buffers identified by chunk keys.
+
+All provided chunk buffers are expected to be for the same fragment.
+
+**Parameters**
+
+<ParamField path="required_buffers" type="const ChunkToBufferMap &">
+- Chunk buffers that must always be populated
+</ParamField>
+
+<ParamField path="optional_buffers" type="const ChunkToBufferMap &">
+- Chunk buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats)
+</ParamField>
+
+<ParamField path="delete_buffer" type="AbstractBuffer *">
+- Chunk buffer for fragment's delete column, if non-null data wrapper is expected to mark deleted rows in buffer and continue processing
+</ParamField>
+
+### populateChunkBatchBuffers [#populatechunkbatchbuffers]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::populateChunkBatchBuffers(
+    const ChunkToBatchBufferMap &required_buffers,
+    const ChunkToBatchBufferMap &optional_buffers,
+    const std::vector<AbstractBuffer *> &delete_buffer
+) override
+```
+</CodeBlock>
+
+Mirrors [`populateChunkBuffers`](#populatechunkbuffers), but uses batch buffers instead as an optimization.
+
+Populates given chunk batch buffers identified by chunk keys. All provided chunk buffers are expected to be for the same fragment.
+
+**Parameters**
+
+<ParamField path="required_buffers" type="const ChunkToBatchBufferMap &">
+- Chunk batch buffers that must always be populated
+</ParamField>
+
+<ParamField path="optional_buffers" type="const ChunkToBatchBufferMap &">
+- Chunk batch buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats)
+</ParamField>
+
+<ParamField path="delete_buffer" type="const std::vector<AbstractBuffer *> &">
+- Chunk batch buffer for fragment's delete column, if non-null data wrapper is expected to mark deleted rows in buffer and continue processing
+</ParamField>
+
+### getSerializedDataWrapper [#getserializeddatawrapper]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::AbstractTextFileDataWrapper::getSerializedDataWrapper() const override
+```
+</CodeBlock>
+
+Serialize internal state of wrapper into file at given path if implemented.
+
+### restoreDataWrapperInternals [#restoredatawrapperinternals]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::restoreDataWrapperInternals(
+    const std::string &file_path,
+    const ChunkMetadataVector &chunk_metadata
+) override
+```
+</CodeBlock>
+
+Restore internal state of datawrapper.
+
+**Parameters**
+
+<ParamField path="file_path" type="const std::string &">
+- Location of file created by serializeMetadata
+</ParamField>
+
+### isRestored [#isrestored]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::AbstractTextFileDataWrapper::isRestored() const override
+```
+</CodeBlock>
+
+### getCachedParallelismLevel [#getcachedparallelismlevel]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+ParallelismLevel foreign_storage::AbstractTextFileDataWrapper::getCachedParallelismLevel() const override
+```
+</CodeBlock>
+
+Gets the desired level of parallelism for the data wrapper when a cache is in use.
+
+This affects the optional buffers that the data wrapper is made aware of during data requests.
+
+### getNonCachedParallelismLevel [#getnoncachedparallelismlevel]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+ParallelismLevel foreign_storage::AbstractTextFileDataWrapper::getNonCachedParallelismLevel() const override
+```
+</CodeBlock>
+
+Gets the desired level of parallelism for the data wrapper when no cache is in use.
+
+This affects the optional buffers that the data wrapper is made aware of during data requests.
+
+### isLazyFragmentFetchingEnabled [#islazyfragmentfetchingenabled]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::AbstractTextFileDataWrapper::isLazyFragmentFetchingEnabled() const override
+```
+</CodeBlock>
+
+If `true` data wrapper implements a lazy fragment fetching mode.
+
+This mode allows requests for fragments to be issued to `populateChunks` *without* the prerequisite that [`populateChunkMetadata`](#populatechunkmetadata) has successfully finished execution. This is an optimization that has some specific use-cases and is not required.
+
+NOTE: this mode is not guaranteed to work as expected when combined with certain types of refresh modes such as append. This is subject to change in the future, but has no impact on the intended use-cases of this mode.
+
+### getOptimalBatchSize [#getoptimalbatchsize]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::AbstractTextFileDataWrapper::getOptimalBatchSize() override
+```
+</CodeBlock>
+
+Get the size of batches to be used in `BatchBuffer` code paths.
+
+This quantity must be a constant and can not change over the course of the lifetime of the data wrapper. Typically, this quantity is chosen to ensure concurrency can be best executed.
+
+### acceptsPrepopulatedDeleteBuffer [#acceptsprepopulateddeletebuffer]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::AbstractTextFileDataWrapper::acceptsPrepopulatedDeleteBuffer() const override
+```
+</CodeBlock>
+
+If `true` data wrapper accepts delete buffers that may be prepoulated with a speculative number of `false` values.
+
+This is an minor optimization that prevents unnecessary allocations and deallocations by reusing the buffer when it is large enouhg, and requiring a smaller allocation when it needs to be resized.
+
+This option is only used when delete buffers are in use.
+
+TODO: remove this method when it will become the default behaviour for all data wrappers going forward.
+
+### validateServerOptions [#validateserveroptions]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::validateServerOptions(
+    const ForeignServer *foreign_server
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given foreign server object are valid.
+
+**Parameters**
+
+<ParamField path="foreign_server" type="const ForeignServer *">
+- Foreign server object containing options to be validated
+</ParamField>
+
+### validateTableOptions [#validatetableoptions]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::validateTableOptions(
+    const ForeignTable *foreign_table
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given foreign table object are valid.
+
+**Parameters**
+
+<ParamField path="foreign_table" type="const ForeignTable *">
+- Foreign table object containing options to be validated
+</ParamField>
+
+### getSupportedTableOptions [#getsupportedtableoptions]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string_view> & foreign_storage::AbstractTextFileDataWrapper::getSupportedTableOptions() const override
+```
+</CodeBlock>
+
+Gets the set of supported table options for the data wrapper.
+
+### validateUserMappingOptions [#validateusermappingoptions]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::validateUserMappingOptions(
+    const UserMapping *user_mapping,
+    const ForeignServer *foreign_server
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given user mapping object are valid.
+
+**Parameters**
+
+<ParamField path="user_mapping" type="const UserMapping *">
+- User mapping object containing options to be validated
+</ParamField>
+
+### getSupportedUserMappingOptions [#getsupportedusermappingoptions]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string_view> & foreign_storage::AbstractTextFileDataWrapper::getSupportedUserMappingOptions() const override
+```
+</CodeBlock>
+
+Gets the set of supported user mapping options for the data wrapper.
+
+### getAlterableTableOptions [#getalterabletableoptions]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string> foreign_storage::AbstractTextFileDataWrapper::getAlterableTableOptions() const override
+```
+</CodeBlock>
+
+Gets the subset of table options that can be altered for the data wrapper.
+
+### validateSchema [#validateschema]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ForeignDataWrapper::validateSchema(
+    const std::list<ColumnDescriptor> &columns,
+    const ForeignTable *foreign_table
+) const
+```
+</CodeBlock>
+
+Verifies the schema is supported by this foreign table.
+
+**Parameters**
+
+<ParamField path="columns" type="const std::list<ColumnDescriptor> &">
+- Column descriptors for this table
+</ParamField>
+
+### getFileBufferParser [#getfilebufferparser]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "TextFileBufferParser": "textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+virtual const TextFileBufferParser & foreign_storage::AbstractTextFileDataWrapper::getFileBufferParser() const
+```
+</CodeBlock>
+
+### getMaxFileCount [#getmaxfilecount]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> foreign_storage::AbstractTextFileDataWrapper::getMaxFileCount() const
+```
+</CodeBlock>
+
+### iterativeFileScan [#iterativefilescan]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "IterativeFileScanParameters": "../structs/iterativefilescanparameters"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::iterativeFileScan(
+    ChunkMetadataVector &chunk_metadata_vector,
+    IterativeFileScanParameters &file_scan_param
+)
+```
+</CodeBlock>
+
+Implements an iterative file scan that enables populating chunks fragment by fragment.
+
+### populateChunks [#populatechunks]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "Chunk": "../../chunkns/classes/chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::populateChunks(
+    std::map<int, Chunk_NS::Chunk> &column_id_to_chunk_map,
+    int fragment_id,
+    AbstractBuffer *delete_buffer
+)
+```
+</CodeBlock>
+
+Populates provided chunks with appropriate data by parsing all file regions containing chunk data.
+
+**Parameters**
+
+<ParamField path="column_id_to_chunk_map" type="std::map<int, Chunk_NS::Chunk> &">
+- Map of column id to chunks to be populated
+</ParamField>
+
+<ParamField path="fragment_id" type="int">
+- Fragment id of given chunks
+</ParamField>
+
+<ParamField path="delete_buffer" type="AbstractBuffer *">
+- Optional buffer to store deleted row indices
+</ParamField>
+
+### populateBatchChunks [#populatebatchchunks]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "Chunk": "../../chunkns/classes/chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::populateBatchChunks(
+    std::map<std::pair<int, int>, Chunk_NS::Chunk> &column_id_batch_id_to_chunk_map,
+    int fragment_id,
+    const std::vector<AbstractBuffer *> &delete_buffer
+)
+```
+</CodeBlock>
+
+Populates provided chunks with appropriate data by parsing all file regions containing chunk data.
+
+Mirrors `populateChunks` for batch buffers.
+
+**Parameters**
+
+<ParamField path="column_id_batch_id_to_chunk_map" type="std::map<std::pair<int, int>, Chunk_NS::Chunk> &">
+- Map of column id & batch id to chunks to be populated
+</ParamField>
+
+<ParamField path="fragment_id" type="int">
+- Fragment id of given chunks
+</ParamField>
+
+<ParamField path="delete_buffer" type="const std::vector<AbstractBuffer *> &">
+- Batch buffer to store deleted row indices
+</ParamField>
+
+### populateChunkMapForColumns [#populatechunkmapforcolumns]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::populateChunkMapForColumns(
+    const std::set<const ColumnDescriptor *> &columns,
+    const int fragment_id,
+    const ChunkToBufferMap &buffers,
+    std::map<int, Chunk_NS::Chunk> &column_id_to_chunk_map
+)
+```
+</CodeBlock>
+
+### populateBatchChunkMapForColumns [#populatebatchchunkmapforcolumns]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::populateBatchChunkMapForColumns(
+    const std::set<const ColumnDescriptor *> &columns,
+    const int fragment_id,
+    const ChunkToBatchBufferMap &buffers,
+    std::map<std::pair<int, int>, Chunk_NS::Chunk> &column_id_to_chunk_map
+)
+```
+</CodeBlock>
+
+### updateMetadata [#updatemetadata]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::updateMetadata(
+    std::map<int, Chunk_NS::Chunk> &column_id_to_chunk_map,
+    int fragment_id
+)
+```
+</CodeBlock>
+
+### updateRolledOffChunks [#updaterolledoffchunks]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::updateRolledOffChunks(
+    const std::set<std::string> &rolled_off_files,
+    const std::map<int32_t, const ColumnDescriptor *> &column_by_id
+)
+```
+</CodeBlock>
+
+### initializeIterativeScanModeIfNecessary [#initializeiterativescanmodeifnecessary]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::AbstractTextFileDataWrapper::initializeIterativeScanModeIfNecessary()
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getFilePathOptions [#getfilepathoptions]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+shared::FilePathOptions foreign_storage::AbstractTextFileDataWrapper::getFilePathOptions(
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+### getFullFilePath [#getfullfilepath]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::AbstractTextFileDataWrapper::getFullFilePath(
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+Returns the path to the source file/dir of the table.
+
+Depending on options this may result from a concatenation of server and table path options.
+
+### allowFileRollOff [#allowfilerolloff]
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::AbstractTextFileDataWrapper::allowFileRollOff(
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### ParallelismLevel
+
+ParallelismLevel describes the desired level of parallelism of the data wrapper.
+
+| Name | Value | Description |
+|---|---|---|
+| `NONE` | | |
+| `INTRA_FRAGMENT` | | |
+| `INTER_FRAGMENT` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `chunk_metadata_map_` | `std::map< ChunkKey, std::shared_ptr< ChunkMetadata > >` | |
+| `fragment_id_to_file_regions_map_` | `std::map< int, FileRegions >` | |
+| `db_id_` | `const int` | |
+| `foreign_table_` | `const ForeignTable *` | |
+| `chunk_encoder_buffers_` | `std::map< ChunkKey, std::unique_ptr< ForeignStorageBuffer > >` | |
+| `num_rows_` | `size_t` | |
+| `append_start_offset_` | `size_t` | |
+| `is_restored_` | `bool` | |
+| `user_mapping_` | `const UserMapping *` | |
+| `disable_cache_` | `const bool` | |
+| `is_first_file_scan_call_` | `bool` | |
+| `is_file_scan_in_progress_` | `bool` | |
+| `iterative_scan_last_scanned_fragment_id_` | `int` | |
+| `iterative_scan_last_processed_fragment_id_` | `std::atomic< int >` | |
+| `multi_threading_params_` | `MetadataScanMultiThreadingParams` | |
+| `buffer_size_` | `size_t` | |
+| `thread_count_` | `size_t` | |
+| `residual_buffer_` | `ResidualBuffer` | |
+| `is_iterative_scan_mode_initialized_` | `bool` | |
+| `file_reader_` | `std::unique_ptr< FileReader >` | |
+| `STORAGE_TYPE_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `BASE_PATH_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `FILE_PATH_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `REGEX_PATH_FILTER_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `LOCAL_FILE_STORAGE_TYPE` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `S3_STORAGE_TYPE` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `FILE_SORT_ORDER_BY_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `FILE_SORT_REGEX_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ALLOW_FILE_ROLL_OFF_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `THREADS_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `LONLAT_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `supported_storage_types` <Badge intent="note" minimal>static</Badge> | `const std::array< std::string, 1 >` | |
+
+---
+
+## Inner classes
+
+### ResidualBuffer
+
+<CodeBlock links={{"AbstractTextFileDataWrapper": "abstracttextfiledatawrapper"}}>
+```cpp showLineNumbers={false}
+struct foreign_storage::AbstractTextFileDataWrapper::ResidualBuffer
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `residual_data` | `std::unique_ptr< char[]>` | |
+| `alloc_size` | `size_t` | |
+| `residual_buffer_size` | `size_t` | |
+| `residual_buffer_alloc_size` | `size_t` | |

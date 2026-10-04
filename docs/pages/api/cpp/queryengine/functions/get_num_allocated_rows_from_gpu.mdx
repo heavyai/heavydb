@@ -1,0 +1,18 @@
+---
+title: get_num_allocated_rows_from_gpu
+description: "Returns back total number of allocated rows per device (i.e., number of matched elements in projections)."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+size_t get_num_allocated_rows_from_gpu(
+    DeviceAllocator &device_allocator,
+    int8_t *projection_size_gpu,
+    const int device_id
+)
+```
+</CodeBlock>
+
+Returns back total number of allocated rows per device (i.e., number of matched elements in projections).
+
+TODO(Saman): revisit this for bump allocators

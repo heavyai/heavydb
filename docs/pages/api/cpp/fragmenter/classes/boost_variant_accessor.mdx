@@ -1,0 +1,65 @@
+---
+title: boost_variant_accessor
+description: ""
+---
+
+<CodeBlock id="boost_variant_accessor" links={{"boost_variant_accessor": "boostvariantaccessor"}}>
+```cpp showLineNumbers={false}
+template <typename RETURN_TYPE>
+class boost_variant_accessor
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TargetValueConverters.h>
+```
+
+**Template parameters**
+
+<ParamField path="RETURN_TYPE" type="typename">
+</ParamField>
+
+**Inherits from:** `boost::static_visitor< const RETURN_TYPE * >` (public)
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"boost_variant_accessor": "boostvariantaccessor"}}>
+```cpp showLineNumbers={false}
+const RETURN_TYPE * boost_variant_accessor<RETURN_TYPE>::operator()(
+    RETURN_TYPE const &operand
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"boost_variant_accessor": "boostvariantaccessor"}}>
+```cpp showLineNumbers={false}
+const RETURN_TYPE * boost_variant_accessor<RETURN_TYPE>::operator()(
+    void *operand
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (3)">
+
+<CodeBlock links={{"boost_variant_accessor": "boostvariantaccessor"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+const RETURN_TYPE * boost_variant_accessor<RETURN_TYPE>::operator()(
+    T const &operand
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,282 @@
+---
+title: Analyzer::RangeOper
+description: "@type RangeOper"
+---
+
+@type `RangeOper`
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### RangeOper [#rangeoper]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::RangeOper::RangeOper(
+    const bool l_inclusive,
+    const bool r_inclusive,
+    std::shared_ptr<Analyzer::Expr> l,
+    std::shared_ptr<Analyzer::Expr> r
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_left_operand [#getleftoperand]
+
+<CodeBlock links={{"RangeOper": "rangeoper"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::RangeOper::get_left_operand() const
+```
+</CodeBlock>
+
+### get_right_operand [#getrightoperand]
+
+<CodeBlock links={{"RangeOper": "rangeoper"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::RangeOper::get_right_operand() const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::RangeOper::deep_copy() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"RangeOper": "rangeoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::RangeOper::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RangeOper": "rangeoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::RangeOper::toString() const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"RangeOper": "rangeoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RangeOper::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RangeOper::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::RangeOper::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::RangeOper::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RangeOper::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::RangeOper::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RangeOper::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::RangeOper::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::RangeOper::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::RangeOper::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::RangeOper::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::RangeOper::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::RangeOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::RangeOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::RangeOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::RangeOper::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RangeOper::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::RangeOper::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::RangeOper::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"RangeOper": "rangeoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::RangeOper::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `left_inclusive_` | `bool` | |
+| `right_inclusive_` | `bool` | |
+| `left_operand_` | `std::shared_ptr< Analyzer::Expr >` | |
+| `right_operand_` | `std::shared_ptr< Analyzer::Expr >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

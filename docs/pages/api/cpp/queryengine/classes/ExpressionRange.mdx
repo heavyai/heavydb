@@ -1,0 +1,356 @@
+---
+title: ExpressionRange
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ExpressionRange.h>
+```
+
+---
+
+## Constructors
+
+### ExpressionRange [#expressionrange]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange::ExpressionRange(
+    const int64_t int_min_in,
+    const int64_t int_max_in,
+    const int64_t bucket,
+    const bool has_nulls_in
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange::ExpressionRange(
+    const ExpressionRangeType type,
+    const double fp_min_in,
+    const double fp_max_in,
+    const bool has_nulls_in
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange::ExpressionRange()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange::ExpressionRange(
+    const ExpressionRangeType type
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getIntMin [#getintmin]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+int64_t ExpressionRange::getIntMin() const
+```
+</CodeBlock>
+
+### getIntMax [#getintmax]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+int64_t ExpressionRange::getIntMax() const
+```
+</CodeBlock>
+
+### getFpMin [#getfpmin]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+double ExpressionRange::getFpMin() const
+```
+</CodeBlock>
+
+### getFpMax [#getfpmax]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+double ExpressionRange::getFpMax() const
+```
+</CodeBlock>
+
+### setIntMin [#setintmin]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+void ExpressionRange::setIntMin(
+    const int64_t int_min
+)
+```
+</CodeBlock>
+
+### setIntMax [#setintmax]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+void ExpressionRange::setIntMax(
+    const int64_t int_max
+)
+```
+</CodeBlock>
+
+### setIntInvalidRange [#setintinvalidrange]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+void ExpressionRange::setIntInvalidRange()
+```
+</CodeBlock>
+
+### setFpMin [#setfpmin]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+void ExpressionRange::setFpMin(
+    const double fp_min
+)
+```
+</CodeBlock>
+
+### setFpMax [#setfpmax]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+void ExpressionRange::setFpMax(
+    const double fp_max
+)
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRangeType ExpressionRange::getType() const
+```
+</CodeBlock>
+
+### getBucket [#getbucket]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+int64_t ExpressionRange::getBucket() const
+```
+</CodeBlock>
+
+### hasNulls [#hasnulls]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+bool ExpressionRange::hasNulls() const
+```
+</CodeBlock>
+
+### setHasNulls [#sethasnulls]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+void ExpressionRange::setHasNulls()
+```
+</CodeBlock>
+
+### setNulls [#setnulls]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+void ExpressionRange::setNulls(
+    bool n
+)
+```
+</CodeBlock>
+
+### operator+ [#operator_plus]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange ExpressionRange::operator+(
+    const ExpressionRange &other
+) const
+```
+</CodeBlock>
+
+### operator- [#operator_minus]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange ExpressionRange::operator-(
+    const ExpressionRange &other
+) const
+```
+</CodeBlock>
+
+### operator* [#operator_mul]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange ExpressionRange::operator*(
+    const ExpressionRange &other
+) const
+```
+</CodeBlock>
+
+### operator/ [#operator_div]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange ExpressionRange::operator/(
+    const ExpressionRange &other
+) const
+```
+</CodeBlock>
+
+### operator|| [#operator_logical_or]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange ExpressionRange::operator||(
+    const ExpressionRange &other
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+bool ExpressionRange::operator==(
+    const ExpressionRange &other
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+std::string ExpressionRange::toString() const
+```
+</CodeBlock>
+
+### binOp [#binop]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+template <class T, class BinOp>
+ExpressionRange ExpressionRange::binOp(
+    const ExpressionRange &other,
+    const BinOp &bin_op
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### makeIntRange [#makeintrange]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+static ExpressionRange ExpressionRange::makeIntRange(
+    const int64_t int_min,
+    const int64_t int_max,
+    const int64_t bucket,
+    const bool has_nulls
+)
+```
+</CodeBlock>
+
+### makeDoubleRange [#makedoublerange]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+static ExpressionRange ExpressionRange::makeDoubleRange(
+    const double fp_min,
+    const double fp_max,
+    const bool has_nulls
+)
+```
+</CodeBlock>
+
+### makeFloatRange [#makefloatrange]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+static ExpressionRange ExpressionRange::makeFloatRange(
+    const float fp_min,
+    const float fp_max,
+    const bool has_nulls
+)
+```
+</CodeBlock>
+
+### makeNullRange [#makenullrange]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+static ExpressionRange ExpressionRange::makeNullRange()
+```
+</CodeBlock>
+
+### makeInvalidRange [#makeinvalidrange]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+static ExpressionRange ExpressionRange::makeInvalidRange()
+```
+</CodeBlock>
+
+### typeSupportsRange [#typesupportsrange]
+
+<CodeBlock links={{"ExpressionRange": "expressionrange"}}>
+```cpp showLineNumbers={false}
+bool ExpressionRange::typeSupportsRange(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_` | `ExpressionRangeType` | |
+| `has_nulls_` | `bool` | |
+| `` | `union ExpressionRange` | |
+| `` | `union ExpressionRange` | |
+| `bucket_` | `int64_t` | |
+| `int_min_` | `int64_t` | |
+| `fp_min_` | `double` | |
+| `int_max_` | `int64_t` | |
+| `fp_max_` | `double` | |

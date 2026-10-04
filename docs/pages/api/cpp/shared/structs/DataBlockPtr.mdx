@@ -1,0 +1,46 @@
+---
+title: DataBlockPtr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <sqltypes.h>
+```
+
+---
+
+## Methods
+
+### setStringsPtr [#setstringsptr]
+
+<CodeBlock links={{"DataBlockPtr": "datablockptr"}}>
+```cpp showLineNumbers={false}
+template <typename VectorType>
+void DataBlockPtr::setStringsPtr(
+    VectorType &vector
+)
+```
+</CodeBlock>
+
+### setArraysPtr [#setarraysptr]
+
+<CodeBlock links={{"DataBlockPtr": "datablockptr"}}>
+```cpp showLineNumbers={false}
+template <typename VectorType>
+void DataBlockPtr::setArraysPtr(
+    VectorType &vector
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `numbersPtr` | `int8_t *` | |
+| `stringsPtr` | `std::string *` | |
+| `arraysPtr` | `ArrayDatum *` | |
+| `` | `union DataBlockPtr` | |
+| `size` | `size_t` | |

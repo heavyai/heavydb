@@ -1,0 +1,67 @@
+---
+title: Parser::DropModelStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### DropModelStmt [#dropmodelstmt]
+
+<CodeBlock links={{"DropModelStmt": "dropmodelstmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropModelStmt::DropModelStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getModelName [#getmodelname]
+
+<CodeBlock links={{"DropModelStmt": "dropmodelstmt"}}>
+```cpp showLineNumbers={false}
+auto const  & Parser::DropModelStmt::getModelName()
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"DropModelStmt": "dropmodelstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropModelStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"DropModelStmt": "dropmodelstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropModelStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `model_name_` | `std::string` | |
+| `if_exists_` | `bool` | |

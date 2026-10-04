@@ -1,0 +1,159 @@
+---
+title: RelLeftDeepTreeIdsCollector
+description: ""
+---
+
+**Inherits from:** `RelAlgVisitor< std::vector< unsigned > >` (public)
+
+---
+
+## Methods
+
+### visitLeftDeepInnerJoin [#visitleftdeepinnerjoin]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelLeftDeepInnerJoin": "relleftdeepinnerjoin"}}>
+```cpp showLineNumbers={false}
+std::vector<unsigned> RelLeftDeepTreeIdsCollector::visitLeftDeepInnerJoin(
+    const RelLeftDeepInnerJoin *left_deep_join_tree
+) const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelAlgNode": "relalgnode", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visit(
+    const RelAlgNode *rel_alg
+) const
+```
+</CodeBlock>
+
+### visitAggregate [#visitaggregate]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelAggregate": "relaggregate", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitAggregate(
+    const RelAggregate *
+) const
+```
+</CodeBlock>
+
+### visitCompound [#visitcompound]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelCompound": "relcompound", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitCompound(
+    const RelCompound *
+) const
+```
+</CodeBlock>
+
+### visitFilter [#visitfilter]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelFilter": "relfilter", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitFilter(
+    const RelFilter *
+) const
+```
+</CodeBlock>
+
+### visitJoin [#visitjoin]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelJoin": "reljoin", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitJoin(
+    const RelJoin *
+) const
+```
+</CodeBlock>
+
+### visitProject [#visitproject]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelProject": "relproject", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitProject(
+    const RelProject *
+) const
+```
+</CodeBlock>
+
+### visitScan [#visitscan]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelScan": "relscan", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitScan(
+    const RelScan *
+) const
+```
+</CodeBlock>
+
+### visitSort [#visitsort]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelSort": "relsort", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitSort(
+    const RelSort *
+) const
+```
+</CodeBlock>
+
+### visitLogicalValues [#visitlogicalvalues]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelLogicalValues": "rellogicalvalues", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitLogicalValues(
+    const RelLogicalValues *
+) const
+```
+</CodeBlock>
+
+### visitModify [#visitmodify]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelModify": "relmodify", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitModify(
+    const RelModify *
+) const
+```
+</CodeBlock>
+
+### visitTableFunction [#visittablefunction]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelTableFunction": "reltablefunction", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitTableFunction(
+    const RelTableFunction *
+) const
+```
+</CodeBlock>
+
+### visitLogicalUnion [#visitlogicalunion]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelLogicalUnion": "rellogicalunion", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::visitLogicalUnion(
+    const RelLogicalUnion *
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector"}}>
+```cpp showLineNumbers={false}
+std::vector<unsigned> RelLeftDeepTreeIdsCollector::aggregateResult(
+    const std::vector<unsigned> &aggregate,
+    const std::vector<unsigned> &next_result
+) const override
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"RelLeftDeepTreeIdsCollector": "relleftdeeptreeidscollector", "RelAlgVisitor": "relalgvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<unsigned> RelAlgVisitor<std::vector<unsigned>>::defaultResult() const
+```
+</CodeBlock>
