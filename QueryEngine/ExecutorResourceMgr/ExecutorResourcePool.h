@@ -41,6 +41,8 @@ inline ResourceType map_resource_subtype_to_resource_type(
       return ResourceType::CPU_BUFFER_POOL_MEM;
     case ResourceSubtype::PAGEABLE_GPU_BUFFER_POOL_MEM:
       return ResourceType::GPU_BUFFER_POOL_MEM;
+    case ResourceSubtype::CPU_RESULT_MEM_IN_POOL:
+      return ResourceType::CPU_BUFFER_POOL_MEM;
     default:
       UNREACHABLE();
       return ResourceType::INVALID_TYPE;
@@ -68,7 +70,8 @@ inline std::vector<ResourceSubtype> map_resource_type_to_resource_subtypes(
       return {ResourceSubtype::GPU_RESULT_MEM};
     case ResourceType::CPU_BUFFER_POOL_MEM:
       return {ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM,
-              ResourceSubtype::PAGEABLE_CPU_BUFFER_POOL_MEM};
+              ResourceSubtype::PAGEABLE_CPU_BUFFER_POOL_MEM,
+              ResourceSubtype::CPU_RESULT_MEM_IN_POOL};
     case ResourceType::GPU_BUFFER_POOL_MEM:
       return {ResourceSubtype::PINNED_GPU_BUFFER_POOL_MEM,
               ResourceSubtype::PAGEABLE_GPU_BUFFER_POOL_MEM};
@@ -197,6 +200,11 @@ using BufferPoolChunkMap =
  * PINNED_CPU_BUFFER_POOL_MEM and PINNED_GPU_BUFFER_POOL_MEM to represent non-pageable
  * memory (specifically for kernel results), and PAGEABLE_CPU_BUFFER_POOL_MEM and
  * PAGEABLE_GPU_BUFFER_POOL_MEM to represent data that could be evicted as necessary.
+ * When CPU result memory is drawn from the CPU buffer pool, it is tracked under
+ * ResourceSubtype CPU_RESULT_MEM_IN_POOL, which also rolls up under ResourceType
+ * CPU_BUFFER_POOL_MEM. Because result memory and pinned input chunks then draw on one
+ * pool, requests for them are validated jointly against the pool total rather than
+ * independently.
  *
  * Currently, a singleton ExecutorResourcePool is managed by ExecutorResourceMgr and is
  * initialized by the latter in the ExecutorResourceMgr constructor. Various parameters
@@ -329,6 +337,17 @@ class ExecutorResourcePool {
   std::pair<size_t, size_t> get_resource_info(const ResourceType resource_type) const;
 
   /**
+   * @brief Returns the maximum CPU result memory that could be granted to the
+   * specified request, accounting for the buffer pool memory its input chunks will
+   * need if result memory is drawn from the CPU buffer pool.
+   *
+   * Exposed so that `ExecutorResourceMgr` can resize a request that was rejected for
+   * needing too much CPU result memory against the same limit the pool will apply,
+   * rather than duplicating the arithmetic.
+   */
+  size_t get_max_cpu_result_mem_grant_for_request(const RequestInfo& request_info) const;
+
+  /**
    * @brief Returns a struct detailing the allocated and total available resources
    * of each type tracked in ExecutorResourcePool
    *
@@ -409,6 +428,26 @@ class ExecutorResourcePool {
       const size_t min_requested_independent_resource_quantity,
       const size_t max_grantable_independent_resource_quantity,
       const size_t dependent_to_independent_resource_ratio) const;
+
+  /**
+   * @brief Bytes of buffer pool memory a request's input chunks will occupy, and which
+   * therefore cannot also be granted to that request as result memory when result
+   * memory is drawn from the same pool. Returns 0 for a GPU chunk request, as GPU
+   * buffer pool memory never backs CPU result memory.
+   *
+   * If chunk memory will be gated per slot, only a slot's worth of chunk memory is
+   * pinned at a time, so the gated quantity rather than the full working set is
+   * reserved.
+   */
+  size_t calc_chunk_headroom_for_request(const ChunkRequestInfo& chunk_request_info,
+                                         const size_t min_cpu_slots) const;
+
+  /**
+   * @brief The per-request max CPU result memory grant, less the buffer pool memory
+   * that must be left available for the request's input chunks.
+   */
+  size_t get_max_cpu_result_mem_grant_per_request(
+      const size_t chunk_headroom_bytes) const;
 
   bool check_request_against_global_policy(
       const size_t resource_total,
