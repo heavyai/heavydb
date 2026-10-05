@@ -981,8 +981,7 @@ void ExecutorResourcePool::allocate_resources(
         cpu_result_mem_resource_type_.resource_type);
   }
   if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU) {
-    if (resource_grant.buffer_mem_gated_per_slot ||
-        (chunk_request_info.num_chunks > 0 && chunk_request_info.total_bytes > 0)) {
+    if (counts_as_cpu_buffer_pool_chunk_request(resource_grant, chunk_request_info)) {
       increment_outstanding_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM);
       increment_total_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM);
     }
@@ -1047,8 +1046,7 @@ void ExecutorResourcePool::deallocate_resources(
         cpu_result_mem_resource_type_.resource_type);
   }
   if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU) {
-    if (resource_grant.buffer_mem_gated_per_slot ||
-        (chunk_request_info.num_chunks > 0 && chunk_request_info.total_bytes > 0)) {
+    if (counts_as_cpu_buffer_pool_chunk_request(resource_grant, chunk_request_info)) {
       decrement_outstanding_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM);
     }
   } else if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::GPU) {

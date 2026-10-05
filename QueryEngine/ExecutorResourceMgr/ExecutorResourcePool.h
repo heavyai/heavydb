@@ -446,6 +446,28 @@ class ExecutorResourcePool {
 
   void sanity_check_requests_against_allocations() const;
 
+  /**
+   * @brief Whether a request's chunk needs should contribute to the outstanding
+   * request count for `ResourceType::CPU_BUFFER_POOL_MEM`.
+   *
+   * Returns false when the request's CPU result memory has already been counted
+   * against that resource type, which happens when result memory is drawn from the CPU
+   * buffer pool. Otherwise one request would be counted twice.
+   */
+  inline bool counts_as_cpu_buffer_pool_chunk_request(
+      const ResourceGrant& resource_grant,
+      const ChunkRequestInfo& chunk_request_info) const {
+    const bool already_counted_for_result_mem =
+        resource_grant.cpu_result_mem > 0 &&
+        cpu_result_mem_resource_type_.resource_type ==
+            ResourceType::CPU_BUFFER_POOL_MEM;
+    if (already_counted_for_result_mem) {
+      return false;
+    }
+    return resource_grant.buffer_mem_gated_per_slot ||
+           (chunk_request_info.num_chunks > 0 && chunk_request_info.total_bytes > 0);
+  }
+
   inline size_t get_total_allocated_buffer_pool_mem_for_level(
       const ExecutorDeviceType memory_pool_type) const {
     return memory_pool_type == ExecutorDeviceType::CPU
