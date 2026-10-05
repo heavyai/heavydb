@@ -75,6 +75,47 @@ std::shared_ptr<ExecutorResourceMgr> gen_resource_mgr_with_defaults(
       default_max_available_resource_use_ratio);
 }
 
+// Pool-backed output buffers (the production default), where CPU result memory and
+// pinned input chunks both draw on the CPU buffer pool
+std::shared_ptr<ExecutorResourceMgr> gen_pool_backed_resource_mgr(
+    const size_t cpu_buffer_pool_mem,
+    const size_t num_cpu_slots = default_cpu_slots) {
+  return generate_executor_resource_mgr(
+      num_cpu_slots,
+      default_gpu_slots,
+      0u,  // result memory is drawn from the cpu buffer pool instead
+      true,
+      cpu_buffer_pool_mem,
+      default_gpu_buffer_pool_mem,
+      default_per_query_max_cpu_slots_ratio,
+      default_per_query_max_cpu_result_mem_ratio,
+      default_per_query_max_pinned_cpu_buffer_pool_mem_ratio,
+      default_per_query_max_pageable_cpu_buffer_pool_mem_ratio,
+      default_allow_cpu_kernel_concurrency,
+      default_allow_cpu_gpu_kernel_concurrency,
+      default_allow_cpu_slot_oversubscription_concurrency,
+      default_allow_gpu_slot_oversubscription,
+      default_allow_cpu_result_mem_oversubscription_concurrency,
+      default_max_available_resource_use_ratio);
+}
+
+ChunkRequestInfo gen_cpu_chunk_request_info(const size_t num_chunks,
+                                            const size_t bytes_per_chunk,
+                                            const bool bytes_scales_per_kernel) {
+  ChunkRequestInfo chunk_request_info;
+  chunk_request_info.device_memory_pool_type = ExecutorDeviceType::CPU;
+  chunk_request_info.bytes_scales_per_kernel = bytes_scales_per_kernel;
+  for (size_t chunk_idx = 0; chunk_idx < num_chunks; ++chunk_idx) {
+    chunk_request_info.chunks_with_byte_sizes.emplace_back(
+        ChunkKey{1, 1, 1, static_cast<int>(chunk_idx)}, bytes_per_chunk);
+    chunk_request_info.bytes_per_kernel.emplace_back(bytes_per_chunk);
+    chunk_request_info.total_bytes += bytes_per_chunk;
+  }
+  chunk_request_info.num_chunks = num_chunks;
+  chunk_request_info.max_bytes_per_kernel = bytes_per_chunk;
+  return chunk_request_info;
+}
+
 RequestInfo gen_default_request_info() {
   const RequestInfo request_info(ExecutorDeviceType::CPU,
                                  default_priority_level_request,
@@ -1192,9 +1233,11 @@ TEST(ExecutorResourceMgr, AdjustNumCPUSlotForCPUGroupbyQuery) {
     ASSERT_TRUE(false) << "We should throw an ERM \'RequestStat Error\' exception.";
   } catch (std::runtime_error const& e) {
     std::string const err_msg{e.what()};
+    // Limit is the per-query result memory ratio (0.8) of the 65536 byte pool, less the
+    // 796 bytes of headroom reserved for this request's input chunks: 52429 - 796
     std::string const expected_msg{
         "RequestStats error: Query requested more CPU result memory (62.18 KB) than "
-        "available per query (48.0 KB) in executor resource pool"};
+        "available per query (50.42 KB) in executor resource pool"};
     ASSERT_EQ(err_msg, expected_msg);
   }
 
@@ -1249,9 +1292,11 @@ TEST(ExecutorResourceMgr, AdjustedNumCPUSlotBecomeZero) {
     ASSERT_TRUE(false) << "We should throw an exception.";
   } catch (std::runtime_error const& e) {
     std::string const err_msg{e.what()};
+    // Limit is the per-query result memory ratio (0.8) of the 1000 byte pool, less the
+    // headroom for a gated slot's worth of chunk memory (16 bytes): 800 - 16
     std::string const expected_msg{
         "RequestStats error: Query requested more CPU result memory (1.55 KB) than "
-        "available per query (750 bytes) in executor resource pool"};
+        "available per query (784 bytes) in executor resource pool"};
     ASSERT_EQ(err_msg, expected_msg);
   }
 
@@ -1268,7 +1313,14 @@ TEST(ExecutorResourceMgr, AdjustedNumCPUSlotBecomeZero) {
   }
 }
 
-TEST(ExecutorResourceMgr, IdentitalAdjustedNumCPUSlot) {
+// Was IdentitalAdjustedNumCPUSlot, which drove the auto-shrink retry to recompute the
+// slot count it was already given and hit the "adjusted CPU slots is equal to the
+// original resource request" guard. That is no longer reachable here: the retry now
+// sizes slots against the same limit the pool enforces, so a request rejected for
+// needing too much result memory always yields strictly fewer slots (or zero, which
+// the other guard covers). The guard is kept as a defensive stop against unbounded
+// recursion, so this test asserts the shrink instead.
+TEST(ExecutorResourceMgr, AdjustedNumCPUSlotStrictlyShrinks) {
   auto executor_resource_mgr = generate_executor_resource_mgr(
       1,
       1,
@@ -1315,23 +1367,200 @@ TEST(ExecutorResourceMgr, IdentitalAdjustedNumCPUSlot) {
     ASSERT_TRUE(false) << "We should throw an exception.";
   } catch (std::runtime_error const& e) {
     std::string const err_msg{e.what()};
+    // Limit is the per-query result memory ratio (0.8) of the 131072 byte pool, less
+    // the 796 bytes of headroom reserved for this request's input chunks: 104858 - 796
     std::string const expected_msg{
         "RequestStats error: Query requested more CPU result memory (128.0 KB) than "
-        "available per query (96.0 KB) in executor resource pool"};
+        "available per query (101.62 KB) in executor resource pool"};
     ASSERT_EQ(err_msg, expected_msg);
   }
 
   g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = true;
-  try {
-    auto request_info = executor_resource_mgr->request_resources(resource_request_info);
-    ASSERT_TRUE(false) << "We should throw an exception.";
-  } catch (std::runtime_error const& e) {
-    std::string const err_msg{e.what()};
-    std::string const expected_msg{
-        "Failed to adjust CPU slots for \'QueryNeedsTooMuchCpuResultMem\' error: "
-        "adjusted CPU slots is equal to the original resource request"};
-    ASSERT_EQ(err_msg, expected_msg);
+  {
+    auto const request_handle =
+        executor_resource_mgr->request_resources(resource_request_info);
+    ASSERT_TRUE(request_handle != nullptr);
+    const auto resource_grant = request_handle->get_resource_grant();
+    EXPECT_LT(resource_grant.cpu_slots, resource_request_info.cpu_slots);
+    // Result memory and chunk memory together must fit the pool, which is the invariant
+    // whose absence previously aborted the server
+    const auto cpu_buffer_mem_info =
+        executor_resource_mgr->get_resource_info(ResourceType::CPU_BUFFER_POOL_MEM);
+    EXPECT_LE(cpu_buffer_mem_info.first, cpu_buffer_mem_info.second);
   }
+}
+
+// The field failure: with output buffers drawn from the CPU buffer pool, result memory
+// and pinned input chunks each fit on their own but not together. The pool used to
+// admit such a request and then abort the server on the CHECK_LE in
+// add_chunk_requests_to_allocated_pool.
+TEST(ExecutorResourceMgr, CpuResultMemAndChunksCompeteForPool) {
+  constexpr size_t cpu_buffer_pool_mem{1UL << 20};  // 1MB
+  // Per-query limits: result memory 0.8 -> 838861, pinned chunks 0.75 -> 786432
+  const auto chunk_request_info = gen_cpu_chunk_request_info(4, 125000, false);
+  ASSERT_EQ(chunk_request_info.total_bytes, size_t(500000));
+
+  {
+    auto executor_resource_mgr = gen_pool_backed_resource_mgr(cpu_buffer_pool_mem);
+    // 700000 of result memory and 500000 of chunks are individually under their limits,
+    // but 1200000 overcommits the 1048576 byte pool
+    const RequestInfo resource_request_info(ExecutorDeviceType::CPU,
+                                            default_priority_level_request,
+                                            1,
+                                            1,
+                                            0,
+                                            0,
+                                            700000,
+                                            700000,
+                                            chunk_request_info,
+                                            false);
+    try {
+      executor_resource_mgr->request_resources(resource_request_info);
+      ASSERT_TRUE(false) << "Expected the request to be rejected.";
+    } catch (std::runtime_error const& e) {
+      ASSERT_TRUE(std::string(e.what()).find(
+                      QUERY_NEEDS_TOO_MUCH_CPU_RESULT_MEM_ERR_MSG) != std::string::npos)
+          << e.what();
+    }
+    // A rejected request must leave the pool untouched
+    const auto cpu_buffer_mem_info =
+        executor_resource_mgr->get_resource_info(ResourceType::CPU_BUFFER_POOL_MEM);
+    EXPECT_EQ(cpu_buffer_mem_info.first, ZERO_SIZE);
+  }
+
+  {
+    auto executor_resource_mgr = gen_pool_backed_resource_mgr(cpu_buffer_pool_mem);
+    // Same chunks, but result memory now leaves room for them
+    const RequestInfo resource_request_info(ExecutorDeviceType::CPU,
+                                            default_priority_level_request,
+                                            1,
+                                            1,
+                                            0,
+                                            0,
+                                            300000,
+                                            300000,
+                                            chunk_request_info,
+                                            false);
+    auto const request_handle =
+        executor_resource_mgr->request_resources(resource_request_info);
+    ASSERT_TRUE(request_handle != nullptr);
+    EXPECT_EQ(request_handle->get_resource_grant().cpu_result_mem, size_t(300000));
+    // Both the result memory and the chunks are accounted against the one pool
+    const auto cpu_buffer_mem_info =
+        executor_resource_mgr->get_resource_info(ResourceType::CPU_BUFFER_POOL_MEM);
+    EXPECT_EQ(cpu_buffer_mem_info.first, size_t(800000));
+    EXPECT_LE(cpu_buffer_mem_info.first, cpu_buffer_mem_info.second);
+  }
+}
+
+// The same competition, but down the path where chunk memory is gated per CPU slot,
+// which commits chunk bytes through a second code path
+TEST(ExecutorResourceMgr, CpuResultMemAndGatedChunksCompeteForPool) {
+  constexpr size_t cpu_buffer_pool_mem{1UL << 20};  // 1MB
+  auto executor_resource_mgr = gen_pool_backed_resource_mgr(cpu_buffer_pool_mem);
+  // 900000 bytes of chunks exceeds the 786432 byte pinned limit, so the chunks are
+  // gated to 225000 bytes per CPU slot
+  const auto chunk_request_info = gen_cpu_chunk_request_info(4, 225000, true);
+  ASSERT_EQ(chunk_request_info.total_bytes, size_t(900000));
+
+  const RequestInfo resource_request_info(ExecutorDeviceType::CPU,
+                                          default_priority_level_request,
+                                          4,
+                                          1,
+                                          0,
+                                          0,
+                                          600000,
+                                          600000,
+                                          chunk_request_info,
+                                          false);
+  auto const request_handle =
+      executor_resource_mgr->request_resources(resource_request_info);
+  ASSERT_TRUE(request_handle != nullptr);
+  const auto resource_grant = request_handle->get_resource_grant();
+  EXPECT_TRUE(resource_grant.buffer_mem_gated_per_slot);
+  // Slots are gated down to what the pool can hold alongside the result memory
+  EXPECT_EQ(resource_grant.cpu_slots, size_t(1));
+  EXPECT_EQ(resource_grant.buffer_mem_for_given_slots, size_t(225000));
+  const auto cpu_buffer_mem_info =
+      executor_resource_mgr->get_resource_info(ResourceType::CPU_BUFFER_POOL_MEM);
+  EXPECT_EQ(cpu_buffer_mem_info.first, size_t(825000));
+  EXPECT_LE(cpu_buffer_mem_info.first, cpu_buffer_mem_info.second);
+}
+
+// Pool-backed result memory is limited by the per-query result memory ratio, not by the
+// pinned chunk ratio that shares the same pool
+TEST(ExecutorResourceMgr, PoolBackedCpuResultMemUsesResultMemRatio) {
+  constexpr size_t cpu_buffer_pool_mem{1UL << 20};  // 1MB
+  // 0.8 of the pool is 838861 bytes, versus 786432 for the 0.75 pinned chunk ratio
+  auto executor_resource_mgr = gen_pool_backed_resource_mgr(cpu_buffer_pool_mem);
+
+  auto gen_request = [](const size_t cpu_result_mem) {
+    return RequestInfo(ExecutorDeviceType::CPU,
+                       default_priority_level_request,
+                       1,
+                       1,
+                       0,
+                       0,
+                       cpu_result_mem,
+                       cpu_result_mem,
+                       default_chunk_request_info,
+                       false);
+  };
+
+  {
+    auto const request_handle =
+        executor_resource_mgr->request_resources(gen_request(800000));
+    ASSERT_TRUE(request_handle != nullptr);
+    EXPECT_EQ(request_handle->get_resource_grant().cpu_result_mem, size_t(800000));
+  }
+
+  try {
+    executor_resource_mgr->request_resources(gen_request(900000));
+    ASSERT_TRUE(false) << "Expected the request to be rejected.";
+  } catch (std::runtime_error const& e) {
+    ASSERT_TRUE(std::string(e.what()).find(
+                    QUERY_NEEDS_TOO_MUCH_CPU_RESULT_MEM_ERR_MSG) != std::string::npos)
+        << e.what();
+  }
+}
+
+// When a group by query is retried with fewer CPU slots, the reduced result memory has
+// to leave room for the query's input chunks in the shared pool
+TEST(ExecutorResourceMgr, AdjustNumCPUSlotReservesChunkHeadroom) {
+  constexpr size_t cpu_buffer_pool_mem{1UL << 20};  // 1MB
+  auto executor_resource_mgr = gen_pool_backed_resource_mgr(cpu_buffer_pool_mem);
+  const auto chunk_request_info = gen_cpu_chunk_request_info(2, 131072, false);
+  ASSERT_EQ(chunk_request_info.total_bytes, size_t(262144));
+
+  // 8 slots at 131072 bytes per slot asks for the whole pool
+  const RequestInfo resource_request_info(ExecutorDeviceType::CPU,
+                                          default_priority_level_request,
+                                          8,
+                                          1,
+                                          0,
+                                          0,
+                                          1048576,
+                                          131072,
+                                          chunk_request_info,
+                                          true);
+
+  ScopeGuard reset_flag =
+      [orig =
+           g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query]() {
+        g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = orig;
+      };
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = true;
+
+  auto const request_handle =
+      executor_resource_mgr->request_resources(resource_request_info);
+  ASSERT_TRUE(request_handle != nullptr);
+  // Result memory is capped at 838861 less the 262144 reserved for chunks, so the retry
+  // gets 576717 / 131072 == 4 slots rather than the 8 it asked for
+  EXPECT_EQ(request_handle->get_resource_grant().cpu_slots, size_t(4));
+  const auto cpu_buffer_mem_info =
+      executor_resource_mgr->get_resource_info(ResourceType::CPU_BUFFER_POOL_MEM);
+  EXPECT_EQ(cpu_buffer_mem_info.first, size_t(786432));
+  EXPECT_LE(cpu_buffer_mem_info.first, cpu_buffer_mem_info.second);
 }
 
 TEST(ExecutorResourceMgr, ResourceSubtypeMapping) {
@@ -1349,6 +1578,8 @@ TEST(ExecutorResourceMgr, ResourceSubtypeMapping) {
             "pinned_gpu_buffer_pool_mem");
   EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::PAGEABLE_GPU_BUFFER_POOL_MEM),
             "pageable_gpu_buffer_pool_mem");
+  EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::CPU_RESULT_MEM_IN_POOL),
+            "cpu_result_mem_in_pool");
 
   // Every subtype must roll up under a type that lists it, or the pool will track a
   // subtype that no type-level total ever accounts for
