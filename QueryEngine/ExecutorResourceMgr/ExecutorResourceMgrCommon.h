@@ -18,17 +18,34 @@ namespace ExecutorResourceMgr_Namespace {
 using ChunkKey = std::vector<int>;
 using RequestId = size_t;
 
+/**
+ * @brief Categorizes an `ExecutorResourceMgrError` so that callers can react to a
+ * specific failure mode without pattern-matching on the error message, which is
+ * stringified as it is carried between the requesting thread and the resource
+ * manager's queue thread.
+ */
+enum class ExecutorResourceMgrErrorKind {
+  OTHER = 0,
+  CPU_RESULT_MEM_TOO_LARGE,
+};
+
 class ExecutorResourceMgrError {
  public:
-  ExecutorResourceMgrError(std::optional<RequestId> const request_id,
-                           std::string error_msg)
-      : request_id_(request_id), error_msg_(std::move(error_msg)) {}
+  ExecutorResourceMgrError(
+      std::optional<RequestId> const request_id,
+      std::string error_msg,
+      ExecutorResourceMgrErrorKind error_kind = ExecutorResourceMgrErrorKind::OTHER)
+      : request_id_(request_id)
+      , error_msg_(std::move(error_msg))
+      , error_kind_(error_kind) {}
   std::optional<RequestId> getRequestId() const { return request_id_; }
   std::string getErrorMsg() const { return error_msg_; }
+  ExecutorResourceMgrErrorKind getErrorKind() const { return error_kind_; }
 
  private:
   std::optional<RequestId> request_id_;
   std::string error_msg_;
+  ExecutorResourceMgrErrorKind error_kind_;
 };
 
 class QueryTimedOutWaitingInQueue : public std::runtime_error {
