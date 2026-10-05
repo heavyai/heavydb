@@ -581,26 +581,6 @@ bool ExecutorResourcePool::can_currently_satisfy_request_impl(
   return can_currently_satisfy_chunk_request(min_resource_grant, chunk_request_info);
 }
 
-ChunkRequestInfo ExecutorResourcePool::get_requested_chunks_not_in_pool(
-    const ChunkRequestInfo& chunk_request_info) const {
-  const BufferPoolChunkMap& chunk_map_for_memory_level =
-      chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU
-          ? allocated_cpu_buffer_pool_chunks_
-          : allocated_gpu_buffer_pool_chunks_;
-  ChunkRequestInfo missing_chunk_info;
-  missing_chunk_info.device_memory_pool_type = chunk_request_info.device_memory_pool_type;
-  std::vector<std::pair<ChunkKey, size_t>> missing_chunks_with_byte_sizes;
-  for (const auto& requested_chunk : chunk_request_info.chunks_with_byte_sizes) {
-    if (chunk_map_for_memory_level.find(requested_chunk.first) ==
-        chunk_map_for_memory_level.end()) {
-      missing_chunk_info.chunks_with_byte_sizes.emplace_back(requested_chunk);
-      missing_chunk_info.total_bytes += requested_chunk.second;
-    }
-  }
-  missing_chunk_info.num_chunks = missing_chunk_info.chunks_with_byte_sizes.size();
-  return missing_chunk_info;
-}
-
 size_t ExecutorResourcePool::get_chunk_bytes_not_in_pool(
     const ChunkRequestInfo& chunk_request_info) const {
   const BufferPoolChunkMap& chunk_map_for_memory_level =

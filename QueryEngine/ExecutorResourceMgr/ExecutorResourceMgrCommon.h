@@ -147,18 +147,30 @@ enum class ResourceSubtype {
 static constexpr size_t ResourceSubtypeSize =
     static_cast<size_t>(ResourceSubtype::NUM_RESOURCE_SUBTYPES);
 
-static const char* ResourceSubtypeStrings[] = {"cpu_slots",
-                                               "gpu_slots",
-                                               "cpu_result_mem",
-                                               "gpu_result_mem",
-                                               "pinned_cpu_buffer_pool_mem",
-                                               "pinned_gpu_buffer_pool_mem",
-                                               "pageable_cpu_buffer_pool_mem",
-                                               "pageable_gpu_buffer_pool_mem",
-                                               "invalid_type"};
-
 inline std::string resource_subtype_to_string(const ResourceSubtype resource_subtype) {
-  return ResourceSubtypeStrings[static_cast<size_t>(resource_subtype)];
+  switch (resource_subtype) {
+    case ResourceSubtype::CPU_SLOTS:
+      return "cpu_slots";
+    case ResourceSubtype::GPU_SLOTS:
+      return "gpu_slots";
+    case ResourceSubtype::CPU_RESULT_MEM:
+      return "cpu_result_mem";
+    case ResourceSubtype::GPU_RESULT_MEM:
+      return "gpu_result_mem";
+    case ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM:
+      return "pinned_cpu_buffer_pool_mem";
+    case ResourceSubtype::PAGEABLE_CPU_BUFFER_POOL_MEM:
+      return "pageable_cpu_buffer_pool_mem";
+    case ResourceSubtype::PINNED_GPU_BUFFER_POOL_MEM:
+      return "pinned_gpu_buffer_pool_mem";
+    case ResourceSubtype::PAGEABLE_GPU_BUFFER_POOL_MEM:
+      return "pageable_gpu_buffer_pool_mem";
+    case ResourceSubtype::INVALID_SUBTYPE:
+      return "invalid_type";
+    default:
+      UNREACHABLE();
+      return "invalid_type";
+  }
 }
 
 struct CPUResultMemResourceType {
