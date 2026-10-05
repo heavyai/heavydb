@@ -50,8 +50,7 @@ size_t ResourceGrantPolicy::get_grant_quantity(const size_t total_resource_quant
 
 std::string ResourceGrantPolicy::to_string() const {
   std::ostringstream oss;
-  oss << "RESOURCE TYPE: "
-      << ResourceSubtypeStrings[static_cast<size_t>(resource_subtype)] << " ";
+  oss << "RESOURCE TYPE: " << resource_subtype_to_string(resource_subtype) << " ";
   switch (policy_size_type) {
     case ResourceGrantPolicySizeType::UNLIMITED:
       oss << "SIZE TYPE: Unlimited";

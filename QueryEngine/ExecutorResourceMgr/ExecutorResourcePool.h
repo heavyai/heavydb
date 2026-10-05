@@ -430,8 +430,6 @@ class ExecutorResourcePool {
   bool can_currently_satisfy_chunk_request(
       const ResourceGrant& min_resource_grant,
       const ChunkRequestInfo& chunk_request_info) const;
-  ChunkRequestInfo get_requested_chunks_not_in_pool(
-      const ChunkRequestInfo& chunk_request_info) const;
   size_t get_chunk_bytes_not_in_pool(const ChunkRequestInfo& chunk_request_info) const;
   void add_chunk_requests_to_allocated_pool(const ResourceGrant& resource_grant,
                                             const ChunkRequestInfo& chunk_request_info);

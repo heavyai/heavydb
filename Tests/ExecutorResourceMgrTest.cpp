@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <algorithm>
 #include <future>
 #include <thread>
 
@@ -1330,6 +1331,35 @@ TEST(ExecutorResourceMgr, IdentitalAdjustedNumCPUSlot) {
         "Failed to adjust CPU slots for \'QueryNeedsTooMuchCpuResultMem\' error: "
         "adjusted CPU slots is equal to the original resource request"};
     ASSERT_EQ(err_msg, expected_msg);
+  }
+}
+
+TEST(ExecutorResourceMgr, ResourceSubtypeMapping) {
+  EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::CPU_SLOTS), "cpu_slots");
+  EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::GPU_SLOTS), "gpu_slots");
+  EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::CPU_RESULT_MEM),
+            "cpu_result_mem");
+  EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::GPU_RESULT_MEM),
+            "gpu_result_mem");
+  EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM),
+            "pinned_cpu_buffer_pool_mem");
+  EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::PAGEABLE_CPU_BUFFER_POOL_MEM),
+            "pageable_cpu_buffer_pool_mem");
+  EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::PINNED_GPU_BUFFER_POOL_MEM),
+            "pinned_gpu_buffer_pool_mem");
+  EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::PAGEABLE_GPU_BUFFER_POOL_MEM),
+            "pageable_gpu_buffer_pool_mem");
+
+  // Every subtype must roll up under a type that lists it, or the pool will track a
+  // subtype that no type-level total ever accounts for
+  for (size_t subtype_idx = 0; subtype_idx < ResourceSubtypeSize; ++subtype_idx) {
+    const auto subtype = static_cast<ResourceSubtype>(subtype_idx);
+    const auto resource_type = map_resource_subtype_to_resource_type(subtype);
+    EXPECT_NE(resource_type, ResourceType::INVALID_TYPE)
+        << resource_subtype_to_string(subtype);
+    const auto subtypes = map_resource_type_to_resource_subtypes(resource_type);
+    EXPECT_NE(std::find(subtypes.begin(), subtypes.end(), subtype), subtypes.end())
+        << resource_subtype_to_string(subtype);
   }
 }
 
