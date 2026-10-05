@@ -47,6 +47,11 @@ ExecutorResourceMgr::request_resources_with_timeout(const RequestInfo& request_i
   try {
     min_max_resource_grants =
         executor_resource_pool_.calc_min_max_resource_grants_for_request(request_info);
+  } catch (QueryNeedsTooMuchCpuResultMem const& e) {
+    std::ostringstream oss;
+    oss << REQUEST_STATS_ERROR_MSG_PREFIX << e.what();
+    throw ExecutorResourceMgrError(
+        std::nullopt, oss.str(), ExecutorResourceMgrErrorKind::CPU_RESULT_MEM_TOO_LARGE);
   } catch (std::runtime_error const& e) {
     std::ostringstream oss;
     oss << REQUEST_STATS_ERROR_MSG_PREFIX << e.what();
@@ -92,7 +97,8 @@ ExecutorResourceMgr::request_resources_with_timeout(const RequestInfo& request_i
     // instead of std::runtime_error to revert ERM's status outside from this function
     // after releasing `queue_stats_mutex_` lock
     throw ExecutorResourceMgrError(request_id,
-                                   REQUEST_STATS_ERROR_MSG_PREFIX + *request_stats.error);
+                                   REQUEST_STATS_ERROR_MSG_PREFIX + *request_stats.error,
+                                   request_stats.error_kind);
   }
   const ResourceGrant& actual_resource_grant = request_stats.actual_resource_grant;
   // Ensure each resource granted was at least the minimum requested
@@ -115,8 +121,8 @@ std::unique_ptr<ExecutorResourceHandle> ExecutorResourceMgr::request_resources(
         e.getRequestId().has_value()) {
       handle_resource_stat_error(e.getRequestId().value());
     }
-    auto result_memory_error =
-        e.getErrorMsg().find("CPU result memory") != std::string::npos;
+    const auto result_memory_error =
+        e.getErrorKind() == ExecutorResourceMgrErrorKind::CPU_RESULT_MEM_TOO_LARGE;
     if (g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query &&
         request_info.output_buffers_reusable_intra_thread && result_memory_error &&
         request_info.cpu_slots > 1) {
@@ -190,11 +196,14 @@ RequestStats ExecutorResourceMgr::get_request_for_id(const RequestId request_id)
   return requests_stats_[request_id];
 }
 
-void ExecutorResourceMgr::mark_request_error(const RequestId request_id,
-                                             std::string error_msg) {
+void ExecutorResourceMgr::mark_request_error(
+    const RequestId request_id,
+    std::string error_msg,
+    const ExecutorResourceMgrErrorKind error_kind) {
   std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   CHECK_LT(request_id, requests_stats_.size());
   requests_stats_[request_id].error = std::move(error_msg);
+  requests_stats_[request_id].error_kind = error_kind;
 }
 
 RequestId ExecutorResourceMgr::choose_next_request() {
@@ -225,6 +234,9 @@ RequestId ExecutorResourceMgr::choose_next_request() {
         }
         return request_id;
       }
+    } catch (QueryNeedsTooMuchCpuResultMem const& e) {
+      throw ExecutorResourceMgrError(
+          request_id, e.what(), ExecutorResourceMgrErrorKind::CPU_RESULT_MEM_TOO_LARGE);
     } catch (std::runtime_error const& e) {
       throw ExecutorResourceMgrError(request_id, e.what());
     }
@@ -423,7 +435,7 @@ void ExecutorResourceMgr::process_queue_loop() {
     } catch (ExecutorResourceMgrError const& e) {
       CHECK(e.getRequestId().has_value());
       chosen_request_id = e.getRequestId().value();
-      mark_request_error(chosen_request_id, e.getErrorMsg());
+      mark_request_error(chosen_request_id, e.getErrorMsg(), e.getErrorKind());
     }
     if (enable_debug_printing_) {
       std::unique_lock<std::mutex> print_lock(print_mutex_);
