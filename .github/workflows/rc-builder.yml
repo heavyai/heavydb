@@ -301,9 +301,9 @@ jobs:
           # Every copy is tolerant of a missing source so a build that died
           # early still exports whatever logs it did manage to write.
           sudo cp -a "$WORKDIR/build/logs/." "$dest/" 2>/dev/null || true
-          for f in CMakeCache.txt CMakeFiles/CMakeError.log CMakeFiles/CMakeOutput.log; do
-            sudo cp -a "$WORKDIR/build/$f" "$dest/$(basename "$f")" 2>/dev/null || true
-          done
+          # Holds the compiler output of failed cmake feature probes, which
+          # cmake never prints to the console.
+          sudo cp -a "$WORKDIR/build/CMakeFiles/CMakeConfigureLog.yaml" "$dest/" 2>/dev/null || true
           sudo cp -a "$WORKDIR/build/Testing/Temporary/." "$dest/" 2>/dev/null || true
           sudo chown -R "$(id -u):$(id -g)" "$dest" || true
           {
