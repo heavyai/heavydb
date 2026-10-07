@@ -6639,11 +6639,9 @@ TEST_P(RasterImportTest, PointTransformWorld) {
                    {{-83.222766892364277, 39.818764365787985, 287.54092407226562}});
 }
 
-TEST_P(RasterImportTest, DISABLED_ImportFetchCRSFromSubDataset) {
+TEST_P(RasterImportTest, ImportFetchCRSFromSubDataset) {
   // if the CRS is correctly fetched from the sub-dataset then the longitudes will be
   // in the range -120 to -130 (Bay Area) as opposed to positive pixel coordinates
-  // test disabled as unreliable on Jenkins (get "Resource temporarily unavailable"
-  // errors even though it runs fine locally... can be manually run if needed)
   // @TODO try to construct a smaller test file bundle
   ASSERT_NO_THROW(importTestCommon(
       kS2A,
