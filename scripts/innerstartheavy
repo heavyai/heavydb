@@ -179,9 +179,9 @@ if [[ -d heavyiq ]]; then
     # Execute the HeavyIQ startup script in a subshell in order to avoid
     # possible conflicts from virtual environment activation.
 
-    # Always start HeavyIQ, it will do it's own checks and bail if failed
-    # Specifically if it's _not_ free edition and there's no config
-    # -or- if a `disabled`` config flag is specified in `[iq]` it will bail
+    # start_heavyiq.sh does its own checks and bails on its own: it exits
+    # immediately when the config has no `[iq]` section, and the app itself
+    # exits later if `disabled = true` is set under `[iq]`.
   ($DIR/scripts/start_heavyiq.sh)
 fi
 

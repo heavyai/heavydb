@@ -39,8 +39,8 @@ the repo, that is often ``build/``; for ``dev-tools`` output, use
 * start ``heavydb``;
 * start ``heavy_web_server`` when both the binary and a ``frontend`` directory
   exist; and
-* start HeavyIQ when its directory is present.
-
+* start HeavyIQ when its directory is present and the ``--config`` file
+  contains an ``[iq]`` section.
 Useful flags: ``--data PATH``, ``--config PATH``, ``--base-port PORT``,
 ``--non-interactive``. Extra arguments are forwarded to ``heavydb``.
 
