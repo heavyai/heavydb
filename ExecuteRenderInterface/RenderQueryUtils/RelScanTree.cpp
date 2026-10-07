@@ -54,6 +54,31 @@ const RelProject* find_top_level_project_node(const RelAlgNode* curr_node) {
   return nullptr;
 }
 
+// After bind_inputs(), a RelProject over a RelJoin binds RexInputs to the join's
+// children (see get_node_output(RelJoin)), not the join itself. Convert that
+// child-local index to a join-local index so the RelJoin visitor can pick lhs vs
+// rhs. Also accept a RexInput already sourced at the join (injectInputColumn).
+uint32_t local_index_from_rex_input(const RexInput* input_node,
+                                    const RelAlgNode& lhs_ra) {
+  auto const* src = input_node->getSourceNode();
+  if (auto const* join = dynamic_cast<const RelJoin*>(&lhs_ra)) {
+    if (src == join->getInput(0) || src == join) {
+      return input_node->getIndex();
+    }
+    if (src == join->getInput(1)) {
+      return input_node->getIndex() + static_cast<uint32_t>(join->getInput(0)->size());
+    }
+  } else if (src == &lhs_ra) {
+    return input_node->getIndex();
+  }
+  auto cfg = RelRexToStringConfig::defaults();
+  cfg.attributes_only = true;
+  throw std::runtime_error("RelScanTree::getScanNodeForOutputIndex: RexInput source (" +
+                           (src ? src->toString(cfg) : std::string("null")) +
+                           ") does not match project input (" + lhs_ra.toString(cfg) +
+                           ")");
+}
+
 }  // namespace
 
 std::unique_ptr<RelScanTree> RelScanTree::create(RelAlgDag& rel_alg_dag) {
@@ -107,13 +132,8 @@ std::pair<const RelScan*, uint32_t> RelScanTree::getScanNodeForOutputIndex(
             if (auto const* input_node = dynamic_cast<const RexInput*>(scalar_input);
                 input_node != nullptr) {
               if (current_tree_node->lhs) {
-                if (input_node->getSourceNode() !=
-                    &current_tree_node->lhs->rel_alg_node) {
-                  throw std::runtime_error(
-                      "Error in RelAlgTree.cpp: input_node != "
-                      "current_tree_node->lhs->rel_alg_node");
-                }
-                current_index = input_node->getIndex();
+                current_index = local_index_from_rex_input(
+                    input_node, current_tree_node->lhs->rel_alg_node);
               } else {
                 return nullptr;
               }
