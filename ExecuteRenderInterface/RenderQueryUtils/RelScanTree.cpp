@@ -69,25 +69,20 @@ const RelProject* find_top_level_project_node(const RelAlgNode* curr_node) {
 // children (see get_node_output(RelJoin)), not the join itself. Convert that
 // child-local index to a join-local index so the RelJoin visitor can pick lhs vs
 // rhs. Also accept a RexInput already sourced at the join (injectInputColumn).
-bool set_join_local_index_from_rex_input(const RexInput* input_node,
-                                         const RelAlgNode& lhs_ra,
-                                         uint32_t& current_index) {
-  auto const* join = dynamic_cast<const RelJoin*>(&lhs_ra);
-  if (!join) {
-    return false;
-  }
+uint32_t local_index_from_rex_input(const RexInput* input_node,
+                                    const RelAlgNode& lhs_ra) {
   auto const* src = input_node->getSourceNode();
-  if (src == join->getInput(0) || src == join) {
-    current_index = input_node->getIndex();
-    return true;
-  }
-  if (src == join->getInput(1)) {
-    current_index =
-        input_node->getIndex() + static_cast<uint32_t>(join->getInput(0)->size());
-    return true;
+  if (auto const* join = dynamic_cast<const RelJoin*>(&lhs_ra)) {
+    if (src == join->getInput(0) || src == join) {
+      return input_node->getIndex();
+    }
+    if (src == join->getInput(1)) {
+      return input_node->getIndex() + static_cast<uint32_t>(join->getInput(0)->size());
+    }
+  } else if (src == &lhs_ra) {
+    return input_node->getIndex();
   }
   throw_mismatched_rex_input_source(src, &lhs_ra);
-  return false;
 }
 
 }  // namespace
@@ -143,15 +138,8 @@ std::pair<const RelScan*, uint32_t> RelScanTree::getScanNodeForOutputIndex(
             if (auto const* input_node = dynamic_cast<const RexInput*>(scalar_input);
                 input_node != nullptr) {
               if (current_tree_node->lhs) {
-                auto const& lhs_ra = current_tree_node->lhs->rel_alg_node;
-                if (!set_join_local_index_from_rex_input(
-                        input_node, lhs_ra, current_index)) {
-                  if (input_node->getSourceNode() != &lhs_ra) {
-                    throw_mismatched_rex_input_source(input_node->getSourceNode(),
-                                                      &lhs_ra);
-                  }
-                  current_index = input_node->getIndex();
-                }
+                current_index = local_index_from_rex_input(
+                    input_node, current_tree_node->lhs->rel_alg_node);
               } else {
                 return nullptr;
               }
