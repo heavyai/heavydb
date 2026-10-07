@@ -54,17 +54,6 @@ const RelProject* find_top_level_project_node(const RelAlgNode* curr_node) {
   return nullptr;
 }
 
-[[noreturn]] void throw_mismatched_rex_input_source(const RelAlgNode* source,
-                                                    const RelAlgNode* expected_lhs) {
-  auto cfg = RelRexToStringConfig::defaults();
-  cfg.attributes_only = true;
-  throw std::runtime_error(
-      "RelScanTree::getScanNodeForOutputIndex: RexInput source (" +
-      (source ? source->toString(cfg) : std::string("null")) +
-      ") does not match project input (" +
-      (expected_lhs ? expected_lhs->toString(cfg) : std::string("null")) + ")");
-}
-
 // After bind_inputs(), a RelProject over a RelJoin binds RexInputs to the join's
 // children (see get_node_output(RelJoin)), not the join itself. Convert that
 // child-local index to a join-local index so the RelJoin visitor can pick lhs vs
@@ -82,7 +71,12 @@ uint32_t local_index_from_rex_input(const RexInput* input_node,
   } else if (src == &lhs_ra) {
     return input_node->getIndex();
   }
-  throw_mismatched_rex_input_source(src, &lhs_ra);
+  auto cfg = RelRexToStringConfig::defaults();
+  cfg.attributes_only = true;
+  throw std::runtime_error("RelScanTree::getScanNodeForOutputIndex: RexInput source (" +
+                           (src ? src->toString(cfg) : std::string("null")) +
+                           ") does not match project input (" + lhs_ra.toString(cfg) +
+                           ")");
 }
 
 }  // namespace
