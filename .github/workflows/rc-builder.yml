@@ -10,8 +10,10 @@ run-name: ${{ inputs.description != '' && format('Product Builder — {0}', inpu
 # than downloaded as prebuilt release assets. This keeps every product asset off
 # any public GitHub Release:
 # the finished product is pushed only to private/independent targets (Docker Hub
-# heavyai/scantest and the heavyai-binary-scan-testing repo) and NOTHING is
-# retained as a GitHub Actions artifact or attached to a GitHub Release.
+# heavyai/scantest and the heavyai-binary-scan-testing repo). NO product asset —
+# tarball, image, or signed bundle — is ever retained as a GitHub Actions
+# artifact or attached to a GitHub Release. The one artifact this workflow does
+# upload is the build log bundle, for debugging.
 
 on:
   workflow_dispatch:
@@ -90,8 +92,8 @@ on:
       # visibility: their exposure is controlled entirely by Docker Hub's and
       # the heavyai-binary-scan-testing repo's own access settings, which this
       # workflow cannot see or change. There is deliberately no create_release
-      # / upload-artifact path — this workflow never publishes a product asset
-      # on an open-source repo.
+      # path, and the only upload-artifact step covers build logs — this
+      # workflow never publishes a product asset on an open-source repo.
       push_to_binary_scan_testing:
         description: 'Push the product binary tarball to heavyai/heavyai-binary-scan-testing'
         type: boolean
@@ -193,6 +195,10 @@ jobs:
     # container to build each component and heavydb, then builds the product
     # image on the host. The deps image is pulled explicitly below.
     runs-on: ${{ matrix.runner }}
+    # Full product build from source; raise above the GHA default 360-min cap.
+    # The build step's own (lower) timeout fires first so a hang still leaves
+    # the job alive to upload its logs.
+    timeout-minutes: 720
     permissions:
       contents: read
       packages: read
@@ -250,6 +256,7 @@ jobs:
           docker pull "${{ matrix.image }}"
 
       - name: Build product from source
+        timeout-minutes: 600
         working-directory: ${{ env.WORKDIR }}
         run: |
           # "build all" includes HeavyIQ; the bare "build" target omits it.
@@ -280,6 +287,42 @@ jobs:
             $([ "${{ matrix.cuda }}" = "on" ] && echo "--cuda" || echo "--cpu") \
             $([ "${{ matrix.lib_type }}" = "static" ] && echo "--static" || echo "--shared") \
             --docker $product_base_flag
+
+      # Staged and uploaded here, immediately after the build, so a failure in
+      # any later step (locate/sign/push) can't lose the logs and the final
+      # Cleanup step — which wipes build/ — still runs last.
+      - name: Collect build logs
+        if: always()
+        run: |
+          dest="${{ github.workspace }}/build-logs"
+          mkdir -p "$dest"
+          # dev.sh writes one log per build step under build/logs. Copy with
+          # sudo: anything produced inside the deps container is root-owned.
+          # Every copy is tolerant of a missing source so a build that died
+          # early still exports whatever logs it did manage to write.
+          sudo cp -a "$WORKDIR/build/logs/." "$dest/" 2>/dev/null || true
+          for f in CMakeCache.txt CMakeFiles/CMakeError.log CMakeFiles/CMakeOutput.log; do
+            sudo cp -a "$WORKDIR/build/$f" "$dest/$(basename "$f")" 2>/dev/null || true
+          done
+          sudo cp -a "$WORKDIR/build/Testing/Temporary/." "$dest/" 2>/dev/null || true
+          sudo chown -R "$(id -u):$(id -g)" "$dest" || true
+          {
+            echo "### Build logs — ${{ matrix.os_family }}-${{ matrix.arch }} ${{ matrix.recipe }}"
+            echo '```'
+            ls -lh "$dest" || echo "(none)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build logs
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-logs-${{ matrix.os_family }}-${{ matrix.arch }}-${{ matrix.recipe }}-${{ github.run_attempt }}
+          path: build-logs/
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 9
 
       - name: Locate build outputs
         id: artifacts
