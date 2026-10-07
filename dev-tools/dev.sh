@@ -96,9 +96,10 @@ docker_gpus_flag() {
 }
 
 # Extract the distro token from an arbitrary string (image name, tarball name,
-# etc.). Prints one of ubuntu22.04, rockylinux8, or nothing.
+# etc.). Prints one of ubuntu22.04, ubuntu24.04, rockylinux8, or nothing.
 _parse_distro() {
   case "$1" in
+    *ubuntu24.04*) echo "ubuntu24.04" ;;
     *ubuntu22.04*) echo "ubuntu22.04" ;;
     *rockylinux8*) echo "rockylinux8" ;;
   esac
@@ -126,15 +127,15 @@ _docker_wipe_dir() {
     bash -c 'find /target -mindepth 1 -maxdepth 1 -exec rm -rf {} +'
 }
 
-# Validate that effective_distro is one of the known values.
+# Validate that effective_distro is one of the three known values.
 # Usage: _validate_distro <effective_distro> <deps_image>
 _validate_distro() {
   local effective_distro="$1" deps_image="${2:-}"
   case "$effective_distro" in
-    ubuntu22.04|rockylinux8) ;;
+    ubuntu24.04|ubuntu22.04|rockylinux8) ;;
     *)
       echo "ERROR: unsupported distro '${effective_distro:-unknown}'${deps_image:+ (deps image: $deps_image)}" >&2
-      echo "Expected one of: ubuntu22.04, rockylinux8" >&2
+      echo "Expected one of: ubuntu24.04, ubuntu22.04, rockylinux8" >&2
       exit 1 ;;
   esac
 }
@@ -194,7 +195,7 @@ _DEPS_ENV_SOURCE='[ -e /usr/local/mapd-deps/mapd-deps.sh ] && source /usr/local/
 # Finds a locally built deps image.
 # Usage: _resolve_deps_image [lib_type] [distro] [cuda_version]
 #   lib_type:     static (default) or shared
-#   distro:       ubuntu22.04, rockylinux8, or "" (any)
+#   distro:       ubuntu22.04, ubuntu24.04, rockylinux8, or "" (any)
 #   cuda_version: e.g. 12.9.2, or "" (any)
 # All supplied dimensions are used as filters. Exits with an error if no
 # image is found or if the result is ambiguous (multiple candidates match).
@@ -238,7 +239,7 @@ _resolve_deps_image() {
   if [ "$count" -gt 1 ]; then
     echo "ERROR: multiple deps images found. Specify one with --deps-image, or narrow the" >&2
     echo "auto-detection by adding the missing dimension(s):" >&2
-    [ -z "$distro" ]       && echo "  --distro=ubuntu22.04|rockylinux8" >&2
+    [ -z "$distro" ]       && echo "  --distro=ubuntu22.04|ubuntu24.04|rockylinux8" >&2
     [ -z "$cuda_version" ] && echo "  --cuda-version=<ver>   e.g. --cuda-version=12.9.2" >&2
     if [ -z "$distro" ] || [ -z "$cuda_version" ]; then
       echo "If all dimensions are already specified, use --deps-image to pick a specific tag:" >&2
@@ -405,7 +406,7 @@ set -u
 git config --global --add safe.directory /work'
 
 # Install a python3 venv toolchain and set PYBIN. Ubuntu uses the distro default
-# python3 (3.10 on 22.04 — which HeavyIQ build_prod needs);
+# python3 (3.10 on 22.04 — which HeavyIQ build_prod needs — 3.12 on 24.04);
 # Rocky8's default python3 is too old, so install 3.11 there.
 DEV_CONTAINER_PYVENV='if command -v apt-get >/dev/null 2>&1; then
   apt-get update -q >/dev/null

@@ -12,6 +12,11 @@ on:
     # source for the deps flavor: /test deps omits these so they apply, and
     # pr-required-checks.yml's env block mirrors them for the images it pulls.
     # Bump them together.
+    #
+    # Primary CI track stays on ubuntu_version=22.04 + cuda_version=12.9.2.
+    # Publish the Ubuntu 24.04 / CUDA 13.3.0 track explicitly via
+    # workflow_dispatch with ubuntu_version=24.04 and cuda_version=13.3.0
+    # (produces core-build-ubuntu24.04-static-cuda13.3.0-{x86_64,aarch64}).
     inputs:
       scripts_ref:
         description: 'Branch/ref to checkout for build scripts and Dockerfile'
@@ -34,6 +39,7 @@ on:
         type: choice
         options:
           - '22.04'
+          - '24.04'
         default: '22.04'
       lib_type:
         description: 'Deps library type (rockylinux8 supports static only)'

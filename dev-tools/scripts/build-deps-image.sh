@@ -21,11 +21,18 @@ Builds a local deps container image using the same scripts as CI
 (deps-image-builder.yml). This is a multi-hour operation.
 
 Options:
-  --distro=ubuntu22.04|rockylinux8   default: ubuntu22.04
-  --cuda-version=<ver>               default: 12.9.2
-  --lib-type=static|shared           default: static
-  --tag=<tag>                        image tag; default: YYYYMMDD
-  --nproc=<n>                        parallel jobs; default: min(nproc,24)
+  --distro=ubuntu22.04|ubuntu24.04|rockylinux8   default: ubuntu22.04
+  --cuda-version=<ver>                           default: 12.9.2
+  --lib-type=static|shared                       default: static
+  --tag=<tag>                                    image tag; default: YYYYMMDD
+  --nproc=<n>                                    parallel jobs; default: min(nproc,24)
+
+Examples:
+  # Primary CI track (unchanged defaults)
+  dev-tools/dev.sh build-deps-image
+
+  # Ubuntu 24.04 / CUDA 13.3.0 track (matches deps-image-builder workflow_dispatch)
+  dev-tools/dev.sh build-deps-image --distro=ubuntu24.04 --cuda-version=13.3.0
 EOF
         return 0 ;;
       --distro=*)      distro="${arg#*=}" ;;
@@ -45,6 +52,13 @@ EOF
   case "$distro" in
     ubuntu22.04)
       ubuntu_version="22.04"
+      cuda_base="nvcr.io/nvidia/cuda:${cuda_version}-devel-ubuntu${ubuntu_version}"
+      deps_script="mapd-deps-ubuntu.sh"
+      param_dir="$REPO_ROOT/docker/build/ubuntu_param"
+      output_image="ghcr.io/${GHCR_OWNER}/${GHCR_REPO}/core-build-ubuntu${ubuntu_version}-${lib_type}-cuda${cuda_version}-$(uname -m)"
+      ;;
+    ubuntu24.04)
+      ubuntu_version="24.04"
       cuda_base="nvcr.io/nvidia/cuda:${cuda_version}-devel-ubuntu${ubuntu_version}"
       deps_script="mapd-deps-ubuntu.sh"
       param_dir="$REPO_ROOT/docker/build/ubuntu_param"

@@ -15,7 +15,7 @@ Builds a local deps container image (~2 hours).
 
 | Option | Default | Description |
 |---|---|---|
-| `--distro=ubuntu22.04\|rockylinux8` | `ubuntu22.04` | Target distro |
+| `--distro=ubuntu22.04\|ubuntu24.04\|rockylinux8` | `ubuntu22.04` | Target distro |
 | `--cuda-version=<ver>` | `12.9.2` | CUDA version |
 | `--lib-type=static\|shared` | `static` | Library type |
 | `--tag=<tag>` | `YYYYMMDD` | Image tag |
@@ -53,7 +53,7 @@ Runs cmake + make + cpack inside the deps container.
 | Option | Default | Description |
 |---|---|---|
 | `--deps-image=<image>` | auto-detected | Deps container image |
-| `--distro=<distro>` | parsed from deps image | `ubuntu22.04\|rockylinux8` |
+| `--distro=<distro>` | parsed from deps image | `ubuntu22.04\|ubuntu24.04\|rockylinux8` |
 | `--cuda-version=<ver>` | — | Filter deps image detection |
 | `--compiler=gcc\|clang` | `gcc` | Compiler |
 | `--norendering` | off | Disable rendering |

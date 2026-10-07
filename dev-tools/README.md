@@ -78,7 +78,7 @@ dev-tools/dev.sh build [target] [options]
 
 ```
 --deps-image=<image>          Override auto-detected deps container image
---distro=ubuntu22.04|rockylinux8   (default: ubuntu22.04)
+--distro=ubuntu22.04|ubuntu24.04|rockylinux8   (default: ubuntu22.04)
 --cuda-version=<ver>          Filter deps image auto-detection to a CUDA version (e.g. 12.9.2)
 --compiler=gcc|clang          (default: gcc)
 --cuda / --cpu                (default: cuda)
@@ -232,6 +232,25 @@ are deduplicated by image ID; the `:latest` tag is preferred when multiple tags
 point to the same image. Override with `--deps-image=<image>` or narrow with
 `--distro=<distro>` and/or `--cuda-version=<ver>`. Ambiguous results (multiple
 distinct images after filtering) are an error — add dimensions or use `--deps-image`.
+
+## Dual-track deps images (22.04 vs 24.04)
+
+CI defaults and `/deps-test` stay on **Ubuntu 22.04 + CUDA 12.9.2** (`core-build-ubuntu22.04-static-cuda12.9.2-*:latest`).
+
+The **Ubuntu 24.04 + CUDA 13.3.0** track is additive: build and publish it explicitly, then point local or workflow builds at the new tags.
+
+```bash
+# Local multi-hour deps image build (same scripts as deps-image-builder.yml)
+dev-tools/dev.sh build-deps-image --distro=ubuntu24.04 --cuda-version=13.3.0
+
+# CI: workflow_dispatch on deps-image-builder with ubuntu_version=24.04,
+# cuda_version=13.3.0, tag_latest=true →
+#   ghcr.io/heavyai/heavydb-internal/core-build-ubuntu24.04-static-cuda13.3.0-{x86_64,aarch64}:latest
+```
+
+Product Builder (`rc-builder.yml`) includes the 24.04 deps images in its default
+`images` list; use `ubuntu24_product_image_name` for the matching runtime base
+(`nvcr.io/nvidia/cuda:13.3.0-runtime-ubuntu24.04` by default).
 
 ## Log files
 

@@ -6,6 +6,8 @@
 #include "QueryRenderer/Data/Transforms/Aggregate/thrust/ThrustOpExecutorImplSpecialized.h"
 
 #include <thrust/count.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/tuple.h>
 
 #include "QueryRenderer/Utils/AnyDataType.h"
 #include "QueryRenderer/Utils/thrust/ThrustExecutionContextInternal.h"

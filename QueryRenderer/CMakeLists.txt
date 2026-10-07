@@ -277,3 +277,9 @@ else()
   target_include_directories(QueryRenderer PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/ShaderTemplates)
   target_link_libraries(QueryRenderer QueryRendererShaderTemplates)
 endif()
+
+if(ENABLE_CUDA)
+  # suppress new warning in CUDA SDK 13.x
+  # warning #20011-D: calling a __host__ function from a __host__ __device__ function is not allowed
+  target_compile_options(QueryRenderer PUBLIC $<$<COMPILE_LANGUAGE:CUDA>:--diag-suppress=20011>)
+endif()
