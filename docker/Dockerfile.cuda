@@ -33,23 +33,31 @@ RUN if command -v apt-get >/dev/null; then \
         apt-get upgrade -y && \
         apt-get install -y --no-install-recommends \
             bsdmainutils \
+            ca-certificates \
+            gnupg \
             libglx0 \
             libegl1 \
             wget \
             curl \
-            clang-14 \
             liblz4-tool \
             default-jre-headless \
             software-properties-common \
             zip && \
+        . /etc/os-release && \
+        wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor -o /usr/share/keyrings/llvm-apt.gpg && \
+        echo "deb [signed-by=/usr/share/keyrings/llvm-apt.gpg] https://apt.llvm.org/${VERSION_CODENAME}/ llvm-toolchain-${VERSION_CODENAME}-21 main" > /etc/apt/sources.list.d/llvm-21.list && \
+        apt-get update -y && apt-get install -y --no-install-recommends \
+            clang-21 \
+            llvm-21-dev && \
         add-apt-repository ppa:deadsnakes/ppa && \
         apt-get install -y --no-install-recommends \
             python3.10 \
             python3.10-venv \
             libpython3.10 && \
-        update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-14 100 && \
+        update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-21 100 && \
+        clang_resource_dir="$(llvm-config-21 --print-resource-dir)" && \
         mkdir -p /usr/local/include && \
-        ln -sfn /usr/lib/llvm-14/lib/clang/14.0.0/include /usr/local/include/clang-resource && \
+        ln -sfn "$clang_resource_dir/include" /usr/local/include/clang-resource && \
         apt-get remove --purge -y && \
         rm -rf /var/lib/apt/lists/*; \
     elif command -v dnf >/dev/null || command -v yum >/dev/null; then \

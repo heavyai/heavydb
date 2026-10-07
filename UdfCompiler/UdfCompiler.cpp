@@ -9,6 +9,7 @@
 #include <clang/AST/ASTConsumer.h>
 #include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/Basic/DiagnosticDriver.h>
+#include <clang/Basic/DiagnosticOptions.h>
 #include <clang/Driver/Compilation.h>
 #include <clang/Driver/Driver.h>
 #include <clang/Frontend/CompilerInstance.h>
@@ -27,13 +28,10 @@
 #include <cctype>
 #include <iterator>
 #include <locale>
+#include <memory>
 #include "clang/Basic/Version.h"
 
-#if LLVM_VERSION_MAJOR >= 17
 #include <llvm/TargetParser/Host.h>
-#else
-#include <llvm/Support/Host.h>
-#endif
 
 #include "Logger/Logger.h"
 
@@ -77,11 +75,7 @@ class FunctionDeclVisitor : public RecursiveASTVisitor<FunctionDeclVisitor> {
 
  private:
   std::string getMainFileName() const {
-#if LLVM_VERSION_MAJOR >= 17
     auto f_entry = source_manager_.getFileEntryRefForID(source_manager_.getMainFileID());
-#else
-    auto f_entry = source_manager_.getFileEntryForID(source_manager_.getMainFileID());
-#endif
     return f_entry->getName().str();
   }
 
@@ -205,10 +199,10 @@ class UdfClangDriver {
 
  protected:
   UdfClangDriver(const std::string& clang_path,
-                 llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options);
+                 std::unique_ptr<clang::DiagnosticOptions> diag_options);
 
  private:
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options;
+  std::unique_ptr<clang::DiagnosticOptions> diag_options;
   clang::DiagnosticConsumer* diag_client;
   llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs> diag_id;
   clang::DiagnosticsEngine diags;
@@ -218,8 +212,7 @@ class UdfClangDriver {
 };
 
 UdfClangDriver UdfClangDriver::init(const std::string& clang_path) {
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options =
-      new DiagnosticOptions();
+  auto diag_options = std::make_unique<DiagnosticOptions>();
   if (!diag_options) {
     throw std::runtime_error(
         "Failed to initialize UDF compiler diagnostic options. Aborting UDF compiler "
@@ -228,13 +221,12 @@ UdfClangDriver UdfClangDriver::init(const std::string& clang_path) {
   return UdfClangDriver(clang_path, std::move(diag_options));
 }
 
-UdfClangDriver::UdfClangDriver(
-    const std::string& clang_path,
-    llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options)
-    : diag_options(diag_options)
-    , diag_client(new TextDiagnosticPrinter(llvm::errs(), diag_options.get()))
+UdfClangDriver::UdfClangDriver(const std::string& clang_path,
+                               std::unique_ptr<clang::DiagnosticOptions> diag_options)
+    : diag_options(std::move(diag_options))
+    , diag_client(new TextDiagnosticPrinter(llvm::errs(), *this->diag_options))
     , diag_id(new clang::DiagnosticIDs())
-    , diags(diag_id, diag_options.get(), diag_client)
+    , diags(diag_id, *this->diag_options, diag_client)
     , diag_client_owner(diags.takeClient())
     , the_driver(clang_path.c_str(), llvm::sys::getDefaultTargetTriple(), diags)
     , clang_version(get_clang_version(clang_path)) {

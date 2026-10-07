@@ -3,13 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#pragma once
+
+#include <llvm/IR/Attributes.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/PassManager.h>
 
-#include <llvm/Analysis/CallGraph.h>
-#include <llvm/Analysis/CallGraphSCCPass.h>
-
-#include <llvm/Pass.h>
-#include <llvm/Support/raw_ostream.h>
+#include <set>
+#include <string>
+#include <vector>
 
 #include "Logger/Logger.h"
 
@@ -20,45 +22,46 @@
  * optimizer to more aggressively remove / reorder these functions and is particularly
  * important for dead code elimination.
  */
-class AnnotateInternalFunctionsPass : public llvm::CallGraphSCCPass {
+class AnnotateInternalFunctionsPass
+    : public llvm::PassInfoMixin<AnnotateInternalFunctionsPass> {
  public:
-  static char ID;
-  AnnotateInternalFunctionsPass() : CallGraphSCCPass(ID) {}
-
-  bool runOnSCC(llvm::CallGraphSCC& SCC) override {
+  llvm::PreservedAnalyses run(llvm::Module& module, llvm::ModuleAnalysisManager& /*am*/) {
     bool updated_function_defs = false;
-
-    // iterate the call graph
-    for (auto& node : SCC) {
-      CHECK(node);
-      auto fcn = node->getFunction();
-      if (!fcn) {
+    for (llvm::Function& fcn : module) {
+      if (fcn.isDeclaration()) {
         continue;
       }
-      if (isInternalStatelessFunction(fcn->getName()) ||
-          isInternalMathFunction(fcn->getName())) {
+      if (isInternalStatelessFunction(fcn.getName()) ||
+          isInternalMathFunction(fcn.getName())) {
+        applyInternalFunctionAnnotations(fcn);
         updated_function_defs = true;
-        std::vector<llvm::Attribute::AttrKind> attrs{llvm::Attribute::NoFree,
-                                                     llvm::Attribute::NoSync,
-                                                     llvm::Attribute::NoUnwind,
-                                                     llvm::Attribute::WillReturn,
-                                                     llvm::Attribute::ReadNone,
-                                                     llvm::Attribute::Speculatable};
-        // WriteOnly is automatically added to all math functions in llvm 14.0
-        // https://reviews.llvm.org/D116426 which is incompatible with ReadNone.
-        fcn->removeFnAttr(llvm::Attribute::WriteOnly);
-        for (const auto& attr : attrs) {
-          fcn->addFnAttr(attr);
-        }
       }
     }
-
-    return updated_function_defs;
+    return updated_function_defs ? llvm::PreservedAnalyses::none()
+                                 : llvm::PreservedAnalyses::all();
   }
 
-  llvm::StringRef getPassName() const override { return "AnnotateInternalFunctionsPass"; }
-
  private:
+  static void applyInternalFunctionAnnotations(llvm::Function& fcn) {
+    // WriteOnly is automatically added to all math functions in llvm 14.0
+    // https://reviews.llvm.org/D116426 which is incompatible with ReadNone.
+    fcn.removeFnAttr(llvm::Attribute::WriteOnly);
+
+    // LLVM 17+ only allows readnone/readonly on arguments; use memory(none)
+    // for function-level "does not access memory" semantics.
+    fcn.addFnAttr(llvm::Attribute::getWithMemoryEffects(fcn.getContext(),
+                                                        llvm::MemoryEffects::none()));
+
+    const std::vector<llvm::Attribute::AttrKind> attrs{llvm::Attribute::NoFree,
+                                                       llvm::Attribute::NoSync,
+                                                       llvm::Attribute::NoUnwind,
+                                                       llvm::Attribute::WillReturn,
+                                                       llvm::Attribute::Speculatable};
+    for (const auto& attr : attrs) {
+      fcn.addFnAttr(attr);
+    }
+  }
+
   static const std::set<std::string> extension_functions;
 
   static bool isInternalStatelessFunction(const llvm::StringRef& func_name) {
@@ -74,9 +77,7 @@ class AnnotateInternalFunctionsPass : public llvm::CallGraphSCCPass {
   }
 };
 
-char AnnotateInternalFunctionsPass::ID = 0;
-
-const std::set<std::string> AnnotateInternalFunctionsPass::extension_functions =
+inline const std::set<std::string> AnnotateInternalFunctionsPass::extension_functions =
     std::set<std::string>{"point_coord_array_is_null",
                           "decompress_x_coord_geoint",
                           "decompress_y_coord_geoint",
@@ -109,7 +110,7 @@ const std::set<std::string> AnnotateInternalFunctionsPass::extension_functions =
 // TODO: consider either adding specializations here for the `__X` versions (for different
 // types), or just truncate the function name removing the underscores in
 // `isInternalMathFunction`.
-const std::set<std::string> AnnotateInternalFunctionsPass::math_builtins =
+inline const std::set<std::string> AnnotateInternalFunctionsPass::math_builtins =
     std::set<std::string>{"Acos",  "Asin",    "Atan", "Atan2",    "Ceil",    "Cos",
                           "Cot",   "degrees", "Exp",  "Floor",    "ln",      "Log",
                           "Log10", "log",     "pi",   "power",    "radians", "Round",

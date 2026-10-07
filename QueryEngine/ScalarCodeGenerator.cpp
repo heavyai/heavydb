@@ -84,8 +84,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
     const auto& ti = col_expr->get_type_info();
     arg_types[arg_idx + 1] = llvm_type_from_sql(ti, ctx);
   }
-  arg_types[0] =
-      llvm::PointerType::get(llvm_type_from_sql(expr->get_type_info(), ctx), 0);
+  arg_types[0] = typed_ptr_ty(llvm_type_from_sql(expr->get_type_info(), ctx), 0);
   auto ft = llvm::FunctionType::get(get_int_type(32, ctx), arg_types, false);
   auto scalar_expr_func = llvm::Function::Create(
       ft, llvm::Function::ExternalLinkage, "scalar_expr", module_.get());
@@ -103,10 +102,10 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0, ctx));
   if (co.device_type == ExecutorDeviceType::GPU) {
     std::vector<llvm::Type*> wrapper_arg_types(arg_types.size() + 1);
-    wrapper_arg_types[0] = llvm::PointerType::get(get_int_type(32, ctx), 0);
+    wrapper_arg_types[0] = typed_ptr_ty(get_int_type(32, ctx), 0);
     wrapper_arg_types[1] = arg_types[0];
     for (size_t i = 1; i < arg_types.size(); ++i) {
-      wrapper_arg_types[i + 1] = llvm::PointerType::get(arg_types[i], 0);
+      wrapper_arg_types[i + 1] = typed_ptr_ty(arg_types[i], 0);
     }
     auto wrapper_ft =
         llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), wrapper_arg_types, false);
@@ -122,8 +121,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
     std::vector<llvm::Value*> loaded_args = {wrapper_scalar_expr_func->arg_begin() + 1};
     for (size_t i = 2; i < wrapper_arg_types.size(); ++i) {
       auto* value = wrapper_scalar_expr_func->arg_begin() + i;
-      loaded_args.push_back(
-          b.CreateLoad(value->getType()->getPointerElementType(), value));
+      loaded_args.push_back(b.CreateLoad(arg_types[i - 1], value));
     }
     auto error_lv = b.CreateCall(scalar_expr_func, loaded_args);
     b.CreateStore(error_lv, wrapper_scalar_expr_func->arg_begin());
@@ -145,7 +143,7 @@ std::unordered_map<int, void*> ScalarCodeGenerator::generateNativeCode(
           generateNativeCPUCode(compiled_expression.func, {compiled_expression.func}, co);
       constexpr int cpu_device_id = 0;
       return {{cpu_device_id,
-               execution_engine_->getPointerToFunction(compiled_expression.func)}};
+               execution_engine_.getFunctionPointer(compiled_expression.func)}};
     }
     case ExecutorDeviceType::GPU: {
       return generateNativeGPUCode(

@@ -119,10 +119,10 @@ class PointN : public Codegen {
         codegenIndexOutOfBoundCheck(cgen_state, raw_index_lv, geo_size_lv);
     if (arg_lvs.size() == 2) {
       // col byte stream from column on disk
-      array_operand_lvs.push_back(
-          cgen_state->emitExternalCall("array_buff",
-                                       llvm::Type::getInt8PtrTy(cgen_state->context_),
-                                       {arg_lvs.front(), pos_lvs.front()}));
+      array_operand_lvs.push_back(cgen_state->emitExternalCall(
+          "array_buff",
+          typed_ptr_ty(get_int_type(8, cgen_state->context_), 0),
+          {arg_lvs.front(), pos_lvs.front()}));
       array_operand_lvs.push_back(geo_size_lv);
       // convert the index to a byte index
       raw_index_lv =
@@ -153,26 +153,26 @@ class PointN : public Codegen {
 
     auto& builder = cgen_state->ir_builder_;
     if (geo_ti.get_compression() == kENCODING_GEOINT) {
-      array_buff_cast = builder.CreateBitCast(
-          args.front(), llvm::Type::getInt32PtrTy(cgen_state->context_));
+      array_buff_cast =
+          builder.CreateBitCast(args.front(), get_int_ptr_type(32, cgen_state->context_));
     } else {
-      array_buff_cast = builder.CreateBitCast(
-          args.front(), llvm::Type::getDoublePtrTy(cgen_state->context_));
+      array_buff_cast =
+          builder.CreateBitCast(args.front(), get_fp_ptr_type(64, cgen_state->context_));
     }
 
     const auto index_lv = args.back();
-    auto array_offset_lv = builder.CreateGEP(
-        array_buff_cast->getType()->getScalarType()->getPointerElementType(),
-        array_buff_cast,
-        index_lv,
-        operator_->getName() + "_Offset");
+    auto array_offset_lv = typed_gep(builder,
+                                     geo_ti.get_compression() == kENCODING_GEOINT
+                                         ? get_int_type(32, cgen_state->context_)
+                                         : llvm::Type::getDoubleTy(cgen_state->context_),
+                                     array_buff_cast,
+                                     index_lv);
+    array_offset_lv->setName(operator_->getName() + "_Offset");
     CHECK(nullcheck_codegen);
     auto ret_lv = nullcheck_codegen->finalize(
-        llvm::ConstantPointerNull::get(
-            geo_ti.get_compression() == kENCODING_GEOINT
-                ? llvm::PointerType::get(llvm::Type::getInt32Ty(cgen_state->context_), 0)
-                : llvm::PointerType::get(llvm::Type::getDoubleTy(cgen_state->context_),
-                                         0)),
+        llvm::ConstantPointerNull::get(geo_ti.get_compression() == kENCODING_GEOINT
+                                           ? get_int_ptr_type(32, cgen_state->context_)
+                                           : get_fp_ptr_type(64, cgen_state->context_)),
         array_offset_lv);
     const auto geo_size_lv = args[1];
     return {ret_lv, geo_size_lv};

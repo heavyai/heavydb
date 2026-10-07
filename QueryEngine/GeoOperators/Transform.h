@@ -33,6 +33,149 @@ class Transform : public Codegen {
     return (32601 <= srid && srid <= 32660) || (32701 <= srid && srid <= 32760);
   }
 
+  static std::string transformFunctionPrefix(const unsigned srid_in,
+                                             const unsigned srid_out,
+                                             std::vector<llvm::Value*>& prefix_args,
+                                             CgenState* cgen_state) {
+    prefix_args.clear();
+    if (srid_out == 900913) {
+      if (srid_in == 4326) {
+        return "transform_4326_900913_";
+      }
+      if (isUtm(srid_in)) {
+        prefix_args.push_back(cgen_state->llInt(static_cast<int32_t>(srid_in)));
+        return "transform_utm_900913_";
+      }
+    } else if (srid_out == 4326) {
+      if (srid_in == 900913) {
+        return "transform_900913_4326_";
+      }
+      if (isUtm(srid_in)) {
+        prefix_args.push_back(cgen_state->llInt(static_cast<int32_t>(srid_in)));
+        return "transform_utm_4326_";
+      }
+    } else if (isUtm(srid_out)) {
+      if (srid_in == 4326) {
+        prefix_args.push_back(cgen_state->llInt(static_cast<int32_t>(srid_out)));
+        return "transform_4326_utm_";
+      }
+      if (srid_in == 900913) {
+        prefix_args.push_back(cgen_state->llInt(static_cast<int32_t>(srid_out)));
+        return "transform_900913_utm_";
+      }
+    }
+    throw std::runtime_error("Unsupported geo transformation from " +
+                             std::to_string(srid_in) + " to " + std::to_string(srid_out));
+  }
+
+  static llvm::Value* emitTransformAxisCall(
+      const std::string& transform_function_prefix,
+      const char axis,
+      const std::vector<llvm::Value*>& transform_args,
+      CgenState* cgen_state,
+      const CompilationOptions& co) {
+    auto& builder = cgen_state->ir_builder_;
+    const std::string fn_name = transform_function_prefix + axis;
+    if (co.device_type == ExecutorDeviceType::GPU) {
+      auto fn = cgen_state->module_->getFunction(fn_name);
+      CHECK(fn);
+      cgen_state->maybeCloneFunctionRecursive(fn);
+      CHECK(!fn->isDeclaration());
+      auto gpu_functions_to_replace = cgen_state->gpuFunctionsToReplace(fn);
+      for (const auto& fcn_name : gpu_functions_to_replace) {
+        cgen_state->replaceFunctionForGpu(fcn_name, fn);
+      }
+      verify_function_ir(fn);
+      return builder.CreateCall(fn, transform_args);
+    }
+    return cgen_state->emitCall(fn_name, transform_args);
+  }
+
+  enum class PointCoordAxis { X, Y };
+
+  static llvm::Value* loadPointCoord(llvm::Value* array_buff_ptr,
+                                     const SQLTypeInfo& geo_ti,
+                                     const PointCoordAxis axis,
+                                     CgenState* cgen_state,
+                                     const bool decompressed_buffer = false) {
+    auto& builder = cgen_state->ir_builder_;
+    const auto is_x = axis == PointCoordAxis::X;
+    const std::string expr_name = is_x ? "x" : "y";
+    const auto coord_index = is_x ? cgen_state->llInt(0) : cgen_state->llInt(1);
+
+    if (!decompressed_buffer && geo_ti.get_compression() == kENCODING_GEOINT) {
+      const auto compressed_arr_ptr = builder.CreateBitCast(
+          array_buff_ptr, get_int_ptr_type(32, cgen_state->context_));
+      auto coord_lv_ptr = typed_gep(builder,
+                                    get_int_type(32, cgen_state->context_),
+                                    compressed_arr_ptr,
+                                    coord_index);
+      coord_lv_ptr->setName(expr_name + "_coord_ptr");
+      const auto compressed_coord_lv = typed_load(builder,
+                                                  get_int_type(32, cgen_state->context_),
+                                                  coord_lv_ptr,
+                                                  expr_name + "_coord_compressed");
+      return cgen_state->emitExternalCall("decompress_" + expr_name + "_coord_geoint",
+                                          llvm::Type::getDoubleTy(cgen_state->context_),
+                                          std::vector<llvm::Value*>{compressed_coord_lv});
+    }
+
+    auto coord_arr_ptr =
+        builder.CreateBitCast(array_buff_ptr, get_fp_ptr_type(64, cgen_state->context_));
+    auto coord_lv_ptr = typed_gep(builder,
+                                  llvm::Type::getDoubleTy(cgen_state->context_),
+                                  coord_arr_ptr,
+                                  coord_index);
+    coord_lv_ptr->setName(expr_name + "_coord_ptr");
+    return typed_load(builder,
+                      llvm::Type::getDoubleTy(cgen_state->context_),
+                      coord_lv_ptr,
+                      expr_name + "_coord");
+  }
+
+  // Project a single transformed coordinate. companion_coord overrides the other axis
+  // for the transform call (use zero for ST_X/ST_Y over ST_Transform(column)); when
+  // null, load the companion from array_buff_ptr (full ST_Transform on decompressed
+  // doubles).
+  static llvm::Value* codegenPointCoord(llvm::Value* array_buff_ptr,
+                                        const SQLTypeInfo& geo_ti,
+                                        const PointCoordAxis axis,
+                                        const unsigned srid_in,
+                                        const unsigned srid_out,
+                                        CgenState* cgen_state,
+                                        const CompilationOptions& co,
+                                        llvm::Value* companion_coord = nullptr,
+                                        const bool decompressed_buffer = false) {
+    const auto coord_lv =
+        loadPointCoord(array_buff_ptr, geo_ti, axis, cgen_state, decompressed_buffer);
+    if (srid_in == srid_out) {
+      return coord_lv;
+    }
+
+    llvm::Value* other_coord_lv = companion_coord;
+    if (!other_coord_lv) {
+      const auto other_axis =
+          axis == PointCoordAxis::X ? PointCoordAxis::Y : PointCoordAxis::X;
+      other_coord_lv = loadPointCoord(
+          array_buff_ptr, geo_ti, other_axis, cgen_state, decompressed_buffer);
+    }
+
+    std::vector<llvm::Value*> prefix_args;
+    const auto transform_function_prefix =
+        transformFunctionPrefix(srid_in, srid_out, prefix_args, cgen_state);
+    std::vector<llvm::Value*> transform_args = prefix_args;
+    if (axis == PointCoordAxis::X) {
+      transform_args.push_back(coord_lv);
+      transform_args.push_back(other_coord_lv);
+      return emitTransformAxisCall(
+          transform_function_prefix, 'x', transform_args, cgen_state, co);
+    }
+    transform_args.push_back(other_coord_lv);
+    transform_args.push_back(coord_lv);
+    return emitTransformAxisCall(
+        transform_function_prefix, 'y', transform_args, cgen_state, co);
+  }
+
   std::tuple<std::vector<llvm::Value*>, llvm::Value*> codegenLoads(
       const std::vector<llvm::Value*>& arg_lvs,
       const std::vector<llvm::Value*>& pos_lvs,
@@ -83,71 +226,74 @@ class Transform : public Codegen {
           builder.CreateAlloca(llvm::Type::getDoubleTy(cgen_state->context_),
                                cgen_state->llInt(int32_t(2)),
                                getName() + "_Array");
-      auto compressed_arr_ptr = builder.CreateBitCast(
-          arr_buff_ptr, llvm::Type::getInt32PtrTy(cgen_state->context_));
+      auto compressed_arr_ptr =
+          builder.CreateBitCast(arr_buff_ptr, get_int_ptr_type(32, cgen_state->context_));
       // x coord
-      auto* gep = builder.CreateGEP(
-          compressed_arr_ptr->getType()->getScalarType()->getPointerElementType(),
-          compressed_arr_ptr,
-          cgen_state->llInt(0));
-      auto x_coord_lv = cgen_state->emitExternalCall(
-          "decompress_x_coord_geoint",
-          llvm::Type::getDoubleTy(cgen_state->context_),
-          {builder.CreateLoad(
-              gep->getType()->getPointerElementType(), gep, "compressed_x_coord")});
+      auto* gep = typed_gep(builder,
+                            get_int_type(32, cgen_state->context_),
+                            compressed_arr_ptr,
+                            cgen_state->llInt(0));
+      auto x_coord_lv =
+          cgen_state->emitExternalCall("decompress_x_coord_geoint",
+                                       llvm::Type::getDoubleTy(cgen_state->context_),
+                                       {typed_load(builder,
+                                                   get_int_type(32, cgen_state->context_),
+                                                   gep,
+                                                   "compressed_x_coord")});
       builder.CreateStore(
           x_coord_lv,
-          builder.CreateGEP(
-              new_arr_ptr->getType()->getScalarType()->getPointerElementType(),
-              new_arr_ptr,
-              cgen_state->llInt(0)));
-      gep = builder.CreateGEP(
-          compressed_arr_ptr->getType()->getScalarType()->getPointerElementType(),
-          compressed_arr_ptr,
-          cgen_state->llInt(1));
-      auto y_coord_lv = cgen_state->emitExternalCall(
-          "decompress_y_coord_geoint",
-          llvm::Type::getDoubleTy(cgen_state->context_),
-          {builder.CreateLoad(
-              gep->getType()->getPointerElementType(), gep, "compressed_y_coord")});
+          typed_alloca_element_ptr(builder,
+                                   llvm::Type::getDoubleTy(cgen_state->context_),
+                                   new_arr_ptr,
+                                   cgen_state->llInt(0)));
+      gep = typed_gep(builder,
+                      get_int_type(32, cgen_state->context_),
+                      compressed_arr_ptr,
+                      cgen_state->llInt(1));
+      auto y_coord_lv =
+          cgen_state->emitExternalCall("decompress_y_coord_geoint",
+                                       llvm::Type::getDoubleTy(cgen_state->context_),
+                                       {typed_load(builder,
+                                                   get_int_type(32, cgen_state->context_),
+                                                   gep,
+                                                   "compressed_y_coord")});
       builder.CreateStore(
           y_coord_lv,
-          builder.CreateGEP(
-              new_arr_ptr->getType()->getScalarType()->getPointerElementType(),
-              new_arr_ptr,
-              cgen_state->llInt(1)));
+          typed_alloca_element_ptr(builder,
+                                   llvm::Type::getDoubleTy(cgen_state->context_),
+                                   new_arr_ptr,
+                                   cgen_state->llInt(1)));
       arr_buff_ptr = new_arr_ptr;
     } else if (!can_transform_in_place_) {
       auto new_arr_ptr =
           builder.CreateAlloca(llvm::Type::getDoubleTy(cgen_state->context_),
                                cgen_state->llInt(int32_t(2)),
                                getName() + "_Array");
-      const auto arr_buff_ptr_cast = builder.CreateBitCast(
-          arr_buff_ptr, llvm::Type::getDoublePtrTy(cgen_state->context_));
+      const auto arr_buff_ptr_cast =
+          builder.CreateBitCast(arr_buff_ptr, get_fp_ptr_type(64, cgen_state->context_));
 
-      auto* gep = builder.CreateGEP(
-          arr_buff_ptr_cast->getType()->getScalarType()->getPointerElementType(),
-          arr_buff_ptr_cast,
-          cgen_state->llInt(0));
+      auto* gep = typed_gep(builder,
+                            llvm::Type::getDoubleTy(cgen_state->context_),
+                            arr_buff_ptr_cast,
+                            cgen_state->llInt(0));
       builder.CreateStore(
-          builder.CreateLoad(gep->getType()->getPointerElementType(), gep),
-          builder.CreateGEP(
-              new_arr_ptr->getType()->getScalarType()->getPointerElementType(),
-              new_arr_ptr,
-              cgen_state->llInt(0)));
-      gep = builder.CreateGEP(
-          arr_buff_ptr_cast->getType()->getScalarType()->getPointerElementType(),
-          arr_buff_ptr_cast,
-          cgen_state->llInt(1));
+          typed_load(builder, llvm::Type::getDoubleTy(cgen_state->context_), gep),
+          typed_alloca_element_ptr(builder,
+                                   llvm::Type::getDoubleTy(cgen_state->context_),
+                                   new_arr_ptr,
+                                   cgen_state->llInt(0)));
+      gep = typed_gep(builder,
+                      llvm::Type::getDoubleTy(cgen_state->context_),
+                      arr_buff_ptr_cast,
+                      cgen_state->llInt(1));
       builder.CreateStore(
-          builder.CreateLoad(gep->getType()->getPointerElementType(), gep),
-          builder.CreateGEP(
-              new_arr_ptr->getType()->getScalarType()->getPointerElementType(),
-              new_arr_ptr,
-              cgen_state->llInt(1)));
+          typed_load(builder, llvm::Type::getDoubleTy(cgen_state->context_), gep),
+          typed_alloca_element_ptr(builder,
+                                   llvm::Type::getDoubleTy(cgen_state->context_),
+                                   new_arr_ptr,
+                                   cgen_state->llInt(1)));
       arr_buff_ptr = new_arr_ptr;
     }
-    CHECK(arr_buff_ptr->getType() == llvm::Type::getDoublePtrTy(cgen_state->context_));
 
     auto const srid_in = static_cast<unsigned>(transform_operator_->getInputSRID());
     auto const srid_out = static_cast<unsigned>(transform_operator_->getOutputSRID());
@@ -157,105 +303,55 @@ class Transform : public Codegen {
     }
 
     // transform in place
-    std::string transform_function_prefix{""};
-    std::vector<llvm::Value*> transform_args;
+    arr_buff_ptr =
+        builder.CreateBitCast(arr_buff_ptr, get_fp_ptr_type(64, cgen_state->context_));
+    auto x_coord_ptr_lv = typed_gep(builder,
+                                    llvm::Type::getDoubleTy(cgen_state->context_),
+                                    arr_buff_ptr,
+                                    cgen_state->llInt(0));
+    x_coord_ptr_lv->setName("x_coord_ptr");
+    auto y_coord_ptr_lv = typed_gep(builder,
+                                    llvm::Type::getDoubleTy(cgen_state->context_),
+                                    arr_buff_ptr,
+                                    cgen_state->llInt(1));
+    y_coord_ptr_lv->setName("y_coord_ptr");
 
-    if (srid_out == 900913) {
-      if (srid_in == 4326) {
-        transform_function_prefix = "transform_4326_900913_";
-      } else if (isUtm(srid_in)) {
-        transform_function_prefix = "transform_utm_900913_";
-        transform_args.push_back(cgen_state->llInt(srid_in));
-      } else {
-        throw std::runtime_error("Unsupported input SRID " + std::to_string(srid_in) +
-                                 " for output SRID " + std::to_string(srid_out));
-      }
-    } else if (srid_out == 4326) {
-      if (srid_in == 900913) {
-        transform_function_prefix = "transform_900913_4326_";
-      } else if (isUtm(srid_in)) {
-        transform_function_prefix = "transform_utm_4326_";
-        transform_args.push_back(cgen_state->llInt(srid_in));
-      } else {
-        throw std::runtime_error("Unsupported input SRID " + std::to_string(srid_in) +
-                                 " for output SRID " + std::to_string(srid_out));
-      }
-    } else if (isUtm(srid_out)) {
-      if (srid_in == 4326) {
-        transform_function_prefix = "transform_4326_utm_";
-      } else if (srid_in == 900913) {
-        transform_function_prefix = "transform_900913_utm_";
-      } else {
-        throw std::runtime_error("Unsupported input SRID " + std::to_string(srid_in) +
-                                 " for output SRID " + std::to_string(srid_out));
-      }
-      transform_args.push_back(cgen_state->llInt(srid_out));
-    } else {
-      throw std::runtime_error("Unsupported output SRID for ST_Transform: " +
-                               std::to_string(srid_out));
-    }
-    CHECK(!transform_function_prefix.empty());
-
-    auto x_coord_ptr_lv = builder.CreateGEP(
-        arr_buff_ptr->getType()->getScalarType()->getPointerElementType(),
-        arr_buff_ptr,
-        cgen_state->llInt(0),
-        "x_coord_ptr");
-    transform_args.push_back(builder.CreateLoad(
-        x_coord_ptr_lv->getType()->getPointerElementType(), x_coord_ptr_lv, "x_coord"));
-    auto y_coord_ptr_lv = builder.CreateGEP(
-        arr_buff_ptr->getType()->getScalarType()->getPointerElementType(),
-        arr_buff_ptr,
-        cgen_state->llInt(1),
-        "y_coord_ptr");
-    transform_args.push_back(builder.CreateLoad(
-        y_coord_ptr_lv->getType()->getPointerElementType(), y_coord_ptr_lv, "y_coord"));
-    if (co.device_type == ExecutorDeviceType::GPU) {
-      auto fn_x = cgen_state->module_->getFunction(transform_function_prefix + 'x');
-      CHECK(fn_x);
-      cgen_state->maybeCloneFunctionRecursive(fn_x);
-      CHECK(!fn_x->isDeclaration());
-
-      auto gpu_functions_to_replace = cgen_state->gpuFunctionsToReplace(fn_x);
-      for (const auto& fcn_name : gpu_functions_to_replace) {
-        cgen_state->replaceFunctionForGpu(fcn_name, fn_x);
-      }
-      verify_function_ir(fn_x);
-      auto transform_call = builder.CreateCall(fn_x, transform_args);
-      builder.CreateStore(transform_call, x_coord_ptr_lv);
-
-      auto fn_y = cgen_state->module_->getFunction(transform_function_prefix + 'y');
-      CHECK(fn_y);
-      cgen_state->maybeCloneFunctionRecursive(fn_y);
-      CHECK(!fn_y->isDeclaration());
-
-      gpu_functions_to_replace = cgen_state->gpuFunctionsToReplace(fn_y);
-      for (const auto& fcn_name : gpu_functions_to_replace) {
-        cgen_state->replaceFunctionForGpu(fcn_name, fn_y);
-      }
-      verify_function_ir(fn_y);
-      transform_call = builder.CreateCall(fn_y, transform_args);
-      builder.CreateStore(transform_call, y_coord_ptr_lv);
-    } else {
-      builder.CreateStore(
-          cgen_state->emitCall(transform_function_prefix + 'x', transform_args),
-          x_coord_ptr_lv);
-      builder.CreateStore(
-          cgen_state->emitCall(transform_function_prefix + 'y', transform_args),
-          y_coord_ptr_lv);
-    }
+    auto decompressed_ti = operand_ti;
+    decompressed_ti.set_compression(kENCODING_NONE);
+    // Load source coords before any store so the Y transform still sees WGS x.
+    const auto orig_x = loadPointCoord(
+        arr_buff_ptr, decompressed_ti, PointCoordAxis::X, cgen_state, true);
+    const auto orig_y = loadPointCoord(
+        arr_buff_ptr, decompressed_ti, PointCoordAxis::Y, cgen_state, true);
+    builder.CreateStore(codegenPointCoord(arr_buff_ptr,
+                                          decompressed_ti,
+                                          PointCoordAxis::X,
+                                          srid_in,
+                                          srid_out,
+                                          cgen_state,
+                                          co,
+                                          orig_y,
+                                          true),
+                        x_coord_ptr_lv);
+    builder.CreateStore(codegenPointCoord(arr_buff_ptr,
+                                          decompressed_ti,
+                                          PointCoordAxis::Y,
+                                          srid_in,
+                                          srid_out,
+                                          cgen_state,
+                                          co,
+                                          orig_x,
+                                          true),
+                        y_coord_ptr_lv);
     auto ret = arr_buff_ptr;
     const auto& geo_ti = transform_operator_->get_type_info();
 
     if (is_nullable_) {
       CHECK(nullcheck_codegen);
       ret = nullcheck_codegen->finalize(
-          llvm::ConstantPointerNull::get(
-              geo_ti.get_compression() == kENCODING_GEOINT
-                  ? llvm::PointerType::get(llvm::Type::getInt32Ty(cgen_state->context_),
-                                           0)
-                  : llvm::PointerType::get(llvm::Type::getDoubleTy(cgen_state->context_),
-                                           0)),
+          llvm::ConstantPointerNull::get(geo_ti.get_compression() == kENCODING_GEOINT
+                                             ? get_int_ptr_type(32, cgen_state->context_)
+                                             : get_fp_ptr_type(64, cgen_state->context_)),
           ret);
     }
     return {ret,
