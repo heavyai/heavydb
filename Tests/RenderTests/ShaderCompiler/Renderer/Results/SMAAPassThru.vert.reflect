@@ -1,0 +1,13 @@
+vertex_attrs 0
+samplers 0
+storage_images 0
+uniform_buffers 1
+  "SMAA_PASS_THRU_VERT_UBO_TYPE" set=0 binding=0 offset=-1 block_size=8 array_length=-1 array_stride=-1
+shader_storage_buffers 0
+acceleration_structures 0
+uniform_buffer_attrs 1
+  "VIEWPORT_SCALING" set=0 binding=0 offset=0 size=8 array_length=-1 array_stride=-1
+shader_storage_buffer_attrs 0
+push_constants 0
+push_constant_attrs 0
+fragment_output_locations 0

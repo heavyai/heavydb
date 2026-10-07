@@ -34,9 +34,6 @@ enum class ShaderStage : uint8_t {
   kTask
 };
 
-// must be kept in sync with enum
-static constexpr int kShaderStageCount = 8;
-
 // Stage bits - add stages as needed
 enum class ShaderStageBits {
   kVertex = 1 << 0,
@@ -60,7 +57,7 @@ enum ShaderArtifactTypeBits {
   kSpvBin = 0x04,      // spirv binary blob
   kSpvDis = 0x08,      // spirv disassembly
   kSpvGlsl = 0x10,     // glsl output from spirv-cross
-  kSpvReflect = 0x20,  // reflection information from spir-cross
+  kSpvReflect = 0x20,  // our ShaderReflection, plus spirv-cross's own reflection
   kAll = 0xFFFF
 };
 

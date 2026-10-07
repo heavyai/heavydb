@@ -235,6 +235,33 @@ uint32_t Material::getVertexAttributeLocation(std::string_view attr_name) const 
       resource_tracking_string_ + "'");
 }
 
+void Material::validatePushConstantRange(std::string_view name,
+                                         uint32_t offset,
+                                         uint32_t num_bytes) const {
+  for (auto const& cache : shader_caches_) {
+    auto const& info = cache->getReflection().getPushConstantItemInfo(name);
+    if (info.offset < 0) {
+      continue;
+    }
+
+    auto const declared_begin = static_cast<uint32_t>(info.offset);
+    auto const declared_end =
+        declared_begin + static_cast<uint32_t>(info.block_or_array_size);
+    RUNTIME_EX_ASSERT(
+        offset >= declared_begin && offset + num_bytes <= declared_end,
+        "Push of " + std::to_string(num_bytes) + " bytes at offset " +
+            std::to_string(offset) + " to '" + std::string(name) + "' in Material '" +
+            resource_tracking_string_ + "' falls outside the " +
+            std::to_string(declared_end - declared_begin) +
+            " bytes the shader declares at offset " + std::to_string(declared_begin));
+    return;
+  }
+
+  THROW_RUNTIME_EX("Failed to find push constant '" + std::string(name) +
+                   "' in Material '" + resource_tracking_string_ +
+                   "'. The name must be the push constant block or one of its members");
+}
+
 const ShaderReflection::ItemInfo& Material::getUniformBufferAttrInfo(
     std::string_view uniform_buffer_name) const {
   for (auto const& cache : shader_caches_) {

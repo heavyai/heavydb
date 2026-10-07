@@ -31,6 +31,13 @@ uniform sampler2DArray vert_sampler_array;
 layout(binding = 7) uniform sampler2DArray shared_array_of_sampler_arrays[2];
 uniform sampler2DArray vert_array_of_sampler_arrays[2];
 
+// The first member carries an explicit offset so that the block's reflected range is
+// its members' span rather than its declared size, which would start at zero
+layout(push_constant) uniform VERT_PUSH_CONSTANTS {
+  layout(offset = 8) uint vert_first_item;
+  uint vert_item_count;
+} pushConstants;
+
 in vec3 in_position;
 
 layout(location = 0) out float out_depth;
@@ -38,6 +45,7 @@ layout(location = 1) out vec3 out_color;
 
 void main() {
   gl_Position = viewTM * vec4(in_position, 1.0);
-  out_depth = in_position.z + vert_x + float(vert_y);
+  out_depth = in_position.z + vert_x + float(vert_y) +
+              float(pushConstants.vert_first_item + pushConstants.vert_item_count);
   out_color = in_position * 0.5 + 0.5;
 }

@@ -5,6 +5,7 @@
 
 #include "GfxDriver/ShaderCompiler/ShaderRedecorator.h"
 
+#include <algorithm>
 #include <string_view>
 
 #include <spirv_cross/spirv.hpp>
@@ -19,7 +20,7 @@
 namespace gfx {
 
 ShaderRedecorator::ShaderRedecorator(std::string_view shader_name)
-    : shader_name_{shader_name}, num_vertex_attr_locations_{0} {}
+    : shader_name_{shader_name} {}
 
 namespace {
 
@@ -106,12 +107,11 @@ std::string decoration_to_string(spv::Decoration decoration) {
 
 }  // namespace
 
-void ShaderRedecorator::redecorate(spirv_t& spirv,
+void ShaderRedecorator::redecorate(const spirv_t& spirv,
                                    ShaderReflection& reflection,
                                    const std::string& template_name) {
-  int set = 0;
   try {
-    redecorateInternal(spirv, set, reflection);
+    redecorateInternal(spirv, reflection);
   } catch (spirv_cross::CompilerError& e) {
     THROW_RUNTIME_EX("Failure during redecoration of shader '" + template_name +
                      "' (SPIRV-Cross exception: " + e.what() + ")");
@@ -121,11 +121,10 @@ void ShaderRedecorator::redecorate(spirv_t& spirv,
   }
 }
 
-void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
-                                           int set,
+void ShaderRedecorator::redecorateInternal(const spirv_t& spirv,
                                            ShaderReflection& reflection) {
   // pass the blob to a compiler and get the resources
-  spirv_cross::CompilerGLSL compiler(spirv);
+  spirv_cross::CompilerGLSL compiler(spirv.data(), spirv.size());
   spirv_cross::ShaderResources resources = compiler.get_shader_resources();
 
   // blob should have only one entry point
@@ -152,54 +151,31 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
         << "' has no existing " << decoration_to_string(decoration) << " decoration!";
     return compiler.get_decoration(id, decoration);
   };
-  auto update_decoration = [&compiler, &spirv](uint32_t id,
-                                               const ResourceType resource_type,
-                                               std::string_view name,
-                                               const spv::Decoration decoration,
-                                               const uint32_t decoration_value) {
-    uint32_t offset = 0;
-    CHECK(compiler.get_binary_offset_for_decoration(id, decoration, offset))
-        << "    " << resource_type_to_string(resource_type) << " '" << name
-        << "' has no binary offset for " << decoration_to_string(decoration)
-        << " decoration!";
-    spirv[offset] = decoration_value;
-  };
   auto get_resource_count = [&compiler](uint32_t type_id) -> uint32_t {
     const auto& type = compiler.get_type(type_id);
     CHECK(type.array.size() < 2) << "Multi-dimensional arrays not supported!";
     return type.array.size() ? type.array[0] : 1;
   };
 
-  // capture vertex stage input attributes and allocate locations
+  // capture vertex stage input attributes, at the locations glslang gave them
   if (execution_model == spv::ExecutionModelVertex) {
     if (resources.stage_inputs.size()) {
       LOG_IF(INFO, DEBUG_LOG_REFLECTION)
           << "  " << resources.stage_inputs.size() << " Vertex Inputs";
       for (auto& input : resources.stage_inputs) {
-        check_has_decoration(
+        auto const vertex_attr_location = check_has_decoration(
             input.id, ResourceType::kVertexAttr, input.name, spv::DecorationLocation);
 
         // how many locations?
         uint32_t num_locations = get_resource_count(input.type_id);
 
-        // allocate location(s)
-        const auto vertex_attr_location = num_vertex_attr_locations_;
-        num_vertex_attr_locations_ += num_locations;
-
-        // write the new location back to the SPIRV blob
-        update_decoration(input.id,
-                          ResourceType::kVertexAttr,
-                          input.name,
-                          spv::DecorationLocation,
-                          vertex_attr_location);
-
-        // and store in reflection
+        // store in reflection
         reflection.addVertexAttr(input.name, vertex_attr_location, num_locations);
 
         // log
         LOG_IF(INFO, DEBUG_LOG_REFLECTION)
             << "    Vertex Attr '" << input.name << array_suffix(num_locations)
-            << "' allocated location " << vertex_attr_location;
+            << "' has location " << vertex_attr_location;
       }
     } else {
       LOG_IF(INFO, DEBUG_LOG_REFLECTION) << "  No Vertex Inputs";
@@ -213,65 +189,39 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
     }
   }
 
-  auto reserve_bindings_for_resources =
-      [&](const spirv_cross::SmallVector<spirv_cross::Resource>& resources,
-          ResourceType resource_type) {
-        LOG_IF(INFO, DEBUG_LOG_REFLECTION)
-            << "  " << resources.size() << " " << resource_type_to_string(resource_type)
-            << "s";
-        for (auto& resource : resources) {
-          // get any existing binding
-          auto const existing_binding = check_has_decoration(
-              resource.id, resource_type, resource.name, spv::DecorationBinding);
+  // Reads the set and binding glslang assigned, checking that the set is the only one
+  // we support and that the binding is not already another resource's
+  auto claim_binding = [&](const spirv_cross::Resource& resource,
+                           ResourceType resource_type) -> uint32_t {
+    auto const assigned_set = check_has_decoration(
+        resource.id, resource_type, resource.name, spv::DecorationDescriptorSet);
+    auto const assigned_binding = check_has_decoration(
+        resource.id, resource_type, resource.name, spv::DecorationBinding);
 
-          // reserve?
-          if (existing_binding != kUninitializedBinding) {
-            auto const num_bindings = get_resource_count(resource.type_id);
-            reserveBindings(
-                set, existing_binding, num_bindings, resource_type, resource.name);
-          }
-        }
-      };
+    // No shader declares an explicit set, and the resolver assigns 0 without one, so
+    // every resource lands in kDescriptorSet. Assert instead of branching, so that a
+    // shader which does declare one fails loudly rather than taking a path nothing
+    // exercises.
+    CHECK_EQ(assigned_set, kDescriptorSet)
+        << "    " << resource_type_to_string(resource_type) << " '" << resource.name
+        << "' is in descriptor set " << assigned_set << ", which is not supported";
 
-  auto allocate_and_decorate_bindings_for_buffers =
+    // An array of resources is one binding with a descriptor count, not a binding per
+    // element, so its size does not come into this. It still reaches the reflection,
+    // which is where VulkanMaterial reads the count from.
+    recordBinding(assigned_binding, resource_type, resource.name);
+    return assigned_binding;
+  };
+
+  auto reflect_buffers =
       [&](const spirv_cross::SmallVector<spirv_cross::Resource>& buffers,
           ResourceType resource_type) {
+        LOG_IF(INFO, DEBUG_LOG_REFLECTION)
+            << "  " << buffers.size() << " " << resource_type_to_string(resource_type)
+            << "s";
         for (auto& buffer : buffers) {
-          // validate set (Vulkan only) and binding
-          auto const existing_set = check_has_decoration(
-              buffer.id, resource_type, buffer.name, spv::DecorationDescriptorSet);
-          auto const existing_binding = check_has_decoration(
-              buffer.id, resource_type, buffer.name, spv::DecorationBinding);
-
-          // how many bindings?
+          auto const buffer_binding = claim_binding(buffer, resource_type);
           auto const num_bindings = get_resource_count(buffer.type_id);
-
-          // allocate new set and binding(s) or keep existing
-          uint32_t buffer_set{0U}, buffer_binding{0U};
-          if (existing_set == kUninitializedSet) {
-            CHECK_GE(set, 0);
-            buffer_set = static_cast<uint32_t>(set);
-          } else {
-            buffer_set = existing_set;
-          }
-          if (existing_binding == kUninitializedBinding) {
-            buffer_binding =
-                allocateBindings(set, num_bindings, resource_type, buffer.name);
-          } else {
-            buffer_binding = existing_binding;
-          }
-
-          // write the new set and binding back to the SPIRV blob
-          update_decoration(buffer.id,
-                            resource_type,
-                            buffer.name,
-                            spv::DecorationDescriptorSet,
-                            buffer_set);
-          update_decoration(buffer.id,
-                            resource_type,
-                            buffer.name,
-                            spv::DecorationBinding,
-                            buffer_binding);
 
           // capture buffer attributes
           auto& buffer_type = compiler.get_type(buffer.base_type_id);
@@ -279,7 +229,7 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
           uint32_t buffer_member_count = buffer_type.member_types.size();
 
           // and store in reflection
-          int reflection_set = static_cast<int>(buffer_set);
+          int reflection_set = static_cast<int>(kDescriptorSet);
           if (resource_type == ResourceType::kShaderStorageBuffer) {
             reflection.addShaderStorageBuffer(
                 buffer.name, reflection_set, buffer_binding, buffer_size);
@@ -291,7 +241,7 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
           // log
           LOG_IF(INFO, DEBUG_LOG_REFLECTION)
               << "    " << resource_type_to_string(resource_type) << " '" << buffer.name
-              << array_suffix(num_bindings) << "' allocated binding " << buffer_binding
+              << array_suffix(num_bindings) << "' has binding " << buffer_binding
               << ", requires " << buffer_size << " bytes and has " << buffer_member_count
               << " members";
 
@@ -302,6 +252,61 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
             auto const member_offset = compiler.type_struct_member_offset(buffer_type, i);
             auto const member_size =
                 compiler.get_declared_struct_member_size(buffer_type, i);
+
+            // Everything derived from an array member below describes element zero only,
+            // its offsets being that element's. These two are what reach the rest:
+            // element i is at offset + i * stride. A runtime-sized array reports a length
+            // of 0, which SPIRV-Cross gives as its single dimension and which is a real
+            // answer, distinct from the -1 meaning not an array at all.
+            //
+            // An array of arrays is flattened to the element count and the element
+            // stride, rather than keeping its shape. That loses the inner extent, but it
+            // is how the only multi-dimensional member we have is actually used:
+            // PPLL_BATCH_STAT_COUNTERS_SSBO is declared [batches][tiles] and read back
+            // into one flat vector by PPLLRender.
+            int array_length = -1;
+            int array_stride = -1;
+            if (!member_type.array.empty()) {
+              // A dimension given by a specialization constant is stored as that
+              // constant's id rather than as a size, so reading it as one would record a
+              // plausible-looking wrong number. Nothing declares one today, every
+              // dimension in the shader library being a literal or a textual
+              // substitution made before compilation.
+              CHECK(std::all_of(member_type.array_size_literal.begin(),
+                                member_type.array_size_literal.end(),
+                                [](auto const literal) { return literal; }))
+                  << "Array member '" << member_name
+                  << "' is sized by a specialization constant, which cannot be reflected";
+
+              // SPIRV-Cross stores the dimensions innermost first, so the stride
+              // decorating the member's own type is the one belonging to array.back()
+              auto const outer_stride =
+                  compiler.type_struct_member_array_stride(buffer_type, i);
+              auto const total_bytes = member_type.array.back() * outer_stride;
+              uint32_t element_count = 1;
+              for (auto const dimension : member_type.array) {
+                element_count *= dimension;
+              }
+
+              if (element_count == 0) {
+                // Runtime-sized. Only the outermost dimension may be, and with no element
+                // count to divide by, the outer stride is already the element stride.
+                CHECK_EQ(member_type.array.size(), 1u)
+                    << "Runtime-sized array member '" << member_name
+                    << "' also has inner dimensions, whose extent is lost by flattening";
+                array_length = 0;
+                array_stride = static_cast<int>(outer_stride);
+              } else {
+                // Only holds if every dimension is tightly packed, which is the sole
+                // reason a flattened stride can address an inner element at all
+                CHECK_EQ(total_bytes % element_count, 0u)
+                    << "Array member '" << member_name
+                    << "' is padded between dimensions and cannot be flattened: "
+                    << total_bytes << " bytes over " << element_count << " elements";
+                array_length = static_cast<int>(element_count);
+                array_stride = static_cast<int>(total_bytes / element_count);
+              }
+            }
 
             if (member_type.basetype == spirv_cross::SPIRType::Struct) {
               LOG_IF(INFO, DEBUG_LOG_REFLECTION) << "      Struct '" << member_name
@@ -335,18 +340,24 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
                 uint32_t child_full_offset = member_offset + child_member_offset;
 
                 // store in reflection
+                // The array shape belongs to the member, not to the child: slabs[64].cuda
+                // is one uint64_t repeated 64 times at the member's stride
                 if (resource_type == ResourceType::kShaderStorageBuffer) {
                   reflection.addShaderStorageBufferAttr(child_full_name,
                                                         reflection_set,
                                                         buffer_binding,
                                                         child_full_offset,
-                                                        child_member_size);
+                                                        child_member_size,
+                                                        array_length,
+                                                        array_stride);
                 } else {
                   reflection.addUniformBufferAttr(child_full_name,
                                                   reflection_set,
                                                   buffer_binding,
                                                   child_full_offset,
-                                                  child_member_size);
+                                                  child_member_size,
+                                                  array_length,
+                                                  array_stride);
                 }
 
                 LOG_IF(INFO, DEBUG_LOG_REFLECTION)
@@ -363,13 +374,17 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
                                                       reflection_set,
                                                       buffer_binding,
                                                       member_offset,
-                                                      member_size);
+                                                      member_size,
+                                                      array_length,
+                                                      array_stride);
               } else {
                 reflection.addUniformBufferAttr(member_name,
                                                 reflection_set,
                                                 buffer_binding,
                                                 member_offset,
-                                                member_size);
+                                                member_size,
+                                                array_length,
+                                                array_stride);
               }
 
               LOG_IF(INFO, DEBUG_LOG_REFLECTION)
@@ -380,54 +395,24 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
         }
       };
 
-  auto allocate_and_decorate_bindings_for_opaque_uniforms =
+  auto reflect_opaque_uniforms =
       [&](const spirv_cross::SmallVector<spirv_cross::Resource>& resources,
           ResourceType resource_type) {
+        LOG_IF(INFO, DEBUG_LOG_REFLECTION)
+            << "  " << resources.size() << " " << resource_type_to_string(resource_type)
+            << "s";
         for (auto& resource : resources) {
-          auto const existing_set = check_has_decoration(
-              resource.id, resource_type, resource.name, spv::DecorationDescriptorSet);
-          auto const existing_binding = check_has_decoration(
-              resource.id, resource_type, resource.name, spv::DecorationBinding);
-
-          // how many bindings?
+          auto const uniform_binding = claim_binding(resource, resource_type);
           auto const num_bindings = get_resource_count(resource.type_id);
-
-          // allocate new set and binding(s) or keep existing
-          uint32_t uniform_set{0U}, uniform_binding{0U};
-          if (existing_set == kUninitializedSet) {
-            CHECK_GE(set, 0);
-            uniform_set = static_cast<uint32_t>(set);
-          } else {
-            uniform_set = existing_set;
-          }
-          if (existing_binding == kUninitializedBinding) {
-            uniform_binding =
-                allocateBindings(set, num_bindings, resource_type, resource.name);
-          } else {
-            uniform_binding = existing_binding;
-          }
 
           // log
           LOG_IF(INFO, DEBUG_LOG_REFLECTION)
               << "    " << resource_type_to_string(resource_type) << " '" << resource.name
-              << array_suffix(num_bindings) << "' allocated uniform binding "
+              << array_suffix(num_bindings) << "' has uniform binding "
               << uniform_binding;
 
-          // write the new set and binding back to the SPIRV blob
-          // update set and binding
-          update_decoration(resource.id,
-                            resource_type,
-                            resource.name,
-                            spv::DecorationDescriptorSet,
-                            uniform_set);
-          update_decoration(resource.id,
-                            resource_type,
-                            resource.name,
-                            spv::DecorationBinding,
-                            uniform_binding);
-
-          // and store in reflection
-          int reflection_set = static_cast<int>(uniform_set);
+          // store in reflection
+          int reflection_set = static_cast<int>(kDescriptorSet);
           if (resource_type == ResourceType::kSampledImage) {
             reflection.addSampler(
                 resource.name, reflection_set, uniform_binding, num_bindings);
@@ -441,26 +426,72 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
         }
       };
 
-  // reserve any pre-specified bindings for all resources
-  reserve_bindings_for_resources(resources.uniform_buffers, ResourceType::kUniformBuffer);
-  reserve_bindings_for_resources(resources.storage_buffers,
-                                 ResourceType::kShaderStorageBuffer);
-  reserve_bindings_for_resources(resources.sampled_images, ResourceType::kSampledImage);
-  reserve_bindings_for_resources(resources.storage_images, ResourceType::kStorageImage);
-  reserve_bindings_for_resources(resources.acceleration_structures,
-                                 ResourceType::kAccelerationStructure);
+  // A push constant block has neither a set nor a binding, so it claims nothing and
+  // does not go through claim_binding. It is reflected so that CommandList can check a
+  // push against what the shader declares: the ranges handed to pipeline creation are
+  // written out by hand at each call site, and nothing has ever verified that they
+  // agree with the shader.
+  auto reflect_push_constants = [&]() {
+    // One block per entry point is a Vulkan rule, not a simplification here
+    CHECK_LE(resources.push_constant_buffers.size(), 1U)
+        << "  Shader '" << shader_name_ << "' declares "
+        << resources.push_constant_buffers.size() << " push constant blocks";
 
-  // allocate and decorate new bindings
-  allocate_and_decorate_bindings_for_buffers(resources.uniform_buffers,
-                                             ResourceType::kUniformBuffer);
-  allocate_and_decorate_bindings_for_buffers(resources.storage_buffers,
-                                             ResourceType::kShaderStorageBuffer);
-  allocate_and_decorate_bindings_for_opaque_uniforms(resources.sampled_images,
-                                                     ResourceType::kSampledImage);
-  allocate_and_decorate_bindings_for_opaque_uniforms(resources.storage_images,
-                                                     ResourceType::kStorageImage);
-  allocate_and_decorate_bindings_for_opaque_uniforms(
-      resources.acceleration_structures, ResourceType::kAccelerationStructure);
+    for (auto const& block : resources.push_constant_buffers) {
+      auto const& block_type = compiler.get_type(block.base_type_id);
+      uint32_t const member_count = block_type.member_types.size();
+      CHECK_GT(member_count, 0U)
+          << "  Push constant block '" << block.name << "' has no members";
+
+      // The block's own span, rather than its declared size, which would count the
+      // padding before a member given an explicit offset. A caller pushing into the
+      // block is allowed this range and no more, and it is what the hand-written
+      // PushConstantRange at the call site is meant to match.
+      uint32_t block_begin = 0;
+      uint32_t block_end = 0;
+      for (uint32_t i = 0; i < member_count; i++) {
+        auto const member_offset = compiler.type_struct_member_offset(block_type, i);
+        auto const member_size = static_cast<uint32_t>(
+            compiler.get_declared_struct_member_size(block_type, i));
+        auto const& member_name = compiler.get_member_name(block_type.self, i);
+
+        LOG_IF(INFO, DEBUG_LOG_REFLECTION)
+            << "    Push Constant '" << member_name << "' at offset " << member_offset
+            << " has size " << member_size;
+        reflection.addPushConstantAttr(member_name, member_offset, member_size);
+
+        block_begin = i == 0 ? member_offset : std::min(block_begin, member_offset);
+        block_end = std::max(block_end, member_offset + member_size);
+      }
+      // SPIRV-Cross names a push constant block after its variable, so block.name is
+      // the instance name the shader body uses. That is worth knowing because it is
+      // not what it does elsewhere: a uniform block is named by its type, which is why
+      // the uniform_buffers section of a .reflect file reads "SLAB_ADDRESS_TABLE_UBO"
+      // and not "slab_address_table". Record both, since a caller has no reason to
+      // know which of the two names this particular category happens to report.
+      //
+      // Either may be absent. A block declared without an instance name has no
+      // variable name to report, and an empty one must not be recorded: it would put
+      // an unnamed entry in the reflection and make a lookup on "" succeed.
+      auto const& type_name = compiler.get_name(block.base_type_id);
+      if (!block.name.empty()) {
+        reflection.addPushConstant(block.name, block_begin, block_end - block_begin);
+      }
+      if (!type_name.empty() && type_name != block.name) {
+        reflection.addPushConstant(type_name, block_begin, block_end - block_begin);
+      }
+    }
+  };
+
+  // One pass now, rather than reserving the explicit bindings before allocating the
+  // rest, because every binding arrives already assigned
+  reflect_buffers(resources.uniform_buffers, ResourceType::kUniformBuffer);
+  reflect_buffers(resources.storage_buffers, ResourceType::kShaderStorageBuffer);
+  reflect_opaque_uniforms(resources.sampled_images, ResourceType::kSampledImage);
+  reflect_opaque_uniforms(resources.storage_images, ResourceType::kStorageImage);
+  reflect_opaque_uniforms(resources.acceleration_structures,
+                          ResourceType::kAccelerationStructure);
+  reflect_push_constants();
 
   // Vulkan things that we shouldn't see with our shaders (yet)
   CHECK_EQ(resources.separate_images.size(), 0U);
@@ -468,101 +499,30 @@ void ShaderRedecorator::redecorateInternal(spirv_t& spirv,
   CHECK_EQ(resources.subpass_inputs.size(), 0U);
 }
 
-ShaderRedecorator::ReservedBindings& ShaderRedecorator::getReservedBindings(
-    int set,
-    ResourceType resource_type) {
-  // otherwise we're in in Vulkan mode, and all the bindings are in one map per set
-  // find or create an entry for this set and return it
-  auto const itr = reserved_vulkan_bindings_.try_emplace(set, ReservedBindings()).first;
-  CHECK(itr != reserved_vulkan_bindings_.end());
-  return (*itr).second;
-}
-
-void ShaderRedecorator::reserveBindings(int set,
-                                        uint32_t first_binding,
-                                        uint32_t num_bindings,
-                                        ResourceType resource_type,
-                                        const std::string& resource_name) {
-  // will the whole range fit?
-  CHECK_LE(first_binding + num_bindings, kMaxBindingsPerSet)
-      << "Binding overflow (set " << set
+void ShaderRedecorator::recordBinding(uint32_t binding,
+                                      ResourceType resource_type,
+                                      const std::string& resource_name) {
+  CHECK_LT(binding, kMaxBindingsPerSet)
+      << "Binding overflow (set " << kDescriptorSet
       << ", " + resource_type_to_string(resource_type) + " '" << resource_name
       << "', shader '" << shader_name_ << "')";
 
-  // find or create the reserved bindings map for this set
-  auto& reserved_bindings = getReservedBindings(set, resource_type);
-
-  // reserve the range, unless there's a clash
-  for (uint32_t i = first_binding; i < first_binding + num_bindings; i++) {
-    ReservedBindingEntry new_entry{resource_type, resource_name, i - first_binding};
-    auto const [itr, inserted] = reserved_bindings.try_emplace(i, new_entry);
-    if (!inserted && new_entry != itr->second) {
-      std::string range_msg = (num_bindings > 1u)
-                                  ? "in range " + std::to_string(first_binding) + " to " +
-                                        std::to_string(first_binding + num_bindings - 1)
-                                  : "at " + std::to_string(first_binding);
-      auto const existing_type = std::get<0>(itr->second);
-      auto const existing_name = std::get<1>(itr->second);
-      uint32_t max_index{0u};
-      for (auto const& entry : reserved_bindings) {
-        max_index = std::max(max_index, std::get<2>(entry.second));
-      }
-      auto const first_available_binding = first_binding + max_index + 1;
-      THROW_RUNTIME_EX("Binding clash " + range_msg + ", Set " + std::to_string(set) +
-                       ", Shader '" + shader_name_ + "', " +
-                       resource_type_to_string(resource_type) + " '" + resource_name +
-                       "' clashes with " + resource_type_to_string(existing_type) + " '" +
-                       existing_name + "'. Next available binding is " +
-                       std::to_string(first_available_binding));
-    }
+  ReservedBindingEntry new_entry{resource_type, resource_name};
+  auto const [itr, inserted] = reserved_bindings_.try_emplace(binding, new_entry);
+  if (!inserted && new_entry != itr->second) {
+    auto const existing_type = std::get<0>(itr->second);
+    auto const existing_name = std::get<1>(itr->second);
+    // One past everything claimed so far, which is where a shader author can safely
+    // move whichever of the two resources they choose to renumber
+    auto const first_available_binding = reserved_bindings_.rbegin()->first + 1u;
+    THROW_RUNTIME_EX("Binding clash at " + std::to_string(binding) + ", Set " +
+                     std::to_string(kDescriptorSet) + ", Shader '" + shader_name_ +
+                     "', " + resource_type_to_string(resource_type) + " '" +
+                     resource_name + "' clashes with " +
+                     resource_type_to_string(existing_type) + " '" + existing_name +
+                     "'. Next available binding is " +
+                     std::to_string(first_available_binding));
   }
-}
-
-uint32_t ShaderRedecorator::allocateBindings(int set,
-                                             uint32_t num_bindings,
-                                             ResourceType resource_type,
-                                             const std::string& resource_name) {
-  // find or create the reserved bindings map for this set
-  auto& reserved_bindings = getReservedBindings(set, resource_type);
-
-  // find available binding range
-  uint32_t first_binding{0U};
-  while (first_binding < kMaxBindingsPerSet) {
-    // will the whole range fit?
-    CHECK_LE(first_binding + num_bindings, kMaxBindingsPerSet)
-        << "Binding overflow (set " << set
-        << ", " + resource_type_to_string(resource_type) + " '" << resource_name
-        << "', shader '" << shader_name_ << "')";
-
-    // check the required range of bindings is available
-    bool range_available{true};
-    uint32_t first_unavailable{0U};
-    auto const itr = reserved_bindings.lower_bound(first_binding);
-    if (itr != reserved_bindings.end() && itr->first < first_binding + num_bindings) {
-      range_available = false;
-      first_unavailable = itr->first;
-    }
-
-    // if so, reserve the whole range and we're done
-    // otherwise restart search after first unavailable
-    if (range_available) {
-      for (uint32_t j = first_binding; j < first_binding + num_bindings; j++) {
-        CHECK(reserved_bindings
-                  .try_emplace(
-                      j, std::make_tuple(resource_type, resource_name, j - first_binding))
-                  .second);
-      }
-      return first_binding;
-    } else {
-      first_binding = first_unavailable + 1u;
-    }
-  }
-
-  // unavailable
-  THROW_RUNTIME_EX("Failed to allocate " + std::to_string(num_bindings) +
-                   " bindings (set " + std::to_string(set) + ", " +
-                   resource_type_to_string(resource_type) + " '" + resource_name +
-                   "', shader '" + shader_name_ + "')");
 }
 
 }  // namespace gfx

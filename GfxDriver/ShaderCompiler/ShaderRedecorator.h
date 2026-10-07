@@ -6,30 +6,22 @@
 #pragma once
 
 #include <map>
-#include <unordered_map>
+#include <tuple>
 
 #include "GfxDriver/ShaderCompiler/Types.h"
 
 namespace gfx {
 
+// Reads a compiled shader's interface out of its SPIR-V and into a ShaderReflection,
+// checking as it goes that no two resources of a material were given the same binding.
+// It no longer assigns anything: glslang resolves sets, bindings and locations across
+// the material before this ever sees the module. The name is left alone because PR 7
+// of the Slang migration deletes the class outright.
 class ShaderRedecorator {
  public:
   explicit ShaderRedecorator(std::string_view shader_name);
   ~ShaderRedecorator() = default;
   ShaderRedecorator() = delete;
-
-  // Public for use by IoMapResolver
-  // These values are one less than glslang::TQualifier::layout*End
-  // which are the values representing "undefined" in the IoMapResolver
-  // but it's not legal to actually request that they be SET to those
-  // values there, which we currently need to do to persist them until
-  // our own redecoration step
-  // It really shouldn't be this complicated, but I can't find any other
-  // way of distinguishing pre-specified values from automatic values
-  // @TODO(se) Make mo' better
-  static constexpr uint32_t kUninitializedSet = 0x3E;
-  static constexpr uint32_t kUninitializedBinding = 0xFFFE;
-  static constexpr uint32_t kUninitializedLocation = 0xFFE;
 
   enum class ResourceType {
     kVertexAttr,
@@ -40,34 +32,36 @@ class ShaderRedecorator {
     kAccelerationStructure,
   };
 
-  void redecorate(spirv_t& spirv,
+  void redecorate(const spirv_t& spirv,
                   ShaderReflection& reflection,
                   const std::string& template_name);
 
  private:
-  static constexpr uint32_t kMaxBindingsPerSet = kUninitializedBinding - 1U;
-  using ReservedBindingEntry = std::tuple<ResourceType, std::string, uint32_t>;
+  // Every resource lands in this one set. No shader in the library declares an explicit
+  // set, and glslang's resolver assigns 0 in the absence of one, so there is never a
+  // second.
+  static constexpr uint32_t kDescriptorSet = 0U;
+
+  // A binding beyond this cannot have come from a layout qualifier, so seeing one means
+  // something went wrong in the compiler rather than in the shader. The limit that
+  // actually constrains us is the device's maxPerStageDescriptor*, which is enforced
+  // when the descriptor set layout is built.
+  static constexpr uint32_t kMaxBindingsPerSet = 0xFFFFU;
+
+  using ReservedBindingEntry = std::tuple<ResourceType, std::string>;
   using ReservedBindings = std::map<uint32_t, ReservedBindingEntry>;
-  using VulkanReservedBindings = std::unordered_map<int, ReservedBindings>;
 
-  void redecorateInternal(spirv_t& spirv, int set, ShaderReflection& reflection);
+  void redecorateInternal(const spirv_t& spirv, ShaderReflection& reflection);
 
-  ReservedBindings& getReservedBindings(int set, ResourceType resource_type);
-
-  void reserveBindings(int set,
-                       uint32_t first_binding,
-                       uint32_t num_bindings,
-                       ResourceType resource_type,
-                       const std::string& resource_name);
-
-  uint32_t allocateBindings(int set,
-                            uint32_t num_bindings,
-                            ResourceType resource_type,
-                            const std::string& resource_name);
+  // Claims one binding for one resource, throwing if a different resource of the
+  // material already holds it. Accumulates across the stages, so the clash this is
+  // really looking for is a cross-stage one.
+  void recordBinding(uint32_t binding,
+                     ResourceType resource_type,
+                     const std::string& resource_name);
 
   std::string shader_name_;
-  VulkanReservedBindings reserved_vulkan_bindings_;
-  uint32_t num_vertex_attr_locations_;
+  ReservedBindings reserved_bindings_;
 };
 
 }  // namespace gfx
