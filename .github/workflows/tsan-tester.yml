@@ -1,10 +1,17 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-name: TSAN Tester
+name: Driver Version Tester
 
-# Placeholder workflow — does not build or run TSAN tests. Use workflow_dispatch
-# to verify the workflow file is wired up without consuming runner resources.
+# Experimental: temporarily repurposed to survey the NVIDIA driver version on
+# every GPU runner target the CI uses. Runs on the plain host runner (NOT inside
+# a container:) so nvidia-smi reports the host driver directly.
+#
+# GPU targets surveyed (keep in sync with the other workflows):
+#   linux-amd64-gpu-t4-latest-1   nightly, weekly, render-checks, pr-required-checks, rc-builder
+#   linux-amd64-gpu-t4-latest-2   pr-required-checks (multi-GPU subset)
+#   linux-arm64-gpu-l4-latest-1   rc-builder (aarch64 test legs)
+#   group: nv-gpu-amd64-t4-1gpu   render-checks (test-multi-cuda-gcc)
 
 on:
   workflow_dispatch:
@@ -12,10 +19,53 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  noop:
-    name: noop
-    runs-on: linux-amd64-cpu16
+  smi-labelled:
+    name: nvidia-smi (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - linux-amd64-gpu-t4-latest-1
+          - linux-amd64-gpu-t4-latest-2
+          - linux-arm64-gpu-l4-latest-1
     steps:
-      - name: No-op
-        run: echo "tsan-tester placeholder — nothing to do"
+      - name: Report host and driver
+        run: |
+          echo "runner label : ${{ matrix.runner }}"
+          echo "hostname     : $(hostname)"
+          echo "arch         : $(uname -m)"
+          echo "kernel       : $(uname -r)"
+          if ! command -v nvidia-smi >/dev/null 2>&1; then
+            echo "nvidia-smi not found on PATH"
+            exit 1
+          fi
+          nvidia-smi --query-gpu=index,name,driver_version --format=csv
+          echo
+          nvidia-smi
+
+  smi-group:
+    name: nvidia-smi (group nv-gpu-amd64-t4-1gpu)
+    runs-on:
+      group: nv-gpu-amd64-t4-1gpu
+    timeout-minutes: 15
+    steps:
+      - name: Report host and driver
+        run: |
+          echo "runner group : nv-gpu-amd64-t4-1gpu"
+          echo "hostname     : $(hostname)"
+          echo "arch         : $(uname -m)"
+          echo "kernel       : $(uname -r)"
+          if ! command -v nvidia-smi >/dev/null 2>&1; then
+            echo "nvidia-smi not found on PATH"
+            exit 1
+          fi
+          nvidia-smi --query-gpu=index,name,driver_version --format=csv
+          echo
+          nvidia-smi
