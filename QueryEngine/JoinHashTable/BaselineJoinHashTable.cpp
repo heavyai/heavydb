@@ -57,6 +57,8 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
       HashJoin::normalizeColumnPairs(condition.get(), executor->getTemporaryTables());
   const auto& inner_outer_cols = inner_outer_pairs.first;
   const auto& col_pairs_string_op_infos = inner_outer_pairs.second;
+  HashJoin::checkStringEncodingForHashJoin(
+      inner_outer_cols, executor->getTemporaryTables(), table_id_to_node_map);
   auto join_hash_table = std::shared_ptr<BaselineJoinHashTable>(
       new BaselineJoinHashTable(condition,
                                 join_type,
@@ -83,7 +85,8 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     throw HashJoinFail(std::string("Could not build hash tables for equijoin | ") +
                        e.what());
   } catch (const OutOfMemory& e) {
-    throw HashJoinFail(
+    join_hash_table->freeHashBufferMemory();
+    throw HashJoinOutOfMemory(
         std::string("Ran out of memory while building hash tables for equijoin | ") +
         e.what());
   } catch (const JoinHashTableTooBig& e) {
@@ -224,13 +227,15 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
 bool needs_dictionary_translation(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs,
-    const Executor* executor) {
+    const Executor* executor,
+    const TableIdToNodeMap& table_id_to_node_map) {
   const auto num_col_pairs = inner_outer_pairs.size();
   CHECK_EQ(num_col_pairs, inner_outer_string_op_infos_pairs.size());
   for (size_t col_pair_idx = 0; col_pair_idx < num_col_pairs; ++col_pair_idx) {
     if (needs_dictionary_translation(inner_outer_pairs[col_pair_idx],
                                      inner_outer_string_op_infos_pairs[col_pair_idx],
-                                     executor)) {
+                                     executor,
+                                     table_id_to_node_map)) {
       return true;
     }
   }
@@ -294,10 +299,7 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
     return;
   }
 
-  const auto total_entries = 2 * query_info.getNumTuplesUpperBound();
-  if (total_entries > HashJoin::MAX_NUM_HASH_ENTRIES) {
-    throw TooManyHashEntries();
-  }
+  const auto total_entries = get_hash_join_table_slot_count(query_info, memory_level_);
 
   std::unordered_map<int, std::vector<Fragmenter_Namespace::FragmentInfo>>
       fragments_per_device;
@@ -393,8 +395,11 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     std::unique_lock<std::mutex> str_proxy_translation_lock(str_proxy_translation_mutex_);
     if (str_proxy_translation_maps_.empty()) {
-      const auto composite_key_info = HashJoin::getCompositeKeyInfo(
-          inner_outer_pairs_, executor_, inner_outer_string_op_infos_pairs_);
+      const auto composite_key_info =
+          HashJoin::getCompositeKeyInfo(inner_outer_pairs_,
+                                        executor_,
+                                        inner_outer_string_op_infos_pairs_,
+                                        &table_id_to_node_map_);
       str_proxy_translation_maps_ = HashJoin::translateCompositeStrDictProxies(
           composite_key_info, inner_outer_string_op_infos_pairs_, executor_);
       CHECK_EQ(str_proxy_translation_maps_.size(), inner_outer_pairs_.size());
@@ -407,9 +412,11 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
                                                 inner_outer_string_op_infos_pairs_,
                                                 getInnerTableId(inner_outer_pairs_));
   bool has_invalid_cached_hash_table = false;
+  const auto allow_full_cpu_hashtable_recycling =
+      allow_hashtable_recycling && getInnerTableId(inner_outer_pairs_).table_id >= 0;
   if (effective_memory_level == Data_Namespace::CPU_LEVEL &&
       HashJoin::canAccessHashTable(
-          allow_hashtable_recycling, invalid_cache_key, join_type_)) {
+          allow_full_cpu_hashtable_recycling, invalid_cache_key, join_type_)) {
     // build a hash table on CPU, and we have a chance to recycle the cached one if
     // available
     for (auto device_id : device_ids_) {
@@ -447,15 +454,39 @@ void BaselineJoinHashTable::reifyWithLayout(const HashType layout) {
 
   // we have no cached hash table for this qual
   // so, start building the hash table by fetching columns for devices
-  for (auto device_id : device_ids_) {
+  const auto fetch_columns = [this, &fragments_per_device](const int device_id) {
     DeviceAllocator* device_allocator{nullptr};
     if (memory_level_ == Data_Namespace::MemoryLevel::GPU_LEVEL) {
       device_allocator = executor_->getCudaAllocator(device_id);
       CHECK(device_allocator);
     }
-    const auto columns_for_device = fetchColumnsForDevice(
-        fragments_per_device[device_id], device_id, device_allocator);
-    columns_per_device.emplace(device_id, columns_for_device);
+    return fetchColumnsForDevice(
+        fragments_per_device.at(device_id), device_id, device_allocator);
+  };
+  if (device_ids_.size() == 1) {
+    const auto device_id = *device_ids_.begin();
+    columns_per_device.emplace(device_id, fetch_columns(device_id));
+  } else {
+    std::vector<std::future<std::pair<int, ColumnsForDevice>>> column_fetch_threads;
+    column_fetch_threads.reserve(device_ids_.size());
+    const auto parent_thread_local_ids = logger::thread_local_ids();
+    for (auto device_id : device_ids_) {
+      column_fetch_threads.push_back(std::async(
+          std::launch::async, [device_id, &fetch_columns, parent_thread_local_ids] {
+            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+            DEBUG_TIMER_NEW_THREAD(parent_thread_local_ids.thread_id_);
+            return std::make_pair(device_id, fetch_columns(device_id));
+          }));
+    }
+    for (auto& column_fetch_thread : column_fetch_threads) {
+      column_fetch_thread.wait();
+    }
+    for (auto& column_fetch_thread : column_fetch_threads) {
+      auto [device_id, columns_for_device] = column_fetch_thread.get();
+      const auto inserted =
+          columns_per_device.emplace(device_id, std::move(columns_for_device)).second;
+      CHECK(inserted);
+    }
   }
 
   auto hashtable_layout_type = layout;
@@ -564,6 +595,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
                                 true,
                                 join_columns_gpu,
                                 join_column_types_gpu,
+                                nullptr,
                                 nullptr,
                                 nullptr);
           const auto key_handler_gpu = transfer_flat_object_to_gpu(
@@ -695,8 +727,10 @@ size_t BaselineJoinHashTable::getKeyComponentCount() const {
 
 Data_Namespace::MemoryLevel BaselineJoinHashTable::getEffectiveMemoryLevel(
     const std::vector<InnerOuter>& inner_outer_pairs) const {
-  if (needs_dictionary_translation(
-          inner_outer_pairs, inner_outer_string_op_infos_pairs_, executor_)) {
+  if (needs_dictionary_translation(inner_outer_pairs,
+                                   inner_outer_string_op_infos_pairs_,
+                                   executor_,
+                                   table_id_to_node_map_)) {
     needs_dict_translation_ = true;
     return Data_Namespace::CPU_LEVEL;
   }
@@ -728,21 +762,23 @@ void BaselineJoinHashTable::copyCpuHashTableToGpu(
 StrProxyTranslationMapsPtrsAndOffsets decomposeStrDictTranslationMaps(
     const std::vector<const StringDictionaryProxy::IdMap*>& str_proxy_translation_maps) {
   StrProxyTranslationMapsPtrsAndOffsets translation_map_ptrs_and_offsets;
-  // First element of pair is vector of int32_t* pointing to translation map "vector"
-  // Second element of pair is vector of int32_t of min inner dictionary ids (offsets)
   const size_t num_translation_maps = str_proxy_translation_maps.size();
-  translation_map_ptrs_and_offsets.first.reserve(num_translation_maps);
-  translation_map_ptrs_and_offsets.second.reserve(num_translation_maps);
+  translation_map_ptrs_and_offsets.maps.reserve(num_translation_maps);
+  translation_map_ptrs_and_offsets.min_inner_elems.reserve(num_translation_maps);
+  translation_map_ptrs_and_offsets.max_inner_elems.reserve(num_translation_maps);
   for (const auto& str_proxy_translation_map : str_proxy_translation_maps) {
     if (str_proxy_translation_map) {
-      translation_map_ptrs_and_offsets.first.emplace_back(
+      translation_map_ptrs_and_offsets.maps.emplace_back(
           str_proxy_translation_map->data());
-      translation_map_ptrs_and_offsets.second.emplace_back(
+      translation_map_ptrs_and_offsets.min_inner_elems.emplace_back(
           str_proxy_translation_map->domainStart());
+      translation_map_ptrs_and_offsets.max_inner_elems.emplace_back(
+          str_proxy_translation_map->domainEnd());
     } else {
       // dummy values
-      translation_map_ptrs_and_offsets.first.emplace_back(nullptr);
-      translation_map_ptrs_and_offsets.second.emplace_back(0);
+      translation_map_ptrs_and_offsets.maps.emplace_back(nullptr);
+      translation_map_ptrs_and_offsets.min_inner_elems.emplace_back(0);
+      translation_map_ptrs_and_offsets.max_inner_elems.emplace_back(0);
     }
   }
   return translation_map_ptrs_and_offsets;
@@ -769,8 +805,11 @@ int BaselineJoinHashTable::initHashTableForDevice(
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
     std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
 
-    const auto composite_key_info = HashJoin::getCompositeKeyInfo(
-        inner_outer_pairs_, executor_, inner_outer_string_op_infos_pairs_);
+    const auto composite_key_info =
+        HashJoin::getCompositeKeyInfo(inner_outer_pairs_,
+                                      executor_,
+                                      inner_outer_string_op_infos_pairs_,
+                                      &table_id_to_node_map_);
 
     CHECK(!join_columns.empty());
 
@@ -787,8 +826,9 @@ int BaselineJoinHashTable::initHashTableForDevice(
                           true,
                           &join_columns[0],
                           &join_column_types[0],
-                          &str_proxy_translation_map_ptrs_and_offsets.first[0],
-                          &str_proxy_translation_map_ptrs_and_offsets.second[0]);
+                          &str_proxy_translation_map_ptrs_and_offsets.maps[0],
+                          &str_proxy_translation_map_ptrs_and_offsets.min_inner_elems[0],
+                          &str_proxy_translation_map_ptrs_and_offsets.max_inner_elems[0]);
     err = builder.initHashTableOnCpu(&key_handler,
                                      composite_key_info,
                                      join_columns,
@@ -804,7 +844,9 @@ int BaselineJoinHashTable::initHashTableForDevice(
     auto hashtable_build_time =
         std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
     hash_table = getHashTableForDevice(device_id);
-    if (!err && allow_hashtable_recycling &&
+    const auto allow_full_cpu_hashtable_recycling =
+        allow_hashtable_recycling && getInnerTableId(inner_outer_pairs_).table_id >= 0;
+    if (!err && allow_full_cpu_hashtable_recycling &&
         hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU) > 0) {
       // add ht-related items to cache iff we have a valid hashtable
       putHashTableOnCpuToCache(hashtable_cache_key_[device_id],
@@ -849,6 +891,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
                                                true,
                                                join_columns_gpu,
                                                join_column_types_gpu,
+                                               nullptr,
                                                nullptr,
                                                nullptr);
 

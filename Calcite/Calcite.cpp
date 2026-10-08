@@ -27,6 +27,14 @@
 
 #ifdef _MSC_VER
 #include <process.h>
+#else
+#include <signal.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
 #endif
 
 #include "gen-cpp/CalciteServer.h"
@@ -59,17 +67,17 @@ int wrapped_execlp(char const* path,
 }
 }  // namespace
 
-static void start_calcite_server_as_daemon(const int db_port,
-                                           const int port,
-                                           const std::string& data_dir,
-                                           const size_t calcite_max_mem,
-                                           const std::string& ssl_trust_store,
-                                           const std::string& ssl_trust_password_X,
-                                           const std::string& ssl_keystore,
-                                           const std::string& ssl_keystore_password_X,
-                                           const std::string& ssl_key_file,
-                                           const std::string& db_config_file,
-                                           const std::string& udf_filename) {
+static int start_calcite_server_as_daemon(const int db_port,
+                                          const int port,
+                                          const std::string& data_dir,
+                                          const size_t calcite_max_mem,
+                                          const std::string& ssl_trust_store,
+                                          const std::string& ssl_trust_password_X,
+                                          const std::string& ssl_keystore,
+                                          const std::string& ssl_keystore_password_X,
+                                          const std::string& ssl_key_file,
+                                          const std::string& db_config_file,
+                                          const std::string& udf_filename) {
   auto root_abs_path = heavyai::get_root_abs_path();
   std::string const xDebug = "-Xdebug";
   std::string const remoteDebug =
@@ -165,9 +173,29 @@ static void start_calcite_server_as_daemon(const int db_port,
   if (ret == 0) {
     LOG(FATAL) << "Failed to start Calcite server " << GetLastError();
   }
+  CloseHandle(proc_info.hThread);
+  CloseHandle(proc_info.hProcess);
+  return -1;
 #else
+  const auto parent_pid = getpid();
   int pid = fork();
+  if (pid < 0) {
+    LOG(FATAL) << "Failed to fork Calcite server [errno=" << errno
+               << "]: " << strerror(errno);
+  }
   if (pid == 0) {
+#ifdef __linux__
+    struct sigaction default_signal_action {};
+    default_signal_action.sa_handler = SIG_DFL;
+    sigemptyset(&default_signal_action.sa_mask);
+    sigset_t empty_signal_mask;
+    sigemptyset(&empty_signal_mask);
+    if (sigaction(SIGTERM, &default_signal_action, nullptr) != 0 ||
+        sigprocmask(SIG_SETMASK, &empty_signal_mask, nullptr) != 0 ||
+        prctl(PR_SET_PDEATHSIG, SIGTERM) != 0 || getppid() != parent_pid) {
+      _exit(EXIT_FAILURE);
+    }
+#endif
     int i;
 
     if (udf_filename.empty()) {
@@ -236,6 +264,7 @@ static void start_calcite_server_as_daemon(const int db_port,
       LOG(INFO) << "Successfully started Calcite server";
     }
   }
+  return pid;
 #endif
 }
 
@@ -285,12 +314,24 @@ void Calcite::runServer(const int db_port,
       clientP.second->close();
       LOG(ERROR) << "orphaned Calcite server shutdown";
 
-    } catch (TException& tx) {
+    } catch (const std::exception& tx) {
       LOG(ERROR) << "Failed to shutdown orphaned Calcite server, reason: " << tx.what();
+    }
+
+    constexpr int orphan_shutdown_retries = 300;
+    for (int retry = 0; retry < orphan_shutdown_retries; ++retry) {
+      if (ping() < 0) {
+        break;
+      }
+      if (retry + 1 == orphan_shutdown_retries) {
+        LOG(FATAL) << "Orphaned Calcite server did not release port [" << port << "]";
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
   }
 
-  // start the calcite server as a seperate process
+  // Start Calcite only after any prior process has released the listening port.
+#ifdef _MSC_VER
   start_calcite_server_as_daemon(db_port,
                                  port,
                                  data_dir,
@@ -302,11 +343,30 @@ void Calcite::runServer(const int db_port,
                                  ssl_key_file_,
                                  db_config_file_,
                                  udf_filename);
+#else
+  calcite_server_pid_ = start_calcite_server_as_daemon(db_port,
+                                                       port,
+                                                       data_dir,
+                                                       calcite_max_mem,
+                                                       ssl_trust_store_,
+                                                       ssl_trust_password_,
+                                                       ssl_keystore_,
+                                                       ssl_keystore_password_,
+                                                       ssl_key_file_,
+                                                       db_config_file_,
+                                                       udf_filename);
+#endif
 
   // check for new server for 30 seconds max
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
   int retry_max = 300;
   for (int i = 2; i <= retry_max; i++) {
+#ifndef _MSC_VER
+    if (owned_calcite_server_exited()) {
+      LOG(FATAL) << "Calcite server process exited before becoming ready on port ["
+                 << port << "]";
+    }
+#endif
     int ping_time = ping(i, retry_max);
     if (ping_time > -1) {
       LOG(INFO) << "Calcite server start took " << i * 100 << " ms ";
@@ -319,9 +379,72 @@ void Calcite::runServer(const int db_port,
     }
   }
   server_available_ = false;
+#ifndef _MSC_VER
+  stop_owned_calcite_server();
+#endif
   LOG(FATAL) << "Could not connect to Calcite remote server running on port [" << port
              << "]";
 }
+
+#ifndef _MSC_VER
+bool Calcite::owned_calcite_server_exited() {
+  if (calcite_server_pid_ <= 0) {
+    return true;
+  }
+
+  int status = 0;
+  const auto wait_result = waitpid(calcite_server_pid_, &status, WNOHANG);
+  if (wait_result == 0) {
+    return false;
+  }
+  if (wait_result == calcite_server_pid_ || (wait_result < 0 && errno == ECHILD)) {
+    calcite_server_pid_ = -1;
+    return true;
+  }
+  if (wait_result < 0 && errno != EINTR) {
+    LOG(ERROR) << "Failed to inspect Calcite server process " << calcite_server_pid_
+               << " [errno=" << errno << "]: " << strerror(errno);
+  }
+  return false;
+}
+
+void Calcite::stop_owned_calcite_server() {
+  if (calcite_server_pid_ <= 0) {
+    return;
+  }
+
+  const auto wait_for_exit = [this](const std::chrono::seconds timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+      if (owned_calcite_server_exited()) {
+        return true;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    return owned_calcite_server_exited();
+  };
+
+  if (wait_for_exit(std::chrono::seconds(5))) {
+    return;
+  }
+
+  LOG(WARNING) << "Calcite server process " << calcite_server_pid_
+               << " did not exit after shutdown; sending SIGTERM";
+  kill(calcite_server_pid_, SIGTERM);
+  if (wait_for_exit(std::chrono::seconds(5))) {
+    return;
+  }
+
+  LOG(ERROR) << "Calcite server process " << calcite_server_pid_
+             << " did not exit after SIGTERM; sending SIGKILL";
+  kill(calcite_server_pid_, SIGKILL);
+  if (!wait_for_exit(std::chrono::seconds(5))) {
+    LOG(ERROR) << "Calcite server process " << calcite_server_pid_
+               << " could not be reaped after SIGKILL; abandoning the child during "
+                  "shutdown";
+  }
+}
+#endif
 
 // ping existing server
 // return -1 if no ping response
@@ -648,6 +771,9 @@ void Calcite::inner_close_calcite_server(bool log) {
     LOG_IF(INFO, log) << "shut down Calcite";
     server_available_ = false;
   }
+#ifndef _MSC_VER
+  stop_owned_calcite_server();
+#endif
 }
 
 Calcite::~Calcite() {
@@ -699,10 +825,16 @@ TQueryParsingOption Calcite::getCalciteQueryParsingOption(bool legacy_syntax,
 TOptimizationOption Calcite::getCalciteOptimizationOption(
     bool is_view_optimize,
     bool enable_watchdog,
-    const std::vector<TFilterPushDownInfo>& filter_push_down_info) {
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+    bool enable_experimental_query_rewrites,
+    bool trust_unenforced_table_constraints) {
   TOptimizationOption optimization_option;
   optimization_option.filter_push_down_info = filter_push_down_info;
   optimization_option.is_view_optimize = is_view_optimize;
   optimization_option.enable_watchdog = enable_watchdog;
+  optimization_option.enable_experimental_query_rewrites =
+      enable_experimental_query_rewrites;
+  optimization_option.trust_unenforced_table_constraints =
+      trust_unenforced_table_constraints;
   return optimization_option;
 }

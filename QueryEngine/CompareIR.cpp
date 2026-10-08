@@ -5,7 +5,10 @@
 
 #include "CodeGenerator.h"
 #include "Execute.h"
+#include "Visitors/CommonVisitors.h"
 
+#include <algorithm>
+#include <optional>
 #include <typeinfo>
 
 #include "../Parser/ParserNode.h"
@@ -111,6 +114,22 @@ std::string string_cmp_func(const SQLOps optype) {
   }
 }
 
+SQLTypes integer_type_for_bit_width(const size_t bit_width) {
+  switch (bit_width) {
+    case 8:
+      return kTINYINT;
+    case 16:
+      return kSMALLINT;
+    case 32:
+      return kINT;
+    case 64:
+      return kBIGINT;
+    default:
+      CHECK(false) << "Unexpected integer bit width: " << bit_width;
+  }
+  return kNULLT;
+}
+
 std::shared_ptr<Analyzer::BinOper> lower_bw_eq(const Analyzer::BinOper* bw_eq) {
   const auto eq_oper =
       std::make_shared<Analyzer::BinOper>(bw_eq->get_type_info(),
@@ -141,6 +160,58 @@ std::shared_ptr<Analyzer::BinOper> make_eq(const std::shared_ptr<Analyzer::Expr>
       Parser::OperExpr::normalize(optype, kONE, lhs, rhs));
   CHECK(eq_oper);
   return optype == kBW_EQ ? lower_bw_eq(eq_oper.get()) : eq_oper;
+}
+
+std::optional<int64_t> get_int_literal_value(const Analyzer::Expr* expr) {
+  const auto constant = dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(expr));
+  if (!constant || constant->get_is_null()) {
+    return std::nullopt;
+  }
+  const auto& ti = constant->get_type_info();
+  const auto& datum = constant->get_constval();
+  switch (ti.get_type()) {
+    case kTINYINT:
+      return datum.tinyintval;
+    case kSMALLINT:
+      return datum.smallintval;
+    case kINT:
+      return datum.intval;
+    case kBIGINT:
+      return datum.bigintval;
+    case kNUMERIC:
+    case kDECIMAL:
+      if (ti.get_scale() != 0) {
+        return std::nullopt;
+      }
+      return datum.bigintval;
+    default:
+      return std::nullopt;
+  }
+}
+
+std::optional<std::string> get_string_literal_value(const Analyzer::Expr* expr) {
+  const auto constant = dynamic_cast<const Analyzer::Constant*>(extract_cast_arg(expr));
+  if (!constant || constant->get_is_null()) {
+    return std::nullopt;
+  }
+  const auto& ti = constant->get_type_info();
+  if (!ti.is_string() || !constant->get_constval().stringval) {
+    return std::nullopt;
+  }
+  return *constant->get_constval().stringval;
+}
+
+std::string escape_like_prefix(std::string_view prefix) {
+  std::string pattern;
+  pattern.reserve(prefix.size() + 1);
+  for (const auto ch : prefix) {
+    if (ch == '\\' || ch == '%' || ch == '_') {
+      pattern.push_back('\\');
+    }
+    pattern.push_back(ch);
+  }
+  pattern.push_back('%');
+  return pattern;
 }
 
 // Convert a column tuple equality expression back to a conjunction of comparisons
@@ -214,7 +285,113 @@ void check_array_comp_cond(const Analyzer::BinOper* bin_oper) {
   }
 }
 
+void mark_comparison_columns_to_fetch(PlanState* plan_state,
+                                      const Analyzer::Expr* lhs,
+                                      const Analyzer::Expr* rhs) {
+  if (!plan_state || !plan_state->allow_lazy_fetch_) {
+    return;
+  }
+  AllColumnVarsVisitor column_visitor;
+  std::set<const Analyzer::ColumnVar*> columns = column_visitor.visit(lhs);
+  const auto rhs_columns = column_visitor.visit(rhs);
+  columns.insert(rhs_columns.begin(), rhs_columns.end());
+  for (const auto column : columns) {
+    if (plan_state->isLazyFetchColumn(column)) {
+      plan_state->addColumnToFetch(column->getColumnKey(), /*unmark_lazy_fetch=*/true);
+    }
+  }
+}
+
 }  // namespace
+
+std::optional<CodeGenerator::DictPrefixEqInfo> CodeGenerator::getDictPrefixEqInfo(
+    const Analyzer::BinOper* bin_oper) {
+  const auto optype = bin_oper->get_optype();
+  if (optype != kEQ || bin_oper->get_qualifier() != kONE) {
+    return std::nullopt;
+  }
+
+  auto get_prefix_info =
+      [&](const Analyzer::Expr* lhs,
+          const Analyzer::Expr* rhs) -> std::optional<DictPrefixEqInfo> {
+    const auto substring =
+        dynamic_cast<const Analyzer::StringOper*>(extract_cast_arg(lhs));
+    const auto literal = get_string_literal_value(rhs);
+    if (!substring || !literal || substring->get_kind() != SqlStringOpKind::SUBSTRING ||
+        substring->getArity() != 3) {
+      return std::nullopt;
+    }
+
+    const auto source_arg = substring->getOwnArg(0);
+    if (extract_cast_arg(source_arg.get()) != source_arg.get()) {
+      return std::nullopt;
+    }
+    const auto source_col = dynamic_cast<const Analyzer::ColumnVar*>(source_arg.get());
+    if (!source_col) {
+      return std::nullopt;
+    }
+    const auto& source_ti = source_col->get_type_info();
+    if (!source_ti.get_notnull() || !source_ti.is_dict_encoded_string()) {
+      return std::nullopt;
+    }
+
+    const auto start_pos = get_int_literal_value(substring->getArg(1));
+    const auto substring_len = get_int_literal_value(substring->getArg(2));
+    if (!start_pos || !substring_len || *start_pos != 1 || *substring_len <= 0 ||
+        static_cast<size_t>(*substring_len) != literal->size()) {
+      return std::nullopt;
+    }
+
+    const auto sdp = executor()->getStringDictionaryProxy(
+        source_ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true);
+    CHECK(sdp);
+
+    return DictPrefixEqInfo{
+        source_arg,
+        source_ti,
+        source_col->getColumnKey(),
+        source_col->get_rte_idx(),
+        sdp->getLike<int64_t>(escape_like_prefix(*literal), false, true, '\\')};
+  };
+
+  if (auto prefix_info =
+          get_prefix_info(bin_oper->get_left_operand(), bin_oper->get_right_operand())) {
+    return prefix_info;
+  }
+  return get_prefix_info(bin_oper->get_right_operand(), bin_oper->get_left_operand());
+}
+
+llvm::Value* CodeGenerator::codegenDictPrefixInSet(const DictPrefixEqInfo& prefix_info,
+                                                   std::vector<int64_t> matching_ids,
+                                                   const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  if (plan_state_ && plan_state_->allow_lazy_fetch_) {
+    plan_state_->addColumnToFetch(prefix_info.source_col_key,
+                                  /*unmark_lazy_fetch=*/true);
+  }
+
+  std::sort(matching_ids.begin(), matching_ids.end());
+  matching_ids.erase(std::unique(matching_ids.begin(), matching_ids.end()),
+                     matching_ids.end());
+  if (matching_ids.empty()) {
+    return llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_),
+                                  false);
+  }
+
+  const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
+      prefix_info.source_arg, matching_ids, prefix_info.source_ti.get_notnull());
+  auto result_lvs = codegen(in_values.get(), true, co);
+  CHECK_EQ(size_t(1), result_lvs.size());
+  return result_lvs.front();
+}
+
+llvm::Value* CodeGenerator::codegenDictPrefixCmp(const Analyzer::BinOper* bin_oper,
+                                                 const CompilationOptions& co) {
+  if (auto prefix_info = getDictPrefixEqInfo(bin_oper)) {
+    return codegenDictPrefixInSet(*prefix_info, std::move(prefix_info->matching_ids), co);
+  }
+  return nullptr;
+}
 
 llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
                                        const CompilationOptions& co) {
@@ -244,9 +421,24 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
   if (is_unnest(lhs) || is_unnest(rhs)) {
     throw std::runtime_error("Unnest not supported in comparisons");
   }
+  mark_comparison_columns_to_fetch(plan_state_, lhs, rhs);
   check_array_comp_cond(bin_oper);
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
+
+  if (lhs_ti.is_array() || rhs_ti.is_array()) {
+    if (qualifier == kONE) {
+      throw std::runtime_error("Full array comparisons are not supported yet.");
+    }
+    if (lhs_ti.is_array()) {
+      if (rhs_ti.is_array()) {
+        throw std::runtime_error(
+            "Array-to-array qualified comparisons are not supported.");
+      }
+      auto rhs_lvs = codegen(rhs, true, co);
+      return codegenQualifierCmp(COMMUTE_COMPARISON(optype), qualifier, rhs_lvs, lhs, co);
+    }
+  }
 
   if (lhs_ti.is_string() && rhs_ti.is_string() &&
       !(IS_EQUIVALENCE(optype) || optype == kNE)) {
@@ -265,6 +457,13 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
         codegenCmpDecimalConst(optype, qualifier, lhs, lhs_ti, rhs, co);
     if (cmp_decimal_const) {
       return cmp_decimal_const;
+    }
+  }
+  if (lhs_ti.is_string() && rhs_ti.is_string() && qualifier == kONE &&
+      IS_EQUIVALENCE(optype)) {
+    auto prefix_cmp = codegenDictPrefixCmp(bin_oper, co);
+    if (prefix_cmp) {
+      return prefix_cmp;
     }
   }
   auto lhs_lvs = codegen(lhs, true, co);
@@ -482,40 +681,68 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
   }
   auto rhs_lvs = codegen(rhs, true, co);
   CHECK_EQ(kONE, qualifier);
-  if (optype == kBBOX_INTERSECT) {
-    CHECK(lhs_ti.is_geometry());
-    CHECK(rhs_ti.is_array() ||
-          rhs_ti.is_geometry());  // allow geo col or bounds col to pass
-  } else {
-    CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
-          (lhs_ti.is_string() && rhs_ti.is_string()));
+  auto lhs_cmp_ti = lhs_ti;
+  auto rhs_cmp_ti = rhs_ti;
+  if (lhs_ti.is_integer() && rhs_ti.is_integer() &&
+      lhs_ti.get_type() != rhs_ti.get_type()) {
+    const auto common_bit_width = std::max(get_bit_width(lhs_ti), get_bit_width(rhs_ti));
+    lhs_cmp_ti =
+        SQLTypeInfo(integer_type_for_bit_width(common_bit_width), lhs_ti.get_notnull());
+    rhs_cmp_ti =
+        SQLTypeInfo(integer_type_for_bit_width(common_bit_width), rhs_ti.get_notnull());
+    lhs_lvs.front() = codegenCastBetweenIntTypes(lhs_lvs.front(), lhs_ti, lhs_cmp_ti);
+    rhs_lvs.front() = codegenCastBetweenIntTypes(rhs_lvs.front(), rhs_ti, rhs_cmp_ti);
   }
-  const auto null_check_suffix = get_null_check_suffix(lhs_ti, rhs_ti);
-  if (lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() ||
-      lhs_ti.is_boolean() || lhs_ti.is_string() || lhs_ti.is_timeinterval()) {
-    if (lhs_ti.is_string()) {
-      CHECK(rhs_ti.is_string());
+  if (optype == kBBOX_INTERSECT) {
+    CHECK(lhs_cmp_ti.is_geometry());
+    CHECK(rhs_cmp_ti.is_array() ||
+          rhs_cmp_ti.is_geometry());  // allow geo col or bounds col to pass
+  } else {
+    CHECK((lhs_cmp_ti.get_type() == rhs_cmp_ti.get_type()) ||
+          (lhs_cmp_ti.is_string() && rhs_cmp_ti.is_string()))
+        << "lhs type: " << lhs_cmp_ti.get_type_name()
+        << ", rhs type: " << rhs_cmp_ti.get_type_name()
+        << ", rhs expr: " << rhs->toString();
+  }
+  const auto null_check_suffix = get_null_check_suffix(lhs_cmp_ti, rhs_cmp_ti);
+  if (lhs_cmp_ti.is_integer() || lhs_cmp_ti.is_decimal() || lhs_cmp_ti.is_time() ||
+      lhs_cmp_ti.is_boolean() || lhs_cmp_ti.is_string() || lhs_cmp_ti.is_timeinterval()) {
+    if (lhs_cmp_ti.is_string()) {
+      CHECK(rhs_cmp_ti.is_string());
       // we sync two string col's encoding scheme
       // if one of them is dict-encoded before reaching here,
       // i.e., call `codegenCastNonStringToString` or `codegenCastFromString`
-      CHECK_EQ(lhs_ti.get_compression(), rhs_ti.get_compression());
       bool unpack_strings = true;
-      if (lhs_ti.get_compression() == kENCODING_NONE) {
+      const auto unpack_string = [this](const SQLTypeInfo& ti,
+                                        std::vector<llvm::Value*>& lvs,
+                                        llvm::StructType* string_view_struct_type) {
+        if (ti.get_compression() == kENCODING_NONE) {
+          unpack_none_encoded_string(cgen_state_, lvs);
+        } else if (ti.get_compression() == kENCODING_DICT) {
+          unpack_dict_encoded_string(
+              cgen_state_, executor_, ti, string_view_struct_type, lvs);
+        } else {
+          CHECK(false) << "Unsupported string compression: " << ti.get_compression();
+        }
+      };
+      if (lhs_cmp_ti.get_compression() != rhs_cmp_ti.get_compression()) {
+        auto sv_struct_type_lv = createStringViewStructType();
+        unpack_string(lhs_cmp_ti, lhs_lvs, sv_struct_type_lv);
+        unpack_string(rhs_cmp_ti, rhs_lvs, sv_struct_type_lv);
+      } else if (lhs_cmp_ti.get_compression() == kENCODING_NONE) {
         unpack_none_encoded_string(cgen_state_, lhs_lvs);
         unpack_none_encoded_string(cgen_state_, rhs_lvs);
-      } else if (lhs_ti.get_compression() == kENCODING_DICT) {
-        if (IS_EQUIVALENCE(optype) || optype == kNE) {
-          // we use `StringDictionaryTranslationMgr` to translate
-          // dict-encoded lhs against rhs's string dictionary
-          // and then compare their string ids without unpacking strings
-          // i.e., call `eq_int32_t_nullable` instead of `string_eq_nullable`
+      } else if (lhs_cmp_ti.get_compression() == kENCODING_DICT) {
+        if ((IS_EQUIVALENCE(optype) || optype == kNE) &&
+            lhs_cmp_ti.getStringDictKey() == rhs_cmp_ti.getStringDictKey()) {
+          // Same-dictionary equality can compare encoded ids directly.
           unpack_strings = false;
         } else {
           auto sv_struct_type_lv = createStringViewStructType();
           unpack_dict_encoded_string(
-              cgen_state_, executor_, lhs_ti, sv_struct_type_lv, lhs_lvs);
+              cgen_state_, executor_, lhs_cmp_ti, sv_struct_type_lv, lhs_lvs);
           unpack_dict_encoded_string(
-              cgen_state_, executor_, rhs_ti, sv_struct_type_lv, rhs_lvs);
+              cgen_state_, executor_, rhs_cmp_ti, sv_struct_type_lv, rhs_lvs);
         }
       }
       if (unpack_strings) {
@@ -532,7 +759,7 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
       }
     }
 
-    if (lhs_ti.is_boolean() && rhs_ti.is_boolean()) {
+    if (lhs_cmp_ti.is_boolean() && rhs_cmp_ti.is_boolean()) {
       auto& lhs_lv = lhs_lvs.front();
       auto& rhs_lv = rhs_lvs.front();
       CHECK(lhs_lv->getType()->isIntegerTy());
@@ -551,24 +778,24 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
                ? cgen_state_->ir_builder_.CreateICmp(
                      llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
                : cgen_state_->emitCall(
-                     icmp_name(optype) + "_" + numeric_type_name(lhs_ti) +
+                     icmp_name(optype) + "_" + numeric_type_name(lhs_cmp_ti) +
                          null_check_suffix,
                      {lhs_lvs.front(),
                       rhs_lvs.front(),
-                      cgen_state_->llInt(inline_int_null_val(lhs_ti)),
+                      cgen_state_->llInt(inline_int_null_val(lhs_cmp_ti)),
                       cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
   }
-  if (lhs_ti.get_type() == kFLOAT || lhs_ti.get_type() == kDOUBLE) {
+  if (lhs_cmp_ti.get_type() == kFLOAT || lhs_cmp_ti.get_type() == kDOUBLE) {
     return null_check_suffix.empty()
                ? cgen_state_->ir_builder_.CreateFCmp(
                      llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
                : cgen_state_->emitCall(
-                     icmp_name(optype) + "_" + numeric_type_name(lhs_ti) +
+                     icmp_name(optype) + "_" + numeric_type_name(lhs_cmp_ti) +
                          null_check_suffix,
                      {lhs_lvs.front(),
                       rhs_lvs.front(),
-                      lhs_ti.get_type() == kFLOAT ? cgen_state_->llFp(NULL_FLOAT)
-                                                  : cgen_state_->llFp(NULL_DOUBLE),
+                      lhs_cmp_ti.get_type() == kFLOAT ? cgen_state_->llFp(NULL_FLOAT)
+                                                      : cgen_state_->llFp(NULL_DOUBLE),
                       cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
   }
   CHECK(false);

@@ -15,6 +15,7 @@
 #include "ApproxQuantileDescriptor.h"
 #include "ColSlotContext.h"
 #include "Logger/Logger.h"
+#include "QueryEngine/ColumnBufferLayout.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/CountDistinct.h"
 #include "QueryEngine/enums.h"
@@ -26,8 +27,10 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -70,6 +73,7 @@ class QueryMemoryDescriptor {
                         const std::vector<int8_t>& group_col_widths,
                         const int8_t group_col_compact_width,
                         const std::vector<int64_t>& target_groupby_indices,
+                        const std::vector<int64_t>& group_col_translated_nulls,
                         const size_t entry_count,
                         const ApproxQuantileDescriptors&,
                         const size_t nmode_targets,
@@ -127,12 +131,15 @@ class QueryMemoryDescriptor {
       const shared::TableKey& outer_table_key,
       const int64_t num_rows,
       const std::vector<std::vector<const int8_t*>>& col_buffers,
+      const ColumnBufferLayouts& col_buffer_layouts,
+      const std::vector<std::vector<const int64_t*>>& selected_rowids,
       const std::vector<std::vector<uint64_t>>& frag_offsets,
       std::shared_ptr<RowSetMemoryOwner>,
       const bool output_columnar,
       const bool sort_on_gpu,
       const size_t thread_idx,
-      RenderInfo*) const;
+      RenderInfo*,
+      const bool defer_gpu_result_cpu_materialization = false) const;
 
   static bool many_entries(const int64_t max_val,
                            const int64_t min_val,
@@ -261,6 +268,39 @@ class QueryMemoryDescriptor {
   int64_t getBucket() const { return bucket_; }
 
   bool hasNulls() const { return has_nulls_; }
+
+  static constexpr int64_t noTranslatedGroupbyNull() {
+    return std::numeric_limits<int64_t>::min();
+  }
+
+  std::optional<int64_t> getTranslatedGroupbyNull(const size_t groupby_idx) const {
+    if (groupby_idx >= group_col_translated_nulls_.size()) {
+      return std::nullopt;
+    }
+    const auto translated_null = group_col_translated_nulls_[groupby_idx];
+    if (translated_null == noTranslatedGroupbyNull()) {
+      return std::nullopt;
+    }
+    return translated_null;
+  }
+
+  std::optional<int64_t> getTranslatedGroupbyNullForTarget(
+      const size_t target_idx) const {
+    if (targetGroupbyIndicesSize()) {
+      if (target_idx >= targetGroupbyIndicesSize()) {
+        return std::nullopt;
+      }
+      const auto groupby_idx = getTargetGroupbyIndex(target_idx);
+      if (groupby_idx < 0) {
+        return std::nullopt;
+      }
+      return getTranslatedGroupbyNull(static_cast<size_t>(groupby_idx));
+    }
+    if (!isSingleColumnGroupByWithPerfectHash()) {
+      return std::nullopt;
+    }
+    return getTranslatedGroupbyNull(0);
+  }
 
   const ApproxQuantileDescriptors& getApproxQuantileDescriptors() const {
     return approx_quantile_descriptors_;
@@ -399,6 +439,7 @@ class QueryMemoryDescriptor {
                                     // cols if able to be consistent
                                     // otherwise 0
   std::vector<int64_t> target_groupby_indices_;
+  std::vector<int64_t> group_col_translated_nulls_;
   size_t entry_count_;  // the number of entries in the main buffer
   int64_t min_val_;     // meaningful for OneColKnownRange,
                         // MultiColPerfectHash only

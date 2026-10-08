@@ -15,6 +15,8 @@
 
 #include <boost/locale/conversion.hpp>
 
+#include <sstream>
+
 extern "C" RUNTIME_EXPORT StringView string_decode(int8_t* chunk_iter_, int64_t pos) {
   auto chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   VarlenDatum vd;
@@ -27,11 +29,11 @@ extern "C" RUNTIME_EXPORT StringView string_decode(int8_t* chunk_iter_, int64_t 
 
 extern "C" RUNTIME_EXPORT StringView string_decompress(const int32_t string_id,
                                                        const int64_t string_dict_handle) {
-  if (string_id == NULL_INT) {
-    return {nullptr, 0};
-  }
   auto string_dict_proxy =
       reinterpret_cast<const StringDictionaryProxy*>(string_dict_handle);
+  if (!string_dict_proxy->canDecodeStringId(string_id)) {
+    return {nullptr, 0};
+  }
   auto string_bytes = string_dict_proxy->getStringBytes(string_id);
   CHECK(string_bytes.first);
   return {string_bytes.first, string_bytes.second};
@@ -706,9 +708,6 @@ llvm::Value* CodeGenerator::codegenDictLike(
   CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
   const auto sdp = executor()->getStringDictionaryProxy(
       dict_like_arg_ti.getStringDictKey(), executor()->getRowSetMemoryOwner(), true);
-  if (sdp->storageEntryCount() > 200000000) {
-    return nullptr;
-  }
   if (sdp->getDictKey().isTransientDict()) {
     // If we have a literal dictionary it was a product
     // of string ops applied to none-encoded strings, and
@@ -729,12 +728,24 @@ llvm::Value* CodeGenerator::codegenDictLike(
   CHECK_EQ(kENCODING_NONE, pattern_ti.get_compression());
   const auto& pattern_datum = pattern->get_constval();
   const auto& pattern_str = *pattern_datum.stringval;
-  auto work_timer = timer_start();
-  const auto matching_ids =
-      sdp->getLike<int64_t>(pattern_str, ilike, is_simple, escape_char);
-  auto const work_ms = timer_stop(work_timer);
-  VLOG(3) << "Processing like operator with the pattern " << pattern_str << " took "
-          << work_ms << " ms (# matching elems: " << matching_ids.size() << ")";
+  std::ostringstream cache_key;
+  cache_key << "dict_like{dict:" << sdp->getDictKey()
+            << ",generation:" << sdp->getGeneration() << ",ilike:" << ilike
+            << ",simple:" << is_simple
+            << ",escape:" << static_cast<int>(static_cast<unsigned char>(escape_char))
+            << ",pattern_size:" << pattern_str.size() << ",pattern:" << pattern_str
+            << "}";
+  auto row_set_mem_owner = executor()->getRowSetMemoryOwner();
+  auto matching_ids = row_set_mem_owner
+                          ? row_set_mem_owner->getCachedStringLikeIds(cache_key.str())
+                          : nullptr;
+  if (!matching_ids) {
+    matching_ids =
+        sdp->getLikeShared<int64_t>(pattern_str, ilike, is_simple, escape_char);
+    if (row_set_mem_owner) {
+      row_set_mem_owner->putCachedStringLikeIds(cache_key.str(), matching_ids);
+    }
+  }
   const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
       dict_like_arg, matching_ids, dict_like_arg_ti.get_notnull());
   return codegen(in_values.get(), co);

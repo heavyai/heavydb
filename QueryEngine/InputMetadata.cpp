@@ -5,12 +5,17 @@
 
 #include "InputMetadata.h"
 #include "Execute.h"
+#ifdef HAVE_CUDA
+#include "GpuInitGroups.h"
+#endif
 
 #include "../Fragmenter/Fragmenter.h"
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
 #include <future>
+#include <numeric>
+#include <optional>
 
 extern bool g_enable_data_recycler;
 extern bool g_use_chunk_metadata_cache;
@@ -79,29 +84,219 @@ bool uses_int_meta(const SQLTypeInfo& col_ti) {
          (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT);
 }
 
+#ifdef HAVE_CUDA
+std::optional<ChunkMetadataMap> synthesize_device_columnar_metadata(
+    const ResultSet* rows) {
+  if (!rows || rows->colCount() == 0 || rows->areAnyColumnsLazyFetched() ||
+      rows->isTruncated()) {
+    return std::nullopt;
+  }
+
+  struct ColumnDeviceFragments {
+    SQLTypeInfo col_ti;
+    SQLTypeInfo logical_ti;
+    size_t elem_size{0};
+    std::vector<ResultSet::DeviceColumnarBufferFragment> fragments;
+  };
+
+  std::vector<ColumnDeviceFragments> columns;
+  columns.reserve(rows->colCount());
+  for (size_t col_idx = 0; col_idx < rows->colCount(); ++col_idx) {
+    const auto col_ti = rows->getColType(col_idx);
+    const auto logical_ti = get_logical_type_info(col_ti);
+    if (!uses_int_meta(col_ti) && !logical_ti.is_fp()) {
+      return std::nullopt;
+    }
+    const auto elem_size = logical_ti.get_size();
+    if (elem_size <= 0 || logical_ti.is_varlen()) {
+      return std::nullopt;
+    }
+    std::vector<ResultSet::DeviceColumnarBufferFragment> fragments;
+    if (!rows->getDeviceColumnarBufferFragments(
+            col_idx, static_cast<size_t>(elem_size), fragments) ||
+        fragments.empty()) {
+      return std::nullopt;
+    }
+    columns.push_back(ColumnDeviceFragments{
+        col_ti, logical_ti, static_cast<size_t>(elem_size), std::move(fragments)});
+  }
+
+  const auto row_count = rows->entryCount();
+  ChunkMetadataMap metadata_map;
+  for (size_t col_idx = 0; col_idx < columns.size(); ++col_idx) {
+    const auto& column = columns[col_idx];
+    auto encoder = Encoder::Create(nullptr, column.col_ti);
+    CHECK(encoder);
+    bool saw_nulls = false;
+    bool saw_values = false;
+    if (uses_int_meta(column.col_ti)) {
+      const auto null_val = inline_int_null_val(column.col_ti);
+      for (const auto& fragment : column.fragments) {
+        if (!fragment.entry_count) {
+          continue;
+        }
+        fragment.owner->waitForReadyEvent(fragment.ready_event);
+        DeviceColumnFragmentStats stats;
+        if (!compute_columnar_fragment_int_stats_on_device(
+                fragment.buffer,
+                fragment.entry_count,
+                column.elem_size,
+                null_val,
+                fragment.device_id,
+                stats,
+                fragment.owner->getCudaStream())) {
+          return std::nullopt;
+        }
+        if (stats.has_nulls) {
+          saw_nulls = true;
+        }
+        if (stats.has_values) {
+          encoder->updateStats(stats.int_min, false);
+          encoder->updateStats(stats.int_max, false);
+          saw_values = true;
+        }
+      }
+      if (saw_nulls) {
+        encoder->updateStats(null_val, true);
+      }
+    } else {
+      CHECK(column.logical_ti.is_fp());
+      const auto null_val = inline_fp_null_val(column.col_ti);
+      for (const auto& fragment : column.fragments) {
+        if (!fragment.entry_count) {
+          continue;
+        }
+        fragment.owner->waitForReadyEvent(fragment.ready_event);
+        DeviceColumnFragmentStats stats;
+        if (!compute_columnar_fragment_fp_stats_on_device(
+                fragment.buffer,
+                fragment.entry_count,
+                column.elem_size,
+                null_val,
+                fragment.device_id,
+                stats,
+                fragment.owner->getCudaStream())) {
+          return std::nullopt;
+        }
+        if (stats.has_nulls) {
+          saw_nulls = true;
+        }
+        if (stats.has_values) {
+          encoder->updateStats(stats.fp_min, false);
+          encoder->updateStats(stats.fp_max, false);
+          saw_values = true;
+        }
+      }
+      if (saw_nulls) {
+        encoder->updateStats(null_val, true);
+      }
+    }
+
+    auto chunk_metadata = std::make_shared<ChunkMetadata>();
+    chunk_metadata->sqlType = column.col_ti;
+    chunk_metadata->numElements = row_count;
+    chunk_metadata->numBytes = row_count * column.elem_size;
+    chunk_metadata->chunkStats = encoder->synthesizeChunkStats(column.col_ti);
+    if (!saw_values) {
+      chunk_metadata->chunkStats.has_nulls = saw_nulls;
+    }
+    const auto it_ok = metadata_map.emplace(col_idx, chunk_metadata);
+    CHECK(it_ok.second);
+  }
+
+  return metadata_map;
+}
+
+#endif
+
 Fragmenter_Namespace::TableInfo synthesize_table_info(int table_id,
                                                       const ResultSetPtr& rows,
                                                       Executor* executor) {
   std::vector<Fragmenter_Namespace::FragmentInfo> result;
+  std::optional<size_t> known_physical_row_count;
   if (rows) {
-    result.resize(1);
-    auto& fragment = result.front();
-    fragment.fragmentId = 0;
-    fragment.deviceIds.resize(3);
-    fragment.resultSet = rows.get();
-    fragment.resultSetMutex.reset(new std::mutex());
+    std::vector<ResultSet::DeviceColumnarFragmentInfo> device_columnar_fragments;
+    const bool use_device_columnar_result_fragments =
+        rows->getDeviceColumnarFragmentInfo(device_columnar_fragments);
+    std::vector<size_t> columnar_fragment_row_counts;
+    bool use_columnar_result_fragments = false;
+    if (!use_device_columnar_result_fragments) {
+      use_columnar_result_fragments =
+          rows->getColumnarFragmentRowCounts(columnar_fragment_row_counts) &&
+          columnar_fragment_row_counts.size() > 1;
+    }
+    const size_t fragment_count =
+        use_device_columnar_result_fragments
+            ? device_columnar_fragments.size()
+            : (use_columnar_result_fragments ? columnar_fragment_row_counts.size()
+                                             : size_t(1));
+    if (use_device_columnar_result_fragments) {
+      known_physical_row_count =
+          std::accumulate(device_columnar_fragments.begin(),
+                          device_columnar_fragments.end(),
+                          size_t(0),
+                          [](const size_t running_count,
+                             const ResultSet::DeviceColumnarFragmentInfo& fragment) {
+                            return running_count + fragment.entry_count;
+                          });
+    } else if (use_columnar_result_fragments) {
+      known_physical_row_count = std::accumulate(columnar_fragment_row_counts.begin(),
+                                                 columnar_fragment_row_counts.end(),
+                                                 size_t(0));
+    }
+    result.resize(fragment_count);
+    auto result_set_mutex = std::make_shared<std::mutex>();
+    std::vector<int> selected_gpu_device_ids;
     if (executor->isDevicesToUseInitialized()) {
       auto const& device_ids = executor->getAvailableDevicesToProcessQuery();
-      // currently, we assume a temporary table is processed by a single GPU
-      CHECK_EQ(device_ids.size(), 1u);
+      CHECK(!device_ids.empty());
+      selected_gpu_device_ids.assign(device_ids.begin(), device_ids.end());
+    }
+    for (size_t fragment_idx = 0; fragment_idx < fragment_count; ++fragment_idx) {
+      auto& fragment = result[fragment_idx];
+      fragment.fragmentId = static_cast<int>(fragment_idx);
+      fragment.deviceIds.resize(3);
+      fragment.resultSet = rows.get();
+      fragment.resultSetMutex = result_set_mutex;
+      if (use_device_columnar_result_fragments) {
+        fragment.setPhysicalNumTuples(
+            device_columnar_fragments[fragment_idx].entry_count);
+      } else if (use_columnar_result_fragments) {
+        fragment.setPhysicalNumTuples(columnar_fragment_row_counts[fragment_idx]);
+      } else {
+        fragment.setPhysicalNumTuples(rows->rowCount());
+      }
+      if (use_device_columnar_result_fragments) {
+        constexpr int gpu_mem_level = static_cast<int>(Data_Namespace::GPU_LEVEL);
+        fragment.deviceIds[gpu_mem_level] =
+            selected_gpu_device_ids.empty()
+                ? device_columnar_fragments[fragment_idx].device_id
+                : selected_gpu_device_ids[fragment_idx % selected_gpu_device_ids.size()];
+      } else if (!selected_gpu_device_ids.empty()) {
+        constexpr int gpu_mem_level = static_cast<int>(Data_Namespace::GPU_LEVEL);
+        fragment.deviceIds[gpu_mem_level] =
+            selected_gpu_device_ids[fragment_idx % selected_gpu_device_ids.size()];
+      }
+    }
+    if ((use_device_columnar_result_fragments || !use_columnar_result_fragments) &&
+        !result.empty() && !selected_gpu_device_ids.empty()) {
       constexpr int gpu_mem_level = static_cast<int>(Data_Namespace::GPU_LEVEL);
-      fragment.deviceIds[gpu_mem_level] = *device_ids.begin();
       VLOG(1) << "Synthesize query resultset fragment's device id to "
-              << fragment.deviceIds[gpu_mem_level] << " (table_id: " << table_id << ")";
+              << result.front().deviceIds[gpu_mem_level] << " (table_id: " << table_id
+              << ")";
     }
   }
   Fragmenter_Namespace::TableInfo table_info;
   table_info.fragments = result;
+  if (rows) {
+    size_t row_count;
+    if (known_physical_row_count) {
+      row_count = *known_physical_row_count;
+    } else {
+      row_count = rows->rowCount();
+    }
+    table_info.setPhysicalNumTuples(row_count);
+  }
   return table_info;
 }
 
@@ -125,8 +320,10 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       CHECK_LT(table_id, 0);
       CHECK(temporary_tables);
       const auto it = temporary_tables->find(table_id);
-      LOG_IF(FATAL, it == temporary_tables->end())
-          << "Failed to find previous query result for node " << -table_id;
+      if (it == temporary_tables->end()) {
+        throw std::runtime_error("Failed to find previous query result for node " +
+                                 std::to_string(-table_id));
+      }
       table_infos.push_back(
           {{0, table_id}, synthesize_table_info(table_id, it->second, executor)});
     } else {
@@ -365,6 +562,218 @@ union Number64 {
   double as_double;
   int64_t as_int64;
 };
+
+std::shared_ptr<ChunkMetadata> synthesize_lazy_fetch_source_column_metadata(
+    const ResultSet* rows,
+    const size_t column_idx) {
+  const auto& column_type = rows->getColType(column_idx);
+  if (!uses_int_meta(column_type) && !column_type.is_fp()) {
+    return nullptr;
+  }
+
+  const auto source_metadata = rows->getLazyFetchSourceMetadata(column_idx);
+  if (source_metadata.empty()) {
+    return nullptr;
+  }
+
+  auto encoder = std::unique_ptr<Encoder>(Encoder::Create(nullptr, column_type));
+  CHECK(encoder);
+  bool saw_elements{false};
+  bool saw_values{false};
+  bool saw_nulls{false};
+  for (const auto& source : source_metadata) {
+    const auto& metadata = source.chunk_metadata;
+    if (!metadata || metadata->isPlaceholder()) {
+      return nullptr;
+    }
+    auto source_type = source.source_type;
+    auto result_type = column_type;
+    source_type.set_notnull(false);
+    result_type.set_notnull(false);
+    if (source_type != result_type) {
+      return nullptr;
+    }
+    if (!metadata->numElements) {
+      continue;
+    }
+    saw_elements = true;
+    saw_nulls |= metadata->chunkStats.has_nulls;
+    if (uses_int_meta(column_type)) {
+      const auto min =
+          extract_int_type_from_datum(metadata->chunkStats.min, metadata->sqlType);
+      const auto max =
+          extract_int_type_from_datum(metadata->chunkStats.max, metadata->sqlType);
+      if (min <= max) {
+        encoder->updateStats(min, false);
+        encoder->updateStats(max, false);
+        saw_values = true;
+      } else if (!metadata->chunkStats.has_nulls) {
+        return nullptr;
+      }
+    } else {
+      const auto min =
+          extract_fp_type_from_datum(metadata->chunkStats.min, metadata->sqlType);
+      const auto max =
+          extract_fp_type_from_datum(metadata->chunkStats.max, metadata->sqlType);
+      if (min <= max) {
+        encoder->updateStats(min, false);
+        encoder->updateStats(max, false);
+        saw_values = true;
+      } else if (!metadata->chunkStats.has_nulls) {
+        return nullptr;
+      }
+    }
+  }
+  if (!saw_elements || (!saw_values && !saw_nulls)) {
+    return nullptr;
+  }
+  if (saw_nulls) {
+    if (uses_int_meta(column_type)) {
+      encoder->updateStats(inline_int_null_val(column_type), true);
+    } else {
+      encoder->updateStats(inline_fp_null_val(column_type), true);
+    }
+  }
+  return std::make_shared<ChunkMetadata>(encoder->getMetadata(column_type));
+}
+
+std::optional<ChunkMetadataMap> synthesize_lazy_fetch_source_metadata(
+    const ResultSet* rows) {
+  if (!rows->hasLazyFetchSourceMetadata() ||
+      rows->getQueryMemDesc().getQueryDescriptionType() ==
+          QueryDescriptionType::TableFunction) {
+    return std::nullopt;
+  }
+
+  std::vector<std::shared_ptr<ChunkMetadata>> source_metadata(rows->colCount());
+  std::vector<bool> targets_to_skip(rows->colCount(), false);
+  bool has_deferred_metadata{false};
+  for (size_t column_idx = 0; column_idx < rows->colCount(); ++column_idx) {
+    auto metadata = synthesize_lazy_fetch_source_column_metadata(rows, column_idx);
+    if (metadata) {
+      source_metadata[column_idx] = std::move(metadata);
+      targets_to_skip[column_idx] = true;
+      has_deferred_metadata = true;
+    }
+  }
+  if (!has_deferred_metadata) {
+    return std::nullopt;
+  }
+  const size_t worker_count =
+      result_set::use_parallel_algorithms(*rows) ? cpu_threads() : 1;
+  std::vector<std::vector<std::unique_ptr<Encoder>>> dummy_encoders;
+  dummy_encoders.reserve(worker_count);
+  for (size_t worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
+    dummy_encoders.emplace_back();
+    dummy_encoders.back().reserve(rows->colCount());
+    for (size_t column_idx = 0; column_idx < rows->colCount(); ++column_idx) {
+      dummy_encoders.back().emplace_back(
+          targets_to_skip[column_idx]
+              ? nullptr
+              : Encoder::Create(nullptr, rows->getColType(column_idx)));
+    }
+  }
+
+  std::vector<SQLTypeInfo> row_column_types;
+  row_column_types.reserve(rows->colCount());
+  std::vector<Number64> column_null_values(rows->colCount());
+  for (size_t column_idx = 0; column_idx < rows->colCount(); ++column_idx) {
+    const auto column_type = rows->getColType(column_idx);
+    row_column_types.push_back(column_type);
+    if (uses_int_meta(column_type)) {
+      column_null_values[column_idx].as_int64 = inline_int_null_val(column_type);
+    } else if (column_type.is_fp()) {
+      column_null_values[column_idx].as_double = inline_fp_null_val(column_type);
+    } else {
+      throw std::runtime_error(column_type.get_type_name() +
+                               " is not supported in temporary table.");
+    }
+  }
+
+  const auto process_row = [&row_column_types, &column_null_values, &targets_to_skip](
+                               const std::vector<TargetValue>& row,
+                               std::vector<std::unique_ptr<Encoder>>& encoders) {
+    for (size_t column_idx = 0; column_idx < row_column_types.size(); ++column_idx) {
+      if (targets_to_skip[column_idx]) {
+        continue;
+      }
+      const auto& column_type = row_column_types[column_idx];
+      const auto scalar_value = boost::get<ScalarTargetValue>(&row[column_idx]);
+      CHECK(scalar_value);
+      CHECK(encoders[column_idx]);
+      if (uses_int_meta(column_type)) {
+        const auto value = boost::get<int64_t>(scalar_value);
+        CHECK(value);
+        encoders[column_idx]->updateStats(
+            *value, *value == column_null_values[column_idx].as_int64);
+      } else {
+        CHECK(column_type.is_fp());
+        switch (column_type.get_type()) {
+          case kFLOAT: {
+            const auto value = boost::get<float>(scalar_value);
+            CHECK(value);
+            encoders[column_idx]->updateStats(
+                *value, *value == column_null_values[column_idx].as_double);
+            break;
+          }
+          case kDOUBLE: {
+            const auto value = boost::get<double>(scalar_value);
+            CHECK(value);
+            encoders[column_idx]->updateStats(
+                *value, *value == column_null_values[column_idx].as_double);
+            break;
+          }
+          default:
+            CHECK(false);
+        }
+      }
+    }
+  };
+
+  const size_t entry_count = rows->entryCount();
+  if (result_set::use_parallel_algorithms(*rows)) {
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, entry_count),
+        [&process_row, &rows, &dummy_encoders, &targets_to_skip](
+            const tbb::blocked_range<size_t>& range) {
+          const size_t worker_idx = tbb::this_task_arena::current_thread_index();
+          for (size_t entry_idx = range.begin(); entry_idx < range.end(); ++entry_idx) {
+            const auto row = rows->getRowAtNoTranslations(entry_idx, targets_to_skip);
+            if (!row.empty()) {
+              process_row(row, dummy_encoders[worker_idx]);
+            }
+          }
+        });
+  } else {
+    for (size_t entry_idx = 0; entry_idx < entry_count; ++entry_idx) {
+      const auto row = rows->getRowAtNoTranslations(entry_idx, targets_to_skip);
+      if (!row.empty()) {
+        process_row(row, dummy_encoders.front());
+      }
+    }
+  }
+
+  for (size_t worker_idx = 1; worker_idx < worker_count; ++worker_idx) {
+    for (size_t column_idx = 0; column_idx < rows->colCount(); ++column_idx) {
+      if (!targets_to_skip[column_idx]) {
+        dummy_encoders.front()[column_idx]->reduceStats(
+            *dummy_encoders[worker_idx][column_idx]);
+      }
+    }
+  }
+
+  ChunkMetadataMap metadata_map;
+  for (size_t column_idx = 0; column_idx < rows->colCount(); ++column_idx) {
+    auto metadata = targets_to_skip[column_idx]
+                        ? std::move(source_metadata[column_idx])
+                        : std::make_shared<ChunkMetadata>(
+                              dummy_encoders.front()[column_idx]->getMetadata(
+                                  rows->getColType(column_idx)));
+    const auto it_ok = metadata_map.emplace(column_idx, std::move(metadata));
+    CHECK(it_ok.second);
+  }
+  return metadata_map;
+}
 }  // namespace
 
 ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
@@ -384,6 +793,16 @@ ChunkMetadataMap synthesize_metadata(const ResultSet* rows) {
       CHECK(it_ok.second);
     }
     return metadata_map;
+  }
+
+#ifdef HAVE_CUDA
+  if (auto device_metadata = synthesize_device_columnar_metadata(rows)) {
+    return *device_metadata;
+  }
+#endif
+
+  if (auto source_metadata = synthesize_lazy_fetch_source_metadata(rows)) {
+    return *source_metadata;
   }
 
   // Create a vector of Encoder vectors for each worker.
@@ -588,20 +1007,34 @@ size_t Fragmenter_Namespace::FragmentInfo::getNumTuples() const {
 
 size_t Fragmenter_Namespace::TableInfo::getNumTuples() const {
   if (!fragments.empty() && fragments.front().resultSet) {
-    return fragments.front().getNumTuples();
+    return std::accumulate(
+        fragments.begin(), fragments.end(), size_t(0), [](const auto sum, const auto& f) {
+          return sum + f.getNumTuples();
+        });
   }
   return numTuples;
 }
 
 size_t Fragmenter_Namespace::TableInfo::getNumTuplesUpperBound() const {
   if (!fragments.empty() && fragments.front().resultSet) {
-    return fragments.front().resultSet->entryCount();
+    if (fragments.size() == 1) {
+      return fragments.front().resultSet->entryCount();
+    }
+    return getNumTuples();
   }
   return numTuples;
 }
 
 size_t Fragmenter_Namespace::TableInfo::getFragmentNumTuplesUpperBound() const {
   if (!fragments.empty() && fragments.front().resultSet) {
+    if (fragments.size() > 1) {
+      return std::accumulate(fragments.begin(),
+                             fragments.end(),
+                             size_t(0),
+                             [](const auto max_rows, const auto& fragment) {
+                               return std::max(max_rows, fragment.getNumTuples());
+                             });
+    }
     return fragments.front().resultSet->entryCount();
   }
   size_t fragment_num_tupples_upper_bound = 0;

@@ -169,27 +169,43 @@ void HashtableRecycler::removeItemFromCache(
     return;
   }
   auto& cache_metrics = getMetricTracker(item_type);
-  // remove cached item from the cache
-  auto cache_metric = cache_metrics.getCacheItemMetric(key, device_identifier);
-  CHECK(cache_metric);
-  auto hashtable_size = cache_metric->getMemSize();
   auto hashtable_container = getCachedItemContainer(item_type, device_identifier);
   auto filter = [key](auto const& item) { return item.key == key; };
   auto itr =
       std::find_if(hashtable_container->cbegin(), hashtable_container->cend(), filter);
+  auto cache_metric = cache_metrics.getCacheItemMetric(key, device_identifier);
   if (itr == hashtable_container->cend()) {
+    if (cache_metric) {
+      auto hashtable_size = cache_metric->getMemSize();
+      cache_metrics.removeCacheItemMetric(key, device_identifier);
+      if (auto current_cache_size =
+              cache_metrics.getCurrentCacheSize(device_identifier)) {
+        auto size_to_remove = std::min(hashtable_size, *current_cache_size);
+        if (size_to_remove > 0) {
+          cache_metrics.updateCurrentCacheSize(
+              device_identifier, CacheUpdateAction::REMOVE, size_to_remove);
+        }
+      }
+    }
     return;
-  } else {
-    VLOG(1) << "[" << item_type << ", "
-            << DataRecyclerUtil::getDeviceIdentifierString(device_identifier)
-            << "] remove cached item from cache (key: " << key << ")";
-    hashtable_container->erase(itr);
+  }
+
+  hashtable_container->erase(itr);
+
+  if (!cache_metric) {
+    return;
   }
   // remove cache metric
+  auto hashtable_size = cache_metric->getMemSize();
   cache_metrics.removeCacheItemMetric(key, device_identifier);
   // update current cache size
-  cache_metrics.updateCurrentCacheSize(
-      device_identifier, CacheUpdateAction::REMOVE, hashtable_size);
+  if (auto current_cache_size = cache_metrics.getCurrentCacheSize(device_identifier)) {
+    auto size_to_remove = std::min(hashtable_size, *current_cache_size);
+    if (size_to_remove > 0) {
+      cache_metrics.updateCurrentCacheSize(
+          device_identifier, CacheUpdateAction::REMOVE, size_to_remove);
+    }
+  }
   return;
 }
 
@@ -201,7 +217,7 @@ void HashtableRecycler::cleanupCacheForInsertion(
     std::optional<HashtableCacheMetaInfo> meta_info) {
   // sort the vector based on the importance of the cached items (by # referenced, size
   // and compute time) and then remove unimportant cached items
-  int elimination_target_offset = 0;
+  size_t elimination_target_offset = 0;
   size_t removed_size = 0;
   auto& metric_tracker = getMetricTracker(item_type);
   auto actual_space_to_free = metric_tracker.getTotalCacheSize() / 2;
@@ -220,7 +236,7 @@ void HashtableRecycler::cleanupCacheForInsertion(
     auto target_size = metric->getMemSize();
     ++elimination_target_offset;
     removed_size += target_size;
-    if (removed_size > required_size) {
+    if (removed_size >= required_size) {
       break;
     }
   }
@@ -337,35 +353,25 @@ size_t HashtableRecycler::getJoinColumnInfoHash(
 bool HashtableRecycler::isSafeToCacheHashtable(
     const TableIdToNodeMap& table_id_to_node_map,
     bool need_dict_translation,
-    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_info_pairs,
+    const std::vector<InnerOuterStringOpInfos>&,
     const shared::TableKey& table_key) {
-  // if hashtable is built from subquery's resultset we need to check
-  // 1) whether resulset rows can have inconsistency, e.g., rows can randomly be
-  // permutated per execution and 2) whether it needs dictionary translation for hashtable
-  // building to recycle the hashtable safely
   auto getNodeByTableId =
       [&table_id_to_node_map](
           const shared::TableKey& table_key_param) -> const RelAlgNode* {
     auto it = table_id_to_node_map.find(table_key_param);
-    if (it != table_id_to_node_map.end()) {
-      return it->second;
-    }
-    return nullptr;
+    return it == table_id_to_node_map.end() ? nullptr : it->second;
   };
   bool found_sort_node = false;
   if (table_key.table_id < 0) {
     const auto origin_table_id = table_key.table_id * -1;
-    const auto inner_node = getNodeByTableId({table_key.db_id, origin_table_id});
+    auto inner_node = getNodeByTableId({table_key.db_id, origin_table_id});
+    if (!inner_node && table_key.db_id != 0) {
+      inner_node = getNodeByTableId({0, origin_table_id});
+    }
     if (!inner_node) {
-      // we have to keep the node info of temporary resultset
-      // so in this case we are not safe to recycle the hashtable
       return false;
     }
-    // it is not safe to recycle the hashtable when
-    // this resultset may have resultset ordering inconsistency and/or
-    // need dictionary translation for hashtable building
-    auto sort_node = dynamic_cast<const RelSort*>(inner_node);
-    if (sort_node) {
+    if (dynamic_cast<const RelSort*>(inner_node)) {
       found_sort_node = true;
     }
   }

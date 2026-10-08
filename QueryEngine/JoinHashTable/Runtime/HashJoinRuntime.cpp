@@ -37,6 +37,7 @@
 #include "Shared/funcannotations.h"
 
 #include <cmath>
+#include <limits>
 #include <numeric>
 
 #ifndef __CUDACC__
@@ -44,9 +45,13 @@ namespace {
 
 inline int64_t map_str_id_to_outer_dict(const int64_t inner_elem,
                                         const int64_t min_inner_elem,
+                                        const int64_t max_inner_elem,
                                         const int64_t min_outer_elem,
                                         const int64_t max_outer_elem,
                                         const int32_t* inner_to_outer_translation_map) {
+  if (inner_elem < min_inner_elem || inner_elem >= max_inner_elem) {
+    return StringDictionary::INVALID_STR_ID;
+  }
   const auto outer_id = inner_to_outer_translation_map[inner_elem - min_inner_elem];
   if (outer_id > max_outer_elem || outer_id < min_outer_elem) {
     return StringDictionary::INVALID_STR_ID;
@@ -74,6 +79,19 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
   }
 }
 
+DEVICE ALWAYS_INLINE bool SUFFIX(is_translated_null_key_for_bitwise_eq)(
+    const int64_t elem,
+    const JoinColumnTypeInfo& type_info) {
+  return type_info.uses_bw_eq && elem == type_info.translated_null_val;
+}
+
+DEVICE ALWAYS_INLINE bool SUFFIX(is_valid_perfect_hash_join_key)(
+    const int64_t elem,
+    const JoinColumnTypeInfo& type_info) {
+  return SUFFIX(is_translated_null_key_for_bitwise_eq)(elem, type_info) ||
+         (elem >= type_info.min_val && elem <= type_info.max_val);
+}
+
 #ifndef __CUDACC__
 #ifdef HAVE_TBB
 
@@ -96,13 +114,22 @@ void SUFFIX(init_hash_join_buff_tbb)(int32_t* groups_buffer,
 
 #ifdef __CUDACC__
 #define mapd_cas(address, compare, val) atomicCAS(address, compare, val)
+#define mapd_or(address, val) atomicOr(address, val)
+#define mapd_add_u32(address, val) atomicAdd(address, val)
 #elif defined(_MSC_VER)
 #define mapd_cas(address, compare, val)                                 \
   InterlockedCompareExchange(reinterpret_cast<volatile long*>(address), \
                              static_cast<long>(val),                    \
                              static_cast<long>(compare))
+#define mapd_or(address, val) \
+  InterlockedOr(reinterpret_cast<volatile long*>(address), static_cast<long>(val))
+#define mapd_add_u32(address, val)                                  \
+  InterlockedExchangeAdd(reinterpret_cast<volatile long*>(address), \
+                         static_cast<long>(val))
 #else
 #define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
+#define mapd_or(address, val) __sync_fetch_and_or(address, val)
+#define mapd_add_u32(address, val) __sync_fetch_and_add(address, val)
 #endif
 
 template <typename HASHTABLE_FILLING_FUNC>
@@ -133,10 +160,12 @@ DEVICE auto fill_hash_join_buff_impl(OneToOnePerfectJoinHashTableFillFuncArgs co
 #ifndef __CUDACC__
     auto const sd_inner_to_outer_translation_map = args.sd_inner_to_outer_translation_map;
     auto const min_inner_elem = args.min_inner_elem;
+    auto const max_inner_elem = args.max_inner_elem;
     if (sd_inner_to_outer_translation_map &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       const auto outer_id = map_str_id_to_outer_dict(elem,
                                                      min_inner_elem,
+                                                     max_inner_elem,
                                                      type_info.min_val,
                                                      type_info.max_val,
                                                      sd_inner_to_outer_translation_map);
@@ -146,6 +175,9 @@ DEVICE auto fill_hash_join_buff_impl(OneToOnePerfectJoinHashTableFillFuncArgs co
       elem = outer_id;
     }
 #endif
+    if (!SUFFIX(is_valid_perfect_hash_join_key)(elem, type_info)) {
+      continue;
+    }
     if (filling_func(elem, index)) {
       return -1;
     }
@@ -204,6 +236,512 @@ DEVICE int SUFFIX(fill_hash_join_buff)(
       args, cpu_thread_idx, cpu_thread_count, hashtable_filling_func);
 }
 
+DEVICE bool SUFFIX(join_column_filter_matches)(const JoinColumnFilter filter,
+                                               JoinColumnIterator& filter_it) {
+  if (!filter.enabled) {
+    return true;
+  }
+  if (!filter_it) {
+    return false;
+  }
+  const auto filter_value = filter_it.getElementSwitch();
+  if (filter_value == filter.type_info.null_val) {
+    return false;
+  }
+  if (filter.has_lower_bound) {
+    if (filter.lower_bound_inclusive) {
+      if (filter_value < filter.lower_bound) {
+        return false;
+      }
+    } else if (filter_value <= filter.lower_bound) {
+      return false;
+    }
+  }
+  if (filter.has_upper_bound) {
+    if (filter.upper_bound_inclusive) {
+      if (filter_value > filter.upper_bound) {
+        return false;
+      }
+    } else if (filter_value >= filter.upper_bound) {
+      return false;
+    }
+  }
+  return true;
+}
+
+DEVICE void SUFFIX(fill_join_bitmap)(uint32_t* bitmap,
+                                     const JoinColumn join_column,
+                                     const JoinColumnTypeInfo type_info,
+                                     const JoinColumnFilter filter,
+                                     const int64_t min_val,
+                                     const int64_t max_val,
+                                     const int32_t cpu_thread_idx,
+                                     const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  JoinColumnTyped col{&join_column, &type_info};
+  JoinColumnTyped filter_col{&filter.filter_column, &filter.type_info};
+  auto filter_it =
+      filter.enabled ? filter_col.slice(start, step).begin() : JoinColumnIterator();
+  for (auto item : col.slice(start, step)) {
+    if (!SUFFIX(join_column_filter_matches)(filter, filter_it)) {
+      if (filter.enabled) {
+        ++filter_it;
+      }
+      continue;
+    }
+    if (filter.enabled) {
+      ++filter_it;
+    }
+    int64_t elem = item.element;
+    if (elem == type_info.null_val || elem < min_val || elem > max_val) {
+      continue;
+    }
+    const uint64_t bitmap_idx = static_cast<uint64_t>(elem - min_val);
+    const uint64_t word_idx = bitmap_idx >> 5;
+    const uint32_t mask = uint32_t(1) << (bitmap_idx & 31);
+    mapd_or(bitmap + word_idx, mask);
+  }
+}
+
+DEVICE void SUFFIX(fill_join_bitmap_segmented)(uint64_t* bitmap_chunks,
+                                               const int64_t bitmap_chunk_word_count,
+                                               const JoinColumn join_column,
+                                               const JoinColumnTypeInfo type_info,
+                                               const JoinColumnFilter filter,
+                                               const int64_t min_val,
+                                               const int64_t max_val,
+                                               const int32_t cpu_thread_idx,
+                                               const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  JoinColumnTyped col{&join_column, &type_info};
+  JoinColumnTyped filter_col{&filter.filter_column, &filter.type_info};
+  auto filter_it =
+      filter.enabled ? filter_col.slice(start, step).begin() : JoinColumnIterator();
+  for (auto item : col.slice(start, step)) {
+    if (!SUFFIX(join_column_filter_matches)(filter, filter_it)) {
+      if (filter.enabled) {
+        ++filter_it;
+      }
+      continue;
+    }
+    if (filter.enabled) {
+      ++filter_it;
+    }
+    int64_t elem = item.element;
+    if (elem == type_info.null_val || elem < min_val || elem > max_val) {
+      continue;
+    }
+    const uint64_t bitmap_idx = static_cast<uint64_t>(elem - min_val);
+    const uint64_t word_idx = bitmap_idx >> 5;
+    const uint64_t chunk_idx = word_idx / bitmap_chunk_word_count;
+    const uint64_t chunk_offset = word_idx - chunk_idx * bitmap_chunk_word_count;
+    auto bitmap = reinterpret_cast<uint32_t*>(bitmap_chunks[chunk_idx]);
+    const uint32_t mask = uint32_t(1) << (bitmap_idx & 31);
+    mapd_or(bitmap + chunk_offset, mask);
+  }
+}
+
+DEVICE inline uint32_t SUFFIX(popcount32)(const uint32_t val) {
+#ifdef __CUDACC__
+  return __popc(val);
+#else
+  return __builtin_popcount(val);
+#endif
+}
+
+DEVICE int64_t SUFFIX(ranked_bitmap_rank)(const uint32_t* bitmap,
+                                          const uint32_t* rank_blocks,
+                                          const int64_t val,
+                                          const int64_t min_val,
+                                          const int64_t max_val,
+                                          const int64_t null_val,
+                                          const int64_t rank_block_word_count) {
+  if (val == null_val || val < min_val || val > max_val) {
+    return -1;
+  }
+  const uint64_t bitmap_idx = static_cast<uint64_t>(val - min_val);
+  const uint64_t word_idx = bitmap_idx >> 5;
+  const uint32_t word = bitmap[word_idx];
+  const uint32_t bit_idx = bitmap_idx & 31;
+  const uint32_t bit_mask = uint32_t(1) << bit_idx;
+  if (!(word & bit_mask)) {
+    return -1;
+  }
+  const uint64_t block_idx = word_idx / rank_block_word_count;
+  const uint64_t block_start_word = block_idx * rank_block_word_count;
+  uint32_t rank = rank_blocks[block_idx];
+  for (uint64_t idx = block_start_word; idx < word_idx; ++idx) {
+    rank += SUFFIX(popcount32)(bitmap[idx]);
+  }
+  const uint32_t lower_bits_mask = bit_idx ? ((uint32_t(1) << bit_idx) - 1) : 0;
+  rank += SUFFIX(popcount32)(word & lower_bits_mask);
+  return rank;
+}
+
+DEVICE void SUFFIX(build_ranked_bitmap_index)(uint32_t* rank_blocks,
+                                              const uint32_t* bitmap,
+                                              const int64_t bitmap_word_count,
+                                              const int64_t rank_block_word_count,
+                                              const int32_t cpu_thread_idx,
+                                              const int32_t cpu_thread_count) {
+  const int64_t rank_block_count =
+      bitmap_word_count == 0 ? 0 : ((bitmap_word_count - 1) / rank_block_word_count + 1);
+#ifdef __CUDACC__
+  int64_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int64_t step = blockDim.x * gridDim.x;
+#else
+  int64_t start = cpu_thread_idx;
+  int64_t step = cpu_thread_count;
+#endif
+  for (int64_t block_idx = start; block_idx < rank_block_count; block_idx += step) {
+    const int64_t word_start = block_idx * rank_block_word_count;
+    const int64_t word_end = word_start + rank_block_word_count < bitmap_word_count
+                                 ? word_start + rank_block_word_count
+                                 : bitmap_word_count;
+    uint32_t count = 0;
+    for (int64_t word_idx = word_start; word_idx < word_end; ++word_idx) {
+      count += SUFFIX(popcount32)(bitmap[word_idx]);
+    }
+    rank_blocks[block_idx] = count;
+  }
+}
+
+DEVICE int SUFFIX(fill_ranked_bitmap_payload)(uint32_t* payload,
+                                              const uint32_t* bitmap,
+                                              const uint32_t* rank_blocks,
+                                              const JoinColumn join_column,
+                                              const JoinColumnTypeInfo type_info,
+                                              const JoinColumnFilter filter,
+                                              const int64_t min_val,
+                                              const int64_t max_val,
+                                              const int64_t rank_block_word_count,
+                                              const int64_t payload_count,
+                                              const int32_t cpu_thread_idx,
+                                              const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  JoinColumnTyped col{&join_column, &type_info};
+  JoinColumnTyped filter_col{&filter.filter_column, &filter.type_info};
+  auto filter_it =
+      filter.enabled ? filter_col.slice(start, step).begin() : JoinColumnIterator();
+  for (auto item : col.slice(start, step)) {
+    if (!SUFFIX(join_column_filter_matches)(filter, filter_it)) {
+      if (filter.enabled) {
+        ++filter_it;
+      }
+      continue;
+    }
+    if (filter.enabled) {
+      ++filter_it;
+    }
+    const int64_t rank = SUFFIX(ranked_bitmap_rank)(bitmap,
+                                                    rank_blocks,
+                                                    item.element,
+                                                    min_val,
+                                                    max_val,
+                                                    type_info.null_val,
+                                                    rank_block_word_count);
+    if (rank < 0) {
+      continue;
+    }
+    if (rank >= payload_count || item.index > static_cast<size_t>(UINT32_MAX)) {
+      return -1;
+    }
+    const auto row_slot = static_cast<uint32_t>(item.index);
+    constexpr uint32_t invalid_slot = UINT32_MAX;
+    if (mapd_cas(payload + rank, invalid_slot, row_slot) != invalid_slot) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+DEVICE int SUFFIX(fill_ranked_bitmap_payload_unique)(uint32_t* payload,
+                                                     const uint32_t* bitmap,
+                                                     const uint32_t* rank_blocks,
+                                                     const JoinColumn join_column,
+                                                     const JoinColumnTypeInfo type_info,
+                                                     const int64_t min_val,
+                                                     const int64_t max_val,
+                                                     const int64_t rank_block_word_count,
+                                                     const int64_t payload_count,
+                                                     const int32_t cpu_thread_idx,
+                                                     const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  JoinColumnTyped col{&join_column, &type_info};
+  for (auto item : col.slice(start, step)) {
+    const int64_t rank = SUFFIX(ranked_bitmap_rank)(bitmap,
+                                                    rank_blocks,
+                                                    item.element,
+                                                    min_val,
+                                                    max_val,
+                                                    type_info.null_val,
+                                                    rank_block_word_count);
+    if (rank < 0) {
+      continue;
+    }
+    if (rank >= payload_count || item.index > static_cast<size_t>(UINT32_MAX)) {
+      return -1;
+    }
+    payload[rank] = static_cast<uint32_t>(item.index);
+  }
+  return 0;
+}
+
+DEVICE int SUFFIX(fill_ranked_bitmap_payload_segmented)(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const JoinColumnFilter filter,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  JoinColumnTyped col{&join_column, &type_info};
+  JoinColumnTyped filter_col{&filter.filter_column, &filter.type_info};
+  auto filter_it =
+      filter.enabled ? filter_col.slice(start, step).begin() : JoinColumnIterator();
+  for (auto item : col.slice(start, step)) {
+    if (!SUFFIX(join_column_filter_matches)(filter, filter_it)) {
+      if (filter.enabled) {
+        ++filter_it;
+      }
+      continue;
+    }
+    if (filter.enabled) {
+      ++filter_it;
+    }
+    const int64_t rank = SUFFIX(ranked_bitmap_rank)(bitmap,
+                                                    rank_blocks,
+                                                    item.element,
+                                                    min_val,
+                                                    max_val,
+                                                    type_info.null_val,
+                                                    rank_block_word_count);
+    if (rank < 0) {
+      continue;
+    }
+    if (rank >= payload_count || item.index > static_cast<size_t>(UINT32_MAX)) {
+      return -1;
+    }
+    const auto chunk_idx = rank / payload_chunk_word_count;
+    const auto chunk_offset = rank - chunk_idx * payload_chunk_word_count;
+    auto payload = reinterpret_cast<uint32_t*>(payload_chunks[chunk_idx]);
+    const auto row_slot = static_cast<uint32_t>(item.index);
+    constexpr uint32_t invalid_slot = UINT32_MAX;
+    if (mapd_cas(payload + chunk_offset, invalid_slot, row_slot) != invalid_slot) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+DEVICE int SUFFIX(fill_ranked_bitmap_payload_unique_segmented)(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  JoinColumnTyped col{&join_column, &type_info};
+  for (auto item : col.slice(start, step)) {
+    const int64_t rank = SUFFIX(ranked_bitmap_rank)(bitmap,
+                                                    rank_blocks,
+                                                    item.element,
+                                                    min_val,
+                                                    max_val,
+                                                    type_info.null_val,
+                                                    rank_block_word_count);
+    if (rank < 0) {
+      continue;
+    }
+    if (rank >= payload_count || item.index > static_cast<size_t>(UINT32_MAX)) {
+      return -1;
+    }
+    const auto chunk_idx = rank / payload_chunk_word_count;
+    const auto chunk_offset = rank - chunk_idx * payload_chunk_word_count;
+    auto payload = reinterpret_cast<uint32_t*>(payload_chunks[chunk_idx]);
+    payload[chunk_offset] = static_cast<uint32_t>(item.index);
+  }
+  return 0;
+}
+
+DEVICE void SUFFIX(count_ranked_bitmap_matches)(uint32_t* counts,
+                                                const uint32_t* bitmap,
+                                                const uint32_t* rank_blocks,
+                                                const JoinColumn join_column,
+                                                const JoinColumnTypeInfo type_info,
+                                                const int64_t min_val,
+                                                const int64_t max_val,
+                                                const int64_t rank_block_word_count,
+                                                const int32_t cpu_thread_idx,
+                                                const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  JoinColumnTyped col{&join_column, &type_info};
+  for (auto item : col.slice(start, step)) {
+    const int64_t rank = SUFFIX(ranked_bitmap_rank)(bitmap,
+                                                    rank_blocks,
+                                                    item.element,
+                                                    min_val,
+                                                    max_val,
+                                                    type_info.null_val,
+                                                    rank_block_word_count);
+    if (rank >= 0) {
+      mapd_add_u32(counts + rank, uint32_t(1));
+    }
+  }
+}
+
+DEVICE int SUFFIX(fill_ranked_bitmap_payload_one_to_many)(
+    uint32_t* payload,
+    uint32_t* counts,
+    const uint32_t* offsets,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  JoinColumnTyped col{&join_column, &type_info};
+  for (auto item : col.slice(start, step)) {
+    const int64_t rank = SUFFIX(ranked_bitmap_rank)(bitmap,
+                                                    rank_blocks,
+                                                    item.element,
+                                                    min_val,
+                                                    max_val,
+                                                    type_info.null_val,
+                                                    rank_block_word_count);
+    if (rank < 0) {
+      continue;
+    }
+    if (item.index > static_cast<size_t>(UINT32_MAX)) {
+      return -1;
+    }
+    const uint32_t local_offset = mapd_add_u32(counts + rank, uint32_t(1));
+    const uint64_t payload_idx = static_cast<uint64_t>(offsets[rank]) + local_offset;
+    if (payload_idx >= static_cast<uint64_t>(payload_count)) {
+      return -1;
+    }
+    payload[payload_idx] = static_cast<uint32_t>(item.index);
+  }
+  return 0;
+}
+
+DEVICE int SUFFIX(fill_ranked_bitmap_payload_one_to_many_segmented)(
+    uint64_t* payload_chunks,
+    const int64_t payload_chunk_word_count,
+    uint32_t* counts,
+    const uint32_t* offsets,
+    const uint32_t* bitmap,
+    const uint32_t* rank_blocks,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int64_t min_val,
+    const int64_t max_val,
+    const int64_t rank_block_word_count,
+    const int64_t payload_count,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  JoinColumnTyped col{&join_column, &type_info};
+  for (auto item : col.slice(start, step)) {
+    const int64_t rank = SUFFIX(ranked_bitmap_rank)(bitmap,
+                                                    rank_blocks,
+                                                    item.element,
+                                                    min_val,
+                                                    max_val,
+                                                    type_info.null_val,
+                                                    rank_block_word_count);
+    if (rank < 0) {
+      continue;
+    }
+    if (item.index > static_cast<size_t>(UINT32_MAX)) {
+      return -1;
+    }
+    const uint32_t local_offset = mapd_add_u32(counts + rank, uint32_t(1));
+    const uint64_t payload_idx = static_cast<uint64_t>(offsets[rank]) + local_offset;
+    if (payload_idx >= static_cast<uint64_t>(payload_count)) {
+      return -1;
+    }
+    const auto chunk_idx = payload_idx / payload_chunk_word_count;
+    const auto chunk_offset = payload_idx - chunk_idx * payload_chunk_word_count;
+    auto payload = reinterpret_cast<uint32_t*>(payload_chunks[chunk_idx]);
+    payload[chunk_offset] = static_cast<uint32_t>(item.index);
+  }
+  return 0;
+}
+
 template <typename HASHTABLE_FILLING_FUNC>
 DEVICE int fill_hash_join_buff_sharded_impl(
     int32_t* buff,
@@ -212,6 +750,7 @@ DEVICE int fill_hash_join_buff_sharded_impl(
     const ShardInfo shard_info,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count,
     HASHTABLE_FILLING_FUNC filling_func) {
@@ -226,10 +765,6 @@ DEVICE int fill_hash_join_buff_sharded_impl(
   for (auto item : col.slice(start, step)) {
     const size_t index = item.index;
     int64_t elem = item.element;
-    size_t shard = SHARD_FOR_KEY(elem, shard_info.num_shards);
-    if (shard != shard_info.shard) {
-      continue;
-    }
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -242,6 +777,7 @@ DEVICE int fill_hash_join_buff_sharded_impl(
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       const auto outer_id = map_str_id_to_outer_dict(elem,
                                                      min_inner_elem,
+                                                     max_inner_elem,
                                                      type_info.min_val,
                                                      type_info.max_val,
                                                      sd_inner_to_outer_translation_map);
@@ -251,6 +787,13 @@ DEVICE int fill_hash_join_buff_sharded_impl(
       elem = outer_id;
     }
 #endif
+    if (!SUFFIX(is_valid_perfect_hash_join_key)(elem, type_info)) {
+      continue;
+    }
+    size_t shard = SHARD_FOR_KEY(elem, shard_info.num_shards);
+    if (shard != shard_info.shard) {
+      continue;
+    }
     if (filling_func(elem, shard, index)) {
       return -1;
     }
@@ -267,6 +810,7 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
     const ShardInfo shard_info,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count,
     const int64_t bucket_normalization) {
@@ -292,6 +836,7 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
                                           shard_info,
                                           sd_inner_to_outer_translation_map,
                                           min_inner_elem,
+                                          max_inner_elem,
                                           cpu_thread_idx,
                                           cpu_thread_count,
                                           hashtable_filling_func);
@@ -306,6 +851,7 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(
     const ShardInfo shard_info,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count) {
   auto filling_func = for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
@@ -327,6 +873,7 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(
                                           shard_info,
                                           sd_inner_to_outer_translation_map,
                                           min_inner_elem,
+                                          max_inner_elem,
                                           cpu_thread_idx,
                                           cpu_thread_count,
                                           hashtable_filling_func);
@@ -628,6 +1175,8 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
 }
 
 #undef mapd_cas
+#undef mapd_or
+#undef mapd_add_u32
 
 #ifdef __CUDACC__
 #define mapd_add(address, val) atomicAdd(address, val)
@@ -647,6 +1196,7 @@ DEVICE void count_matches_impl(int32_t* count_buff,
                                ,
                                const int32_t* sd_inner_to_outer_translation_map,
                                const int32_t min_inner_elem,
+                               const int32_t max_inner_elem,
                                const int32_t cpu_thread_idx,
                                const int32_t cpu_thread_count
 #endif
@@ -674,6 +1224,7 @@ DEVICE void count_matches_impl(int32_t* count_buff,
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       const auto outer_id = map_str_id_to_outer_dict(elem,
                                                      min_inner_elem,
+                                                     max_inner_elem,
                                                      type_info.min_val,
                                                      type_info.max_val,
                                                      sd_inner_to_outer_translation_map);
@@ -683,6 +1234,9 @@ DEVICE void count_matches_impl(int32_t* count_buff,
       elem = outer_id;
     }
 #endif
+    if (!SUFFIX(is_valid_perfect_hash_join_key)(elem, type_info)) {
+      continue;
+    }
     auto* entry_ptr = slot_selector(count_buff, elem);
     mapd_add(entry_ptr, int32_t(1));
   }
@@ -695,6 +1249,7 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
                                   ,
                                   const int32_t* sd_inner_to_outer_translation_map,
                                   const int32_t min_inner_elem,
+                                  const int32_t max_inner_elem,
                                   const int32_t cpu_thread_idx,
                                   const int32_t cpu_thread_count
 #endif
@@ -709,6 +1264,7 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
                      ,
                      sd_inner_to_outer_translation_map,
                      min_inner_elem,
+                     max_inner_elem,
                      cpu_thread_idx,
                      cpu_thread_count
 #endif
@@ -724,6 +1280,7 @@ GLOBAL void SUFFIX(count_matches_bucketized)(
     ,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count
 #endif
@@ -743,6 +1300,7 @@ GLOBAL void SUFFIX(count_matches_bucketized)(
                      ,
                      sd_inner_to_outer_translation_map,
                      min_inner_elem,
+                     max_inner_elem,
                      cpu_thread_idx,
                      cpu_thread_count
 #endif
@@ -759,6 +1317,7 @@ GLOBAL void SUFFIX(count_matches_sharded)(
     ,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count
 #endif
@@ -785,6 +1344,7 @@ GLOBAL void SUFFIX(count_matches_sharded)(
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       const auto outer_id = map_str_id_to_outer_dict(elem,
                                                      min_inner_elem,
+                                                     max_inner_elem,
                                                      type_info.min_val,
                                                      type_info.max_val,
                                                      sd_inner_to_outer_translation_map);
@@ -794,6 +1354,9 @@ GLOBAL void SUFFIX(count_matches_sharded)(
       elem = outer_id;
     }
 #endif
+    if (!SUFFIX(is_valid_perfect_hash_join_key)(elem, type_info)) {
+      continue;
+    }
     int32_t* entry_ptr = SUFFIX(get_hash_slot_sharded)(count_buff,
                                                        elem,
                                                        type_info.min_val,
@@ -889,6 +1452,7 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
                               ,
                               const int32_t* sd_inner_to_outer_translation_map,
                               const int32_t min_inner_elem,
+                              const int32_t max_inner_elem,
                               const int32_t cpu_thread_idx,
                               const int32_t cpu_thread_count
 #endif
@@ -920,6 +1484,7 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       const auto outer_id = map_str_id_to_outer_dict(elem,
                                                      min_inner_elem,
+                                                     max_inner_elem,
                                                      type_info.min_val,
                                                      type_info.max_val,
                                                      sd_inner_to_outer_translation_map);
@@ -929,6 +1494,9 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
       elem = outer_id;
     }
 #endif
+    if (!SUFFIX(is_valid_perfect_hash_join_key)(elem, type_info)) {
+      continue;
+    }
     auto pos_ptr = slot_selector(pos_buff, elem);
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
@@ -946,6 +1514,7 @@ DEVICE void fill_row_ids_for_window_framing_impl(
     ,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count
 #endif
@@ -996,6 +1565,7 @@ DEVICE void fill_row_ids_for_window_framing_impl(
     if (sd_inner_to_outer_translation_map && elem != type_info.translated_null_val) {
       const auto outer_id = map_str_id_to_outer_dict(elem,
                                                      min_inner_elem,
+                                                     max_inner_elem,
                                                      type_info.min_val,
                                                      type_info.max_val,
                                                      sd_inner_to_outer_translation_map);
@@ -1005,6 +1575,9 @@ DEVICE void fill_row_ids_for_window_framing_impl(
       elem = outer_id;
     }
 #endif
+    if (!SUFFIX(is_valid_perfect_hash_join_key)(elem, type_info)) {
+      continue;
+    }
     auto pos_ptr = slot_selector(pos_buff, elem);
     const auto bin_idx = pos_ptr - pos_buff;
     auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
@@ -1022,6 +1595,7 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                                  ,
                                  const int32_t* sd_inner_to_outer_translation_map,
                                  const int32_t min_inner_elem,
+                                 const int32_t max_inner_elem,
                                  const int32_t cpu_thread_idx,
                                  const int32_t cpu_thread_count
 #endif
@@ -1039,6 +1613,7 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                       ,
                       sd_inner_to_outer_translation_map,
                       min_inner_elem,
+                      max_inner_elem,
                       cpu_thread_idx,
                       cpu_thread_count
 #endif
@@ -1053,6 +1628,7 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
                                          ,
                                          sd_inner_to_outer_translation_map,
                                          min_inner_elem,
+                                         max_inner_elem,
                                          cpu_thread_idx,
                                          cpu_thread_count
 #endif
@@ -1070,6 +1646,7 @@ GLOBAL void SUFFIX(fill_row_ids_bucketized)(
     ,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count
 #endif
@@ -1091,6 +1668,7 @@ GLOBAL void SUFFIX(fill_row_ids_bucketized)(
                     ,
                     sd_inner_to_outer_translation_map,
                     min_inner_elem,
+                    max_inner_elem,
                     cpu_thread_idx,
                     cpu_thread_count
 #endif
@@ -1108,6 +1686,7 @@ DEVICE void fill_row_ids_sharded_impl(int32_t* buff,
                                       ,
                                       const int32_t* sd_inner_to_outer_translation_map,
                                       const int32_t min_inner_elem,
+                                      const int32_t max_inner_elem,
                                       const int32_t cpu_thread_idx,
                                       const int32_t cpu_thread_count
 #endif
@@ -1141,6 +1720,7 @@ DEVICE void fill_row_ids_sharded_impl(int32_t* buff,
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
       const auto outer_id = map_str_id_to_outer_dict(elem,
                                                      min_inner_elem,
+                                                     max_inner_elem,
                                                      type_info.min_val,
                                                      type_info.max_val,
                                                      sd_inner_to_outer_translation_map);
@@ -1150,6 +1730,9 @@ DEVICE void fill_row_ids_sharded_impl(int32_t* buff,
       elem = outer_id;
     }
 #endif
+    if (!SUFFIX(is_valid_perfect_hash_join_key)(elem, type_info)) {
+      continue;
+    }
     auto* pos_ptr = slot_selector(pos_buff, elem);
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
@@ -1166,6 +1749,7 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
                                          ,
                                          const int32_t* sd_inner_to_outer_translation_map,
                                          const int32_t min_inner_elem,
+                                         const int32_t max_inner_elem,
                                          const int32_t cpu_thread_idx,
                                          const int32_t cpu_thread_count
 #endif
@@ -1186,6 +1770,7 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
                     ,
                     sd_inner_to_outer_translation_map,
                     min_inner_elem,
+                    max_inner_elem,
                     cpu_thread_idx,
                     cpu_thread_count
 #endif
@@ -1203,6 +1788,7 @@ GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(
     ,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_idx,
     const int32_t cpu_thread_count
 #endif
@@ -1229,6 +1815,7 @@ GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(
                     ,
                     sd_inner_to_outer_translation_map,
                     min_inner_elem,
+                    max_inner_elem,
                     cpu_thread_idx,
                     cpu_thread_count
 #endif
@@ -1495,6 +2082,7 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
                                       const JoinColumnTypeInfo& type_info,
                                       const int32_t* sd_inner_to_outer_translation_map,
                                       const int32_t min_inner_elem,
+                                      const int32_t max_inner_elem,
                                       const int32_t cpu_thread_count,
                                       const bool for_window_framing,
                                       COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_func,
@@ -1564,6 +2152,7 @@ void fill_one_to_many_hash_table(OneToManyPerfectJoinHashTableFillFuncArgs const
      args.type_info,
      args.sd_inner_to_outer_translation_map,
      args.min_inner_elem,
+     args.max_inner_elem,
      cpu_thread_idx,
      cpu_thread_count);
   };
@@ -1578,6 +2167,7 @@ void fill_one_to_many_hash_table(OneToManyPerfectJoinHashTableFillFuncArgs const
          args.for_window_framing,
          args.sd_inner_to_outer_translation_map,
          args.min_inner_elem,
+         args.max_inner_elem,
          cpu_thread_idx,
          cpu_thread_count);
       };
@@ -1588,6 +2178,7 @@ void fill_one_to_many_hash_table(OneToManyPerfectJoinHashTableFillFuncArgs const
                                    args.type_info,
                                    args.sd_inner_to_outer_translation_map,
                                    args.min_inner_elem,
+                                   args.max_inner_elem,
                                    cpu_thread_count,
                                    args.for_window_framing,
                                    launch_count_matches,
@@ -1611,6 +2202,7 @@ void fill_one_to_many_hash_table_bucketized(
      args.type_info,
      args.sd_inner_to_outer_translation_map,
      args.min_inner_elem,
+     args.max_inner_elem,
      cpu_thread_idx,
      cpu_thread_count,
      bucket_normalization);
@@ -1624,6 +2216,7 @@ void fill_one_to_many_hash_table_bucketized(
      args.type_info,
      args.sd_inner_to_outer_translation_map,
      args.min_inner_elem,
+     args.max_inner_elem,
      cpu_thread_idx,
      cpu_thread_count,
      bucket_normalization);
@@ -1635,6 +2228,7 @@ void fill_one_to_many_hash_table_bucketized(
                                    args.type_info,
                                    args.sd_inner_to_outer_translation_map,
                                    args.min_inner_elem,
+                                   args.max_inner_elem,
                                    cpu_thread_count,
                                    false,
                                    launch_count_matches,
@@ -1650,6 +2244,7 @@ void fill_one_to_many_hash_table_sharded_impl(
     const ShardInfo& shard_info,
     const int32_t* sd_inner_to_outer_translation_map,
     const int32_t min_inner_elem,
+    const int32_t max_inner_elem,
     const int32_t cpu_thread_count,
     COUNT_MATCHES_LAUNCH_FUNCTOR count_matches_launcher,
     FILL_ROW_IDS_LAUNCH_FUNCTOR fill_row_ids_launcher) {
@@ -1708,6 +2303,7 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                          const ShardInfo& shard_info,
                                          const int32_t* sd_inner_to_outer_translation_map,
                                          const int32_t min_inner_elem,
+                                         const int32_t max_inner_elem,
                                          const int32_t cpu_thread_count) {
   auto launch_count_matches = [count_buff = buff + hash_entry_count,
                                &join_column,
@@ -1716,7 +2312,8 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
 #ifndef __CUDACC__
                                ,
                                sd_inner_to_outer_translation_map,
-                               min_inner_elem
+                               min_inner_elem,
+                               max_inner_elem
 #endif
   ](auto cpu_thread_idx, auto cpu_thread_count) {
     return SUFFIX(count_matches_sharded)(count_buff,
@@ -1727,6 +2324,7 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                          ,
                                          sd_inner_to_outer_translation_map,
                                          min_inner_elem,
+                                         max_inner_elem,
                                          cpu_thread_idx,
                                          cpu_thread_count
 #endif
@@ -1741,7 +2339,8 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
 #ifndef __CUDACC__
                               ,
                               sd_inner_to_outer_translation_map,
-                              min_inner_elem
+                              min_inner_elem,
+                              max_inner_elem
 #endif
   ](auto cpu_thread_idx, auto cpu_thread_count) {
     return SUFFIX(fill_row_ids_sharded)(buff,
@@ -1753,6 +2352,7 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                         ,
                                         sd_inner_to_outer_translation_map,
                                         min_inner_elem,
+                                        max_inner_elem,
                                         cpu_thread_idx,
                                         cpu_thread_count);
 #endif
@@ -1767,6 +2367,7 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
                                            ,
                                            sd_inner_to_outer_translation_map,
                                            min_inner_elem,
+                                           max_inner_elem,
                                            cpu_thread_count
 #endif
                                            ,
@@ -1971,6 +2572,7 @@ void fill_one_to_many_baseline_hash_table(
     const std::vector<JoinBucketInfo>& join_buckets_per_key,
     const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
     const std::vector<int32_t>& sd_min_inner_elems,
+    const std::vector<int32_t>& sd_max_inner_elems,
     const size_t cpu_thread_count,
     const bool is_range_join,
     const bool is_geo_compressed,
@@ -2037,6 +2639,7 @@ void fill_one_to_many_baseline_hash_table(
                       &type_info_per_key,
                       &sd_inner_to_outer_translation_maps,
                       &sd_min_inner_elems,
+                      &sd_max_inner_elems,
                       cpu_thread_idx,
                       cpu_thread_count] {
                        const auto key_handler =
@@ -2045,7 +2648,8 @@ void fill_one_to_many_baseline_hash_table(
                                              &join_column_per_key[0],
                                              &type_info_per_key[0],
                                              &sd_inner_to_outer_translation_maps[0],
-                                             &sd_min_inner_elems[0]);
+                                             &sd_min_inner_elems[0],
+                                             &sd_max_inner_elems[0]);
                        count_matches_baseline(count_buff,
                                               composite_key_dict,
                                               hash_entry_count,
@@ -2147,6 +2751,7 @@ void fill_one_to_many_baseline_hash_table(
                                           &type_info_per_key,
                                           &sd_inner_to_outer_translation_maps,
                                           &sd_min_inner_elems,
+                                          &sd_max_inner_elems,
                                           for_window_framing,
                                           cpu_thread_idx,
                                           cpu_thread_count] {
@@ -2156,7 +2761,8 @@ void fill_one_to_many_baseline_hash_table(
                                                &join_column_per_key[0],
                                                &type_info_per_key[0],
                                                &sd_inner_to_outer_translation_maps[0],
-                                               &sd_min_inner_elems[0]);
+                                               &sd_min_inner_elems[0],
+                                               &sd_max_inner_elems[0]);
                                            SUFFIX(fill_row_ids_baseline)
                                            (buff,
                                             composite_key_dict,
@@ -2185,6 +2791,7 @@ void fill_one_to_many_baseline_hash_table_32(
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
     const std::vector<int32_t>& sd_min_inner_elems,
+    const std::vector<int32_t>& sd_max_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join,
     const bool is_geo_compressed,
@@ -2198,6 +2805,7 @@ void fill_one_to_many_baseline_hash_table_32(
                                                 join_bucket_info,
                                                 sd_inner_to_outer_translation_maps,
                                                 sd_min_inner_elems,
+                                                sd_max_inner_elems,
                                                 cpu_thread_count,
                                                 is_range_join,
                                                 is_geo_compressed,
@@ -2214,6 +2822,7 @@ void fill_one_to_many_baseline_hash_table_64(
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const int32_t*>& sd_inner_to_outer_translation_maps,
     const std::vector<int32_t>& sd_min_inner_elems,
+    const std::vector<int32_t>& sd_max_inner_elems,
     const int32_t cpu_thread_count,
     const bool is_range_join,
     const bool is_geo_compressed,
@@ -2227,6 +2836,7 @@ void fill_one_to_many_baseline_hash_table_64(
                                                 join_bucket_info,
                                                 sd_inner_to_outer_translation_maps,
                                                 sd_min_inner_elems,
+                                                sd_max_inner_elems,
                                                 cpu_thread_count,
                                                 is_range_join,
                                                 is_geo_compressed,
@@ -2259,6 +2869,7 @@ void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
                                                      false,
                                                      &join_column_per_key[0],
                                                      &type_info_per_key[0],
+                                                     nullptr,
                                                      nullptr,
                                                      nullptr);
           approximate_distinct_tuples_impl(hll_buffer,

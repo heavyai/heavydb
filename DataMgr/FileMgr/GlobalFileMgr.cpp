@@ -83,6 +83,17 @@ size_t GlobalFileMgr::getNumChunks() {
   return num_chunks;
 }
 
+StorageRewriteStats GlobalFileMgr::rewriteStoragePayloadsWithPrefix(
+    const ChunkKey& key_prefix,
+    const NativeStorageCompressionConfig& compression_config) {
+  auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(getFileMgr(key_prefix));
+  if (!file_mgr) {
+    throw std::runtime_error(
+        "Native storage rewrite is only supported for native tables.");
+  }
+  return file_mgr->rewriteStoragePayloadsWithPrefix(key_prefix, compression_config);
+}
+
 void GlobalFileMgr::deleteBuffersWithPrefix(const ChunkKey& keyPrefix, const bool purge) {
   /* keyPrefix[0] can be -1 only for gpu or cpu buffers but not for FileMgr.
    * There is no assert here, as GlobalFileMgr is being called with -1 value as well in

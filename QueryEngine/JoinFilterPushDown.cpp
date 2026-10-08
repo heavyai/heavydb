@@ -37,6 +37,34 @@ class CollectInputColumnsVisitor
   }
 };
 
+std::unordered_map<shared::TableKey, size_t> count_input_table_keys(
+    const std::vector<InputDescriptor>& input_descs) {
+  std::unordered_map<shared::TableKey, size_t> counts;
+  for (const auto& input_desc : input_descs) {
+    ++counts[input_desc.getTableKey()];
+  }
+  return counts;
+}
+
+bool candidate_references_duplicated_table(
+    const PushedDownFilterInfo& candidate,
+    const std::unordered_map<shared::TableKey, size_t>& input_table_key_counts) {
+  CollectInputColumnsVisitor input_columns_visitor;
+  std::unordered_set<InputColDescriptor> input_column_descriptors;
+  for (const auto& filter_expr : candidate.filter_expressions) {
+    input_column_descriptors = input_columns_visitor.aggregateResult(
+        input_column_descriptors, input_columns_visitor.visit(filter_expr.get()));
+  }
+  for (const auto& input_col_desc : input_column_descriptors) {
+    const auto table_key = input_col_desc.getScanDesc().getTableKey();
+    const auto count_it = input_table_key_counts.find(table_key);
+    if (count_it != input_table_key_counts.end() && count_it->second > 1) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 /**
@@ -200,13 +228,18 @@ std::vector<PushedDownFilterInfo> RelAlgExecutor::selectFiltersToBePushedDown(
                              work_unit.input_permutation,
                              work_unit.left_deep_join_input_sizes);
   std::vector<PushedDownFilterInfo> selective_push_down_candidates;
-  const auto ti = get_table_infos(work_unit.exe_unit.input_descs, executor_);
-  if (to_gather_info_for_filter_selectivity(ti)) {
-    for (const auto& candidate : all_push_down_candidates) {
-      const auto selectivity = getFilterSelectivity(candidate.filter_expressions, co, eo);
-      if (selectivity.is_valid && selectivity.isFilterSelectiveEnough()) {
-        selective_push_down_candidates.push_back(candidate);
-      }
+  if (work_unit.exe_unit.input_descs.size() < 2) {
+    return {};
+  }
+  const auto input_table_key_counts =
+      count_input_table_keys(work_unit.exe_unit.input_descs);
+  for (const auto& candidate : all_push_down_candidates) {
+    if (candidate_references_duplicated_table(candidate, input_table_key_counts)) {
+      continue;
+    }
+    const auto selectivity = getFilterSelectivity(candidate.filter_expressions, co, eo);
+    if (selectivity.is_valid && selectivity.isFilterSelectiveEnough()) {
+      selective_push_down_candidates.push_back(candidate);
     }
   }
   return selective_push_down_candidates;
@@ -218,8 +251,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
     const ExecutionOptions& eo,
     RenderInfo* render_info,
     const int64_t queue_time_ms) {
-  // we currently do not fully support filter push down with
-  // multi-step execution and/or with subqueries
+  // We currently do not fully support filter push down with multi-step execution
+  // and/or with subqueries.
   // TODO(Saman): add proper caching to enable filter push down for all cases
   const auto& subqueries = getSubqueries();
   if (seq.size() > 1 || !subqueries.empty()) {

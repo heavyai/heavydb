@@ -38,6 +38,8 @@ class directory_iterator;
 }  // namespace boost
 
 namespace File_Namespace {
+extern bool g_enable_file_mgr_manifests;
+
 /// DB version for DataMgr DS and corresponding file buffer read/write code.
 /* In future kDbVersion may be added to AbstractBufferMgr class.
  * This will allow support of different dbVersions for different tables, so
@@ -79,6 +81,7 @@ using Chunk = FileBuffer;
  * vectors of MultiPage* pointers (logical pages).
  */
 using ChunkKeyToChunkMap = std::map<ChunkKey, FileBuffer*>;
+using ChunkMetadataPayloadMap = std::map<ChunkKey, std::vector<int8_t>>;
 /**
  * @type TablePair
  * @breif Pair detailing the id for a database and table (first two entries in a
@@ -115,8 +118,14 @@ struct StorageStats {
 
 struct OpenFilesResult {
   std::vector<HeaderInfo> header_infos;
+  ChunkMetadataPayloadMap metadata_payloads;
   int32_t max_file_id;
   std::string compaction_status_file_name;
+  uint64_t file_count{0};
+  uint64_t page_count{0};
+  uint64_t page_header_probe_bytes{0};
+  bool used_page_header_manifest{false};
+  bool used_metadata_payload_manifest{false};
 };
 
 // Page header size is serialized/deserialized as an int.
@@ -187,6 +196,10 @@ class FileMgr : public AbstractBufferMgr {  // implements
 
   /// Returns the a pointer to the chunk with the specified key.
   FileBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override;
+  AbstractBuffer* getBufferIfNativeStorage(const ChunkKey& key,
+                                           const size_t numBytes = 0) override {
+    return getBuffer(key, numBytes);
+  }
 
   void fetchBuffer(const ChunkKey& key,
                    AbstractBuffer* destBuffer,
@@ -251,6 +264,9 @@ class FileMgr : public AbstractBufferMgr {  // implements
                                        const ChunkKey& keyPrefix) override;
 
   bool hasChunkMetadataForKeyPrefix(const ChunkKey& keyPrefix);
+  StorageRewriteStats rewriteStoragePayloadsWithPrefix(
+      const ChunkKey& keyPrefix,
+      const NativeStorageCompressionConfig& compression_config);
 
   /**
    * @brief Fsyncs data files, writes out epoch and
@@ -390,7 +406,12 @@ class FileMgr : public AbstractBufferMgr {  // implements
   static constexpr char DB_META_FILENAME[] = "dbmeta";
   static constexpr char FILE_MGR_VERSION_FILENAME[] = "filemgr_version";
   static constexpr int32_t INVALID_VERSION = -1;
-  static constexpr int32_t LATEST_FILE_MGR_VERSION = 2;
+  static constexpr int32_t DEFAULT_FILE_MGR_VERSION = 2;
+  static constexpr int32_t SIDECAR_METADATA_FILE_MGR_VERSION = 3;
+  static constexpr int32_t LATEST_FILE_MGR_VERSION = SIDECAR_METADATA_FILE_MGR_VERSION;
+  // At eight bytes per 64 KiB compression frame, this can describe up to 512 GiB
+  // of logical chunk data while bounding allocations from a corrupt manifest.
+  static constexpr size_t MAX_SIDECAR_METADATA_PAYLOAD_SIZE = 1ULL << 26;
 
  protected:
   // Used to initialize CachingFileMgr.
@@ -448,13 +469,35 @@ class FileMgr : public AbstractBufferMgr {  // implements
                                  const int32_t version);
   void processFileFutures(std::vector<std::future<std::vector<HeaderInfo>>>& file_futures,
                           std::vector<HeaderInfo>& headerVec);
+  std::vector<FileMetadata> getSortedDataFileMetadata(
+      std::string& compaction_status_file_name) const;
+  bool loadPageHeaderManifest(const std::vector<FileMetadata>& data_files,
+                              OpenFilesResult& result);
+  void writePageHeaderManifest(const std::vector<FileMetadata>& data_files,
+                               const OpenFilesResult& result) const;
+  bool loadFileBufferMetadataManifest(const std::vector<FileMetadata>& data_files,
+                                      OpenFilesResult& result);
+  bool loadFileBufferMetadataManifestAtPath(const std::vector<FileMetadata>& data_files,
+                                            const std::string& manifest_path,
+                                            OpenFilesResult& result);
+  bool writeFileBufferMetadataManifest(const std::vector<FileMetadata>& data_files,
+                                       const int32_t manifest_epoch,
+                                       const std::string& manifest_path) const;
+  bool writePendingFileBufferMetadataManifest(const int32_t manifest_epoch) const;
+  void publishPendingFileBufferMetadataManifest() const;
+  bool hasSidecarOnlyFileBufferMetadata() const;
+  bool willUseSidecarOnlyFileBufferMetadata() const;
+  void setFileMgrVersion(const int32_t version);
+  void openExistingFilesFromManifest(const std::vector<FileMetadata>& data_files,
+                                     const std::vector<HeaderInfo>& header_infos);
   virtual FileBuffer* createBufferUnlocked(const ChunkKey& key,
                                            size_t pageSize = 0,
                                            const size_t numBytes = 0);
   virtual FileBuffer* createBufferFromHeaders(
       const ChunkKey& key,
       const std::vector<HeaderInfo>::const_iterator& headerStartIt,
-      const std::vector<HeaderInfo>::const_iterator& headerEndIt);
+      const std::vector<HeaderInfo>::const_iterator& headerEndIt,
+      const std::vector<int8_t>* metadataPayload = nullptr);
 
   // Migration functions
   void migrateToLatestFileMgrVersion();
@@ -493,7 +536,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   virtual FileBuffer* allocateBuffer(
       const ChunkKey& key,
       const std::vector<HeaderInfo>::const_iterator& headerStartIt,
-      const std::vector<HeaderInfo>::const_iterator& headerEndIt);
+      const std::vector<HeaderInfo>::const_iterator& headerEndIt,
+      const std::vector<int8_t>* metadataPayload = nullptr);
   virtual ChunkKeyToChunkMap::iterator deleteBufferUnlocked(
       const ChunkKeyToChunkMap::iterator chunk_it,
       const bool purge = true);

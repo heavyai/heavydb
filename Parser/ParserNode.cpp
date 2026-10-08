@@ -28,12 +28,14 @@
 #include <regex>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <typeinfo>
 
 #include "Analyzer/RangeTableEntry.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/SharedDictionaryValidator.h"
+#include "Catalog/TableConstraints.h"
 #include "DataMgr/FileMgr/FileBuffer.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
@@ -2859,7 +2861,8 @@ void set_string_field(rapidjson::Value& obj,
 
 std::string serialize_key_metainfo(
     const ShardKeyDef* shard_key_def,
-    const std::vector<SharedDictionaryDef>& shared_dict_defs) {
+    const std::vector<SharedDictionaryDef>& shared_dict_defs,
+    const std::vector<Catalog_Namespace::TableConstraint>& table_constraints = {}) {
   rapidjson::Document document;
   auto& allocator = document.GetAllocator();
   rapidjson::Value arr(rapidjson::kArrayType);
@@ -2884,7 +2887,12 @@ std::string serialize_key_metainfo(
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   arr.Accept(writer);
-  return buffer.GetString();
+  std::string key_metainfo = buffer.GetString();
+  for (const auto& table_constraint : table_constraints) {
+    key_metainfo = Catalog_Namespace::append_table_constraint_to_key_metainfo(
+        key_metainfo, table_constraint);
+  }
+  return key_metainfo;
 }
 
 template <typename LITERAL_TYPE,
@@ -3042,6 +3050,35 @@ void get_table_definitions_for_ctas(TableDescriptor& td,
   return it->second(td, p.get(), columns);
 }
 
+std::vector<std::string> strings_from_json_array(const rapidjson::Value& array,
+                                                 const std::string_view field_name) {
+  if (!array.IsArray()) {
+    throw std::runtime_error("CREATE TABLE constraint field '" + std::string(field_name) +
+                             "' must be an array.");
+  }
+  std::vector<std::string> strings;
+  strings.reserve(array.Size());
+  for (const auto& value : array.GetArray()) {
+    if (!value.IsString()) {
+      throw std::runtime_error("CREATE TABLE constraint field '" +
+                               std::string(field_name) +
+                               "' must contain only column names.");
+    }
+    strings.emplace_back(json_str(value));
+  }
+  return strings;
+}
+
+std::optional<std::string> optional_constraint_name(const rapidjson::Value& element) {
+  if (!element.HasMember("name") || element["name"].IsNull()) {
+    return std::nullopt;
+  }
+  if (!element["name"].IsString()) {
+    throw std::runtime_error("CREATE TABLE constraint name must be a string or null.");
+  }
+  return json_str(element["name"]);
+}
+
 void parse_elements(const rapidjson::Value& payload,
                     std::string element_name,
                     std::string& table_name,
@@ -3055,7 +3092,9 @@ void parse_elements(const rapidjson::Value& payload,
       table_element_list.emplace_back(std::move(col_def));
     } else if (json_str(element["type"]) == "SQL_COLUMN_CONSTRAINT") {
       CHECK(element.HasMember("name"));
-      if (json_str(element["name"]) == "SHARD_KEY") {
+      const auto constraint_name =
+          element["name"].IsString() ? json_str(element["name"]) : std::string{};
+      if (constraint_name == "SHARD_KEY") {
         CHECK(element.HasMember("columns"));
         CHECK(element["columns"].IsArray());
         const auto& columns = element["columns"].GetArray();
@@ -3064,7 +3103,7 @@ void parse_elements(const rapidjson::Value& payload,
         }
         auto shard_key_def = std::make_unique<ShardKeyDef>(json_str(columns[0]));
         table_element_list.emplace_back(std::move(shard_key_def));
-      } else if (json_str(element["name"]) == "SHARED_DICT") {
+      } else if (constraint_name == "SHARED_DICT") {
         CHECK(element.HasMember("columns"));
         CHECK(element["columns"].IsArray());
         const auto& columns = element["columns"].GetArray();
@@ -3087,8 +3126,46 @@ void parse_elements(const rapidjson::Value& payload,
         table_element_list.emplace_back(std::move(shared_dict_def));
 
       } else {
-        LOG(FATAL) << "Unsupported type for SQL_COLUMN_CONSTRAINT: "
-                   << json_str(element["name"]);
+        if (!element.HasMember("constraintType") ||
+            !element["constraintType"].IsString()) {
+          throw std::runtime_error(
+              "CREATE TABLE constraint is missing a string constraintType.");
+        }
+        const auto constraint_type =
+            boost::to_upper_copy<std::string>(json_str(element["constraintType"]));
+        if (!element.HasMember("columns")) {
+          throw std::runtime_error("CREATE TABLE constraint is missing columns.");
+        }
+        auto columns = strings_from_json_array(element["columns"], "columns");
+        auto constraint_name = optional_constraint_name(element);
+        if (constraint_type == "PRIMARY KEY" || constraint_type == "UNIQUE") {
+          auto unique_def = std::make_unique<UniqueDef>(constraint_type == "PRIMARY KEY",
+                                                        std::move(columns),
+                                                        std::move(constraint_name));
+          table_element_list.emplace_back(std::move(unique_def));
+        } else if (constraint_type == "FOREIGN KEY") {
+          if (!element.HasMember("references") || !element["references"].IsObject()) {
+            throw std::runtime_error(
+                "FOREIGN KEY constraint is missing a references object.");
+          }
+          const auto& references = element["references"].GetObject();
+          if (!references.HasMember("table") || !references["table"].IsString()) {
+            throw std::runtime_error(
+                "FOREIGN KEY references must include a string table name.");
+          }
+          if (!references.HasMember("columns")) {
+            throw std::runtime_error("FOREIGN KEY references must include columns.");
+          }
+          auto foreign_key_def = std::make_unique<ForeignKeyDef>(
+              std::move(columns),
+              json_str(references["table"]),
+              strings_from_json_array(references["columns"], "references.columns"),
+              std::move(constraint_name));
+          table_element_list.emplace_back(std::move(foreign_key_def));
+        } else {
+          throw std::runtime_error("Unsupported SQL column constraint type: " +
+                                   constraint_type);
+        }
       }
     } else {
       LOG(FATAL) << "Unsupported element type for CREATE TABLE: "
@@ -3216,10 +3293,57 @@ CreateTableStmt::CreateTableStmt(const rapidjson::Value& payload) {
   parse_options(payload, storage_options_);
 }
 
-void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& session,
-                                    TableDescriptor& td,
-                                    std::list<ColumnDescriptor>& columns,
-                                    std::vector<SharedDictionaryDef>& shared_dict_defs) {
+namespace {
+
+std::vector<std::string> table_constraint_column_names(
+    const std::list<std::unique_ptr<std::string>>& column_list) {
+  std::vector<std::string> column_names;
+  column_names.reserve(column_list.size());
+  for (const auto& column_name : column_list) {
+    column_names.emplace_back(*column_name);
+  }
+  return column_names;
+}
+
+Catalog_Namespace::TableConstraint table_constraint_from_unique_def(
+    const UniqueDef& unique_def) {
+  Catalog_Namespace::TableConstraint constraint;
+  constraint.type = unique_def.get_is_primarykey()
+                        ? Catalog_Namespace::TableConstraintType::PrimaryKey
+                        : Catalog_Namespace::TableConstraintType::Unique;
+  if (const auto constraint_name = unique_def.get_constraint_name()) {
+    constraint.name = *constraint_name;
+  }
+  constraint.column_names = table_constraint_column_names(unique_def.get_column_list());
+  return constraint;
+}
+
+Catalog_Namespace::TableConstraint table_constraint_from_foreign_key_def(
+    const ForeignKeyDef& foreign_key_def) {
+  Catalog_Namespace::TableConstraint constraint;
+  constraint.type = Catalog_Namespace::TableConstraintType::ForeignKey;
+  if (const auto constraint_name = foreign_key_def.get_constraint_name()) {
+    constraint.name = *constraint_name;
+  }
+  constraint.column_names =
+      table_constraint_column_names(foreign_key_def.get_column_list());
+
+  Catalog_Namespace::ForeignKeyReference reference;
+  reference.table_name = *foreign_key_def.get_foreign_table();
+  reference.column_names =
+      table_constraint_column_names(foreign_key_def.get_foreign_column_list());
+  constraint.foreign_key_reference = reference;
+  return constraint;
+}
+
+}  // namespace
+
+void CreateTableStmt::executeDryRun(
+    const Catalog_Namespace::SessionInfo& session,
+    TableDescriptor& td,
+    std::list<ColumnDescriptor>& columns,
+    std::vector<SharedDictionaryDef>& shared_dict_defs,
+    std::vector<Catalog_Namespace::TableConstraint>& table_constraints) {
   std::unordered_set<std::string> uc_col_names;
   const auto& catalog = session.getCatalog();
   const ShardKeyDef* shard_key_def{nullptr};
@@ -3236,6 +3360,16 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
         throw std::runtime_error("Specified more than one shard key");
       }
       shard_key_def = static_cast<const ShardKeyDef*>(e.get());
+      continue;
+    }
+    if (dynamic_cast<UniqueDef*>(e.get())) {
+      table_constraints.emplace_back(
+          table_constraint_from_unique_def(*static_cast<UniqueDef*>(e.get())));
+      continue;
+    }
+    if (dynamic_cast<ForeignKeyDef*>(e.get())) {
+      table_constraints.emplace_back(
+          table_constraint_from_foreign_key_def(*static_cast<ForeignKeyDef*>(e.get())));
       continue;
     }
     if (!dynamic_cast<ColumnDef*>(e.get())) {
@@ -3271,7 +3405,18 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
   if (td.shardedColumnId && !td.nShards) {
     throw std::runtime_error("SHARD_COUNT needs to be specified with SHARD_KEY.");
   }
-  td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
+  table_constraints =
+      catalog.normalizeTableConstraintsForCreate(&td, columns, table_constraints);
+  td.keyMetainfo =
+      serialize_key_metainfo(shard_key_def, shared_dict_defs, table_constraints);
+}
+
+void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& session,
+                                    TableDescriptor& td,
+                                    std::list<ColumnDescriptor>& columns,
+                                    std::vector<SharedDictionaryDef>& shared_dict_defs) {
+  std::vector<Catalog_Namespace::TableConstraint> table_constraints;
+  executeDryRun(session, td, columns, shared_dict_defs, table_constraints);
 }
 
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
@@ -3300,8 +3445,9 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   TableDescriptor td;
   std::list<ColumnDescriptor> columns;
   std::vector<SharedDictionaryDef> shared_dict_defs;
+  std::vector<Catalog_Namespace::TableConstraint> table_constraints;
 
-  executeDryRun(session, td, columns, shared_dict_defs);
+  executeDryRun(session, td, columns, shared_dict_defs, table_constraints);
   td.userId = session.get_currentUser().userId;
 
   catalog.createShardedTable(td, columns, shared_dict_defs);
@@ -3787,6 +3933,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          g_from_table_reordering,
                          false,
                          std::numeric_limits<size_t>::max(),
+                         0,
                          ExecutorType::Native,
                          outer_fragment_indices};
 
@@ -4871,6 +5018,41 @@ OptimizeTableStmt::OptimizeTableStmt(const rapidjson::Value& payload) {
   parse_options(payload, options_);
 }
 
+std::string OptimizeTableStmt::storageCompressionRewriteOption() const {
+  for (const auto& e : options_) {
+    if (!boost::iequals(*(e->get_name()), "STORAGE_COMPRESSION") &&
+        !boost::iequals(*(e->get_name()), "NATIVE_STORAGE_COMPRESSION")) {
+      continue;
+    }
+    const auto literal = dynamic_cast<const StringLiteral*>(e->get_value());
+    if (!literal) {
+      throw std::runtime_error("STORAGE_COMPRESSION must be a string parameter.");
+    }
+    const auto storage_compression = literal->get_stringval();
+    CHECK(storage_compression);
+    const auto value = boost::to_lower_copy<std::string>(*storage_compression);
+    if (value == "rewrite" || value == "current") {
+      return "current";
+    }
+    if (value == "true" || value == "1") {
+      return "enabled";
+    }
+    if (value == "lz4" || value == "snappy" || value == "gdeflate" ||
+        value == "bitcomp" || value == "bitcomp-sparse" || value == "bitcomp-default" ||
+        value == "adaptive" || value == "auto" || value == "none") {
+      return value;
+    }
+    if (value == "false" || value == "0") {
+      return {};
+    }
+    throw std::runtime_error(
+        "STORAGE_COMPRESSION must be REWRITE, CURRENT, LZ4, SNAPPY, GDEFLATE, "
+        "BITCOMP, BITCOMP-SPARSE, BITCOMP-DEFAULT, ADAPTIVE, AUTO, TRUE, FALSE, "
+        "or NONE.");
+  }
+  return {};
+}
+
 namespace {
 bool user_can_access_table(const Catalog_Namespace::SessionInfo& session_info,
                            const TableDescriptor* td,
@@ -4914,10 +5096,55 @@ void OptimizeTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID).get();
   const TableOptimizer optimizer(td, executor, catalog);
-  if (shouldVacuumDeletedRows()) {
+  const bool vacuum_deleted_rows = shouldVacuumDeletedRows();
+  const auto storage_compression_option = storageCompressionRewriteOption();
+  const bool rewrite_storage_payloads = !storage_compression_option.empty();
+  auto compression_config = File_Namespace::configured_native_storage_compression();
+  if (storage_compression_option == "none") {
+    compression_config = {false, "none", 0};
+  } else if (storage_compression_option == "enabled") {
+    if (!compression_config.enabled || boost::iequals(compression_config.codec, "none")) {
+      throw std::runtime_error(
+          "OPTIMIZE TABLE STORAGE_COMPRESSION=TRUE requires enabled native storage "
+          "compression with a configured codec.");
+    }
+  } else if (storage_compression_option == "lz4" ||
+             storage_compression_option == "snappy" ||
+             storage_compression_option == "gdeflate" ||
+             storage_compression_option == "bitcomp" ||
+             storage_compression_option == "bitcomp-sparse" ||
+             storage_compression_option == "bitcomp-default" ||
+             storage_compression_option == "adaptive" ||
+             storage_compression_option == "auto") {
+    compression_config = {true,
+                          storage_compression_option,
+                          File_Namespace::g_native_storage_compression_frame_size,
+                          File_Namespace::g_native_storage_compression_gdeflate_level};
+  }
+  if ((storage_compression_option == "lz4" || storage_compression_option == "snappy" ||
+       storage_compression_option == "gdeflate" ||
+       storage_compression_option == "bitcomp" ||
+       storage_compression_option == "bitcomp-sparse" ||
+       storage_compression_option == "bitcomp-default" ||
+       storage_compression_option == "adaptive" ||
+       storage_compression_option == "auto") &&
+      !File_Namespace::g_enable_native_storage_compression) {
+    throw std::runtime_error(
+        "OPTIMIZE TABLE with compressed STORAGE_COMPRESSION requires "
+        "--enable-native-storage-compression=true.");
+  }
+  if (rewrite_storage_payloads) {
+    File_Namespace::validate_native_storage_compression_config(compression_config);
+  }
+  if (vacuum_deleted_rows) {
     optimizer.vacuumDeletedRows();
   }
-  optimizer.recomputeMetadata();
+  if (!rewrite_storage_payloads || vacuum_deleted_rows) {
+    optimizer.recomputeMetadata();
+  }
+  if (rewrite_storage_payloads) {
+    optimizer.rewriteStoragePayloads(compression_config);
+  }
 }
 
 bool repair_type(std::list<std::unique_ptr<NameValueAssign>>& options) {

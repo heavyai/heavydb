@@ -418,6 +418,8 @@ class ArrowIpcBasic : public ::testing::Test {
     run_ddl_statement("DROP TABLE IF EXISTS test_data_text;");
     run_ddl_statement("DROP TABLE IF EXISTS test_data_array;");
     run_ddl_statement("DROP TABLE IF EXISTS test_data_array_text;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_data_not_null_dict;");
+    run_ddl_statement("DROP TABLE IF EXISTS test_data_not_null_array;");
 
     run_ddl_statement(R"(
       CREATE TABLE
@@ -458,6 +460,17 @@ class ArrowIpcBasic : public ::testing::Test {
           test_data_array_text(t TEXT[] ENCODING DICT);
     )");
 
+    run_ddl_statement(R"(
+        CREATE TABLE
+          test_data_not_null_dict(t TEXT NOT NULL ENCODING DICT(32));
+    )");
+
+    run_ddl_statement(R"(
+        CREATE TABLE
+          test_data_not_null_array(i INTEGER[] NOT NULL,
+                                   t TEXT[] NOT NULL ENCODING DICT(32));
+    )");
+
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (1, 1.1, 'foo');");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (2, 2.1, NULL);");
     run_ddl_statement("INSERT INTO arrow_ipc_test VALUES (NULL, 3.1, 'bar');");
@@ -474,6 +487,15 @@ class ArrowIpcBasic : public ::testing::Test {
     run_ddl_statement("INSERT INTO test_data_text VALUES ('world');");
     run_ddl_statement("INSERT INTO test_data_text VALUES ('');");
     run_ddl_statement("INSERT INTO test_data_text VALUES ('text');");
+
+    run_ddl_statement("INSERT INTO test_data_not_null_dict VALUES ('MAIL');");
+    run_ddl_statement("INSERT INTO test_data_not_null_dict VALUES ('SHIP');");
+    run_ddl_statement(
+        "INSERT INTO test_data_not_null_array VALUES ({1, NULL, 3}, "
+        "{'MAIL', NULL, 'SHIP'});");
+    run_ddl_statement(
+        "INSERT INTO test_data_not_null_array VALUES ({NULL, 5}, "
+        "{'SHIP', 'MAIL'});");
 
     {
       std::string arr = "{0, 1, 2}";
@@ -572,6 +594,80 @@ TEST_F(ArrowIpcBasic, IpcWire) {
       ASSERT_EQ(str, truth_strings.GetString(i));
     }
   }
+}
+
+TEST_F(ArrowIpcBasic, IpcWireNotNullDictionary) {
+  auto data_frame = execute_arrow_ipc("SELECT t FROM test_data_not_null_dict ORDER BY t;",
+                                      ExecutorDeviceType::CPU,
+                                      0,
+                                      -1,
+                                      TArrowTransport::type::WIRE);
+  auto df = ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::type::WIRE);
+
+  ASSERT_EQ(df.schema->num_fields(), 1);
+  ASSERT_EQ(df.record_batch->num_rows(), 2);
+  const auto& dictionary_array =
+      static_cast<const arrow::DictionaryArray&>(*df.record_batch->column(0));
+  const auto& indices =
+      static_cast<const arrow::Int32Array&>(*dictionary_array.indices());
+  const auto& dictionary =
+      static_cast<const arrow::StringArray&>(*dictionary_array.dictionary());
+  ASSERT_FALSE(indices.IsNull(0));
+  ASSERT_FALSE(indices.IsNull(1));
+  EXPECT_EQ("MAIL", dictionary.GetString(indices.Value(0)));
+  EXPECT_EQ("SHIP", dictionary.GetString(indices.Value(1)));
+}
+
+TEST_F(ArrowIpcBasic, IpcWireNotNullArrays) {
+  auto data_frame = execute_arrow_ipc("SELECT i, t FROM test_data_not_null_array;",
+                                      ExecutorDeviceType::CPU,
+                                      0,
+                                      -1,
+                                      TArrowTransport::type::WIRE);
+  auto df = ArrowOutput(data_frame, ExecutorDeviceType::CPU, TArrowTransport::type::WIRE);
+
+  ASSERT_EQ(df.schema->num_fields(), 2);
+  ASSERT_EQ(df.record_batch->num_rows(), 2);
+
+  const auto& integer_list =
+      static_cast<const arrow::ListArray&>(*df.record_batch->column(0));
+  ASSERT_FALSE(integer_list.IsNull(0));
+  const auto integer_values =
+      std::static_pointer_cast<arrow::Int32Array>(integer_list.value_slice(0));
+  ASSERT_EQ(integer_values->length(), 3);
+  EXPECT_EQ(1, integer_values->Value(0));
+  EXPECT_TRUE(integer_values->IsNull(1));
+  EXPECT_EQ(3, integer_values->Value(2));
+
+  const auto& string_list =
+      static_cast<const arrow::ListArray&>(*df.record_batch->column(1));
+  ASSERT_FALSE(string_list.IsNull(0));
+  const auto dictionary_values =
+      std::static_pointer_cast<arrow::DictionaryArray>(string_list.value_slice(0));
+  ASSERT_EQ(dictionary_values->length(), 3);
+  const auto& indices =
+      static_cast<const arrow::Int32Array&>(*dictionary_values->indices());
+  const auto& dictionary =
+      static_cast<const arrow::StringArray&>(*dictionary_values->dictionary());
+  EXPECT_EQ("MAIL", dictionary.GetString(indices.Value(0)));
+  EXPECT_TRUE(indices.IsNull(1));
+  EXPECT_EQ("SHIP", dictionary.GetString(indices.Value(2)));
+
+  const auto second_integer_values =
+      std::static_pointer_cast<arrow::Int32Array>(integer_list.value_slice(1));
+  ASSERT_EQ(second_integer_values->length(), 2);
+  EXPECT_TRUE(second_integer_values->IsNull(0));
+  EXPECT_EQ(5, second_integer_values->Value(1));
+
+  const auto second_dictionary_values =
+      std::static_pointer_cast<arrow::DictionaryArray>(string_list.value_slice(1));
+  ASSERT_EQ(second_dictionary_values->length(), 2);
+  const auto& second_indices =
+      static_cast<const arrow::Int32Array&>(*second_dictionary_values->indices());
+  const auto& second_dictionary =
+      static_cast<const arrow::StringArray&>(*second_dictionary_values->dictionary());
+  EXPECT_EQ("SHIP", second_dictionary.GetString(second_indices.Value(0)));
+  EXPECT_EQ("MAIL", second_dictionary.GetString(second_indices.Value(1)));
 }
 
 namespace {

@@ -143,6 +143,20 @@ extern "C" RUNTIME_EXPORT void agg_count_distinct_bitmap(int64_t* agg,
                                                          const int64_t min_val,
                                                          const int64_t bucket_size);
 
+extern "C" RUNTIME_EXPORT int8_t bit_is_set(const int8_t* bitset,
+                                            const int64_t val,
+                                            const int64_t min_val,
+                                            const int64_t max_val,
+                                            const int64_t null_val,
+                                            const int8_t null_bool_val);
+
+extern "C" RUNTIME_EXPORT int8_t segmented_bit_is_set(const int8_t* bitset_header,
+                                                      const int64_t val,
+                                                      const int64_t min_val,
+                                                      const int64_t max_val,
+                                                      const int64_t null_val,
+                                                      const int8_t null_bool_val);
+
 extern "C" RUNTIME_EXPORT int64_t decimal_division(int64_t const a,
                                                    int64_t const b,
                                                    int64_t const denom,
@@ -291,6 +305,11 @@ extern "C" RUNTIME_EXPORT void linear_probabilistic_count(uint8_t* bitmap,
                                                           const uint8_t* key_bytes,
                                                           const uint32_t key_len);
 
+extern "C" RUNTIME_EXPORT void hll_probabilistic_count(uint8_t* registers,
+                                                       const uint32_t precision_bits,
+                                                       const uint8_t* key_bytes,
+                                                       const uint32_t key_len);
+
 // Regular fixed_width_*_decode are only available from the JIT,
 // we need to call them for lazy fetch columns -- create wrappers.
 
@@ -303,6 +322,10 @@ extern "C" RUNTIME_EXPORT int64_t
 fixed_width_unsigned_decode_noinline(const int8_t* byte_stream,
                                      const int32_t byte_width,
                                      const int64_t pos);
+
+extern "C" RUNTIME_EXPORT const int8_t* segmented_column_ptr(const int8_t* descriptor,
+                                                             const int64_t pos,
+                                                             const int64_t elem_size);
 
 extern "C" RUNTIME_EXPORT float fixed_width_float_decode_noinline(
     const int8_t* byte_stream,

@@ -4,10 +4,13 @@
  */
 
 #include "ForeignDataImporter.h"
+#include "ParquetImportThreadPlanner.h"
 
+#include <atomic>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <filesystem>
+#include <limits>
 
 #include "Archive/S3Archive.h"
 #include "DataMgr/ForeignStorage/ForeignDataWrapperFactory.h"
@@ -20,6 +23,7 @@
 #include "Shared/measure.h"
 #include "Shared/misc.h"
 #include "Shared/scope.h"
+#include "Shared/thread_count.h"
 
 #include "DataMgr/ForeignStorage/RasterDataWrapper.h"
 #include "Fragmenter/RasterFragmenter.h"
@@ -239,6 +243,15 @@ std::unique_ptr<FragmentBuffers> get_fragment_buffers_for_fragment_id(
   return frag_buffers;
 }
 
+void populate_fragment_buffers(
+    foreign_storage::ForeignDataWrapper* data_wrapper,
+    std::unique_ptr<FragmentBuffers>& grouped_fragment_buffers) {
+  CHECK(grouped_fragment_buffers);
+  data_wrapper->populateChunkBatchBuffers(grouped_fragment_buffers->fragment_buffers,
+                                          {},
+                                          grouped_fragment_buffers->delete_buffer);
+}
+
 void load_foreign_data_buffers(
     Fragmenter_Namespace::InsertDataLoader::InsertConnector* connector,
     Catalog_Namespace::Catalog& catalog,
@@ -255,7 +268,8 @@ void load_foreign_data_buffers(
     std::list<std::unique_ptr<FragmentBuffers>>& buffers_to_load,
     std::list<std::unique_ptr<FragmentBuffers>>& buffer_pool,
     const bool accepts_prepopulated_delete_buffer,
-    const size_t batch_size) {
+    const size_t batch_size,
+    const size_t num_insert_threads) {
   Fragmenter_Namespace::InsertDataLoader insert_data_loader(*connector);
   while (true) {
     std::unique_ptr<FragmentBuffers> grouped_fragment_buffers;
@@ -283,7 +297,7 @@ void load_foreign_data_buffers(
                batched_fragment_buffers, batched_delete_buffer, batch_size)) {
         // get chunks for import
         Fragmenter_Namespace::InsertChunks insert_chunks{
-            table->tableId, catalog.getDatabaseId(), {}, {}};
+            table->tableId, catalog.getDatabaseId(), {}, {}, num_insert_threads};
 
         // create chunks from buffers
         for (const auto& [key, buffer] : fragment_buffers) {
@@ -378,7 +392,14 @@ import_export::ImportStatus import_foreign_data(
     const Catalog_Namespace::SessionInfo* session_info,
     const import_export::CopyParams& copy_params,
     const std::string& copy_from_source,
-    const size_t maximum_num_fragments_buffered) {
+    const size_t maximum_num_fragments_buffered,
+    const size_t num_fragment_loaders,
+    const size_t num_insert_threads) {
+  CHECK_GT(maximum_num_fragments_buffered, size_t{0});
+  CHECK_GT(num_fragment_loaders, size_t{0});
+  CHECK_LE(num_fragment_loaders, maximum_num_fragments_buffered);
+  CHECK_GT(num_insert_threads, size_t{0});
+
   import_export::ImportStatus import_status;
 
   std::mutex communication_mutex;
@@ -418,43 +439,130 @@ import_export::ImportStatus import_foreign_data(
                                 std::ref(buffers_to_load),
                                 std::ref(buffers_pool),
                                 data_wrapper->acceptsPrepopulatedDeleteBuffer(),
-                                data_wrapper->getOptimalBatchSize());
+                                data_wrapper->getOptimalBatchSize(),
+                                num_insert_threads);
 
-  for (int32_t fragment_id = 0; fragment_id <= max_fragment_id; ++fragment_id) {
-    std::unique_ptr<FragmentBuffers> grouped_fragment_buffers;
-    {
-      std::unique_lock communication_lock(communication_mutex);
-      buffers_to_load_condition.wait(communication_lock, [&]() {
-        return (buffers_to_load.size() < maximum_num_fragments_buffered &&
-                buffers_pool.size()) ||
-               load_failed;
-      });
-      if (load_failed) {
-        break;
-      }
-      grouped_fragment_buffers = get_fragment_buffers_for_fragment_id(
-          fragment_id, catalog, table, buffers_pool, data_wrapper->getOptimalBatchSize());
-    }
-
-    auto& fragment_buffers = grouped_fragment_buffers->fragment_buffers;
-    auto& delete_buffer = grouped_fragment_buffers->delete_buffer;
-
-    // get the buffers, accounting for the possibility of the requested fragment id being
-    // out of bounds
+  std::exception_ptr fragment_loader_exception;
+  if (num_fragment_loaders == 1) {
     try {
-      data_wrapper->populateChunkBatchBuffers(fragment_buffers, {}, delete_buffer);
-    } catch (const foreign_storage::RequestedFragmentIdOutOfBoundsException& except) {
-      break;
+      for (int32_t fragment_id = 0; fragment_id <= max_fragment_id; ++fragment_id) {
+        std::unique_ptr<FragmentBuffers> grouped_fragment_buffers;
+        {
+          std::unique_lock communication_lock(communication_mutex);
+          buffers_to_load_condition.wait(
+              communication_lock, [&]() { return !buffers_pool.empty() || load_failed; });
+          if (load_failed) {
+            break;
+          }
+          grouped_fragment_buffers =
+              get_fragment_buffers_for_fragment_id(fragment_id,
+                                                   catalog,
+                                                   table,
+                                                   buffers_pool,
+                                                   data_wrapper->getOptimalBatchSize());
+        }
+
+        try {
+          populate_fragment_buffers(data_wrapper, grouped_fragment_buffers);
+        } catch (const foreign_storage::RequestedFragmentIdOutOfBoundsException&) {
+          break;
+        }
+
+        std::unique_lock communication_lock(communication_mutex);
+        buffers_to_load.emplace_back(std::move(grouped_fragment_buffers));
+        buffers_to_load_condition.notify_all();
+      }
     } catch (...) {
+      fragment_loader_exception = std::current_exception();
       std::unique_lock communication_lock(communication_mutex);
       data_wrapper_error_occured = true;
       buffers_to_load_condition.notify_all();
-      throw;
     }
+  } else {
+    CHECK_NE(max_fragment_id, std::numeric_limits<int32_t>::max());
+    CHECK_GE(max_fragment_id, 0);
+    const auto max_fragment_index = static_cast<size_t>(max_fragment_id);
+    std::atomic<size_t> next_fragment_id{0};
+    size_t next_fragment_to_queue = 0;
 
-    std::unique_lock communication_lock(communication_mutex);
-    buffers_to_load.emplace_back(std::move(grouped_fragment_buffers));
-    buffers_to_load_condition.notify_all();
+    auto fragment_loader = [&]() {
+      try {
+        while (true) {
+          const auto fragment_id = next_fragment_id.fetch_add(1);
+          if (fragment_id > max_fragment_index) {
+            return;
+          }
+
+          std::unique_ptr<FragmentBuffers> grouped_fragment_buffers;
+          {
+            std::unique_lock communication_lock(communication_mutex);
+            buffers_to_load_condition.wait(communication_lock, [&]() {
+              return !buffers_pool.empty() || load_failed || data_wrapper_error_occured;
+            });
+            if (load_failed || data_wrapper_error_occured) {
+              return;
+            }
+            grouped_fragment_buffers =
+                get_fragment_buffers_for_fragment_id(static_cast<int32_t>(fragment_id),
+                                                     catalog,
+                                                     table,
+                                                     buffers_pool,
+                                                     data_wrapper->getOptimalBatchSize());
+          }
+
+          try {
+            populate_fragment_buffers(data_wrapper, grouped_fragment_buffers);
+          } catch (...) {
+            std::unique_lock communication_lock(communication_mutex);
+            data_wrapper_error_occured = true;
+            reset_buffers_and_move_to_pool_unlocked(
+                grouped_fragment_buffers,
+                buffers_pool,
+                data_wrapper->acceptsPrepopulatedDeleteBuffer());
+            buffers_to_load_condition.notify_all();
+            throw;
+          }
+
+          std::unique_lock communication_lock(communication_mutex);
+          buffers_to_load_condition.wait(communication_lock, [&]() {
+            return fragment_id == next_fragment_to_queue || load_failed ||
+                   data_wrapper_error_occured;
+          });
+          if (load_failed || data_wrapper_error_occured) {
+            reset_buffers_and_move_to_pool_unlocked(
+                grouped_fragment_buffers,
+                buffers_pool,
+                data_wrapper->acceptsPrepopulatedDeleteBuffer());
+            buffers_to_load_condition.notify_all();
+            return;
+          }
+          buffers_to_load.emplace_back(std::move(grouped_fragment_buffers));
+          ++next_fragment_to_queue;
+          buffers_to_load_condition.notify_all();
+        }
+      } catch (...) {
+        std::unique_lock communication_lock(communication_mutex);
+        data_wrapper_error_occured = true;
+        buffers_to_load_condition.notify_all();
+        throw;
+      }
+    };
+
+    std::vector<std::future<void>> fragment_loader_futures;
+    fragment_loader_futures.reserve(num_fragment_loaders);
+    for (size_t i = 0; i < num_fragment_loaders; ++i) {
+      fragment_loader_futures.emplace_back(
+          std::async(std::launch::async, fragment_loader));
+    }
+    for (auto& future : fragment_loader_futures) {
+      try {
+        future.get();
+      } catch (...) {
+        if (!fragment_loader_exception) {
+          fragment_loader_exception = std::current_exception();
+        }
+      }
+    }
   }
 
   {  // data wrapper processing has finished, notify loading thread
@@ -465,6 +573,10 @@ import_export::ImportStatus import_foreign_data(
 
   // any exceptions in separate loading thread will occur here
   load_future.get();
+
+  if (fragment_loader_exception) {
+    std::rethrow_exception(fragment_loader_exception);
+  }
 
   return import_status;
 }
@@ -683,6 +795,7 @@ ImportStatus ForeignDataImporter::importGeneralNoFinalize(
   // maximum number of fragments buffered in memory at any one time, affects
   // `maxFragRows` heuristic below
   const size_t maximum_num_fragments_buffered = g_max_import_num_fragment_buffered;
+  CHECK_GT(maximum_num_fragments_buffered, size_t{0});
   // set fragment size for proxy foreign table during import
   foreign_table->maxFragRows =
       get_proxy_foreign_table_fragment_size(maximum_num_fragments_buffered,
@@ -776,6 +889,32 @@ ImportStatus ForeignDataImporter::importGeneralNoFinalize(
     CHECK_GE(max_fragment_id, 0);
   }
 
+  size_t num_fragment_loaders = 1;
+  size_t num_insert_threads = 1;
+#ifdef ENABLE_IMPORT_PARQUET
+  if (copy_params.source_type == SourceType::kParquetFile && copy_params.threads > 0 &&
+      max_fragment_id != std::numeric_limits<int32_t>::max()) {
+    const auto logical_columns =
+        catalog.getAllColumnMetadataForTable(table_->tableId, false, false, false);
+    const auto max_threads = num_import_threads(copy_params.threads);
+    const auto available_fragments = static_cast<size_t>(max_fragment_id) + 1;
+    const auto thread_plan = plan_parquet_import_threads(
+        max_threads,
+        logical_columns.size(),
+        std::min(maximum_num_fragments_buffered, available_fragments));
+
+    foreign_table->options[foreign_storage::AbstractFileStorageDataWrapper::THREADS_KEY] =
+        std::to_string(thread_plan.threads_per_fragment);
+    num_fragment_loaders = std::max<size_t>(1, thread_plan.concurrent_fragments - 1);
+    num_insert_threads = thread_plan.threads_per_fragment;
+    LOG(INFO) << "Parquet import using " << num_fragment_loaders
+              << " fragment producers and " << num_insert_threads
+              << " workers per decode/insert stage (" << max_threads
+              << " maximum threads, " << maximum_num_fragments_buffered
+              << " fragment buffers).";
+  }
+#endif
+
   import_status = import_foreign_data(max_fragment_id,
                                       connector_.get(),
                                       catalog,
@@ -784,7 +923,9 @@ ImportStatus ForeignDataImporter::importGeneralNoFinalize(
                                       session_info,
                                       copy_params,
                                       copy_from_source,
-                                      maximum_num_fragments_buffered);
+                                      maximum_num_fragments_buffered,
+                                      num_fragment_loaders,
+                                      num_insert_threads);
 
   return import_status;
 }

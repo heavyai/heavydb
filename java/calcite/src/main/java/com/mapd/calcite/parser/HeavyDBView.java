@@ -36,7 +36,15 @@ public class HeavyDBView extends HeavyDBTable implements TranslatableTable {
   private final Object initLock = new Object();
 
   public HeavyDBView(String view_sql, TTableDetails ri, HeavyDBParser mp) {
-    super(ri);
+    this(view_sql, ri, mp, null, null);
+  }
+
+  public HeavyDBView(String view_sql,
+          TTableDetails ri,
+          HeavyDBParser mp,
+          String schemaName,
+          String tableName) {
+    super(ri, schemaName, tableName);
     this.viewSql = view_sql;
     // Calcite 1.41 asks for view row types while the parser context is already
     // established. Defer planning until that point instead of recursively

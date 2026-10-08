@@ -34,8 +34,8 @@ std::string get_file_server_options() {
 #if defined(HAVE_AWS_S3)
       "S3_BUCKET, "
       "S3_ENDPOINT, "
-#endif  // defined(HAVE_AWS_S3)
       "S3_USE_VIRTUAL_ADDRESSING, "
+#endif  // defined(HAVE_AWS_S3)
       "STORAGE_TYPE.";
 }
 

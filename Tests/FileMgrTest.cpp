@@ -9,14 +9,22 @@
  */
 
 #include <gtest/gtest.h>
+#include <atomic>
 #include <boost/filesystem.hpp>  // TODO(Misiu): Update FileMgr API to remove this.
+#include <chrono>
+#include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
+#include <numeric>
+#include <thread>
 #include "DataMgr/FileMgr/CachingFileMgr.h"
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "DataMgrTestHelpers.h"
 #include "Shared/File.h"
+#include "Shared/file_delete.h"
 #include "TestHelpers.h"
 
 extern bool g_read_only;
@@ -25,17 +33,59 @@ namespace fs = std::filesystem;
 namespace fn = File_Namespace;
 namespace bf = boost::filesystem;
 
+namespace File_Namespace {
+extern bool g_enable_file_mgr_manifests;
+extern bool g_enable_native_storage_compression;
+extern bool g_enable_file_buffer_metadata_sidecar_only;
+extern std::string g_native_storage_compression_codec;
+extern size_t g_native_storage_compression_frame_size;
+}  // namespace File_Namespace
+
 constexpr const char* kReadOnlyWriteError{"Error trying to write file"};
 constexpr const char* kReadOnlyCreateError{"Error trying to create file"};
 constexpr const char* kFileMgrPath{"./FileMgrTestDir"};
 constexpr const char* kTestDataDir{"./test_dir"};
 constexpr const char* kDataDir{"./test_dir/mapd_data"};
 constexpr const char* kTempFile{"./test_dir/mapd_data/temp.txt"};
+constexpr const char* kFileBufferMetadataManifestFilename{
+    "file_buffer_metadata_manifest_v1"};
+constexpr const char* kFileBufferMetadataPendingManifestFilename{
+    "file_buffer_metadata_manifest_v1.pending"};
+constexpr const char* kPageHeaderManifestFilename{"page_header_manifest_v1"};
 
 namespace {
 struct ExpectedException : public std::runtime_error {
   ExpectedException(const std::string& msg) : std::runtime_error(msg) {}
 };
+
+TEST(FileIo, RejectsOverflowingPageOffsets) {
+  auto* file = std::tmpfile();
+  ASSERT_NE(file, nullptr);
+  int8_t byte{0};
+  EXPECT_THROW(fn::readPartialPage(file,
+                                   size_t(2),
+                                   size_t(0),
+                                   size_t(1),
+                                   std::numeric_limits<size_t>::max(),
+                                   &byte,
+                                   "temporary file"),
+               std::overflow_error);
+  EXPECT_EQ(std::fclose(file), 0);
+}
+
+TEST(FileDelete, DirectoryScanFailureDoesNotEscape) {
+  std::atomic<bool> cleaner_running{true};
+  std::thread stop_cleaner([&cleaner_running] {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    cleaner_running = false;
+  });
+  const auto missing_path =
+      (bf::temp_directory_path() / bf::unique_path("file-delete-missing-%%%%-%%%%"))
+          .string();
+
+  EXPECT_NO_THROW(file_delete(cleaner_running, 1, missing_path));
+  stop_cleaner.join();
+}
 
 // Wrapper that executes a given function with the expectation that it throws an exception
 // containing specific text.
@@ -77,6 +127,72 @@ void compare_buffers(AbstractBuffer* left_buffer,
   right_buffer->read(right_array.data(), num_bytes);
   ASSERT_EQ(left_array, right_array);
   ASSERT_EQ(left_buffer->hasEncoder(), right_buffer->hasEncoder());
+}
+
+std::vector<char> read_file_bytes(const fs::path& path) {
+  std::ifstream input(path, std::ios::binary);
+  CHECK(input.is_open());
+  return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+}
+
+template <typename T>
+T read_manifest_value(std::istream& input) {
+  T value{};
+  input.read(reinterpret_cast<char*>(&value), sizeof(value));
+  CHECK(input);
+  return value;
+}
+
+struct MetadataManifestRecordLocation {
+  std::streamoff payload_size_offset;
+  uint64_t payload_size;
+};
+
+MetadataManifestRecordLocation find_metadata_manifest_record(
+    const fs::path& manifest_path,
+    const ChunkKey& target_chunk_key) {
+  std::ifstream manifest(manifest_path, std::ios::in | std::ios::binary);
+  CHECK(manifest.is_open());
+
+  (void)read_manifest_value<uint64_t>(manifest);  // magic
+  (void)read_manifest_value<uint32_t>(manifest);  // manifest version
+  (void)read_manifest_value<int32_t>(manifest);   // database version
+  (void)read_manifest_value<int32_t>(manifest);   // FileMgr version
+  (void)read_manifest_value<int32_t>(manifest);   // epoch
+  (void)read_manifest_value<int32_t>(manifest);   // epoch floor
+
+  const auto file_count = read_manifest_value<uint64_t>(manifest);
+  for (uint64_t file_idx = 0; file_idx < file_count; ++file_idx) {
+    (void)read_manifest_value<int32_t>(manifest);   // file id
+    (void)read_manifest_value<uint64_t>(manifest);  // page size
+    (void)read_manifest_value<uint64_t>(manifest);  // file size
+    (void)read_manifest_value<uint64_t>(manifest);  // page count
+    (void)read_manifest_value<int64_t>(manifest);   // legacy mtime identity
+  }
+
+  const auto record_count = read_manifest_value<uint64_t>(manifest);
+  for (uint64_t record_idx = 0; record_idx < record_count; ++record_idx) {
+    const auto chunk_key_size = read_manifest_value<uint32_t>(manifest);
+    CHECK_GT(chunk_key_size, uint32_t(0));
+    ChunkKey chunk_key(chunk_key_size);
+    manifest.read(reinterpret_cast<char*>(chunk_key.data()),
+                  chunk_key.size() * sizeof(int32_t));
+    CHECK(manifest);
+    (void)read_manifest_value<int32_t>(manifest);   // version epoch
+    (void)read_manifest_value<int32_t>(manifest);   // file id
+    (void)read_manifest_value<uint64_t>(manifest);  // page number
+    const auto payload_size_offset = manifest.tellg();
+    CHECK_GE(payload_size_offset, std::streamoff(0));
+    const auto payload_size = read_manifest_value<uint64_t>(manifest);
+    if (chunk_key == target_chunk_key) {
+      return {payload_size_offset, payload_size};
+    }
+    manifest.seekg(static_cast<std::streamoff>(payload_size), std::ios::cur);
+    CHECK(manifest);
+  }
+
+  throw std::runtime_error("Could not find metadata manifest record for chunk " +
+                           show_chunk(target_chunk_key));
 }
 
 void compare_metadata(const std::shared_ptr<ChunkMetadata> lhs_metadata,
@@ -137,6 +253,64 @@ void append_data(AbstractBuffer* data_buffer, std::vector<int32_t>& append_data)
   write_data(data_buffer, append_data, -1);
 }
 
+class NativeStorageCompressionGuard {
+ public:
+  NativeStorageCompressionGuard(const bool enabled,
+                                const std::string& codec,
+                                const size_t frame_size,
+                                const int gdeflate_level = 1)
+      : old_enabled_(fn::g_enable_native_storage_compression)
+      , old_codec_(fn::g_native_storage_compression_codec)
+      , old_frame_size_(fn::g_native_storage_compression_frame_size)
+      , old_gdeflate_level_(fn::g_native_storage_compression_gdeflate_level) {
+    fn::g_enable_native_storage_compression = enabled;
+    fn::g_native_storage_compression_codec = codec;
+    fn::g_native_storage_compression_frame_size = frame_size;
+    fn::g_native_storage_compression_gdeflate_level = gdeflate_level;
+  }
+
+  ~NativeStorageCompressionGuard() {
+    fn::g_enable_native_storage_compression = old_enabled_;
+    fn::g_native_storage_compression_codec = old_codec_;
+    fn::g_native_storage_compression_frame_size = old_frame_size_;
+    fn::g_native_storage_compression_gdeflate_level = old_gdeflate_level_;
+  }
+
+ private:
+  const bool old_enabled_;
+  const std::string old_codec_;
+  const size_t old_frame_size_;
+  const int old_gdeflate_level_;
+};
+
+class FileBufferMetadataSidecarOnlyGuard {
+ public:
+  explicit FileBufferMetadataSidecarOnlyGuard(const bool enabled)
+      : old_enabled_(fn::g_enable_file_buffer_metadata_sidecar_only) {
+    fn::g_enable_file_buffer_metadata_sidecar_only = enabled;
+  }
+
+  ~FileBufferMetadataSidecarOnlyGuard() {
+    fn::g_enable_file_buffer_metadata_sidecar_only = old_enabled_;
+  }
+
+ private:
+  const bool old_enabled_;
+};
+
+class FileMgrManifestsGuard {
+ public:
+  explicit FileMgrManifestsGuard(const bool enabled)
+      : old_enabled_(fn::g_enable_file_mgr_manifests) {
+    fn::g_enable_file_mgr_manifests = enabled;
+  }
+
+  ~FileMgrManifestsGuard() { fn::g_enable_file_mgr_manifests = old_enabled_; }
+
+ private:
+  const bool old_enabled_;
+};
+
 }  // namespace
 
 class FileInfoTest : public testing::Test {
@@ -194,7 +368,7 @@ class FileInfoTest : public testing::Test {
   std::vector<int32_t> getTypeInfoBufferFromSqlInfo(const SQLTypeInfo& sql_type) {
     CHECK_EQ(NUM_METADATA, 10);  // Defined in FileBuffer.h
     std::vector<int32_t> type_data(NUM_METADATA);
-    type_data[0] = Encoder::metadata_version_;
+    type_data[0] = Encoder::MetadataVersion::kRaster;
     type_data[1] = 1;  // Set has_encoder.
     type_data[2] = static_cast<int32_t>(sql_type.get_type());
     type_data[3] = static_cast<int32_t>(sql_type.get_subtype());
@@ -645,6 +819,23 @@ TEST_F(OpenExistingFileTest, Metadata) {
   EXPECT_EQ(headers[1].page.pageNum, 2U);  // 2 because page 1 was deleted.
 }
 
+TEST_F(OpenExistingFileTest, RejectsInvalidPageHeaderSizes) {
+  for (const int32_t invalid_header_size : {-4, 3, 40}) {
+    fs::copy(source_data_file, data_file_name, fs::copy_options::overwrite_existing);
+
+    auto fd = heavyai::fopen(data_file_name, "r+w");
+    fn::FileInfo file_info(
+        fm_.get(), data_file_id, fd, page_size, num_pages, data_file_name);
+    ASSERT_EQ(file_info.write(0,
+                              sizeof(invalid_header_size),
+                              reinterpret_cast<const int8_t*>(&invalid_header_size)),
+              sizeof(invalid_header_size));
+
+    std::vector<fn::HeaderInfo> headers;
+    EXPECT_THROW(file_info.openExistingFile(headers), std::runtime_error);
+  }
+}
+
 TEST_F(FileInfoTest, SyncToDisk) {
   // Write data to file
   int8_t write_buf[8]{1, 2, 3, 4, 5, 6, 7, 8};
@@ -715,6 +906,34 @@ class FileMgrTest : public AbstractFileMgrTest {
     fn::FileMgrParams file_mgr_params;
     file_mgr_params.max_rollback_epochs = max_rollback_epochs;
     global_file_mgr_->setFileMgrParams(db_id, tb_id, file_mgr_params);
+  }
+
+  int32_t readMetadataVersion(const fn::FileBuffer* file_buffer) {
+    CHECK(file_buffer);
+    CHECK_GT(file_buffer->numMetadataPages(), size_t(0));
+    const auto metadata_page = file_buffer->getMetadataPage().current().page;
+    auto file_info = getFileMgr()->getFileInfoForFileId(metadata_page.fileId);
+    CHECK(file_info);
+    int32_t metadata_version{-1};
+    const auto metadata_version_offset =
+        metadata_page.pageNum * getFileMgr()->getMetadataPageSize() +
+        file_buffer->reservedHeaderSize() + 2 * sizeof(size_t);
+    CHECK_EQ(file_info->read(metadata_version_offset,
+                             sizeof(metadata_version),
+                             reinterpret_cast<int8_t*>(&metadata_version)),
+             sizeof(metadata_version));
+    return metadata_version;
+  }
+
+  int32_t readFileMgrVersion() {
+    const auto version_path = fs::path(
+        getFileMgr()->getFilePath(fn::FileMgr::FILE_MGR_VERSION_FILENAME).string());
+    std::ifstream version_file(version_path, std::ios::in | std::ios::binary);
+    CHECK(version_file.is_open());
+    int32_t version{-1};
+    version_file.read(reinterpret_cast<char*>(&version), sizeof(version));
+    CHECK(version_file);
+    return version;
   }
 
   std::unique_ptr<fn::GlobalFileMgr> global_file_mgr_;
@@ -874,6 +1093,1396 @@ TEST_F(FileMgrTest, buffer_append_and_recovery) {
       compare_buffers_and_metadata(&source_buffer, file_buffer);
     }
   }
+}
+
+TEST_F(FileMgrTest, native_storage_compressed_checkpoint_reopen) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 42, 0};
+  constexpr size_t element_count = 4096;
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(element_count, 7);
+  append_data(&source_buffer, data);
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+    // Compressible native chunks should be written compressed before the first
+    // checkpoint, not rewritten opportunistically during metadata flush.
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    ASSERT_LT(file_buffer->storageCompressedSize(), source_buffer.size());
+    file_mgr->checkpoint();
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    ASSERT_EQ(readMetadataVersion(file_buffer),
+              Encoder::MetadataVersion::kNativeStorageCompression);
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+  }
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+  }
+}
+
+TEST_F(FileMgrTest, native_storage_compression_rejects_inconsistent_frame_count) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 55, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 71);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+
+  const auto metadata_page = file_buffer->getMetadataPage().current().page;
+  auto file_info = file_mgr->getFileInfoForFileId(metadata_page.fileId);
+  ASSERT_NE(file_info, nullptr);
+  std::vector<int8_t> metadata_page_bytes(file_mgr->getMetadataPageSize());
+  const auto metadata_page_offset =
+      metadata_page.pageNum * file_mgr->getMetadataPageSize();
+  ASSERT_EQ(
+      file_info->read(
+          metadata_page_offset, metadata_page_bytes.size(), metadata_page_bytes.data()),
+      metadata_page_bytes.size());
+
+  constexpr uint32_t compression_magic = 0x48435331;
+  size_t compression_metadata_offset = metadata_page_bytes.size();
+  for (size_t offset = 0;
+       offset + sizeof(compression_magic) <= metadata_page_bytes.size();
+       ++offset) {
+    uint32_t candidate = 0;
+    std::memcpy(&candidate, metadata_page_bytes.data() + offset, sizeof(candidate));
+    if (candidate == compression_magic) {
+      compression_metadata_offset = offset;
+      break;
+    }
+  }
+  ASSERT_LT(compression_metadata_offset, metadata_page_bytes.size());
+
+  constexpr size_t frame_count_offset = 3 * sizeof(uint32_t) + 3 * sizeof(uint64_t);
+  const uint64_t inconsistent_frame_count = 1;
+  ASSERT_EQ(file_info->write(
+                metadata_page_offset + compression_metadata_offset + frame_count_offset,
+                sizeof(inconsistent_frame_count),
+                reinterpret_cast<const int8_t*>(&inconsistent_frame_count)),
+            sizeof(inconsistent_frame_count));
+  ASSERT_EQ(file_info->syncToDisk(), 0);
+
+  fs::remove(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  // Corrupt optional-format metadata must reject the table without terminating the
+  // server process.
+  EXPECT_THROW(
+      {
+        auto reopened_file_mgr = getFileMgr();
+        (void)reopened_file_mgr->getBuffer(compressed_key, source_buffer.size());
+      },
+      std::runtime_error);
+}
+
+TEST_F(FileMgrTest, native_storage_compression_rejects_corrupt_payload) {
+  NativeStorageCompressionGuard compression_guard{true, "snappy", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 58, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 73);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  ASSERT_GT(file_buffer->storageCompressedSize(), size_t{0});
+  file_mgr->checkpoint();
+
+  const auto data_page = file_buffer->getMultiPage().front().current().page;
+  auto file_info = file_mgr->getFileInfoForFileId(data_page.fileId);
+  ASSERT_NE(file_info, nullptr);
+  const std::vector<int8_t> corrupt_prefix(
+      std::min<size_t>(size_t{16}, file_buffer->storageCompressedSize()), 0);
+  const auto payload_offset =
+      data_page.pageNum * file_buffer->pageSize() + file_buffer->reservedHeaderSize();
+  ASSERT_EQ(
+      file_info->write(payload_offset, corrupt_prefix.size(), corrupt_prefix.data()),
+      corrupt_prefix.size());
+  ASSERT_EQ(file_info->syncToDisk(), 0);
+
+  std::vector<int8_t> output(source_buffer.size());
+  EXPECT_THROW(file_buffer->read(output.data(), output.size()), std::runtime_error);
+}
+
+TEST_F(FileMgrTest, native_storage_compression_reopens_legacy_experimental_metadata) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 53, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 59);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+
+  // Compression files written by the research branch before the format-version
+  // guard used the raster metadata version followed by the compression marker.
+  const auto metadata_page = file_buffer->getMetadataPage().current().page;
+  auto file_info = file_mgr->getFileInfoForFileId(metadata_page.fileId);
+  const int32_t legacy_metadata_version = Encoder::MetadataVersion::kRaster;
+  const auto metadata_version_offset =
+      metadata_page.pageNum * file_mgr->getMetadataPageSize() +
+      file_buffer->reservedHeaderSize() + 2 * sizeof(size_t);
+  ASSERT_EQ(file_info->write(metadata_version_offset,
+                             sizeof(legacy_metadata_version),
+                             reinterpret_cast<const int8_t*>(&legacy_metadata_version)),
+            sizeof(legacy_metadata_version));
+  ASSERT_EQ(file_info->syncToDisk(), 0);
+  fs::remove(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest,
+       native_storage_compression_reopens_version_two_uncompressed_metadata) {
+  NativeStorageCompressionGuard compression_guard{false, "snappy", 1024};
+  const ChunkKey uncompressed_key{db_id, tb_id, 57, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 63);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(uncompressed_key, &source_buffer);
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+  ASSERT_EQ(readMetadataVersion(file_buffer), Encoder::MetadataVersion::kRaster);
+
+  // Early versions of the branch wrote the current version followed by a zero marker
+  // for uncompressed chunks. The remainder of a newly allocated metadata page is zero,
+  // so changing the version reproduces that durable layout exactly.
+  const auto metadata_page = file_buffer->getMetadataPage().current().page;
+  auto file_info = file_mgr->getFileInfoForFileId(metadata_page.fileId);
+  const int32_t legacy_metadata_version =
+      Encoder::MetadataVersion::kNativeStorageCompression;
+  const auto metadata_version_offset =
+      metadata_page.pageNum * file_mgr->getMetadataPageSize() +
+      file_buffer->reservedHeaderSize() + 2 * sizeof(size_t);
+  ASSERT_EQ(file_info->write(metadata_version_offset,
+                             sizeof(legacy_metadata_version),
+                             reinterpret_cast<const int8_t*>(&legacy_metadata_version)),
+            sizeof(legacy_metadata_version));
+  ASSERT_EQ(file_info->syncToDisk(), 0);
+  fs::remove(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(uncompressed_key, source_buffer.size());
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, native_storage_compression_preserves_rollback_epoch) {
+  NativeStorageCompressionGuard compression_guard{true, "snappy", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 54, 0};
+
+  TestHelpers::TestBuffer initial_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> initial_data(4096, 61);
+  append_data(&initial_buffer, initial_data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &initial_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+  const auto initial_epoch = global_file_mgr_->getTableEpoch(db_id, tb_id);
+
+  std::vector<int32_t> updated_data(4096, 67);
+  write_data(file_buffer, updated_data, 0);
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  ASSERT_GT(global_file_mgr_->getTableEpoch(db_id, tb_id), initial_epoch);
+
+  // A rollback image must remain durable after replacement pages become eligible for
+  // reuse. Allocating another chunk catches implementations that retain only a delete
+  // marker, rather than the prior payload, after a compressed rewrite.
+  const ChunkKey reuse_key{db_id, tb_id, 59, 0};
+  TestHelpers::TestBuffer reuse_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> reuse_data(4096, 71);
+  append_data(&reuse_buffer, reuse_data);
+  file_mgr->putBuffer(reuse_key, &reuse_buffer);
+  file_mgr->checkpoint();
+
+  fn::FileMgrParams file_mgr_params;
+  file_mgr_params.epoch = initial_epoch;
+  global_file_mgr_->setFileMgrParams(db_id, tb_id, file_mgr_params);
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, initial_buffer.size());
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&initial_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, file_mgr_manifests_are_opt_in) {
+  FileMgrManifestsGuard manifests_guard{false};
+  auto file_mgr = getFileMgr();
+  const auto page_header_manifest_path =
+      fs::path(file_mgr->getFilePath(kPageHeaderManifestFilename).string());
+  const auto metadata_manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+
+  ASSERT_FALSE(fs::exists(page_header_manifest_path));
+  ASSERT_FALSE(fs::exists(metadata_manifest_path));
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  EXPECT_FALSE(fs::exists(page_header_manifest_path));
+  EXPECT_FALSE(fs::exists(metadata_manifest_path));
+  auto file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_NE(file_buffer, nullptr);
+  std::vector<int32_t> value(1);
+  file_buffer->read(reinterpret_cast<int8_t*>(value.data()), sizeof(int32_t));
+  EXPECT_EQ(value, std::vector<int32_t>({1}));
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_manifest_falls_back_to_metadata_pages) {
+  FileMgrManifestsGuard manifests_guard{true};
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 48, 0};
+  constexpr size_t element_count = 4096;
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(element_count, 41);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  ASSERT_TRUE(fs::exists(manifest_path));
+  fs::remove(manifest_path);
+  ASSERT_FALSE(fs::exists(manifest_path));
+
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, page_header_manifest_rejects_same_timestamp_file_change) {
+  FileMgrManifestsGuard manifests_guard{true};
+  auto file_mgr = getFileMgr();
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  // The first reopen scans physical page headers and creates the disposable manifest.
+  file_mgr = getFileMgr();
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kPageHeaderManifestFilename).string());
+  ASSERT_TRUE(fs::exists(manifest_path));
+  const auto manifest_before = read_file_bytes(manifest_path);
+  ASSERT_FALSE(manifest_before.empty());
+
+  auto file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_NE(file_buffer, nullptr);
+  const auto metadata_page = file_buffer->getMetadataPage().current().page;
+  auto metadata_file = file_mgr->getFileInfoForFileId(metadata_page.fileId);
+  ASSERT_NE(metadata_file, nullptr);
+
+  const auto original_mtime = fs::last_write_time(metadata_file->file_path);
+  int8_t unchanged_byte{0};
+  const auto byte_offset = metadata_page.pageNum * file_mgr->getMetadataPageSize();
+  ASSERT_EQ(metadata_file->read(byte_offset, sizeof(unchanged_byte), &unchanged_byte),
+            sizeof(unchanged_byte));
+  ASSERT_EQ(metadata_file->write(byte_offset, sizeof(unchanged_byte), &unchanged_byte),
+            sizeof(unchanged_byte));
+  ASSERT_EQ(metadata_file->syncToDisk(), 0);
+
+  // Recreate the old coarse-timestamp collision. The strong change token must still
+  // notice the ctime/inode identity change and force a physical header scan.
+  fs::last_write_time(metadata_file->file_path, original_mtime);
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  const auto manifest_after = read_file_bytes(manifest_path);
+  EXPECT_NE(manifest_before, manifest_after);
+  file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_NE(file_buffer, nullptr);
+  std::vector<int32_t> value(1);
+  file_buffer->read(reinterpret_cast<int8_t*>(value.data()), sizeof(int32_t));
+  EXPECT_EQ(value, std::vector<int32_t>({1}));
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_manifest_reopens_without_metadata_page_read) {
+  FileMgrManifestsGuard manifests_guard{true};
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 49, 0};
+  constexpr size_t element_count = 4096;
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(element_count, 43);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  ASSERT_TRUE(fs::exists(manifest_path));
+
+  const auto metadata_page = file_buffer->getMetadataPage().current().page;
+  auto metadata_file = file_mgr->getFileInfoForFileId(metadata_page.fileId);
+  const auto original_mtime = fs::last_write_time(metadata_file->file_path);
+  const std::vector<int8_t> corrupt_page_size(sizeof(size_t), 0);
+  ASSERT_EQ(metadata_file->write(metadata_page.pageNum * file_mgr->getMetadataPageSize() +
+                                     file_buffer->reservedHeaderSize(),
+                                 corrupt_page_size.size(),
+                                 corrupt_page_size.data()),
+            corrupt_page_size.size());
+  ASSERT_EQ(metadata_file->syncToDisk(), 0);
+  fs::last_write_time(metadata_file->file_path, original_mtime);
+
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_only_reopens_without_metadata_pages) {
+  setMaxRollbackEpochs(0);
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+  const ChunkKey compressed_key{db_id, tb_id, 50, 0};
+  constexpr size_t element_count = 4096;
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(element_count, 47);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  ASSERT_EQ(readFileMgrVersion(), fn::FileMgr::DEFAULT_FILE_MGR_VERSION);
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  ASSERT_EQ(readFileMgrVersion(), fn::FileMgr::SIDECAR_METADATA_FILE_MGR_VERSION);
+
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  ASSERT_TRUE(fs::exists(manifest_path));
+
+  const auto data_page = file_buffer->getMultiPage().front().current().page;
+  auto data_file = file_mgr->getFileInfoForFileId(data_page.fileId);
+  const auto original_mtime = fs::last_write_time(data_file->file_path);
+  fs::last_write_time(data_file->file_path, original_mtime + std::chrono::seconds(2));
+
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  ASSERT_EQ(readFileMgrVersion(), fn::FileMgr::SIDECAR_METADATA_FILE_MGR_VERSION);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_reopens_large_compression_metadata) {
+  setMaxRollbackEpochs(0);
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 64};
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+  const ChunkKey compressed_key{db_id, tb_id, 76, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(65536, 31);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+  ASSERT_EQ(file_buffer->storageCompressionFrameSize(), size_t(64));
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  const auto record = find_metadata_manifest_record(manifest_path, compressed_key);
+  ASSERT_GT(record.payload_size, file_mgr->getMetadataPageSize());
+
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+  ASSERT_EQ(file_buffer->storageCompressionFrameSize(), size_t(64));
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_rejects_oversized_payload) {
+  setMaxRollbackEpochs(0);
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+
+  auto file_mgr = getFileMgr();
+  file_mgr->checkpoint();
+  auto file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  const auto record = find_metadata_manifest_record(manifest_path, default_key);
+  const auto manifest_size = fs::file_size(manifest_path);
+  ASSERT_GT(manifest_size, sizeof(uint64_t));
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  // Use the checksum-free legacy envelope so this specifically exercises the payload
+  // allocation bound rather than failing the checksum first.
+  {
+    std::fstream manifest(manifest_path, std::ios::in | std::ios::out | std::ios::binary);
+    ASSERT_TRUE(manifest.is_open());
+    const uint32_t legacy_manifest_version{1};
+    manifest.seekp(sizeof(uint64_t), std::ios::beg);
+    manifest.write(reinterpret_cast<const char*>(&legacy_manifest_version),
+                   sizeof(legacy_manifest_version));
+    const uint64_t oversized_payload = fn::FileMgr::MAX_SIDECAR_METADATA_PAYLOAD_SIZE + 1;
+    manifest.seekp(record.payload_size_offset);
+    manifest.write(reinterpret_cast<const char*>(&oversized_payload),
+                   sizeof(oversized_payload));
+  }
+  fs::resize_file(manifest_path, manifest_size - sizeof(uint64_t));
+
+  EXPECT_THROW((void)getFileMgr(), std::runtime_error);
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_version_downgrades_after_restore) {
+  setMaxRollbackEpochs(0);
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+
+  auto file_mgr = getFileMgr();
+  file_mgr->checkpoint();
+  auto file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  ASSERT_EQ(readFileMgrVersion(), fn::FileMgr::SIDECAR_METADATA_FILE_MGR_VERSION);
+
+  setMaxRollbackEpochs(1);
+  file_mgr = getFileMgr();
+  file_mgr->checkpoint();
+  file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_GT(file_buffer->numMetadataPages(), size_t(0));
+  ASSERT_EQ(readFileMgrVersion(), fn::FileMgr::DEFAULT_FILE_MGR_VERSION);
+
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_GT(file_buffer->numMetadataPages(), size_t(0));
+  ASSERT_EQ(readFileMgrVersion(), fn::FileMgr::DEFAULT_FILE_MGR_VERSION);
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_checksum_rejects_corruption) {
+  setMaxRollbackEpochs(0);
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+
+  auto file_mgr = getFileMgr();
+  file_mgr->checkpoint();
+  auto file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  ASSERT_GT(fs::file_size(manifest_path), sizeof(uint64_t));
+
+  {
+    std::fstream manifest(manifest_path, std::ios::in | std::ios::out | std::ios::binary);
+    ASSERT_TRUE(manifest.is_open());
+    manifest.seekg(-1, std::ios::end);
+    char checksum_byte{0};
+    manifest.read(&checksum_byte, 1);
+    checksum_byte ^= 0x5a;
+    manifest.seekp(-1, std::ios::end);
+    manifest.write(&checksum_byte, 1);
+  }
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  EXPECT_THROW((void)getFileMgr(), std::runtime_error);
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_reopens_version_one_manifest) {
+  setMaxRollbackEpochs(0);
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+
+  auto file_mgr = getFileMgr();
+  file_mgr->checkpoint();
+  auto file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  const auto manifest_size = fs::file_size(manifest_path);
+  ASSERT_GT(manifest_size, sizeof(uint64_t));
+
+  {
+    std::fstream manifest(manifest_path, std::ios::in | std::ios::out | std::ios::binary);
+    ASSERT_TRUE(manifest.is_open());
+    const uint32_t legacy_version{1};
+    manifest.seekp(sizeof(uint64_t), std::ios::beg);
+    manifest.write(reinterpret_cast<const char*>(&legacy_version),
+                   sizeof(legacy_version));
+  }
+  fs::resize_file(manifest_path, manifest_size - sizeof(uint64_t));
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  std::vector<int32_t> value(1);
+  file_buffer->read(reinterpret_cast<int8_t*>(value.data()), sizeof(int32_t));
+  EXPECT_EQ(value, std::vector<int32_t>({1}));
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_requires_sidecar_file_mgr_version) {
+  setMaxRollbackEpochs(0);
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+
+  auto file_mgr = getFileMgr();
+  file_mgr->checkpoint();
+  auto file_buffer = file_mgr->getBuffer(default_key, sizeof(int32_t));
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  ASSERT_EQ(readFileMgrVersion(), fn::FileMgr::SIDECAR_METADATA_FILE_MGR_VERSION);
+
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  const auto version_path =
+      fs::path(file_mgr->getFilePath(fn::FileMgr::FILE_MGR_VERSION_FILENAME).string());
+  const auto manifest_size = fs::file_size(manifest_path);
+  ASSERT_GT(manifest_size, sizeof(uint64_t));
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  // Convert the manifest to the checksum-free v1 representation, then relabel both
+  // it and the table as the legacy FileMgr version. The sidecar-only sentinel must
+  // not be accepted without the storage-version fence that tells older binaries to
+  // reject this table format.
+  {
+    std::fstream manifest(manifest_path, std::ios::in | std::ios::out | std::ios::binary);
+    ASSERT_TRUE(manifest.is_open());
+    const uint32_t legacy_manifest_version{1};
+    const int32_t legacy_file_mgr_version{fn::FileMgr::DEFAULT_FILE_MGR_VERSION};
+    manifest.seekp(sizeof(uint64_t), std::ios::beg);
+    manifest.write(reinterpret_cast<const char*>(&legacy_manifest_version),
+                   sizeof(legacy_manifest_version));
+    manifest.seekp(sizeof(uint64_t) + sizeof(uint32_t) + sizeof(int32_t), std::ios::beg);
+    manifest.write(reinterpret_cast<const char*>(&legacy_file_mgr_version),
+                   sizeof(legacy_file_mgr_version));
+  }
+  fs::resize_file(manifest_path, manifest_size - sizeof(uint64_t));
+  {
+    std::ofstream version_file(version_path,
+                               std::ios::out | std::ios::binary | std::ios::trunc);
+    ASSERT_TRUE(version_file.is_open());
+    const int32_t legacy_file_mgr_version{fn::FileMgr::DEFAULT_FILE_MGR_VERSION};
+    version_file.write(reinterpret_cast<const char*>(&legacy_file_mgr_version),
+                       sizeof(legacy_file_mgr_version));
+  }
+
+  EXPECT_THROW((void)getFileMgr(), std::runtime_error);
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_only_checkpoint_converts_clean_chunk) {
+  setMaxRollbackEpochs(0);
+  const ChunkKey key{db_id, tb_id, 51, 0};
+  constexpr size_t element_count = 4096;
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(element_count, 53);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  fn::FileBuffer* file_buffer{nullptr};
+  {
+    FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{false};
+    file_buffer = file_mgr->putBuffer(key, &source_buffer);
+    file_mgr->checkpoint();
+    ASSERT_GT(file_buffer->numMetadataPages(), size_t(0));
+  }
+
+  {
+    FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+    ASSERT_FALSE(file_buffer->isDirty());
+    file_mgr->checkpoint();
+    ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+
+    const auto manifest_path =
+        fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+    ASSERT_TRUE(fs::exists(manifest_path));
+
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+    file_mgr = getFileMgr();
+    file_buffer = file_mgr->getBuffer(key, source_buffer.size());
+    ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+  }
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_only_survives_flag_disable) {
+  setMaxRollbackEpochs(0);
+  const ChunkKey key{db_id, tb_id, 55, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 59);
+  append_data(&source_buffer, data);
+
+  {
+    FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->putBuffer(key, &source_buffer);
+    file_mgr->checkpoint();
+    ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+  }
+
+  {
+    FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{false};
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->getBuffer(key, source_buffer.size());
+    ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+
+    file_mgr->checkpoint();
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+    file_mgr = getFileMgr();
+    file_buffer = file_mgr->getBuffer(key, source_buffer.size());
+    ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+  }
+}
+
+TEST_F(FileMgrTest, file_buffer_metadata_sidecar_only_recovers_pending_manifest) {
+  setMaxRollbackEpochs(0);
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+  const ChunkKey key{db_id, tb_id, 56, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 61);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(key, &source_buffer);
+  file_mgr->checkpoint();
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+
+  const auto manifest_path =
+      fs::path(file_mgr->getFilePath(kFileBufferMetadataManifestFilename).string());
+  const auto pending_manifest_path = fs::path(
+      file_mgr->getFilePath(kFileBufferMetadataPendingManifestFilename).string());
+  ASSERT_TRUE(fs::exists(manifest_path));
+  ASSERT_FALSE(fs::exists(pending_manifest_path));
+  fs::rename(manifest_path, pending_manifest_path);
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(key, source_buffer.size());
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+  ASSERT_TRUE(fs::exists(manifest_path));
+  ASSERT_FALSE(fs::exists(pending_manifest_path));
+}
+
+TEST_F(FileMgrTest, native_storage_compression_adapts_frame_size_to_metadata_page) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 64};
+  const ChunkKey compressed_key{db_id, tb_id, 46, 0};
+  constexpr size_t element_count = 65536;
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(element_count, 31);
+  append_data(&source_buffer, data);
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    file_mgr->checkpoint();
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    ASSERT_GT(file_buffer->storageCompressionFrameSize(), size_t(64));
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+  }
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    ASSERT_GT(file_buffer->storageCompressionFrameSize(), size_t(64));
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+  }
+}
+
+TEST_F(FileMgrTest, native_storage_compression_sidecar_preserves_requested_frame_size) {
+  setMaxRollbackEpochs(0);
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 64};
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+  const ChunkKey compressed_key{db_id, tb_id, 76, 0};
+  constexpr size_t element_count = 65536;
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(element_count, 31);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+  ASSERT_EQ(file_buffer->storageCompressionFrameSize(), size_t(64));
+  ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+#ifdef HAVE_NVCOMP_GDEFLATE
+TEST_F(FileMgrTest, native_storage_gdeflate_requires_sidecar_only_metadata) {
+  NativeStorageCompressionGuard compression_guard{true, "gdeflate", 64 * 1024};
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{false};
+
+  EXPECT_THROW(fn::validate_native_storage_compression_config(
+                   fn::configured_native_storage_compression()),
+               std::invalid_argument);
+}
+
+TEST_F(FileMgrTest, native_storage_gdeflate_rejects_rollback_tables) {
+  setMaxRollbackEpochs(1);
+  NativeStorageCompressionGuard compression_guard{true, "gdeflate", 64 * 1024};
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+  const ChunkKey compressed_key{db_id, tb_id, 78, 0};
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 43);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  EXPECT_THROW(file_mgr->putBuffer(compressed_key, &source_buffer), std::runtime_error);
+}
+
+TEST_F(FileMgrTest, native_storage_gdeflate_rejects_invalid_compression_level) {
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+
+  for (const int invalid_level : {-1, 13}) {
+    NativeStorageCompressionGuard compression_guard{
+        true, "gdeflate", 64 * 1024, invalid_level};
+    EXPECT_THROW(fn::validate_native_storage_compression_config(
+                     fn::configured_native_storage_compression()),
+                 std::invalid_argument);
+  }
+}
+
+TEST_F(FileMgrTest, native_storage_gdeflate_sidecar_checkpoint_reopens) {
+  setMaxRollbackEpochs(0);
+  constexpr size_t frame_size = 64 * 1024;
+  NativeStorageCompressionGuard compression_guard{true, "gdeflate", frame_size, 1};
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+  const ChunkKey compressed_key{db_id, tb_id, 77, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(512 * 1024);
+  for (size_t i = 0; i < data.size(); ++i) {
+    data[i] = static_cast<int32_t>((i / 64) % 17);
+  }
+  append_data(&source_buffer, data);
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+    ASSERT_TRUE(file_buffer->isGdeflateStorageCompressed());
+    ASSERT_EQ(file_buffer->storageCompressionFrameSize(), frame_size);
+    ASSERT_LT(file_buffer->storageCompressedSize(), source_buffer.size());
+    file_mgr->checkpoint();
+    ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+    ASSERT_EQ(readFileMgrVersion(), fn::FileMgr::SIDECAR_METADATA_FILE_MGR_VERSION);
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+  }
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+    ASSERT_TRUE(file_buffer->isGdeflateStorageCompressed());
+    ASSERT_EQ(file_buffer->storageCompressionFrameSize(), frame_size);
+    ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+
+    const size_t offset = frame_size - 23;
+    const size_t length = frame_size + 71;
+    std::vector<int8_t> actual(length);
+    file_buffer->readWithReaderThreads(actual.data(), length, offset, 4);
+    const auto* expected = reinterpret_cast<const int8_t*>(data.data());
+    EXPECT_EQ(std::memcmp(actual.data(), expected + offset, length), 0);
+  }
+}
+#endif
+
+#ifdef HAVE_NVCOMP_BITCOMP
+TEST_F(FileMgrTest, native_storage_adaptive_frame_growth_preserves_value_alignment) {
+  setMaxRollbackEpochs(3);
+  constexpr size_t requested_frame_size = 64;
+  NativeStorageCompressionGuard compression_guard{true, "adaptive", requested_frame_size};
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{false};
+  const ChunkKey compressed_key{db_id, tb_id, 83, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(65536);
+  std::iota(data.begin(), data.end(), int32_t{0});
+  append_data(&source_buffer, data);
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+    ASSERT_TRUE(file_buffer->isBitcompStorageCompressed());
+    ASSERT_GT(file_buffer->storageCompressionFrameSize(), requested_frame_size);
+    ASSERT_EQ(file_buffer->storageCompressionFrameSize() % sizeof(int32_t), size_t(0));
+    ASSERT_LT(file_buffer->storageCompressedSize(), source_buffer.size());
+    file_mgr->checkpoint();
+    ASSERT_GT(file_buffer->numMetadataPages(), size_t(0));
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+  }
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+  ASSERT_TRUE(file_buffer->isBitcompStorageCompressed());
+  ASSERT_EQ(file_buffer->storageCompressionFrameSize() % sizeof(int32_t), size_t(0));
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, native_storage_bitcomp_codecs_checkpoint_reopen) {
+  setMaxRollbackEpochs(0);
+  constexpr size_t frame_size = 64 * 1024;
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+  int column_id = 79;
+  for (const std::string codec : {"bitcomp-sparse", "bitcomp-default"}) {
+    SCOPED_TRACE(codec);
+    NativeStorageCompressionGuard compression_guard{true, codec, frame_size};
+    const ChunkKey compressed_key{db_id, tb_id, column_id++, 0};
+
+    TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+    std::vector<int32_t> data(512 * 1024);
+    for (size_t i = 0; i < data.size(); ++i) {
+      data[i] = static_cast<int32_t>((i / 64) % 17);
+    }
+    append_data(&source_buffer, data);
+
+    {
+      auto file_mgr = getFileMgr();
+      auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+      ASSERT_TRUE(file_buffer->isBitcompStorageCompressed());
+      ASSERT_EQ(file_buffer->storageCompressionFrameSize(), frame_size);
+      ASSERT_LT(file_buffer->storageCompressedSize(), source_buffer.size());
+      file_mgr->checkpoint();
+      ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+      compare_buffers_and_metadata(&source_buffer, file_buffer);
+      global_file_mgr_->closeFileMgr(db_id, tb_id);
+    }
+
+    {
+      auto file_mgr = getFileMgr();
+      auto file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+      ASSERT_TRUE(file_buffer->isBitcompStorageCompressed());
+      ASSERT_EQ(file_buffer->storageCompressionFrameSize(), frame_size);
+      ASSERT_EQ(file_buffer->numMetadataPages(), size_t(0));
+      compare_buffers_and_metadata(&source_buffer, file_buffer);
+
+      const size_t offset = frame_size - 23;
+      const size_t length = frame_size + 71;
+      std::vector<int8_t> actual(length);
+      file_buffer->readWithReaderThreads(actual.data(), length, offset, 4);
+      const auto* expected = reinterpret_cast<const int8_t*>(data.data());
+      EXPECT_EQ(std::memcmp(actual.data(), expected + offset, length), 0);
+    }
+  }
+}
+
+TEST_F(FileMgrTest, native_storage_adaptive_codec_selects_smallest_representation) {
+  constexpr size_t frame_size = 64 * 1024;
+  NativeStorageCompressionGuard compression_guard{true, "adaptive", frame_size};
+  FileBufferMetadataSidecarOnlyGuard sidecar_only_guard{true};
+  setMaxRollbackEpochs(0);
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(512 * 1024);
+  for (size_t i = 0; i < data.size(); ++i) {
+    data[i] = static_cast<int32_t>((i / 64) % 17);
+  }
+  append_data(&source_buffer, data);
+
+  {
+    auto file_mgr = getFileMgr();
+    std::vector<std::unique_ptr<TestHelpers::TestBuffer>> codec_sources;
+    const auto write_with_codec = [&](const int32_t column_id, const std::string& codec) {
+      fn::g_native_storage_compression_codec = codec;
+      codec_sources.emplace_back(
+          std::make_unique<TestHelpers::TestBuffer>(SQLTypeInfo{kINT}));
+      append_data(codec_sources.back().get(), data);
+      return file_mgr->putBuffer(ChunkKey{db_id, tb_id, column_id, 0},
+                                 codec_sources.back().get());
+    };
+    auto snappy_buffer = write_with_codec(85, "snappy");
+    auto bitcomp_buffer = write_with_codec(86, "bitcomp-default");
+    auto adaptive_buffer = write_with_codec(88, "adaptive");
+
+    ASSERT_TRUE(adaptive_buffer->isStorageCompressed());
+    const auto physical_size = [&](const auto* buffer) {
+      return buffer->isStorageCompressed() ? buffer->storageCompressedSize()
+                                           : source_buffer.size();
+    };
+    auto expected_size = std::min({source_buffer.size(),
+                                   physical_size(snappy_buffer),
+                                   physical_size(bitcomp_buffer)});
+    EXPECT_EQ(physical_size(adaptive_buffer), expected_size);
+    file_mgr->checkpoint();
+    compare_buffers_and_metadata(&source_buffer, snappy_buffer);
+    compare_buffers_and_metadata(&source_buffer, bitcomp_buffer);
+    compare_buffers_and_metadata(&source_buffer, adaptive_buffer);
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+  }
+
+  {
+    auto file_mgr = getFileMgr();
+    auto adaptive_buffer =
+        file_mgr->getBuffer(ChunkKey{db_id, tb_id, 88, 0}, source_buffer.size());
+    ASSERT_TRUE(adaptive_buffer->isStorageCompressed());
+    compare_buffers_and_metadata(&source_buffer, adaptive_buffer);
+  }
+}
+#endif
+
+TEST_F(FileMgrTest, native_storage_compression_fallback_allows_append) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey fallback_key{db_id, tb_id, 43, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data{1};
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(fallback_key, &source_buffer);
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  ASSERT_EQ(readMetadataVersion(file_buffer), Encoder::MetadataVersion::kRaster);
+
+  data = {2};
+  append_data(&source_buffer, data);
+  file_buffer = file_mgr->putBuffer(fallback_key, &source_buffer);
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, native_storage_compression_allows_append_rewrite) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 44, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> first_batch(4096, 11);
+  append_data(&source_buffer, first_batch);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  ASSERT_LT(file_buffer->storageCompressedSize(), source_buffer.size());
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+
+  std::vector<int32_t> second_batch(2048, 19);
+  append_data(&source_buffer, second_batch);
+  file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  // The first mutation materializes the old compressed payload once. Additional writes
+  // in this epoch remain raw until checkpoint instead of recompressing the full growing
+  // chunk after every append.
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, native_storage_compression_batches_appends_until_checkpoint) {
+  NativeStorageCompressionGuard compression_guard{true, "snappy", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 59, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> first_batch(4096, 11);
+  append_data(&source_buffer, first_batch);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  file_mgr->checkpoint();
+
+  for (int batch = 0; batch < 8; ++batch) {
+    std::vector<int32_t> next_batch(512, 20 + batch);
+    append_data(&source_buffer, next_batch);
+    file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+    ASSERT_FALSE(file_buffer->isStorageCompressed());
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+  }
+
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, native_storage_compression_drops_empty_rollback_page_suffix) {
+  NativeStorageCompressionGuard compression_guard{true, "snappy", 64 * 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 80, 0};
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->createBuffer(compressed_key);
+  file_buffer->initEncoder(SQLTypeInfo{kINT});
+  const auto values_per_page = file_buffer->pageDataSize() / sizeof(int32_t);
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> first_batch(2 * values_per_page, 11);
+  append_data(&source_buffer, first_batch);
+  file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  file_mgr->checkpoint();
+
+  std::vector<int32_t> second_batch(2 * values_per_page, 17);
+  append_data(&source_buffer, second_batch);
+  file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  ASSERT_GT(file_buffer->pageCount(), size_t(1));
+
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  ASSERT_EQ(file_buffer->pageCount(), size_t(1));
+  ASSERT_FALSE(file_buffer->getMultiPage().front().pageVersions.empty());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, native_storage_compression_failed_rewrite_preserves_payload) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 53, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> first_batch(4096, 61);
+  append_data(&source_buffer, first_batch);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+
+  // An invalid explicit rewrite must fail before releasing the current physical pages.
+  const fn::NativeStorageCompressionConfig invalid_config{true, "lz4", 0};
+  EXPECT_THROW(file_mgr->rewriteStoragePayloadsWithPrefix(compressed_key, invalid_config),
+               std::invalid_argument);
+
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  ASSERT_EQ(file_buffer->size(), source_buffer.size());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, native_storage_compression_put_preserves_existing_codec) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 58, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> first_batch(4096, 71);
+  append_data(&source_buffer, first_batch);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  file_mgr->checkpoint();
+
+  std::vector<int32_t> second_batch(128, 73);
+  append_data(&source_buffer, second_batch);
+  // Once a chunk is compressed, subsequent writes use its persisted codec and frame
+  // size. A changed server default must not alter or invalidate that on-disk format.
+  fn::g_native_storage_compression_frame_size = 0;
+  file_mgr->putBuffer(compressed_key, &source_buffer);
+
+  ASSERT_FALSE(source_buffer.isDirty());
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isLz4StorageCompressed());
+  EXPECT_EQ(file_buffer->storageCompressionFrameSize(), size_t(1024));
+}
+
+TEST_F(FileMgrTest, native_storage_compression_snappy_reopens) {
+  NativeStorageCompressionGuard compression_guard{true, "snappy", 64 * 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 48, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  // Keep this above the parallel compression threshold so the framed Snappy path is
+  // covered by a persistent round trip.
+  std::vector<int32_t> data(512 * 1024, 41);
+  append_data(&source_buffer, data);
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+    ASSERT_LT(file_buffer->storageCompressedSize(), source_buffer.size());
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+    file_mgr->checkpoint();
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+  }
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+  }
+}
+
+TEST_F(FileMgrTest, native_storage_compression_reads_logical_subranges) {
+  constexpr size_t frame_size = 1024;
+  std::vector<int32_t> data(4096);
+  for (size_t i = 0; i < data.size(); ++i) {
+    data[i] = static_cast<int32_t>(i / (frame_size / sizeof(int32_t)));
+  }
+
+  for (size_t codec_idx = 0; codec_idx < size_t{2}; ++codec_idx) {
+    const std::string codec = codec_idx == 0 ? "lz4" : "snappy";
+    SCOPED_TRACE("codec=" + codec);
+    NativeStorageCompressionGuard compression_guard{true, codec, frame_size};
+    const ChunkKey compressed_key{db_id, tb_id, static_cast<int32_t>(70 + codec_idx), 0};
+    TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+    append_data(&source_buffer, data);
+
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    file_mgr->checkpoint();
+
+    const std::vector<std::pair<size_t, size_t>> ranges{
+        {0, 17},
+        {frame_size - 7, 23},
+        {2 * frame_size + 31, 3 * frame_size + 19},
+        {source_buffer.size() - 19, 19}};
+    const auto* const expected = reinterpret_cast<const int8_t*>(data.data());
+    for (const auto& [offset, length] : ranges) {
+      ASSERT_LE(offset + length, source_buffer.size());
+      std::vector<int8_t> actual(length);
+      file_buffer->readWithReaderThreads(actual.data(), length, offset, 4);
+      EXPECT_EQ(std::memcmp(actual.data(), expected + offset, length), 0)
+          << "codec=" << codec << " offset=" << offset << " length=" << length;
+    }
+  }
+}
+
+TEST_F(FileMgrTest, native_storage_compression_rewrite_uses_explicit_codec) {
+  NativeStorageCompressionGuard compression_guard{true, "snappy", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 53, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 47);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  file_mgr->checkpoint();
+
+  const fn::NativeStorageCompressionConfig lz4_config{true, "lz4", 1024};
+  const auto lz4_stats =
+      file_mgr->rewriteStoragePayloadsWithPrefix(compressed_key, lz4_config);
+  EXPECT_EQ(lz4_stats.chunks_rewritten, size_t(1));
+  ASSERT_TRUE(file_buffer->isLz4StorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+
+  const fn::NativeStorageCompressionConfig uncompressed_config{false, "none", 0};
+  const auto uncompressed_stats =
+      file_mgr->rewriteStoragePayloadsWithPrefix(compressed_key, uncompressed_config);
+  EXPECT_EQ(uncompressed_stats.chunks_rewritten, size_t(1));
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+
+  file_mgr->checkpoint();
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  compare_buffers_and_metadata(&source_buffer, file_buffer);
+}
+
+TEST_F(FileMgrTest, native_storage_compression_update_preserves_existing_codec) {
+  NativeStorageCompressionGuard compression_guard{true, "snappy", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 54, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 59);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  file_mgr->checkpoint();
+
+  fn::g_enable_native_storage_compression = false;
+  std::vector<int32_t> update_values(64, 61);
+  const size_t update_element_offset = 128;
+  std::copy(
+      update_values.begin(), update_values.end(), data.begin() + update_element_offset);
+  file_buffer->write(reinterpret_cast<int8_t*>(update_values.data()),
+                     update_values.size() * sizeof(int32_t),
+                     update_element_offset * sizeof(int32_t));
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+
+  TestHelpers::TestBuffer expected_buffer{SQLTypeInfo{kINT}};
+  append_data(&expected_buffer, data);
+  compare_buffers(&expected_buffer, file_buffer, expected_buffer.size());
+
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, expected_buffer.size());
+  ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+  compare_buffers(&expected_buffer, file_buffer, expected_buffer.size());
+}
+
+TEST_F(FileMgrTest, native_storage_compression_handles_reserved_first_append) {
+  NativeStorageCompressionGuard compression_guard{true, "snappy", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 52, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 53);
+  append_data(&source_buffer, data);
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->createBuffer(compressed_key);
+    file_buffer->initEncoder(SQLTypeInfo{kINT});
+
+    file_buffer->reserve(source_buffer.size());
+    ASSERT_FALSE(file_buffer->isStorageCompressed());
+    ASSERT_EQ(file_buffer->size(), size_t(0));
+
+    append_data(file_buffer, data);
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+    ASSERT_LT(file_buffer->storageCompressedSize(), source_buffer.size());
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+
+    file_mgr->checkpoint();
+    global_file_mgr_->closeFileMgr(db_id, tb_id);
+  }
+
+  {
+    auto file_mgr = getFileMgr();
+    auto file_buffer = file_mgr->getBuffer(compressed_key, source_buffer.size());
+    ASSERT_TRUE(file_buffer->isStorageCompressed());
+    ASSERT_TRUE(file_buffer->isSnappyStorageCompressed());
+    compare_buffers_and_metadata(&source_buffer, file_buffer);
+  }
+}
+
+TEST_F(FileMgrTest, native_storage_compression_allows_update_rewrite) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 1024};
+  const ChunkKey compressed_key{db_id, tb_id, 45, 0};
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> data(4096, 23);
+  append_data(&source_buffer, data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  ASSERT_LT(file_buffer->storageCompressedSize(), source_buffer.size());
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+
+  std::vector<int32_t> update_values(128, 29);
+  const size_t update_element_offset = 512;
+  const size_t update_byte_offset = sizeof(int32_t) * update_element_offset;
+  std::copy(
+      update_values.begin(), update_values.end(), data.begin() + update_element_offset);
+  TestHelpers::TestBuffer expected_buffer{SQLTypeInfo{kINT}};
+  append_data(&expected_buffer, data);
+  file_buffer->write(reinterpret_cast<int8_t*>(update_values.data()),
+                     update_values.size() * sizeof(int32_t),
+                     update_byte_offset);
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  ASSERT_EQ(expected_buffer.size(), file_buffer->size());
+  compare_buffers(&expected_buffer, file_buffer, expected_buffer.size());
+
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, expected_buffer.size());
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  ASSERT_EQ(expected_buffer.size(), file_buffer->size());
+  compare_buffers(&expected_buffer, file_buffer, expected_buffer.size());
+}
+
+TEST_F(FileMgrTest, native_storage_compression_rewrite_to_uncompressed_reopens) {
+  NativeStorageCompressionGuard compression_guard{true, "lz4", 16};
+  const ChunkKey compressed_key{db_id, tb_id, 47, 0};
+  constexpr size_t element_count = 4096;
+
+  TestHelpers::TestBuffer source_buffer{SQLTypeInfo{kINT}};
+  std::vector<int32_t> compressible_data(element_count, 37);
+  append_data(&source_buffer, compressible_data);
+
+  auto file_mgr = getFileMgr();
+  auto file_buffer = file_mgr->putBuffer(compressed_key, &source_buffer);
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+  ASSERT_LT(file_buffer->storageCompressedSize(), source_buffer.size());
+  file_mgr->checkpoint();
+  ASSERT_TRUE(file_buffer->isStorageCompressed());
+
+  std::vector<int32_t> fallback_data(element_count);
+  uint32_t value = 0x12345678U;
+  for (auto& item : fallback_data) {
+    value ^= value << 13;
+    value ^= value >> 17;
+    value ^= value << 5;
+    item = static_cast<int32_t>(value);
+  }
+  TestHelpers::TestBuffer expected_buffer{SQLTypeInfo{kINT}};
+  append_data(&expected_buffer, fallback_data);
+
+  file_buffer->write(reinterpret_cast<int8_t*>(fallback_data.data()),
+                     fallback_data.size() * sizeof(int32_t),
+                     0);
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  ASSERT_EQ(expected_buffer.size(), file_buffer->size());
+  compare_buffers(&expected_buffer, file_buffer, expected_buffer.size());
+
+  file_mgr->checkpoint();
+  global_file_mgr_->closeFileMgr(db_id, tb_id);
+
+  file_mgr = getFileMgr();
+  file_buffer = file_mgr->getBuffer(compressed_key, expected_buffer.size());
+  ASSERT_FALSE(file_buffer->isStorageCompressed());
+  ASSERT_EQ(expected_buffer.size(), file_buffer->size());
+  compare_buffers(&expected_buffer, file_buffer, expected_buffer.size());
 }
 
 TEST_F(FileMgrTest, buffer_update_and_recovery) {
@@ -1657,8 +3266,8 @@ TEST_F(FileMgrUnitTest, SimulateReadError) {
   ASSERT_NE(f, nullptr);
   int8_t buf;
   ASSERT_DEATH(fn::read(f, 0, 1, &buf, data_file),
-               "Expected bytes read: 1, actual bytes read: 0, offset: 0, file stream "
-               "error set: true, EOF reached: false, error reading file: Is a directory");
+               "Error trying to read file: .*test_file, offset: 0, size: 1, error was: "
+               "Is a directory");
 }
 
 TEST_F(FileMgrUnitTest, InitializeWithUncheckpointedFreedFirstPage) {
@@ -1781,6 +3390,19 @@ class RebrandMigrationTest : public FileMgrUnitTest {
     return version_number;
   }
 };
+
+TEST_F(RebrandMigrationTest, RejectsNewerFileMgrVersion) {
+  auto global_file_mgr = initializeGFM();
+  constexpr int32_t db_id{1};
+  constexpr int32_t table_id{1};
+  global_file_mgr->closeFileMgr(db_id, table_id);
+  setFileMgrVersion(fn::FileMgr::LATEST_FILE_MGR_VERSION + 1);
+
+  ASSERT_DEATH(
+      global_file_mgr->getFileMgr(db_id, table_id),
+      "Table storage forward compatibility is not supported.*older than the version of "
+      "table being read");
+}
 
 TEST_F(RebrandMigrationTest, ExistingLegacyDataFiles) {
   auto global_file_mgr = initializeGFM();

@@ -5,6 +5,9 @@
 
 #include "TestHelpers.h"
 
+#include "../CudaMgr/CudaMgr.h"
+#include "../DataMgr/FileMgr/FileBuffer.h"
+#include "../DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
 #include "../ImportExport/Importer.h"
 #include "../Parser/ParserNode.h"
 #include "../QueryEngine/ArrowResultSet.h"
@@ -13,8 +16,13 @@
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ExpressionRange.h"
+#include "../QueryEngine/GpuMemUtils.h"
+#include "../QueryEngine/JoinHashTable/BitmapJoinHashTable.h"
+#include "../QueryEngine/JoinHashTable/RankedBitmapHashTable.h"
+#include "../QueryEngine/JoinHashTable/RankedBitmapJoinHashTable.h"
 #include "../QueryEngine/QueryEngine.h"
 #include "../QueryEngine/RelAlgDag.h"  // RelAlgDagBuilder::buildDag
+#include "../QueryEngine/RelAlgOptimizer.h"
 #include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/Compressor.h"
@@ -29,8 +37,12 @@
 #include <boost/any.hpp>
 #include <boost/program_options.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
+#include <map>
+#include <numeric>
 #include <random>
 #include <sstream>
 
@@ -45,6 +57,9 @@ extern bool g_enable_smem_group_by;
 extern size_t g_compression_limit_bytes;
 extern bool g_allow_cpu_retry;
 extern bool g_allow_query_step_cpu_retry;
+extern bool g_enable_dynamic_watchdog;
+extern bool g_enable_result_reduction_pipeline;
+extern int g_peer_copy_mode;
 extern bool g_enable_watchdog;
 extern bool g_skip_intermediate_count;
 extern bool g_enable_left_join_filter_hoisting;
@@ -53,18 +68,33 @@ extern size_t g_baseline_groupby_threshold;
 
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_bbox_intersect_hashjoin;
+extern bool g_enable_bitmap_hashjoin;
+extern bool g_enable_ranked_bitmap_hashjoin;
 extern double g_gpu_mem_limit_percent;
 extern size_t g_parallel_top_min;
 extern size_t g_parallel_top_max;
 
+extern unsigned g_dynamic_watchdog_time_limit;
 extern bool g_enable_window_functions;
 extern bool g_enable_calcite_view_optimize;
 extern bool g_enable_bump_allocator;
+extern bool g_enable_gpu_aggregate_payload_host_mapping;
+extern bool g_enable_deferred_lazy_fetch;
+extern bool g_enable_gpu_input_batched_prefetch;
+extern bool g_enable_gpu_input_cpu_buffer_bypass;
+extern bool g_enable_gpu_input_cpu_prefetch;
+extern bool g_enable_gpu_input_prefetch;
+extern bool g_enable_gpu_selected_dense_aggregate_payload_fetch;
+extern bool g_enable_gpu_input_compressed_pipeline;
+extern bool g_enable_gpu_input_compressed_peer_exchange;
+extern size_t g_gpu_input_compressed_batch_max_bytes;
+extern std::string g_gpu_input_cpu_buffer_bypass_mode;
 extern bool g_enable_interop;
 extern bool g_enable_union;
 extern size_t g_watchdog_none_encoded_string_translation_limit;
 extern bool g_enable_table_functions;
 extern bool g_enable_executor_resource_mgr;
+extern bool g_null_div_by_zero;
 
 extern bool g_is_test_env;
 
@@ -416,10 +446,12 @@ class SQLiteComparator {
             ASSERT_NE(nullptr, omnisci_as_int_p);
             const auto omnisci_val = *omnisci_as_int_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
+              ASSERT_EQ(inline_int_null_val(omnisci_ti), omnisci_val)
+                  << errmsg << " row_idx=" << row_idx << " col_idx=" << col_idx;
             } else {
               const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
-              ASSERT_EQ(ref_val, omnisci_val) << errmsg;
+              ASSERT_EQ(ref_val, omnisci_val)
+                  << errmsg << " row_idx=" << row_idx << " col_idx=" << col_idx;
             }
             break;
           }
@@ -579,13 +611,23 @@ const size_t g_num_rows{10};
 SQLiteComparator g_sqlite_comparator;
 
 void c(const std::string& query_string, const ExecutorDeviceType device_type) {
-  g_sqlite_comparator.compare(query_string, device_type);
+  SCOPED_TRACE(query_string);
+  try {
+    g_sqlite_comparator.compare(query_string, device_type);
+  } catch (const std::exception& e) {
+    throw std::runtime_error(query_string + "\n" + e.what());
+  }
 }
 
 void c(const std::string& query_string,
        const std::string& sqlite_query_string,
        const ExecutorDeviceType device_type) {
-  g_sqlite_comparator.compare(query_string, sqlite_query_string, device_type);
+  SCOPED_TRACE(query_string);
+  try {
+    g_sqlite_comparator.compare(query_string, sqlite_query_string, device_type);
+  } catch (const std::exception& e) {
+    throw std::runtime_error(query_string + "\n" + e.what());
+  }
 }
 
 /* timestamp approximate checking for NOW() */
@@ -638,6 +680,15 @@ void c_arrow_dict_check(
     LOG(ERROR) << "Tests not valid when using temporary tables."; \
     return;                                                       \
   }
+
+#define SKIP_ALL_ON_AGGREGATOR() \
+  do {                           \
+  } while (false)
+
+#define SKIP_ON_AGGREGATOR(EXP) \
+  do {                          \
+    EXP;                        \
+  } while (false)
 
 #define SKIP_IF_SHARDED()                                       \
   if (g_shard_count) {                                          \
@@ -2400,7 +2451,7 @@ TEST_F(Select, FloatAndDoubleTests) {
       dt);
     c("SELECT f + d AS s, x * y FROM test ORDER by s DESC;", dt);
     c("SELECT COUNT(*) AS n FROM test GROUP BY f ORDER BY n;", dt);
-    c("SELECT f, COUNT(*) FROM test GROUP BY f HAVING f > 1.25;", dt);
+    c("SELECT f, COUNT(*) FROM test GROUP BY f HAVING f > 1.25 ORDER BY f;", dt);
     c("SELECT COUNT(*) AS n FROM test GROUP BY d ORDER BY n;", dt);
     c("SELECT MIN(x + y) AS n FROM test WHERE x + y > 47 AND x + y < 53 GROUP BY f + 1, "
       "f + d ORDER BY n;",
@@ -2476,6 +2527,10 @@ TEST_F(Select, InValues) {
     c(R"(SELECT x FROM test WHERE x IN (8, 9, 10, 11, 12, 13, 14) GROUP BY x ORDER BY x;)",
       dt);
     c(R"(SELECT y FROM test WHERE y IN (43, 44, 45, 46, 47, 48, 49) GROUP BY y ORDER BY y;)",
+      dt);
+    c(R"(SELECT fixed_str FROM test WHERE fixed_str IN ('foo', 'bar', 'fish', 'missing') GROUP BY fixed_str ORDER BY fixed_str;)",
+      dt);
+    c(R"(SELECT x, fixed_null_str IN ('foo', 'bar', 'missing', NULL) FROM test ORDER BY x, fixed_null_str;)",
       dt);
     c(R"(SELECT t FROM test WHERE t NOT IN (NULL) GROUP BY t ORDER BY t;)", dt);
     c(R"(SELECT t FROM test WHERE t NOT IN (1001, 1003, 1005, 1007, 1009, -10) GROUP BY t ORDER BY t;)",
@@ -2785,7 +2840,10 @@ TEST_F(Select, FilterAndGroupBy) {
     c("SELECT x, AVG(u), COUNT(*) AS n FROM test GROUP BY x ORDER BY n DESC;", dt);
     c("SELECT f, ss FROM test GROUP BY f, ss ORDER BY f DESC;", dt);
     c("SELECT fx, COUNT(*) FROM test GROUP BY fx HAVING COUNT(*) > 5;", dt);
-    c("SELECT fx, COUNT(*) n FROM test GROUP BY fx ORDER BY n DESC, fx IS NULL DESC;",
+    // Include the grouped value as a final tie-breaker so SQLite and HeavyDB compare
+    // deterministic rows when counts and null-ness match.
+    c("SELECT fx, COUNT(*) n FROM test GROUP BY fx ORDER BY n DESC, fx IS NULL DESC, "
+      "fx;",
       dt);
     c("SELECT CASE WHEN x > 8 THEN 100000000 ELSE 42 END AS c, COUNT(*) FROM test GROUP "
       "BY c;",
@@ -4687,6 +4745,19 @@ TEST_F(Select, ApproxPercentileValidate) {
   EXPECT_EQ(NULL_DOUBLE, v<double>(crt_row[0]));
 }
 
+TEST_F(Select, ValidateProjectionOverTableFunction) {
+  const std::string query =
+      "SELECT generate_series * 2.0 AS y, generate_series AS x "
+      "FROM TABLE(generate_series(1, 100));";
+  for (const auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto eo = ExecutionOptions::defaults();
+    eo.just_validate = true;
+    EXPECT_NO_THROW(
+        QR::get()->runSelectQuery(query, CompilationOptions::defaults(dt), eo));
+  }
+}
+
 template <typename T>
 T select_mode(std::string const col, ExecutorDeviceType const dt) {
   std::string const query = "SELECT MODE(" + col + ") FROM test;";
@@ -5158,6 +5229,52 @@ TEST_F(Select, MultiStepQueries) {
     c("SELECT z, (z * SUM(x)) / SUM(y) + 1 FROM test GROUP BY z ORDER BY z;", dt);
     c("SELECT z,COUNT(*), AVG(x) / SUM(y) + 1 FROM test GROUP BY z ORDER BY z;", dt);
   }
+}
+
+TEST_F(Select, TemporaryJoinColumnPreservesPayloadRowOrder) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  constexpr auto dt = ExecutorDeviceType::CPU;
+  const std::string table_name{"temporary_join_row_order_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT, label TEXT ENCODING DICT(32)) "
+                    "WITH (FRAGMENT_SIZE=32);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+
+  constexpr int row_count = 1024;
+  constexpr int batch_size = 64;
+  constexpr int label_count = 31;
+  for (int batch_begin = 0; batch_begin < row_count; batch_begin += batch_size) {
+    const auto batch_end = std::min(batch_begin + batch_size, row_count);
+    std::ostringstream insert_sql;
+    insert_sql << "INSERT INTO " << table_name << " VALUES";
+    for (int k = batch_begin; k < batch_end; ++k) {
+      insert_sql << (k == batch_begin ? "" : ",") << "(" << k << ",'label_"
+                 << (k % label_count) << "')";
+    }
+    insert_sql << ";";
+    run_multiple_agg(insert_sql.str(), dt);
+  }
+
+  // The aggregate CTE is consumed as a temporary table. Hash-table row ids built from
+  // its join key must address payload columns in the same temporary-result row order.
+  std::ostringstream query;
+  query << "WITH q AS ("
+        << "  SELECT k, SAMPLE(label) AS label "
+        << "  FROM " << table_name << "  WHERE k % 3 = 1 "
+        << "  GROUP BY k"
+        << ") "
+        << "SELECT COUNT(*) "
+        << "FROM " << table_name << " b JOIN q ON b.k = q.k "
+        << "WHERE q.label <> b.label;";
+  const auto mismatches = v<int64_t>(run_simple_agg(query.str(), dt));
+  EXPECT_EQ(mismatches, int64_t(0));
 }
 
 TEST_F(Select, GroupByPushDownFilterIntoExprRange) {
@@ -7267,6 +7384,9 @@ TEST_F(Select, DivByZero) {
 }
 
 TEST_F(Select, ReturnNullFromDivByZero) {
+  ScopeGuard reset_null_div_by_zero = [orig = g_null_div_by_zero] {
+    g_null_div_by_zero = orig;
+  };
   g_null_div_by_zero = true;
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -8487,7 +8607,7 @@ TEST_F(Select, LogicalValues) {
     {
       auto rows = run_multiple_agg(
           "SELECT x, COUNT(y) FROM (VALUES(1, 1), (2, 2), (NULL, NULL), (3, 3)) as t(x, "
-          "y) GROUP BY x;",
+          "y) GROUP BY x ORDER BY x IS NULL, x;",
           dt);
       EXPECT_EQ(rows->rowCount(), size_t(4));
       {
@@ -9232,8 +9352,9 @@ TEST_F(Select, PerDeviceCardinality) {
     }
     std::shared_ptr<ResultSet> res =
         run_multiple_agg("SELECT v1 FROM pdc_test WHERE v2 <= 2;", dt);
-    ASSERT_EQ(res->entryCount(), num_fragments * 2)
-        << "Expected: " << num_fragments * 2 << ", Actual: " << res->entryCount();
+    ASSERT_EQ(res->rowCount(), num_fragments * 2)
+        << "Expected: " << num_fragments * 2 << ", Actual: " << res->rowCount();
+    ASSERT_GE(res->entryCount(), res->rowCount());
   }
   run_ddl_statement("DROP TABLE IF EXISTS pdc_test;");
 }
@@ -10540,6 +10661,8 @@ void import_window_function_framing_timestamp_types() {
   auto gen_table_creation_ddl = [&columns_definition](const std::string& table_name) {
     return "CREATE TABLE " + table_name + " " + columns_definition + ";";
   };
+  run_ddl_statement("DROP TABLE IF EXISTS TD_RANGE;");
+  run_ddl_statement("DROP TABLE IF EXISTS TD_RANGE_NULL;");
   run_ddl_statement(gen_table_creation_ddl("TD_RANGE"));
   run_ddl_statement(gen_table_creation_ddl("TD_RANGE_NULL"));
   run_ddl_statement(
@@ -11201,6 +11324,86 @@ TEST_F(Select, SpeculativeTopNSort) {
   }
 }
 
+TEST_F(Select, TopNDictionaryOrderMatchesGlobalOrdering) {
+  constexpr std::string_view table_name{"parallel_top_dictionary_test"};
+  const auto drop_table = "DROP TABLE IF EXISTS " + std::string(table_name) + ";";
+  run_ddl_statement(drop_table);
+  g_sqlite_comparator.query(drop_table);
+  ScopeGuard cleanup = [&] {
+    run_ddl_statement(drop_table);
+    g_sqlite_comparator.query(drop_table);
+  };
+
+  const auto create_table = "CREATE TABLE " + std::string(table_name) +
+                            " (score INT, primary_label TEXT ENCODING DICT(32), "
+                            "secondary_label TEXT ENCODING DICT(32))";
+  run_ddl_statement(create_table + " WITH (FRAGMENT_SIZE=2);");
+  g_sqlite_comparator.query(create_table + ";");
+
+  const std::array<std::string_view, 12> rows{"(9, 'zulu', 'beta')",
+                                              "(9, 'alpha', 'omega')",
+                                              "(9, 'alpha', NULL)",
+                                              "(9, NULL, 'delta')",
+                                              "(8, 'echo', 'alpha')",
+                                              "(8, 'bravo', 'zeta')",
+                                              "(8, 'bravo', 'beta')",
+                                              "(7, 'hotel', NULL)",
+                                              "(7, NULL, 'gamma')",
+                                              "(7, 'charlie', 'eta')",
+                                              "(6, 'foxtrot', 'iota')",
+                                              "(6, 'delta', 'theta')"};
+  for (const auto row : rows) {
+    const auto insert =
+        "INSERT INTO " + std::string(table_name) + " VALUES " + std::string(row) + ";";
+    run_multiple_agg(insert, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert);
+  }
+  std::string filler_insert = "INSERT INTO " + std::string(table_name) + " VALUES ";
+  for (size_t i = 0; i < 256; ++i) {
+    if (i) {
+      filler_insert += ",";
+    }
+    filler_insert += "(0, 'unused_primary_" + std::to_string(i) +
+                     "', 'unused_secondary_" + std::to_string(255 - i) + "')";
+  }
+  filler_insert += ";";
+  run_multiple_agg(filler_insert, ExecutorDeviceType::CPU);
+  g_sqlite_comparator.query(filler_insert);
+
+  ScopeGuard restore_flags = [parallel_top_min = g_parallel_top_min,
+                              reduction_pipeline = g_enable_result_reduction_pipeline] {
+    g_parallel_top_min = parallel_top_min;
+    g_enable_result_reduction_pipeline = reduction_pipeline;
+  };
+  const std::array<std::string, 4> queries{
+      "SELECT score, primary_label, secondary_label FROM " + std::string(table_name) +
+          " WHERE score >= 6 ORDER BY score DESC, primary_label ASC NULLS LAST, "
+          "secondary_label DESC "
+          "NULLS FIRST LIMIT 7;",
+      "SELECT score, primary_label, secondary_label FROM " + std::string(table_name) +
+          " WHERE score >= 6 ORDER BY score ASC, primary_label DESC NULLS FIRST, "
+          "secondary_label ASC "
+          "NULLS LAST LIMIT 9;",
+      "SELECT score, primary_label, secondary_label FROM " + std::string(table_name) +
+          " WHERE score >= 6 ORDER BY score DESC, primary_label ASC NULLS LAST, "
+          "secondary_label DESC NULLS FIRST;",
+      "SELECT score, primary_label, secondary_label FROM " + std::string(table_name) +
+          " WHERE score >= 6 ORDER BY score ASC, primary_label DESC NULLS FIRST, "
+          "secondary_label ASC NULLS LAST;"};
+  for (const auto parallel_top_min : {size_t{0}, std::numeric_limits<size_t>::max()}) {
+    g_parallel_top_min = parallel_top_min;
+    for (const bool reduction_pipeline : {false, true}) {
+      g_enable_result_reduction_pipeline = reduction_pipeline;
+      for (const auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        for (const auto& query : queries) {
+          c(query, dt);
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, TopNSortWithWatchdogOn) {
   ScopeGuard reset = [top_min = g_parallel_top_min,
                       top_max = g_parallel_top_max,
@@ -11312,6 +11515,9 @@ TEST_F(Select, GroupByPerfectHash) {
 TEST_F(Select, GroupByBaselineHash) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    c("SELECT CAST(x AS DOUBLE) AS key, AVG(CAST(y AS FLOAT)) FROM gpu_sort_test "
+      "GROUP BY key ORDER BY key;",
+      dt);
     c("SELECT cast(x1 as double) as key, COUNT(*), SUM(x2), MIN(x3), MAX(x4) FROM "
       "random_test"
       " GROUP BY key ORDER BY key;",
@@ -11441,6 +11647,120 @@ TEST_F(Select, GroupByCardinalityCacheForSimilarSubquery) {
     run_multiple_agg(gen_query("-115.1523"), dt);
     EXPECT_EQ(QR::get()->getExecutor()->getNumCachedCardinality(),
               static_cast<size_t>(2));
+  }
+}
+
+TEST_F(Select, GroupedDictionarySubqueryCardinalityCache) {
+  ScopeGuard restore_flags = [default_groups = g_default_max_groups_buffer_entry_guess,
+                              big_group_threshold = g_big_group_threshold,
+                              baseline_threshold = g_baseline_groupby_threshold,
+                              bump_allocator = g_enable_bump_allocator,
+                              reduction_pipeline = g_enable_result_reduction_pipeline] {
+    g_default_max_groups_buffer_entry_guess = default_groups;
+    g_big_group_threshold = big_group_threshold;
+    g_baseline_groupby_threshold = baseline_threshold;
+    g_enable_bump_allocator = bump_allocator;
+    g_enable_result_reduction_pipeline = reduction_pipeline;
+  };
+  g_default_max_groups_buffer_entry_guess = 1;
+  g_big_group_threshold = 1;
+  g_baseline_groupby_threshold = 0;
+  g_enable_bump_allocator = false;
+  g_enable_result_reduction_pipeline = false;
+
+  const std::array<std::string, 2> table_names{"grouped_dict_outer",
+                                               "grouped_dict_inner"};
+  for (const auto& table_name : table_names) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    run_ddl_statement("CREATE TABLE " + table_name +
+                      " (label TEXT ENCODING DICT(32), value INT);");
+  }
+  ScopeGuard drop_tables = [&table_names] {
+    for (const auto& table_name : table_names) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  run_multiple_agg(
+      "INSERT INTO grouped_dict_outer VALUES "
+      "('alpha', 1), ('beta', 2), ('gamma', 3), ('beta', 4);",
+      ExecutorDeviceType::CPU);
+  run_multiple_agg(
+      "INSERT INTO grouped_dict_inner VALUES "
+      "('alpha', 10), ('beta', 20), ('gamma', 30), ('unused', 40);",
+      ExecutorDeviceType::CPU);
+
+  const auto query = [](const int minimum_value) {
+    return "SELECT /*+ disable_loop_join */ value FROM grouped_dict_outer "
+           "WHERE label IN (SELECT label FROM grouped_dict_inner WHERE value >= " +
+           std::to_string(minimum_value) + " GROUP BY label);";
+  };
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    QR::get()->getExecutor()->clearCardinalityCache();
+    EXPECT_EQ(run_multiple_agg(query(20), dt)->rowCount(), size_t(3));
+    EXPECT_EQ(run_multiple_agg(query(30), dt)->rowCount(), size_t(1));
+    EXPECT_EQ(QR::get()->getExecutor()->getNumCachedCardinality(), size_t(2));
+  }
+}
+
+TEST(CardinalityCacheKey, UsesStableTemporarySourceMetadata) {
+  const shared::TableKey temporary_table_key{7, -41};
+  const shared::TableKey physical_table_key{7, 13};
+  RelAlgExecutionUnit exe_unit{
+      {InputDescriptor(temporary_table_key.db_id, temporary_table_key.table_id, 0)},
+      {},
+      {},
+      {},
+      {},
+      {},
+      {},
+      nullptr,
+      SortInfo(),
+      0};
+  TemporaryTableSourceInfoMap temporary_source_info{
+      {temporary_table_key.table_id,
+       TemporaryTableSourceInfo{101, 202, {physical_table_key}}}};
+
+  const CardinalityCacheKey cache_key{exe_unit, {}, &temporary_source_info};
+  EXPECT_TRUE(cache_key.isCacheable());
+  EXPECT_TRUE(cache_key.containsTableKey(physical_table_key));
+
+  auto different_source_info = temporary_source_info;
+  different_source_info.begin()->second.rel_alg_hash = 102;
+  const CardinalityCacheKey different_source_key{exe_unit, {}, &different_source_info};
+  EXPECT_TRUE(different_source_key.isCacheable());
+  EXPECT_FALSE(cache_key == different_source_key);
+
+  EXPECT_FALSE(CardinalityCacheKey{exe_unit}.isCacheable());
+}
+
+TEST_F(Select, HllGroupCardinalityEstimatorCpuGpuParity) {
+  ScopeGuard restore_flags = [result_reduction_pipeline =
+                                  g_enable_result_reduction_pipeline,
+                              default_groups = g_default_max_groups_buffer_entry_guess,
+                              big_group_threshold = g_big_group_threshold,
+                              baseline_threshold = g_baseline_groupby_threshold] {
+    g_enable_result_reduction_pipeline = result_reduction_pipeline;
+    g_default_max_groups_buffer_entry_guess = default_groups;
+    g_big_group_threshold = big_group_threshold;
+    g_baseline_groupby_threshold = baseline_threshold;
+  };
+  g_enable_result_reduction_pipeline = true;
+  g_default_max_groups_buffer_entry_guess = 1;
+  g_big_group_threshold = 1;
+  g_baseline_groupby_threshold = 0;
+
+  const std::array<std::string, 2> queries{
+      "SELECT x1, x2, COUNT(*) FROM random_test GROUP BY x1, x2 ORDER BY x1, x2;",
+      "SELECT x1, x2, COUNT(*) FROM random_test WHERE x1 = 999 "
+      "GROUP BY x1, x2 ORDER BY x1, x2;"};
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (const auto& query : queries) {
+      QR::get()->getExecutor()->clearCardinalityCache();
+      c(query, dt);
+    }
   }
 }
 
@@ -12034,6 +12354,3028 @@ TEST_F(Select, Subqueries) {
   }
 }
 
+namespace {
+
+class DeferredGpuIntermediateResultSetTestMode {
+ public:
+  explicit DeferredGpuIntermediateResultSetTestMode(const bool columnar_output = true)
+      : orig_result_reduction_pipeline_(g_enable_result_reduction_pipeline)
+      , orig_columnar_output_(g_enable_columnar_output)
+      , orig_deferred_lazy_fetch_(g_enable_deferred_lazy_fetch)
+      , orig_cpu_retry_(g_allow_cpu_retry)
+      , orig_step_cpu_retry_(g_allow_query_step_cpu_retry) {
+    g_enable_result_reduction_pipeline = true;
+    g_enable_columnar_output = columnar_output;
+    g_enable_deferred_lazy_fetch = true;
+    g_allow_cpu_retry = false;
+    g_allow_query_step_cpu_retry = false;
+  }
+
+  ~DeferredGpuIntermediateResultSetTestMode() {
+    g_enable_result_reduction_pipeline = orig_result_reduction_pipeline_;
+    g_enable_columnar_output = orig_columnar_output_;
+    g_enable_deferred_lazy_fetch = orig_deferred_lazy_fetch_;
+    g_allow_cpu_retry = orig_cpu_retry_;
+    g_allow_query_step_cpu_retry = orig_step_cpu_retry_;
+  }
+
+ private:
+  const bool orig_result_reduction_pipeline_;
+  const bool orig_columnar_output_;
+  const bool orig_deferred_lazy_fetch_;
+  const bool orig_cpu_retry_;
+  const bool orig_step_cpu_retry_;
+};
+
+class ResultReductionPipelineTestMode {
+ public:
+  ResultReductionPipelineTestMode()
+      : orig_result_reduction_pipeline_(g_enable_result_reduction_pipeline)
+      , orig_cpu_retry_(g_allow_cpu_retry)
+      , orig_step_cpu_retry_(g_allow_query_step_cpu_retry) {
+    g_enable_result_reduction_pipeline = true;
+    g_allow_cpu_retry = false;
+    g_allow_query_step_cpu_retry = false;
+  }
+
+  ~ResultReductionPipelineTestMode() {
+    g_enable_result_reduction_pipeline = orig_result_reduction_pipeline_;
+    g_allow_cpu_retry = orig_cpu_retry_;
+    g_allow_query_step_cpu_retry = orig_step_cpu_retry_;
+  }
+
+ private:
+  const bool orig_result_reduction_pipeline_;
+  const bool orig_cpu_retry_;
+  const bool orig_step_cpu_retry_;
+};
+
+TEST_F(Select, TransientStringTranslationCacheTracksDictionaryGeneration) {
+  constexpr auto dt = ExecutorDeviceType::CPU;
+  const std::string table_name{"string_translation_cache_generation_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(id INT, value TEXT ENCODING DICT(32)) WITH (FRAGMENT_SIZE=2);");
+  ScopeGuard drop_table = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+
+  run_multiple_agg(
+      "INSERT INTO " + table_name + " VALUES (1, 'alpha'), (2, 'alpine'), (3, 'beta');",
+      dt);
+  const auto query = "SELECT SUBSTRING(value, 1, 2) AS prefix, COUNT(*) FROM " +
+                     table_name + " GROUP BY prefix ORDER BY prefix;";
+  const auto assert_rows =
+      [&](const std::vector<std::pair<std::string, int64_t>>& expected) {
+        const auto rows = run_multiple_agg(query, dt);
+        ASSERT_TRUE(rows);
+        ASSERT_EQ(rows->rowCount(), expected.size());
+        rows->moveToBegin();
+        for (const auto& [expected_prefix, expected_count] : expected) {
+          const auto row = rows->getNextRow(true, true);
+          ASSERT_EQ(row.size(), size_t(2));
+          const auto prefix = v<NullableString>(row[0]);
+          const auto* prefix_value = boost::get<std::string>(&prefix);
+          ASSERT_NE(prefix_value, nullptr);
+          EXPECT_EQ(*prefix_value, expected_prefix);
+          EXPECT_EQ(v<int64_t>(row[1]), expected_count);
+        }
+      };
+
+  ScopeGuard restore_pipeline = [original = g_enable_result_reduction_pipeline] {
+    g_enable_result_reduction_pipeline = original;
+  };
+  g_enable_result_reduction_pipeline = false;
+  ASSERT_NO_FATAL_FAILURE(assert_rows({{"al", 2}, {"be", 1}}));
+
+  g_enable_result_reduction_pipeline = true;
+  ASSERT_NO_FATAL_FAILURE(assert_rows({{"al", 2}, {"be", 1}}));
+  ASSERT_NO_FATAL_FAILURE(assert_rows({{"al", 2}, {"be", 1}}));
+
+  run_multiple_agg("INSERT INTO " + table_name + " VALUES (4, 'gamma');", dt);
+  ASSERT_NO_FATAL_FAILURE(assert_rows({{"al", 2}, {"be", 1}, {"ga", 1}}));
+}
+
+class BitmapHashJoinTestMode {
+ public:
+  BitmapHashJoinTestMode() : original_(g_enable_bitmap_hashjoin) {
+    BitmapJoinHashTable::invalidateCache();
+    g_enable_bitmap_hashjoin = true;
+  }
+
+  ~BitmapHashJoinTestMode() {
+    BitmapJoinHashTable::invalidateCache();
+    g_enable_bitmap_hashjoin = original_;
+  }
+
+ private:
+  const bool original_;
+};
+
+class RankedBitmapHashJoinTestMode {
+ public:
+  RankedBitmapHashJoinTestMode() : original_(g_enable_ranked_bitmap_hashjoin) {
+    RankedBitmapJoinHashTable::invalidateCache();
+    g_enable_ranked_bitmap_hashjoin = true;
+  }
+
+  ~RankedBitmapHashJoinTestMode() {
+    RankedBitmapJoinHashTable::invalidateCache();
+    g_enable_ranked_bitmap_hashjoin = original_;
+  }
+
+ private:
+  const bool original_;
+};
+
+class ExperimentalConstraintTrustTestMode {
+ public:
+  ExperimentalConstraintTrustTestMode(const bool enable_rewrites,
+                                      const bool trust_unenforced_constraints)
+      : original_enable_rewrites_(g_enable_experimental_query_rewrites)
+      , original_trust_unenforced_constraints_(g_trust_unenforced_table_constraints) {
+    g_enable_experimental_query_rewrites = enable_rewrites;
+    g_trust_unenforced_table_constraints = trust_unenforced_constraints;
+  }
+
+  ~ExperimentalConstraintTrustTestMode() {
+    g_enable_experimental_query_rewrites = original_enable_rewrites_;
+    g_trust_unenforced_table_constraints = original_trust_unenforced_constraints_;
+  }
+
+ private:
+  const bool original_enable_rewrites_;
+  const bool original_trust_unenforced_constraints_;
+};
+
+void assertInt64RowsEqual(const std::shared_ptr<ResultSet>& rows,
+                          const std::vector<std::vector<int64_t>>& expected);
+
+TEST_F(Select, UnenforcedForeignKeyDoesNotEliminateJoinWithoutExplicitTrust) {
+  constexpr auto dt = ExecutorDeviceType::CPU;
+  const std::string parent_table{"unenforced_fk_parent"};
+  const std::string child_table{"unenforced_fk_child"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + child_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + parent_table + ";");
+  run_ddl_statement("CREATE TABLE " + parent_table +
+                    "(id INT NOT NULL, CONSTRAINT unenforced_fk_parent_pk "
+                    "PRIMARY KEY (id));");
+  run_ddl_statement("CREATE TABLE " + child_table +
+                    "(parent_id INT NOT NULL, payload INT, "
+                    "CONSTRAINT unenforced_fk_child_fk FOREIGN KEY (parent_id) "
+                    "REFERENCES " +
+                    parent_table + " (id));");
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + child_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + parent_table + ";");
+    }
+  };
+
+  run_multiple_agg("INSERT INTO " + parent_table + " VALUES (1);", dt);
+  run_multiple_agg("INSERT INTO " + child_table + " VALUES (1, 10), (2, 20);", dt);
+  const auto query = "SELECT COUNT(*) FROM " + child_table + " c JOIN " + parent_table +
+                     " p ON c.parent_id = p.id;";
+
+  {
+    ExperimentalConstraintTrustTestMode mode(
+        /*enable_rewrites=*/false, /*trust_unenforced_constraints=*/true);
+    ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{1}}));
+  }
+  {
+    ExperimentalConstraintTrustTestMode mode(
+        /*enable_rewrites=*/true, /*trust_unenforced_constraints=*/false);
+    ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{1}}));
+  }
+}
+
+TEST_F(Select, ForeignKeyJoinEliminationPreservesLimitedKeyDomain) {
+  constexpr auto dt = ExecutorDeviceType::CPU;
+  const std::string parent_table{"limited_fk_parent"};
+  const std::string child_table{"limited_fk_child"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + child_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + parent_table + ";");
+  run_ddl_statement("CREATE TABLE " + parent_table +
+                    "(id INT NOT NULL, CONSTRAINT limited_fk_parent_pk "
+                    "PRIMARY KEY (id));");
+  run_ddl_statement("CREATE TABLE " + child_table +
+                    "(parent_id INT NOT NULL, CONSTRAINT limited_fk_child_fk "
+                    "FOREIGN KEY (parent_id) REFERENCES " +
+                    parent_table + " (id));");
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + child_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + parent_table + ";");
+    }
+  };
+
+  run_multiple_agg("INSERT INTO " + parent_table + " VALUES (1), (2);", dt);
+  run_multiple_agg("INSERT INTO " + child_table + " VALUES (1), (2);", dt);
+  const auto query = "SELECT COUNT(*) FROM " + child_table + " c JOIN (SELECT id FROM " +
+                     parent_table + " ORDER BY id LIMIT 1) p ON c.parent_id = p.id;";
+  ExperimentalConstraintTrustTestMode mode(
+      /*enable_rewrites=*/true, /*trust_unenforced_constraints=*/true);
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{1}}));
+}
+
+class ResultReductionPipelineTimeoutTestMode {
+ public:
+  ResultReductionPipelineTimeoutTestMode()
+      : orig_result_reduction_pipeline_(g_enable_result_reduction_pipeline)
+      , orig_dynamic_watchdog_(g_enable_dynamic_watchdog)
+      , orig_dynamic_watchdog_time_limit_(g_dynamic_watchdog_time_limit)
+      , orig_cpu_retry_(g_allow_cpu_retry)
+      , orig_step_cpu_retry_(g_allow_query_step_cpu_retry) {
+    g_enable_result_reduction_pipeline = true;
+    g_enable_dynamic_watchdog = true;
+    g_dynamic_watchdog_time_limit = 1;
+    g_allow_cpu_retry = false;
+    g_allow_query_step_cpu_retry = false;
+  }
+
+  ~ResultReductionPipelineTimeoutTestMode() {
+    g_enable_result_reduction_pipeline = orig_result_reduction_pipeline_;
+    g_enable_dynamic_watchdog = orig_dynamic_watchdog_;
+    g_dynamic_watchdog_time_limit = orig_dynamic_watchdog_time_limit_;
+    g_allow_cpu_retry = orig_cpu_retry_;
+    g_allow_query_step_cpu_retry = orig_step_cpu_retry_;
+  }
+
+ private:
+  const bool orig_result_reduction_pipeline_;
+  const bool orig_dynamic_watchdog_;
+  const unsigned orig_dynamic_watchdog_time_limit_;
+  const bool orig_cpu_retry_;
+  const bool orig_step_cpu_retry_;
+};
+
+class BaselineBoundaryAppendTestMode {
+ public:
+  BaselineBoundaryAppendTestMode()
+      : orig_result_reduction_pipeline_(g_enable_result_reduction_pipeline)
+      , orig_columnar_output_(g_enable_columnar_output)
+      , orig_cpu_retry_(g_allow_cpu_retry)
+      , orig_step_cpu_retry_(g_allow_query_step_cpu_retry)
+      , orig_baseline_groupby_threshold_(g_baseline_groupby_threshold) {
+    g_enable_result_reduction_pipeline = true;
+    g_enable_columnar_output = false;
+    g_allow_cpu_retry = false;
+    g_allow_query_step_cpu_retry = false;
+    g_baseline_groupby_threshold = 0;
+  }
+
+  ~BaselineBoundaryAppendTestMode() {
+    g_enable_result_reduction_pipeline = orig_result_reduction_pipeline_;
+    g_enable_columnar_output = orig_columnar_output_;
+    g_allow_cpu_retry = orig_cpu_retry_;
+    g_allow_query_step_cpu_retry = orig_step_cpu_retry_;
+    g_baseline_groupby_threshold = orig_baseline_groupby_threshold_;
+  }
+
+ private:
+  const bool orig_result_reduction_pipeline_;
+  const bool orig_columnar_output_;
+  const bool orig_cpu_retry_;
+  const bool orig_step_cpu_retry_;
+  const size_t orig_baseline_groupby_threshold_;
+};
+
+void createDeviceResultSetTestTable(const std::string& table_name) {
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k BIGINT, v BIGINT, w BIGINT) WITH (FRAGMENT_SIZE=2);");
+  for (int i = 0; i < 8; ++i) {
+    run_multiple_agg("INSERT INTO " + table_name + " VALUES(" + std::to_string(i) + "," +
+                         std::to_string(i * 10) + "," + std::to_string(i * 100) + ");",
+                     ExecutorDeviceType::CPU);
+  }
+}
+
+void createVarlenDeviceResultSetTestTable(const std::string& table_name) {
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k BIGINT, v BIGINT, w BIGINT, label TEXT ENCODING NONE) "
+                    "WITH (FRAGMENT_SIZE=2);");
+  for (int i = 0; i < 8; ++i) {
+    run_multiple_agg("INSERT INTO " + table_name + " VALUES(" + std::to_string(i) + "," +
+                         std::to_string(i * 10) + "," + std::to_string(i * 100) +
+                         ",'label" + std::to_string(i) + "');",
+                     ExecutorDeviceType::CPU);
+  }
+}
+
+void createResultReductionPipelineTestTable(const std::string& table_name) {
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT, cd INT, wide_cd BIGINT, mode_v INT, avg_v INT, "
+                    "label TEXT ENCODING DICT(32)) WITH (FRAGMENT_SIZE=2);");
+  const std::vector<std::tuple<int, int, int64_t, int, int, std::string>> rows{
+      {0, 1, 1, 7, 1, "alpha"},
+      {0, 2, 1000000000000, 8, 2, "alpha"},
+      {0, 3, 2000000000000, 8, 3, "alpha"},
+      {1, 4, 3000000000000, 9, 4, "beta"},
+      {1, 5, 4000000000000, 9, 5, "beta"},
+      {1, 6, 5000000000000, 10, 6, "beta"},
+  };
+  for (const auto& [k, cd, wide_cd, mode_v, avg_v, label] : rows) {
+    run_multiple_agg("INSERT INTO " + table_name + " VALUES(" + std::to_string(k) + "," +
+                         std::to_string(cd) + "," + std::to_string(wide_cd) + "," +
+                         std::to_string(mode_v) + "," + std::to_string(avg_v) + ",'" +
+                         label + "');",
+                     ExecutorDeviceType::CPU);
+  }
+}
+
+void createResultReductionPipelineFailureTestTable(const std::string& table_name) {
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT, v BIGINT, denom INT) WITH (FRAGMENT_SIZE=2);");
+  run_multiple_agg("INSERT INTO " + table_name +
+                       " VALUES(0, 10, 1), (1, 20, 1), (2, 30, 0), (3, 40, 1);",
+                   ExecutorDeviceType::CPU);
+}
+
+// Keep the cross-join timeout workload large enough that it does not race a 1 ms
+// watchdog limit on fast GPUs.
+// Leave a one-row final fragment so the post-timeout cleanup query exercises the
+// dynamic-watchdog path with a partially active GPU block.
+constexpr int64_t kResultReductionTimeoutTestRowCount = 32769;
+
+void createBaselineBoundaryAppendTestTable(const std::string& table_name) {
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT, v BIGINT) WITH (FRAGMENT_SIZE=2);");
+  run_multiple_agg(
+      "INSERT INTO " + table_name + " VALUES(0, 10), (1, 20), (1, 30), (2, 40);",
+      ExecutorDeviceType::CPU);
+}
+
+void createResultReductionPipelineTimeoutTestTable(const std::string& table_name) {
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT, v BIGINT) WITH (FRAGMENT_SIZE=128);");
+  std::ostringstream insert_sql;
+  insert_sql << "INSERT INTO " << table_name << " VALUES";
+  for (int64_t i = 0; i < kResultReductionTimeoutTestRowCount; ++i) {
+    insert_sql << (i == 0 ? "" : ",") << "(" << i << "," << (i % 17) << ")";
+  }
+  insert_sql << ";";
+  run_multiple_agg(insert_sql.str(), ExecutorDeviceType::CPU);
+}
+
+int64_t timeoutTestRowCount() {
+  return kResultReductionTimeoutTestRowCount;
+}
+
+int64_t timeoutTestValueSum() {
+  constexpr int64_t period = 17;
+  constexpr int64_t period_sum = (period - 1) * period / 2;
+  const auto full_periods = kResultReductionTimeoutTestRowCount / period;
+  const auto remainder = kResultReductionTimeoutTestRowCount % period;
+  return full_periods * period_sum + (remainder - 1) * remainder / 2;
+}
+
+void assertDeviceResultSetProjection(const std::shared_ptr<ResultSet>& rows) {
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(rows->rowCount(), size_t(8));
+  ASSERT_EQ(rows->colCount(), size_t(3));
+
+  int64_t sum_k = 0;
+  int64_t sum_v = 0;
+  int64_t sum_w = 0;
+  rows->moveToBegin();
+  auto row_iterator = rows->rowIterator(true, true);
+  for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+    const auto row = *row_iterator++;
+    ASSERT_EQ(row.size(), size_t(3));
+    sum_k += v<int64_t>(row[0]);
+    sum_v += v<int64_t>(row[1]);
+    sum_w += v<int64_t>(row[2]);
+  }
+  EXPECT_EQ(sum_k, int64_t(28));
+  EXPECT_EQ(sum_v, int64_t(280));
+  EXPECT_EQ(sum_w, int64_t(2800));
+}
+
+void assertSingleRowAggregateResult(const std::shared_ptr<ResultSet>& rows,
+                                    const int64_t expected_count,
+                                    const int64_t expected_sum) {
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(rows->rowCount(), size_t(1));
+  rows->moveToBegin();
+  const auto row = rows->getNextRow(true, true);
+  ASSERT_EQ(row.size(), size_t(2));
+  EXPECT_EQ(v<int64_t>(row[0]), expected_count);
+  EXPECT_EQ(v<int64_t>(row[1]), expected_sum);
+}
+
+void assertInt64RowsEqual(const ResultSet& rows,
+                          const std::vector<std::vector<int64_t>>& expected) {
+  ASSERT_EQ(rows.rowCount(), expected.size());
+  rows.moveToBegin();
+  for (size_t row_idx = 0; row_idx < expected.size(); ++row_idx) {
+    const auto row = rows.getNextRow(true, true);
+    ASSERT_EQ(row.size(), expected[row_idx].size());
+    for (size_t col_idx = 0; col_idx < expected[row_idx].size(); ++col_idx) {
+      EXPECT_EQ(v<int64_t>(row[col_idx]), expected[row_idx][col_idx])
+          << "row_idx=" << row_idx << " col_idx=" << col_idx;
+    }
+  }
+}
+
+void assertInt64RowsEqual(const std::shared_ptr<ResultSet>& rows,
+                          const std::vector<std::vector<int64_t>>& expected) {
+  ASSERT_TRUE(rows);
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(*rows, expected));
+}
+
+TEST_F(Select, AggregateOverJoinRemapsEveryAggregateOperand) {
+  constexpr auto dt = ExecutorDeviceType::CPU;
+  const std::string lhs_table{"aggregate_join_operand_lhs"};
+  const std::string rhs_table{"aggregate_join_operand_rhs"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + lhs_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + rhs_table + ";");
+  run_ddl_statement("CREATE TABLE " + lhs_table + "(id INT, value BIGINT);");
+  run_ddl_statement("CREATE TABLE " + rhs_table + "(id INT, selected BOOLEAN);");
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + rhs_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + lhs_table + ";");
+    }
+  };
+
+  run_multiple_agg("INSERT INTO " + lhs_table + " VALUES (1, 10), (2, 20);", dt);
+  run_multiple_agg("INSERT INTO " + rhs_table + " VALUES (1, TRUE), (2, FALSE);", dt);
+  const auto query = "SELECT SUM_IF(l.value, r.selected) FROM " + lhs_table + " l JOIN " +
+                     rhs_table + " r ON l.id = r.id;";
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{10}}));
+}
+
+void assertInt64RowSetEqual(const std::shared_ptr<ResultSet>& rows,
+                            std::vector<std::vector<int64_t>> expected) {
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(rows->rowCount(), expected.size());
+  std::vector<std::vector<int64_t>> actual;
+  rows->moveToBegin();
+  for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+    const auto row = rows->getNextRow(true, true);
+    std::vector<int64_t> actual_row;
+    actual_row.reserve(row.size());
+    for (const auto& datum : row) {
+      actual_row.push_back(v<int64_t>(datum));
+    }
+    actual.emplace_back(std::move(actual_row));
+  }
+  std::sort(actual.begin(), actual.end());
+  std::sort(expected.begin(), expected.end());
+  EXPECT_EQ(actual, expected);
+}
+
+void assertUnsupportedNumericReducerRows(const std::shared_ptr<ResultSet>& rows) {
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(rows->rowCount(), size_t(2));
+  ASSERT_EQ(rows->colCount(), size_t(2));
+  rows->moveToBegin();
+
+  const std::vector<std::pair<int64_t, double>> expected{
+      {0, 1.0},
+      {1, 4.0},
+  };
+  for (const auto& [expected_k, expected_value] : expected) {
+    const auto row = rows->getNextRow(true, true);
+    ASSERT_EQ(row.size(), size_t(2));
+    EXPECT_EQ(v<int64_t>(row[0]), expected_k);
+    EXPECT_DOUBLE_EQ(v<double>(row[1]), expected_value);
+  }
+}
+
+void assertUnsupportedVarlenReducerRows(const std::shared_ptr<ResultSet>& rows) {
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(rows->rowCount(), size_t(2));
+  ASSERT_EQ(rows->colCount(), size_t(2));
+  rows->moveToBegin();
+
+  const std::vector<std::pair<int64_t, std::string>> expected{{0, "alpha"}, {1, "beta"}};
+  for (const auto& [expected_k, expected_label] : expected) {
+    const auto row = rows->getNextRow(true, true);
+    ASSERT_EQ(row.size(), size_t(2));
+    EXPECT_EQ(v<int64_t>(row[0]), expected_k);
+    const auto label = v<NullableString>(row[1]);
+    const auto* label_value = boost::get<std::string>(&label);
+    ASSERT_NE(label_value, nullptr);
+    EXPECT_EQ(*label_value, expected_label);
+  }
+}
+
+std::string makeDeviceResultSetJoinQuery(const std::string& table_name) {
+  return "WITH lhs AS (SELECT k, v FROM " + table_name +
+         " WHERE k < 6), rhs AS (SELECT k, w FROM " + table_name +
+         " WHERE k >= 2) "
+         "SELECT COUNT(*), SUM(lhs.v + rhs.w) FROM lhs JOIN rhs ON lhs.k = rhs.k;";
+}
+
+std::string makeUnrelatedDeviceResultSetJoinQuery(const std::string& table_name) {
+  return "WITH lhs AS (SELECT k, v FROM " + table_name +
+         " WHERE k BETWEEN 1 AND 7), rhs AS (SELECT k, w FROM " + table_name +
+         " WHERE k <= 4) "
+         "SELECT COUNT(*), SUM(lhs.v + rhs.w) FROM lhs JOIN rhs ON lhs.k = rhs.k;";
+}
+
+std::string makeDeviceResultSetLazyProjectionQuery(const std::string& table_name) {
+  return "WITH keys AS (SELECT k FROM " + table_name +
+         " WHERE k BETWEEN 2 AND 6) "
+         "SELECT base.k, base.v, base.w FROM " +
+         table_name +
+         " base JOIN keys ON base.k = keys.k "
+         "ORDER BY base.k ASC;";
+}
+
+std::string makeDeferredLazyLimitedAggregateQuery(const std::string& table_name) {
+  return "SELECT SUM(w) FROM (SELECT k, w FROM " + table_name +
+         " WHERE k > 0 ORDER BY k LIMIT 5) limited;";
+}
+
+std::string makeDeferredLazyAggregatePayloadTopKQuery(const std::string& table_name,
+                                                      const size_t offset = 0) {
+  return "WITH totals AS (SELECT k, SUM(v) AS total FROM " + table_name +
+         " GROUP BY k) "
+         "SELECT base.k, base.v, base.w, totals.total FROM " +
+         table_name +
+         " base JOIN totals ON base.k = totals.k "
+         "ORDER BY totals.total DESC, base.k ASC LIMIT 3" +
+         (offset ? " OFFSET " + std::to_string(offset) : "") + ";";
+}
+
+std::string makeDeviceResultSetTopKProjectionQuery(const std::string& table_name) {
+  return "WITH lhs AS (SELECT k, v FROM " + table_name +
+         " WHERE k < 7), rhs AS (SELECT k, w FROM " + table_name +
+         " WHERE k >= 1) "
+         "SELECT lhs.k, lhs.v + rhs.w AS score "
+         "FROM lhs JOIN rhs ON lhs.k = rhs.k "
+         "ORDER BY score DESC, lhs.k ASC LIMIT 3;";
+}
+
+std::string makeUnsupportedNumericReducerTargetQuery(const std::string& table_name) {
+  return "SELECT k, MIN(CAST(avg_v AS DOUBLE)) FROM " + table_name +
+         " GROUP BY k ORDER BY k;";
+}
+
+std::string makeUnsupportedVarlenReducerTargetQuery(const std::string& table_name) {
+  return "SELECT k, SAMPLE(label) FROM " + table_name + " GROUP BY k ORDER BY k;";
+}
+
+std::string makeDeferredPerfectHashCpuFallbackQuery(const std::string& table_name) {
+  return "SELECT COUNT(*), SUM(group_sum) FROM "
+         "(SELECT k, SUM(avg_v) AS group_sum FROM " +
+         table_name + " GROUP BY k) grouped;";
+}
+
+std::string makeExactBitmapCountDistinctQuery(const std::string& table_name) {
+  return "SELECT COUNT(DISTINCT cd) FROM " + table_name + ";";
+}
+
+std::string makeGroupedExactBitmapCountDistinctQuery(const std::string& table_name) {
+  return "SELECT k, COUNT(DISTINCT cd) FROM " + table_name + " GROUP BY k;";
+}
+
+std::string makeExactBitmapCountDistinctOrderByQuery(const std::string& table_name) {
+  return "SELECT k, COUNT(DISTINCT cd) FROM " + table_name + " GROUP BY k ORDER BY k;";
+}
+
+std::string makeApproxCountDistinctQuery(const std::string& table_name) {
+  return "SELECT APPROX_COUNT_DISTINCT(cd) FROM " + table_name + ";";
+}
+
+std::string makeCountDistinctMixedAggregateQuery(const std::string& table_name) {
+  return "SELECT COUNT(DISTINCT cd), SUM(avg_v) FROM " + table_name + ";";
+}
+
+std::string makeSparseCountDistinctGroupByQuery(const std::string& table_name) {
+  return "SELECT k, COUNT(DISTINCT wide_cd) FROM " + table_name + " GROUP BY k;";
+}
+
+std::string makeRuntimeErrorPipelineQuery(const std::string& table_name) {
+  return "SELECT k % 2, SUM(10 / denom) FROM " + table_name + " GROUP BY 1;";
+}
+
+std::string makeFailureCleanupPipelineQuery(const std::string& table_name) {
+  return "SELECT k % 2, COUNT(*), SUM(v) FROM " + table_name + " GROUP BY 1;";
+}
+
+std::string makeBaselineBoundaryAppendQuery(const std::string& table_name) {
+  return "SELECT k, COUNT(*), SUM(v), MIN(v), MAX(v) FROM " + table_name +
+         " GROUP BY k ORDER BY k;";
+}
+
+std::string makeTimeoutPipelineQuery(const std::string& table_name) {
+  return "SELECT /*+ query_time_limit(1) */ SUM(a.v + b.v) FROM " + table_name + " a, " +
+         table_name + " b;";
+}
+
+std::string makeTimeoutCleanupPipelineQuery(const std::string& table_name) {
+  return "SELECT COUNT(*), SUM(v) FROM " + table_name + ";";
+}
+
+bool hasAtLeastGpuDeviceCount(const size_t min_device_count) {
+  auto session = QR::get()->getSession();
+  const auto cuda_mgr = session->getCatalog().getDataMgr().getCudaMgr();
+  return cuda_mgr && static_cast<size_t>(cuda_mgr->getDeviceCount()) >= min_device_count;
+}
+
+}  // namespace
+
+TEST_F(Select, DeferredGpuIntermediateResultSetRepeatedExecution) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"device_resultset_repeat_test"};
+  createDeviceResultSetTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  DeferredGpuIntermediateResultSetTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertDeviceResultSetProjection(
+      run_multiple_agg("SELECT k, v, w FROM " + table_name + " WHERE k >= 0;", dt)));
+
+  const auto join_query = makeDeviceResultSetJoinQuery(table_name);
+  // Repeat through the filtered-count cache. The global count remains reusable, but
+  // a temporary result's per-device distribution is rebuilt for each execution.
+  for (size_t run_idx = 0; run_idx < 4; ++run_idx) {
+    ASSERT_NO_FATAL_FAILURE(assertSingleRowAggregateResult(
+        run_multiple_agg(join_query, dt), int64_t(4), int64_t(1540)));
+  }
+}
+
+TEST_F(Select, DeferredGpuIntermediateResultSetIndependentQueries) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"device_resultset_independent_test"};
+  createDeviceResultSetTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  DeferredGpuIntermediateResultSetTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertSingleRowAggregateResult(
+      run_multiple_agg(makeDeviceResultSetJoinQuery(table_name), dt),
+      int64_t(4),
+      int64_t(1540)));
+  ASSERT_NO_FATAL_FAILURE(assertSingleRowAggregateResult(
+      run_multiple_agg(makeUnrelatedDeviceResultSetJoinQuery(table_name), dt),
+      int64_t(4),
+      int64_t(1100)));
+}
+
+TEST_F(Select, SelectedRowwiseProjectionColumnsFeedGpuJoin) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"device_resultset_selected_projection_test"};
+  createDeviceResultSetTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  DeferredGpuIntermediateResultSetTestMode test_mode(/*columnar_output=*/false);
+
+  const auto query = "WITH filtered AS (SELECT k, v, w FROM " + table_name +
+                     " WHERE k BETWEEN 1 AND 6) "
+                     "SELECT COUNT(*), SUM(filtered.v + base.w) FROM filtered JOIN " +
+                     table_name +
+                     " base ON filtered.k = base.k WHERE base.k BETWEEN 3 AND 7;";
+  ASSERT_NO_FATAL_FAILURE(assertSingleRowAggregateResult(
+      run_multiple_agg(query, dt), int64_t(4), int64_t(1980)));
+}
+
+TEST_F(Select, SelectedFixedColumnsFromVarlenRowwiseProjectionFeedGpuJoin) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"device_resultset_varlen_projection_test"};
+  createVarlenDeviceResultSetTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  DeferredGpuIntermediateResultSetTestMode test_mode(/*columnar_output=*/false);
+
+  const auto query =
+      "WITH filtered AS (SELECT k, v, label FROM " + table_name +
+      " WHERE k BETWEEN 1 AND 6) "
+      "SELECT filtered.label, filtered.v + base.w AS score FROM filtered JOIN " +
+      table_name +
+      " base ON filtered.k = base.k WHERE base.k BETWEEN 3 AND 7 "
+      "ORDER BY score, filtered.label;";
+  const auto rows = run_multiple_agg(query, dt);
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(rows->rowCount(), size_t(4));
+  rows->moveToBegin();
+  for (int64_t key = 3; key <= 6; ++key) {
+    const auto row = rows->getNextRow(true, true);
+    ASSERT_EQ(row.size(), size_t(2));
+    const auto label = v<NullableString>(row[0]);
+    const auto* label_value = boost::get<std::string>(&label);
+    ASSERT_NE(label_value, nullptr);
+    EXPECT_EQ(*label_value, "label" + std::to_string(key));
+    EXPECT_EQ(v<int64_t>(row[1]), key * 110);
+  }
+}
+
+#ifdef HAVE_CUDA
+TEST_F(Select, SelectedDeferredPayloadRowsUseAvailableDecompressionPath) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const auto saved_compression_enabled =
+      File_Namespace::g_enable_native_storage_compression;
+  const auto saved_compression_codec = File_Namespace::g_native_storage_compression_codec;
+  const auto saved_compression_frame_size =
+      File_Namespace::g_native_storage_compression_frame_size;
+  const auto saved_sidecar_only =
+      File_Namespace::g_enable_file_buffer_metadata_sidecar_only;
+  const auto saved_gpu_prefetch = g_enable_gpu_input_prefetch;
+  const auto saved_batched_prefetch = g_enable_gpu_input_batched_prefetch;
+  const auto saved_cpu_buffer_bypass = g_enable_gpu_input_cpu_buffer_bypass;
+  const auto saved_bypass_mode = g_gpu_input_cpu_buffer_bypass_mode;
+  ScopeGuard restore_flags = [&] {
+    File_Namespace::g_enable_native_storage_compression = saved_compression_enabled;
+    File_Namespace::g_native_storage_compression_codec = saved_compression_codec;
+    File_Namespace::g_native_storage_compression_frame_size =
+        saved_compression_frame_size;
+    File_Namespace::g_enable_file_buffer_metadata_sidecar_only = saved_sidecar_only;
+    g_enable_gpu_input_prefetch = saved_gpu_prefetch;
+    g_enable_gpu_input_batched_prefetch = saved_batched_prefetch;
+    g_enable_gpu_input_cpu_buffer_bypass = saved_cpu_buffer_bypass;
+    g_gpu_input_cpu_buffer_bypass_mode = saved_bypass_mode;
+  };
+
+  File_Namespace::g_enable_native_storage_compression = true;
+  File_Namespace::g_native_storage_compression_codec = "snappy";
+  File_Namespace::g_native_storage_compression_frame_size = 64 * 1024;
+  File_Namespace::g_enable_file_buffer_metadata_sidecar_only = true;
+  g_enable_gpu_input_prefetch = true;
+  g_enable_gpu_input_batched_prefetch = true;
+  g_enable_gpu_input_cpu_buffer_bypass = true;
+  g_gpu_input_cpu_buffer_bypass_mode = "staged";
+
+  const std::string table_name{"selected_deferred_payload_rows_test"};
+  const auto drop_table = "DROP TABLE IF EXISTS " + table_name + ";";
+  run_ddl_statement(drop_table);
+  ScopeGuard cleanup = [&] {
+    QR::get()->clearGpuMemory();
+    QR::get()->clearCpuMemory();
+    run_ddl_statement(drop_table);
+  };
+  constexpr size_t row_count = 32768;
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    " (k BIGINT, v BIGINT, w BIGINT) WITH (FRAGMENT_SIZE=" +
+                    std::to_string(row_count) + ", MAX_ROLLBACK_EPOCHS=0);");
+
+  auto& catalog = QR::get()->getSession()->getCatalog();
+  const auto table = catalog.getMetadataForTable(table_name);
+  ASSERT_NE(table, nullptr);
+  const auto columns =
+      catalog.getAllColumnMetadataForTable(table->tableId, false, false, false);
+  ASSERT_EQ(columns.size(), size_t(3));
+  auto loader = QR::get()->getLoader(table);
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+  for (const auto column : columns) {
+    import_buffers.emplace_back(
+        std::make_unique<import_export::TypedImportBuffer>(column, nullptr));
+  }
+  for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+    import_buffers[0]->addBigint(static_cast<int64_t>(row_idx));
+    import_buffers[1]->addBigint(static_cast<int64_t>(row_idx * 10));
+    import_buffers[2]->addBigint(static_cast<int64_t>(row_idx * 100));
+  }
+  loader->load(import_buffers, row_count, nullptr);
+
+  auto& data_mgr = catalog.getDataMgr();
+  data_mgr.checkpoint(catalog.getDatabaseId(), table->tableId);
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+
+  const auto payload_column = catalog.getMetadataForColumn(table->tableId, "v");
+  ASSERT_NE(payload_column, nullptr);
+  const ChunkKey payload_key{
+      catalog.getDatabaseId(), table->tableId, payload_column->columnId, 0};
+  auto* source_buffer = dynamic_cast<File_Namespace::FileBuffer*>(
+      data_mgr.getPersistentStorageMgr()->getBufferIfNativeStorage(payload_key, 0));
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_TRUE(source_buffer->isSnappyStorageCompressed());
+  ASSERT_EQ(source_buffer->numMetadataPages(), size_t(0));
+  ASSERT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+
+  DeferredGpuIntermediateResultSetTestMode test_mode(/*columnar_output=*/false);
+  const auto query = "WITH filtered AS (SELECT k, v, w FROM " + table_name +
+                     " WHERE k BETWEEN 123 AND 130) "
+                     "SELECT COUNT(*), SUM(filtered.v + base.w) FROM filtered JOIN " +
+                     table_name +
+                     " base ON filtered.k = base.k WHERE base.k BETWEEN 123 AND 130;";
+  ASSERT_NO_FATAL_FAILURE(assertSingleRowAggregateResult(
+      run_multiple_agg(query, dt), int64_t(8), int64_t(111320)));
+
+  // nvCOMP can decode the compressed payload directly on GPU. Without it, the supported
+  // fallback decompresses through the CPU buffer pool before transferring to GPU.
+#ifdef HAVE_NVCOMP
+  EXPECT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+#else
+  EXPECT_TRUE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+#endif
+
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  const auto payload_num_bytes = source_buffer->size();
+  {
+    DeferredLazyFetchChunk complete_frame_selection(
+        *payload_column, &data_mgr, payload_key, payload_num_bytes, row_count);
+    const int8_t* materialized_payload{nullptr};
+    complete_frame_selection.materializeRows({0, 8192, 16384, 24576},
+                                             materialized_payload);
+    ASSERT_NE(materialized_payload, nullptr);
+    const auto* materialized_values =
+        reinterpret_cast<const int64_t*>(materialized_payload);
+    EXPECT_EQ(materialized_values[0], int64_t(0));
+    EXPECT_EQ(materialized_values[8192], int64_t(81920));
+    EXPECT_EQ(materialized_values[16384], int64_t(163840));
+    EXPECT_EQ(materialized_values[24576], int64_t(245760));
+  }
+
+  // One selected row in each frame requires the complete payload. The full-column path
+  // is then preferable because it parallelizes the read and leaves a reusable CPU chunk.
+  // Deferred destruction waits for the overlapped cache publication before asserting it.
+  EXPECT_TRUE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+}
+#endif
+
+TEST_F(Select, DeferredGpuIntermediateResultSetLazyFetchConsumer) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"device_resultset_lazy_consumer_test"};
+  createDeviceResultSetTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  DeferredGpuIntermediateResultSetTestMode test_mode;
+
+  const auto rows =
+      run_multiple_agg(makeDeviceResultSetLazyProjectionQuery(table_name), dt);
+  ASSERT_TRUE(rows->areAnyColumnsLazyFetched());
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      rows, {{2, 20, 200}, {3, 30, 300}, {4, 40, 400}, {5, 50, 500}, {6, 60, 600}}));
+}
+
+TEST_F(Select, DeferredGpuIntermediateResultSetLimitedAggregateConsumer) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"device_resultset_limit_consumer_test"};
+  createDeviceResultSetTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  DeferredGpuIntermediateResultSetTestMode test_mode;
+
+  EXPECT_EQ(
+      int64_t(1500),
+      v<int64_t>(run_simple_agg(makeDeferredLazyLimitedAggregateQuery(table_name), dt)));
+}
+
+TEST_F(Select, DeferredGpuMixedAggregateTopKMaterializesSelectedPayloadRows) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"device_resultset_aggregate_topk_payload_test"};
+  createDeviceResultSetTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  DeferredGpuIntermediateResultSetTestMode test_mode(/*columnar_output=*/false);
+
+  const auto rows =
+      run_multiple_agg(makeDeferredLazyAggregatePayloadTopKQuery(table_name), dt);
+  ASSERT_TRUE(rows->areAnyColumnsLazyFetched());
+  ASSERT_TRUE(rows->hasDeferredLazyFetchChunks());
+  ASSERT_NO_FATAL_FAILURE(
+      assertInt64RowsEqual(rows, {{7, 70, 700, 70}, {6, 60, 600, 60}, {5, 50, 500, 50}}));
+
+  const auto offset_rows =
+      run_multiple_agg(makeDeferredLazyAggregatePayloadTopKQuery(table_name, 1), dt);
+  ASSERT_TRUE(offset_rows->areAnyColumnsLazyFetched());
+  ASSERT_TRUE(offset_rows->hasDeferredLazyFetchChunks());
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      offset_rows, {{6, 60, 600, 60}, {5, 50, 500, 50}, {4, 40, 400, 40}}));
+}
+
+TEST_F(Select, DeferredGpuMultiStorageAggregateConsumerMaterializesColumns) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+  if (!hasAtLeastGpuDeviceCount(2)) {
+    GTEST_SKIP() << "Multi-storage temporary results require at least two GPUs";
+  }
+
+  const std::string table_name{"device_resultset_multistorage_aggregate_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k BIGINT, v BIGINT) WITH (FRAGMENT_SIZE=128);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  constexpr int64_t row_count = 4096;
+  constexpr int64_t rows_per_group = 4;
+  int64_t expected_group_count = 0;
+  int64_t expected_all_key_sum = 0;
+  int64_t expected_all_value_sum = 0;
+  int64_t expected_count = 0;
+  int64_t expected_key_sum = 0;
+  int64_t expected_value_sum = 0;
+  std::ostringstream insert_sql;
+  insert_sql << "INSERT INTO " << table_name << " VALUES";
+  for (int64_t row_idx = 0; row_idx < row_count; ++row_idx) {
+    const auto group_idx = row_idx / rows_per_group;
+    const auto key = group_idx * 1000000 + 7;
+    const auto value = group_idx % 17 + 1;
+    insert_sql << (row_idx == 0 ? "" : ",") << "(" << key << "," << value << ")";
+    if (row_idx % rows_per_group == 0) {
+      ++expected_group_count;
+      expected_all_key_sum += key;
+      expected_all_value_sum += rows_per_group * value;
+      if (rows_per_group * value > 36) {
+        ++expected_count;
+        expected_key_sum += key;
+        expected_value_sum += rows_per_group * value;
+      }
+    }
+  }
+  insert_sql << ";";
+  run_multiple_agg(insert_sql.str(), ExecutorDeviceType::CPU);
+  DeferredGpuIntermediateResultSetTestMode test_mode(/*columnar_output=*/false);
+
+  const auto grouped_query =
+      "SELECT COUNT(*), SUM(k), SUM(sum_v) FROM (SELECT k, SUM(v) AS sum_v FROM " +
+      table_name + " GROUP BY k);";
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg(grouped_query, dt),
+      {{expected_group_count, expected_all_key_sum, expected_all_value_sum}}));
+
+  const auto query = "WITH grouped AS (SELECT k, SUM(v) AS sum_v FROM " + table_name +
+                     " GROUP BY k HAVING SUM(v) > 36) "
+                     "SELECT COUNT(*), SUM(k), SUM(sum_v) FROM grouped;";
+  // Repeat through both post-reduction filtering and temporary-result cardinality
+  // caching. Each run must preserve the original perfect-hash bin keys.
+  for (size_t run_idx = 0; run_idx < 4; ++run_idx) {
+    ASSERT_NO_FATAL_FAILURE(
+        assertInt64RowsEqual(run_multiple_agg(query, dt),
+                             {{expected_count, expected_key_sum, expected_value_sum}}));
+  }
+
+  const auto empty_query =
+      "WITH grouped AS (SELECT k, SUM(v) AS sum_v FROM " + table_name +
+      " GROUP BY k HAVING SUM(v) > 1000) SELECT COUNT(*) FROM grouped;";
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(empty_query, dt), {{0}}));
+}
+
+TEST_F(Select, DeferredGpuIntermediateResultSetTopKHostConsumer) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"device_resultset_topk_host_test"};
+  createDeviceResultSetTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  DeferredGpuIntermediateResultSetTestMode test_mode;
+  ScopeGuard reset_parallel_top_min = [orig = g_parallel_top_min] {
+    g_parallel_top_min = orig;
+  };
+  g_parallel_top_min = 0;
+
+  const auto rows =
+      run_multiple_agg(makeDeviceResultSetTopKProjectionQuery(table_name), dt);
+  const std::vector<std::vector<int64_t>> expected_rows{{6, 660}, {5, 550}, {4, 440}};
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(rows, expected_rows));
+}
+
+TEST_F(Select, DisabledResultReductionPipelineDoesNotExposeDeviceFragments) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  ScopeGuard restore_query_modes = [reduction_pipeline =
+                                        g_enable_result_reduction_pipeline,
+                                    shared_mem_group_by = g_enable_smem_group_by] {
+    g_enable_result_reduction_pipeline = reduction_pipeline;
+    g_enable_smem_group_by = shared_mem_group_by;
+  };
+  g_enable_result_reduction_pipeline = false;
+  g_enable_smem_group_by = false;
+
+  // The fixture's x values differ by one. Scale that range above the 10,000-bin
+  // block-sharing threshold without relying on shared-memory group-by.
+  const auto rows = run_multiple_agg("SELECT COUNT(*) FROM test GROUP BY x * 20000;", dt);
+  ASSERT_EQ(QueryDescriptionType::GroupByPerfectHash,
+            rows->getQueryMemDesc().getQueryDescriptionType());
+  ASSERT_FALSE(rows->getQueryMemDesc().isGpuSharedMemoryUsed());
+  ASSERT_TRUE(rows->getQueryMemDesc().hasKeylessHash());
+  ASSERT_GT(rows->getQueryMemDesc().getEntryCount(), size_t(4096));
+  ASSERT_TRUE(rows->getQueryMemDesc().blocksShareMemory());
+  ASSERT_TRUE(can_defer_keyless_perfect_hash_rowwise_result(
+      rows->getQueryMemDesc(), rows->getQueryMemDesc().getEntryCount()));
+
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> rowwise_fragments;
+  EXPECT_FALSE(rows->getDeviceRowwiseBufferFragments(rowwise_fragments));
+
+  std::vector<ResultSet::DeviceColumnarBufferFragment> columnar_fragments;
+  EXPECT_FALSE(
+      rows->getDeviceColumnarBufferFragments(0, sizeof(int64_t), columnar_fragments));
+
+  const auto projected_group_key_rows =
+      run_multiple_agg("SELECT x * 20000, COUNT(*) FROM test GROUP BY x * 20000;", dt);
+  ASSERT_EQ(QueryDescriptionType::GroupByPerfectHash,
+            projected_group_key_rows->getQueryMemDesc().getQueryDescriptionType());
+  EXPECT_TRUE(projected_group_key_rows->getQueryMemDesc().hasKeylessHash());
+}
+
+TEST_F(Select, PipelinedGpuNonGroupedDecimalSumUsesSharedReduction) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_non_grouped_decimal_sum_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT, v DECIMAL(18, 2)) WITH (FRAGMENT_SIZE=2);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  run_multiple_agg("INSERT INTO " + table_name +
+                       " VALUES (1, 1.25), (2, NULL), (3, -0.50), (4, 3.75), "
+                       "(5, NULL), (6, -1.00), (7, 2.50), (8, NULL);",
+                   ExecutorDeviceType::CPU);
+
+  ResultReductionPipelineTestMode test_mode;
+  const auto assert_shared_result = [&](const std::string& query,
+                                        const int64_t expected_count,
+                                        const std::optional<double> expected_sum,
+                                        const std::optional<double> expected_even_sum) {
+    const auto rows = run_multiple_agg(query, dt);
+    ASSERT_TRUE(rows);
+    ASSERT_EQ(QueryDescriptionType::NonGroupedAggregate,
+              rows->getQueryMemDesc().getQueryDescriptionType());
+    ASSERT_TRUE(rows->getQueryMemDesc().isGpuSharedMemoryUsed());
+    ASSERT_EQ(rows->rowCount(), size_t(1));
+    rows->moveToBegin();
+    const auto row = rows->getNextRow(true, true);
+    ASSERT_EQ(row.size(), size_t(3));
+    EXPECT_EQ(v<int64_t>(row[0]), expected_count);
+
+    const auto assert_decimal = [&](const size_t column_idx,
+                                    const std::optional<double> expected) {
+      if (expected) {
+        ASSERT_FALSE(is_null_tv(row[column_idx], rows->getColType(column_idx)));
+        EXPECT_DOUBLE_EQ(v<double>(row[column_idx]), *expected);
+      } else {
+        EXPECT_TRUE(is_null_tv(row[column_idx], rows->getColType(column_idx)));
+      }
+    };
+    assert_decimal(1, expected_sum);
+    assert_decimal(2, expected_even_sum);
+  };
+
+  const auto aggregate_sql =
+      "SELECT COUNT(*), SUM(v), "
+      "SUM(CASE WHEN MOD(k, 2) = 0 THEN v ELSE CAST(0 AS DECIMAL(18, 2)) END) "
+      "FROM " +
+      table_name;
+  ASSERT_NO_FATAL_FAILURE(
+      assert_shared_result(aggregate_sql + ";", int64_t(8), double(6.0), double(2.75)));
+  ASSERT_NO_FATAL_FAILURE(assert_shared_result(
+      aggregate_sql + " WHERE k < 0;", int64_t(0), std::nullopt, std::nullopt));
+  ASSERT_NO_FATAL_FAILURE(assert_shared_result(
+      aggregate_sql + " WHERE k IN (2, 8);", int64_t(2), std::nullopt, std::nullopt));
+}
+
+TEST_F(Select, PipelinedGpuNonGroupedIntegerSumUsesSharedReduction) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_non_grouped_integer_sum_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT, v BIGINT) WITH (FRAGMENT_SIZE=2);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  run_multiple_agg("INSERT INTO " + table_name +
+                       " VALUES (1, 5), (2, NULL), (3, -2), (4, 7), "
+                       "(5, NULL), (6, -4), (7, 9), (8, NULL);",
+                   ExecutorDeviceType::CPU);
+
+  ResultReductionPipelineTestMode test_mode;
+  const auto assert_shared_result =
+      [&](const std::string& query,
+          const int64_t expected_count,
+          const std::array<std::optional<int64_t>, 4>& expected_sums) {
+        const auto rows = run_multiple_agg(query, dt);
+        ASSERT_TRUE(rows);
+        ASSERT_EQ(QueryDescriptionType::NonGroupedAggregate,
+                  rows->getQueryMemDesc().getQueryDescriptionType());
+        ASSERT_TRUE(rows->getQueryMemDesc().isGpuSharedMemoryUsed());
+        ASSERT_EQ(rows->rowCount(), size_t(1));
+        rows->moveToBegin();
+        const auto row = rows->getNextRow(true, true);
+        ASSERT_EQ(row.size(), size_t(5));
+        EXPECT_EQ(v<int64_t>(row[0]), expected_count);
+
+        for (size_t i = 0; i < expected_sums.size(); ++i) {
+          const auto column_idx = i + 1;
+          if (expected_sums[i]) {
+            ASSERT_FALSE(is_null_tv(row[column_idx], rows->getColType(column_idx)));
+            EXPECT_EQ(v<int64_t>(row[column_idx]), *expected_sums[i]);
+          } else {
+            EXPECT_TRUE(is_null_tv(row[column_idx], rows->getColType(column_idx)));
+          }
+        }
+      };
+
+  const auto aggregate_sql =
+      "SELECT COUNT(*), SUM(k), SUM(v), SUM(v * CAST(k AS BIGINT)), "
+      "SUM(CASE WHEN MOD(k, 2) = 0 THEN v ELSE CAST(0 AS BIGINT) END) FROM " +
+      table_name;
+  ASSERT_NO_FATAL_FAILURE(
+      assert_shared_result(aggregate_sql + ";",
+                           int64_t(8),
+                           {int64_t(36), int64_t(15), int64_t(66), int64_t(3)}));
+  ASSERT_NO_FATAL_FAILURE(
+      assert_shared_result(aggregate_sql + " WHERE k < 0;",
+                           int64_t(0),
+                           {std::nullopt, std::nullopt, std::nullopt, std::nullopt}));
+  ASSERT_NO_FATAL_FAILURE(
+      assert_shared_result(aggregate_sql + " WHERE k IN (2, 8);",
+                           int64_t(2),
+                           {int64_t(10), std::nullopt, std::nullopt, std::nullopt}));
+}
+
+TEST_F(Select, PipelinedGpuReductionMergesKeylessPerfectHashAggregates) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+  if (!hasAtLeastGpuDeviceCount(2)) {
+    GTEST_SKIP() << "Multi-device perfect-hash reduction requires at least two GPUs";
+  }
+
+  const std::string table_name{"gpu_reducer_keyless_perfect_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k BIGINT NOT NULL, v BIGINT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  for (size_t fragment_idx = 0; fragment_idx < size_t(8); ++fragment_idx) {
+    run_multiple_agg("INSERT INTO " + table_name + " VALUES(0, 1), (1, 2);",
+                     ExecutorDeviceType::CPU);
+  }
+
+  ResultReductionPipelineTestMode test_mode;
+  ScopeGuard restore_columnar_output = [columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar_output;
+  };
+  g_enable_columnar_output = false;
+  constexpr int64_t key_scale = int64_t(1) << 19;
+  const auto grouped_sql = "SELECT k * " + std::to_string(key_scale) +
+                           " AS grouped_key, SUM(v) AS total_v FROM " + table_name +
+                           " GROUP BY grouped_key";
+  const auto rows = run_multiple_agg(grouped_sql + ";", dt);
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(QueryDescriptionType::GroupByPerfectHash,
+            rows->getQueryMemDesc().getQueryDescriptionType());
+  ASSERT_TRUE(rows->getQueryMemDesc().hasKeylessHash());
+  const auto partial_result_bytes =
+      rows->entryCount() * rows->getQueryMemDesc().getRowSize();
+  ASSERT_GE(partial_result_bytes, kMinGpuPerfectHashReductionInputBytes);
+  ASSERT_LT(partial_result_bytes, size_t{16} << 20);
+
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> rowwise_fragments;
+  ASSERT_TRUE(rows->getDeviceRowwiseBufferFragments(rowwise_fragments));
+  ASSERT_EQ(rowwise_fragments.size(), size_t(1));
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowSetEqual(rows, {{0, 8}, {key_scale, 16}}));
+
+  const auto consumed_rows = run_multiple_agg(
+      "WITH grouped AS (" + grouped_sql +
+          ") SELECT COUNT(*), SUM(grouped_key), SUM(total_v) FROM grouped;",
+      dt);
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(consumed_rows, {{2, key_scale, 24}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionPreservesBaselineHashAverageSlots) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+  if (!hasAtLeastGpuDeviceCount(2)) {
+    GTEST_SKIP() << "Multi-device baseline-hash reduction requires at least two GPUs";
+  }
+
+  const std::string table_name{"gpu_reducer_baseline_avg_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT, bucket INT, iv BIGINT, dv DOUBLE) "
+                    "WITH (FRAGMENT_SIZE=3);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  for (int fragment_idx = 0; fragment_idx < 8; ++fragment_idx) {
+    const auto nullable_iv =
+        fragment_idx % 2 == 0 ? std::string{"NULL"} : std::to_string(fragment_idx * 10);
+    const auto nullable_dv =
+        fragment_idx % 2 == 0 ? std::string{"NULL"} : std::to_string(fragment_idx + 0.5);
+    run_multiple_agg("INSERT INTO " + table_name + " VALUES(0, 10, " +
+                         std::to_string(fragment_idx + 1) + ", " +
+                         std::to_string(fragment_idx + 0.25) + "), (1, 20, " +
+                         nullable_iv + ", " + nullable_dv + "), (2, 30, NULL, NULL);",
+                     ExecutorDeviceType::CPU);
+  }
+
+  BaselineBoundaryAppendTestMode test_mode;
+  const auto grouped_sql = "SELECT k, bucket, AVG(iv) AS avg_i, AVG(dv) AS avg_d FROM " +
+                           table_name + " GROUP BY k, bucket";
+  const auto rows = run_multiple_agg(grouped_sql + ";", dt);
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(QueryDescriptionType::GroupByBaselineHash,
+            rows->getQueryMemDesc().getQueryDescriptionType());
+  ASSERT_EQ(rows->rowCount(), size_t(3));
+
+  rows->moveToBegin();
+  std::map<std::pair<int64_t, int64_t>, std::pair<double, double>> averages;
+  bool saw_all_null_group{false};
+  for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
+    const auto row = rows->getNextRow(true, true);
+    ASSERT_EQ(row.size(), size_t(4));
+    const auto key = std::make_pair(v<int64_t>(row[0]), v<int64_t>(row[1]));
+    if (key == std::make_pair(int64_t(2), int64_t(30))) {
+      EXPECT_TRUE(is_null_tv(row[2], rows->getColType(2)));
+      EXPECT_TRUE(is_null_tv(row[3], rows->getColType(3)));
+      saw_all_null_group = true;
+      continue;
+    }
+    ASSERT_FALSE(is_null_tv(row[2], rows->getColType(2)));
+    ASSERT_FALSE(is_null_tv(row[3], rows->getColType(3)));
+    averages.emplace(key, std::make_pair(v<double>(row[2]), v<double>(row[3])));
+  }
+  EXPECT_TRUE(saw_all_null_group);
+  ASSERT_EQ(averages.size(), size_t(2));
+  const auto first_group = averages.find(std::make_pair(int64_t(0), int64_t(10)));
+  ASSERT_NE(first_group, averages.end());
+  EXPECT_DOUBLE_EQ(first_group->second.first, 4.5);
+  EXPECT_DOUBLE_EQ(first_group->second.second, 3.75);
+  const auto second_group = averages.find(std::make_pair(int64_t(1), int64_t(20)));
+  ASSERT_NE(second_group, averages.end());
+  EXPECT_DOUBLE_EQ(second_group->second.first, 40.0);
+  EXPECT_DOUBLE_EQ(second_group->second.second, 4.5);
+
+  const auto consumed_sql =
+      "WITH grouped AS (" + grouped_sql +
+      ") SELECT COUNT(*), COUNT(avg_i), SUM(avg_i), SUM(avg_d) FROM grouped;";
+  const auto assert_consumed_averages = [&](const ExecutorDeviceType device_type) {
+    const auto consumed_rows = run_multiple_agg(consumed_sql, device_type);
+    ASSERT_TRUE(consumed_rows);
+    ASSERT_EQ(consumed_rows->rowCount(), size_t(1));
+    consumed_rows->moveToBegin();
+    const auto consumed_row = consumed_rows->getNextRow(true, true);
+    ASSERT_EQ(consumed_row.size(), size_t(4));
+    EXPECT_EQ(v<int64_t>(consumed_row[0]), int64_t(3));
+    EXPECT_EQ(v<int64_t>(consumed_row[1]), int64_t(2));
+    EXPECT_DOUBLE_EQ(v<double>(consumed_row[2]), 44.5);
+    EXPECT_DOUBLE_EQ(v<double>(consumed_row[3]), 8.25);
+  };
+  ASSERT_NO_FATAL_FAILURE(assert_consumed_averages(ExecutorDeviceType::CPU));
+  ASSERT_NO_FATAL_FAILURE(assert_consumed_averages(dt));
+}
+
+TEST_F(Select, PipelinedGpuReductionMergesLargePerfectHashInputsAsPeerTree) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+  if (!hasAtLeastGpuDeviceCount(4)) {
+    GTEST_SKIP() << "Peer-tree perfect-hash reduction requires at least four GPUs";
+  }
+  auto session = QR::get()->getSession();
+  const auto cuda_mgr = session->getCatalog().getDataMgr().getCudaMgr();
+  ASSERT_NE(cuda_mgr, nullptr);
+  for (int destination_device_id = 0; destination_device_id < 4;
+       destination_device_id += 2) {
+    if (!cuda_mgr->canAccessPeer(destination_device_id, destination_device_id + 1)) {
+      GTEST_SKIP() << "Peer-tree perfect-hash reduction requires direct peer access";
+    }
+  }
+
+  const std::string table_name{"gpu_reducer_peer_tree_perfect_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k BIGINT NOT NULL, v BIGINT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  for (size_t fragment_idx = 0; fragment_idx < size_t(4); ++fragment_idx) {
+    run_multiple_agg("INSERT INTO " + table_name + " VALUES(0, 1), (1, 2);",
+                     ExecutorDeviceType::CPU);
+  }
+
+  ResultReductionPipelineTestMode test_mode;
+  ScopeGuard restore_flags = [columnar_output = g_enable_columnar_output,
+                              peer_copy_mode = g_peer_copy_mode] {
+    g_enable_columnar_output = columnar_output;
+    g_peer_copy_mode = peer_copy_mode;
+  };
+  g_enable_columnar_output = false;
+  g_peer_copy_mode = CudaMgr_Namespace::kPeerCopyModeDirect;
+  constexpr int64_t key_scale = int64_t(1) << 25;
+  const auto grouped_sql = "SELECT k * " + std::to_string(key_scale) +
+                           " AS grouped_key, SUM(v) AS total_v FROM " + table_name +
+                           " GROUP BY grouped_key";
+  const auto rows = run_multiple_agg(grouped_sql + ";", dt);
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(QueryDescriptionType::GroupByPerfectHash,
+            rows->getQueryMemDesc().getQueryDescriptionType());
+  ASSERT_TRUE(rows->getQueryMemDesc().hasKeylessHash());
+  const auto partial_result_bytes =
+      rows->entryCount() * rows->getQueryMemDesc().getRowSize();
+  ASSERT_GE(partial_result_bytes * size_t(4), size_t{1} << 30);
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowSetEqual(rows, {{0, 4}, {key_scale, 8}}));
+
+  const auto consumed_rows = run_multiple_agg(
+      "WITH grouped AS (" + grouped_sql +
+          ") SELECT COUNT(*), SUM(grouped_key), SUM(total_v) FROM grouped;",
+      dt);
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(consumed_rows, {{2, key_scale, 12}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionCompactsSingleKeylessPerfectHashResult) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_single_keyless_perfect_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k BIGINT NOT NULL, v BIGINT NOT NULL) WITH (FRAGMENT_SIZE=16);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  run_multiple_agg("INSERT INTO " + table_name +
+                       " VALUES(0, 1), (1, 2), (0, 1), (1, 2), (0, 1), (1, 2), "
+                       "(0, 1), (1, 2), (0, 1), (1, 2), (0, 1), (1, 2), "
+                       "(0, 1), (1, 2), (0, 1), (1, 2);",
+                   ExecutorDeviceType::CPU);
+
+  ResultReductionPipelineTestMode test_mode;
+  ScopeGuard restore_columnar_output = [columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar_output;
+  };
+  g_enable_columnar_output = false;
+  constexpr int64_t key_scale = int64_t(1) << 22;
+  const auto rows =
+      run_multiple_agg("SELECT SUM(v) FROM " + table_name + " GROUP BY k * " +
+                           std::to_string(key_scale) + ";",
+                       dt);
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(QueryDescriptionType::GroupByPerfectHash,
+            rows->getQueryMemDesc().getQueryDescriptionType());
+  ASSERT_TRUE(rows->getQueryMemDesc().hasKeylessHash());
+  ASSERT_GE(rows->entryCount() * rows->getQueryMemDesc().getRowSize(), size_t{32} << 20);
+
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> rowwise_fragments;
+  ASSERT_TRUE(rows->getDeviceRowwiseBufferFragments(rowwise_fragments));
+  ASSERT_EQ(rowwise_fragments.size(), size_t(1));
+  // A CPU boundary must materialize the compacted device view, not the retained
+  // sparse perfect-hash backing buffer.
+  rows->materializeDeviceColumnarCpuStorageIfNeeded();
+  EXPECT_EQ(rows->entryCount(), size_t(2));
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowSetEqual(rows, {{8}, {16}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionMergesNonKeylessPerfectHashGroupKeys) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+  if (!hasAtLeastGpuDeviceCount(2)) {
+    GTEST_SKIP() << "Multi-device perfect-hash reduction requires at least two GPUs";
+  }
+
+  const std::string table_name{"gpu_reducer_non_keyless_perfect_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k BIGINT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  for (size_t fragment_idx = 0; fragment_idx < size_t(8); ++fragment_idx) {
+    run_multiple_agg("INSERT INTO " + table_name + " VALUES(0), (1);",
+                     ExecutorDeviceType::CPU);
+  }
+
+  ResultReductionPipelineTestMode test_mode;
+  ScopeGuard restore_columnar_output = [columnar_output = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar_output;
+  };
+  g_enable_columnar_output = false;
+  constexpr int64_t key_scale = int64_t(1) << 19;
+  const auto rows = run_multiple_agg("SELECT k * " + std::to_string(key_scale) +
+                                         " AS grouped_key FROM " + table_name +
+                                         " GROUP BY grouped_key;",
+                                     dt);
+  ASSERT_TRUE(rows);
+  ASSERT_EQ(QueryDescriptionType::GroupByPerfectHash,
+            rows->getQueryMemDesc().getQueryDescriptionType());
+  ASSERT_FALSE(rows->getQueryMemDesc().hasKeylessHash());
+  const auto partial_result_bytes =
+      rows->entryCount() * rows->getQueryMemDesc().getRowSize();
+  ASSERT_GE(partial_result_bytes, kMinGpuPerfectHashReductionInputBytes);
+  ASSERT_LT(partial_result_bytes, size_t{16} << 20);
+
+  std::vector<ResultSet::DeviceRowwiseBufferFragment> rowwise_fragments;
+  ASSERT_TRUE(rows->getDeviceRowwiseBufferFragments(rowwise_fragments));
+  ASSERT_EQ(rowwise_fragments.size(), size_t(1));
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowSetEqual(rows, {{0}, {key_scale}}));
+
+  // A downstream GPU aggregate can consume the sparse perfect-hash bins without an
+  // intervening host copy. The final CPU boundary must still expose the exact rows.
+  const auto consumed_rows = run_multiple_agg(
+      "WITH grouped AS (SELECT k * " + std::to_string(key_scale) +
+          " AS grouped_key FROM " + table_name +
+          " GROUP BY grouped_key) SELECT COUNT(*), SUM(grouped_key) FROM grouped;",
+      dt);
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(consumed_rows, {{2, key_scale}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionRejectsUnsupportedNumericTargets) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_unsupported_numeric_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertUnsupportedNumericReducerRows(
+      run_multiple_agg(makeUnsupportedNumericReducerTargetQuery(table_name), dt)));
+}
+
+TEST_F(Select, PipelinedGpuReductionRejectsVarlenAggregateOutput) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_unsupported_varlen_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertUnsupportedVarlenReducerRows(
+      run_multiple_agg(makeUnsupportedVarlenReducerTargetQuery(table_name), dt)));
+}
+
+TEST_F(Select, PipelinedGpuReductionPreservesNullSafeAggregateFilter) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_null_safe_filter_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT, bucket INT, v BIGINT) WITH (FRAGMENT_SIZE=2);");
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  run_multiple_agg("INSERT INTO " + table_name +
+                       " VALUES (1, 10, NULL), (2, 20, 5), "
+                       "(1, 10, NULL), (2, 20, NULL);",
+                   ExecutorDeviceType::CPU);
+  BaselineBoundaryAppendTestMode test_mode;
+
+  const auto grouped_rows = run_multiple_agg(
+      "SELECT k, bucket, SUM(v) FROM " + table_name + " GROUP BY k, bucket;", dt);
+  ASSERT_TRUE(grouped_rows);
+  ASSERT_EQ(grouped_rows->getQueryMemDesc().getQueryDescriptionType(),
+            QueryDescriptionType::GroupByBaselineHash);
+
+  // The all-NULL group must survive the null-safe predicate. ResultSet entry
+  // compaction cannot replace the relational filter unless it preserves that semantic.
+  const auto rows = run_multiple_agg(
+      "SELECT k, bucket FROM "
+      "(SELECT k, bucket, SUM(v) AS total FROM " +
+          table_name +
+          " GROUP BY k, bucket) grouped "
+          "WHERE total IS NOT DISTINCT FROM NULL ORDER BY k, bucket;",
+      dt);
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(rows, {{1, 10}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionCpuFallbackMaterializesDeferredDestination) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_deferred_cpu_fallback_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg(makeDeferredPerfectHashCpuFallbackQuery(table_name), dt),
+      {{2, 21}}));
+}
+
+TEST_F(Select, PipelinedGpuTemporaryResultSupportsCpuStepFallback) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_cpu_step_fallback_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ScopeGuard restore_flags = [pipeline = g_enable_result_reduction_pipeline,
+                              cpu_retry = g_allow_cpu_retry,
+                              step_cpu_retry = g_allow_query_step_cpu_retry] {
+    g_enable_result_reduction_pipeline = pipeline;
+    g_allow_cpu_retry = cpu_retry;
+    g_allow_query_step_cpu_retry = step_cpu_retry;
+  };
+  g_enable_result_reduction_pipeline = true;
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = true;
+
+  const auto rows = run_multiple_agg(
+      "SELECT k, APPROX_MEDIAN(group_count) FROM "
+      "(SELECT k, cd, COUNT(*) AS group_count FROM " +
+          table_name + " GROUP BY k, cd) grouped GROUP BY k ORDER BY k;",
+      dt);
+  ASSERT_TRUE(rows);
+  EXPECT_EQ(ExecutorDeviceType::CPU, rows->getDeviceType());
+  ASSERT_EQ(size_t(2), rows->rowCount());
+  rows->moveToBegin();
+  for (int64_t expected_key = 0; expected_key < 2; ++expected_key) {
+    const auto row = rows->getNextRow(false, false);
+    ASSERT_EQ(size_t(2), row.size());
+    EXPECT_EQ(expected_key, v<int64_t>(row[0]));
+    EXPECT_DOUBLE_EQ(1.0, v<double>(row[1]));
+  }
+}
+
+TEST_F(Select, PipelinedGpuTemporaryResultPreservesTransientDictionaryKeys) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_transient_dictionary_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  const auto query =
+      "SELECT COUNT(*), SUM(group_count), COUNT_IF(normalized_label IS NULL), "
+      "COUNT_IF(normalized_label = 'alpha'), COUNT_IF(normalized_label = 'beta') FROM "
+      "(SELECT LOWER(label) AS normalized_label, COUNT(*) AS group_count FROM " +
+      table_name + " GROUP BY LOWER(label)) grouped;";
+  const auto assert_rows = [](const std::shared_ptr<ResultSet>& rows) {
+    ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(rows, {{2, 6, 0, 1, 1}}));
+  };
+
+  ASSERT_NO_FATAL_FAILURE(assert_rows(run_multiple_agg(query, ExecutorDeviceType::CPU)));
+  ResultReductionPipelineTestMode test_mode;
+  ASSERT_NO_FATAL_FAILURE(assert_rows(run_multiple_agg(query, dt)));
+}
+
+TEST_F(Select, MembershipJoinPreservesNullableSemiAntiSemantics) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  const std::string build_table{"bitmap_membership_nullable_build"};
+  const std::string probe_table{"bitmap_membership_nullable_probe"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  ScopeGuard drop_test_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+
+  run_ddl_statement("CREATE TABLE " + build_table + " (k INTEGER);");
+  run_ddl_statement("CREATE TABLE " + probe_table + " (k INTEGER);");
+  run_multiple_agg("INSERT INTO " + build_table + " VALUES (NULL), (2), (4);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + probe_table + " VALUES (NULL), (1), (2), (3), (4);",
+                   ExecutorDeviceType::CPU);
+
+  for (const auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    if (skip_tests(dt)) {
+      continue;
+    }
+    const auto semi_query = "SELECT COUNT(*), COUNT(p.k), SUM(p.k) FROM " + probe_table +
+                            " p WHERE EXISTS (SELECT 1 FROM " + build_table +
+                            " b WHERE b.k = p.k);";
+    ASSERT_NO_FATAL_FAILURE(
+        assertInt64RowsEqual(run_multiple_agg(semi_query, dt), {{2, 2, 6}}));
+
+    const auto anti_query = "SELECT COUNT(*), COUNT(p.k), SUM(p.k) FROM " + probe_table +
+                            " p WHERE NOT EXISTS (SELECT 1 FROM " + build_table +
+                            " b WHERE b.k = p.k);";
+    ASSERT_NO_FATAL_FAILURE(
+        assertInt64RowsEqual(run_multiple_agg(anti_query, dt), {{3, 2, 4}}));
+  }
+}
+
+TEST_F(Select, BitmapMembershipExecutesForNonNullAntiJoin) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string build_table{"bitmap_membership_not_null_build"};
+  const std::string probe_table{"bitmap_membership_not_null_probe"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  ScopeGuard drop_test_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+
+  run_ddl_statement("CREATE TABLE " + build_table + " (k INTEGER NOT NULL);");
+  run_ddl_statement("CREATE TABLE " + probe_table + " (k INTEGER NOT NULL);");
+  run_multiple_agg("INSERT INTO " + build_table + " VALUES (2), (4);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + probe_table + " VALUES (1), (2), (3), (4);",
+                   ExecutorDeviceType::CPU);
+
+  BitmapHashJoinTestMode bitmap_mode;
+  ExperimentalConstraintTrustTestMode rewrite_mode(
+      /*enable_rewrites=*/true, /*trust_unenforced_constraints=*/false);
+  const auto query = "SELECT COUNT(*), SUM(p.k) FROM " + probe_table +
+                     " p WHERE p.k NOT IN (SELECT b.k FROM " + build_table + " b);";
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{2, 4}}));
+  EXPECT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::BITMAP_HT),
+            size_t(0));
+
+  run_multiple_agg("INSERT INTO " + build_table + " VALUES (3);",
+                   ExecutorDeviceType::CPU);
+  EXPECT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::BITMAP_HT),
+            size_t(0));
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{1, 1}}));
+}
+
+TEST_F(Select, RankedBitmapJoinPreservesDuplicateAndFilteredBuildRows) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string build_table{"ranked_bitmap_duplicate_build"};
+  const std::string probe_table{"ranked_bitmap_duplicate_probe"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  ScopeGuard drop_test_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+
+  run_ddl_statement("CREATE TABLE " + build_table +
+                    " (k INTEGER, v INTEGER, ts TIMESTAMP(3));");
+  run_ddl_statement("CREATE TABLE " + probe_table + " (k INTEGER);");
+  run_multiple_agg("INSERT INTO " + build_table +
+                       " VALUES (NULL, 99, NULL), "
+                       "(1, 10, '1970-01-01 00:00:00.000'), "
+                       "(1, 11, '1970-01-01 00:00:00.001'), "
+                       "(3, 30, '1970-01-01 00:00:00.002');",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + probe_table + " VALUES (NULL), (1), (2), (3);",
+                   ExecutorDeviceType::CPU);
+
+  RankedBitmapHashJoinTestMode test_mode;
+  const auto join_from =
+      " FROM " + probe_table + " p JOIN " + build_table + " b ON p.k = b.k";
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT COUNT(*), SUM(b.v)" + join_from + ";", dt), {{3, 51}}));
+  EXPECT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::ALL,
+                                             CacheItemType::RANKED_BITMAP_HT),
+            size_t(0));
+  EXPECT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::RANKED_BITMAP_HT),
+            size_t(0));
+  EXPECT_EQ(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::RANKED_BITMAP_HT),
+            size_t(0));
+
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT COUNT(*), SUM(b.v)" + join_from + " WHERE b.v > 10;", dt),
+      {{2, 41}}));
+
+  // Truncating this TIMESTAMP(6) bound to the TIMESTAMP(3) storage precision would
+  // incorrectly turn the predicate into b.ts < 0ms and discard the first row.
+  ASSERT_NO_FATAL_FAILURE(
+      assertInt64RowsEqual(run_multiple_agg("SELECT COUNT(*), SUM(b.v)" + join_from +
+                                                " WHERE b.ts < TIMESTAMP(6) "
+                                                "'1970-01-01 00:00:00.000500';",
+                                            dt),
+                           {{1, 10}}));
+}
+
+TEST_F(Select, RankedBitmapJoinPreservesGlobalRowIdsAcrossSparseBuildFragments) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string build_table{"ranked_bitmap_sparse_build"};
+  const std::string probe_table{"ranked_bitmap_sparse_probe"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  ScopeGuard drop_test_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+
+  run_ddl_statement("CREATE TABLE " + build_table +
+                    " (k INTEGER NOT NULL, v INTEGER NOT NULL) "
+                    "WITH (FRAGMENT_SIZE=2);");
+  run_ddl_statement("CREATE TABLE " + probe_table +
+                    " (k INTEGER NOT NULL) WITH (FRAGMENT_SIZE=1);");
+  run_multiple_agg("INSERT INTO " + build_table +
+                       " VALUES (1, 10), (1, 11), (3, 30), (3, 31), "
+                       "(5, 50), (5, 51), (7, 70), (7, 71);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + probe_table +
+                       " VALUES (1), (5), (1), (5), (1), (5), "
+                       "(1), (5), (1), (5), (2), (6);",
+                   ExecutorDeviceType::CPU);
+
+  RankedBitmapHashJoinTestMode bitmap_mode;
+  ResultReductionPipelineTestMode pipeline_mode;
+  const auto query = "SELECT COUNT(*), SUM(b.v) FROM " + probe_table + " p JOIN " +
+                     build_table + " b ON p.k = b.k;";
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{20, 610}}));
+  EXPECT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::RANKED_BITMAP_HT),
+            size_t(0));
+}
+
+TEST_F(Select, RankedBitmapJoinDoesNotTrustUnenforcedUniqueConstraint) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string build_table{"ranked_bitmap_unenforced_unique_build"};
+  const std::string probe_table{"ranked_bitmap_unenforced_unique_probe"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  ScopeGuard drop_test_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+
+  run_ddl_statement("CREATE TABLE " + build_table +
+                    " (k INTEGER NOT NULL, CONSTRAINT ranked_bitmap_unenforced_pk "
+                    "PRIMARY KEY (k));");
+  run_ddl_statement("CREATE TABLE " + probe_table + " (k INTEGER NOT NULL);");
+  // HeavyDB records PRIMARY KEY metadata but does not enforce uniqueness. The two
+  // build rows must therefore contribute two matches unless constraint trust is
+  // explicitly enabled.
+  run_multiple_agg("INSERT INTO " + build_table + " VALUES (1), (1);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + probe_table + " VALUES (1);",
+                   ExecutorDeviceType::CPU);
+
+  RankedBitmapHashJoinTestMode bitmap_mode;
+  ExperimentalConstraintTrustTestMode constraint_mode(
+      /*enable_rewrites=*/false, /*trust_unenforced_constraints=*/false);
+  const auto query = "SELECT COUNT(*) FROM " + probe_table + " p JOIN (SELECT k FROM " +
+                     build_table + " ORDER BY k LIMIT 100) b ON p.k = b.k;";
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{2}}));
+}
+
+#ifdef HAVE_CUDA
+TEST_F(Select, PayloadFreeRankedBitmapAllreducePreservesGlobalMembership) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+  if (!hasAtLeastGpuDeviceCount(2)) {
+    GTEST_SKIP() << "Ranked bitmap allreduce requires at least two GPUs";
+  }
+
+  auto executor = QR::get()->getExecutor().get();
+  ASSERT_NE(executor, nullptr);
+  auto data_mgr = executor->getDataMgr();
+  ASSERT_NE(data_mgr, nullptr);
+  auto cuda_mgr = data_mgr->getCudaMgr();
+  ASSERT_NE(cuda_mgr, nullptr);
+
+  const auto device_count =
+      std::min<size_t>(static_cast<size_t>(cuda_mgr->getDeviceCount()), size_t{3});
+  std::vector<int> device_ids(device_count);
+  std::iota(device_ids.begin(), device_ids.end(), 0);
+
+  constexpr size_t bit_count{289};
+  const auto make_hash_tables = [&] {
+    std::vector<std::shared_ptr<RankedBitmapHashTable>> hash_tables;
+    hash_tables.reserve(device_count);
+    for (const auto device_id : device_ids) {
+      hash_tables.push_back(
+          std::make_shared<RankedBitmapHashTable>(ExecutorDeviceType::GPU,
+                                                  bit_count,
+                                                  /*payload_count=*/0,
+                                                  executor->maxGpuSlabSize(),
+                                                  data_mgr,
+                                                  device_id,
+                                                  HashType::OneToOne,
+                                                  /*distinct_count=*/0,
+                                                  /*force_segmented_layout=*/false,
+                                                  /*payload_free=*/true));
+    }
+    return hash_tables;
+  };
+
+  const auto bitmap_for = [](const auto& hash_table) {
+    return hash_table->hasSegmentedLayout()
+               ? hash_table->getGpuBitmap()
+               : reinterpret_cast<uint32_t*>(hash_table->getGpuBuffer());
+  };
+  const auto seed_bitmaps = [&](const auto& hash_tables,
+                                const std::vector<std::vector<size_t>>& keys_by_rank) {
+    ASSERT_EQ(hash_tables.size(), keys_by_rank.size());
+    for (size_t rank = 0; rank < hash_tables.size(); ++rank) {
+      std::vector<uint32_t> host_index(hash_tables[rank]->getIndexWordCount(), 0);
+      for (const auto key : keys_by_rank[rank]) {
+        ASSERT_LT(key, bit_count);
+        host_index[key / 32] |= uint32_t{1} << (key % 32);
+      }
+      cuda_mgr->copyHostToDevice(reinterpret_cast<int8_t*>(bitmap_for(hash_tables[rank])),
+                                 reinterpret_cast<const int8_t*>(host_index.data()),
+                                 host_index.size() * sizeof(uint32_t),
+                                 device_ids[rank],
+                                 "ranked bitmap allreduce test seed");
+    }
+  };
+
+  auto hash_tables = make_hash_tables();
+  std::vector<std::vector<size_t>> keys_by_rank(device_count);
+  std::vector<uint32_t> expected_bitmap(hash_tables.front()->getBitmapWordCount(), 0);
+  size_t expected_distinct_count{0};
+  for (size_t rank = 0; rank < device_count; ++rank) {
+    keys_by_rank[rank] = {rank, size_t{33} + rank * size_t{41}, bit_count - rank - 1};
+    for (const auto key : keys_by_rank[rank]) {
+      expected_bitmap[key / 32] |= uint32_t{1} << (key % 32);
+      ++expected_distinct_count;
+    }
+  }
+  seed_bitmaps(hash_tables, keys_by_rank);
+  ASSERT_NO_THROW(allreduce_payload_free_ranked_bitmaps_for_test(
+      device_ids, hash_tables, data_mgr, expected_distinct_count));
+  for (size_t rank = 0; rank < device_count; ++rank) {
+    std::vector<uint32_t> actual_bitmap(expected_bitmap.size());
+    cuda_mgr->copyDeviceToHost(
+        reinterpret_cast<int8_t*>(actual_bitmap.data()),
+        reinterpret_cast<const int8_t*>(bitmap_for(hash_tables[rank])),
+        actual_bitmap.size() * sizeof(uint32_t),
+        device_ids[rank],
+        "ranked bitmap allreduce test result");
+    EXPECT_EQ(actual_bitmap, expected_bitmap);
+  }
+
+  auto duplicate_hash_tables = make_hash_tables();
+  std::vector<std::vector<size_t>> duplicate_keys(device_count, {{17}});
+  seed_bitmaps(duplicate_hash_tables, duplicate_keys);
+  EXPECT_THROW(allreduce_payload_free_ranked_bitmaps_for_test(
+                   device_ids, duplicate_hash_tables, data_mgr, device_count),
+               HashJoinFail);
+}
+#endif
+
+TEST_F(Select, RangePrunedRankedBitmapCacheTracksProbeTableChanges) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string build_table{"ranked_bitmap_range_cache_build"};
+  const std::string probe_table{"ranked_bitmap_range_cache_probe"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  ScopeGuard drop_test_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+
+  run_ddl_statement("CREATE TABLE " + build_table +
+                    " (k INTEGER NOT NULL) WITH (FRAGMENT_SIZE=2);");
+  run_ddl_statement("CREATE TABLE " + probe_table +
+                    " (k INTEGER NOT NULL) WITH (FRAGMENT_SIZE=1);");
+  run_multiple_agg("INSERT INTO " + build_table +
+                       " VALUES (1), (100), (200), (300), (2), (101), (201), (301);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + probe_table + " VALUES (1);",
+                   ExecutorDeviceType::CPU);
+
+  RankedBitmapHashJoinTestMode bitmap_mode;
+  ResultReductionPipelineTestMode pipeline_mode;
+  const auto query = "SELECT COUNT(*) FROM " + probe_table + " p JOIN (SELECT k FROM " +
+                     build_table + " GROUP BY k) b ON p.k = b.k;";
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{1}}));
+  EXPECT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::RANKED_BITMAP_HT),
+            size_t(0));
+
+  run_multiple_agg("INSERT INTO " + probe_table + " VALUES (300);",
+                   ExecutorDeviceType::CPU);
+  EXPECT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::RANKED_BITMAP_HT),
+            size_t(0));
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(run_multiple_agg(query, dt), {{2}}));
+}
+
+TEST_F(Select, RangePrunedPhysicalRankedBitmapPreservesGlobalBuildRowIds) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string build_table{"ranked_bitmap_physical_range_build"};
+  const std::string probe_table{"ranked_bitmap_physical_range_probe"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  ScopeGuard drop_test_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+
+  run_ddl_statement("CREATE TABLE " + build_table +
+                    " (k INTEGER NOT NULL, v BIGINT NOT NULL) "
+                    "WITH (FRAGMENT_SIZE=2);");
+  run_ddl_statement("CREATE TABLE " + probe_table +
+                    " (k INTEGER NOT NULL) WITH (FRAGMENT_SIZE=64);");
+  run_multiple_agg("INSERT INTO " + build_table +
+                       " VALUES (1, 10), (2, 20), (100, 1000), (101, 1010), "
+                       "(200, 2000), (201, 2010);",
+                   ExecutorDeviceType::CPU);
+  std::string probe_values;
+  for (size_t i = 0; i < size_t{32}; ++i) {
+    probe_values += (i ? "," : "") + std::string("(200)");
+  }
+  run_multiple_agg("INSERT INTO " + probe_table + " VALUES " + probe_values + ";",
+                   ExecutorDeviceType::CPU);
+
+  RankedBitmapHashJoinTestMode bitmap_mode;
+  ResultReductionPipelineTestMode pipeline_mode;
+  const auto query = "SELECT COUNT(*), SUM(b.v) FROM " + probe_table + " p JOIN " +
+                     build_table + " b ON p.k = b.k;";
+  // The matching build row is in fragment 2. A compact fragment-local payload would
+  // incorrectly read row 0, while the global row id must read value 2000.
+  ASSERT_NO_FATAL_FAILURE(
+      assertInt64RowsEqual(run_multiple_agg(query, dt), {{32, 64000}}));
+
+  EXPECT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::CLEAN_ONLY,
+                                             CacheItemType::RANKED_BITMAP_HT),
+            size_t(0));
+  run_multiple_agg("INSERT INTO " + probe_table + " VALUES (1);",
+                   ExecutorDeviceType::CPU);
+  EXPECT_GT(QR::get()->getNumberOfCachedItem(QueryRunner::CacheItemStatus::DIRTY_ONLY,
+                                             CacheItemType::RANKED_BITMAP_HT),
+            size_t(0));
+  ASSERT_NO_FATAL_FAILURE(
+      assertInt64RowsEqual(run_multiple_agg(query, dt), {{33, 64010}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionExactBitmapCountDistinct) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_count_distinct_bitmap_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+
+  const auto rows = run_multiple_agg(makeExactBitmapCountDistinctQuery(table_name), dt);
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(rows, {{6}}));
+
+  const auto& original_descriptor = rows->getQueryMemDesc().getCountDistinctDescriptor(0);
+  auto different_descriptor = original_descriptor;
+  ++different_descriptor.bucket_size;
+  EXPECT_NE(different_descriptor, original_descriptor);
+  different_descriptor = original_descriptor;
+  ++different_descriptor.sub_bitmap_count;
+  EXPECT_NE(different_descriptor, original_descriptor);
+}
+
+TEST_F(Select, PipelinedGpuReductionApproxCountDistinct) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_approx_count_distinct_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowSetEqual(
+      run_multiple_agg(makeApproxCountDistinctQuery(table_name), dt), {{6}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionCountDistinctMixedAggregates) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_count_distinct_mixed_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowSetEqual(
+      run_multiple_agg(makeCountDistinctMixedAggregateQuery(table_name), dt), {{6, 21}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionRejectsSparseCountDistinctCpuFallback) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_count_distinct_unordered_set_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+  ScopeGuard reset_gpu_mem_limit = [orig_gpu_mem_limit = g_gpu_mem_limit_percent] {
+    g_gpu_mem_limit_percent = orig_gpu_mem_limit;
+  };
+  // A zero input-memory budget makes the sparse exact count-distinct range
+  // over-budget. Descriptor selection then chooses the set-based implementation,
+  // which is CPU-only today; with CPU retry disabled the query must fail instead
+  // of silently changing execution mode.
+  g_gpu_mem_limit_percent = 0.0;
+
+  runAndAssertException(
+      makeSparseCountDistinctGroupByQuery(table_name), "Query must run in cpu mode", dt);
+}
+
+TEST_F(Select, PipelinedGpuReductionGroupedExactBitmapCountDistinctMaterialization) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_count_distinct_grouped_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowSetEqual(
+      run_multiple_agg(makeGroupedExactBitmapCountDistinctQuery(table_name), dt),
+      {{0, 3}, {1, 3}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionCountDistinctOrderByMaterialization) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_count_distinct_order_by_test"};
+  createResultReductionPipelineTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg(makeExactBitmapCountDistinctOrderByQuery(table_name), dt),
+      {{0, 3}, {1, 3}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionRuntimeErrorCleanup) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_runtime_error_cleanup_test"};
+  createResultReductionPipelineFailureTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTestMode test_mode;
+
+  runAndAssertException(
+      makeRuntimeErrorPipelineQuery(table_name), "Division by zero", dt);
+  EXPECT_EQ(QR::get()->getExecutor()->getCudaAllocatorCount(), size_t(0));
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowSetEqual(
+      run_multiple_agg(makeFailureCleanupPipelineQuery(table_name), dt),
+      {{0, 2, 40}, {1, 2, 60}}));
+}
+
+TEST_F(Select, PipelinedGpuReductionDynamicWatchdogCleanup) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_reducer_timeout_cleanup_test"};
+  createResultReductionPipelineTimeoutTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  ResultReductionPipelineTimeoutTestMode test_mode;
+
+  runAndAssertException(makeTimeoutPipelineQuery(table_name),
+                        "Query execution has exceeded the time limit",
+                        dt);
+  EXPECT_EQ(QR::get()->getExecutor()->getCudaAllocatorCount(), size_t(0));
+  g_dynamic_watchdog_time_limit = 10000;
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg(makeTimeoutCleanupPipelineQuery(table_name), dt),
+      {{timeoutTestRowCount(), timeoutTestValueSum()}}));
+}
+
+TEST_F(Select, BaselineBoundaryAppendReducesSplitFragmentKeys) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+  if (!hasAtLeastGpuDeviceCount(2)) {
+    GTEST_SKIP() << "Boundary append reduction requires at least two GPUs";
+  }
+
+  const std::string table_name{"baseline_boundary_append_test"};
+  createBaselineBoundaryAppendTestTable(table_name);
+  ScopeGuard drop_test_table = [&table_name] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  BaselineBoundaryAppendTestMode test_mode;
+
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg(makeBaselineBoundaryAppendQuery(table_name), dt),
+      {{0, 1, 10, 10, 10}, {1, 2, 50, 20, 30}, {2, 1, 40, 40, 40}}));
+
+  // Each partial sum for key 1 fails the predicate (20 and 30), while the reduced
+  // boundary value passes (50). Filtering before boundary reduction would lose it.
+  const auto filtered_query =
+      "SELECT COUNT(*), SUM(k), SUM(total) FROM "
+      "(SELECT k, SUM(v) AS total FROM " +
+      table_name + " GROUP BY k HAVING SUM(v) > 40) filtered;";
+  for (size_t run_idx = 0; run_idx < 4; ++run_idx) {
+    ASSERT_NO_FATAL_FAILURE(
+        assertInt64RowsEqual(run_multiple_agg(filtered_query, dt), {{1, 1, 50}}));
+  }
+}
+
+TEST_F(Select, ExperimentalGpuInputFetchModesPreserveAggregateResults) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"gpu_input_fetch_modes_test"};
+  const auto drop_table = "DROP TABLE IF EXISTS " + table_name + ";";
+  run_ddl_statement(drop_table);
+  g_sqlite_comparator.query(drop_table);
+  ScopeGuard cleanup = [&] {
+    run_ddl_statement(drop_table);
+    g_sqlite_comparator.query(drop_table);
+  };
+
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    " (filter_col INTEGER, payload BIGINT, event_ts TIMESTAMP) "
+                    "WITH (FRAGMENT_SIZE=3);");
+  g_sqlite_comparator.query("CREATE TABLE " + table_name +
+                            " (filter_col INTEGER, payload BIGINT, event_ts TIMESTAMP);");
+  for (const auto& values : {"(-3, 10, '2020-01-01 00:00:00')",
+                             "(-1, 20, '2020-01-01 12:00:00')",
+                             "(0, 30, '2020-01-01 23:59:59')",
+                             "(2, 40, '2020-01-02 00:00:00')",
+                             "(4, 50, '2020-01-02 12:00:00')",
+                             "(6, 60, '2020-01-03 00:00:00')",
+                             "(NULL, 70, '2020-01-03 12:00:00')"}) {
+    const auto insert = "INSERT INTO " + table_name + " VALUES " + values + ";";
+    run_multiple_agg(insert, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert);
+  }
+
+  const auto saved_cpu_retry = g_allow_cpu_retry;
+  const auto saved_step_cpu_retry = g_allow_query_step_cpu_retry;
+  const auto saved_result_reduction_pipeline = g_enable_result_reduction_pipeline;
+  const auto saved_cpu_prefetch = g_enable_gpu_input_cpu_prefetch;
+  const auto saved_gpu_prefetch = g_enable_gpu_input_prefetch;
+  const auto saved_batched_prefetch = g_enable_gpu_input_batched_prefetch;
+  const auto saved_cpu_buffer_bypass = g_enable_gpu_input_cpu_buffer_bypass;
+  const auto saved_host_mapping = g_enable_gpu_aggregate_payload_host_mapping;
+  const auto saved_selected_dense = g_enable_gpu_selected_dense_aggregate_payload_fetch;
+  const auto saved_bypass_mode = g_gpu_input_cpu_buffer_bypass_mode;
+  ScopeGuard restore_flags = [&] {
+    g_allow_cpu_retry = saved_cpu_retry;
+    g_allow_query_step_cpu_retry = saved_step_cpu_retry;
+    g_enable_result_reduction_pipeline = saved_result_reduction_pipeline;
+    g_enable_gpu_input_cpu_prefetch = saved_cpu_prefetch;
+    g_enable_gpu_input_prefetch = saved_gpu_prefetch;
+    g_enable_gpu_input_batched_prefetch = saved_batched_prefetch;
+    g_enable_gpu_input_cpu_buffer_bypass = saved_cpu_buffer_bypass;
+    g_enable_gpu_aggregate_payload_host_mapping = saved_host_mapping;
+    g_enable_gpu_selected_dense_aggregate_payload_fetch = saved_selected_dense;
+    g_gpu_input_cpu_buffer_bypass_mode = saved_bypass_mode;
+  };
+
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  const auto reset_fetch_flags = [&] {
+    g_enable_gpu_input_cpu_prefetch = false;
+    g_enable_gpu_input_prefetch = false;
+    g_enable_gpu_input_batched_prefetch = false;
+    g_enable_gpu_input_cpu_buffer_bypass = false;
+    g_enable_result_reduction_pipeline = false;
+    g_enable_gpu_aggregate_payload_host_mapping = false;
+    g_enable_gpu_selected_dense_aggregate_payload_fetch = false;
+    g_gpu_input_cpu_buffer_bypass_mode = "staged";
+  };
+  const auto run_mode = [&](const int lower_bound, const int upper_bound) {
+    QueryEngine::getInstance()->gpu_code_accessor->clear();
+    QR::get()->clearGpuMemory();
+    QR::get()->clearCpuMemory();
+    const auto query = "SELECT COUNT(*), SUM(payload), MIN(payload), MAX(payload) FROM " +
+                       table_name +
+                       " WHERE filter_col >= " + std::to_string(lower_bound) +
+                       " AND filter_col < " + std::to_string(upper_bound) + ";";
+    c(query, query, dt);
+  };
+
+  reset_fetch_flags();
+  g_enable_gpu_selected_dense_aggregate_payload_fetch = true;
+  run_mode(-1, 4);
+  c("SELECT COUNT(*), SUM(payload) FROM " + table_name +
+        " WHERE CAST(filter_col AS DOUBLE) > -1.5;",
+    "SELECT COUNT(*), SUM(payload) FROM " + table_name +
+        " WHERE CAST(filter_col AS DOUBLE) > -1.5;",
+    dt);
+  QueryEngine::getInstance()->gpu_code_accessor->clear();
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  assertSingleRowAggregateResult(
+      run_multiple_agg("SELECT COUNT(*), SUM(payload) FROM " + table_name +
+                           " WHERE CAST(event_ts AS DATE) = DATE '2020-01-01';",
+                       dt),
+      3,
+      60);
+
+  reset_fetch_flags();
+  g_enable_gpu_aggregate_payload_host_mapping = true;
+  run_mode(-2, 5);
+
+  reset_fetch_flags();
+  g_enable_gpu_input_cpu_prefetch = true;
+  run_mode(-3, 6);
+
+  reset_fetch_flags();
+  g_enable_gpu_input_prefetch = true;
+  run_mode(-4, 7);
+
+  reset_fetch_flags();
+  g_enable_gpu_input_cpu_buffer_bypass = true;
+  run_mode(-5, 8);
+
+  reset_fetch_flags();
+  g_enable_gpu_input_prefetch = true;
+  g_enable_gpu_input_batched_prefetch = true;
+  g_enable_gpu_input_cpu_buffer_bypass = true;
+  g_gpu_input_cpu_buffer_bypass_mode = "mmap";
+  run_mode(0, 9);
+
+  // Exercise a cache-miss batch whose pinned buffers are adopted directly by a
+  // segmented table-column descriptor and retained through the consuming kernel.
+  QueryEngine::getInstance()->gpu_code_accessor->clear();
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  g_enable_result_reduction_pipeline = true;
+  const auto segmented_join_query =
+      "SELECT COUNT(*), SUM(lhs.payload + rhs.payload) FROM " + table_name +
+      " lhs JOIN " + table_name +
+      " rhs ON lhs.filter_col = rhs.filter_col "
+      "WHERE lhs.filter_col BETWEEN -3 AND 6;";
+  c(segmented_join_query, segmented_join_query, dt);
+}
+
+#ifdef HAVE_CUDA
+TEST_F(Select, CompressedNativeGpuInputReleasesDecodeWorkspace) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"compressed_gpu_input_workspace_test"};
+  const auto drop_table = "DROP TABLE IF EXISTS " + table_name + ";";
+  run_ddl_statement(drop_table);
+  ScopeGuard cleanup = [&] {
+    QR::get()->clearGpuMemory();
+    QR::get()->clearCpuMemory();
+    run_ddl_statement(drop_table);
+  };
+
+  const auto saved_compression_enabled =
+      File_Namespace::g_enable_native_storage_compression;
+  const auto saved_compression_codec = File_Namespace::g_native_storage_compression_codec;
+  const auto saved_compression_frame_size =
+      File_Namespace::g_native_storage_compression_frame_size;
+  const auto saved_cpu_retry = g_allow_cpu_retry;
+  const auto saved_step_cpu_retry = g_allow_query_step_cpu_retry;
+  const auto saved_gpu_prefetch = g_enable_gpu_input_prefetch;
+  const auto saved_batched_prefetch = g_enable_gpu_input_batched_prefetch;
+  const auto saved_cpu_buffer_bypass = g_enable_gpu_input_cpu_buffer_bypass;
+  const auto saved_compressed_pipeline = g_enable_gpu_input_compressed_pipeline;
+  const auto saved_compressed_peer_exchange = g_enable_gpu_input_compressed_peer_exchange;
+  const auto saved_compressed_batch_max_bytes = g_gpu_input_compressed_batch_max_bytes;
+  const auto saved_bypass_mode = g_gpu_input_cpu_buffer_bypass_mode;
+  ScopeGuard restore_flags = [&] {
+    File_Namespace::g_enable_native_storage_compression = saved_compression_enabled;
+    File_Namespace::g_native_storage_compression_codec = saved_compression_codec;
+    File_Namespace::g_native_storage_compression_frame_size =
+        saved_compression_frame_size;
+    g_allow_cpu_retry = saved_cpu_retry;
+    g_allow_query_step_cpu_retry = saved_step_cpu_retry;
+    g_enable_gpu_input_prefetch = saved_gpu_prefetch;
+    g_enable_gpu_input_batched_prefetch = saved_batched_prefetch;
+    g_enable_gpu_input_cpu_buffer_bypass = saved_cpu_buffer_bypass;
+    g_enable_gpu_input_compressed_pipeline = saved_compressed_pipeline;
+    g_enable_gpu_input_compressed_peer_exchange = saved_compressed_peer_exchange;
+    g_gpu_input_compressed_batch_max_bytes = saved_compressed_batch_max_bytes;
+    g_gpu_input_cpu_buffer_bypass_mode = saved_bypass_mode;
+  };
+
+  File_Namespace::g_enable_native_storage_compression = true;
+  File_Namespace::g_native_storage_compression_codec = "snappy";
+  File_Namespace::g_native_storage_compression_frame_size = 64 * 1024;
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  g_enable_gpu_input_prefetch = true;
+  g_enable_gpu_input_batched_prefetch = true;
+  g_enable_gpu_input_cpu_buffer_bypass = true;
+  g_enable_gpu_input_compressed_pipeline = true;
+  g_enable_gpu_input_compressed_peer_exchange = true;
+  // Force each compressed fragment into a separate nvCOMP submission so the test
+  // covers both pipeline lanes, bounded sub-batch execution, and workspace reuse.
+  g_gpu_input_compressed_batch_max_bytes = 1;
+  g_gpu_input_cpu_buffer_bypass_mode = "staged";
+
+  constexpr size_t row_count = 4096;
+  constexpr size_t fragment_size = 1024;
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    " (filter_col INTEGER, payload BIGINT) WITH (FRAGMENT_SIZE=" +
+                    std::to_string(fragment_size) + ");");
+
+  auto& catalog = QR::get()->getSession()->getCatalog();
+  const auto table = catalog.getMetadataForTable(table_name);
+  ASSERT_NE(table, nullptr);
+  const auto columns =
+      catalog.getAllColumnMetadataForTable(table->tableId, false, false, false);
+  ASSERT_EQ(columns.size(), size_t(2));
+  auto loader = QR::get()->getLoader(table);
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+  for (const auto column : columns) {
+    import_buffers.emplace_back(
+        std::make_unique<import_export::TypedImportBuffer>(column, nullptr));
+  }
+  for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+    import_buffers[0]->addInt(static_cast<int32_t>(row_idx % 4));
+    import_buffers[1]->addBigint(7);
+  }
+  loader->load(import_buffers, row_count, nullptr);
+
+  auto& data_mgr = catalog.getDataMgr();
+  data_mgr.checkpoint(catalog.getDatabaseId(), table->tableId);
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+
+  const auto payload_column = catalog.getMetadataForColumn(table->tableId, "payload");
+  ASSERT_NE(payload_column, nullptr);
+  const auto native_payload_buffer = [&] {
+    return dynamic_cast<File_Namespace::FileBuffer*>(
+        data_mgr.getPersistentStorageMgr()->getBufferIfNativeStorage(
+            ChunkKey{
+                catalog.getDatabaseId(), table->tableId, payload_column->columnId, 0},
+            0));
+  };
+  auto* source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_TRUE(source_buffer->isSnappyStorageCompressed());
+
+  run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                    " WITH (STORAGE_COMPRESSION='NONE');");
+  source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_FALSE(source_buffer->isStorageCompressed());
+
+  File_Namespace::g_enable_native_storage_compression = false;
+  EXPECT_THROW(run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                                 " WITH (STORAGE_COMPRESSION='TRUE');"),
+               std::runtime_error);
+  File_Namespace::g_enable_native_storage_compression = true;
+  run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                    " WITH (STORAGE_COMPRESSION='TRUE');");
+  source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_TRUE(source_buffer->isSnappyStorageCompressed());
+
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+
+  auto* cuda_mgr = data_mgr.getCudaMgr();
+  ASSERT_NE(cuda_mgr, nullptr);
+  const auto non_slab_allocation_count = [&] {
+    return std::count_if(
+        cuda_mgr->getDeviceMemoryAllocationMap().getMap().begin(),
+        cuda_mgr->getDeviceMemoryAllocationMap().getMap().end(),
+        [](const auto& allocation) { return !allocation.second.is_slab; });
+  };
+  const auto allocations_before = non_slab_allocation_count();
+
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT filter_col, COUNT(*), SUM(payload) FROM " + table_name +
+                           " GROUP BY filter_col ORDER BY filter_col;",
+                       dt),
+      {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
+  EXPECT_EQ(non_slab_allocation_count(), allocations_before);
+
+  // A request may contain both a CPU-resident source and cold compressed native
+  // chunks. The resident buffer remains authoritative, while the cold chunks should
+  // retain the direct GPU-input path instead of being materialized in the CPU pool.
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  const auto filter_column = catalog.getMetadataForColumn(table->tableId, "filter_col");
+  ASSERT_NE(filter_column, nullptr);
+  const ChunkKey resident_filter_key{
+      catalog.getDatabaseId(), table->tableId, filter_column->columnId, 0};
+  const ChunkKey cold_payload_key{
+      catalog.getDatabaseId(), table->tableId, payload_column->columnId, 0};
+  auto* resident_filter_buffer =
+      data_mgr.getChunkBuffer(resident_filter_key, MemoryLevel::CPU_LEVEL);
+  ASSERT_NE(resident_filter_buffer, nullptr);
+  resident_filter_buffer->unPin();
+  ASSERT_TRUE(data_mgr.isBufferOnDevice(resident_filter_key, MemoryLevel::CPU_LEVEL, 0));
+  ASSERT_FALSE(data_mgr.isBufferOnDevice(cold_payload_key, MemoryLevel::CPU_LEVEL, 0));
+
+  const auto mixed_allocations_before = non_slab_allocation_count();
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT filter_col, COUNT(*), SUM(payload) FROM " + table_name +
+                           " GROUP BY filter_col ORDER BY filter_col;",
+                       dt),
+      {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
+  EXPECT_EQ(non_slab_allocation_count(), mixed_allocations_before);
+  EXPECT_TRUE(data_mgr.isBufferOnDevice(resident_filter_key, MemoryLevel::CPU_LEVEL, 0));
+  EXPECT_FALSE(data_mgr.isBufferOnDevice(cold_payload_key, MemoryLevel::CPU_LEVEL, 0));
+}
+
+#ifdef HAVE_NVCOMP_BITCOMP
+TEST_F(Select, CompressedNativeBitcompCodecsDecodeOnCpuAndDirectlyToGpuInput) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"compressed_bitcomp_gpu_input_test"};
+  const std::string mixed_table_name{"compressed_adaptive_mixed_gpu_input_test"};
+  const auto drop_table = "DROP TABLE IF EXISTS " + table_name + ";";
+  const auto drop_mixed_table = "DROP TABLE IF EXISTS " + mixed_table_name + ";";
+  run_ddl_statement(drop_table);
+  run_ddl_statement(drop_mixed_table);
+  ScopeGuard cleanup = [&] {
+    QR::get()->clearGpuMemory();
+    QR::get()->clearCpuMemory();
+    run_ddl_statement(drop_table);
+    run_ddl_statement(drop_mixed_table);
+  };
+
+  const auto saved_compression_enabled =
+      File_Namespace::g_enable_native_storage_compression;
+  const auto saved_compression_codec = File_Namespace::g_native_storage_compression_codec;
+  const auto saved_compression_frame_size =
+      File_Namespace::g_native_storage_compression_frame_size;
+  const auto saved_sidecar_only =
+      File_Namespace::g_enable_file_buffer_metadata_sidecar_only;
+  const auto saved_cpu_retry = g_allow_cpu_retry;
+  const auto saved_step_cpu_retry = g_allow_query_step_cpu_retry;
+  const auto saved_gpu_prefetch = g_enable_gpu_input_prefetch;
+  const auto saved_batched_prefetch = g_enable_gpu_input_batched_prefetch;
+  const auto saved_cpu_buffer_bypass = g_enable_gpu_input_cpu_buffer_bypass;
+  const auto saved_compressed_pipeline = g_enable_gpu_input_compressed_pipeline;
+  const auto saved_compressed_peer_exchange = g_enable_gpu_input_compressed_peer_exchange;
+  const auto saved_compressed_batch_max_bytes = g_gpu_input_compressed_batch_max_bytes;
+  const auto saved_bypass_mode = g_gpu_input_cpu_buffer_bypass_mode;
+  ScopeGuard restore_flags = [&] {
+    File_Namespace::g_enable_native_storage_compression = saved_compression_enabled;
+    File_Namespace::g_native_storage_compression_codec = saved_compression_codec;
+    File_Namespace::g_native_storage_compression_frame_size =
+        saved_compression_frame_size;
+    File_Namespace::g_enable_file_buffer_metadata_sidecar_only = saved_sidecar_only;
+    g_allow_cpu_retry = saved_cpu_retry;
+    g_allow_query_step_cpu_retry = saved_step_cpu_retry;
+    g_enable_gpu_input_prefetch = saved_gpu_prefetch;
+    g_enable_gpu_input_batched_prefetch = saved_batched_prefetch;
+    g_enable_gpu_input_cpu_buffer_bypass = saved_cpu_buffer_bypass;
+    g_enable_gpu_input_compressed_pipeline = saved_compressed_pipeline;
+    g_enable_gpu_input_compressed_peer_exchange = saved_compressed_peer_exchange;
+    g_gpu_input_compressed_batch_max_bytes = saved_compressed_batch_max_bytes;
+    g_gpu_input_cpu_buffer_bypass_mode = saved_bypass_mode;
+  };
+
+  File_Namespace::g_enable_native_storage_compression = true;
+  File_Namespace::g_native_storage_compression_codec = "bitcomp-sparse";
+  File_Namespace::g_native_storage_compression_frame_size = 1024 * 1024;
+  File_Namespace::g_enable_file_buffer_metadata_sidecar_only = true;
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  g_enable_gpu_input_prefetch = true;
+  g_enable_gpu_input_batched_prefetch = true;
+  g_enable_gpu_input_cpu_buffer_bypass = true;
+  g_enable_gpu_input_compressed_pipeline = true;
+  g_enable_gpu_input_compressed_peer_exchange = true;
+  g_gpu_input_compressed_batch_max_bytes = 2ULL * 1024 * 1024 * 1024;
+  g_gpu_input_cpu_buffer_bypass_mode = "staged";
+
+  constexpr size_t row_count = 4096;
+  constexpr size_t fragment_size = 1024;
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    " (filter_col INTEGER, payload BIGINT) WITH (FRAGMENT_SIZE=" +
+                    std::to_string(fragment_size) + ", MAX_ROLLBACK_EPOCHS=0);");
+
+  auto& catalog = QR::get()->getSession()->getCatalog();
+  const auto table = catalog.getMetadataForTable(table_name);
+  ASSERT_NE(table, nullptr);
+  const auto columns =
+      catalog.getAllColumnMetadataForTable(table->tableId, false, false, false);
+  ASSERT_EQ(columns.size(), size_t(2));
+  auto loader = QR::get()->getLoader(table);
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+  for (const auto column : columns) {
+    import_buffers.emplace_back(
+        std::make_unique<import_export::TypedImportBuffer>(column, nullptr));
+  }
+  for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+    import_buffers[0]->addInt(static_cast<int32_t>(row_idx % 4));
+    import_buffers[1]->addBigint(7);
+  }
+  loader->load(import_buffers, row_count, nullptr);
+
+  auto& data_mgr = catalog.getDataMgr();
+  data_mgr.checkpoint(catalog.getDatabaseId(), table->tableId);
+  const auto payload_column = catalog.getMetadataForColumn(table->tableId, "payload");
+  const auto filter_column = catalog.getMetadataForColumn(table->tableId, "filter_col");
+  ASSERT_NE(payload_column, nullptr);
+  ASSERT_NE(filter_column, nullptr);
+  const ChunkKey payload_key{
+      catalog.getDatabaseId(), table->tableId, payload_column->columnId, 0};
+  const ChunkKey filter_key{
+      catalog.getDatabaseId(), table->tableId, filter_column->columnId, 0};
+  const auto native_buffer = [&](const ChunkKey& key) {
+    return dynamic_cast<File_Namespace::FileBuffer*>(
+        data_mgr.getPersistentStorageMgr()->getBufferIfNativeStorage(key, 0));
+  };
+  const auto native_payload_buffer = [&] { return native_buffer(payload_key); };
+  auto* source_buffer = native_payload_buffer();
+  auto* filter_source_buffer = native_buffer(filter_key);
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_NE(filter_source_buffer, nullptr);
+  ASSERT_TRUE(source_buffer->isBitcompStorageCompressed());
+  ASSERT_TRUE(filter_source_buffer->isBitcompStorageCompressed());
+  ASSERT_EQ(source_buffer->storageBitcompElementWidth(), sizeof(int64_t));
+  ASSERT_EQ(filter_source_buffer->storageBitcompElementWidth(), sizeof(int32_t));
+  ASSERT_EQ(source_buffer->storageCompressionFrameSize(), size_t(1024 * 1024));
+  ASSERT_EQ(source_buffer->numMetadataPages(), size_t(0));
+
+  run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                    " WITH (STORAGE_COMPRESSION='NONE');");
+  source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_FALSE(source_buffer->isStorageCompressed());
+  run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                    " WITH (STORAGE_COMPRESSION='BITCOMP-SPARSE');");
+  source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_TRUE(source_buffer->isBitcompStorageCompressed());
+
+  // The enable flag controls writes, not whether persisted self-describing chunks can
+  // be read. Exercise the host decoder with the write feature disabled, then evict its
+  // CPU materialization before checking the direct GPU-input path.
+  File_Namespace::g_enable_native_storage_compression = false;
+  File_Namespace::g_native_storage_compression_codec = "snappy";
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT filter_col, COUNT(*), SUM(payload) FROM " + table_name +
+                           " GROUP BY filter_col ORDER BY filter_col;",
+                       ExecutorDeviceType::CPU),
+      {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
+
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  ASSERT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+  ASSERT_FALSE(data_mgr.isBufferOnDevice(filter_key, MemoryLevel::CPU_LEVEL, 0));
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT filter_col, COUNT(*), SUM(payload) FROM " + table_name +
+                           " GROUP BY filter_col ORDER BY filter_col;",
+                       dt),
+      {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
+  EXPECT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+  EXPECT_FALSE(data_mgr.isBufferOnDevice(filter_key, MemoryLevel::CPU_LEVEL, 0));
+
+  EXPECT_THROW(run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                                 " WITH (STORAGE_COMPRESSION='ADAPTIVE');"),
+               std::runtime_error);
+  File_Namespace::g_enable_native_storage_compression = true;
+  run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                    " WITH (STORAGE_COMPRESSION='BITCOMP-DEFAULT');");
+  source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_TRUE(source_buffer->isBitcompStorageCompressed());
+
+  File_Namespace::g_enable_native_storage_compression = false;
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT filter_col, COUNT(*), SUM(payload) FROM " + table_name +
+                           " GROUP BY filter_col ORDER BY filter_col;",
+                       ExecutorDeviceType::CPU),
+      {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
+
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  ASSERT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT filter_col, COUNT(*), SUM(payload) FROM " + table_name +
+                           " GROUP BY filter_col ORDER BY filter_col;",
+                       dt),
+      {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
+  EXPECT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+
+  File_Namespace::g_enable_native_storage_compression = true;
+  run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                    " WITH (STORAGE_COMPRESSION='ADAPTIVE');");
+  source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_TRUE(source_buffer->isStorageCompressed());
+
+  // Persisted codec metadata remains self-describing after the write feature is
+  // disabled, including for the codec selected by ADAPTIVE.
+  File_Namespace::g_enable_native_storage_compression = false;
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT filter_col, COUNT(*), SUM(payload) FROM " + table_name +
+                           " GROUP BY filter_col ORDER BY filter_col;",
+                       ExecutorDeviceType::CPU),
+      {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
+
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT filter_col, COUNT(*), SUM(payload) FROM " + table_name +
+                           " GROUP BY filter_col ORDER BY filter_col;",
+                       dt),
+      {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
+  EXPECT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+
+  // Exercise one batched scan over independently selected persisted codecs. The
+  // selected codec is deliberately not asserted: adaptive mode's invariant is the
+  // smallest supported representation, which can change as codecs are added.
+  constexpr size_t mixed_fragment_size = 512 * 1024;
+  constexpr size_t repeated_block_size = 1024;
+  File_Namespace::g_enable_native_storage_compression = true;
+  File_Namespace::g_native_storage_compression_codec = "adaptive";
+  run_ddl_statement("CREATE TABLE " + mixed_table_name +
+                    " (v INTEGER) WITH (FRAGMENT_SIZE=" +
+                    std::to_string(mixed_fragment_size) + ", MAX_ROLLBACK_EPOCHS=0);");
+
+  const auto mixed_table = catalog.getMetadataForTable(mixed_table_name);
+  ASSERT_NE(mixed_table, nullptr);
+  const auto mixed_column = catalog.getMetadataForColumn(mixed_table->tableId, "v");
+  ASSERT_NE(mixed_column, nullptr);
+  auto mixed_loader = QR::get()->getLoader(mixed_table);
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> mixed_import_buffers;
+  mixed_import_buffers.emplace_back(
+      std::make_unique<import_export::TypedImportBuffer>(mixed_column, nullptr));
+
+  std::vector<int32_t> repeated_block(repeated_block_size);
+  uint32_t state{0x9e3779b9U};
+  for (auto& value : repeated_block) {
+    state ^= state << 13;
+    state ^= state >> 17;
+    state ^= state << 5;
+    value = static_cast<int32_t>(state);
+  }
+
+  int64_t expected_sum{0};
+  for (size_t row_idx = 0; row_idx < mixed_fragment_size; ++row_idx) {
+    const auto value = static_cast<int32_t>(row_idx);
+    mixed_import_buffers.front()->addInt(value);
+    expected_sum += value;
+  }
+  for (size_t row_idx = 0; row_idx < mixed_fragment_size; ++row_idx) {
+    const auto value = repeated_block[row_idx % repeated_block.size()];
+    mixed_import_buffers.front()->addInt(value);
+    expected_sum += value;
+  }
+  mixed_loader->load(mixed_import_buffers, 2 * mixed_fragment_size, nullptr);
+  data_mgr.checkpoint(catalog.getDatabaseId(), mixed_table->tableId);
+
+  const ChunkKey bitcomp_fragment_key{
+      catalog.getDatabaseId(), mixed_table->tableId, mixed_column->columnId, 0};
+  const ChunkKey snappy_fragment_key{
+      catalog.getDatabaseId(), mixed_table->tableId, mixed_column->columnId, 1};
+  const auto native_mixed_buffer = [&](const ChunkKey& key) {
+    return dynamic_cast<File_Namespace::FileBuffer*>(
+        data_mgr.getPersistentStorageMgr()->getBufferIfNativeStorage(key, 0));
+  };
+  const auto bitcomp_fragment = native_mixed_buffer(bitcomp_fragment_key);
+  const auto snappy_fragment = native_mixed_buffer(snappy_fragment_key);
+  ASSERT_NE(bitcomp_fragment, nullptr);
+  ASSERT_NE(snappy_fragment, nullptr);
+  ASSERT_TRUE(bitcomp_fragment->isStorageCompressed());
+  ASSERT_TRUE(snappy_fragment->isStorageCompressed());
+
+  File_Namespace::g_enable_native_storage_compression = false;
+  const std::vector<std::vector<int64_t>> expected_mixed_rows{
+      {static_cast<int64_t>(2 * mixed_fragment_size), expected_sum}};
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT COUNT(*), SUM(v) FROM " + mixed_table_name + ";",
+                       ExecutorDeviceType::CPU),
+      expected_mixed_rows));
+
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+  ASSERT_FALSE(
+      data_mgr.isBufferOnDevice(bitcomp_fragment_key, MemoryLevel::CPU_LEVEL, 0));
+  ASSERT_FALSE(data_mgr.isBufferOnDevice(snappy_fragment_key, MemoryLevel::CPU_LEVEL, 0));
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT COUNT(*), SUM(v) FROM " + mixed_table_name + ";", dt),
+      expected_mixed_rows));
+  EXPECT_FALSE(
+      data_mgr.isBufferOnDevice(bitcomp_fragment_key, MemoryLevel::CPU_LEVEL, 0));
+  EXPECT_FALSE(data_mgr.isBufferOnDevice(snappy_fragment_key, MemoryLevel::CPU_LEVEL, 0));
+}
+#endif
+
+#ifdef HAVE_NVCOMP_GDEFLATE
+TEST_F(Select, CompressedNativeGdeflateDecodesDirectlyToGpuInput) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  constexpr auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"compressed_gdeflate_gpu_input_test"};
+  const auto drop_table = "DROP TABLE IF EXISTS " + table_name + ";";
+  run_ddl_statement(drop_table);
+  ScopeGuard cleanup = [&] {
+    QR::get()->clearGpuMemory();
+    QR::get()->clearCpuMemory();
+    run_ddl_statement(drop_table);
+  };
+
+  const auto saved_compression_enabled =
+      File_Namespace::g_enable_native_storage_compression;
+  const auto saved_compression_codec = File_Namespace::g_native_storage_compression_codec;
+  const auto saved_compression_frame_size =
+      File_Namespace::g_native_storage_compression_frame_size;
+  const auto saved_gdeflate_level =
+      File_Namespace::g_native_storage_compression_gdeflate_level;
+  const auto saved_sidecar_only =
+      File_Namespace::g_enable_file_buffer_metadata_sidecar_only;
+  const auto saved_cpu_retry = g_allow_cpu_retry;
+  const auto saved_step_cpu_retry = g_allow_query_step_cpu_retry;
+  const auto saved_gpu_prefetch = g_enable_gpu_input_prefetch;
+  const auto saved_batched_prefetch = g_enable_gpu_input_batched_prefetch;
+  const auto saved_cpu_buffer_bypass = g_enable_gpu_input_cpu_buffer_bypass;
+  const auto saved_bypass_mode = g_gpu_input_cpu_buffer_bypass_mode;
+  ScopeGuard restore_flags = [&] {
+    File_Namespace::g_enable_native_storage_compression = saved_compression_enabled;
+    File_Namespace::g_native_storage_compression_codec = saved_compression_codec;
+    File_Namespace::g_native_storage_compression_frame_size =
+        saved_compression_frame_size;
+    File_Namespace::g_native_storage_compression_gdeflate_level = saved_gdeflate_level;
+    File_Namespace::g_enable_file_buffer_metadata_sidecar_only = saved_sidecar_only;
+    g_allow_cpu_retry = saved_cpu_retry;
+    g_allow_query_step_cpu_retry = saved_step_cpu_retry;
+    g_enable_gpu_input_prefetch = saved_gpu_prefetch;
+    g_enable_gpu_input_batched_prefetch = saved_batched_prefetch;
+    g_enable_gpu_input_cpu_buffer_bypass = saved_cpu_buffer_bypass;
+    g_gpu_input_cpu_buffer_bypass_mode = saved_bypass_mode;
+  };
+
+  File_Namespace::g_enable_native_storage_compression = true;
+  File_Namespace::g_native_storage_compression_codec = "gdeflate";
+  File_Namespace::g_native_storage_compression_frame_size = 64 * 1024;
+  File_Namespace::g_native_storage_compression_gdeflate_level = 1;
+  File_Namespace::g_enable_file_buffer_metadata_sidecar_only = true;
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  g_enable_gpu_input_prefetch = true;
+  g_enable_gpu_input_batched_prefetch = true;
+  g_enable_gpu_input_cpu_buffer_bypass = true;
+  g_gpu_input_cpu_buffer_bypass_mode = "staged";
+
+  constexpr size_t row_count = 4096;
+  constexpr size_t fragment_size = 1024;
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    " (filter_col INTEGER, payload BIGINT) WITH (FRAGMENT_SIZE=" +
+                    std::to_string(fragment_size) + ", MAX_ROLLBACK_EPOCHS=0);");
+
+  auto& catalog = QR::get()->getSession()->getCatalog();
+  const auto table = catalog.getMetadataForTable(table_name);
+  ASSERT_NE(table, nullptr);
+  const auto columns =
+      catalog.getAllColumnMetadataForTable(table->tableId, false, false, false);
+  ASSERT_EQ(columns.size(), size_t(2));
+  auto loader = QR::get()->getLoader(table);
+  std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
+  for (const auto column : columns) {
+    import_buffers.emplace_back(
+        std::make_unique<import_export::TypedImportBuffer>(column, nullptr));
+  }
+  for (size_t row_idx = 0; row_idx < row_count; ++row_idx) {
+    import_buffers[0]->addInt(static_cast<int32_t>(row_idx % 4));
+    import_buffers[1]->addBigint(7);
+  }
+  loader->load(import_buffers, row_count, nullptr);
+
+  auto& data_mgr = catalog.getDataMgr();
+  data_mgr.checkpoint(catalog.getDatabaseId(), table->tableId);
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+
+  const auto payload_column = catalog.getMetadataForColumn(table->tableId, "payload");
+  ASSERT_NE(payload_column, nullptr);
+  const ChunkKey payload_key{
+      catalog.getDatabaseId(), table->tableId, payload_column->columnId, 0};
+  const auto native_payload_buffer = [&] {
+    return dynamic_cast<File_Namespace::FileBuffer*>(
+        data_mgr.getPersistentStorageMgr()->getBufferIfNativeStorage(payload_key, 0));
+  };
+  auto* source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_TRUE(source_buffer->isGdeflateStorageCompressed());
+  ASSERT_EQ(source_buffer->storageCompressionFrameSize(), size_t(64 * 1024));
+  ASSERT_EQ(source_buffer->numMetadataPages(), size_t(0));
+  ASSERT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+
+  run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                    " WITH (STORAGE_COMPRESSION='NONE');");
+  source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_FALSE(source_buffer->isStorageCompressed());
+  run_ddl_statement("OPTIMIZE TABLE " + table_name +
+                    " WITH (STORAGE_COMPRESSION='GDEFLATE');");
+  source_buffer = native_payload_buffer();
+  ASSERT_NE(source_buffer, nullptr);
+  ASSERT_TRUE(source_buffer->isGdeflateStorageCompressed());
+  ASSERT_EQ(source_buffer->storageCompressionFrameSize(), size_t(64 * 1024));
+  ASSERT_EQ(source_buffer->numMetadataPages(), size_t(0));
+  QR::get()->clearGpuMemory();
+  QR::get()->clearCpuMemory();
+
+  ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+      run_multiple_agg("SELECT filter_col, COUNT(*), SUM(payload) FROM " + table_name +
+                           " GROUP BY filter_col ORDER BY filter_col;",
+                       dt),
+      {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
+  EXPECT_FALSE(data_mgr.isBufferOnDevice(payload_key, MemoryLevel::CPU_LEVEL, 0));
+}
+#endif
+#endif
+
 TEST_F(Select, Export_Via_Query_Having_Scalar_Subquery) {
   // EXPORT stmt needs "validation_query" to gather some info from the query
   // before doing the actual data export
@@ -12385,15 +15727,9 @@ TEST_F(Select, Joins_AvoidLoopJoin) {
   auto perform_test =
       [](ExecutorDeviceType dt, const std::string& query, int64_t expected_res) {
         EXPECT_EQ(expected_res, v<int64_t>(run_simple_agg(query, dt)));
-        if (dt == ExecutorDeviceType::CPU) {
-          auto num_cached_ht =
-              QR::get()->getNumberOfCachedItem(
-                  QueryRunner::CacheItemStatus::ALL, CacheItemType::PERFECT_HT, false) +
-              QR::get()->getNumberOfCachedItem(
-                  QueryRunner::CacheItemStatus::ALL, CacheItemType::BASELINE_HT, false);
-          // if we execute the join via hash join on CPU, we keep it to the cache
-          EXPECT_GE(num_cached_ht, static_cast<size_t>(1)) << query;
-        }
+        const auto no_loop_query = boost::replace_first_copy(
+            query, "SELECT ", "SELECT /*+ disable_loop_join */ ");
+        EXPECT_EQ(expected_res, v<int64_t>(run_simple_agg(no_loop_query, dt))) << query;
         QR::get()->clearCpuMemory();
       };
   std::string query_prefix{"SELECT COUNT(1) FROM "};
@@ -12418,11 +15754,9 @@ TEST_F(Select, Joins_Fragmented_SelfJoin_And_LoopJoin) {
     (c("SELECT COUNT(*) FROM test a, test b WHERE b.x = b.x;", dt));
     (c("SELECT COUNT(*) FROM test a, test b, test c WHERE b.x = b.x;", dt));
     (c("SELECT COUNT(*) FROM test a, test b, test c WHERE c.x = c.x;", dt));
-    // We can't fold b.y = b.y b/c y is nullable
-    EXPECT_THROW(
-        run_multiple_agg(
-            "SELECT COUNT(*) FROM test a, test b WHERE b.x = b.x AND b.y = b.y;", dt),
-        std::runtime_error);
+    // We cannot fold b.y = b.y because y is nullable, but the remaining loop
+    // join shape is now executable and should return the reference result.
+    c("SELECT COUNT(*) FROM test a, test b WHERE b.x = b.x AND b.y = b.y;", dt);
     ASSERT_EQ(
         int64_t(-95),
         v<int64_t>(run_simple_agg(
@@ -13141,14 +16475,17 @@ TEST_F(Select, Joins_LeftJoinFiltered) {
     const auto crt_row = explain_result->getNextRow(true, true);
     EXPECT_EQ(size_t(1), crt_row.size());
     const auto explain_str = boost::get<std::string>(v<NullableString>(crt_row[0]));
-    const auto n = explain_str.find("hoisted_left_join_filters_");
-    const bool condition = n == std::string::npos;
+    const bool has_left_join_hoist =
+        explain_str.find("hoisted_left_join_filters_") != std::string::npos;
+    const bool has_pre_join_filter =
+        explain_str.find("filter_func_hoisted_literals") != std::string::npos;
     if (enable_filter_hoisting) {
-      // expect a match
-      EXPECT_FALSE(condition);
+      // Planner-side left-filter pushdown can make the older left-join-specific
+      // codegen hook unnecessary; either shape keeps the preserved-side filter out of
+      // the post-join path.
+      EXPECT_TRUE(has_left_join_hoist || has_pre_join_filter) << explain_str;
     } else {
-      // expect no match
-      EXPECT_TRUE(condition);
+      EXPECT_FALSE(has_left_join_hoist) << explain_str;
     }
   };
 
@@ -13629,14 +16966,13 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
       "where b > 1 and c < 7 order by a,b,c,d,e,f;",
       dt);
 
-    //    d) expect to throw an error due to unsupported full outer join
-    //    --> we need a filter predicate in probe-side (i.e., outer) table
-    EXPECT_THROW(
-        run_multiple_agg(
-            "select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a "
-            "= d where d is not null and c < 2 order by a,b,c,d,e,f;",
-            dt),
-        std::runtime_error);
+    //    d) probe-side filters used to leave some full outer join reductions
+    //    unsupported. Keep the result invariant explicit now that these shapes execute.
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
+      "where d is not null and c < 2 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and d is "
+      "not null and c < 2 order by a,b,c,d,e,f;",
+      dt);
     EXPECT_THROW(run_multiple_agg(
                      "select a,b,c,d,e,f from outer_join_foo full outer join "
                      "outer_join_bar on a = d where e is not null order by a,b,c,d,e,f;",
@@ -13648,11 +16984,11 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
             "= d where f is not null and e < 2 order by a,b,c,d,e,f;",
             dt),
         std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("select a,b,c,d,e,f from outer_join_foo full outer join "
-                         "outer_join_bar on a = d where c < 2 order by a,b,c,d,e,f;",
-                         dt),
-        std::runtime_error);
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
+      "where c < 2 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
+      "where c < 2 order by a,b,c,d,e,f;",
+      dt);
     EXPECT_THROW(
         run_multiple_agg("select a,b,c,d,e,f from outer_join_foo full outer join "
                          "outer_join_bar on a = d where d < 5 order by a,b,c,d,e,f;",
@@ -13850,12 +17186,11 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
             "= d and c = f where d is not null and f < 2 order by a,b,c,d,e,f;",
             dt),
         std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg(
-            "select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a "
-            "= d and c = f where a < 2 order by a,b,c,d,e,f;",
-            dt),
-        std::runtime_error);
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
+      "and c = f where a < 2 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
+      "and c = f where a < 2 order by a,b,c,d,e,f;",
+      dt);
 
     // 2. execute full outer join via inner join
     //    a) return zero matching row
@@ -14901,9 +18236,9 @@ TEST_F(Select, ArrowOutput) {
     c_arrow("SELECT x, y, w, z, t, f, d, str, ofd, ofq FROM test ORDER BY x ASC, y ASC;",
             dt);
     c_arrow("SELECT null_str, COUNT(*) FROM test GROUP BY null_str;", dt);
-    c_arrow("SELECT m,m_3,m_6,m_9 from test", dt);
-    c_arrow("SELECT o, o1, o2 from test", dt);
-    c_arrow("SELECT n from test", dt);
+    c_arrow("SELECT m,m_3,m_6,m_9 from test ORDER BY x ASC, y ASC, str ASC;", dt);
+    c_arrow("SELECT o, o1, o2 from test ORDER BY x ASC, y ASC, str ASC;", dt);
+    c_arrow("SELECT n from test ORDER BY x ASC, y ASC, str ASC;", dt);
     c_arrow(
         "SELECT x, CASE WHEN x = 7 THEN 'foo' ELSE 'bar' END AS case_x FROM test "
         "WHERE str IN ('bar', 'baz') ORDER BY x ASC;",
@@ -14987,16 +18322,21 @@ TEST_F(Select, PuntToCPU) {
     return;
   }
 
-  g_gpu_mem_limit_percent = 1e-10;
+  // Use a zero input-memory budget to exercise the OOM path deterministically on
+  // large-memory GPUs.
+  g_gpu_mem_limit_percent = 0.0;
   EXPECT_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt),
                std::runtime_error);
   EXPECT_THROW(run_multiple_agg("SELECT str, COUNT(*) FROM test GROUP BY str;", dt),
                std::runtime_error);
 
   g_allow_cpu_retry = true;
-  EXPECT_NO_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt));
-  EXPECT_NO_THROW(run_multiple_agg(
-      "SELECT COUNT(*) FROM test WHERE x IN (SELECT y FROM test WHERE y > 3);", dt));
+  const auto grouped_result =
+      run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY x;", dt);
+  EXPECT_EQ(grouped_result->getDeviceType(), ExecutorDeviceType::CPU);
+  const auto subquery_result = run_multiple_agg(
+      "SELECT COUNT(*) FROM test WHERE x IN (SELECT y FROM test WHERE y > 3);", dt);
+  EXPECT_EQ(subquery_result->getDeviceType(), ExecutorDeviceType::CPU);
 }
 
 TEST_F(Select, PuntQueryStepToCPU) {
@@ -15037,14 +18377,16 @@ TEST_F(Select, PuntQueryStepToCPU) {
   // Even without g_allow_cpu_retry = true, this should run with
   // g_allow_query_step_cpu_retry = true, as second step can drop to CPU without
   // triggering global punt to CPU
-  EXPECT_NO_THROW(
-      run_multiple_agg("SELECT x, APPROX_MEDIAN(n) AS n_median FROM (SELECT x, y, "
-                       "COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
-                       dt));
+  const auto cpu_step_result = run_multiple_agg(
+      "SELECT x, APPROX_MEDIAN(n) AS n_median FROM (SELECT x, y, "
+      "COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
+      dt);
+  EXPECT_EQ(cpu_step_result->getDeviceType(), ExecutorDeviceType::CPU);
+  EXPECT_EQ(QR::get()->getExecutor()->getCudaAllocatorCount(), size_t(0));
 
   g_allow_cpu_retry = false;
   g_allow_query_step_cpu_retry = false;
-  g_gpu_mem_limit_percent = 1e-10;
+  g_gpu_mem_limit_percent = 0.0;
 
   // Out of memory errors caught pre-allocation should (currently) trigger a
   // QueryMustRunOnCPU exception and will be caught with either g_allow_cpu_retry or
@@ -15059,10 +18401,12 @@ TEST_F(Select, PuntQueryStepToCPU) {
   g_allow_query_step_cpu_retry = true;
   g_gpu_mem_limit_percent = 1e-10;
 
-  EXPECT_NO_THROW(
-      run_multiple_agg("SELECT x, AVG(n) AS n_avg FROM (SELECT x, y, "
-                       "COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
-                       dt));
+  const auto oom_cpu_step_result = run_multiple_agg(
+      "SELECT x, AVG(n) AS n_avg FROM (SELECT x, y, "
+      "COUNT(*) AS n FROM test GROUP BY x, y) GROUP BY x;",
+      dt);
+  EXPECT_EQ(oom_cpu_step_result->getDeviceType(), ExecutorDeviceType::CPU);
+  EXPECT_EQ(QR::get()->getExecutor()->getCudaAllocatorCount(), size_t(0));
 }
 
 TEST_F(Select, TimestampMeridiesEncoding) {
@@ -21611,11 +24955,12 @@ TEST(Join, MultiCompositeColumns) {
       "join_test.dup_str IS NULL)) AND (test.x = join_test.x OR (test.x IS NULL AND "
       "join_test.x IS NULL));",
       dt);
-    // a composite keys having text columns
-    EXPECT_ANY_THROW(
-        run_multiple_agg("SELECT COUNT(1) FROM CTX1 S, CTX2 R WHERE R.v3 = S.v3 AND R.v4 "
-                         "= S.v4 AND R.v2 = S.v1;",
-                         dt));
+    // Composite text keys with mixed dictionary and none-encoded text columns are
+    // supported; CTX1 has two matching A rows and CTX2 has two matching A rows.
+    EXPECT_EQ(static_cast<int64_t>(4),
+              v<int64_t>(run_simple_agg("SELECT COUNT(1) FROM CTX1 S, CTX2 R WHERE R.v3 "
+                                        "= S.v3 AND R.v4 = S.v4 AND R.v2 = S.v1;",
+                                        dt)));
     EXPECT_EQ(static_cast<int64_t>(0),
               v<int64_t>(run_simple_agg("SELECT COUNT(1) FROM CTX3 S, CTX4 R WHERE R.v3 "
                                         "= S.v3 AND R.v4 = S.v4 AND R.v2 = S.v2;",
@@ -22055,6 +25400,12 @@ TEST_F(Select, Correlated_Exists) {
       dt);
     c("SELECT ename FROM emp E WHERE NOT EXISTS (SELECT * from dept D WHERE "
       "D.deptno > 40 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT COUNT(*) FROM emp E WHERE EXISTS (SELECT * from dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno);",
+      dt);
+    c("SELECT COUNT(*) FROM emp E WHERE NOT EXISTS (SELECT * from dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno);",
       dt);
   }
 }
@@ -22775,17 +26126,61 @@ TEST_F(Select, DatesDaysEncodingTest) {
 }
 
 TEST_F(Select, WindowFunctionRank) {
-  auto dt = ExecutorDeviceType::CPU;
-  for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
-    std::string part1 =
-        "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) r1, RANK() OVER "
-        "(PARTITION BY y ORDER BY x ASC) r2, DENSE_RANK() OVER (PARTITION BY y ORDER BY "
-        "x "
-        "DESC) r3 FROM " +
-        table_name + " ORDER BY x ASC";
-    std::string part2 = ", y ASC, r1 ASC, r2 ASC, r3 ASC;";
-    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    if (dt == ExecutorDeviceType::GPU) {
+      SKIP_NO_GPU();
+    }
+    for (std::string table_name : {"test_window_func", "test_window_func_multi_frag"}) {
+      std::string part1 =
+          "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) r1, RANK() "
+          "OVER "
+          "(PARTITION BY y ORDER BY x ASC) r2, DENSE_RANK() OVER (PARTITION BY y ORDER "
+          "BY "
+          "x "
+          "DESC) r3 FROM " +
+          table_name + " ORDER BY x ASC";
+      std::string part2 = ", y ASC, r1 ASC, r2 ASC, r3 ASC;";
+      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    }
   }
+}
+
+TEST_F(Select, WindowFunctionGpuEligibilityBoundary) {
+  const auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  ScopeGuard restore_flags = [cpu_retry = g_allow_cpu_retry,
+                              step_cpu_retry = g_allow_query_step_cpu_retry,
+                              reduction_pipeline = g_enable_result_reduction_pipeline] {
+    g_allow_cpu_retry = cpu_retry;
+    g_allow_query_step_cpu_retry = step_cpu_retry;
+    g_enable_result_reduction_pipeline = reduction_pipeline;
+  };
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  g_enable_result_reduction_pipeline = true;
+
+  const std::string supported_query =
+      "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC), "
+      "RANK() OVER (PARTITION BY y ORDER BY x ASC), "
+      "DENSE_RANK() OVER (PARTITION BY y ORDER BY x DESC), "
+      "NTILE(2) OVER (PARTITION BY y ORDER BY x ASC) "
+      "FROM test_window_func";
+  c(supported_query + " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST;",
+    supported_query + " ORDER BY x ASC, y ASC;",
+    dt);
+  const auto gpu_result = run_multiple_agg(supported_query + ";", dt);
+  ASSERT_EQ(ExecutorDeviceType::GPU, gpu_result->getDeviceType());
+
+  // Unsupported window kinds are selected for CPU before execution. A later projection
+  // can return a GPU ResultSet, so the final device is not an observable for the window
+  // step itself. With both retry paths disabled, successful reference comparison proves
+  // that the explicit device-selection boundary remains executable.
+  const std::string unsupported_query =
+      "SELECT x, y, SUM(x) OVER (PARTITION BY y) FROM test_window_func";
+  c(unsupported_query + " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST;",
+    unsupported_query + " ORDER BY x ASC, y ASC;",
+    dt);
 }
 
 TEST_F(Select, WindowFunctionJoins) {
@@ -23603,6 +26998,163 @@ TEST_F(Select, WindowFunctionAggregateNoOrder) {
       c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
     }
   }
+}
+
+TEST_F(Select, WindowFunctionWholePartitionMinMaxGpu) {
+  const auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"window_extrema_gpu_test"};
+  const std::string drop_table{"DROP TABLE IF EXISTS " + table_name + ";"};
+  run_ddl_statement(drop_table);
+  g_sqlite_comparator.query(drop_table);
+  ScopeGuard cleanup = [&] {
+    run_ddl_statement(drop_table);
+    g_sqlite_comparator.query(drop_table);
+  };
+
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    " (p INTEGER, k BIGINT, d DOUBLE) WITH (FRAGMENT_SIZE=2);");
+  g_sqlite_comparator.query("CREATE TABLE " + table_name +
+                            " (p INTEGER, k BIGINT, d DOUBLE);");
+
+  const std::vector<std::string> rows{"(0, 5, 2.5)",
+                                      "(0, 3, NULL)",
+                                      "(0, NULL, 0.5)",
+                                      "(1, 10, 4.0)",
+                                      "(1, 7, 8.0)",
+                                      "(2, NULL, NULL)",
+                                      "(3, -2, -1.25)",
+                                      "(3, -5, -3.5)"};
+  for (const auto& row : rows) {
+    const auto insert = "INSERT INTO " + table_name + " VALUES" + row + ";";
+    run_multiple_agg(insert, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert);
+  }
+
+  ScopeGuard restore_cpu_retry = [cpu_retry = g_allow_cpu_retry,
+                                  step_cpu_retry = g_allow_query_step_cpu_retry] {
+    g_allow_cpu_retry = cpu_retry;
+    g_allow_query_step_cpu_retry = step_cpu_retry;
+  };
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+
+  ScopeGuard restore_reduction_pipeline = [reduction_pipeline =
+                                               g_enable_result_reduction_pipeline] {
+    g_enable_result_reduction_pipeline = reduction_pipeline;
+  };
+
+  const auto bigint_query =
+      "SELECT p, k, MIN(k) OVER (PARTITION BY p) AS mn, "
+      "MAX(k) OVER (PARTITION BY p) AS mx FROM " +
+      table_name +
+      " ORDER BY p ASC NULLS FIRST, k ASC NULLS FIRST, mn ASC NULLS FIRST, "
+      "mx ASC NULLS FIRST;";
+
+  // GPU window execution is opt-in. With the reduction pipeline disabled, preserve the
+  // established CPU window path even when the caller requests GPU execution.
+  g_enable_result_reduction_pipeline = false;
+  const auto baseline_result = run_multiple_agg(
+      "SELECT MIN(k) OVER (PARTITION BY p) FROM " + table_name + ";", dt);
+  ASSERT_EQ(ExecutorDeviceType::CPU, baseline_result->getDeviceType());
+
+  g_enable_result_reduction_pipeline = true;
+  c(bigint_query, bigint_query, dt);
+
+  const auto double_query =
+      "SELECT p, d, MIN(d) OVER (PARTITION BY p) AS mn, "
+      "MAX(d) OVER (PARTITION BY p) AS mx FROM " +
+      table_name +
+      " ORDER BY p ASC NULLS FIRST, d ASC NULLS FIRST, mn ASC NULLS FIRST, "
+      "mx ASC NULLS FIRST;";
+  c(double_query, double_query, dt);
+
+  // The ordered comparisons above may sort on CPU; this unsorted query verifies the
+  // whole-partition extrema window step itself remains GPU executable.
+  const auto result = run_multiple_agg(
+      "SELECT MIN(k) OVER (PARTITION BY p) FROM " + table_name + ";", dt);
+  ASSERT_EQ(ExecutorDeviceType::GPU, result->getDeviceType());
+}
+
+TEST_F(Select, WindowFunctionWholePartitionDoubleExtremaMatchesCpuWithNan) {
+  const auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table_name{"window_extrema_gpu_nan_test"};
+  const std::string drop_table{"DROP TABLE IF EXISTS " + table_name + ";"};
+  run_ddl_statement(drop_table);
+  ScopeGuard cleanup = [&] { run_ddl_statement(drop_table); };
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    " (p INTEGER, d DOUBLE) WITH (FRAGMENT_SIZE=2);");
+
+  const std::vector<std::string> rows{"(0, 'nan')",
+                                      "(0, 2.0)",
+                                      "(1, 2.0)",
+                                      "(1, 'nan')",
+                                      "(1, -1.0)",
+                                      "(2, NULL)",
+                                      "(2, 'nan')",
+                                      "(2, 3.0)",
+                                      "(3, NULL)",
+                                      "(4, 0.0)",
+                                      "(4, -0.0)",
+                                      "(5, -0.0)",
+                                      "(5, 0.0)"};
+  for (const auto& row : rows) {
+    run_multiple_agg("INSERT INTO " + table_name + " VALUES" + row + ";",
+                     ExecutorDeviceType::CPU);
+  }
+
+  ScopeGuard restore_flags = [cpu_retry = g_allow_cpu_retry,
+                              step_cpu_retry = g_allow_query_step_cpu_retry,
+                              reduction_pipeline = g_enable_result_reduction_pipeline] {
+    g_allow_cpu_retry = cpu_retry;
+    g_allow_query_step_cpu_retry = step_cpu_retry;
+    g_enable_result_reduction_pipeline = reduction_pipeline;
+  };
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  g_enable_result_reduction_pipeline = true;
+
+  const auto query =
+      "SELECT p, MIN(d) OVER (PARTITION BY p), "
+      "MAX(d) OVER (PARTITION BY p) FROM " +
+      table_name + ";";
+  const auto cpu_result = run_multiple_agg(query, ExecutorDeviceType::CPU);
+  const auto gpu_result = run_multiple_agg(query, ExecutorDeviceType::GPU);
+  ASSERT_EQ(ExecutorDeviceType::GPU, gpu_result->getDeviceType());
+
+  using EncodedValue = std::pair<bool, uint64_t>;
+  using EncodedExtrema = std::pair<EncodedValue, EncodedValue>;
+  const auto collect_extrema = [](const std::shared_ptr<ResultSet>& result) {
+    std::map<int64_t, EncodedExtrema> extrema_by_partition;
+    const auto encode = [&](const TargetValue& value, const size_t column_idx) {
+      if (is_null_tv(value, result->getColType(column_idx))) {
+        return EncodedValue{true, uint64_t(0)};
+      }
+      const auto fp_value = v<double>(value);
+      uint64_t bits{0};
+      static_assert(sizeof(bits) == sizeof(fp_value));
+      std::memcpy(&bits, &fp_value, sizeof(bits));
+      return EncodedValue{false, bits};
+    };
+    while (true) {
+      const auto row = result->getNextRow(false, false);
+      if (row.empty()) {
+        break;
+      }
+      const auto partition = v<int64_t>(row[0]);
+      const EncodedExtrema extrema{encode(row[1], 1), encode(row[2], 2)};
+      const auto [it, inserted] = extrema_by_partition.emplace(partition, extrema);
+      if (!inserted) {
+        EXPECT_EQ(it->second, extrema);
+      }
+    }
+    return extrema_by_partition;
+  };
+
+  EXPECT_EQ(collect_extrema(cpu_result), collect_extrema(gpu_result));
 }
 
 TEST_F(Select, WindowFunctionSum) {

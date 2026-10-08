@@ -15,6 +15,7 @@
 #include "Descriptors/InputDescriptors.h"
 #include "QueryHint.h"
 #include "RelAlgDag.h"
+#include "ResultSetEntryFilter.h"
 #include "Shared/DbObjectKeys.h"
 #include "Shared/sqldefs.h"
 #include "Shared/toString.h"
@@ -83,6 +84,27 @@ using HashTableBuildDagMap = std::unordered_map<size_t, HashTableBuildDag>;
 // since it eliminates a change of data recycling
 using TableIdToNodeMap = std::unordered_map<shared::TableKey, const RelAlgNode*>;
 
+inline const RelAlgNode* get_temporary_table_source_node(
+    const shared::TableKey& table_key,
+    const TableIdToNodeMap& table_id_to_node_map) {
+  if (table_key.table_id >= 0) {
+    return nullptr;
+  }
+  const auto origin_table_id = -table_key.table_id;
+  const shared::TableKey candidate_keys[] = {
+      shared::TableKey{table_key.db_id, origin_table_id},
+      shared::TableKey{0, origin_table_id},
+      shared::TableKey{table_key.db_id, table_key.table_id},
+      shared::TableKey{0, table_key.table_id}};
+  for (const auto& candidate_key : candidate_keys) {
+    if (const auto it = table_id_to_node_map.find(candidate_key);
+        it != table_id_to_node_map.end()) {
+      return it->second;
+    }
+  }
+  return nullptr;
+}
+
 enum JoinColumnSide {
   kInner,
   kOuter,
@@ -147,6 +169,7 @@ struct SortInfo {
 struct JoinCondition {
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
   JoinType type;
+  RegisteredQueryHint query_hint{RegisteredQueryHint::defaults()};
 };
 
 using JoinQualsPerNestingLevel = std::vector<JoinCondition>;
@@ -172,6 +195,15 @@ struct RelAlgExecutionUnit {
   std::shared_ptr<const query_state::QueryState> query_state;
   std::vector<Analyzer::Expr*> target_exprs_union;  // targets in second subquery of UNION
   mutable std::vector<std::pair<std::vector<size_t>, size_t>> per_device_cardinality;
+  // Allocation-only bound derived from an exact preflight. Unlike scan_limit, this
+  // must not alter projection semantics or generated row-limit checks.
+  std::optional<size_t> output_buffer_entry_count_hint;
+  bool defer_sparse_baseline_append_compaction{false};
+  std::optional<ResultSetEntryFilter> deferred_sparse_baseline_filter;
+  bool apply_deferred_sparse_baseline_filter_before_copy{false};
+  bool defer_gpu_baseline_hash_host_storage_before_copy{false};
+  std::vector<int64_t> deferred_sparse_baseline_preserved_keys;
+  std::vector<size_t> device_resident_output_column_indices;
 
   RelAlgExecutionUnit createNdvExecutionUnit(const int64_t range) const;
   RelAlgExecutionUnit createCountAllExecutionUnit(

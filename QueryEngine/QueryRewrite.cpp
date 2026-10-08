@@ -177,6 +177,25 @@ QueryRewriter::generateCaseExprForCountDistinctOnGroupByCol(
   return case_expr;
 }
 
+std::shared_ptr<Analyzer::CaseExpr>
+QueryRewriter::generateCaseExprForNullableAggOnGroupByCol(
+    std::shared_ptr<Analyzer::Expr> expr,
+    const SQLTypeInfo& result_ti) const {
+  CHECK(!expr->get_type_info().get_notnull());
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+      case_expr_list;
+  auto is_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kISNULL, expr);
+  auto is_not_null = std::make_shared<Analyzer::UOper>(kBOOLEAN, kNOT, is_null);
+  std::shared_ptr<Analyzer::Expr> then_expr = expr;
+  if (result_ti != then_expr->get_type_info()) {
+    then_expr = then_expr->add_cast(result_ti);
+  }
+  case_expr_list.emplace_back(is_not_null, then_expr);
+  Datum null_datum;
+  auto else_expr = makeExpr<Analyzer::Constant>(result_ti, true, null_datum);
+  return makeExpr<Analyzer::CaseExpr>(result_ti, false, case_expr_list, else_expr);
+}
+
 namespace {
 
 // TODO(adb): centralize and share (e..g with insert_one_dict_str)
@@ -546,6 +565,14 @@ RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
               auto target_expr = agg_expr->get_own_arg();
               if (agg_expr_ti != target_expr->get_type_info()) {
                 target_expr = target_expr->add_cast(agg_expr_ti);
+              }
+              if (!agg_expr->get_arg()->get_type_info().get_notnull()) {
+                auto case_expr = generateCaseExprForNullableAggOnGroupByCol(
+                    agg_expr->get_own_arg(), agg_expr_ti);
+                new_target_exprs.push_back(case_expr.get());
+                target_exprs_owned_.emplace_back(case_expr);
+                rewritten = true;
+                break;
               }
               new_target_exprs.push_back(target_expr.get());
               target_exprs_owned_.emplace_back(target_expr);

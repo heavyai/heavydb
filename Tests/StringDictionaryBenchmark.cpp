@@ -197,6 +197,28 @@ BENCHMARK_DEFINE_F(StringDictionaryFixture, BulkAppend_10M_Unique)
   }
 }
 
+BENCHMARK_DEFINE_F(StringDictionaryFixture, BulkAppend_10M_Unique_Batched)
+(benchmark::State& state) {
+  const DictRef dict_ref(-1, 1);
+  StringDictionary string_dict(dict_ref, BASE_PATH1, false, false, true);
+  constexpr size_t batch_size{65536};
+  std::vector<std::string_view> batch_strings;
+  batch_strings.reserve(batch_size);
+  std::vector<int32_t> string_ids(batch_size);
+  for (auto _ : state) {
+    for (size_t batch_begin = 0; batch_begin < append_strings_10M_10M_10.size();
+         batch_begin += batch_size) {
+      const auto batch_end =
+          std::min(batch_begin + batch_size, append_strings_10M_10M_10.size());
+      batch_strings.clear();
+      for (size_t string_idx = batch_begin; string_idx < batch_end; ++string_idx) {
+        batch_strings.emplace_back(append_strings_10M_10M_10[string_idx]);
+      }
+      string_dict.getOrAddBulk(batch_strings, string_ids.data());
+    }
+  }
+}
+
 BENCHMARK_DEFINE_F(StringDictionaryFixture, Reload)
 (benchmark::State& state) {
   for (auto _ : state) {
@@ -273,6 +295,11 @@ BENCHMARK_REGISTER_F(StringDictionaryFixture, BulkAppend_1M_Unique)
     ->Unit(benchmark::kMillisecond);
 
 BENCHMARK_REGISTER_F(StringDictionaryFixture, BulkAppend_10M_Unique)
+    ->MeasureProcessCPUTime()
+    ->UseRealTime()
+    ->Unit(benchmark::kMillisecond);
+
+BENCHMARK_REGISTER_F(StringDictionaryFixture, BulkAppend_10M_Unique_Batched)
     ->MeasureProcessCPUTime()
     ->UseRealTime()
     ->Unit(benchmark::kMillisecond);

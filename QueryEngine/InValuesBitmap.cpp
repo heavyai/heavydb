@@ -25,8 +25,15 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
                                const int64_t null_val,
                                const Data_Namespace::MemoryLevel memory_level,
                                Executor* executor,
-                               CompilationOptions const& co)
-    : rhs_has_null_(false), null_val_(null_val), memory_level_(memory_level), co_(co) {
+                               CompilationOptions const& co,
+                               std::optional<int64_t> alternate_null_val,
+                               std::optional<int64_t> dict_entry_count)
+    : rhs_has_null_(false)
+    , alternate_null_val_(alternate_null_val)
+    , dict_entry_count_(dict_entry_count)
+    , null_val_(null_val)
+    , memory_level_(memory_level)
+    , co_(co) {
 #ifdef HAVE_CUDA
   CHECK(memory_level_ == Data_Namespace::CPU_LEVEL ||
         memory_level == Data_Namespace::GPU_LEVEL);
@@ -39,7 +46,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
   min_val_ = std::numeric_limits<int64_t>::max();
   max_val_ = std::numeric_limits<int64_t>::min();
   for (const auto value : values) {
-    if (value == null_val) {
+    if (value == null_val || (alternate_null_val_ && value == *alternate_null_val_)) {
       rhs_has_null_ = true;
       continue;
     }
@@ -64,7 +71,7 @@ InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
   uint64_t const bitmap_sz_bytes = bitmap_sz_bits_minus_one / 8 + 1;
   auto cpu_bitset = static_cast<int8_t*>(checked_calloc(bitmap_sz_bytes, 1));
   for (const auto value : values) {
-    if (value == null_val) {
+    if (value == null_val || (alternate_null_val_ && value == *alternate_null_val_)) {
       continue;
     }
     agg_count_distinct_bitmap(
@@ -174,13 +181,34 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
   const auto null_bool_val =
       static_cast<int8_t>(inline_int_null_val(SQLTypeInfo(kBOOLEAN, false)));
   auto const func_params = prepareBitIsSetParams(executor, constants_owned);
-  return cgen_state->emitCall("bit_is_set",
-                              {func_params.bitmap_ptr_lv,
-                               needle_i64,
-                               func_params.min_val_lv,
-                               func_params.max_val_lv,
-                               func_params.null_val_lv,
-                               cgen_state->llInt(null_bool_val)});
+  auto* bit_is_set = cgen_state->emitCall("bit_is_set",
+                                          {func_params.bitmap_ptr_lv,
+                                           needle_i64,
+                                           func_params.min_val_lv,
+                                           func_params.max_val_lv,
+                                           func_params.null_val_lv,
+                                           cgen_state->llInt(null_bool_val)});
+  if (alternate_null_val_) {
+    auto* is_alternate_null = cgen_state->ir_builder_.CreateICmpEQ(
+        needle_i64, cgen_state->llInt(*alternate_null_val_));
+    bit_is_set = cgen_state->ir_builder_.CreateSelect(
+        is_alternate_null, cgen_state->llInt(null_bool_val), bit_is_set);
+  }
+  if (dict_entry_count_) {
+    // Dictionary null group keys can be encoded as the first id outside the persisted
+    // dictionary domain. Transient dictionary ids are negative below INVALID_STR_ID and
+    // remain valid probe values.
+    auto* const is_past_generation = cgen_state->ir_builder_.CreateICmpSGE(
+        needle_i64, cgen_state->llInt(*dict_entry_count_));
+    bit_is_set = cgen_state->ir_builder_.CreateSelect(
+        is_past_generation, cgen_state->llInt(null_bool_val), bit_is_set);
+  }
+  if (!rhs_has_null_) {
+    return bit_is_set;
+  }
+  return cgen_state->emitCall(
+      "logical_or",
+      {bit_is_set, cgen_state->llInt(null_bool_val), cgen_state->llInt(null_bool_val)});
 }
 
 bool InValuesBitmap::isEmpty() const {
