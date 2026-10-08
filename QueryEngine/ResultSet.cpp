@@ -5341,6 +5341,13 @@ bool ResultSet::getDeviceColumnarFragmentInfo(
       }
     }
 
+    if (column_idx >= device_columnar_fragments_.size() ||
+        device_columnar_fragments_[column_idx].empty()) {
+      fragment_info.clear();
+      return false;
+    }
+    const auto& column_fragments = device_columnar_fragments_[column_idx];
+
     if (!can_expose_group_by_device_fragments) {
       const auto& slots = query_mem_desc_.getColSlotContext().getSlotsForCol(column_idx);
       if (slots.size() != 1) {
@@ -5359,13 +5366,6 @@ bool ResultSet::getDeviceColumnarFragmentInfo(
         return false;
       }
     }
-
-    if (column_idx >= device_columnar_fragments_.size() ||
-        device_columnar_fragments_[column_idx].empty()) {
-      fragment_info.clear();
-      return false;
-    }
-    const auto& column_fragments = device_columnar_fragments_[column_idx];
 
     if (column_idx == 0) {
       fragment_info.reserve(column_fragments.size());

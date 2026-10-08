@@ -4745,6 +4745,19 @@ TEST_F(Select, ApproxPercentileValidate) {
   EXPECT_EQ(NULL_DOUBLE, v<double>(crt_row[0]));
 }
 
+TEST_F(Select, ValidateProjectionOverTableFunction) {
+  const std::string query =
+      "SELECT generate_series * 2.0 AS y, generate_series AS x "
+      "FROM TABLE(generate_series(1, 100));";
+  for (const auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    auto eo = ExecutionOptions::defaults();
+    eo.just_validate = true;
+    EXPECT_NO_THROW(
+        QR::get()->runSelectQuery(query, CompilationOptions::defaults(dt), eo));
+  }
+}
+
 template <typename T>
 T select_mode(std::string const col, ExecutorDeviceType const dt) {
   std::string const query = "SELECT MODE(" + col + ") FROM test;";
