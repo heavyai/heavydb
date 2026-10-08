@@ -3899,4 +3899,29 @@ using RANodeOutput = std::vector<RexInput>;
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node);
 
+// A column of one of a RelJoin's two inputs. `input_ordinal` is 0 for the left input
+// and 1 for the right; prefer it over comparing `node` against getInput(0), which is
+// ambiguous if a join's two inputs alias the same node.
+struct JoinInputColumn {
+  const RelAlgNode* node;
+  size_t index;
+  size_t input_ordinal;
+};
+
+// A RelJoin's output is its left input's output followed by its right input's output
+// (see get_node_output(RelJoin)). The following convert between an index into that
+// concatenation ("join-local") and a column of one input ("input-local"). Note that
+// after bind_inputs(), a RelProject over a RelJoin holds RexInputs sourced at the
+// join's inputs, so their indices are input-local.
+
+// CHECK-fails if join_local_index is out of range.
+JoinInputColumn join_output_to_input_column(const RelJoin* join,
+                                            const size_t join_local_index);
+
+// Returns nullopt if `input` is neither of the join's inputs, leaving callers to choose
+// between CHECK and throwing a diagnostic.
+std::optional<size_t> input_column_to_join_output(const RelJoin* join,
+                                                  const RelAlgNode* input,
+                                                  const size_t input_index);
+
 std::string tree_string(const RelAlgNode*, const size_t depth = 0);

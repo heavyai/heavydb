@@ -8,10 +8,12 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <tuple>
+#include <vector>
 
 #include "Catalog/Catalog.h"
 #include "ExecuteRenderInterface/RenderQueryUtils/RelScanTree.h"
@@ -91,6 +93,19 @@ const RelJoin* find_join_below(const RelAlgNode* node) {
        curr = curr->getInput(0)) {
     if (auto const* join = dynamic_cast<const RelJoin*>(curr->getInput(0))) {
       return join;
+    }
+  }
+  return nullptr;
+}
+
+// RelSort's constructor takes its input as a shared_ptr, so the project has to come
+// from the DAG's node list rather than from a raw walk down from the root.
+std::shared_ptr<const RelAlgNode> find_project_over_join(RelAlgDag& rel_alg_dag) {
+  for (auto const& node : rel_alg_dag.getNodes()) {
+    auto const* project = dynamic_cast<const RelProject*>(node.get());
+    if (project && project->inputCount() == size_t(1) &&
+        dynamic_cast<const RelJoin*>(project->getInput(0))) {
+      return node;
     }
   }
   return nullptr;
@@ -214,6 +229,119 @@ TEST_F(RelScanTreeTest, RowIdFromRightSideOfJoin) {
       << node_str(rowid_input->getSourceNode());
 
   expect_resolves_to_rowid(*rel_scan_tree, *rowid_idx, "rst_lookup");
+}
+
+// Direct coverage of the conversion helpers that the RelScanTree walk shares with the
+// RelAlgOptimizer passes, exercised against a real Calcite join rather than a stub.
+TEST_F(RelScanTreeTest, JoinIndexConversionRoundTrips) {
+  auto rel_alg_dag = build_unoptimized_dag(
+      "SELECT a.lon, b.weight FROM rst_events a INNER JOIN rst_lookup b ON a.grp = "
+      "b.grp;");
+  auto rel_scan_tree = RelScanTree::create(*rel_alg_dag);
+  ASSERT_TRUE(rel_scan_tree) << node_str(&rel_alg_dag->getRootNode());
+
+  auto const& root_project = rel_scan_tree->getRootProjectNode();
+  auto const* join = dynamic_cast<const RelJoin*>(root_project.getInput(0));
+  ASSERT_TRUE(join) << node_str(root_project.getInput(0));
+
+  auto const* lhs = join->getInput(0);
+  auto const* rhs = join->getInput(1);
+  auto const lhs_size = lhs->size();
+  ASSERT_GT(lhs_size, size_t(0));
+  ASSERT_GT(rhs->size(), size_t(0));
+  ASSERT_EQ(join->size(), lhs_size + rhs->size());
+
+  for (size_t i = 0; i < join->size(); ++i) {
+    auto const column = join_output_to_input_column(join, i);
+    if (i < lhs_size) {
+      EXPECT_EQ(column.node, lhs) << "join-local index " << i;
+      EXPECT_EQ(column.index, i) << "join-local index " << i;
+      EXPECT_EQ(column.input_ordinal, size_t(0)) << "join-local index " << i;
+    } else {
+      EXPECT_EQ(column.node, rhs) << "join-local index " << i;
+      EXPECT_EQ(column.index, i - lhs_size) << "join-local index " << i;
+      EXPECT_EQ(column.input_ordinal, size_t(1)) << "join-local index " << i;
+    }
+    EXPECT_EQ(input_column_to_join_output(join, column.node, column.index),
+              std::optional<size_t>(i))
+        << "join-local index " << i;
+  }
+
+  // A node that is not one of the join's inputs is reported rather than asserted on, so
+  // that callers on the render path can throw a diagnostic instead of aborting. The
+  // join itself is not one of its own inputs: an index already join-local is the
+  // caller's business, not the helper's.
+  EXPECT_FALSE(input_column_to_join_output(join, &root_project, 0).has_value());
+  EXPECT_FALSE(input_column_to_join_output(join, join, 0).has_value());
+}
+
+// Regression test for get_equiv_cols re-keying a project's RexInput onto the join it
+// sits on. The walk used to carry the input-local index across, so a column from the
+// left input and a column from the right input that happened to share an index both
+// registered as (join, index). RelSort::hasEquivCollationOf intersects those sets, so
+// two sorts ordering by different columns compared equal, and simplify_sort -- the only
+// caller of RelSort::operator== -- would drop one of them.
+//
+// Asserted on RelSort::operator== directly rather than through simplify_sort, which
+// needs a Sort / identity-Project / Sort sequence that Calcite does not appear to emit
+// when a join is involved (see the comment in RelProject::isIdentity).
+TEST_F(RelScanTreeTest, SortsOverOppositeJoinSidesAreNotEquivalent) {
+  auto rel_alg_dag = build_unoptimized_dag(
+      "SELECT a.grp, b.grp FROM rst_events a INNER JOIN rst_lookup b ON a.grp = "
+      "b.grp;");
+  auto const project_node = find_project_over_join(*rel_alg_dag);
+  ASSERT_TRUE(project_node) << "expected a RelProject over a RelJoin in: "
+                            << node_str(&rel_alg_dag->getRootNode());
+
+  auto const& project = static_cast<const RelProject&>(*project_node);
+  auto const* join = dynamic_cast<const RelJoin*>(project.getInput(0));
+  ASSERT_TRUE(join);
+
+  // Find two outputs whose RexInputs carry the same input-local index but source
+  // opposite inputs of the join; that collision is what the two sorts turn on.
+  // Discovered rather than hardcoded so a change in Calcite's projection order cannot
+  // quietly stop exercising it.
+  std::map<size_t, size_t> lhs_output_by_input_index;
+  std::map<size_t, size_t> rhs_output_by_input_index;
+  for (size_t i = 0; i < project.size(); ++i) {
+    auto const* input = dynamic_cast<const RexInput*>(project.getProjectAt(i));
+    if (!input) {
+      continue;
+    }
+    if (input->getSourceNode() == join->getInput(0)) {
+      lhs_output_by_input_index.emplace(input->getIndex(), i);
+    } else if (input->getSourceNode() == join->getInput(1)) {
+      rhs_output_by_input_index.emplace(input->getIndex(), i);
+    }
+  }
+
+  std::optional<size_t> lhs_output_idx;
+  std::optional<size_t> rhs_output_idx;
+  for (auto const& [input_index, output_index] : lhs_output_by_input_index) {
+    auto const rhs_it = rhs_output_by_input_index.find(input_index);
+    if (rhs_it != rhs_output_by_input_index.end()) {
+      lhs_output_idx = output_index;
+      rhs_output_idx = rhs_it->second;
+      break;
+    }
+  }
+  ASSERT_TRUE(lhs_output_idx && rhs_output_idx)
+      << "expected two outputs sharing an input-local index on opposite sides of the "
+         "join: "
+      << node_str(&project);
+
+  // Identical in every respect operator== checks apart from the collation field, so the
+  // comparison turns solely on hasEquivCollationOf.
+  auto make_sort = [&project_node](const size_t field) {
+    std::vector<SortField> collation{
+        SortField(field, SortDirection::Ascending, NullSortedPosition::First)};
+    return std::make_shared<RelSort>(collation, std::nullopt, size_t(0), project_node);
+  };
+
+  EXPECT_FALSE(*make_sort(*lhs_output_idx) == *make_sort(*rhs_output_idx));
+
+  // Guard against a fix that makes every sort compare distinct.
+  EXPECT_TRUE(*make_sort(*lhs_output_idx) == *make_sort(*lhs_output_idx));
 }
 
 // The query from the original bug report. Calcite 1.41 now leaves an extra RelProject

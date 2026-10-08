@@ -154,14 +154,15 @@ class NonInsituClassifier : public RelRexDagVisitor {
 
   void visit(const RelJoin* node) override {
     CHECK_EQ(node->inputCount(), 2u);
-    auto const* lhs = node->getInput(0);
-    auto const lhs_size = static_cast<int32_t>(lhs->size());
-    if (current_node_idx_ < lhs_size) {
-      visit(lhs);
+    CHECK_GE(current_node_idx_, 0);
+    auto const input_column =
+        join_output_to_input_column(node, static_cast<size_t>(current_node_idx_));
+    if (input_column.input_ordinal == 0) {
+      visit(input_column.node);
     } else {
       auto const prev_node_idx = current_node_idx_;
-      current_node_idx_ -= lhs_size;
-      visit(node->getInput(1));
+      current_node_idx_ = static_cast<int32_t>(input_column.index);
+      visit(input_column.node);
       current_node_idx_ = prev_node_idx;
     }
   }

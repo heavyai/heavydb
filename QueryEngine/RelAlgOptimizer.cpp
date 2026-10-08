@@ -201,13 +201,16 @@ void propagate_rex_input_renumber(
   for (size_t i = 0; i < src_project->size(); ++i) {
     auto rex_in = dynamic_cast<const RexInput*>(src_project->getProjectAt(i));
     CHECK(rex_in);
-    size_t src_base = 0;
-    if (indirect_join_src != nullptr &&
-        indirect_join_src->getInput(1) == rex_in->getSourceNode()) {
-      src_base = indirect_join_src->getInput(0)->size();
+    // Where the project sits on a join, its RexInputs are input-local; re-key them
+    // onto the join. A source that is neither of the join's inputs keeps its index,
+    // as does the no-join case.
+    auto new_idx = rex_in->getIndex();
+    if (indirect_join_src) {
+      new_idx = input_column_to_join_output(
+                    indirect_join_src, rex_in->getSourceNode(), rex_in->getIndex())
+                    .value_or(new_idx);
     }
-    old_to_new_idx.insert(std::make_pair(i, src_base + rex_in->getIndex()));
-    old_to_new_idx.insert(std::make_pair(i, rex_in->getIndex()));
+    old_to_new_idx.insert(std::make_pair(i, new_idx));
   }
   CHECK(old_to_new_idx.size());
   RexInputRenumber<false> renumber(old_to_new_idx);
@@ -586,13 +589,12 @@ class RexInputCollector : public RexVisitor<std::unordered_set<RexInput>> {
     if (node_->inputCount() == 1) {
       auto src = node_->getInput(0);
       if (auto join = dynamic_cast<const RelJoin*>(src)) {
-        CHECK_EQ(join->inputCount(), size_t(2));
-        const auto src2_in_offset = join->getInput(0)->size();
-        if (input->getSourceNode() == join->getInput(1)) {
-          result.emplace(src, input->getIndex() + src2_in_offset);
-        } else {
-          result.emplace(src, input->getIndex());
-        }
+        // Re-key the input-local index onto the join itself. A RexInput sourced at
+        // something other than the join's inputs keeps its index, preserving the
+        // previous behaviour of treating anything but the right input as the left.
+        const auto join_idx =
+            input_column_to_join_output(join, input->getSourceNode(), input->getIndex());
+        result.emplace(src, join_idx.value_or(input->getIndex()));
         return result;
       }
     }
@@ -618,7 +620,7 @@ size_t pick_always_live_col_idx(const RelAlgNode* node) {
     if (auto lhs_idx = pick_always_live_col_idx(join->getInput(0))) {
       return lhs_idx;
     }
-    if (auto rhs_idx = pick_always_live_col_idx(join->getInput(0))) {
+    if (auto rhs_idx = pick_always_live_col_idx(join->getInput(1))) {
       return rhs_idx + join->getInput(0)->size();
     }
   } else if (auto sort = dynamic_cast<const RelSort*>(node)) {
@@ -692,12 +694,12 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
     CHECK_EQ(size_t(2), join->inputCount());
     auto lhs = join->getInput(0);
     auto rhs = join->getInput(1);
-    const auto rhs_idx_base = lhs->size();
     for (const auto idx : live_out) {
-      if (idx < rhs_idx_base) {
-        lhs_live_ins.insert(idx);
+      const auto input_column = join_output_to_input_column(join, idx);
+      if (input_column.input_ordinal == 0) {
+        lhs_live_ins.insert(input_column.index);
       } else {
-        rhs_live_ins.insert(idx - rhs_idx_base);
+        rhs_live_ins.insert(input_column.index);
       }
     }
     auto rex_ins = collector.visit(join->getCondition());
@@ -980,11 +982,8 @@ std::string get_field_name(const RelAlgNode* node, size_t index) {
     return aggregate->getFieldName(index);
   }
   if (auto join = dynamic_cast<const RelJoin*>(node)) {
-    const auto lhs_size = join->getInput(0)->size();
-    if (index < lhs_size) {
-      return get_field_name(join->getInput(0), index);
-    }
-    return get_field_name(join->getInput(1), index - lhs_size);
+    const auto input_column = join_output_to_input_column(join, index);
+    return get_field_name(input_column.node, input_column.index);
   }
   if (auto project = dynamic_cast<const RelProject*>(node)) {
     return project->getFieldName(index);
@@ -1425,19 +1424,12 @@ class RexInputRedirector : public RexDeepCopyVisitor {
   RetType visitInput(const RexInput* input) const override {
     CHECK_EQ(old_src_, input->getSourceNode());
     CHECK_NE(old_src_, new_src_);
-    auto actual_new_src = new_src_;
     if (auto join = dynamic_cast<const RelJoin*>(new_src_)) {
-      actual_new_src = join->getInput(0);
-      CHECK_EQ(join->inputCount(), size_t(2));
-      auto src2_input_base = actual_new_src->size();
-      if (input->getIndex() >= src2_input_base) {
-        actual_new_src = join->getInput(1);
-        return boost::make_unique<RexInput>(actual_new_src,
-                                            input->getIndex() - src2_input_base);
-      }
+      const auto input_column = join_output_to_input_column(join, input->getIndex());
+      return boost::make_unique<RexInput>(input_column.node, input_column.index);
     }
 
-    return boost::make_unique<RexInput>(actual_new_src, input->getIndex());
+    return boost::make_unique<RexInput>(new_src_, input->getIndex());
   }
 
  private:
@@ -1620,26 +1612,19 @@ std::vector<const RexScalar*> find_hoistable_conditions(const RexScalar* conditi
 class JoinTargetRebaser : public RexDeepCopyVisitor {
  public:
   JoinTargetRebaser(const RelJoin* join, const unsigned old_base)
-      : join_(join)
-      , old_base_(old_base)
-      , src1_base_(join->getInput(0)->size())
-      , target_count_(join->size()) {}
+      : join_(join), old_base_(old_base), target_count_(join->size()) {}
   RetType visitInput(const RexInput* input) const override {
     auto curr_idx = input->getIndex();
     CHECK_GE(curr_idx, old_base_);
     CHECK_LT(static_cast<size_t>(curr_idx), target_count_);
     curr_idx -= old_base_;
-    if (curr_idx >= src1_base_) {
-      return boost::make_unique<RexInput>(join_->getInput(1), curr_idx - src1_base_);
-    } else {
-      return boost::make_unique<RexInput>(join_->getInput(0), curr_idx);
-    }
+    const auto input_column = join_output_to_input_column(join_, curr_idx);
+    return boost::make_unique<RexInput>(input_column.node, input_column.index);
   }
 
  private:
   const RelJoin* join_;
   const unsigned old_base_;
-  const size_t src1_base_;
   const size_t target_count_;
 };
 
@@ -1686,10 +1671,11 @@ void hoist_filter_cond_to_cross_join(
           }
           auto only_usr = *usrs_it->second.begin();
           if (auto usr_join = dynamic_cast<const RelJoin*>(only_usr)) {
-            if (join == usr_join->getInput(1)) {
-              const auto src1_offset = usr_join->getInput(0)->size();
-              first_col_idx += src1_offset;
-            }
+            // Re-key the column onto the user join's output. Once the walk has moved
+            // past `join` this no longer matches either input and the index is carried
+            // forward unchanged, as before.
+            first_col_idx = input_column_to_join_output(usr_join, join, first_col_idx)
+                                .value_or(first_col_idx);
             join_seq.push_back(usr_join);
             curr_join = usr_join;
             continue;
@@ -1721,11 +1707,9 @@ void hoist_filter_cond_to_cross_join(
           join->setCondition(filter_condition);
           continue;
         }
-        const auto src1_base = src_join->getInput(0)->size();
-        auto source =
-            first_col_idx < src1_base ? src_join->getInput(0) : src_join->getInput(1);
-        first_col_idx =
-            first_col_idx < src1_base ? first_col_idx : first_col_idx - src1_base;
+        const auto input_column = join_output_to_input_column(src_join, first_col_idx);
+        auto source = input_column.node;
+        first_col_idx = input_column.index;
         auto join_conditions =
             find_hoistable_conditions(filter->getCondition(),
                                       source,
