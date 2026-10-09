@@ -8,6 +8,7 @@
  * @brief Unit tests for BufferMgr classes.
  */
 
+#include <chrono>
 #include <future>
 
 #include <gtest/gtest.h>
@@ -257,6 +258,242 @@ class FailingAllocator : public DramArena {
  public:
   void* allocate(size_t size) override { throw std::bad_alloc(); }
 };
+
+class AllocationCooldownTestBufferMgr final : public Buffer_Namespace::CpuBufferMgr {
+ public:
+  static constexpr size_t kTestMaxBufferPoolSize{1000};
+  static constexpr size_t kTestMinSlabSize{100};
+  static constexpr size_t kTestMaxSlabSize{500};
+  static constexpr size_t kTestDefaultSlabSize{500};
+  static constexpr size_t kTestPageSize{10};
+  static constexpr size_t kTestBufferSize{100};
+
+  AllocationCooldownTestBufferMgr()
+      : CpuBufferMgr(/* device_id = */ 0,
+                     kTestMaxBufferPoolSize,
+                     /* cuda_mgr = */ nullptr,
+                     kTestMinSlabSize,
+                     kTestMaxSlabSize,
+                     kTestDefaultSlabSize,
+                     kTestPageSize) {}
+
+  void setAllocationFailure(const bool should_fail) {
+    allocation_should_fail_ = should_fail;
+  }
+
+  size_t slabAllocationAttempts() const { return attempted_slab_sizes_.size(); }
+
+  const std::vector<size_t>& attemptedSlabSizes() const { return attempted_slab_sizes_; }
+
+  std::chrono::milliseconds allocationRetryCooldown() const {
+    return allocation_retry_cooldown_;
+  }
+
+  void advanceTime(const std::chrono::milliseconds duration) {
+    current_time_ += duration;
+  }
+
+ protected:
+  void addSlab(const size_t slab_size) override {
+    attempted_slab_sizes_.push_back(slab_size);
+    if (allocation_should_fail_) {
+      throw FailedToCreateSlab(slab_size);
+    }
+    CpuBufferMgr::addSlab(slab_size);
+  }
+
+  AllocationRetryClock::time_point getAllocationRetryTime() const override {
+    return current_time_;
+  }
+
+ private:
+  bool allocation_should_fail_{false};
+  AllocationRetryClock::time_point current_time_{};
+  std::vector<size_t> attempted_slab_sizes_;
+};
+
+class BufferMgrAllocationCooldownTest : public testing::Test {
+ protected:
+  void SetUp() override {
+    buffer_mgr_ = std::make_unique<AllocationCooldownTestBufferMgr>();
+  }
+
+  void fillFirstSlab() {
+    ASSERT_NE(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestMaxSlabSize),
+              nullptr);
+    ASSERT_EQ(buffer_mgr_->getAllocated(),
+              AllocationCooldownTestBufferMgr::kTestMaxSlabSize);
+    ASSERT_FALSE(buffer_mgr_->isAllocationCapped());
+  }
+
+  void induceSlabAllocationFailure() {
+    buffer_mgr_->setAllocationFailure(true);
+    const auto attempts_before_failure = buffer_mgr_->slabAllocationAttempts();
+
+    EXPECT_THROW(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+                 OutOfMemory);
+
+    const auto attempts_after_failure = buffer_mgr_->slabAllocationAttempts();
+    ASSERT_GT(attempts_after_failure, attempts_before_failure);
+    failed_ladder_attempt_count_ = attempts_after_failure - attempts_before_failure;
+    ASSERT_TRUE(buffer_mgr_->isAllocationCapped());
+  }
+
+  std::unique_ptr<AllocationCooldownTestBufferMgr> buffer_mgr_;
+  size_t failed_ladder_attempt_count_{0};
+};
+
+TEST_F(BufferMgrAllocationCooldownTest,
+       TransientFailureStartsCooldownAndSuppressesImmediateRetry) {
+  fillFirstSlab();
+  induceSlabAllocationFailure();
+
+  buffer_mgr_->setAllocationFailure(false);
+  const auto attempts_after_failure = buffer_mgr_->slabAllocationAttempts();
+
+  EXPECT_THROW(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+               OutOfMemory);
+
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_failure);
+  EXPECT_EQ(buffer_mgr_->getAllocated(),
+            AllocationCooldownTestBufferMgr::kTestMaxSlabSize);
+  EXPECT_TRUE(buffer_mgr_->isAllocationCapped());
+}
+
+TEST_F(BufferMgrAllocationCooldownTest, PoolGrowthResumesAfterCooldown) {
+  fillFirstSlab();
+  induceSlabAllocationFailure();
+
+  buffer_mgr_->setAllocationFailure(false);
+  const auto attempts_after_failure = buffer_mgr_->slabAllocationAttempts();
+  buffer_mgr_->advanceTime(buffer_mgr_->allocationRetryCooldown());
+
+  auto recovered_buffer =
+      buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize);
+
+  ASSERT_NE(recovered_buffer, nullptr);
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_failure + 1);
+  EXPECT_EQ(buffer_mgr_->attemptedSlabSizes().back(),
+            AllocationCooldownTestBufferMgr::kTestMaxSlabSize);
+  EXPECT_EQ(buffer_mgr_->getAllocated(),
+            AllocationCooldownTestBufferMgr::kTestMaxBufferPoolSize);
+  EXPECT_FALSE(buffer_mgr_->isAllocationCapped());
+}
+
+TEST_F(BufferMgrAllocationCooldownTest, ConcurrentRequestsAfterCooldownCreateSingleSlab) {
+  fillFirstSlab();
+  induceSlabAllocationFailure();
+
+  buffer_mgr_->setAllocationFailure(false);
+  const auto attempts_after_failure = buffer_mgr_->slabAllocationAttempts();
+  buffer_mgr_->advanceTime(buffer_mgr_->allocationRetryCooldown());
+
+  constexpr size_t request_count{AllocationCooldownTestBufferMgr::kTestMaxSlabSize /
+                                 AllocationCooldownTestBufferMgr::kTestBufferSize};
+  std::promise<void> start_promise;
+  const auto start_future = start_promise.get_future().share();
+  std::vector<std::future<AbstractBuffer*>> requests;
+  for (size_t request_num = 0; request_num < request_count; ++request_num) {
+    requests.emplace_back(
+        std::async(std::launch::async, [this, start_future]() -> AbstractBuffer* {
+          start_future.wait();
+          return buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize);
+        }));
+  }
+
+  start_promise.set_value();
+  for (auto& request : requests) {
+    AbstractBuffer* allocated_buffer{nullptr};
+    EXPECT_NO_THROW(allocated_buffer = request.get());
+    EXPECT_NE(allocated_buffer, nullptr);
+  }
+
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_failure + 1);
+  EXPECT_EQ(buffer_mgr_->getAllocated(),
+            AllocationCooldownTestBufferMgr::kTestMaxBufferPoolSize);
+  EXPECT_FALSE(buffer_mgr_->isAllocationCapped());
+}
+
+TEST_F(BufferMgrAllocationCooldownTest, FailedRetryStartsAnotherCooldown) {
+  fillFirstSlab();
+  induceSlabAllocationFailure();
+
+  const auto attempts_after_failure = buffer_mgr_->slabAllocationAttempts();
+  for (size_t request_num = 0; request_num < 3; ++request_num) {
+    EXPECT_THROW(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+                 OutOfMemory);
+  }
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_failure);
+
+  buffer_mgr_->advanceTime(buffer_mgr_->allocationRetryCooldown() -
+                           std::chrono::milliseconds{1});
+  EXPECT_THROW(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+               OutOfMemory);
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_failure);
+
+  buffer_mgr_->advanceTime(std::chrono::milliseconds{1});
+  EXPECT_THROW(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+               OutOfMemory);
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(),
+            attempts_after_failure + failed_ladder_attempt_count_);
+  EXPECT_TRUE(buffer_mgr_->isAllocationCapped());
+
+  const auto attempts_after_retry = buffer_mgr_->slabAllocationAttempts();
+  EXPECT_THROW(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+               OutOfMemory);
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_retry);
+}
+
+TEST_F(BufferMgrAllocationCooldownTest, EmptyPoolRetriesFirstSlabAfterCooldown) {
+  induceSlabAllocationFailure();
+  const auto attempts_after_failure = buffer_mgr_->slabAllocationAttempts();
+
+  buffer_mgr_->setAllocationFailure(false);
+  EXPECT_THROW(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+               FailedToCreateFirstSlab);
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_failure);
+
+  buffer_mgr_->advanceTime(buffer_mgr_->allocationRetryCooldown());
+  ASSERT_NE(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+            nullptr);
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_failure + 1);
+  EXPECT_EQ(buffer_mgr_->getAllocated(),
+            AllocationCooldownTestBufferMgr::kTestMaxSlabSize);
+  EXPECT_FALSE(buffer_mgr_->isAllocationCapped());
+}
+
+TEST_F(BufferMgrAllocationCooldownTest, CooldownDoesNotBlockExistingSlabSpace) {
+  constexpr size_t initial_buffer_size{450};
+  constexpr size_t existing_slab_request_size{50};
+
+  ASSERT_NE(buffer_mgr_->alloc(initial_buffer_size), nullptr);
+  buffer_mgr_->setAllocationFailure(true);
+  EXPECT_THROW(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+               OutOfMemory);
+  ASSERT_TRUE(buffer_mgr_->isAllocationCapped());
+  const auto attempts_after_failure = buffer_mgr_->slabAllocationAttempts();
+
+  buffer_mgr_->setAllocationFailure(false);
+  ASSERT_NE(buffer_mgr_->alloc(existing_slab_request_size), nullptr);
+
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_failure);
+  EXPECT_EQ(buffer_mgr_->getAllocated(),
+            AllocationCooldownTestBufferMgr::kTestMaxSlabSize);
+  EXPECT_TRUE(buffer_mgr_->isAllocationCapped());
+}
+
+TEST_F(BufferMgrAllocationCooldownTest, ClearSlabsCancelsCooldown) {
+  induceSlabAllocationFailure();
+  const auto attempts_after_failure = buffer_mgr_->slabAllocationAttempts();
+
+  buffer_mgr_->setAllocationFailure(false);
+  buffer_mgr_->clearSlabs();
+  EXPECT_FALSE(buffer_mgr_->isAllocationCapped());
+
+  ASSERT_NE(buffer_mgr_->alloc(AllocationCooldownTestBufferMgr::kTestBufferSize),
+            nullptr);
+  EXPECT_EQ(buffer_mgr_->slabAllocationAttempts(), attempts_after_failure + 1);
+}
 
 #ifdef HAVE_CUDA
 class MockCudaMgr : public CudaMgr_Namespace::CudaMgr {
