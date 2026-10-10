@@ -304,7 +304,7 @@ class AllocationCooldownTestBufferMgr final : public Buffer_Namespace::CpuBuffer
     CpuBufferMgr::addSlab(slab_size);
   }
 
-  AllocationRetryClock::time_point getAllocationRetryTime() const override {
+  AllocationRetryClock::time_point allocationClockNow() const override {
     return current_time_;
   }
 

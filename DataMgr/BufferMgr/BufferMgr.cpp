@@ -289,7 +289,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
     }
   }
 
-  if (allocations_capped_ && getAllocationRetryTime() >= allocation_retry_after_) {
+  if (allocations_capped_ && allocationClockNow() >= allocation_retry_after_) {
     allocations_capped_ = false;
     allocation_retry_after_ = AllocationRetryClock::time_point::min();
     current_max_num_pages_per_slab_ = max_num_pages_per_slab_;
@@ -350,7 +350,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
         current_max_num_pages_per_slab_ /= 2;
         if (current_max_num_pages_per_slab_ < min_num_pages_per_slab_) {
           allocations_capped_ = true;
-          allocation_retry_after_ = getAllocationRetryTime() + allocation_retry_cooldown_;
+          allocation_retry_after_ = allocationClockNow() + allocation_retry_cooldown_;
           // dump out the slabs and their sizes
           LOG(INFO) << "ALLOCATION Capped " << current_max_num_pages_per_slab_
                     << " Minimum size = " << min_num_pages_per_slab_ << " "
