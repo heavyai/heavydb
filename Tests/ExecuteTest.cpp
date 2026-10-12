@@ -14853,8 +14853,9 @@ TEST_F(Select, CompressedNativeGpuInputReleasesDecodeWorkspace) {
   g_enable_gpu_input_cpu_buffer_bypass = true;
   g_enable_gpu_input_compressed_pipeline = true;
   g_enable_gpu_input_compressed_peer_exchange = true;
-  // Force each compressed fragment into a separate nvCOMP submission so the test
-  // covers both pipeline lanes, bounded sub-batch execution, and workspace reuse.
+  // When nvCOMP is available, force each compressed fragment into a separate
+  // submission so the test covers both pipeline lanes, bounded sub-batch execution,
+  // and workspace reuse.
   g_gpu_input_compressed_batch_max_bytes = 1;
   g_gpu_input_cpu_buffer_bypass_mode = "staged";
 
@@ -14938,8 +14939,9 @@ TEST_F(Select, CompressedNativeGpuInputReleasesDecodeWorkspace) {
   EXPECT_EQ(non_slab_allocation_count(), allocations_before);
 
   // A request may contain both a CPU-resident source and cold compressed native
-  // chunks. The resident buffer remains authoritative, while the cold chunks should
-  // retain the direct GPU-input path instead of being materialized in the CPU pool.
+  // chunks. The resident buffer remains authoritative. nvCOMP keeps cold chunks on
+  // the direct GPU-input path; without it, the supported fallback materializes them
+  // in the CPU pool before transfer.
   QR::get()->clearGpuMemory();
   QR::get()->clearCpuMemory();
   const auto filter_column = catalog.getMetadataForColumn(table->tableId, "filter_col");
@@ -14963,7 +14965,11 @@ TEST_F(Select, CompressedNativeGpuInputReleasesDecodeWorkspace) {
       {{0, 1024, 7168}, {1, 1024, 7168}, {2, 1024, 7168}, {3, 1024, 7168}}));
   EXPECT_EQ(non_slab_allocation_count(), mixed_allocations_before);
   EXPECT_TRUE(data_mgr.isBufferOnDevice(resident_filter_key, MemoryLevel::CPU_LEVEL, 0));
+#ifdef HAVE_NVCOMP
   EXPECT_FALSE(data_mgr.isBufferOnDevice(cold_payload_key, MemoryLevel::CPU_LEVEL, 0));
+#else
+  EXPECT_TRUE(data_mgr.isBufferOnDevice(cold_payload_key, MemoryLevel::CPU_LEVEL, 0));
+#endif
 }
 
 #ifdef HAVE_NVCOMP_BITCOMP
