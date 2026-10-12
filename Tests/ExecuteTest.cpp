@@ -15705,6 +15705,26 @@ TEST_F(Select, Joins_FunctionOper) {
   }
 }
 
+#ifdef HAVE_SYSTEM_TFS
+TEST_F(Select, ColumnarTemporaryTableJoinWithoutResultReductionPipeline) {
+  ScopeGuard restore_output_modes = [columnar_output = g_enable_columnar_output,
+                                     reduction_pipeline =
+                                         g_enable_result_reduction_pipeline] {
+    g_enable_columnar_output = columnar_output;
+    g_enable_result_reduction_pipeline = reduction_pipeline;
+  };
+  g_enable_columnar_output = true;
+  g_enable_result_reduction_pipeline = false;
+
+  const auto query =
+      "WITH cte AS (SELECT H3_LonLatToCell(CAST(s AS DOUBLE), CAST(s AS DOUBLE), 10) "
+      "AS h3 FROM TABLE(generate_series(-80, 80, 1)) AS t(s)) SELECT COUNT(*) "
+      "FROM TABLE(generate_series(-80, 80, 1)) AS ft(s), cte WHERE "
+      "H3_LonLatToCell(CAST(s AS DOUBLE), CAST(s AS DOUBLE), 10) = cte.h3;";
+  EXPECT_EQ(int64_t(161), v<int64_t>(run_simple_agg(query, ExecutorDeviceType::CPU)));
+}
+#endif
+
 TEST_F(Select, Joins_AvoidLoopJoin) {
   auto drop_tables = []() {
     run_ddl_statement("DROP TABLE IF EXISTS LTA;");

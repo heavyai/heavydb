@@ -18,6 +18,7 @@
 #include <optional>
 
 extern bool g_enable_data_recycler;
+extern bool g_enable_result_reduction_pipeline;
 extern bool g_use_chunk_metadata_cache;
 
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
@@ -217,10 +218,11 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(int table_id,
   if (rows) {
     std::vector<ResultSet::DeviceColumnarFragmentInfo> device_columnar_fragments;
     const bool use_device_columnar_result_fragments =
+        g_enable_result_reduction_pipeline &&
         rows->getDeviceColumnarFragmentInfo(device_columnar_fragments);
     std::vector<size_t> columnar_fragment_row_counts;
     bool use_columnar_result_fragments = false;
-    if (!use_device_columnar_result_fragments) {
+    if (g_enable_result_reduction_pipeline && !use_device_columnar_result_fragments) {
       use_columnar_result_fragments =
           rows->getColumnarFragmentRowCounts(columnar_fragment_row_counts) &&
           columnar_fragment_row_counts.size() > 1;
