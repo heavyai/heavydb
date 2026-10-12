@@ -991,7 +991,6 @@ flatten_simple_compound_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& n
   std::vector<std::unique_ptr<const RexScalar>> condition_operands;
   condition_operands.push_back(
       copy_rebound_condition(join->getInnerCondition(), inlined_compounds));
-  RexDeepCopyVisitor copier;
   for (const auto& compound : inlined_compounds) {
     if (!compound->getFilterExpr()) {
       continue;
