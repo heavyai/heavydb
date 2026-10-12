@@ -13593,7 +13593,9 @@ TEST_F(Select, PipelinedGpuReductionMergesKeylessPerfectHashAggregates) {
     g_enable_columnar_output = columnar_output;
   };
   g_enable_columnar_output = false;
-  constexpr int64_t key_scale = int64_t(1) << 19;
+  // Keep each partial below the 32 MiB aggregate threshold while ensuring that two
+  // device results meet it together.
+  constexpr int64_t key_scale = int64_t(1) << 20;
   const auto grouped_sql = "SELECT k * " + std::to_string(key_scale) +
                            " AS grouped_key, SUM(v) AS total_v FROM " + table_name +
                            " GROUP BY grouped_key";
@@ -13604,8 +13606,8 @@ TEST_F(Select, PipelinedGpuReductionMergesKeylessPerfectHashAggregates) {
   ASSERT_TRUE(rows->getQueryMemDesc().hasKeylessHash());
   const auto partial_result_bytes =
       rows->entryCount() * rows->getQueryMemDesc().getRowSize();
-  ASSERT_GE(partial_result_bytes, kMinGpuPerfectHashReductionInputBytes);
-  ASSERT_LT(partial_result_bytes, size_t{16} << 20);
+  ASSERT_GE(partial_result_bytes, size_t{16} << 20);
+  ASSERT_LT(partial_result_bytes, size_t{32} << 20);
 
   std::vector<ResultSet::DeviceRowwiseBufferFragment> rowwise_fragments;
   ASSERT_TRUE(rows->getDeviceRowwiseBufferFragments(rowwise_fragments));
@@ -13842,7 +13844,9 @@ TEST_F(Select, PipelinedGpuReductionMergesNonKeylessPerfectHashGroupKeys) {
     g_enable_columnar_output = columnar_output;
   };
   g_enable_columnar_output = false;
-  constexpr int64_t key_scale = int64_t(1) << 19;
+  // Keep each partial below the 32 MiB aggregate threshold while ensuring that two
+  // device results meet it together.
+  constexpr int64_t key_scale = int64_t(1) << 20;
   const auto rows = run_multiple_agg("SELECT k * " + std::to_string(key_scale) +
                                          " AS grouped_key FROM " + table_name +
                                          " GROUP BY grouped_key;",
@@ -13853,8 +13857,8 @@ TEST_F(Select, PipelinedGpuReductionMergesNonKeylessPerfectHashGroupKeys) {
   ASSERT_FALSE(rows->getQueryMemDesc().hasKeylessHash());
   const auto partial_result_bytes =
       rows->entryCount() * rows->getQueryMemDesc().getRowSize();
-  ASSERT_GE(partial_result_bytes, kMinGpuPerfectHashReductionInputBytes);
-  ASSERT_LT(partial_result_bytes, size_t{16} << 20);
+  ASSERT_GE(partial_result_bytes, size_t{16} << 20);
+  ASSERT_LT(partial_result_bytes, size_t{32} << 20);
 
   std::vector<ResultSet::DeviceRowwiseBufferFragment> rowwise_fragments;
   ASSERT_TRUE(rows->getDeviceRowwiseBufferFragments(rowwise_fragments));
