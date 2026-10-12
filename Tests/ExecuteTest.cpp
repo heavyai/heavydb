@@ -17675,9 +17675,10 @@ TEST_F(Select, Joins_Subqueries) {
         "COUNT(*) "
         "> 5), test_inner_y WHERE str1 = test_inner_y.str  ORDER BY str;",
         dt);
-      c("WITH table_inner AS (SELECT str FROM test_inner_y LIMIT 1 OFFSET 1) SELECT str, "
-        "n FROM (SELECT str str1, COUNT(*) n FROM test GROUP BY str ORDER BY str ASC "
-        "LIMIT 1), table_inner WHERE str1 = table_inner.str ORDER BY str;",
+      c("WITH table_inner AS (SELECT str FROM test_inner_y ORDER BY str LIMIT 1 OFFSET "
+        "1) SELECT str, n FROM (SELECT str str1, COUNT(*) n FROM test GROUP BY str "
+        "ORDER BY str ASC LIMIT 1), table_inner WHERE str1 = table_inner.str ORDER BY "
+        "str;",
         dt);
       c("WITH table_inner AS (SELECT CASE WHEN str = 'foo' THEN 'hello' ELSE str END "
         "str2 FROM test_inner_y) SELECT str1, n FROM (SELECT CASE WHEN str = 'foo' THEN "
