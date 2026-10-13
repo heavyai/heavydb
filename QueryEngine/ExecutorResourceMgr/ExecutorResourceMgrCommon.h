@@ -18,17 +18,34 @@ namespace ExecutorResourceMgr_Namespace {
 using ChunkKey = std::vector<int>;
 using RequestId = size_t;
 
+/**
+ * @brief Categorizes an `ExecutorResourceMgrError` so that callers can react to a
+ * specific failure mode without pattern-matching on the error message, which is
+ * stringified as it is carried between the requesting thread and the resource
+ * manager's queue thread.
+ */
+enum class ExecutorResourceMgrErrorKind {
+  OTHER = 0,
+  CPU_RESULT_MEM_TOO_LARGE,
+};
+
 class ExecutorResourceMgrError {
  public:
-  ExecutorResourceMgrError(std::optional<RequestId> const request_id,
-                           std::string error_msg)
-      : request_id_(request_id), error_msg_(std::move(error_msg)) {}
+  ExecutorResourceMgrError(
+      std::optional<RequestId> const request_id,
+      std::string error_msg,
+      ExecutorResourceMgrErrorKind error_kind = ExecutorResourceMgrErrorKind::OTHER)
+      : request_id_(request_id)
+      , error_msg_(std::move(error_msg))
+      , error_kind_(error_kind) {}
   std::optional<RequestId> getRequestId() const { return request_id_; }
   std::string getErrorMsg() const { return error_msg_; }
+  ExecutorResourceMgrErrorKind getErrorKind() const { return error_kind_; }
 
  private:
   std::optional<RequestId> request_id_;
   std::string error_msg_;
+  ExecutorResourceMgrErrorKind error_kind_;
 };
 
 class QueryTimedOutWaitingInQueue : public std::runtime_error {
@@ -130,6 +147,14 @@ inline std::string resource_type_to_string(const ResourceType resource_type) {
  * is pinned or pageable (i.e. input chunks, which can be evicted, are considered
  * pageable, while kernel result memory is considered pinned as it cannot currently
  * be evicted or deleted during a query).
+ *
+ * Note that CPU_RESULT_MEM_IN_POOL and CPU_RESULT_MEM both represent kernel result
+ * memory, and exactly one of them is in use for a given server configuration:
+ * CPU_RESULT_MEM_IN_POOL when result buffers are drawn from the CPU buffer pool
+ * (i.e. use-cpu-mem-pool-for-output-buffers), CPU_RESULT_MEM when result memory is
+ * tracked as its own independent resource. Result memory drawn from the buffer pool
+ * must not share a subtype with PINNED_CPU_BUFFER_POOL_MEM (input chunks), as the
+ * two are requested independently and carry separate per-request grant policies.
  */
 enum class ResourceSubtype {
   CPU_SLOTS = 0,
@@ -140,25 +165,40 @@ enum class ResourceSubtype {
   PAGEABLE_CPU_BUFFER_POOL_MEM = 5,
   PINNED_GPU_BUFFER_POOL_MEM = 6,
   PAGEABLE_GPU_BUFFER_POOL_MEM = 7,
-  INVALID_SUBTYPE = 8,
-  NUM_RESOURCE_SUBTYPES = 8,
+  CPU_RESULT_MEM_IN_POOL = 8,
+  INVALID_SUBTYPE = 9,
+  NUM_RESOURCE_SUBTYPES = 9,
 };
 
 static constexpr size_t ResourceSubtypeSize =
     static_cast<size_t>(ResourceSubtype::NUM_RESOURCE_SUBTYPES);
 
-static const char* ResourceSubtypeStrings[] = {"cpu_slots",
-                                               "gpu_slots",
-                                               "cpu_result_mem",
-                                               "gpu_result_mem",
-                                               "pinned_cpu_buffer_pool_mem",
-                                               "pinned_gpu_buffer_pool_mem",
-                                               "pageable_cpu_buffer_pool_mem",
-                                               "pageable_gpu_buffer_pool_mem",
-                                               "invalid_type"};
-
 inline std::string resource_subtype_to_string(const ResourceSubtype resource_subtype) {
-  return ResourceSubtypeStrings[static_cast<size_t>(resource_subtype)];
+  switch (resource_subtype) {
+    case ResourceSubtype::CPU_SLOTS:
+      return "cpu_slots";
+    case ResourceSubtype::GPU_SLOTS:
+      return "gpu_slots";
+    case ResourceSubtype::CPU_RESULT_MEM:
+      return "cpu_result_mem";
+    case ResourceSubtype::GPU_RESULT_MEM:
+      return "gpu_result_mem";
+    case ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM:
+      return "pinned_cpu_buffer_pool_mem";
+    case ResourceSubtype::PAGEABLE_CPU_BUFFER_POOL_MEM:
+      return "pageable_cpu_buffer_pool_mem";
+    case ResourceSubtype::PINNED_GPU_BUFFER_POOL_MEM:
+      return "pinned_gpu_buffer_pool_mem";
+    case ResourceSubtype::PAGEABLE_GPU_BUFFER_POOL_MEM:
+      return "pageable_gpu_buffer_pool_mem";
+    case ResourceSubtype::CPU_RESULT_MEM_IN_POOL:
+      return "cpu_result_mem_in_pool";
+    case ResourceSubtype::INVALID_SUBTYPE:
+      return "invalid_type";
+    default:
+      UNREACHABLE();
+      return "invalid_type";
+  }
 }
 
 struct CPUResultMemResourceType {
