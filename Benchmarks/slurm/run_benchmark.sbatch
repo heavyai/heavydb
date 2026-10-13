@@ -20,12 +20,19 @@ LOG="$OUTPUT_DIR/run-$${SLURM_JOB_ID}_$${SLURM_ARRAY_TASK_ID:-0}.log"
 exec > >(tee -a "$$LOG") 2>&1
 finish() {
   rc=$$?
-  echo "[$$(date '+%F %T')] job finished: exit code $$rc"
+  trap - EXIT TERM INT HUP
+  echo "[$$(date '+%F %T')] job finished: exit code $$rc; cleaning up"
   # keep the server log: scratch is node-local and gets deleted
   cp -f "$$SCRATCH/heavydb.log" "$OUTPUT_DIR/heavydb-$${SLURM_JOB_ID}_$${SLURM_ARRAY_TASK_ID:-0}.log" 2>/dev/null || true
-  if [ "$$rc" -eq 0 ]; then rm -rf "$$SCRATCH"; else echo "scratch kept on $$(hostname): $$SCRATCH"; fi
+  # stop anything the harness left behind (failure, scancel, timeout), then remove scratch
+  enroot list 2>/dev/null | grep -E "^hdb-bench-$${SLURM_JOB_ID:-none}-" | xargs -r -n1 enroot remove -f >/dev/null 2>&1 || true
+  rm -rf "$$SCRATCH"
 }
+# signals run the EXIT trap too (scancel/timeout send TERM; give the harness a moment to clean up first)
 trap finish EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
+trap 'exit 129' HUP
 echo "[$$(date '+%F %T')] job $${SLURM_JOB_ID:-?} task $${SLURM_ARRAY_TASK_ID:-0} on $$(hostname)"
 echo "data=$$DATA image=$IMAGE scratch=$$SCRATCH"
 echo "python: $$(python3 --version 2>&1)  enroot: $$(enroot version 2>&1 | head -1)  gpus: $$(nvidia-smi -L 2>&1 | wc -l)"

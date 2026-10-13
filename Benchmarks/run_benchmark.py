@@ -10,6 +10,8 @@
 
 import argparse
 import os
+import shutil
+import signal
 import sys
 import tempfile
 from pathlib import Path
@@ -84,7 +86,19 @@ def cmd_run(a):
     data = Path(a.data).resolve()
     if not data.is_dir():
         raise SystemExit("data dir not found: %s" % data)
+    auto_work = not a.work_dir
     work = Path(a.work_dir) if a.work_dir else Path(tempfile.mkdtemp(prefix="hdb-bench-"))
+    # scancel/timeouts send SIGTERM: turn it into an exit so the runtime cleans up
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, lambda signum, frame: sys.exit(128 + signum))
+    try:
+        return _run(a, bench, data, work, queries_arg=a.queries)
+    finally:
+        if auto_work:
+            shutil.rmtree(work, ignore_errors=True)
+
+
+def _run(a, bench, data, work, queries_arg):
     kw = dict(data_root=data, work_dir=work, cpu_only=a.cpu_only, server_args=a.server_arg,
               dry_run=a.dry_run)
     if a.runtime == "docker":
@@ -94,7 +108,7 @@ def cmd_run(a):
     else:
         kw.update(build_dir=a.build_dir)
     rt = make_runtime(a.runtime, **kw)
-    queries = select_queries(bench, a.queries)
+    queries = select_queries(bench, queries_arg)
     iters = a.iterations or bench.iterations
     warm = a.warmup if a.warmup is not None else bench.warmup
     print("benchmark=%s data=%s runtime=%s mode=%s queries=%d iters=%d warmup=%d" % (

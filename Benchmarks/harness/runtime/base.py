@@ -14,6 +14,7 @@ import os
 import shlex
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -120,9 +121,17 @@ class Runtime(abc.ABC):
         return ""
 
     def __enter__(self):
-        self.start_server()
-        if not self.dry_run:
-            self.wait_ready()
+        try:
+            self.start_server()
+            if not self.dry_run:
+                self.wait_ready()
+        except BaseException:
+            # __exit__ is not called when __enter__ raises: don't leak the server/container
+            try:
+                self.stop_server()
+            except Exception as e:  # keep the original error
+                print("warning: cleanup after failed start: %s" % e, file=sys.stderr)
+            raise
         return self
 
     def __exit__(self, *exc):
