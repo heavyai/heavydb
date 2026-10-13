@@ -172,6 +172,12 @@ size_t get_available_cpu_threads_per_task(Executor* executor,
 }
 }  // namespace
 
+void ExecutionKernel::prepareForLaunch(Executor* executor,
+                                       SharedKernelContext& shared_context) {
+  query_mem_desc.setAvailableCpuThreads(
+      get_available_cpu_threads_per_task(executor, shared_context));
+}
+
 void ExecutionKernel::runImpl(Executor* executor,
                               const size_t thread_idx,
                               SharedKernelContext& shared_context) {
@@ -316,11 +322,6 @@ void ExecutionKernel::runImpl(Executor* executor,
                     all_frag_row_offsets[frag_list.begin()->fragment_ids.front()];
     }
   }
-
-  // determine the # available CPU threads for each kernel to parallelize rest of
-  // initialization steps when necessary
-  query_mem_desc.setAvailableCpuThreads(
-      get_available_cpu_threads_per_task(executor, shared_context));
 
 #ifdef HAVE_TBB
   bool can_run_subkernels = shared_context.getThreadPool() != nullptr;
