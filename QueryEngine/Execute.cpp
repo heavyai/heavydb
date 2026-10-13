@@ -3128,6 +3128,11 @@ void Executor::launchKernelsImpl(SharedKernelContext& shared_context,
   const size_t num_threads = cpu_threads();
 #endif
   shared_context.setNumAllocatedThreads(num_threads);
+  if (!kernels.empty()) {
+    // All kernels in a launch share one query memory descriptor. Initialize its
+    // launch-wide state before the kernels begin executing concurrently.
+    kernels.front()->prepareForLaunch(this, shared_context);
+  }
   LOG(EXECUTOR) << "Launching query step with " << num_threads << " threads.";
   threading::task_group tg;
   // A hack to have unused unit for results collection.
