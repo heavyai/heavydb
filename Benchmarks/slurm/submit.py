@@ -31,6 +31,8 @@ def main(argv=None):
     p.add_argument("--data", action="append", required=True, help="dataset root; repeat for an array job")
     p.add_argument("--output-dir", default=str(BENCH_ROOT / "results"), help="results dir (shared FS)")
     p.add_argument("--label", default="slurm")
+    p.add_argument("--scratch-dir", help="node-local dir for the server data and logs (a hdb-bench-<jobid> "
+                   "subdir is created and removed); default: $SLURM_TMPDIR, $TMPDIR, then /tmp on the node")
     p.add_argument("--partition")
     p.add_argument("--account")
     p.add_argument("--gres", help="e.g. gpu:8 (omit for CPU-only)")
@@ -64,6 +66,7 @@ def main(argv=None):
         SBATCH_DIRECTIVES="\n".join(d),
         DATASETS=" ".join(shlex.quote(str(Path(x).resolve())) for x in a.data),
         BENCH_ROOT=BENCH_ROOT, OUTPUT_DIR=out_dir, BENCHMARK=a.benchmark,
+        SCRATCH_BASE=shlex.quote(a.scratch_dir) if a.scratch_dir else '"${SLURM_TMPDIR:-${TMPDIR:-/tmp}}"',
         IMAGE=Path(a.image).resolve(), LABEL=a.label, PRE_COMMANDS="\n".join(a.pre_command),
         EXTRA_ARGS=" ".join(shlex.quote(x) for x in extra))
     if a.dry_run:

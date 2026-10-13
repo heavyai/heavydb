@@ -11,7 +11,7 @@ set -euo pipefail
 
 DATASETS=($DATASETS)
 DATA="$${DATASETS[$${SLURM_ARRAY_TASK_ID:-0}]}"
-SCRATCH="$${SLURM_TMPDIR:-$${TMPDIR:-/tmp}}/hdb-bench-$${SLURM_JOB_ID}"
+SCRATCH=$SCRATCH_BASE"/hdb-bench-$${SLURM_JOB_ID}"
 mkdir -p "$$SCRATCH" "$OUTPUT_DIR"
 
 # Mirror everything (stdout+stderr) into a log next to the results, so progress and errors
