@@ -1339,7 +1339,10 @@ std::vector<T> StringDictionary::getLikeImpl(const std::string& pattern,
   auto is_like_impl = icase       ? is_simple ? string_ilike_simple : string_ilike
                       : is_simple ? string_like_simple
                                   : string_like;
-  auto const num_threads = static_cast<size_t>(cpu_threads());
+  const auto max_threads = static_cast<size_t>(cpu_threads());
+  const auto scan_tasks = std::max<size_t>(
+      1, generation / grain_size + static_cast<size_t>(generation % grain_size != 0));
+  const auto num_threads = std::min(max_threads, scan_tasks);
   std::vector<std::vector<T>> worker_results(num_threads);
   tbb::task_arena limited_arena(num_threads);
   const auto populate_worker_results = [&](const auto& matches_at) {
