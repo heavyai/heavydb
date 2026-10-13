@@ -27,6 +27,20 @@
       "internal_path": "ShaderCompilerTests/",
       "language": "glsl",
       "class": "fragment"
+    },
+    {
+      "filename": "unlocatedVaryingTest.vert",
+      "file_path": ".",
+      "internal_path": "ShaderCompilerTests/",
+      "language": "glsl",
+      "class": "vertex"
+    },
+    {
+      "filename": "unlocatedVaryingTest.frag",
+      "file_path": ".",
+      "internal_path": "ShaderCompilerTests/",
+      "language": "glsl",
+      "class": "fragment"
     }
   ]
 }

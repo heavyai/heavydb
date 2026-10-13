@@ -1073,9 +1073,7 @@ function install_abseil() {
   popd
 }
 
-VULKAN_VERSION=1.3.275.0 # 12/22/23
-# updating past this version is not possible at this time due to glslang changes
-# @TODO update to Vulkan SDK 1.4.x and use slang instead of glslang
+VULKAN_VERSION=1.4.363.0 # 09/28/26
 
 function install_vulkan() {
   rm -rf vulkan
@@ -1087,7 +1085,9 @@ function install_vulkan() {
   # build just what we need for this platform
   ./vulkansdk --maxjobs --skip-deps loader glslang spirvcross vul layers
   # also add these non-default glslang headers
-  \cp source/glslang/glslang/Include/InfoSink.h ${ARCH}/include/glslang/Include
+  # glslang 14 tightened which headers it installs, so the destinations may not exist
+  mkdir -p ${ARCH}/include/glslang/Include
+  mkdir -p ${ARCH}/include/glslang/MachineIndependent
   \cp source/glslang/glslang/Include/intermediate.h ${ARCH}/include/glslang/Include
   \cp source/glslang/glslang/Include/Common.h ${ARCH}/include/glslang/Include
   \cp source/glslang/glslang/Include/arrays.h ${ARCH}/include/glslang/Include
@@ -1101,8 +1101,6 @@ function install_vulkan() {
   \cp source/glslang/glslang/MachineIndependent/LiveTraverser.h ${ARCH}/include/glslang/MachineIndependent
   \cp source/glslang/glslang/MachineIndependent/localintermediate.h ${ARCH}/include/glslang/MachineIndependent
   \cp source/glslang/glslang/MachineIndependent/reflection.h ${ARCH}/include/glslang/MachineIndependent
-  \cp source/glslang/build/include/glslang/build_info.h ${ARCH}/include/glslang
-  \cp source/glslang/SPIRV/disassemble.h ${ARCH}/include/glslang/SPIRV
   popd
   # install
   rsync -av ${VULKAN_VERSION}/${ARCH}/* ${PREFIX}

@@ -28,6 +28,7 @@ class ShaderCache : boost::noncopyable {
   const std::string& getGlsl() const;
   const std::string& getEntryPoint() const;
   ShaderReflection& getReflection();
+  const ShaderReflection& getReflection() const;
   const ShaderStage getShaderStage() const;
   const bool getUseSpirvToGlslCompilePath() const;
   const std::string& getLibraryItemFilename() const;

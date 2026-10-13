@@ -497,7 +497,7 @@ bool PPLLRender::countFragmentsAndComputeStats(
       push_constants[push_constant_index].batch_index = batch_index;
       cmd_list
           .setPushConstants(stats_pipeline,
-                            "pushConstants",
+                            "PPLL_STAT_PUSH_CONSTANTS",
                             ShaderStageBits::kCompute,
                             &push_constants[push_constant_index],
                             sizeof(PushConstants))
@@ -522,7 +522,7 @@ bool PPLLRender::countFragmentsAndComputeStats(
   for (auto tile_index : tile_indices) {
     cmd_list
         .setPushConstantUInt32(unbatched_stats_pipeline,
-                               "pushConstants",
+                               "PPLL_STAT_PUSH_CONSTANTS",
                                ShaderStageBits::kCompute,
                                tile_index)
         .dispatchCompute(*global_resources_.getPipeline(

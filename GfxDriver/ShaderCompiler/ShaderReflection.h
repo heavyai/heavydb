@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <iosfwd>
 #include <set>
 #include <string>
 #include <string_view>
@@ -17,32 +18,47 @@ namespace gfx {
 
 // POD for API-agnostic reflection results for shaders created by a Builder
 // initially an instance of this will be in BuilderImpl::Cache
-
+//
+// Declare no destructor and no copy or move operations here. Hand-written ones
+// have to enumerate every member, which is how they drift when a member is
+// added, and declaring any of them costs the implicit move constructor.
 class ShaderReflection {
  public:
-  ShaderReflection();
-  ~ShaderReflection() = default;
-
   struct ItemInfo {
     int set;
     int binding_or_location;
     int offset;
     int block_or_array_size;
-    ItemInfo(int set, int binding_or_location, int offset, int block_or_array_size)
+
+    // Buffer members only, and only where the member is an array. The offset above is
+    // then element zero's, and these two are what reach the rest of them: element i
+    // lives at offset + i * array_stride. A length of 0 means a runtime-sized array,
+    // which is a real answer and distinct from the -1 meaning not an array at all.
+    int array_length;
+    int array_stride;
+
+    ItemInfo(int set,
+             int binding_or_location,
+             int offset,
+             int block_or_array_size,
+             int array_length = -1,
+             int array_stride = -1)
         : set{set}
         , binding_or_location{binding_or_location}
         , offset{offset}
-        , block_or_array_size{block_or_array_size} {}
+        , block_or_array_size{block_or_array_size}
+        , array_length{array_length}
+        , array_stride{array_stride} {}
     ItemInfo() : ItemInfo(-1, -1, -1, -1) {}
     bool operator==(const ItemInfo& rhs) const {
       return set == rhs.set && binding_or_location == rhs.binding_or_location &&
-             offset == rhs.offset && block_or_array_size == rhs.block_or_array_size;
+             offset == rhs.offset && block_or_array_size == rhs.block_or_array_size &&
+             array_length == rhs.array_length && array_stride == rhs.array_stride;
     }
   };
 
   void initialize();
   void clear();
-  ShaderReflection& operator=(const ShaderReflection& rhs);
 
   void addVertexAttr(std::string_view name, int location, int array_size);
   void addSampler(std::string_view name, int set, int binding, int array_size);
@@ -56,16 +72,29 @@ class ShaderReflection {
                               int set,
                               int binding,
                               int block_size);
+  // array_length and array_stride describe an array member, and stay at -1 otherwise.
+  // See ItemInfo above for what they mean.
   void addUniformBufferAttr(std::string_view name,
                             int set,
                             int binding,
                             int offset,
-                            int size);
+                            int size,
+                            int array_length = -1,
+                            int array_stride = -1);
   void addShaderStorageBufferAttr(std::string_view name,
                                   int set,
                                   int binding,
                                   int offset,
-                                  int size);
+                                  int size,
+                                  int array_length = -1,
+                                  int array_stride = -1);
+  // A stage may declare at most one push constant block, which is a Vulkan rule
+  // rather than a simplification here. The block's offset and size are the span its
+  // members occupy, which is the range a caller is allowed to push into, and the
+  // members are recorded individually so that a caller can name one.
+  void addPushConstant(std::string_view name, int offset, int size);
+  void addPushConstantAttr(std::string_view name, int offset, int size);
+
   void addFragmentShaderOutputLocation(int location);
 
   bool hasVertexAttr(std::string_view name) const;
@@ -99,6 +128,17 @@ class ShaderReflection {
   const ItemInfo& getUniformBufferAttrItemInfo(std::string_view name) const;
   const ItemInfo& getShaderStorageBufferAttrItemInfo(std::string_view name) const;
 
+  // Resolves a name against the push constant block and its members alike, so a
+  // caller may name either the block or one member of it. Returns the default
+  // ItemInfo, whose offset is -1, if the name is neither.
+  const ItemInfo& getPushConstantItemInfo(std::string_view name) const;
+
+  // Writes every entry in name-sorted order, so the output is stable across runs
+  // and reviewable as a diff. ShaderCompilerTest stores this form as its golden
+  // expectation, so the format is load-bearing: changing it invalidates every
+  // checked-in .reflect file.
+  void serialize(std::ostream& stream) const;
+
   using NameVector = std::vector<std::string_view>;
   const NameVector getAllUniformBufferNames() const;
   const NameVector getAllShaderStorageBufferNames() const;
@@ -107,6 +147,8 @@ class ShaderReflection {
   const NameVector getAllAccelerationStructureNames() const;
   const NameVector getAllUniformBufferAttrNames() const;
   const NameVector getAllShaderStorageBufferAttrNames() const;
+  const NameVector getAllPushConstantNames() const;
+  const NameVector getAllPushConstantAttrNames() const;
 
  private:
   class NameToItemInfoMap {
@@ -131,10 +173,6 @@ class ShaderReflection {
           map_.try_emplace(std::string(name), value).second,
           std::string(type_name) + " \'" + std::string(name) + "\' repeated");
     }
-    NameToItemInfoMap& operator=(const NameToItemInfoMap& rhs) {
-      map_ = rhs.map_;
-      return *this;
-    }
 
    private:
     MapType map_;
@@ -149,9 +187,9 @@ class ShaderReflection {
   NameToItemInfoMap vertex_attr_locations_;
   NameToItemInfoMap uniform_buffer_attrs_;
   NameToItemInfoMap shader_storage_buffer_attrs_;
+  NameToItemInfoMap push_constants_;
+  NameToItemInfoMap push_constant_attrs_;
   std::set<int> fragment_shader_output_locations_;
-
-  void validateSet(int set);
 };
 
 }  // namespace gfx
