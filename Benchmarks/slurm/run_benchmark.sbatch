@@ -14,6 +14,22 @@ DATA="$${DATASETS[$${SLURM_ARRAY_TASK_ID:-0}]}"
 SCRATCH="$${SLURM_TMPDIR:-$${TMPDIR:-/tmp}}/hdb-bench-$${SLURM_JOB_ID}"
 mkdir -p "$$SCRATCH" "$OUTPUT_DIR"
 
+# Mirror everything (stdout+stderr) into a log next to the results, so progress and errors
+# are visible even if Slurm's own --output file is lost.
+LOG="$OUTPUT_DIR/run-$${SLURM_JOB_ID}_$${SLURM_ARRAY_TASK_ID:-0}.log"
+exec > >(tee -a "$$LOG") 2>&1
+finish() {
+  rc=$$?
+  echo "[$$(date '+%F %T')] job finished: exit code $$rc"
+  # keep the server log: scratch is node-local and gets deleted
+  cp -f "$$SCRATCH/heavydb.log" "$OUTPUT_DIR/heavydb-$${SLURM_JOB_ID}_$${SLURM_ARRAY_TASK_ID:-0}.log" 2>/dev/null || true
+  if [ "$$rc" -eq 0 ]; then rm -rf "$$SCRATCH"; else echo "scratch kept on $$(hostname): $$SCRATCH"; fi
+}
+trap finish EXIT
+echo "[$$(date '+%F %T')] job $${SLURM_JOB_ID:-?} task $${SLURM_ARRAY_TASK_ID:-0} on $$(hostname)"
+echo "data=$$DATA image=$IMAGE scratch=$$SCRATCH"
+echo "python: $$(python3 --version 2>&1)  enroot: $$(enroot version 2>&1 | head -1)  gpus: $$(nvidia-smi -L 2>&1 | wc -l)"
+
 cd "$BENCH_ROOT"
 $PRE_COMMANDS
 python3 -u run_benchmark.py run $BENCHMARK \
@@ -23,4 +39,3 @@ python3 -u run_benchmark.py run $BENCHMARK \
   --output "$OUTPUT_DIR" \
   --label "$LABEL" \
   $EXTRA_ARGS
-rm -rf "$$SCRATCH"
