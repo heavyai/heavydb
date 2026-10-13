@@ -85,7 +85,11 @@ New execution environments (podman, apptainer, ...) are one class in `harness/ru
 
 ## Slurm (enroot)
 
-Convert the product image yourself, e.g. `enroot import -o heavydb.sqsh dockerd://<image>`.
+Convert the product image yourself. On a cluster where `enroot import` can't write
+`/var/lib/enroot`, use `slurm/save_image.sh <image> <out.sqsh> [-- srun args]`, which pulls
+via pyxis (`srun --container-image/--container-save`) and needs registry credentials in
+`~/.config/enroot/.credentials` (see the script header). Elsewhere
+`enroot import -o heavydb.sqsh dockerd://<image>` works too.
 Then:
 
 ```bash
