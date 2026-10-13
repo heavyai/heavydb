@@ -7,6 +7,9 @@
 #include "Tests/TestHelpers.h"
 
 #include <atomic>
+#include <numeric>
+#include <vector>
+
 #include "Shared/threading.h"
 
 std::atomic<int> g_counter{0};
@@ -28,6 +31,18 @@ TEST(THREADING, ParallelFor) {
   parallel_for(blocked_range<size_t>(1, 10000), [&](auto r) { g_counter += r.size(); });
   ASSERT_EQ(g_counter, 9999);
   g_counter = 0;
+}
+
+TEST(THREADING, ParallelForPublishesBoundState) {
+  using namespace threading;
+  constexpr size_t value_count = 64;
+  std::vector<size_t> values(value_count);
+
+  parallel_for(
+      size_t(0), value_count, [&](const size_t index) { values[index] = index + 1; });
+
+  EXPECT_EQ(std::accumulate(values.begin(), values.end(), size_t(0)),
+            value_count * (value_count + 1) / 2);
 }
 
 TEST(THREADING, ParallelReduce) {
@@ -58,6 +73,26 @@ TEST(THREADING, Async) {
   ASSERT_EQ(g_counter, 1);
 }
 
+TEST(THREADING, AsyncPublishesBoundState) {
+  using namespace threading;
+  constexpr size_t task_count = 64;
+  std::vector<size_t> values(task_count);
+  std::vector<future<void>> tasks;
+  tasks.reserve(task_count);
+
+  auto warmup = async([] {});
+  warmup.get();
+  for (size_t i = 0; i < task_count; ++i) {
+    tasks.emplace_back(async([&values, i] { values[i] = i + 1; }));
+  }
+  for (auto& task : tasks) {
+    task.get();
+  }
+
+  EXPECT_EQ(std::accumulate(values.begin(), values.end(), size_t(0)),
+            task_count * (task_count + 1) / 2);
+}
+
 TEST(THREADING, TaskGroup) {
   using namespace threading;
   g_counter = 0;
@@ -66,6 +101,45 @@ TEST(THREADING, TaskGroup) {
   tg.wait();
   ASSERT_EQ(g_counter, 1);
 }
+
+TEST(THREADING, TaskGroupPublishesBoundState) {
+  using namespace threading;
+  constexpr size_t task_count = 64;
+  std::vector<size_t> values(task_count);
+  task_group tasks;
+
+  for (size_t i = 0; i < task_count; ++i) {
+    tasks.run([&values, i] { values[i] = i + 1; });
+  }
+  tasks.wait();
+
+  EXPECT_EQ(std::accumulate(values.begin(), values.end(), size_t(0)),
+            task_count * (task_count + 1) / 2);
+}
+
+#if ENABLE_TBB
+TEST(THREADING, TaskGroupSupportsNestedSubmission) {
+  using namespace threading;
+  constexpr size_t outer_task_count = 8;
+  constexpr size_t inner_task_count = 8;
+  constexpr size_t value_count = outer_task_count * inner_task_count;
+  std::vector<size_t> values(value_count);
+  task_group tasks;
+
+  for (size_t outer = 0; outer < outer_task_count; ++outer) {
+    tasks.run([&tasks, &values, outer] {
+      for (size_t inner = 0; inner < inner_task_count; ++inner) {
+        const auto index = outer * inner_task_count + inner;
+        tasks.run([&values, index] { values[index] = index + 1; });
+      }
+    });
+  }
+  tasks.wait();
+
+  EXPECT_EQ(std::accumulate(values.begin(), values.end(), size_t(0)),
+            value_count * (value_count + 1) / 2);
+}
+#endif
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);

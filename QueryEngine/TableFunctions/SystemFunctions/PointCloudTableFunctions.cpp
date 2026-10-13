@@ -6,12 +6,10 @@
 #ifdef HAVE_POINT_CLOUD_TFS
 #ifndef __CUDACC__
 
-#include <tbb/blocked_range.h>
-#include <tbb/parallel_for.h>
-
 #include "QueryEngine/TableFunctions/SystemFunctions/Shared/Loaders/PdalLoader.h"
 #include "QueryEngine/TableFunctions/SystemFunctions/Shared/TableFunctionsCommon.hpp"
 #include "QueryEngine/TableFunctions/SystemFunctions/Shared/TableFunctionsDataCache.h"
+#include "Shared/threading.h"
 #include "Utils/DdlUtils.h"
 
 #include "PointCloudTableFunctions.h"
@@ -257,9 +255,9 @@ __attribute__((__used__)) int32_t tf_load_point_cloud__cpu_(
   mgr.set_output_row_size(filtered_lidar_file_info.first);  // contains number of rows
 
   std::atomic<int64_t> row_offset = 0;
-  tbb::parallel_for(
-      tbb::blocked_range<size_t>(0, num_filtered_files),
-      [&](const tbb::blocked_range<size_t>& r) {
+  threading::parallel_for(
+      threading::blocked_range<size_t>(0, num_filtered_files),
+      [&](const threading::blocked_range<size_t>& r) {
         const size_t start_file_idx = r.begin();
         const size_t end_file_idx = r.end();
         for (size_t file_idx = start_file_idx; file_idx != end_file_idx; ++file_idx) {

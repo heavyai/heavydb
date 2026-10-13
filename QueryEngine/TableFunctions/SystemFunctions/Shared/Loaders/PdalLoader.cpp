@@ -14,8 +14,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include <tbb/parallel_for.h>
-
 #include <pdal/Options.hpp>
 #include <pdal/PointTable.hpp>
 #include <pdal/PointView.hpp>
@@ -26,6 +24,7 @@
 #include <pdal/private/SrsTransform.hpp>
 
 #include "PdalLoader.h"
+#include "Shared/threading.h"
 
 namespace PdalLoader {
 
@@ -120,8 +119,9 @@ get_metadata_for_files(const std::vector<std::filesystem::path>& file_paths,
   std::vector<std::shared_ptr<LidarMetadata>> lidar_metadata_vec(num_files);
   std::atomic<uint32_t> file_counter = 0;
   std::atomic<int64_t> num_points = 0;
-  tbb::parallel_for(
-      tbb::blocked_range<size_t>(0, num_files), [&](const tbb::blocked_range<size_t>& r) {
+  threading::parallel_for(
+      threading::blocked_range<size_t>(0, num_files),
+      [&](const threading::blocked_range<size_t>& r) {
         const size_t start_file_idx = r.begin();
         const size_t end_file_idx = r.end();
         for (size_t file_idx = start_file_idx; file_idx != end_file_idx; ++file_idx) {
