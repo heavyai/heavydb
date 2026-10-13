@@ -18,7 +18,7 @@ or use --*-file= to provide an explicit path for any component.
 Options:
   --deps-image=<image>    Deps container image to build in. Auto-detected
                           from local Docker images if omitted.
-  --distro=ubuntu22.04|rockylinux8
+  --distro=ubuntu22.04|ubuntu24.04|rockylinux8
                           Filter deps image auto-detection to a specific
                           distro. Ignored when --deps-image is given.
   --cuda-version=<ver>    Filter deps image auto-detection to a specific
@@ -345,6 +345,7 @@ EOF
       case "$image_basename" in
         *rockylinux8*) product_base_image="nvcr.io/nvidia/cuda:${cuda_ver}-runtime-rockylinux8" ;;
         *ubuntu22.04*) product_base_image="nvcr.io/nvidia/cuda:${cuda_ver}-runtime-ubuntu22.04" ;;
+        *ubuntu24.04*) product_base_image="nvcr.io/nvidia/cuda:${cuda_ver}-runtime-ubuntu24.04" ;;
         *)
           echo "ERROR: cannot auto-detect product base image from '$deps_image'" >&2
           echo "Use --product-base-image=<image>" >&2
@@ -366,7 +367,7 @@ EOF
 # multiple CUDA runtime versions are present (ambiguous).
 #
 # Args:
-#   $1  effective_distro   ubuntu22.04 | rockylinux8
+#   $1  effective_distro   ubuntu22.04 | ubuntu24.04 | rockylinux8
 # ---------------------------------------------------------------------------
 _resolve_product_base_image() {
   local effective_distro="$1"
@@ -406,7 +407,7 @@ _resolve_product_base_image() {
 #
 # Args:
 #   $1  tarball            absolute path to the product .tar.gz
-#   $2  effective_distro   ubuntu22.04 | rockylinux8
+#   $2  effective_distro   ubuntu22.04 | ubuntu24.04 | rockylinux8
 #   $3  render             renderer | norender
 #   $4  product_base_image base Docker image (required; passed as --build-arg BASE_IMAGE)
 #   $5  log_dir            directory for docker-build.log
@@ -568,11 +569,11 @@ EOF
     effective_distro=$(_parse_distro "$product_base_image")
     if [ -z "$effective_distro" ]; then
       echo "ERROR: cannot determine distro from --product-base-image: $product_base_image" >&2
-      echo "Expected the image name to contain ubuntu22.04 or rockylinux8." >&2
+      echo "Expected the image name to contain ubuntu22.04, ubuntu24.04, or rockylinux8." >&2
       exit 1
     fi
     # Cross-check against the tarball name when both are parseable, to catch
-    # mismatches like an ubuntu22.04 tarball paired with a rockylinux8 base image.
+    # mismatches like an ubuntu22.04 tarball paired with a ubuntu24.04 base image.
     local tar_distro
     tar_distro=$(_parse_distro "$tarball_name")
     if [ -n "$tar_distro" ] && [ "$tar_distro" != "$effective_distro" ]; then
@@ -585,7 +586,7 @@ EOF
     effective_distro=$(_parse_distro "$tarball_name")
     if [ -z "$effective_distro" ]; then
       echo "ERROR: cannot determine distro from tarball name: $tarball_name" >&2
-      echo "Expected the filename to contain ubuntu22.04 or rockylinux8." >&2
+      echo "Expected the filename to contain ubuntu22.04, ubuntu24.04, or rockylinux8." >&2
       echo "If using an older tarball (with 'Linux' in the name), specify the base" >&2
       echo "image explicitly: --product-base-image=<image>" >&2
       exit 1

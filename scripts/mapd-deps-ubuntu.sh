@@ -13,6 +13,7 @@ TSAN=false
 NOCUDA=false
 CACHE=
 LIBRARY_TYPE=
+TZ="America/Los_Angeles"
 
 # Establish number of cores to compile with
 # Default to 8, Limit to 24
@@ -54,6 +55,9 @@ while (( $# )); do
       ;;
     --nproc=*)
       NPROC="${1#*=}"
+      ;;
+    --tz=*)
+      TZ="${1#*=}"
       ;;
     *)
       break
@@ -121,8 +125,9 @@ source $SCRIPTS_DIR/common-functions.sh
 source /etc/os-release
 if [ "$ID" == "ubuntu" ] ; then
   PACKAGER="apt -y"
-  if [ "$VERSION_ID" != "22.04" ]; then
-    echo "Ubuntu 22.04 is the only Debian-based release supported by this script"
+  if [ "$VERSION_ID" != "24.04" ] && [ "$VERSION_ID" != "22.04" ]; then
+    echo "Ubuntu 24.04 and 22.04 are the only Debian-based releases supported by this script"
+    echo "If you are still using 20.04 or 23.10 then you need to upgrade!"
     exit 1
   fi
 else
@@ -137,15 +142,18 @@ DEBIAN_FRONTEND=noninteractive sudo apt-key adv --fetch-keys https://developer.d
 
 install_required_ubuntu_packages
 
-DEBIAN_FRONTEND=noninteractive sudo apt install -y \
-  gcc-11 \
-  g++-11
+# GCC 11.4 on 22.04; 24.04 uses system GCC 13.3
+if [[ "${VERSION_ID}" == "22.04" ]]; then
+  DEBIAN_FRONTEND=noninteractive sudo apt install -y \
+    gcc-11 \
+    g++-11
 
-# Set up gcc-11 as default gcc
-sudo update-alternatives \
-  --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
-  --slave /usr/bin/g++ g++ /usr/bin/g++-11
-sudo update-alternatives --set gcc /usr/bin/gcc-11
+  # Set up gcc-11 as default gcc
+  sudo update-alternatives \
+    --install /usr/bin/gcc gcc /usr/bin/gcc-11 1100 \
+    --slave /usr/bin/g++ g++ /usr/bin/g++-11
+  sudo update-alternatives --set gcc /usr/bin/gcc-11
+fi
 
 generate_deps_version_file
 
@@ -223,7 +231,7 @@ install_iwyu
 install_tbb
 
 # OneDAL (Intel only)
-if [ "$ARCH" == "x86_64" ] ; then
+if [[ "$ARCH" == "x86_64" ]]; then
   install_onedal
 fi
 

@@ -16,7 +16,6 @@
 #include <thrust/functional.h>
 #include <thrust/partition.h>
 #include <thrust/sort.h>
-#include <thrust/version.h>
 
 #include <cuda.h>
 
@@ -57,6 +56,14 @@ struct is_null_order_entry {
   const int64_t null_val;
 };
 
+template <class K, class I = int32_t>
+struct is_non_null_order_entry : is_null_order_entry<K, I> {
+  using is_null_order_entry<K, I>::is_null_order_entry;
+  __host__ __device__ bool operator()(const I index) {
+    return !is_null_order_entry<K, I>::operator()(index);
+  }
+};
+
 template <typename ForwardIterator>
 ForwardIterator partition_by_null(ForwardIterator first,
                                   ForwardIterator last,
@@ -81,21 +88,13 @@ ForwardIterator partition_by_null(ForwardIterator first,
                ? thrust::partition(
                      first,
                      last,
-#if THRUST_VERSION >= 200700
-                     thrust::not_fn(is_null_order_entry<int32_t>(
-#else
-                     thrust::not1(is_null_order_entry<int32_t>(
-#endif
-                         rows_ptr + layout.col_off, layout.row_bytes, null_val)))
+                     is_non_null_order_entry<int32_t>(
+                         rows_ptr + layout.col_off, layout.row_bytes, null_val))
                : thrust::partition(
                      first,
                      last,
-#if THRUST_VERSION >= 200700
-                     thrust::not_fn(is_null_order_entry<int64_t>(
-#else
-                     thrust::not1(is_null_order_entry<int64_t>(
-#endif
-                         rows_ptr + layout.col_off, layout.row_bytes, null_val)));
+                     is_non_null_order_entry<int64_t>(
+                         rows_ptr + layout.col_off, layout.row_bytes, null_val));
   }
 }
 

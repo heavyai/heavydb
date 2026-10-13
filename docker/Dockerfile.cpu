@@ -21,6 +21,7 @@ FROM ${BASE_IMAGE}
 #LABEL maintainer="TBD"
 
 RUN if command -v apt-get >/dev/null; then \
+        . /etc/os-release && \
         export DEBIAN_FRONTEND=noninteractive && \
         apt-get update && \
         apt-get upgrade -y && \
@@ -32,11 +33,18 @@ RUN if command -v apt-get >/dev/null; then \
             default-jre-headless \
             software-properties-common \
             zip && \
-        add-apt-repository ppa:deadsnakes/ppa && \
-        apt-get install -y --no-install-recommends \
-            python3.10 \
-            python3.10-venv \
-            libpython3.10 && \
+        if [ "$VERSION_ID" = "24.04" ]; then \
+            apt-get install -y --no-install-recommends \
+                python3.12 \
+                python3.12-venv \
+                libpython3.12; \
+        else \
+            add-apt-repository ppa:deadsnakes/ppa && \
+            apt-get install -y --no-install-recommends \
+                python3.10 \
+                python3.10-venv \
+                libpython3.10; \
+        fi && \
         apt-get remove --purge -y && \
         rm -rf /var/lib/apt/lists/*; \
     elif command -v dnf >/dev/null || command -v yum >/dev/null; then \

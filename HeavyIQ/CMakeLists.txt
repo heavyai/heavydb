@@ -13,7 +13,7 @@ externalproject_add_url_or_file(heavyiq ${HEAVYIQ_URL} ${HEAVYIQ_FILE})
 
 externalproject_get_property(heavyiq source_dir)
 install(DIRECTORY ${source_dir}/ DESTINATION "heavyiq/")
-add_custom_command(TARGET heavyiq COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} ${CMAKE_BINARY_DIR}/heavyiq)
+add_custom_command(TARGET heavyiq POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_directory ${source_dir} ${CMAKE_BINARY_DIR}/heavyiq)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/heavyiq)
 set(ADDITIONAL_MAKE_CLEAN_FILES ${ADDITIONAL_MAKE_CLEAN_FILES} PARENT_SCOPE)
 
