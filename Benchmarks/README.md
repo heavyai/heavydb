@@ -88,7 +88,9 @@ New execution environments (podman, apptainer, ...) are one class in `harness/ru
 Convert the product image yourself. On a cluster where `enroot import` can't write
 `/var/lib/enroot`, use `slurm/save_image.sh <image> <out.sqsh> [-- srun args]`, which pulls
 via pyxis (`srun --container-image/--container-save`) and needs registry credentials in
-`~/.config/enroot/.credentials` (see the script header). Elsewhere
+`~/.config/enroot/.credentials` (see the script header). Private Docker Hub images must be
+named with the user, `USER@registry-1.docker.io#heavyai/scantest:<tag>`; a bare name is pulled
+anonymously and fails with 401. Elsewhere
 `enroot import -o heavydb.sqsh dockerd://<image>` works too.
 Then:
 

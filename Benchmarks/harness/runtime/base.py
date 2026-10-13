@@ -95,10 +95,16 @@ class Runtime(abc.ABC):
     # ---- readiness -----------------------------------------------------------
     def wait_ready(self, timeout=600):
         deadline = time.time() + timeout
-        cmd = self.heavysql_prefix() + self.heavysql_args()
         last = ""
         while time.time() < deadline:
             self.check_alive()
+            try:
+                # resolved per attempt: a container runtime may not know its target yet
+                cmd = self.heavysql_prefix() + self.heavysql_args()
+            except RuntimeError as e:
+                last = str(e)
+                time.sleep(2)
+                continue
             r = subprocess.run(cmd, input="select 1;\n", capture_output=True, text=True)
             if r.returncode == 0 and "Exception" not in r.stdout + r.stderr:
                 return
