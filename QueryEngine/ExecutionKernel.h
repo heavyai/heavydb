@@ -127,6 +127,8 @@ class ExecutionKernel {
            const size_t thread_idx,
            SharedKernelContext& shared_context);
 
+  void prepareForLaunch(Executor* executor, SharedKernelContext& shared_context);
+
   void setDeferredSparseBaselineFilterBeforeCopy(std::vector<int64_t> preserved_keys);
   bool applyDeferredSparseBaselineFilterBeforeCopy() const {
     return apply_deferred_sparse_baseline_filter_before_copy_;
