@@ -25,18 +25,10 @@ out=$(realpath -m "$2")  # pure path math; works even if the dir is absent here
 shift 2
 [ "${1:-}" = "--" ] && shift
 
-dir=$(dirname "$out")
-# The output dir may exist only on compute nodes (e.g. /scratch), so prepare it
-# and check the result there rather than on the node this script runs on.
-srun --nodes=1 --ntasks=1 --time=00:05:00 --job-name=heavydb-image-prep "$@" \
-  -- bash -c 'mkdir -p "$1" && rm -f "$2"' _ "$dir" "$out"
-
-# The container only needs to start and exit; --container-save writes the sqsh at exit.
+# One job: pyxis pulls the image and writes the sqsh at exit. The output directory
+# must already exist and be visible on the compute node (e.g. /scratch).
 srun --nodes=1 --ntasks=1 --time=00:30:00 --job-name=heavydb-image-save \
-  --container-mounts="$dir":"$dir" \
   --container-image="$image" \
   --container-save="$out" \
   "$@" \
   -- true
-
-srun --nodes=1 --ntasks=1 --time=00:05:00 --job-name=heavydb-image-check "$@" -- ls -lh "$out"
