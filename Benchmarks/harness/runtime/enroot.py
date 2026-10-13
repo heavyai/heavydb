@@ -31,6 +31,10 @@ class EnrootRuntime(Runtime):
         slurm_job = os.environ.get("SLURM_JOB_ID", str(os.getpid()))
         self.container = "hdb-bench-%s-%d" % (slurm_job, os.getpid())
         self.storage = self.work_dir / "storage"
+        # Mounted read-write by default: a ":ro" bind mount fails with "No such device"
+        # on some cluster filesystems under enroot. The harness never writes to the data.
+        # Set HEAVYDB_ENROOT_DATA_RO=1 to mount it read-only.
+        self.data_mount_opts = ":ro" if os.environ.get("HEAVYDB_ENROOT_DATA_RO") else ""
         self.proc = None
         self.log_path = self.work_dir / "heavydb.log"
 
@@ -45,7 +49,7 @@ class EnrootRuntime(Runtime):
             self.storage.mkdir(parents=True)
         self.run(["enroot", "create", "--name", self.container, self.image], check=True)
         start = (["enroot", "start", "--rw",
-                  "-m", "%s:%s:ro" % (self.data_root, DATA_MOUNT),
+                  "-m", "%s:%s%s" % (self.data_root, DATA_MOUNT, self.data_mount_opts),
                   "-m", "%s:%s" % (self.storage, CONTAINER_STORAGE)]
                  + self.enroot_args
                  + [self.container, "bash", "-c",
