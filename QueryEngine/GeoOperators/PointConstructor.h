@@ -43,12 +43,15 @@ class PointConstructor : public Codegen {
       CHECK_EQ(crt_insert_block->size(), size_t(1));
       builder.SetInsertPoint(crt_insert_block, crt_insert_block->begin());
 
-      auto x_coord_ptr = builder.CreateGEP(
-          pt_local_storage_lv_->getType()->getScalarType()->getPointerElementType(),
-          pt_local_storage_lv_,
-          {cgen_state->llInt(0), cgen_state->llInt(0)},
-          "x_coord_ptr");
       const auto& geo_ti = operator_->get_type_info();
+      llvm::ArrayType* arr_type{nullptr};
+      if (geo_ti.get_compression() == kENCODING_GEOINT) {
+        arr_type = llvm::ArrayType::get(llvm::Type::getInt32Ty(cgen_state->context_), 2);
+      } else {
+        arr_type = llvm::ArrayType::get(llvm::Type::getDoubleTy(cgen_state->context_), 2);
+      }
+      auto x_coord_ptr = typed_array_element_ptr(
+          builder, arr_type, pt_local_storage_lv_, cgen_state->llInt(0));
       if (geo_ti.get_compression() == kENCODING_GEOINT) {
         // TODO: probably wrong
         builder.CreateStore(cgen_state->llInt(inline_int_null_val(SQLTypeInfo(kINT))),
@@ -125,13 +128,16 @@ class PointConstructor : public Codegen {
     CHECK(pt_local_storage_lv_);
 
     const bool is_compressed = geo_ti.get_compression() == kENCODING_GEOINT;
+    llvm::ArrayType* arr_type{nullptr};
+    if (is_compressed) {
+      arr_type = llvm::ArrayType::get(llvm::Type::getInt32Ty(cgen_state->context_), 2);
+    } else {
+      arr_type = llvm::ArrayType::get(llvm::Type::getDoubleTy(cgen_state->context_), 2);
+    }
 
     // store x coord
-    auto x_coord_ptr = builder.CreateGEP(
-        pt_local_storage_lv_->getType()->getScalarType()->getPointerElementType(),
-        pt_local_storage_lv_,
-        {cgen_state->llInt(0), cgen_state->llInt(0)},
-        "x_coord_ptr");
+    auto x_coord_ptr = typed_array_element_ptr(
+        builder, arr_type, pt_local_storage_lv_, cgen_state->llInt(0));
     if (is_compressed) {
       auto compressed_lv =
           cgen_state->emitExternalCall("compress_x_coord_geoint",
@@ -143,11 +149,8 @@ class PointConstructor : public Codegen {
     }
 
     // store y coord
-    auto y_coord_ptr = builder.CreateGEP(
-        pt_local_storage_lv_->getType()->getScalarType()->getPointerElementType(),
-        pt_local_storage_lv_,
-        {cgen_state->llInt(0), cgen_state->llInt(1)},
-        "y_coord_ptr");
+    auto y_coord_ptr = typed_array_element_ptr(
+        builder, arr_type, pt_local_storage_lv_, cgen_state->llInt(1));
     if (is_compressed) {
       auto compressed_lv =
           cgen_state->emitExternalCall("compress_y_coord_geoint",
@@ -165,8 +168,8 @@ class PointConstructor : public Codegen {
     }
     return {builder.CreateBitCast(ret,
                                   geo_ti.get_compression() == kENCODING_GEOINT
-                                      ? llvm::Type::getInt32PtrTy(cgen_state->context_)
-                                      : llvm::Type::getDoublePtrTy(cgen_state->context_)),
+                                      ? get_int_ptr_type(32, cgen_state->context_)
+                                      : get_fp_ptr_type(64, cgen_state->context_)),
             cgen_state->llInt(static_cast<int32_t>(
                 geo_ti.get_compression() == kENCODING_GEOINT ? 8 : 16))};
   }

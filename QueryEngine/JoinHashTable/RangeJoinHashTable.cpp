@@ -708,7 +708,7 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
 
       const auto array_buff_ptr = executor_->cgen_state_->emitExternalCall(
           "array_buff",
-          llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
+          typed_ptr_ty(get_int_type(8, executor_->cgen_state_->context_), 0),
           {col_lvs.front(), code_generator.posArg(outer_col)});
       CHECK(array_buff_ptr);
       CHECK(coords_ti.get_elem_type().get_type() == kTINYINT)
@@ -729,7 +729,8 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
         // thus, all we need is to retrieve necessary coordinate from the S by varying
         // its offset (i.e., i == 0 means x coordinate)
         arr_ptr = LL_BUILDER.CreatePointerCast(
-            col_lvs[0], llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_));
+            col_lvs[0],
+            typed_ptr_ty(get_int_type(8, executor_->cgen_state_->context_), 0));
       } else {
         throw std::runtime_error(
             "RHS key of the range join operator has a geospatial function which is not "
@@ -742,10 +743,8 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
     }
 
     // load and unpack offsets
-    const auto offset =
-        LL_BUILDER.CreateLoad(offset_ptr->getType()->getPointerElementType(),
-                              offset_ptr,
-                              "packed_bucket_offset");
+    const auto offset = typed_load(
+        LL_BUILDER, get_int_type(64, LL_CONTEXT), offset_ptr, "packed_bucket_offset");
     const auto x_offset =
         LL_BUILDER.CreateTrunc(offset, llvm::Type::getInt32Ty(LL_CONTEXT));
 
@@ -760,10 +759,11 @@ llvm::Value* RangeJoinHashTable::codegenKey(const CompilationOptions& co,
         LL_BUILDER.CreateSExt(y_offset, llvm::Type::getInt64Ty(LL_CONTEXT));
 
     for (size_t i = 0; i < 2; i++) {
-      const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(
-          key_buff_lv->getType()->getScalarType()->getPointerElementType(),
-          key_buff_lv,
-          LL_INT(i));
+      const auto key_comp_dest_lv =
+          typed_gep(LL_BUILDER,
+                    get_int_type(key_component_width * 8, LL_CONTEXT),
+                    key_buff_lv,
+                    LL_INT(i));
 
       const auto funcName = isProbeCompressed() ? "get_bucket_key_for_range_compressed"
                                                 : "get_bucket_key_for_range_double";
@@ -801,7 +801,7 @@ HashJoinMatchingSet RangeJoinHashTable::codegenMatchingSetWithOffset(
 
   auto hash_ptr = codegenHashTableLoad(index, executor_);
   const auto composite_dict_ptr_type =
-      llvm::Type::getIntNPtrTy(LL_CONTEXT, key_component_width * 8);
+      get_int_ptr_type(key_component_width * 8, LL_CONTEXT);
 
   const auto composite_key_dict =
       hash_ptr->getType()->isPointerTy()
@@ -813,12 +813,13 @@ HashJoinMatchingSet RangeJoinHashTable::codegenMatchingSetWithOffset(
   const auto funcName =
       "get_composite_key_index_" + std::to_string(key_component_width * 8);
 
-  const auto key = executor_->cgen_state_->emitExternalCall(funcName,
-                                                            get_int_type(64, LL_CONTEXT),
-                                                            {key_buff_lv,
-                                                             LL_INT(key_component_count),
-                                                             composite_key_dict,
-                                                             LL_INT(getEntryCount())});
+  const auto key = executor_->cgen_state_->emitExternalCall(
+      funcName,
+      get_int_type(64, LL_CONTEXT),
+      std::vector<llvm::Value*>{key_buff_lv,
+                                LL_INT(key_component_count),
+                                composite_key_dict,
+                                LL_INT(getEntryCount())});
 
   auto one_to_many_ptr = hash_ptr;
   if (one_to_many_ptr->getType()->isPointerTy()) {
@@ -832,10 +833,8 @@ HashJoinMatchingSet RangeJoinHashTable::codegenMatchingSetWithOffset(
       LL_BUILDER.CreateAdd(one_to_many_ptr, LL_INT(composite_key_dict_size));
 
   return HashJoin::codegenMatchingSet(
-      /* hash_join_idx_args_in */ {one_to_many_ptr,
-                                   key,
-                                   LL_INT(int64_t(0)),
-                                   LL_INT(getEntryCount() - 1)},
+      std::vector<llvm::Value*>{
+          one_to_many_ptr, key, LL_INT(int64_t(0)), LL_INT(getEntryCount() - 1)},
       /* is_sharded            */ false,
       /* is_nullable           */ false,
       /* is_bw_eq              */ false,

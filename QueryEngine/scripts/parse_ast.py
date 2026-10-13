@@ -12,6 +12,9 @@ if len(sys.argv) > 1:
         for line in f:
             if 'FunctionDecl' in line and 'ExtensionFunctions' in line:
                 line = re.sub("-FunctionDecl.*line:[0-9]+:[0-9]+", "", line).lstrip()
+                # Internal geo codegen helpers (ExtensionFunctionsGeo.hpp); not SQL extension types.
+                if 'Point2D' in line or 'CoordData' in line:
+                    continue
                 if not line.startswith('| '):
                     # .ast lines must start with `| `, see ExtensionFunctionSignatureParser.parse
                     line = '| ' + line
@@ -20,6 +23,8 @@ else:
     for line in sys.stdin:
         if 'FunctionDecl' in line and 'ExtensionFunctions' in line:
             line = re.sub("-FunctionDecl.*line:[0-9]+:[0-9]+", "", line).lstrip()
+            if 'Point2D' in line or 'CoordData' in line:
+                continue
             if not line.startswith('| '):
                 line = '| ' + line
             print(line, end ='')

@@ -158,7 +158,7 @@ struct CgenState {
   llvm::Value* addStringConstant(const std::string& str) {
     llvm::Value* str_lv = ir_builder_.CreateGlobalString(
         str, "str_const_" + std::to_string(std::hash<std::string>()(str)));
-    auto i8_ptr = llvm::PointerType::get(get_int_type(8, context_), 0);
+    auto i8_ptr = get_int_ptr_type(8, context_);
     str_constants_.push_back(str_lv);
     str_lv = ir_builder_.CreateBitCast(str_lv, i8_ptr);
     return str_lv;

@@ -234,8 +234,8 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
     CHECK_EQ(size_t(1), str_lv.size());
     auto str_struct_lv = str_lv.front();
     if (isTextEncodingNoneStringPtr(expr->get_arg()->get_type_info(), str_struct_lv)) {
-      str_struct_lv = cgen_state_->ir_builder_.CreateLoad(
-          str_struct_lv->getType()->getPointerElementType(), str_struct_lv);
+      str_struct_lv = typed_load(
+          cgen_state_->ir_builder_, createStringViewStructType(), str_struct_lv);
     }
     str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_struct_lv, 0));
     str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_struct_lv, 1));
@@ -331,8 +331,8 @@ CodeGenerator::codegenStringFetchAndEncode(const Analyzer::StringOper* expr,
   } else if (primary_str_lv.size() == 1 and arg_ti.is_none_encoded_string()) {
     // real (not dictionary-encoded) strings
     CHECK(primary_str_lv[0]->getType()->isPointerTy());
-    const auto none_enc_string = cgen_state_->ir_builder_.CreateLoad(
-        primary_str_lv[0]->getType()->getPointerElementType(), primary_str_lv[0]);
+    const auto none_enc_string = typed_load(
+        cgen_state_->ir_builder_, createStringViewStructType(), primary_str_lv[0]);
     primary_str_lv.push_back(
         cgen_state_->ir_builder_.CreateExtractValue(none_enc_string, 0));
     primary_str_lv.push_back(cgen_state_->ir_builder_.CreateTrunc(
@@ -894,8 +894,8 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
     CHECK_EQ(size_t(1), str_lv.size());
     auto str_struct_lv = str_lv.front();
     if (isTextEncodingNoneStringPtr(expr->get_arg()->get_type_info(), str_struct_lv)) {
-      str_struct_lv = cgen_state_->ir_builder_.CreateLoad(
-          str_struct_lv->getType()->getPointerElementType(), str_struct_lv);
+      str_struct_lv = typed_load(
+          cgen_state_->ir_builder_, createStringViewStructType(), str_struct_lv);
     }
     str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_struct_lv, 0));
     str_lv.push_back(cgen_state_->ir_builder_.CreateExtractValue(str_struct_lv, 1));

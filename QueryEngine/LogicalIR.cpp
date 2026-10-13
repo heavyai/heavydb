@@ -397,8 +397,8 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
         fname, get_int_type(1, cgen_state_->context_), {operand_lv, posArg(operand)});
   } else if (ti.is_none_encoded_string()) {
     if (isTextEncodingNoneStringPtr(ti, operand_lv)) {
-      operand_lv = cgen_state_->ir_builder_.CreateLoad(
-          operand_lv->getType()->getPointerElementType(), operand_lv);
+      operand_lv =
+          typed_load(cgen_state_->ir_builder_, createStringViewStructType(), operand_lv);
     }
     operand_lv = cgen_state_->ir_builder_.CreateExtractValue(operand_lv, 0);
     operand_lv = cgen_state_->castToTypeIn(operand_lv, sizeof(int64_t) * 8);

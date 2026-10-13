@@ -61,7 +61,7 @@ The `ALWAYS_INLINE` decorator tells the LLVM compiler to inline the runtime func
 LLVM Optimization Passes
 ========================
 
-Optimization of generated code is primarily managed by the LLVM Pass Manager. The ``optimize_ir`` free function runs multiple LLVM passes over the IR (e.g. `instruction combining`, `instruction simplification`, etc). By using the pass manager, HeavyDB can chose LLVM passes which will maximize query performance based on both query parameters and the target device for which code is being compiled. 
+HeavyDB is built against **LLVM 21.1.8** from mapd-deps. Query-engine IR optimization uses LLVM's **new pass manager** (``PassBuilder``, module/function pass pipelines) via the ``optimize_ir`` function in ``NativeCodegen.cpp``. That pipeline runs passes such as instruction combining, GVN, DSE, LICM (with MemorySSA), and mem2reg before native code generation.
 
 HeavyDB also marks uncalled runtime and extension functions with internal linkage
 so they can be pruned from the module before JIT compilation.
@@ -90,7 +90,7 @@ Native code generated for CPU can be called by getting the function pointer from
 GPU Native Code Generation
 --------------------------
 
-GPU code generation uses LLVM to generate `nVidia PTX <https://docs.nvidia.com/cuda/parallel-thread-execution/index.html>`_ and then converts the PTX to machine code using the nVidia CUDA driver API. The following intermediate steps are performed during this process:
+GPU code generation uses LLVM to generate `nVidia PTX <https://docs.nvidia.com/cuda/parallel-thread-execution/index.html>`_ and then converts the PTX to machine code using the nVidia CUDA driver API. GPU targets are selected via ``CudaMgr::deviceArchToSM()`` (for example Ada ``sm_89``, Hopper ``sm_90``, and Blackwell ``sm_100`` with LLVM 21.1.8 NVPTX). The following intermediate steps are performed during this process:
 
 1. Updates LLVM Module target details to target nVidia GPU 
 2. Optimizes input IR using the techniques described above.

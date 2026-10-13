@@ -42,14 +42,12 @@ class AreaPerimeter : public Codegen {
     if (dynamic_cast<const Analyzer::ColumnVar*>(operand)) {
       for (size_t i = 0; i < arg_lvs.size(); i++) {
         auto lv = arg_lvs[i];
-        operand_lvs.push_back(
-            cgen_state->emitExternalCall("array_buff",
-                                         llvm::Type::getInt8PtrTy(cgen_state->context_),
-                                         {lv, pos_lvs.front()}));
+        operand_lvs.push_back(cgen_state->emitExternalCall(
+            "array_buff",
+            typed_ptr_ty(get_int_type(8, cgen_state->context_), 0),
+            {lv, pos_lvs.front()}));
         const auto ptr_type = llvm::dyn_cast_or_null<llvm::PointerType>(lv->getType());
         CHECK(ptr_type);
-        const auto elem_type = ptr_type->getPointerElementType();
-        CHECK(elem_type);
         auto const is_coords = (i == 0);
         auto const shift = log2_bytes(is_coords ? 1 : 4);
         std::vector<llvm::Value*> array_sz_args{
@@ -66,6 +64,7 @@ class AreaPerimeter : public Codegen {
     }
     CHECK_EQ(operand_lvs.size(),
              size_t(2 * operand_ti.get_physical_coord_cols()));  // array ptr and size
+    narrow_geo_size_slots_to_i32(cgen_state->ir_builder_, operand_lvs);
 
     // use the points array size argument for nullability
     return std::make_tuple(operand_lvs, is_nullable_ ? operand_lvs[1] : nullptr);

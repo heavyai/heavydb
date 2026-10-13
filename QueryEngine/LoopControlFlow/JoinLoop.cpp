@@ -5,8 +5,10 @@
 
 #include "JoinLoop.h"
 #include "../CgenState.h"
+#include "../IRCodegenUtils.h"
 #include "Logger/Logger.h"
 
+#include <llvm/IR/GlobalVariable.h>
 #include <llvm/IR/Type.h>
 
 #include <stack>
@@ -116,9 +118,10 @@ llvm::BasicBlock* JoinLoop::codegen(
 
         builder.SetInsertPoint(head_bb);
         llvm::Value* iteration_counter =
-            builder.CreateLoad(iteration_counter_ptr->getType()->getPointerElementType(),
-                               iteration_counter_ptr,
-                               "ub_iter_counter_val_" + join_loop.name_);
+            typed_load(builder,
+                       get_int_type(64, context),
+                       iteration_counter_ptr,
+                       "ub_iter_counter_val_" + join_loop.name_);
         auto iteration_val = iteration_counter;
         CHECK(join_loop.kind_ == JoinLoopKind::Set ||
               join_loop.kind_ == JoinLoopKind::MultiSet ||
@@ -126,25 +129,23 @@ llvm::BasicBlock* JoinLoop::codegen(
         if (join_loop.kind_ == JoinLoopKind::Set ||
             join_loop.kind_ == JoinLoopKind::MultiSet) {
           CHECK(iteration_domain.values_buffer->getType()->isPointerTy());
-          const auto ptr_type =
-              static_cast<llvm::PointerType*>(iteration_domain.values_buffer->getType());
-          if (ptr_type->getPointerElementType()->isArrayTy()) {
+          if (auto* global_var =
+                  llvm::dyn_cast<llvm::GlobalVariable>(iteration_domain.values_buffer)) {
+            auto* const array_ty = global_var->getValueType();
+            CHECK(array_ty->isArrayTy());
             iteration_val = builder.CreateGEP(
-                iteration_domain.values_buffer->getType()
-                    ->getScalarType()
-                    ->getPointerElementType(),
+                array_ty,
                 iteration_domain.values_buffer,
                 std::vector<llvm::Value*>{
                     llvm::ConstantInt::get(get_int_type(64, context), 0),
                     iteration_counter},
                 "ub_iter_counter_" + join_loop.name_);
           } else {
-            iteration_val = builder.CreateGEP(iteration_domain.values_buffer->getType()
-                                                  ->getScalarType()
-                                                  ->getPointerElementType(),
-                                              iteration_domain.values_buffer,
-                                              iteration_counter,
-                                              "ub_iter_counter_" + join_loop.name_);
+            iteration_val = typed_gep(builder,
+                                      get_int_type(32, context),
+                                      iteration_domain.values_buffer,
+                                      iteration_counter);
+            iteration_val->setName("ub_iter_counter_" + join_loop.name_);
           }
         }
         iterators.push_back(iteration_val);
@@ -248,8 +249,7 @@ llvm::BasicBlock* JoinLoop::codegen(
         }
         auto match_found = builder.CreateAnd(
             join_cond_match,
-            builder.CreateLoad(remaining_cond_match->getType()->getPointerElementType(),
-                               remaining_cond_match));
+            typed_load(builder, get_int_type(1, context), remaining_cond_match));
         CHECK(match_found);
         if (join_loop.is_deleted_) {
           match_found = builder.CreateAnd(
@@ -327,14 +327,12 @@ std::pair<llvm::BasicBlock*, llvm::Value*> JoinLoop::evaluateOuterJoinCondition(
   builder.CreateStore(current_condition_match, current_condition_match_ptr);
   const auto updated_condition_match = builder.CreateOr(
       current_condition_match,
-      builder.CreateLoad(found_an_outer_match_ptr->getType()->getPointerElementType(),
-                         found_an_outer_match_ptr));
+      typed_load(builder, get_int_type(1, context), found_an_outer_match_ptr));
   builder.CreateStore(updated_condition_match, found_an_outer_match_ptr);
   builder.CreateBr(after_evaluate_outer_condition_bb);
   builder.SetInsertPoint(after_evaluate_outer_condition_bb);
   const auto no_matches_found = builder.CreateNot(
-      builder.CreateLoad(found_an_outer_match_ptr->getType()->getPointerElementType(),
-                         found_an_outer_match_ptr));
+      typed_load(builder, get_int_type(1, context), found_an_outer_match_ptr));
   const auto no_more_inner_rows = builder.CreateICmpEQ(
       iteration_counter,
       join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound
@@ -342,11 +340,9 @@ std::pair<llvm::BasicBlock*, llvm::Value*> JoinLoop::evaluateOuterJoinCondition(
   // Do the iteration if the outer condition is true or it's the last iteration and no
   // matches have been found.
   const auto do_iteration = builder.CreateOr(
-      builder.CreateLoad(current_condition_match_ptr->getType()->getPointerElementType(),
-                         current_condition_match_ptr),
+      typed_load(builder, get_int_type(1, context), current_condition_match_ptr),
       builder.CreateAnd(no_matches_found, no_more_inner_rows));
   join_loop.found_outer_matches_(
-      builder.CreateLoad(current_condition_match_ptr->getType()->getPointerElementType(),
-                         current_condition_match_ptr));
+      typed_load(builder, get_int_type(1, context), current_condition_match_ptr));
   return {after_evaluate_outer_condition_bb, do_iteration};
 }
