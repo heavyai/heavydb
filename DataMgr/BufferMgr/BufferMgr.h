@@ -178,7 +178,8 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
  protected:
   using AllocationRetryClock = std::chrono::steady_clock;
-  static constexpr std::chrono::milliseconds allocation_retry_cooldown_{1000};
+  // Do not try to allocate a new slab again for this long after a failure.
+  static constexpr std::chrono::milliseconds allocation_retry_cooldown_{50};
 
   virtual Buffer* createBuffer(BufferList::iterator seg_it, size_t page_size) = 0;
   // Tests override this method to move time forward without waiting for real time.

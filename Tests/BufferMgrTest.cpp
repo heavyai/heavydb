@@ -374,6 +374,8 @@ TEST_F(BufferMgrAllocationCooldownTest, PoolGrowthResumesAfterCooldown) {
 
   buffer_mgr_->setAllocationFailure(false);
   const auto attempts_after_failure = buffer_mgr_->slabAllocationAttempts();
+  EXPECT_EQ(buffer_mgr_->allocationRetryCooldown(),
+            std::chrono::milliseconds{50});
   buffer_mgr_->advanceTime(buffer_mgr_->allocationRetryCooldown());
 
   auto recovered_buffer =
