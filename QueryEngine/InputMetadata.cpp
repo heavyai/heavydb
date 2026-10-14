@@ -13,6 +13,7 @@
 
 #include <tbb/parallel_for.h>
 #include <tbb/task_arena.h>
+#include <algorithm>
 #include <future>
 #include <numeric>
 #include <optional>
@@ -212,17 +213,19 @@ std::optional<ChunkMetadataMap> synthesize_device_columnar_metadata(
 
 Fragmenter_Namespace::TableInfo synthesize_table_info(int table_id,
                                                       const ResultSetPtr& rows,
-                                                      Executor* executor) {
+                                                      Executor* executor,
+                                                      const bool allow_result_fragments) {
   std::vector<Fragmenter_Namespace::FragmentInfo> result;
   std::optional<size_t> known_physical_row_count;
   if (rows) {
     std::vector<ResultSet::DeviceColumnarFragmentInfo> device_columnar_fragments;
     const bool use_device_columnar_result_fragments =
-        g_enable_result_reduction_pipeline &&
+        g_enable_result_reduction_pipeline && allow_result_fragments &&
         rows->getDeviceColumnarFragmentInfo(device_columnar_fragments);
     std::vector<size_t> columnar_fragment_row_counts;
     bool use_columnar_result_fragments = false;
-    if (g_enable_result_reduction_pipeline && !use_device_columnar_result_fragments) {
+    if (g_enable_result_reduction_pipeline && allow_result_fragments &&
+        !use_device_columnar_result_fragments) {
       use_columnar_result_fragments =
           rows->getColumnarFragmentRowCounts(columnar_fragment_row_counts) &&
           columnar_fragment_row_counts.size() > 1;
@@ -304,7 +307,8 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(int table_id,
 
 void collect_table_infos(std::vector<InputTableInfo>& table_infos,
                          const std::vector<InputDescriptor>& input_descs,
-                         Executor* executor) {
+                         Executor* executor,
+                         const bool allow_result_fragments) {
   const auto temporary_tables = executor->getTemporaryTables();
   std::unordered_map<shared::TableKey, size_t> info_cache;
   for (const auto& input_desc : input_descs) {
@@ -327,7 +331,9 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
                                  std::to_string(-table_id));
       }
       table_infos.push_back(
-          {{0, table_id}, synthesize_table_info(table_id, it->second, executor)});
+          {{0, table_id},
+           synthesize_table_info(
+               table_id, it->second, executor, allow_result_fragments)});
     } else {
       CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
       table_infos.push_back({table_key, executor->getTableInfo(table_key)});
@@ -941,14 +947,24 @@ std::vector<InputTableInfo> get_table_infos(
     const std::vector<InputDescriptor>& input_descs,
     Executor* executor) {
   std::vector<InputTableInfo> table_infos;
-  collect_table_infos(table_infos, input_descs, executor);
+  collect_table_infos(table_infos, input_descs, executor, true);
   return table_infos;
 }
 
 std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_unit,
                                             Executor* executor) {
+  // Window partition row ids and the final projection must address the same complete
+  // input. A single logical fragment makes the existing column fetchers gather all
+  // ResultSet storages, even when the producer ran on multiple fragments or GPUs.
+  const bool allow_result_fragments =
+      std::none_of(ra_exe_unit.target_exprs.begin(),
+                   ra_exe_unit.target_exprs.end(),
+                   [](const auto* expr) {
+                     return dynamic_cast<const Analyzer::WindowFunction*>(expr);
+                   });
   std::vector<InputTableInfo> table_infos;
-  collect_table_infos(table_infos, ra_exe_unit.input_descs, executor);
+  collect_table_infos(
+      table_infos, ra_exe_unit.input_descs, executor, allow_result_fragments);
   return table_infos;
 }
 

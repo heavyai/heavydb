@@ -3667,7 +3667,7 @@ void RelAlgExecutor::computeWindow(const WorkUnit& work_unit,
                                    const ExecutionOptions& eo,
                                    ColumnCacheMap& column_cache_map,
                                    const int64_t queue_time_ms) {
-  auto query_infos = get_table_infos(work_unit.exe_unit.input_descs, executor_);
+  auto query_infos = get_table_infos(work_unit.exe_unit, executor_);
   CHECK_EQ(query_infos.size(), size_t(1));
   if (query_infos.front().info.fragments.size() != 1) {
     throw std::runtime_error(
@@ -6011,7 +6011,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   auto timer = DEBUG_TIMER(__func__);
   auto query_exec_time_begin = timer_start();
 
-  const auto query_infos = get_table_infos(work_unit.exe_unit.input_descs, executor_);
+  const auto query_infos = get_table_infos(work_unit.exe_unit, executor_);
   check_none_encoded_string_cast_tuple_limit(query_infos, work_unit.exe_unit);
 
   auto co = co_in;

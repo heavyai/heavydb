@@ -26256,26 +26256,33 @@ TEST_F(Select, WindowFunctionGpuEligibilityBoundary) {
       "RANK() OVER (PARTITION BY y ORDER BY x ASC), "
       "DENSE_RANK() OVER (PARTITION BY y ORDER BY x DESC), "
       "NTILE(2) OVER (PARTITION BY y ORDER BY x ASC, t ASC) "
-      "FROM test_window_func";
+      "FROM ";
 
   // Unsupported window kinds are selected for CPU before execution. A later projection
   // can return a GPU ResultSet, so the final device is not an observable for the window
   // step itself. With both retry paths disabled, successful reference comparison proves
   // that the explicit device-selection boundary remains executable.
-  const std::string unsupported_query =
-      "SELECT x, y, SUM(x) OVER (PARTITION BY y) FROM test_window_func";
+  const std::string unsupported_query = "SELECT x, y, SUM(x) OVER (PARTITION BY y) FROM ";
+  const std::string unpartitioned_query =
+      "SELECT t, ROW_NUMBER() OVER (ORDER BY t), "
+      "RANK() OVER (ORDER BY x ASC NULLS FIRST) FROM ";
   for (const bool columnar_output : {false, true}) {
     SCOPED_TRACE(::testing::Message() << "columnar=" << columnar_output);
     g_enable_columnar_output = columnar_output;
-    c(supported_query + " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, t ASC;",
-      supported_query + " ORDER BY x ASC, y ASC, t ASC;",
-      dt);
-    const auto gpu_result = run_multiple_agg(supported_query + ";", dt);
-    ASSERT_EQ(ExecutorDeviceType::GPU, gpu_result->getDeviceType());
+    for (const auto table : {"test_window_func", "test_window_func_multi_frag"}) {
+      SCOPED_TRACE(::testing::Message() << "table=" << table);
+      c(supported_query + table +
+            " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, t ASC;",
+        supported_query + table + " ORDER BY x ASC, y ASC, t ASC;",
+        dt);
+      const auto gpu_result = run_multiple_agg(supported_query + table + ";", dt);
+      ASSERT_EQ(ExecutorDeviceType::GPU, gpu_result->getDeviceType());
 
-    c(unsupported_query + " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST;",
-      unsupported_query + " ORDER BY x ASC, y ASC;",
-      dt);
+      c(unsupported_query + table + " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST;",
+        unsupported_query + table + " ORDER BY x ASC, y ASC;",
+        dt);
+      c(unpartitioned_query + table + " ORDER BY t;", dt);
+    }
   }
 }
 
