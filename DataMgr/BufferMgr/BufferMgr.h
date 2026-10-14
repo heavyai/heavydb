@@ -181,7 +181,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   static constexpr std::chrono::milliseconds allocation_retry_cooldown_{1000};
 
   virtual Buffer* createBuffer(BufferList::iterator seg_it, size_t page_size) = 0;
-  // Virtual so tests can advance cooldown time deterministically without sleeping.
+  // Tests override this method to move time forward without waiting for real time.
   virtual AllocationRetryClock::time_point allocationClockNow() const {
     return AllocationRetryClock::now();
   }
