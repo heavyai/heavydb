@@ -11201,6 +11201,61 @@ TEST_F(Select, SpeculativeTopNSort) {
   }
 }
 
+TEST_F(Select, SparseAggregateSortMaterialization) {
+  const std::string table_name = "sparse_aggregate_sort_test";
+  const auto drop_table = "DROP TABLE IF EXISTS " + table_name + ";";
+  run_ddl_statement(drop_table);
+  g_sqlite_comparator.query(drop_table);
+  ScopeGuard cleanup = [&] {
+    run_ddl_statement(drop_table);
+    g_sqlite_comparator.query(drop_table);
+  };
+  const auto create_table = "CREATE TABLE " + table_name + " (k INT, v INT);";
+  run_ddl_statement(create_table);
+  g_sqlite_comparator.query(create_table);
+  // Three populated groups leave holes in both the compact permutation's tail
+  // and the per-worker Top-N ranges. Each group's mode is its minimum value.
+  const auto insert = "INSERT INTO " + table_name +
+                      " VALUES (0, 10), (0, 10), (31, 20), (31, 21), (31, 20), "
+                      "(127, 30), (127, 31), (127, 32), (127, 30);";
+  run_multiple_agg(insert, ExecutorDeviceType::CPU);
+  g_sqlite_comparator.query(insert);
+
+  ScopeGuard restore_flags = [top_min = g_parallel_top_min,
+                              columnar_output = g_enable_columnar_output] {
+    g_parallel_top_min = top_min;
+    g_enable_columnar_output = columnar_output;
+  };
+  const std::vector<std::pair<std::string, std::string>> aggregates{
+      {"COUNT(DISTINCT v)", "COUNT(DISTINCT v)"},
+      {"APPROX_COUNT_DISTINCT(v)", "COUNT(DISTINCT v)"},
+      {"APPROX_QUANTILE(v, 0)", "MIN(v)"},
+      {"APPROX_QUANTILE(v, 1)", "MAX(v)"},
+      {"MODE(v)", "MIN(v)"}};
+  for (const auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (const bool columnar_output : {false, true}) {
+      g_enable_columnar_output = columnar_output;
+      for (const auto top_min : {size_t{0}, std::numeric_limits<size_t>::max()}) {
+        g_parallel_top_min = top_min;
+        for (const std::string filter : {"", " WHERE k <> 0"}) {
+          for (const std::string limit : {"", " LIMIT 2"}) {
+            for (const auto& [aggregate, reference] : aggregates) {
+              SCOPED_TRACE(::testing::Message()
+                           << "device=" << dt << " columnar=" << columnar_output
+                           << " top_min=" << top_min << " aggregate=" << aggregate
+                           << " filter=" << filter << " limit=" << limit);
+              const auto suffix = " AS a FROM " + table_name + filter +
+                                  " GROUP BY k ORDER BY a DESC, k ASC" + limit + ";";
+              c("SELECT k, " + aggregate + suffix, "SELECT k, " + reference + suffix, dt);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, TopNSortWithWatchdogOn) {
   ScopeGuard reset = [top_min = g_parallel_top_min,
                       top_max = g_parallel_top_max,
