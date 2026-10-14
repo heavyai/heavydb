@@ -60,6 +60,7 @@ BufferMgr::BufferMgr(const int device_id,
     , max_num_pages_per_slab_(convert_num_bytes_to_num_pages(max_slab_size_, page_size_))
     , num_pages_allocated_(0)
     , allocations_capped_(false)
+    , allocation_retry_after_(AllocationRetryClock::time_point::min())
     , parent_mgr_(parent_mgr)
     , max_buffer_id_(0)
     , buffer_epoch_(0) {
@@ -94,6 +95,7 @@ void BufferMgr::reinit() {
       max_num_pages_per_slab_;  // current_max_num_pages_per_slab_ will drop as
                                 // allocations fail - this is the high water mark
   allocations_capped_ = false;
+  allocation_retry_after_ = AllocationRetryClock::time_point::min();
 }
 
 void BufferMgr::clear() {
@@ -287,6 +289,14 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
     }
   }
 
+  if (allocations_capped_ && allocationClockNow() >= allocation_retry_after_) {
+    allocations_capped_ = false;
+    allocation_retry_after_ = AllocationRetryClock::time_point::min();
+    current_max_num_pages_per_slab_ = max_num_pages_per_slab_;
+    LOG(INFO) << "ALLOCATION Retrying slab growth after cooldown " << getStringMgrType()
+              << ":" << device_id_;
+  }
+
   // TODO: Move new slab creation to separate method
   // If we're here then we didn't find a free segment of sufficient size
   // First we see if we can add another slab
@@ -340,10 +350,12 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t num_bytes) {
         current_max_num_pages_per_slab_ /= 2;
         if (current_max_num_pages_per_slab_ < min_num_pages_per_slab_) {
           allocations_capped_ = true;
+          allocation_retry_after_ = allocationClockNow() + allocation_retry_cooldown_;
           // dump out the slabs and their sizes
           LOG(INFO) << "ALLOCATION Capped " << current_max_num_pages_per_slab_
                     << " Minimum size = " << min_num_pages_per_slab_ << " "
-                    << getStringMgrType() << ":" << device_id_;
+                    << getStringMgrType() << ":" << device_id_ << " Retry after "
+                    << allocation_retry_cooldown_.count() << " ms";
         }
       }
     }

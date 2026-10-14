@@ -15,6 +15,7 @@
 
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
 
+#include <chrono>
 #include <iostream>
 #include <list>
 #include <map>
@@ -176,7 +177,15 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   MemoryInfo getMemoryInfo() const;
 
  protected:
+  using AllocationRetryClock = std::chrono::steady_clock;
+  // Do not try to allocate a new slab again for this long after a failure.
+  static constexpr std::chrono::milliseconds allocation_retry_cooldown_{50};
+
   virtual Buffer* createBuffer(BufferList::iterator seg_it, size_t page_size) = 0;
+  // Tests override this method to move time forward without waiting for real time.
+  virtual AllocationRetryClock::time_point allocationClockNow() const {
+    return AllocationRetryClock::now();
+  }
 
   const size_t
       max_buffer_pool_size_;    /// max number of bytes allocated for the buffer pool
@@ -243,6 +252,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
   size_t default_num_pages_per_slab_;
   size_t current_max_num_pages_per_slab_;
   bool allocations_capped_;
+  AllocationRetryClock::time_point allocation_retry_after_;
 
   AbstractBufferMgr* parent_mgr_;
 
