@@ -26237,26 +26237,26 @@ TEST_F(Select, WindowFunctionGpuEligibilityBoundary) {
 
   ScopeGuard restore_flags = [cpu_retry = g_allow_cpu_retry,
                               step_cpu_retry = g_allow_query_step_cpu_retry,
-                              reduction_pipeline = g_enable_result_reduction_pipeline] {
+                              reduction_pipeline = g_enable_result_reduction_pipeline,
+                              columnar_output = g_enable_columnar_output] {
     g_allow_cpu_retry = cpu_retry;
     g_allow_query_step_cpu_retry = step_cpu_retry;
     g_enable_result_reduction_pipeline = reduction_pipeline;
+    g_enable_columnar_output = columnar_output;
   };
   g_allow_cpu_retry = false;
   g_allow_query_step_cpu_retry = false;
   g_enable_result_reduction_pipeline = true;
 
+  // The fixture has duplicate (x, y) pairs. Use its unique t column to make row
+  // numbers, tile assignments, and reference row order deterministic, while retaining
+  // peers and a single ordering key for the GPU RANK and DENSE_RANK paths.
   const std::string supported_query =
-      "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC), "
+      "SELECT x, y, t, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC, t ASC), "
       "RANK() OVER (PARTITION BY y ORDER BY x ASC), "
       "DENSE_RANK() OVER (PARTITION BY y ORDER BY x DESC), "
-      "NTILE(2) OVER (PARTITION BY y ORDER BY x ASC) "
+      "NTILE(2) OVER (PARTITION BY y ORDER BY x ASC, t ASC) "
       "FROM test_window_func";
-  c(supported_query + " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST;",
-    supported_query + " ORDER BY x ASC, y ASC;",
-    dt);
-  const auto gpu_result = run_multiple_agg(supported_query + ";", dt);
-  ASSERT_EQ(ExecutorDeviceType::GPU, gpu_result->getDeviceType());
 
   // Unsupported window kinds are selected for CPU before execution. A later projection
   // can return a GPU ResultSet, so the final device is not an observable for the window
@@ -26264,9 +26264,19 @@ TEST_F(Select, WindowFunctionGpuEligibilityBoundary) {
   // that the explicit device-selection boundary remains executable.
   const std::string unsupported_query =
       "SELECT x, y, SUM(x) OVER (PARTITION BY y) FROM test_window_func";
-  c(unsupported_query + " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST;",
-    unsupported_query + " ORDER BY x ASC, y ASC;",
-    dt);
+  for (const bool columnar_output : {false, true}) {
+    SCOPED_TRACE(::testing::Message() << "columnar=" << columnar_output);
+    g_enable_columnar_output = columnar_output;
+    c(supported_query + " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST, t ASC;",
+      supported_query + " ORDER BY x ASC, y ASC, t ASC;",
+      dt);
+    const auto gpu_result = run_multiple_agg(supported_query + ";", dt);
+    ASSERT_EQ(ExecutorDeviceType::GPU, gpu_result->getDeviceType());
+
+    c(unsupported_query + " ORDER BY x ASC NULLS FIRST, y ASC NULLS FIRST;",
+      unsupported_query + " ORDER BY x ASC, y ASC;",
+      dt);
+  }
 }
 
 TEST_F(Select, WindowFunctionJoins) {
