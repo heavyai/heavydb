@@ -118,6 +118,21 @@ TEST(THREADING, TaskGroupPublishesBoundState) {
 }
 
 #if ENABLE_TBB
+TEST(THREADING, AsyncPublishesNestedTbbWork) {
+  constexpr size_t value_count = 4096;
+  std::vector<size_t> values(value_count);
+
+  auto task = threading::async([&values] {
+    tbb::parallel_for(size_t(0), values.size(), [&values](const size_t index) {
+      values[index] = index + 1;
+    });
+  });
+  task.get();
+
+  EXPECT_EQ(std::accumulate(values.begin(), values.end(), size_t(0)),
+            value_count * (value_count + 1) / 2);
+}
+
 TEST(THREADING, TaskGroupSupportsNestedSubmission) {
   using namespace threading;
   constexpr size_t outer_task_count = 8;
