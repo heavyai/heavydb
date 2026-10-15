@@ -7,6 +7,7 @@
 
 #include <atomic>
 #include <future>
+#include <limits>
 #include <numeric>
 #include <optional>
 #include <thread>
@@ -153,6 +154,39 @@ const InputTableInfo& get_inner_query_info(
   return query_infos[*ti_idx];
 }
 
+size_t get_hash_join_table_num_tuples(const Fragmenter_Namespace::TableInfo& table_info) {
+  if (!table_info.fragments.empty() && table_info.fragments.front().resultSet) {
+    return std::accumulate(table_info.fragments.begin(),
+                           table_info.fragments.end(),
+                           size_t(0),
+                           [](const size_t sum, const auto& fragment) {
+                             return sum + fragment.getNumTuples();
+                           });
+  }
+  return table_info.getNumTuples();
+}
+
+size_t get_hash_join_fragment_num_tuples(
+    const Fragmenter_Namespace::TableInfo& table_info) {
+  if (!table_info.fragments.empty() && table_info.fragments.front().resultSet) {
+    return get_hash_join_table_num_tuples(table_info);
+  }
+  return table_info.getFragmentNumTuplesUpperBound();
+}
+
+size_t get_hash_join_table_slot_count(const Fragmenter_Namespace::TableInfo& table_info,
+                                      const Data_Namespace::MemoryLevel memory_level) {
+  const auto num_tuples = get_hash_join_table_num_tuples(table_info);
+  if (num_tuples > HashJoin::MAX_NUM_HASH_ENTRIES / 2) {
+    const auto requested_entries = num_tuples > std::numeric_limits<size_t>::max() / 2
+                                       ? std::numeric_limits<size_t>::max()
+                                       : 2 * num_tuples;
+    throw TooManyHashEntries(HashJoin::generateTooManyHashEntriesErrMsg(
+        requested_entries, HashJoin::MAX_NUM_HASH_ENTRIES, memory_level));
+  }
+  return 2 * num_tuples;
+}
+
 //! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
@@ -173,6 +207,8 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
   const auto& inner_outer_string_op_infos = cols_and_string_op_infos.second;
   const auto inner_col = cols.first;
   CHECK(inner_col);
+  HashJoin::checkStringEncodingForHashJoin(
+      {cols}, executor->getTemporaryTables(), table_id_to_node_map);
   const auto& ti = inner_col->get_type_info();
   auto col_range =
       getExpressionRange(ti.is_string() ? cols.second : inner_col, query_infos, executor);
@@ -180,7 +216,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw HashJoinFail(
         "Could not compute range for the expressions involved in the equijoin");
   }
-  const auto rhs_source_col_range =
+  auto rhs_source_col_range =
       ti.is_string() ? getExpressionRange(inner_col, query_infos, executor) : col_range;
   if (ti.is_string()) {
     // The nullable info must be the same as the source column.
@@ -189,10 +225,13 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
           "Could not compute range for the expressions involved in the equijoin");
     }
     if (rhs_source_col_range.getIntMin() > rhs_source_col_range.getIntMax()) {
-      // If the inner column expression range is empty, use the inner col range
-      CHECK_EQ(rhs_source_col_range.getIntMin(), int64_t(0));
-      CHECK_EQ(rhs_source_col_range.getIntMax(), int64_t(-1));
-      col_range = rhs_source_col_range;
+      if (rhs_source_col_range.getIntMin() == 0 &&
+          rhs_source_col_range.getIntMax() == -1) {
+        col_range = rhs_source_col_range;
+      } else {
+        throw HashJoinFail(
+            "Could not compute range for the expressions involved in the equijoin");
+      }
     } else {
       col_range = ExpressionRange::makeIntRange(
           std::min(rhs_source_col_range.getIntMin(), col_range.getIntMin()),
@@ -214,7 +253,7 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
 
   auto const& inner_table_info =
       get_inner_query_info(inner_col->getTableKey(), query_infos).info;
-  auto const num_inner_table_tuple = inner_table_info.getFragmentNumTuplesUpperBound();
+  auto const num_inner_table_tuple = get_hash_join_fragment_num_tuples(inner_table_info);
   // when a table has too wide range of hash entries compared to the actual # rows,
   // it's better to deploy baseline hash join to save computational cost w.r.t
   // time and space to use perfect hash join layout
@@ -279,7 +318,8 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
     throw HashJoinFail(std::string("Could not build hash tables for equijoin | ") +
                        e.what());
   } catch (const OutOfMemory& e) {
-    throw HashJoinFail(
+    join_hash_table->freeHashBufferMemory();
+    throw HashJoinOutOfMemory(
         std::string("Ran out of memory while building hash tables for equijoin | ") +
         e.what());
   } catch (const JoinHashTableTooBig& e) {
@@ -302,19 +342,34 @@ std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
 bool needs_dictionary_translation(
     const InnerOuter& inner_outer_col_pair,
     const InnerOuterStringOpInfos& inner_outer_string_op_infos,
-    const Executor* executor) {
+    const Executor* executor,
+    const TableIdToNodeMap& table_id_to_node_map) {
   if (inner_outer_string_op_infos.first.size() ||
       inner_outer_string_op_infos.second.size()) {
     return true;
   }
   auto inner_col = inner_outer_col_pair.first;
   auto outer_col_expr = inner_outer_col_pair.second;
+  const auto inner_expr_ti = HashJoin::getColumnTypeForJoin(
+      inner_col, executor->getTemporaryTables(), table_id_to_node_map, true);
+  const auto outer_expr_ti = HashJoin::getExpressionTypeForJoin(
+      outer_col_expr, executor->getTemporaryTables(), table_id_to_node_map, true);
+  if (inner_expr_ti.is_string() || outer_expr_ti.is_string()) {
+    if (!inner_expr_ti.is_string() || !outer_expr_ti.is_string()) {
+      return true;
+    }
+    if (inner_expr_ti.is_dict_encoded_string() !=
+        outer_expr_ti.is_dict_encoded_string()) {
+      return true;
+    }
+    if (inner_expr_ti.is_dict_encoded_string() &&
+        inner_expr_ti.getStringDictKey() != outer_expr_ti.getStringDictKey()) {
+      return true;
+    }
+  }
   const auto inner_cd = get_column_descriptor_maybe(inner_col->getColumnKey());
-  const auto& inner_col_key = inner_col->getColumnKey();
-  const auto& inner_ti = get_column_type(inner_col_key.column_id,
-                                         inner_col_key.table_id,
-                                         inner_cd,
-                                         executor->getTemporaryTables());
+  const auto inner_ti = HashJoin::getColumnTypeForJoin(
+      inner_col, executor->getTemporaryTables(), table_id_to_node_map, true);
   // Only strings may need dictionary translation.
   if (!inner_ti.is_string()) {
     return false;
@@ -326,11 +381,8 @@ bool needs_dictionary_translation(
   if (!inner_cd || !outer_cd) {
     return true;
   }
-  const auto& outer_col_key = outer_col->getColumnKey();
-  const auto& outer_ti = get_column_type(outer_col_key.column_id,
-                                         outer_col_key.table_id,
-                                         outer_cd,
-                                         executor->getTemporaryTables());
+  const auto outer_ti = HashJoin::getColumnTypeForJoin(
+      outer_col, executor->getTemporaryTables(), table_id_to_node_map, true);
   CHECK_EQ(inner_ti.is_string(), outer_ti.is_string());
   // If the two columns don't share the dictionary, translation is needed.
   if (outer_ti.getStringDictKey() != inner_ti.getStringDictKey()) {
@@ -393,7 +445,8 @@ void PerfectJoinHashTable::reify() {
   if (query_info.fragments.empty()) {
     return;
   }
-  if (query_info.getNumTuplesUpperBound() > HashJoin::MAX_NUM_HASH_ENTRIES) {
+  const auto num_inner_tuples = get_hash_join_table_num_tuples(query_info);
+  if (num_inner_tuples > HashJoin::MAX_NUM_HASH_ENTRIES) {
     throw TooManyHashEntries();
   }
   inner_outer_pairs_.push_back(cols);
@@ -404,8 +457,10 @@ void PerfectJoinHashTable::reify() {
   // Todo(todd): Clean up the fact that we store the inner outer column pairs as a vector,
   // even though only one is ever valid for perfect hash layout. Either move to 1 or keep
   // the vector but move it to the HashTable parent class
-  needs_dict_translation_ = needs_dictionary_translation(
-      inner_outer_pairs_.front(), inner_outer_string_op_infos_, executor_);
+  needs_dict_translation_ = needs_dictionary_translation(inner_outer_pairs_.front(),
+                                                         inner_outer_string_op_infos_,
+                                                         executor_,
+                                                         table_id_to_node_map_);
 
   std::unordered_map<int, std::vector<Fragmenter_Namespace::FragmentInfo>>
       fragments_per_device;
@@ -566,7 +621,8 @@ void PerfectJoinHashTable::reify() {
           HashJoin::translateInnerToOuterStrDictProxies(inner_outer_pairs_.front(),
                                                         inner_outer_string_op_infos_,
                                                         col_range_,
-                                                        executor_);
+                                                        executor_,
+                                                        &table_id_to_node_map_);
       // update hash entry info if necessary
       if (!(col_range_ == copied_col_range)) {
         hash_entry_info_ = get_bucketized_hash_entry_info(
@@ -575,9 +631,11 @@ void PerfectJoinHashTable::reify() {
     }
   }
   bool has_invalid_cached_hash_table = false;
+  const auto allow_full_cpu_hashtable_recycling =
+      allow_hashtable_recycling && getInnerTableId().table_id >= 0;
   if (effective_memory_level == Data_Namespace::CPU_LEVEL &&
       HashJoin::canAccessHashTable(
-          allow_hashtable_recycling, invalid_cache_key, join_type_)) {
+          allow_full_cpu_hashtable_recycling, invalid_cache_key, join_type_)) {
     // build a hash table on CPU, and we have a chance to recycle the cached one if
     // available
     for (auto device_id : device_ids_) {
@@ -691,8 +749,10 @@ void PerfectJoinHashTable::reify() {
 
 Data_Namespace::MemoryLevel PerfectJoinHashTable::getEffectiveMemoryLevel(
     const std::vector<InnerOuter>& inner_outer_pairs) const {
-  if (needs_dictionary_translation(
-          inner_outer_pairs.front(), inner_outer_string_op_infos_, executor_)) {
+  if (needs_dictionary_translation(inner_outer_pairs.front(),
+                                   inner_outer_string_op_infos_,
+                                   executor_,
+                                   table_id_to_node_map_)) {
     needs_dict_translation_ = true;
     return Data_Namespace::CPU_LEVEL;
   }
@@ -847,7 +907,9 @@ int PerfectJoinHashTable::initHashTableForDevice(
       ts2 = std::chrono::steady_clock::now();
       auto build_time =
           std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count();
-      if (allow_hashtable_recycling && hash_table &&
+      const auto allow_full_cpu_hashtable_recycling =
+          allow_hashtable_recycling && inner_col->getTableKey().table_id >= 0;
+      if (allow_full_cpu_hashtable_recycling && hash_table &&
           hash_table->getHashTableBufferSize(ExecutorDeviceType::CPU) > 0) {
         putHashTableOnCpuToCache(hashtable_cache_key_[device_id],
                                  CacheItemType::PERFECT_HT,

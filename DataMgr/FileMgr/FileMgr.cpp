@@ -12,11 +12,22 @@
 #include "DataMgr/FileMgr/FileMgr.h"
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <algorithm>
+#include <array>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <future>
+#include <limits>
+#include <map>
+#include <optional>
+#include <set>
+#include <stdexcept>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -27,6 +38,7 @@
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "Shared/File.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/heavyai_fs.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 
@@ -36,6 +48,8 @@ extern bool g_read_only;
 extern bool g_multi_instance;
 
 namespace File_Namespace {
+
+bool g_enable_file_mgr_manifests{false};
 
 FileMgr::FileMgr(const int32_t device_id,
                  GlobalFileMgr* gfm,
@@ -169,6 +183,10 @@ FileMetadata FileMgr::getMetadataForFile(
     fileMetadata.file_id = boost::lexical_cast<int>(fileStem.substr(0, dotPos));
     fileMetadata.page_size =
         boost::lexical_cast<size_t>(fileStem.substr(dotPos + 1, fileStem.size()));
+    if (fileMetadata.page_size == 0) {
+      throw std::runtime_error("Native data file has a zero page size: " +
+                               fileMetadata.file_path);
+    }
 
     fileMetadata.file_size = boost::filesystem::file_size(fileMetadata.file_path);
     CHECK_EQ(fileMetadata.file_size % fileMetadata.page_size,
@@ -184,41 +202,328 @@ bool is_compaction_status_file(const std::string& file_name) {
           file_name == FileMgr::UPDATE_PAGE_VISIBILITY_STATUS ||
           file_name == FileMgr::DELETE_EMPTY_FILES_STATUS);
 }
+
+constexpr char PAGE_HEADER_MANIFEST_FILENAME[] = "page_header_manifest_v1";
+constexpr uint64_t PAGE_HEADER_MANIFEST_MAGIC = 0x484442464d414e49ULL;  // HDBFMANI
+constexpr uint32_t PAGE_HEADER_MANIFEST_VERSION = 2;
+constexpr char FILE_BUFFER_METADATA_MANIFEST_FILENAME[] =
+    "file_buffer_metadata_manifest_v1";
+constexpr char FILE_BUFFER_METADATA_PENDING_MANIFEST_FILENAME[] =
+    "file_buffer_metadata_manifest_v1.pending";
+constexpr uint64_t FILE_BUFFER_METADATA_MANIFEST_MAGIC =
+    0x484442464d455441ULL;  // HDBFMETA
+constexpr uint32_t FILE_BUFFER_METADATA_MANIFEST_VERSION = 2;
+constexpr uint32_t FILE_BUFFER_METADATA_MANIFEST_LEGACY_VERSION = 1;
+constexpr int32_t FILE_BUFFER_METADATA_MANIFEST_SIDECAR_ONLY_FILE_ID = -1;
+constexpr uint64_t FILE_BUFFER_METADATA_MANIFEST_SIDECAR_ONLY_PAGE_NUM =
+    std::numeric_limits<uint64_t>::max();
+constexpr uint32_t MAX_MANIFEST_CHUNK_KEY_SIZE = 64;
+constexpr size_t PAGE_HEADER_PROBE_BYTES = 10 * sizeof(int32_t);
+
+size_t checked_size_add(const size_t lhs,
+                        const size_t rhs,
+                        const char* const description) {
+  if (rhs > std::numeric_limits<size_t>::max() - lhs) {
+    throw std::overflow_error(description);
+  }
+  return lhs + rhs;
+}
+
+size_t checked_size_multiply(const size_t lhs,
+                             const size_t rhs,
+                             const char* const description) {
+  if (lhs != 0 && rhs > std::numeric_limits<size_t>::max() / lhs) {
+    throw std::overflow_error(description);
+  }
+  return lhs * rhs;
+}
+
+template <typename T>
+void write_pod(std::ofstream& out, const T& value) {
+  out.write(reinterpret_cast<const char*>(&value), sizeof(T));
+}
+
+template <typename T>
+bool read_pod(std::ifstream& in, T& value) {
+  in.read(reinterpret_cast<char*>(&value), sizeof(T));
+  return static_cast<bool>(in);
+}
+
+int64_t file_mtime(const std::string& file_path) {
+  return static_cast<int64_t>(boost::filesystem::last_write_time(file_path));
+}
+
+struct FileChangeToken {
+  uint64_t device;
+  uint64_t inode;
+  int64_t mtime_seconds;
+  int64_t mtime_nanoseconds;
+  int64_t ctime_seconds;
+  int64_t ctime_nanoseconds;
+
+  bool operator==(const FileChangeToken& that) const {
+    return std::tie(device,
+                    inode,
+                    mtime_seconds,
+                    mtime_nanoseconds,
+                    ctime_seconds,
+                    ctime_nanoseconds) == std::tie(that.device,
+                                                   that.inode,
+                                                   that.mtime_seconds,
+                                                   that.mtime_nanoseconds,
+                                                   that.ctime_seconds,
+                                                   that.ctime_nanoseconds);
+  }
+};
+
+FileChangeToken file_change_token(const std::string& file_path) {
+  struct stat file_stat {};
+  CHECK_EQ(::stat(file_path.c_str(), &file_stat), 0)
+      << "Could not stat native data file " << file_path << ": " << std::strerror(errno);
+  return {static_cast<uint64_t>(file_stat.st_dev),
+          static_cast<uint64_t>(file_stat.st_ino),
+          static_cast<int64_t>(file_stat.st_mtim.tv_sec),
+          static_cast<int64_t>(file_stat.st_mtim.tv_nsec),
+          static_cast<int64_t>(file_stat.st_ctim.tv_sec),
+          static_cast<int64_t>(file_stat.st_ctim.tv_nsec)};
+}
+
+void write_file_change_token(std::ofstream& manifest_file, const FileChangeToken& token) {
+  write_pod(manifest_file, token.device);
+  write_pod(manifest_file, token.inode);
+  write_pod(manifest_file, token.mtime_seconds);
+  write_pod(manifest_file, token.mtime_nanoseconds);
+  write_pod(manifest_file, token.ctime_seconds);
+  write_pod(manifest_file, token.ctime_nanoseconds);
+}
+
+bool read_file_change_token(std::ifstream& manifest_file, FileChangeToken& token) {
+  return read_pod(manifest_file, token.device) && read_pod(manifest_file, token.inode) &&
+         read_pod(manifest_file, token.mtime_seconds) &&
+         read_pod(manifest_file, token.mtime_nanoseconds) &&
+         read_pod(manifest_file, token.ctime_seconds) &&
+         read_pod(manifest_file, token.ctime_nanoseconds);
+}
+
+enum class ManifestFileIdentity { LegacyMtime, StrongChangeToken };
+
+bool metadata_matches_manifest(std::ifstream& manifest_file,
+                               const std::vector<FileMetadata>& data_files,
+                               const ManifestFileIdentity file_identity,
+                               const bool require_matching_identity) {
+  uint64_t file_count = 0;
+  if (!read_pod(manifest_file, file_count) || file_count != data_files.size()) {
+    return false;
+  }
+
+  for (const auto& data_file : data_files) {
+    int32_t file_id = -1;
+    uint64_t page_size = 0;
+    uint64_t file_size = 0;
+    uint64_t num_pages = 0;
+    int64_t mtime = 0;
+    if (!read_pod(manifest_file, file_id) || !read_pod(manifest_file, page_size) ||
+        !read_pod(manifest_file, file_size) || !read_pod(manifest_file, num_pages)) {
+      return false;
+    }
+
+    FileChangeToken change_token{};
+    if (file_identity == ManifestFileIdentity::StrongChangeToken) {
+      if (!read_file_change_token(manifest_file, change_token)) {
+        return false;
+      }
+    } else if (!read_pod(manifest_file, mtime)) {
+      return false;
+    }
+
+    if (file_id != data_file.file_id || page_size != data_file.page_size ||
+        file_size != data_file.file_size || num_pages != data_file.num_pages) {
+      return false;
+    }
+    if (require_matching_identity) {
+      if (file_identity == ManifestFileIdentity::StrongChangeToken) {
+        if (!(change_token == file_change_token(data_file.file_path))) {
+          return false;
+        }
+      } else if (mtime != file_mtime(data_file.file_path)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+void write_manifest_file_metadata(std::ofstream& manifest_file,
+                                  const std::vector<FileMetadata>& data_files,
+                                  const ManifestFileIdentity file_identity) {
+  write_pod(manifest_file, static_cast<uint64_t>(data_files.size()));
+  for (const auto& data_file : data_files) {
+    write_pod(manifest_file, data_file.file_id);
+    write_pod(manifest_file, static_cast<uint64_t>(data_file.page_size));
+    write_pod(manifest_file, static_cast<uint64_t>(data_file.file_size));
+    write_pod(manifest_file, static_cast<uint64_t>(data_file.num_pages));
+    if (file_identity == ManifestFileIdentity::StrongChangeToken) {
+      write_file_change_token(manifest_file, file_change_token(data_file.file_path));
+    } else {
+      write_pod(manifest_file, file_mtime(data_file.file_path));
+    }
+  }
+}
+
+std::map<ChunkKey, HeaderInfo> current_metadata_pages_by_chunk(
+    const std::vector<HeaderInfo>& header_infos) {
+  std::map<ChunkKey, HeaderInfo> current_metadata_pages;
+  for (const auto& header_info : header_infos) {
+    if (header_info.pageId != -1) {
+      continue;
+    }
+    auto it = current_metadata_pages.find(header_info.chunkKey);
+    if (it == current_metadata_pages.end() ||
+        header_info.versionEpoch > it->second.versionEpoch) {
+      current_metadata_pages.insert_or_assign(header_info.chunkKey, header_info);
+    }
+  }
+  return current_metadata_pages;
+}
+
+std::set<ChunkKey> current_data_chunks(const std::vector<HeaderInfo>& header_infos) {
+  std::set<ChunkKey> chunks;
+  for (const auto& header_info : header_infos) {
+    if (header_info.pageId >= 0) {
+      chunks.emplace(header_info.chunkKey);
+    }
+  }
+  return chunks;
+}
+
+bool is_sidecar_only_metadata_record(const int32_t file_id, const uint64_t page_num) {
+  return file_id == FILE_BUFFER_METADATA_MANIFEST_SIDECAR_ONLY_FILE_ID &&
+         page_num == FILE_BUFFER_METADATA_MANIFEST_SIDECAR_ONLY_PAGE_NUM;
+}
+
+std::optional<uint64_t> manifest_checksum(const std::string& path,
+                                          const uint64_t byte_count) {
+  constexpr uint64_t fnv_offset_basis{14695981039346656037ULL};
+  constexpr uint64_t fnv_prime{1099511628211ULL};
+  std::ifstream input(path, std::ios::in | std::ios::binary);
+  if (!input.is_open()) {
+    return std::nullopt;
+  }
+
+  uint64_t checksum = fnv_offset_basis;
+  uint64_t bytes_left = byte_count;
+  std::array<char, 64 * 1024> buffer{};
+  while (bytes_left > 0) {
+    const auto bytes_this_read =
+        static_cast<std::streamsize>(std::min<uint64_t>(bytes_left, buffer.size()));
+    input.read(buffer.data(), bytes_this_read);
+    if (input.gcount() != bytes_this_read) {
+      return std::nullopt;
+    }
+    for (std::streamsize i = 0; i < bytes_this_read; ++i) {
+      checksum ^= static_cast<uint8_t>(buffer[static_cast<size_t>(i)]);
+      checksum *= fnv_prime;
+    }
+    bytes_left -= static_cast<uint64_t>(bytes_this_read);
+  }
+  return checksum;
+}
+
+bool append_manifest_checksum(const std::string& path) {
+  boost::system::error_code ec;
+  const auto payload_size = boost::filesystem::file_size(path, ec);
+  if (ec) {
+    return false;
+  }
+  const auto checksum = manifest_checksum(path, payload_size);
+  if (!checksum) {
+    return false;
+  }
+  std::ofstream output(path, std::ios::out | std::ios::binary | std::ios::app);
+  if (!output.is_open()) {
+    return false;
+  }
+  write_pod(output, *checksum);
+  output.close();
+  return static_cast<bool>(output);
+}
+
+bool validate_manifest_checksum(std::ifstream& manifest_file, const std::string& path) {
+  const auto payload_end = manifest_file.tellg();
+  if (payload_end < 0) {
+    return false;
+  }
+  uint64_t expected_checksum{0};
+  if (!read_pod(manifest_file, expected_checksum)) {
+    return false;
+  }
+  if (manifest_file.peek() != std::ifstream::traits_type::eof()) {
+    return false;
+  }
+  const auto actual_checksum =
+      manifest_checksum(path, static_cast<uint64_t>(payload_end));
+  return actual_checksum && expected_checksum == *actual_checksum;
+}
+
+bool sync_file(const std::string& path) {
+  FILE* file = std::fopen(path.c_str(), "rb");
+  if (!file) {
+    return false;
+  }
+  const bool synced = heavyai::fsync(fileno(file)) == 0;
+  std::fclose(file);
+  return synced;
+}
+
+bool sync_directory(const std::string& path) {
+  const int directory_fd = ::open(path.c_str(), O_RDONLY | O_DIRECTORY);
+  if (directory_fd < 0) {
+    return false;
+  }
+  const bool synced = heavyai::fsync(directory_fd) == 0;
+  ::close(directory_fd);
+  return synced;
+}
 }  // namespace
 
 OpenFilesResult FileMgr::openFiles() {
-  auto clock_begin = timer_start();
-  boost::filesystem::directory_iterator
-      end_itr;  // default construction yields past-the-end
   OpenFilesResult result;
   result.max_file_id = -1;
-  int32_t file_count = 0;
-  int32_t thread_count = std::thread::hardware_concurrency();
-  std::vector<std::future<std::vector<HeaderInfo>>> file_futures;
-  boost::filesystem::path path(fileMgrBasePath_);
-  for (boost::filesystem::directory_iterator file_it(path); file_it != end_itr;
-       ++file_it) {
-    FileMetadata file_metadata = getMetadataForFile(file_it);
-    if (file_metadata.is_data_file) {
-      result.max_file_id = std::max(result.max_file_id, file_metadata.file_id);
-      file_futures.emplace_back(std::async(std::launch::async, [file_metadata, this] {
-        std::vector<HeaderInfo> temp_header_vec;
-        openExistingFile(file_metadata.file_path,
-                         file_metadata.file_id,
-                         file_metadata.page_size,
-                         file_metadata.num_pages,
-                         temp_header_vec);
-        return temp_header_vec;
-      }));
-      file_count++;
-      if (file_count % thread_count == 0) {
-        processFileFutures(file_futures, result.header_infos);
-      }
-    }
+  auto data_files = getSortedDataFileMetadata(result.compaction_status_file_name);
+  result.file_count = data_files.size();
+  for (const auto& data_file : data_files) {
+    result.max_file_id = std::max(result.max_file_id, data_file.file_id);
+    result.page_count = checked_size_add(
+        result.page_count, data_file.num_pages, "Native data page count overflow");
+  }
+  result.page_header_probe_bytes = checked_size_multiply(
+      result.page_count, PAGE_HEADER_PROBE_BYTES, "Native page-header probe overflow");
 
-    if (is_compaction_status_file(file_it->path().filename().string())) {
-      CHECK(result.compaction_status_file_name.empty());
-      result.compaction_status_file_name = file_it->path().filename().string();
+  if (loadPageHeaderManifest(data_files, result)) {
+    loadFileBufferMetadataManifest(data_files, result);
+    return result;
+  }
+
+  int32_t thread_count = std::thread::hardware_concurrency();
+  if (thread_count <= 0) {
+    thread_count = 1;
+  }
+  std::vector<std::future<std::vector<HeaderInfo>>> file_futures;
+  int32_t file_count = 0;
+  for (const auto& file_metadata : data_files) {
+    file_futures.emplace_back(std::async(std::launch::async, [file_metadata, this] {
+      std::vector<HeaderInfo> temp_header_vec;
+      openExistingFile(file_metadata.file_path,
+                       file_metadata.file_id,
+                       file_metadata.page_size,
+                       file_metadata.num_pages,
+                       temp_header_vec);
+      return temp_header_vec;
+    }));
+    file_count++;
+    if (file_count % thread_count == 0) {
+      processFileFutures(file_futures, result.header_infos);
     }
   }
 
@@ -226,10 +531,8 @@ OpenFilesResult FileMgr::openFiles() {
     processFileFutures(file_futures, result.header_infos);
   }
 
-  int64_t queue_time_ms = timer_stop(clock_begin);
-  LOG(INFO) << "Completed Reading table's file metadata, Elapsed time : " << queue_time_ms
-            << "ms Epoch: " << epoch_.ceiling() << " files read: " << file_count
-            << " table location: '" << fileMgrBasePath_ << "'";
+  writePageHeaderManifest(data_files, result);
+  loadFileBufferMetadataManifest(data_files, result);
   return result;
 }
 
@@ -268,19 +571,28 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
 
     VLOG(3) << "Number of Headers in Vector: " << header_vec.size();
     if (header_vec.size() > 0) {
+      auto metadata_payload_for =
+          [&](const ChunkKey& chunk_key) -> const std::vector<int8_t>* {
+        const auto payload_it = open_files_result.metadata_payloads.find(chunk_key);
+        return payload_it == open_files_result.metadata_payloads.end()
+                   ? nullptr
+                   : &payload_it->second;
+      };
       ChunkKey lastChunkKey = header_vec.begin()->chunkKey;
       auto startIt = header_vec.begin();
 
       for (auto headerIt = header_vec.begin() + 1; headerIt != header_vec.end();
            ++headerIt) {
         if (headerIt->chunkKey != lastChunkKey) {
-          createBufferFromHeaders(lastChunkKey, startIt, headerIt);
+          createBufferFromHeaders(
+              lastChunkKey, startIt, headerIt, metadata_payload_for(lastChunkKey));
           lastChunkKey = headerIt->chunkKey;
           startIt = headerIt;
         }
       }
       // now need to insert last Chunk
-      createBufferFromHeaders(lastChunkKey, startIt, header_vec.end());
+      createBufferFromHeaders(
+          lastChunkKey, startIt, header_vec.end(), metadata_payload_for(lastChunkKey));
     }
     nextFileId_ = open_files_result.max_file_id + 1;
     rollOffOldData(epoch(), true /* only checkpoint if data is rolled off */);
@@ -292,7 +604,7 @@ void FileMgr::init(const size_t num_reader_threads, const int32_t epochOverride)
     if (!boost::filesystem::create_directory(path)) {
       LOG(FATAL) << "Could not create data directory: " << path;
     }
-    fileMgrVersion_ = LATEST_FILE_MGR_VERSION;
+    fileMgrVersion_ = DEFAULT_FILE_MGR_VERSION;
     if (epochOverride != -1) {
       epoch_.floor(epochOverride);
       epoch_.ceiling(epochOverride);
@@ -414,6 +726,607 @@ void FileMgr::processFileFutures(
     headerVec.insert(headerVec.end(), tempHeaderVec.begin(), tempHeaderVec.end());
   }
   file_futures.clear();
+}
+
+std::vector<FileMetadata> FileMgr::getSortedDataFileMetadata(
+    std::string& compaction_status_file_name) const {
+  std::vector<FileMetadata> data_files;
+  boost::filesystem::directory_iterator end_itr;
+  boost::filesystem::path path(fileMgrBasePath_);
+  for (boost::filesystem::directory_iterator file_it(path); file_it != end_itr;
+       ++file_it) {
+    if (is_compaction_status_file(file_it->path().filename().string())) {
+      CHECK(compaction_status_file_name.empty());
+      compaction_status_file_name = file_it->path().filename().string();
+    }
+
+    FileMetadata file_metadata = getMetadataForFile(file_it);
+    if (file_metadata.is_data_file) {
+      data_files.emplace_back(std::move(file_metadata));
+    }
+  }
+
+  std::sort(data_files.begin(), data_files.end(), [](const auto& lhs, const auto& rhs) {
+    if (lhs.file_id != rhs.file_id) {
+      return lhs.file_id < rhs.file_id;
+    }
+    if (lhs.page_size != rhs.page_size) {
+      return lhs.page_size < rhs.page_size;
+    }
+    return lhs.file_path < rhs.file_path;
+  });
+  return data_files;
+}
+
+bool FileMgr::loadPageHeaderManifest(const std::vector<FileMetadata>& data_files,
+                                     OpenFilesResult& result) {
+  if (!g_enable_file_mgr_manifests || !hasFileMgrKey() ||
+      !result.compaction_status_file_name.empty()) {
+    return false;
+  }
+
+  const auto manifest_path = getFilePath(PAGE_HEADER_MANIFEST_FILENAME);
+  if (!boost::filesystem::exists(manifest_path)) {
+    return false;
+  }
+
+  auto invalid_manifest = [](const std::string&) { return false; };
+
+  std::ifstream manifest_file{manifest_path.string(), std::ios::in | std::ios::binary};
+  if (!manifest_file.is_open()) {
+    return invalid_manifest("could not open manifest file");
+  }
+
+  uint64_t magic = 0;
+  uint32_t version = 0;
+  int32_t db_version = 0;
+  int32_t file_mgr_version = 0;
+  int32_t manifest_epoch = 0;
+  int32_t manifest_epoch_floor = 0;
+  if (!read_pod(manifest_file, magic) || !read_pod(manifest_file, version) ||
+      !read_pod(manifest_file, db_version) ||
+      !read_pod(manifest_file, file_mgr_version) ||
+      !read_pod(manifest_file, manifest_epoch) ||
+      !read_pod(manifest_file, manifest_epoch_floor)) {
+    return invalid_manifest("truncated manifest header");
+  }
+
+  if (magic != PAGE_HEADER_MANIFEST_MAGIC || version != PAGE_HEADER_MANIFEST_VERSION ||
+      db_version != kDbVersion || file_mgr_version != fileMgrVersion_ ||
+      manifest_epoch != epoch() || manifest_epoch_floor != epochFloor()) {
+    return invalid_manifest("version or epoch mismatch");
+  }
+
+  if (!metadata_matches_manifest(manifest_file,
+                                 data_files,
+                                 ManifestFileIdentity::StrongChangeToken,
+                                 true /* require_matching_identity */)) {
+    return invalid_manifest("data file metadata mismatch");
+  }
+
+  uint64_t header_count = 0;
+  if (!read_pod(manifest_file, header_count) || header_count > result.page_count) {
+    return invalid_manifest("invalid header count");
+  }
+
+  std::map<int32_t, const FileMetadata*> data_file_by_id;
+  for (const auto& data_file : data_files) {
+    data_file_by_id.emplace(data_file.file_id, &data_file);
+  }
+
+  std::vector<HeaderInfo> header_infos;
+  header_infos.reserve(header_count);
+  std::set<std::pair<int32_t, uint64_t>> physical_pages;
+  std::map<ChunkKey, std::set<int32_t>> logical_data_page_ids;
+  for (uint64_t header_idx = 0; header_idx < header_count; ++header_idx) {
+    uint32_t chunk_key_size = 0;
+    if (!read_pod(manifest_file, chunk_key_size) || chunk_key_size == 0 ||
+        chunk_key_size > MAX_MANIFEST_CHUNK_KEY_SIZE) {
+      return invalid_manifest("invalid chunk key size");
+    }
+
+    ChunkKey chunk_key(chunk_key_size);
+    manifest_file.read(reinterpret_cast<char*>(chunk_key.data()),
+                       static_cast<std::streamsize>(chunk_key_size * sizeof(int32_t)));
+    int32_t page_id = -1;
+    int32_t version_epoch = -1;
+    int32_t file_id = -1;
+    uint64_t page_num = 0;
+    if (!manifest_file || !read_pod(manifest_file, page_id) ||
+        !read_pod(manifest_file, version_epoch) || !read_pod(manifest_file, file_id) ||
+        !read_pod(manifest_file, page_num)) {
+      return invalid_manifest("truncated header records");
+    }
+
+    if (chunk_key.size() <= CHUNK_KEY_TABLE_IDX ||
+        chunk_key[CHUNK_KEY_DB_IDX] != fileMgrKey_.first ||
+        chunk_key[CHUNK_KEY_TABLE_IDX] != fileMgrKey_.second || page_id < -1 ||
+        version_epoch < 0) {
+      return invalid_manifest("invalid logical page identity");
+    }
+
+    const auto file_it = data_file_by_id.find(file_id);
+    if (file_it == data_file_by_id.end() || page_num >= file_it->second->num_pages ||
+        version_epoch > epoch()) {
+      return invalid_manifest("header record does not match current file layout");
+    }
+    const auto raw_header_bytes =
+        (static_cast<size_t>(chunk_key_size) + 3) * sizeof(int32_t);
+    const auto aligned_header_bytes =
+        ((raw_header_bytes + FileBuffer::kHeaderBufferOffset - 1) /
+         FileBuffer::kHeaderBufferOffset) *
+        FileBuffer::kHeaderBufferOffset;
+    if (aligned_header_bytes >= file_it->second->page_size ||
+        (page_id == -1 && file_it->second->page_size != metadata_page_size_) ||
+        !physical_pages.emplace(file_id, page_num).second) {
+      return invalid_manifest("invalid or duplicate physical page record");
+    }
+    if (page_id >= 0) {
+      logical_data_page_ids[chunk_key].insert(page_id);
+    }
+
+    header_infos.emplace_back(
+        chunk_key, page_id, version_epoch, Page(file_id, static_cast<size_t>(page_num)));
+  }
+
+  for (const auto& [chunk_key, page_ids] : logical_data_page_ids) {
+    int32_t expected_page_id = 0;
+    for (const auto page_id : page_ids) {
+      if (page_id != expected_page_id++) {
+        return invalid_manifest("non-contiguous logical page records");
+      }
+    }
+  }
+
+  if (!validate_manifest_checksum(manifest_file, manifest_path.string())) {
+    return invalid_manifest("manifest checksum mismatch");
+  }
+
+  openExistingFilesFromManifest(data_files, header_infos);
+  result.header_infos = std::move(header_infos);
+  result.used_page_header_manifest = true;
+
+  return true;
+}
+
+void FileMgr::writePageHeaderManifest(const std::vector<FileMetadata>& data_files,
+                                      const OpenFilesResult& result) const {
+  if (!g_enable_file_mgr_manifests || !hasFileMgrKey() || g_read_only ||
+      g_multi_instance || !result.compaction_status_file_name.empty()) {
+    return;
+  }
+
+  const auto manifest_path = getFilePath(PAGE_HEADER_MANIFEST_FILENAME);
+  const auto tmp_manifest_path =
+      getFilePath(std::string(PAGE_HEADER_MANIFEST_FILENAME) + ".tmp");
+  std::ofstream manifest_file{tmp_manifest_path.string(),
+                              std::ios::out | std::ios::binary | std::ios::trunc};
+  if (!manifest_file.is_open()) {
+    LOG(WARNING) << "Could not create page header manifest: " << tmp_manifest_path;
+    return;
+  }
+
+  write_pod(manifest_file, PAGE_HEADER_MANIFEST_MAGIC);
+  write_pod(manifest_file, PAGE_HEADER_MANIFEST_VERSION);
+  write_pod(manifest_file, kDbVersion);
+  write_pod(manifest_file, fileMgrVersion_);
+  write_pod(manifest_file, epoch());
+  write_pod(manifest_file, epochFloor());
+
+  write_manifest_file_metadata(
+      manifest_file, data_files, ManifestFileIdentity::StrongChangeToken);
+
+  const uint64_t header_count = result.header_infos.size();
+  write_pod(manifest_file, header_count);
+  for (const auto& header_info : result.header_infos) {
+    const uint32_t chunk_key_size = header_info.chunkKey.size();
+    write_pod(manifest_file, chunk_key_size);
+    manifest_file.write(reinterpret_cast<const char*>(header_info.chunkKey.data()),
+                        static_cast<std::streamsize>(chunk_key_size * sizeof(int32_t)));
+    write_pod(manifest_file, header_info.pageId);
+    write_pod(manifest_file, header_info.versionEpoch);
+    write_pod(manifest_file, header_info.page.fileId);
+    write_pod(manifest_file, static_cast<uint64_t>(header_info.page.pageNum));
+  }
+
+  manifest_file.close();
+  if (!manifest_file) {
+    LOG(WARNING) << "Could not write complete page header manifest: "
+                 << tmp_manifest_path;
+    boost::filesystem::remove(tmp_manifest_path);
+    return;
+  }
+  if (!append_manifest_checksum(tmp_manifest_path.string())) {
+    LOG(WARNING) << "Could not checksum page header manifest: " << tmp_manifest_path;
+    boost::filesystem::remove(tmp_manifest_path);
+    return;
+  }
+
+  boost::system::error_code ec;
+  boost::filesystem::remove(manifest_path, ec);
+  ec.clear();
+  boost::filesystem::rename(tmp_manifest_path, manifest_path, ec);
+  if (ec) {
+    LOG(WARNING) << "Could not publish page header manifest '" << manifest_path
+                 << "': " << ec.message();
+    boost::filesystem::remove(tmp_manifest_path);
+    return;
+  }
+}
+
+bool FileMgr::loadFileBufferMetadataManifest(const std::vector<FileMetadata>& data_files,
+                                             OpenFilesResult& result) {
+  const bool manifest_is_required_by_storage =
+      fileMgrVersion_ == SIDECAR_METADATA_FILE_MGR_VERSION;
+  if ((!g_enable_file_mgr_manifests && !manifest_is_required_by_storage) ||
+      !hasFileMgrKey() || !result.compaction_status_file_name.empty() ||
+      result.header_infos.empty()) {
+    return false;
+  }
+
+  const auto manifest_path = getFilePath(FILE_BUFFER_METADATA_MANIFEST_FILENAME).string();
+  const auto pending_manifest_path =
+      getFilePath(FILE_BUFFER_METADATA_PENDING_MANIFEST_FILENAME).string();
+  if (loadFileBufferMetadataManifestAtPath(data_files, manifest_path, result)) {
+    if (!g_read_only && !g_multi_instance &&
+        boost::filesystem::exists(pending_manifest_path)) {
+      boost::filesystem::remove(pending_manifest_path);
+      sync_directory(fileMgrBasePath_);
+    }
+    return true;
+  }
+
+  if (loadFileBufferMetadataManifestAtPath(data_files, pending_manifest_path, result)) {
+    publishPendingFileBufferMetadataManifest();
+    return true;
+  }
+  return false;
+}
+
+bool FileMgr::loadFileBufferMetadataManifestAtPath(
+    const std::vector<FileMetadata>& data_files,
+    const std::string& manifest_path,
+    OpenFilesResult& result) {
+  if (!boost::filesystem::exists(manifest_path)) {
+    return false;
+  }
+
+  auto invalid_manifest = [](const std::string&) { return false; };
+
+  std::ifstream manifest_file{manifest_path, std::ios::in | std::ios::binary};
+  if (!manifest_file.is_open()) {
+    return invalid_manifest("could not open manifest file");
+  }
+
+  uint64_t magic = 0;
+  uint32_t version = 0;
+  int32_t db_version = 0;
+  int32_t file_mgr_version = 0;
+  int32_t manifest_epoch = 0;
+  int32_t manifest_epoch_floor = 0;
+  if (!read_pod(manifest_file, magic) || !read_pod(manifest_file, version) ||
+      !read_pod(manifest_file, db_version) ||
+      !read_pod(manifest_file, file_mgr_version) ||
+      !read_pod(manifest_file, manifest_epoch) ||
+      !read_pod(manifest_file, manifest_epoch_floor)) {
+    return invalid_manifest("truncated manifest header");
+  }
+
+  if (magic != FILE_BUFFER_METADATA_MANIFEST_MAGIC ||
+      (version != FILE_BUFFER_METADATA_MANIFEST_LEGACY_VERSION &&
+       version != FILE_BUFFER_METADATA_MANIFEST_VERSION) ||
+      db_version != kDbVersion || file_mgr_version != fileMgrVersion_ ||
+      manifest_epoch != epoch() || manifest_epoch_floor != epochFloor()) {
+    return invalid_manifest("version or epoch mismatch");
+  }
+
+  if (!metadata_matches_manifest(manifest_file,
+                                 data_files,
+                                 ManifestFileIdentity::LegacyMtime,
+                                 false /* require_matching_identity */)) {
+    return invalid_manifest("data file metadata mismatch");
+  }
+
+  const auto current_metadata_pages =
+      current_metadata_pages_by_chunk(result.header_infos);
+  const auto current_chunks_with_data_pages = current_data_chunks(result.header_infos);
+  std::set<ChunkKey> expected_chunks;
+  for (const auto& [chunk_key, unused] : current_metadata_pages) {
+    expected_chunks.insert(chunk_key);
+  }
+  expected_chunks.insert(current_chunks_with_data_pages.begin(),
+                         current_chunks_with_data_pages.end());
+
+  uint64_t record_count = 0;
+  if (!read_pod(manifest_file, record_count) || record_count != expected_chunks.size()) {
+    return invalid_manifest("invalid metadata record count");
+  }
+
+  ChunkMetadataPayloadMap payloads;
+  for (uint64_t record_idx = 0; record_idx < record_count; ++record_idx) {
+    uint32_t chunk_key_size = 0;
+    if (!read_pod(manifest_file, chunk_key_size) || chunk_key_size == 0 ||
+        chunk_key_size > MAX_MANIFEST_CHUNK_KEY_SIZE) {
+      return invalid_manifest("invalid chunk key size");
+    }
+
+    ChunkKey chunk_key(chunk_key_size);
+    manifest_file.read(reinterpret_cast<char*>(chunk_key.data()),
+                       static_cast<std::streamsize>(chunk_key_size * sizeof(int32_t)));
+    if (!manifest_file || chunk_key.size() <= CHUNK_KEY_TABLE_IDX ||
+        chunk_key[CHUNK_KEY_DB_IDX] != fileMgrKey_.first ||
+        chunk_key[CHUNK_KEY_TABLE_IDX] != fileMgrKey_.second ||
+        expected_chunks.find(chunk_key) == expected_chunks.end()) {
+      return invalid_manifest("invalid metadata chunk identity");
+    }
+
+    int32_t version_epoch = -1;
+    int32_t file_id = -1;
+    uint64_t page_num = 0;
+    uint64_t payload_size = 0;
+    if (!manifest_file || !read_pod(manifest_file, version_epoch) ||
+        !read_pod(manifest_file, file_id) || !read_pod(manifest_file, page_num) ||
+        !read_pod(manifest_file, payload_size)) {
+      return invalid_manifest("truncated metadata record");
+    }
+
+    const auto max_payload_size =
+        is_sidecar_only_metadata_record(file_id, page_num) &&
+                file_mgr_version == SIDECAR_METADATA_FILE_MGR_VERSION
+            ? static_cast<uint64_t>(MAX_SIDECAR_METADATA_PAYLOAD_SIZE)
+            : static_cast<uint64_t>(metadata_page_size_);
+    if (payload_size == 0 || payload_size > max_payload_size ||
+        payload_size > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
+      return invalid_manifest("invalid metadata payload size");
+    }
+
+    std::vector<int8_t> payload(payload_size);
+    manifest_file.read(reinterpret_cast<char*>(payload.data()),
+                       static_cast<std::streamsize>(payload_size));
+    if (!manifest_file) {
+      return invalid_manifest("truncated metadata payload");
+    }
+
+    if (is_sidecar_only_metadata_record(file_id, page_num)) {
+      if (file_mgr_version != SIDECAR_METADATA_FILE_MGR_VERSION) {
+        return invalid_manifest(
+            "sidecar-only metadata record requires the sidecar FileMgr version");
+      }
+      if (current_chunks_with_data_pages.find(chunk_key) ==
+              current_chunks_with_data_pages.end() ||
+          current_metadata_pages.find(chunk_key) != current_metadata_pages.end()) {
+        return invalid_manifest("sidecar-only metadata record has no data pages");
+      }
+      if (version_epoch != manifest_epoch) {
+        return invalid_manifest("sidecar-only metadata record epoch mismatch");
+      }
+    } else {
+      const auto current_page_it = current_metadata_pages.find(chunk_key);
+      if (current_page_it == current_metadata_pages.end()) {
+        return invalid_manifest("metadata record has no matching chunk");
+      }
+      const auto& current_page = current_page_it->second;
+      if (current_page.versionEpoch != version_epoch ||
+          current_page.page.fileId != file_id || current_page.page.pageNum != page_num) {
+        return invalid_manifest("metadata record does not match current metadata page");
+      }
+    }
+    if (!payloads.emplace(std::move(chunk_key), std::move(payload)).second) {
+      return invalid_manifest("duplicate metadata record");
+    }
+  }
+
+  if (version == FILE_BUFFER_METADATA_MANIFEST_VERSION &&
+      !validate_manifest_checksum(manifest_file, manifest_path)) {
+    return invalid_manifest("manifest checksum mismatch");
+  }
+  if (version == FILE_BUFFER_METADATA_MANIFEST_LEGACY_VERSION &&
+      manifest_file.peek() != std::ifstream::traits_type::eof()) {
+    return invalid_manifest("unexpected trailing manifest data");
+  }
+
+  result.metadata_payloads = std::move(payloads);
+  result.used_metadata_payload_manifest = true;
+
+  return true;
+}
+
+bool FileMgr::writeFileBufferMetadataManifest(const std::vector<FileMetadata>& data_files,
+                                              const int32_t manifest_epoch,
+                                              const std::string& manifest_path) const {
+  if (!hasFileMgrKey() || g_read_only || g_multi_instance || data_files.empty()) {
+    return false;
+  }
+
+  const auto tmp_manifest_path = manifest_path + ".tmp";
+  std::ofstream manifest_file{tmp_manifest_path,
+                              std::ios::out | std::ios::binary | std::ios::trunc};
+  if (!manifest_file.is_open()) {
+    LOG(WARNING) << "Could not create FileBuffer metadata manifest: "
+                 << tmp_manifest_path;
+    return false;
+  }
+
+  write_pod(manifest_file, FILE_BUFFER_METADATA_MANIFEST_MAGIC);
+  write_pod(manifest_file, FILE_BUFFER_METADATA_MANIFEST_VERSION);
+  write_pod(manifest_file, kDbVersion);
+  write_pod(manifest_file, fileMgrVersion_);
+  write_pod(manifest_file, manifest_epoch);
+  write_pod(manifest_file, epochFloor());
+  // This is the durable metadata-sidecar format, not a disposable cache. Preserve its
+  // version-1 file identity layout so existing sidecar-only tables remain readable.
+  write_manifest_file_metadata(
+      manifest_file, data_files, ManifestFileIdentity::LegacyMtime);
+
+  heavyai::shared_lock<heavyai::shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  const uint64_t record_count = chunkIndex_.size();
+  write_pod(manifest_file, record_count);
+  for (const auto& [chunk_key, buffer] : chunkIndex_) {
+    const bool sidecar_only_metadata = buffer->usesMetadataSidecarOnly();
+    const bool has_metadata_page = !buffer->metadataPages_.pageVersions.empty();
+    if (sidecar_only_metadata == has_metadata_page) {
+      LOG(WARNING) << "Cannot write FileBuffer metadata manifest for chunk with "
+                   << "inconsistent metadata layout: " << show_chunk(chunk_key);
+      boost::filesystem::remove(tmp_manifest_path);
+      return false;
+    }
+
+    const auto payload = buffer->serializeMetadataPayload();
+    const uint32_t chunk_key_size = chunk_key.size();
+    CHECK_LE(chunk_key_size, MAX_MANIFEST_CHUNK_KEY_SIZE);
+    write_pod(manifest_file, chunk_key_size);
+    manifest_file.write(reinterpret_cast<const char*>(chunk_key.data()),
+                        static_cast<std::streamsize>(chunk_key_size * sizeof(int32_t)));
+    if (sidecar_only_metadata) {
+      write_pod(manifest_file, manifest_epoch);
+      write_pod(manifest_file, FILE_BUFFER_METADATA_MANIFEST_SIDECAR_ONLY_FILE_ID);
+      write_pod(manifest_file, FILE_BUFFER_METADATA_MANIFEST_SIDECAR_ONLY_PAGE_NUM);
+    } else {
+      const auto current_metadata_page = buffer->metadataPages_.current();
+      write_pod(manifest_file, current_metadata_page.epoch);
+      write_pod(manifest_file, current_metadata_page.page.fileId);
+      write_pod(manifest_file, static_cast<uint64_t>(current_metadata_page.page.pageNum));
+    }
+    write_pod(manifest_file, static_cast<uint64_t>(payload.size()));
+    manifest_file.write(reinterpret_cast<const char*>(payload.data()),
+                        static_cast<std::streamsize>(payload.size()));
+  }
+  chunk_index_read_lock.unlock();
+
+  manifest_file.close();
+  if (!manifest_file) {
+    LOG(WARNING) << "Could not write complete FileBuffer metadata manifest: "
+                 << tmp_manifest_path;
+    boost::filesystem::remove(tmp_manifest_path);
+    return false;
+  }
+  if (!append_manifest_checksum(tmp_manifest_path)) {
+    LOG(WARNING) << "Could not checksum FileBuffer metadata manifest: "
+                 << tmp_manifest_path;
+    boost::filesystem::remove(tmp_manifest_path);
+    return false;
+  }
+  if (!sync_file(tmp_manifest_path)) {
+    LOG(WARNING) << "Could not sync FileBuffer metadata manifest: " << tmp_manifest_path;
+    boost::filesystem::remove(tmp_manifest_path);
+    return false;
+  }
+
+  boost::system::error_code ec;
+  boost::filesystem::rename(tmp_manifest_path, manifest_path, ec);
+  if (ec) {
+    LOG(WARNING) << "Could not publish FileBuffer metadata manifest '" << manifest_path
+                 << "': " << ec.message();
+    boost::filesystem::remove(tmp_manifest_path);
+    return false;
+  }
+  if (!sync_directory(fileMgrBasePath_)) {
+    LOG(WARNING) << "Could not sync FileBuffer metadata manifest directory: "
+                 << fileMgrBasePath_;
+    return false;
+  }
+  return true;
+}
+
+bool FileMgr::writePendingFileBufferMetadataManifest(const int32_t manifest_epoch) const {
+  if (!g_enable_file_mgr_manifests && !hasSidecarOnlyFileBufferMetadata()) {
+    return false;
+  }
+  std::string compaction_status_file_name;
+  const auto data_files = getSortedDataFileMetadata(compaction_status_file_name);
+  if (!compaction_status_file_name.empty()) {
+    return false;
+  }
+  return writeFileBufferMetadataManifest(
+      data_files,
+      manifest_epoch,
+      getFilePath(FILE_BUFFER_METADATA_PENDING_MANIFEST_FILENAME).string());
+}
+
+void FileMgr::publishPendingFileBufferMetadataManifest() const {
+  if (g_read_only || g_multi_instance) {
+    return;
+  }
+
+  const auto pending_manifest_path =
+      getFilePath(FILE_BUFFER_METADATA_PENDING_MANIFEST_FILENAME);
+  if (!boost::filesystem::exists(pending_manifest_path)) {
+    return;
+  }
+
+  const auto manifest_path = getFilePath(FILE_BUFFER_METADATA_MANIFEST_FILENAME);
+  boost::system::error_code ec;
+  boost::filesystem::rename(pending_manifest_path, manifest_path, ec);
+  if (ec) {
+    LOG(WARNING) << "Could not publish pending FileBuffer metadata manifest '"
+                 << pending_manifest_path << "': " << ec.message();
+    return;
+  }
+  if (!sync_directory(fileMgrBasePath_)) {
+    LOG(WARNING) << "Could not sync FileBuffer metadata manifest directory: "
+                 << fileMgrBasePath_;
+  }
+}
+
+bool FileMgr::hasSidecarOnlyFileBufferMetadata() const {
+  heavyai::shared_lock<heavyai::shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  return std::any_of(chunkIndex_.begin(), chunkIndex_.end(), [](const auto& entry) {
+    return entry.second->usesMetadataSidecarOnly();
+  });
+}
+
+bool FileMgr::willUseSidecarOnlyFileBufferMetadata() const {
+  heavyai::shared_lock<heavyai::shared_mutex> chunk_index_read_lock(chunkIndexMutex_);
+  return std::any_of(chunkIndex_.begin(), chunkIndex_.end(), [](const auto& entry) {
+    return entry.second->shouldWriteMetadataSidecarOnly();
+  });
+}
+
+void FileMgr::setFileMgrVersion(const int32_t version) {
+  CHECK_GE(version, DEFAULT_FILE_MGR_VERSION);
+  CHECK_LE(version, LATEST_FILE_MGR_VERSION);
+  if (fileMgrVersion_ == version) {
+    return;
+  }
+  writeAndSyncVersionToDisk(FILE_MGR_VERSION_FILENAME, version);
+  fileMgrVersion_ = version;
+}
+
+void FileMgr::openExistingFilesFromManifest(const std::vector<FileMetadata>& data_files,
+                                            const std::vector<HeaderInfo>& header_infos) {
+  std::map<int32_t, std::vector<uint8_t>> used_pages_by_file;
+  for (const auto& data_file : data_files) {
+    used_pages_by_file.emplace(data_file.file_id,
+                               std::vector<uint8_t>(data_file.num_pages, 0));
+  }
+
+  for (const auto& header_info : header_infos) {
+    auto& used_pages = used_pages_by_file.at(header_info.page.fileId);
+    CHECK_LT(header_info.page.pageNum, used_pages.size());
+    used_pages[header_info.page.pageNum] = 1;
+  }
+
+  heavyai::unique_lock<heavyai::shared_mutex> write_lock(files_rw_mutex_);
+  for (const auto& data_file : data_files) {
+    FILE* f = open(data_file.file_path);
+    auto file_info = std::make_unique<FileInfo>(this,
+                                                data_file.file_id,
+                                                f,
+                                                data_file.page_size,
+                                                data_file.num_pages,
+                                                data_file.file_path,
+                                                false);
+    const auto& used_pages = used_pages_by_file.at(data_file.file_id);
+    for (size_t page_num = 0; page_num < used_pages.size(); ++page_num) {
+      if (!used_pages[page_num]) {
+        file_info->freePages.insert(page_num);
+      }
+    }
+
+    CHECK(files_.find(data_file.file_id) == files_.end()) << "Attempting to re-open file";
+    files_.emplace(data_file.file_id, std::move(file_info));
+    fileIndex_.insert(std::pair<size_t, int32_t>(data_file.page_size, data_file.file_id));
+  }
 }
 
 void FileMgr::init(const std::string& dataPathToConvertFrom,
@@ -688,12 +1601,27 @@ std::string FileMgr::describeSelf() const {
 
 void FileMgr::checkpoint() {
   VLOG(2) << "Checkpointing " << describeSelf() << " epoch: " << epoch();
+  if (willUseSidecarOnlyFileBufferMetadata()) {
+    setFileMgrVersion(SIDECAR_METADATA_FILE_MGR_VERSION);
+  }
   writeDirtyBuffers();
   rollOffOldData(epoch(), false /* shouldCheckpoint */);
   syncFilesToDisk();
+  const bool metadata_manifest_prepared = writePendingFileBufferMetadataManifest(epoch());
+  if (hasSidecarOnlyFileBufferMetadata() && !metadata_manifest_prepared) {
+    throw std::runtime_error(
+        "Could not durably prepare sidecar-only FileBuffer metadata for checkpoint");
+  }
   writeAndSyncEpochToDisk();
   incrementEpoch();
+  if (metadata_manifest_prepared) {
+    publishPendingFileBufferMetadataManifest();
+  }
   freePages();
+  if (fileMgrVersion_ == SIDECAR_METADATA_FILE_MGR_VERSION &&
+      !hasSidecarOnlyFileBufferMetadata()) {
+    setFileMgrVersion(DEFAULT_FILE_MGR_VERSION);
+  }
 }
 
 FileBuffer* FileMgr::createBuffer(const ChunkKey& key,
@@ -720,11 +1648,12 @@ FileBuffer* FileMgr::createBufferUnlocked(const ChunkKey& key,
 FileBuffer* FileMgr::createBufferFromHeaders(
     const ChunkKey& key,
     const std::vector<HeaderInfo>::const_iterator& headerStartIt,
-    const std::vector<HeaderInfo>::const_iterator& headerEndIt) {
+    const std::vector<HeaderInfo>::const_iterator& headerEndIt,
+    const std::vector<int8_t>* metadataPayload) {
   heavyai::unique_lock<heavyai::shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   CHECK(chunkIndex_.find(key) == chunkIndex_.end())
       << "Chunk already exists for key: " << show_chunk(key);
-  chunkIndex_[key] = allocateBuffer(key, headerStartIt, headerEndIt);
+  chunkIndex_[key] = allocateBuffer(key, headerStartIt, headerEndIt, metadataPayload);
   return (chunkIndex_[key]);
 }
 
@@ -800,9 +1729,39 @@ FileBuffer* FileMgr::putBuffer(const ChunkKey& key,
                                AbstractBuffer* srcBuffer,
                                const size_t numBytes) {
   auto chunk = getOrCreateBuffer(key);
-  size_t oldChunkSize = chunk->size();
+  const size_t oldChunkSize = chunk->size();
+  const bool oldChunkDirty = chunk->isDirty();
+  const bool oldChunkAppended = chunk->isAppended();
+  const bool oldChunkUpdated = chunk->isUpdated();
+  const auto oldChunkSqlType = chunk->getSqlType();
+  std::optional<ChunkMetadata> oldChunkMetadata;
+  if (chunk->hasEncoder()) {
+    oldChunkMetadata = chunk->getEncoder()->getMetadata();
+  }
+  const bool atomicPhysicalRewrite =
+      chunk->isStorageCompressed() ||
+      (oldChunkSize == 0 && File_Namespace::g_enable_native_storage_compression);
+  const auto restoreChunkMetadata = [&] {
+    if (oldChunkMetadata) {
+      chunk->setMetadata(*oldChunkMetadata);
+    } else {
+      chunk->resetToEmpty();
+      chunk->setSqlType(oldChunkSqlType);
+      chunk->setSize(oldChunkSize);
+    }
+    chunk->clearDirtyBits();
+    if (oldChunkUpdated) {
+      chunk->setUpdated();
+    }
+    if (oldChunkAppended) {
+      chunk->setAppended();
+    }
+    if (oldChunkDirty && !oldChunkUpdated && !oldChunkAppended) {
+      chunk->setDirty();
+    }
+  };
   // write the buffer's data to the Chunk
-  size_t newChunkSize = (numBytes == 0) ? srcBuffer->size() : numBytes;
+  const size_t newChunkSize = (numBytes == 0) ? srcBuffer->size() : numBytes;
   if (chunk->isDirty()) {
     // multiple appends are allowed,
     // but only single update is allowed
@@ -813,38 +1772,48 @@ FileBuffer* FileMgr::putBuffer(const ChunkKey& key,
     }
   }
   CHECK(srcBuffer->isDirty()) << "putBuffer expects a dirty buffer";
-  if (srcBuffer->isUpdated()) {
-    // chunk size is not changed when fixed rows are updated or are marked as deleted.
-    // but when rows are vacuumed or varlen rows are updated (new rows are appended),
-    // chunk size will change. For vacuum, checkpoint should sync size from cpu to disk.
-    // For varlen update, it takes another route via fragmenter using disk-level buffer.
-    if (0 == numBytes && !chunk->isDirty()) {
-      chunk->setSize(newChunkSize);
+  try {
+    chunk->syncEncoder(srcBuffer);
+    if (srcBuffer->isUpdated()) {
+      // chunk size is not changed when fixed rows are updated or are marked as deleted.
+      // but when rows are vacuumed or varlen rows are updated (new rows are appended),
+      // chunk size will change. For vacuum, checkpoint should sync size from cpu to disk.
+      // For varlen update, it takes another route via fragmenter using disk-level buffer.
+      if (0 == numBytes && !chunk->isDirty()) {
+        chunk->setSize(newChunkSize);
+      }
+      //@todo use dirty flags to only flush pages of chunk that need to
+      // be flushed
+      chunk->write((int8_t*)srcBuffer->getMemoryPtr(),
+                   newChunkSize,
+                   0,
+                   srcBuffer->getType(),
+                   srcBuffer->getDeviceId());
+    } else if (srcBuffer->isAppended()) {
+      CHECK_LT(oldChunkSize, newChunkSize);
+      chunk->append((int8_t*)srcBuffer->getMemoryPtr() + oldChunkSize,
+                    newChunkSize - oldChunkSize,
+                    srcBuffer->getType(),
+                    srcBuffer->getDeviceId());
+    } else {
+      // If dirty buffer comes in unmarked, it must be empty.
+      // Encoder sync is still required to flush the metadata.
+      CHECK(numBytes == 0)
+          << "Dirty buffer with size > 0 must be marked as isAppended() or isUpdated()";
     }
-    //@todo use dirty flags to only flush pages of chunk that need to
-    // be flushed
-    chunk->write((int8_t*)srcBuffer->getMemoryPtr(),
-                 newChunkSize,
-                 0,
-                 srcBuffer->getType(),
-                 srcBuffer->getDeviceId());
-  } else if (srcBuffer->isAppended()) {
-    CHECK_LT(oldChunkSize, newChunkSize);
-    chunk->append((int8_t*)srcBuffer->getMemoryPtr() + oldChunkSize,
-                  newChunkSize - oldChunkSize,
-                  srcBuffer->getType(),
-                  srcBuffer->getDeviceId());
-  } else {
-    // If dirty buffer comes in unmarked, it must be empty.
-    // Encoder sync is still required to flush the metadata.
-    CHECK(numBytes == 0)
-        << "Dirty buffer with size > 0 must be marked as isAppended() or isUpdated()";
+  } catch (...) {
+    // Compressed payload replacement retains the complete old physical image until the
+    // replacement succeeds. Keep its encoder metadata and dirty state paired with that
+    // image if compression, allocation, or I/O fails.
+    if (atomicPhysicalRewrite) {
+      restoreChunkMetadata();
+    }
+    throw;
   }
   // chunk->clearDirtyBits(); // Hack: because write and append will set dirty bits
   //@todo commenting out line above will make sure this metadata is set
   // but will trigger error on fetch chunk
   srcBuffer->clearDirtyBits();
-  chunk->syncEncoder(srcBuffer);
   return chunk;
 }
 
@@ -1022,6 +1991,34 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(ChunkMetadataVector& chunkMetadata
   }
 }
 
+StorageRewriteStats FileMgr::rewriteStoragePayloadsWithPrefix(
+    const ChunkKey& keyPrefix,
+    const NativeStorageCompressionConfig& compression_config) {
+  validate_native_storage_compression_config(compression_config);
+  auto has_prefix = [](const ChunkKey& key, const ChunkKey& prefix) {
+    return key.size() >= prefix.size() &&
+           std::equal(prefix.begin(), prefix.end(), key.begin());
+  };
+
+  StorageRewriteStats total;
+  heavyai::unique_lock<heavyai::shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
+  auto chunk_it = chunkIndex_.lower_bound(keyPrefix);
+  while (chunk_it != chunkIndex_.end() && has_prefix(chunk_it->first, keyPrefix)) {
+    const auto& [key, buf] = *chunk_it;
+    if (buf->hasDataPages()) {
+      const auto stats = buf->rewriteStoragePayload(epoch(), compression_config);
+      total.chunks_seen += stats.chunks_seen;
+      total.chunks_rewritten += stats.chunks_rewritten;
+      total.chunks_already_compressed += stats.chunks_already_compressed;
+      total.logical_bytes += stats.logical_bytes;
+      total.old_physical_bytes += stats.old_physical_bytes;
+      total.new_physical_bytes += stats.new_physical_bytes;
+    }
+    ++chunk_it;
+  }
+  return total;
+}
+
 size_t FileMgr::getNumUsedMetadataPagesForChunkKey(const ChunkKey& chunkKey) const {
   heavyai::shared_lock<heavyai::shared_mutex> read_lock(chunkIndexMutex_);
   const auto& chunkIt = chunkIndex_.find(chunkKey);
@@ -1145,7 +2142,7 @@ void FileMgr::migrateToLatestFileMgrVersion() {
         << fileMgrVersion_;
   }
 
-  while (fileMgrVersion_ < LATEST_FILE_MGR_VERSION) {
+  while (fileMgrVersion_ < DEFAULT_FILE_MGR_VERSION) {
     switch (fileMgrVersion_) {
       case 0: {
         migrateEpochFileV0();
@@ -1608,8 +2605,9 @@ FileBuffer* FileMgr::allocateBuffer(const size_t page_size,
 FileBuffer* FileMgr::allocateBuffer(
     const ChunkKey& key,
     const std::vector<HeaderInfo>::const_iterator& headerStartIt,
-    const std::vector<HeaderInfo>::const_iterator& headerEndIt) {
-  return new FileBuffer(this, key, headerStartIt, headerEndIt);
+    const std::vector<HeaderInfo>::const_iterator& headerEndIt,
+    const std::vector<int8_t>* metadataPayload) {
+  return new FileBuffer(this, key, headerStartIt, headerEndIt, metadataPayload);
 }
 
 // Checks if a page should be deleted or recovered.  Returns true if page was deleted.
@@ -1661,7 +2659,11 @@ FileBuffer* FileMgr::getOrCreateBuffer(const ChunkKey& key) {
 void FileMgr::writeDirtyBuffers() {
   heavyai::unique_lock<heavyai::shared_mutex> chunk_index_write_lock(chunkIndexMutex_);
   for (auto [key, buf] : chunkIndex_) {
-    if (buf->isDirty()) {
+    buf->finalizePendingStorageCompression(epoch());
+    const bool should_use_sidecar_only = buf->shouldWriteMetadataSidecarOnly();
+    const bool should_change_metadata_layout =
+        should_use_sidecar_only != buf->usesMetadataSidecarOnly();
+    if (buf->isDirty() || should_change_metadata_layout) {
       buf->writeMetadata(epoch());
       buf->clearDirtyBits();
     }

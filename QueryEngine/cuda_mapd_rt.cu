@@ -97,10 +97,13 @@ extern "C" __device__ const int64_t* init_shared_mem(const int64_t* global_group
 
 #undef init_group_by_buffer_gpu_impl
 
-// Dynamic watchdog: monitoring up to 64 SMs. E.g. GP100 config may have 60:
-// 6 Graphics Processing Clusters (GPCs) * 10 Streaming Multiprocessors
+// Dynamic watchdog: track elapsed cycles independently for each SM. Keep this
+// comfortably above contemporary GPU SM counts; the host resets the whole symbol
+// by querying its size from the loaded CUDA module.
 // TODO(Saman): move these into a kernel parameter, allocated and initialized through CUDA
-__device__ int64_t dw_sm_cycle_start[128];  // Set from host before launching the kernel
+constexpr uint32_t DW_MAX_TRACKED_SMS = 512;
+__device__ int64_t
+    dw_sm_cycle_start[DW_MAX_TRACKED_SMS];  // Set from host before launching the kernel
 // TODO(Saman): make this cycle budget something constant in codegen level
 __device__ int64_t dw_cycle_budget = 0;  // Set from host before launching the kernel
 __device__ int32_t dw_abort = 0;         // TBD: set from host (async)
@@ -133,7 +136,7 @@ extern "C" __device__ bool dynamic_watchdog() {
     return true;  // Received host request to abort
   }
   uint32_t smid = get_smid();
-  if (smid >= 128) {
+  if (smid >= DW_MAX_TRACKED_SMS) {
     return false;
   }
   __shared__ volatile int64_t dw_block_cycle_start;  // Thread block shared cycle start
@@ -166,6 +169,42 @@ extern "C" __device__ bool dynamic_watchdog() {
   }
   __syncthreads();
   return dw_should_terminate;
+}
+
+/*
+ * A row-count boundary can leave only part of the final block active. Such threads
+ * cannot call dynamic_watchdog(), whose block-wide barrier requires every thread in the
+ * block. Sample once per active warp instead and broadcast the result only to lanes
+ * participating in the call.
+ */
+extern "C" __device__ bool dynamic_watchdog_with_critical_edge(
+    const bool has_critical_edge) {
+  if (!has_critical_edge) {
+    return dynamic_watchdog();
+  }
+
+  const auto active_mask = __activemask();
+  const auto leader_lane = __ffs(active_mask) - 1;
+  int32_t should_terminate = 0;
+  if (static_cast<int32_t>(threadIdx.x % warpSize) == leader_lane) {
+    if (dw_cycle_budget != 0LL) {
+      if (dw_abort == 1) {
+        should_terminate = 1;
+      } else {
+        const auto smid = get_smid();
+        if (smid < DW_MAX_TRACKED_SMS) {
+          const auto cycle_count = static_cast<int64_t>(clock64());
+          const auto cycle_start = static_cast<int64_t>(
+              atomicCAS(reinterpret_cast<unsigned long long*>(&dw_sm_cycle_start[smid]),
+                        0ULL,
+                        static_cast<unsigned long long>(cycle_count)));
+          should_terminate = smid == get_smid() && cycle_start > 0LL &&
+                             cycle_count - cycle_start > dw_cycle_budget;
+        }
+      }
+    }
+  }
+  return __shfl_sync(active_mask, should_terminate, leader_lane) != 0;
 }
 
 extern "C" __device__ bool check_interrupt() {
@@ -1312,6 +1351,16 @@ extern "C" __device__ void linear_probabilistic_count(uint8_t* bitmap,
   atomicOr(((uint32_t*)bitmap) + word_idx, 1 << bit_idx);
 }
 
+extern "C" __device__ void hll_probabilistic_count(uint8_t* registers,
+                                                   const uint32_t precision_bits,
+                                                   const uint8_t* key_bytes,
+                                                   const uint32_t key_len) {
+  const uint64_t hash = MurmurHash64A(key_bytes, key_len, 0);
+  const uint32_t index = hash >> (64 - precision_bits);
+  const int32_t rank = get_rank(hash << precision_bits, 64 - precision_bits);
+  atomicMax(reinterpret_cast<int32_t*>(registers) + index, rank);
+}
+
 extern "C" __device__ void agg_count_distinct_bitmap_gpu(int64_t* agg,
                                                          const int64_t val,
                                                          const int64_t min_val,
@@ -1416,9 +1465,7 @@ extern "C" __device__ void sync_threadblock() {
 }
 
 /*
- * Currently, we just use this function for handling non-grouped aggregates
- * with COUNT queries (with GPU shared memory used). Later, we should generate code for
- * this depending on the type of aggregate functions.
+ * Handle the final block-to-device reduction for non-grouped COUNT aggregates.
  * TODO: we should use one contiguous global memory buffer, rather than current default
  * behaviour of multiple buffers, each for one aggregate. Once that's resolved, we can
  * do much cleaner than this function
@@ -1428,5 +1475,15 @@ extern "C" __device__ void write_back_non_grouped_agg(int64_t* input_buffer,
                                                       const int32_t agg_idx) {
   if (threadIdx.x == agg_idx) {
     agg_sum_shared(output_buffer, input_buffer[agg_idx]);
+  }
+}
+
+extern "C" __device__ void write_back_non_grouped_agg_sum_skip_val(
+    int64_t* input_buffer,
+    int64_t* output_buffer,
+    const int32_t agg_idx,
+    const int64_t skip_val) {
+  if (threadIdx.x == agg_idx) {
+    agg_sum_skip_val_shared(output_buffer, input_buffer[agg_idx], skip_val);
   }
 }

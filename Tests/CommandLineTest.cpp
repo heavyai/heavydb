@@ -49,12 +49,17 @@ class InitDBTest : public testing::Test {
 
  protected:
   void SetUp() override {
+    bf::remove_all(temp_dir_);
+    bf::remove_all(nonexistant_dir_);
     ASSERT_FALSE(bf::exists(temp_dir_));
     ASSERT_FALSE(bf::exists(nonexistant_dir_));
     bf::create_directory(temp_dir_);
     ASSERT_TRUE(find_file(bf::relative(path("../")), "initheavy", initdb_));
   }
-  void TearDown() override { bf::remove_all(temp_dir_); }
+  void TearDown() override {
+    bf::remove_all(temp_dir_);
+    bf::remove_all(nonexistant_dir_);
+  }
 
  public:
   path get_executable() const { return initdb_; }
@@ -104,6 +109,9 @@ class CommandLineTestcase {
       std_out_string_ += std_out_line_;
     }
     while (std::getline(std_err_pipe_, std_err_line_)) {
+      if (boost::starts_with(std_err_line_, "Picked up JAVA_TOOL_OPTIONS:")) {
+        continue;
+      }
       std_err_string_ += std_err_line_;
     }
 #ifdef HAVE_ASAN

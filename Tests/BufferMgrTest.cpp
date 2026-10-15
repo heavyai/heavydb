@@ -1554,7 +1554,7 @@ TEST_P(BufferMgrTest, ReserveBufferNewSlabCreation) {
   assertSegmentAttributes(
       0, 1, Buffer_Namespace::USED, test_chunk_key_2_, test_buffer_size_);
   assertSegmentAttributes(0, 2, Buffer_Namespace::FREE);
-  assertExpectedBufferMgrAttributes(2 * test_buffer_size_, max_slab_size_, 2, 1);
+  assertExpectedBufferMgrAttributes(2 * test_buffer_size_, max_slab_size_, 2);
 
   auto segment_it = getSegmentAt(0, 0);
   segment_it = buffer_mgr_->reserveBuffer(segment_it, max_slab_size_);
@@ -1845,6 +1845,7 @@ TEST_P(BufferMgrTest,
                    test_chunk_key_, dest_buffer.get(), new_source_content.size()),
                foreign_storage::ForeignStorageException);
 
+  EXPECT_EQ(buffer->getPinCount(), 1);
   assertExpectedBufferMgrAttributes(test_buffer_size_, max_slab_size_, 1);
   assertParentMethodCalledWithParams(
       ParentMgrMethod::kFetchBuffer,
@@ -1951,10 +1952,34 @@ TEST_P(BufferMgrTest,
   EXPECT_THROW(buffer_mgr_->getBuffer(test_chunk_key_, new_source_content.size()),
                foreign_storage::ForeignStorageException);
 
+  EXPECT_EQ(buffer->getPinCount(), 1);
   assertExpectedBufferMgrAttributes(test_buffer_size_, max_slab_size_, 1);
   assertParentMethodCalledWithParams(
       ParentMgrMethod::kFetchBuffer,
       {{test_chunk_key_, buffer, new_source_content.size()}});
+}
+
+TEST_P(BufferMgrTest, GetBuffersForeignStorageExceptionRollsBackPinsAndCreations) {
+  buffer_mgr_ = createBufferMgr();
+  auto* existing_buffer =
+      buffer_mgr_->createBuffer(test_chunk_key_, page_size_, test_buffer_size_);
+  std::vector<int8_t> source_content{1, 2, 3, 4};
+  existing_buffer->append(source_content.data(), source_content.size());
+  ASSERT_EQ(existing_buffer->getPinCount(), 1);
+
+  mock_parent_mgr_.throwForeignStorageException();
+  const auto requested_size = mock_parent_mgr_.buffer_content_.size();
+  const std::vector<Data_Namespace::BufferFetchRequest> requests{
+      {test_chunk_key_, requested_size},
+      {test_chunk_key_, requested_size},
+      {test_chunk_key_2_, requested_size}};
+
+  EXPECT_THROW(buffer_mgr_->getBuffers(requests),
+               foreign_storage::ForeignStorageException);
+  EXPECT_TRUE(buffer_mgr_->isBufferOnDevice(test_chunk_key_));
+  EXPECT_FALSE(buffer_mgr_->isBufferOnDevice(test_chunk_key_2_));
+  EXPECT_EQ(existing_buffer->getPinCount(), 1);
+  EXPECT_EQ(buffer_mgr_->getNumChunks(), size_t(1));
 }
 
 TEST_P(BufferMgrTest, GetBufferCacheMiss) {
@@ -2117,7 +2142,7 @@ TEST_P(BufferMgrTest, GetBufferReentrantReserveNewSlabCreationError) {
   EXPECT_THROW(buffer_mgr_->getBuffer(test_chunk_key_, new_source_content.size()),
                OutOfMemory);
 
-  assertExpectedBufferMgrAttributes(2 * test_buffer_size_, max_slab_size_, 2);
+  assertExpectedBufferMgrAttributes(2 * test_buffer_size_, max_slab_size_, 2, 1);
   auto segment_it = getSegmentAt(0, 1);
   assertParentMethodCalledWithParams(
       ParentMgrMethod::kFetchBuffer,

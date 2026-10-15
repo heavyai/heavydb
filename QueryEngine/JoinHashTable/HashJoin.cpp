@@ -11,17 +11,21 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExpressionRewrite.h"
 #include "QueryEngine/JoinHashTable/BaselineJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/BitmapJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "QueryEngine/JoinHashTable/PerfectJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/RankedBitmapJoinHashTable.h"
 #include "QueryEngine/RangeTableIndexVisitor.h"
+#include "QueryEngine/RelAlgDag.h"
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryEngine/ScalarExprVisitor.h"
 #include "QueryEngine/Visitors/CommonVisitors.h"
 
 #include <sstream>
-
 extern bool g_enable_bbox_intersect_hashjoin;
 extern size_t g_ratio_num_hash_entry_to_num_tuple_switch_to_baseline;
+bool g_enable_bitmap_hashjoin{false};
+bool g_enable_ranked_bitmap_hashjoin{false};
 
 void ColumnsForDevice::setBucketInfo(
     const std::vector<double>& inverse_bucket_sizes_for_dimension,
@@ -55,20 +59,23 @@ JoinColumn HashJoin::fetchJoinColumn(
     DeviceAllocator* dev_buff_owner,
     std::vector<std::shared_ptr<void>>& malloc_owner,
     Executor* executor,
-    ColumnCacheMap* column_cache) {
-  static std::mutex fragment_fetch_mutex;
-  std::lock_guard<std::mutex> fragment_fetch_lock(fragment_fetch_mutex);
+    ColumnCacheMap* column_cache,
+    const bool preserve_result_set_fragment_offsets,
+    const std::map<std::pair<int, int>, size_t>* physical_fragment_rowid_offsets) {
   try {
-    JoinColumn join_column = ColumnFetcher::makeJoinColumn(executor,
-                                                           *hash_col,
-                                                           fragment_info,
-                                                           effective_memory_level,
-                                                           device_id,
-                                                           dev_buff_owner,
-                                                           /*thread_idx=*/0,
-                                                           chunks_owner,
-                                                           malloc_owner,
-                                                           *column_cache);
+    JoinColumn join_column =
+        ColumnFetcher::makeJoinColumn(executor,
+                                      *hash_col,
+                                      fragment_info,
+                                      effective_memory_level,
+                                      device_id,
+                                      dev_buff_owner,
+                                      /*thread_idx=*/0,
+                                      chunks_owner,
+                                      malloc_owner,
+                                      *column_cache,
+                                      preserve_result_set_fragment_offsets,
+                                      physical_fragment_rowid_offsets);
     if (effective_memory_level == Data_Namespace::GPU_LEVEL) {
       CHECK(dev_buff_owner);
       auto device_col_chunks_buff = dev_buff_owner->alloc(join_column.col_chunks_buff_sz);
@@ -283,7 +290,9 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     Executor* executor,
     const HashTableBuildDagMap& hashtable_build_dag_map,
     const RegisteredQueryHint& query_hint,
-    const TableIdToNodeMap& table_id_to_node_map) {
+    const TableIdToNodeMap& table_id_to_node_map,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& build_side_quals,
+    const bool payload_free_unique_probe) {
   auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<HashJoin> join_hash_table;
   CHECK_GT(device_ids.size(), 0u);
@@ -291,6 +300,10 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
     throw std::runtime_error(
         "Bounding box intersection disabled, attempting to fall back to loop join");
   }
+  const bool allow_ranked_bitmap_hashjoin =
+      g_enable_ranked_bitmap_hashjoin &&
+      memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL &&
+      !hashtable_build_dag_map.empty();
   if (qual_bin_oper->is_bbox_intersect_oper()) {
     VLOG(1) << "Trying to build geo hash table:";
     join_hash_table =
@@ -304,6 +317,50 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                        hashtable_build_dag_map,
                                                        query_hint,
                                                        table_id_to_node_map);
+  } else if (g_enable_bitmap_hashjoin &&
+             (join_type == JoinType::SEMI || join_type == JoinType::ANTI)) {
+    try {
+      join_hash_table = BitmapJoinHashTable::getInstance(qual_bin_oper,
+                                                         query_infos,
+                                                         memory_level,
+                                                         join_type,
+                                                         device_ids,
+                                                         column_cache,
+                                                         executor,
+                                                         hashtable_build_dag_map,
+                                                         table_id_to_node_map);
+    } catch (const HashJoinFail&) {
+    } catch (const TooManyHashEntries&) {
+    } catch (const JoinHashTableTooBig&) {
+    }
+  } else if (allow_ranked_bitmap_hashjoin && join_type == JoinType::INNER &&
+             !query_hint.force_baseline_hash_join &&
+             !query_hint.force_one_to_many_hash_join) {
+    try {
+      join_hash_table = RankedBitmapJoinHashTable::getInstance(qual_bin_oper,
+                                                               query_infos,
+                                                               memory_level,
+                                                               join_type,
+                                                               device_ids,
+                                                               column_cache,
+                                                               executor,
+                                                               hashtable_build_dag_map,
+                                                               table_id_to_node_map,
+                                                               query_hint,
+                                                               build_side_quals,
+                                                               payload_free_unique_probe);
+    } catch (const HashJoinFail&) {
+    } catch (const TooManyHashEntries&) {
+    } catch (const JoinHashTableTooBig&) {
+      if (query_hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
+        throw;
+      }
+    }
+  }
+
+  if (join_hash_table) {
+    // Bitmap membership tables are exact and need no payload. Other hash-table layouts
+    // continue through the existing perfect/baseline selection below.
   } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                  qual_bin_oper->get_left_operand()) ||
              query_hint.force_baseline_hash_join) {
@@ -324,6 +381,25 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                          query_hint,
                                                          table_id_to_node_map);
   } else {
+    const auto build_baseline_hash_table = [&](const std::exception&,
+                                               const std::string&) {
+      const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
+      CHECK_EQ(join_quals.size(), size_t(1));
+      const auto join_qual =
+          std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
+      CHECK(join_qual);
+      return BaselineJoinHashTable::getInstance(join_qual,
+                                                query_infos,
+                                                memory_level,
+                                                join_type,
+                                                preferred_hash_type,
+                                                device_ids,
+                                                column_cache,
+                                                executor,
+                                                hashtable_build_dag_map,
+                                                query_hint,
+                                                table_id_to_node_map);
+    };
     try {
       VLOG(1) << "Trying to build perfect hash table:";
       join_hash_table = PerfectJoinHashTable::getInstance(qual_bin_oper,
@@ -337,29 +413,38 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
                                                           hashtable_build_dag_map,
                                                           query_hint,
                                                           table_id_to_node_map);
-    } catch (JoinHashTableTooBig& e) {
-      throw e;
-    } catch (TooManyHashEntries& e) {
-      const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
-      CHECK_EQ(join_quals.size(), size_t(1));
-      const auto join_qual =
-          std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
-      VLOG(1) << "Building a perfect join hash table fails: " << e.what();
-      VLOG(1) << "Trying to re-build keyed join hash table";
-      join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
-                                                           query_infos,
-                                                           memory_level,
-                                                           join_type,
-                                                           preferred_hash_type,
-                                                           device_ids,
-                                                           column_cache,
-                                                           executor,
-                                                           hashtable_build_dag_map,
-                                                           query_hint,
-                                                           table_id_to_node_map);
+    } catch (const JoinHashTableTooBig& e) {
+      join_hash_table =
+          build_baseline_hash_table(e, "Building a perfect join hash table is too large");
+    } catch (const TooManyHashEntries& e) {
+      join_hash_table =
+          build_baseline_hash_table(e, "Building a perfect join hash table fails");
+    } catch (const HashJoinFail& e) {
+      join_hash_table = build_baseline_hash_table(
+          e, "Building a perfect join hash table is not applicable");
     }
   }
   CHECK(join_hash_table);
+  if (query_hint.isHintRegistered(QueryHint::kMaxJoinHashTableSize)) {
+    const auto device_type = memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+                                 ? ExecutorDeviceType::GPU
+                                 : ExecutorDeviceType::CPU;
+    if (device_type == ExecutorDeviceType::CPU) {
+      const auto hash_table_size =
+          join_hash_table->getJoinHashBufferSize(ExecutorDeviceType::CPU);
+      if (hash_table_size > query_hint.max_join_hash_table_size) {
+        throw JoinHashTableTooBig(hash_table_size, query_hint.max_join_hash_table_size);
+      }
+    } else {
+      for (const auto device_id : device_ids) {
+        const auto hash_table_size =
+            join_hash_table->getJoinHashBufferSize(ExecutorDeviceType::GPU, device_id);
+        if (hash_table_size > query_hint.max_join_hash_table_size) {
+          throw JoinHashTableTooBig(hash_table_size, query_hint.max_join_hash_table_size);
+        }
+      }
+    }
+  }
   if (VLOGGING(2)) {
     if (join_hash_table->getMemoryLevel() == Data_Namespace::MemoryLevel::GPU_LEVEL) {
       for (auto const device_id : device_ids) {
@@ -382,15 +467,24 @@ std::shared_ptr<HashJoin> HashJoin::getInstance(
 std::pair<const StringDictionaryProxy*, StringDictionaryProxy*>
 HashJoin::getStrDictProxies(const InnerOuter& cols,
                             const Executor* executor,
-                            const bool has_string_ops) {
+                            const bool has_string_ops,
+                            const TableIdToNodeMap* table_id_to_node_map) {
   const auto inner_col = cols.first;
   CHECK(inner_col);
-  const auto inner_ti = inner_col->get_type_info();
-  const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(cols.second);
+  const auto outer_col = getHashJoinColumn<Analyzer::ColumnVar>(cols.second);
   std::pair<const StringDictionaryProxy*, StringDictionaryProxy*>
       inner_outer_str_dict_proxies{nullptr, nullptr};
+  const auto inner_ti =
+      table_id_to_node_map
+          ? getColumnTypeForJoin(
+                inner_col, executor->getTemporaryTables(), *table_id_to_node_map, true)
+          : inner_col->get_type_info();
   if (inner_ti.is_string() && outer_col) {
-    const auto& outer_ti = outer_col->get_type_info();
+    const auto outer_ti =
+        table_id_to_node_map
+            ? getColumnTypeForJoin(
+                  outer_col, executor->getTemporaryTables(), *table_id_to_node_map, true)
+            : outer_col->get_type_info();
     CHECK(outer_ti.is_string());
     inner_outer_str_dict_proxies.first =
         executor->getStringDictionaryProxy(inner_ti.getStringDictKey(), true);
@@ -413,11 +507,12 @@ const StringDictionaryProxy::IdMap* HashJoin::translateInnerToOuterStrDictProxie
     const InnerOuter& cols,
     const InnerOuterStringOpInfos& inner_outer_string_op_infos,
     ExpressionRange& col_range,
-    const Executor* executor) {
+    const Executor* executor,
+    const TableIdToNodeMap* table_id_to_node_map) {
   const bool has_string_ops = inner_outer_string_op_infos.first.size() ||
                               inner_outer_string_op_infos.second.size();
   const auto inner_outer_proxies =
-      HashJoin::getStrDictProxies(cols, executor, has_string_ops);
+      HashJoin::getStrDictProxies(cols, executor, has_string_ops, table_id_to_node_map);
   const bool translate_dictionary =
       inner_outer_proxies.first && inner_outer_proxies.second;
   if (translate_dictionary) {
@@ -459,7 +554,8 @@ std::vector<int> HashJoin::collectFragmentIds(
 CompositeKeyInfo HashJoin::getCompositeKeyInfo(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const Executor* executor,
-    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs) {
+    const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs,
+    const TableIdToNodeMap* table_id_to_node_map) {
   CHECK(executor);
   std::vector<const void*> sd_inner_proxy_per_key;
   std::vector<void*> sd_outer_proxy_per_key;
@@ -472,8 +568,16 @@ CompositeKeyInfo HashJoin::getCompositeKeyInfo(
   for (const auto& inner_outer_pair : inner_outer_pairs) {
     const auto inner_col = inner_outer_pair.first;
     const auto outer_col = inner_outer_pair.second;
-    const auto& inner_ti = inner_col->get_type_info();
-    const auto& outer_ti = outer_col->get_type_info();
+    const auto inner_ti =
+        table_id_to_node_map
+            ? getColumnTypeForJoin(
+                  inner_col, executor->getTemporaryTables(), *table_id_to_node_map, true)
+            : inner_col->get_type_info();
+    const auto outer_ti =
+        table_id_to_node_map
+            ? getExpressionTypeForJoin(
+                  outer_col, executor->getTemporaryTables(), *table_id_to_node_map, true)
+            : outer_col->get_type_info();
     if (inner_ti.is_string() && outer_ti.is_string() &&
         inner_ti.is_dict_encoded_string() != outer_ti.is_dict_encoded_string()) {
       throw std::runtime_error(
@@ -759,10 +863,246 @@ template <typename T>
 const T* HashJoin::getHashJoinColumn(const Analyzer::Expr* expr) {
   auto* target_expr = expr;
   if (auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr)) {
+    if (cast_expr->get_optype() != kCAST ||
+        cast_expr->get_operand()->get_type_info().is_decimal()) {
+      return nullptr;
+    }
     target_expr = cast_expr->get_operand();
   }
   CHECK(target_expr);
   return dynamic_cast<const T*>(target_expr);
+}
+
+namespace {
+
+bool output_resolves_to_scan_column(const RelAlgNode* node, unsigned index) {
+  for (size_t depth = 0; node && depth < 64; ++depth) {
+    if (dynamic_cast<const RelScan*>(node)) {
+      return true;
+    }
+    if (dynamic_cast<const RelLogicalValues*>(node) ||
+        dynamic_cast<const RelTableFunction*>(node) ||
+        dynamic_cast<const RelLogicalUnion*>(node)) {
+      return false;
+    }
+    if (const auto aggregate = dynamic_cast<const RelAggregate*>(node)) {
+      if (index >= aggregate->getGroupByCount()) {
+        return false;
+      }
+      const auto input_output = get_node_output(aggregate->getInput(0));
+      if (index >= input_output.size()) {
+        return false;
+      }
+      node = input_output[index].getSourceNode();
+      index = input_output[index].getIndex();
+      continue;
+    }
+    if (const auto project = dynamic_cast<const RelProject*>(node)) {
+      if (index >= project->size()) {
+        return false;
+      }
+      const auto input = dynamic_cast<const RexInput*>(project->getProjectAt(index));
+      if (!input) {
+        return false;
+      }
+      node = input->getSourceNode();
+      index = input->getIndex();
+      continue;
+    }
+    if (const auto compound = dynamic_cast<const RelCompound*>(node)) {
+      if (compound->isAggregate()) {
+        if (index >= compound->size()) {
+          return false;
+        }
+        const auto groupby_ref =
+            dynamic_cast<const RexRef*>(compound->getTargetExpr(index));
+        if (!groupby_ref || groupby_ref->getIndex() == 0 ||
+            groupby_ref->getIndex() > compound->getGroupByCount()) {
+          return false;
+        }
+        index = groupby_ref->getIndex() - 1;
+      }
+      if (index >= compound->getScalarSourcesSize()) {
+        return false;
+      }
+      const auto input = dynamic_cast<const RexInput*>(compound->getScalarSource(index));
+      if (!input) {
+        return false;
+      }
+      node = input->getSourceNode();
+      index = input->getIndex();
+      continue;
+    }
+    if (const auto filter = dynamic_cast<const RelFilter*>(node)) {
+      const auto input_node = filter->getInput(0);
+      const auto input_output = get_node_output(input_node);
+      if (index >= input_output.size()) {
+        return false;
+      }
+      node = input_output[index].getSourceNode();
+      index = input_output[index].getIndex();
+      continue;
+    }
+    if (const auto sort = dynamic_cast<const RelSort*>(node)) {
+      const auto input_node = sort->getInput(0);
+      const auto input_output = get_node_output(input_node);
+      if (index >= input_output.size()) {
+        return false;
+      }
+      node = input_output[index].getSourceNode();
+      index = input_output[index].getIndex();
+      continue;
+    }
+    const auto output = get_node_output(node);
+    if (index >= output.size()) {
+      return false;
+    }
+    const auto& ref = output[index];
+    if (ref.getSourceNode() == node && ref.getIndex() == index) {
+      return false;
+    }
+    node = ref.getSourceNode();
+    index = ref.getIndex();
+  }
+  return false;
+}
+
+bool temporary_string_column_is_hash_safe(const Analyzer::ColumnVar* column,
+                                          const TableIdToNodeMap& table_id_to_node_map) {
+  CHECK(column);
+  const auto& column_key = column->getColumnKey();
+  if (column_key.table_id >= 0) {
+    return true;
+  }
+  if (column_key.column_id < 0) {
+    return false;
+  }
+  const auto source_node =
+      get_temporary_table_source_node(column->getTableKey(), table_id_to_node_map);
+  if (!source_node) {
+    return false;
+  }
+  return output_resolves_to_scan_column(source_node, column_key.column_id);
+}
+
+const Analyzer::ColumnVar* column_var_for_hash_join_expr(const Analyzer::Expr* expr) {
+  if (const auto cast = dynamic_cast<const Analyzer::UOper*>(expr)) {
+    if (cast->get_optype() != kCAST ||
+        cast->get_operand()->get_type_info().is_decimal()) {
+      return nullptr;
+    }
+    expr = cast->get_operand();
+  }
+  return dynamic_cast<const Analyzer::ColumnVar*>(expr);
+}
+
+std::optional<SQLTypeInfo> get_temp_column_type_for_join(
+    const Analyzer::ColumnVar* column,
+    const TemporaryTables* temporary_tables,
+    const TableIdToNodeMap& table_id_to_node_map,
+    const bool logical_type) {
+  CHECK(column);
+  const auto& column_key = column->getColumnKey();
+  if (column_key.table_id >= 0 || column_key.column_id < 0) {
+    return std::nullopt;
+  }
+
+  const auto source_node =
+      get_temporary_table_source_node(column->getTableKey(), table_id_to_node_map);
+  if (source_node) {
+    const auto& output_meta = source_node->getOutputMetainfo();
+    if (static_cast<size_t>(column_key.column_id) < output_meta.size()) {
+      const auto& target_meta = output_meta[column_key.column_id];
+      return logical_type ? target_meta.get_type_info()
+                          : target_meta.get_physical_type_info();
+    }
+  }
+
+  if (temporary_tables) {
+    const auto& temp = get_temporary_table(temporary_tables, column_key.table_id);
+    const auto target_meta = temp->getTargetMetaInfo();
+    if (!target_meta.empty() &&
+        static_cast<size_t>(column_key.column_id) < target_meta.size()) {
+      const auto& col_meta = target_meta[column_key.column_id];
+      return logical_type ? col_meta.get_type_info() : col_meta.get_physical_type_info();
+    }
+  }
+
+  return std::nullopt;
+}
+
+}  // namespace
+
+SQLTypeInfo HashJoin::getColumnTypeForJoin(const Analyzer::ColumnVar* column,
+                                           const TemporaryTables* temporary_tables,
+                                           const TableIdToNodeMap& table_id_to_node_map,
+                                           const bool logical_type) {
+  CHECK(column);
+  const auto& column_key = column->getColumnKey();
+  if (const auto temp_ti = get_temp_column_type_for_join(
+          column, temporary_tables, table_id_to_node_map, logical_type)) {
+    return *temp_ti;
+  }
+  if (const auto cd = get_column_descriptor_maybe(column_key)) {
+    CHECK_EQ(column_key.column_id, cd->columnId);
+    CHECK_EQ(column_key.table_id, cd->tableId);
+    return cd->columnType;
+  }
+  if (column_key.table_id < 0 && temporary_tables) {
+    const auto& temp = get_temporary_table(temporary_tables, column_key.table_id);
+    return temp->getColType(column_key.column_id);
+  }
+  return column->get_type_info();
+}
+
+SQLTypeInfo HashJoin::getExpressionTypeForJoin(
+    const Analyzer::Expr* expr,
+    const TemporaryTables* temporary_tables,
+    const TableIdToNodeMap& table_id_to_node_map,
+    const bool logical_type) {
+  CHECK(expr);
+  if (const auto column = getHashJoinColumn<Analyzer::ColumnVar>(expr)) {
+    return getColumnTypeForJoin(
+        column, temporary_tables, table_id_to_node_map, logical_type);
+  }
+  return expr->get_type_info();
+}
+
+void HashJoin::checkStringEncodingForHashJoin(
+    const std::vector<InnerOuter>& inner_outer_pairs,
+    const TemporaryTables* temporary_tables,
+    const TableIdToNodeMap& table_id_to_node_map) {
+  for (const auto& inner_outer : inner_outer_pairs) {
+    const auto inner_ti = getColumnTypeForJoin(
+        inner_outer.first, temporary_tables, table_id_to_node_map, true);
+    const auto outer_ti = getExpressionTypeForJoin(
+        inner_outer.second, temporary_tables, table_id_to_node_map, true);
+    if (!inner_ti.is_string() && !outer_ti.is_string()) {
+      continue;
+    }
+    if (!inner_ti.is_string() || !outer_ti.is_string()) {
+      throw HashJoinFail(
+          "Cannot use hash join for mixed string and non-string join keys");
+    }
+    if (inner_ti.get_compression() != outer_ti.get_compression()) {
+      throw HashJoinFail(
+          "Cannot use hash join for string columns with different encodings");
+    }
+    if (inner_ti.get_compression() != kENCODING_DICT) {
+      throw HashJoinFail("Cannot use hash join for none-encoded string columns");
+    }
+    if (inner_ti.getStringDictKey() == outer_ti.getStringDictKey()) {
+      continue;
+    }
+    const auto outer_col = column_var_for_hash_join_expr(inner_outer.second);
+    if (!temporary_string_column_is_hash_safe(inner_outer.first, table_id_to_node_map) ||
+        !outer_col ||
+        !temporary_string_column_is_hash_safe(outer_col, table_id_to_node_map)) {
+      throw HashJoinFail(
+          "Cannot use hash join for temporary string expressions with transient "
+          "dictionary ids");
+    }
+  }
 }
 
 std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
@@ -849,6 +1189,13 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
         "Cannot use hash join for given expression (both lhs and rhs are invalid)",
         InnerQualDecision::UNKNOWN);
   }
+  if (lhs_col && rhs_col && lhs_col->getTableKey() == rhs_col->getTableKey() &&
+      lhs_col->get_rte_idx() == rhs_col->get_rte_idx()) {
+    throw HashJoinFail(
+        "Cannot use hash join for given expression (both sides use the same range "
+        "table entry)",
+        InnerQualDecision::UNKNOWN);
+  }
 
   const Analyzer::ColumnVar* inner_col{nullptr};
   const Analyzer::ColumnVar* outer_col{nullptr};
@@ -910,6 +1257,18 @@ std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
   if ((inner_col_real_ti.is_decimal() || outer_col_ti.is_decimal()) &&
       (lhs_cast || rhs_cast)) {
     throw HashJoinFail("Cannot use hash join for given expression (cast from decimal)");
+  }
+  if (inner_col_real_ti.is_string() || outer_col_ti.is_string()) {
+    if (!inner_col_real_ti.is_string() || !outer_col_ti.is_string()) {
+      throw HashJoinFail(
+          "Cannot use hash join for given expression (mixed string and "
+          "non-string types)");
+    }
+    if (inner_col_real_ti.get_compression() != outer_col_ti.get_compression()) {
+      throw HashJoinFail(
+          "Cannot use hash join for string columns with different "
+          "encodings");
+    }
   }
   if (is_bbox_intersect) {
     if (!inner_col_real_ti.is_array()) {

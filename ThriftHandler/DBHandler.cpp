@@ -22,12 +22,17 @@
 #include "gen-cpp/CalciteServer.h"
 
 #include "QueryEngine/ErrorHandling.h"
+#include "QueryEngine/JoinHashTable/BitmapJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/RankedBitmapJoinHashTable.h"
 #include "QueryEngine/RelAlgExecutor.h"
 
 #include "Catalog/Catalog.h"
 #include "Catalog/DdlCommandExecutor.h"
 #include "DataMgr/BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
+#include "DataMgr/FileMgr/FileInfo.h"
+#include "DataMgr/ForeignStorage/ForeignStorageMgr.h"
 #include "DataMgr/ForeignStorage/PassThroughBuffer.h"
+#include "DataMgr/PersistentStorageMgr/PersistentStorageMgr.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Geospatial/ColumnNames.h"
 #include "Geospatial/Compression.h"
@@ -45,6 +50,7 @@
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/QueryDispatchQueue.h"
+#include "QueryEngine/RelAlgOptimizer.h"
 #include "QueryEngine/ResultSetBuilder.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TableOptimizer.h"
@@ -98,8 +104,10 @@
 #include <csignal>
 #include <fstream>
 #include <future>
+#include <limits>
 #include <map>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <thread>
@@ -241,6 +249,10 @@ DBHandler::DBHandler(const std::string& base_data_path,
     , clang_path_(clang_path)
     , clang_options_(clang_options)
     , max_num_sessions_(-1) {
+  g_enable_experimental_query_rewrites =
+      system_parameters_.enable_experimental_query_rewrites;
+  g_trust_unenforced_table_constraints =
+      system_parameters_.trust_unenforced_table_constraints;
   LOG(INFO) << "HeavyDB Server " << MAPD_RELEASE;
   initialize(is_new_db);
   resetSessionsStore();
@@ -354,6 +366,13 @@ void DBHandler::init_executor_resource_mgr() {
       !g_use_cpu_mem_pool_for_output_buffers &&
           g_executor_resource_mgr_allow_cpu_result_mem_oversubscription_concurrency,
       g_executor_resource_mgr_max_available_resource_use_ratio);
+}
+
+void DBHandler::startBackgroundGpuTransferWarmup() {
+  auto* cuda_mgr = data_mgr_ ? data_mgr_->getCudaMgr() : nullptr;
+  if (cuda_mgr) {
+    cuda_mgr->startBackgroundJumpBufferAllocation();
+  }
 }
 
 void DBHandler::initialize(const bool is_new_db) {
@@ -1109,43 +1128,45 @@ TDatum DBHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti) 
 
     switch (ti.get_type()) {
       case kBOOLEAN:
-        datum.is_null = (datum.val.int_val == NULL_BOOLEAN);
+        datum.is_null = !ti.get_notnull() && (data == NULL_BOOLEAN);
         break;
       case kTINYINT:
-        datum.is_null = (datum.val.int_val == NULL_TINYINT);
+        datum.is_null = !ti.get_notnull() && (data == NULL_TINYINT);
         break;
       case kSMALLINT:
-        datum.is_null = (datum.val.int_val == NULL_SMALLINT);
+        datum.is_null = !ti.get_notnull() && (data == NULL_SMALLINT);
         break;
       case kINT:
-        datum.is_null = (datum.val.int_val == NULL_INT);
+        datum.is_null = !ti.get_notnull() && (data == NULL_INT);
         break;
       case kDECIMAL:
       case kNUMERIC:
       case kBIGINT:
-        datum.is_null = (datum.val.int_val == NULL_BIGINT);
+        datum.is_null = !ti.get_notnull() && (data == NULL_BIGINT);
         break;
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
       case kINTERVAL_DAY_TIME:
       case kINTERVAL_YEAR_MONTH:
-        datum.is_null = (datum.val.int_val == NULL_BIGINT);
+        datum.is_null = !ti.get_notnull() && (data == NULL_BIGINT);
         break;
       default:
         datum.is_null = false;
     }
   } else if (boost::get<double>(scalar_tv)) {
-    datum.val.real_val = *(boost::get<double>(scalar_tv));
+    const auto data = *(boost::get<double>(scalar_tv));
+    datum.val.real_val = data;
     if (ti.get_type() == kFLOAT) {
-      datum.is_null = (datum.val.real_val == NULL_FLOAT);
+      datum.is_null = !ti.get_notnull() && (data == NULL_FLOAT);
     } else {
-      datum.is_null = (datum.val.real_val == NULL_DOUBLE);
+      datum.is_null = !ti.get_notnull() && (data == NULL_DOUBLE);
     }
   } else if (boost::get<float>(scalar_tv)) {
     CHECK_EQ(kFLOAT, ti.get_type());
-    datum.val.real_val = *(boost::get<float>(scalar_tv));
-    datum.is_null = (datum.val.real_val == NULL_FLOAT);
+    const auto data = *(boost::get<float>(scalar_tv));
+    datum.val.real_val = data;
+    datum.is_null = !ti.get_notnull() && (data == NULL_FLOAT);
   } else if (boost::get<NullableString>(scalar_tv)) {
     auto s_n = boost::get<NullableString>(scalar_tv);
     auto s = boost::get<std::string>(s_n);
@@ -2440,6 +2461,44 @@ void DBHandler::get_table_details_for_database(TTableDetails& _return,
 }
 
 namespace {
+int64_t saturated_num_rows(const size_t num_rows) {
+  const auto max_num_rows = static_cast<size_t>(std::numeric_limits<int64_t>::max());
+  return static_cast<int64_t>(std::min(num_rows, max_num_rows));
+}
+
+int64_t get_table_num_rows(const Catalog& cat, const TableDescriptor* td) {
+  if (td->isView) {
+    return -1;
+  }
+  auto get_fragmenter_num_rows = [&cat](const TableDescriptor* table_desc) -> int64_t {
+    const auto populated_td = cat.getMetadataForTable(table_desc->tableId, true);
+    if (!populated_td || !populated_td->fragmenter) {
+      return -1;
+    }
+    return saturated_num_rows(populated_td->fragmenter->getNumRows());
+  };
+  if (td->nShards > 0) {
+    size_t num_rows{0};
+    const auto max_num_rows = static_cast<size_t>(std::numeric_limits<int64_t>::max());
+    for (const auto physical_td : cat.getPhysicalTablesDescriptors(td)) {
+      if (!physical_td) {
+        return -1;
+      }
+      const auto physical_num_rows = get_fragmenter_num_rows(physical_td);
+      if (physical_num_rows < 0) {
+        return -1;
+      }
+      const auto physical_rows = static_cast<size_t>(physical_num_rows);
+      if (physical_rows > max_num_rows - num_rows) {
+        return std::numeric_limits<int64_t>::max();
+      }
+      num_rows += physical_rows;
+    }
+    return saturated_num_rows(num_rows);
+  }
+  return get_fragmenter_num_rows(td);
+}
+
 TTableRefreshInfo get_refresh_info(const TableDescriptor* td) {
   CHECK(td->isForeignTable());
   auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
@@ -2582,6 +2641,12 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
     _return.fragment_size = td->maxFragRows;
     _return.page_size = td->fragPageSize;
     _return.max_rows = td->maxRows;
+    if (system_parameters_.enable_experimental_query_rewrites) {
+      const auto num_rows = get_table_num_rows(*cat, td);
+      if (num_rows >= 0) {
+        _return.__set_num_rows(num_rows);
+      }
+    }
     _return.view_sql =
         (have_privileges_on_view_sources ? td->viewSQL
                                          : "[Not enough privileges to see the view SQL]");
@@ -3240,8 +3305,21 @@ CacheMemoryUsage get_cache_size() {
       BoundingBoxIntersectJoinHashTable::getBoundingBoxIntersectTuningParamCache()
           ->getCurrentCacheSizeForDevice(CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM,
                                          DataRecyclerUtil::CPU_DEVICE_IDENTIFIER);
+  size_t bitmap_join_ht_cache_size = 0;
+  size_t ranked_bitmap_join_ht_cache_size = 0;
+  for (int device_identifier = 1;
+       device_identifier <= DataRecyclerUtil::MAX_GPU_CACHE_DEVICE_COUNT;
+       ++device_identifier) {
+    bitmap_join_ht_cache_size +=
+        BitmapJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
+            CacheItemType::BITMAP_HT, device_identifier);
+    ranked_bitmap_join_ht_cache_size +=
+        RankedBitmapJoinHashTable::getHashTableCache()->getCurrentCacheSizeForDevice(
+            CacheItemType::RANKED_BITMAP_HT, device_identifier);
+  }
   cmu.hash_tables = perfect_join_ht_cache_size + baseline_join_ht_cache_size +
-                    bbox_intersect_ht_cache_size + bbox_intersect_ht_tuner_cache_size;
+                    bbox_intersect_ht_cache_size + bbox_intersect_ht_tuner_cache_size +
+                    bitmap_join_ht_cache_size + ranked_bitmap_join_ht_cache_size;
 
   // 1.c Chunk Metadata Recycler
   cmu.chunk_metadata =
@@ -3400,7 +3478,7 @@ void DBHandler::load_table_binary(const TSessionId& session_id_or_json,
     const auto execute_read_lock = legacylockmgr::getExecuteReadLock();
     std::unique_ptr<import_export::Loader> loader;
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
-    auto schema_read_lock = prepare_loader_generic(*session_ptr,
+    auto load_table_locks = prepare_loader_generic(*session_ptr,
                                                    table_name,
                                                    rows.front().cols.size(),
                                                    &loader,
@@ -3449,8 +3527,6 @@ void DBHandler::load_table_binary(const TSessionId& session_id_or_json,
                        desc_id_to_column_id,
                        rows_completed,
                        table_name);
-    auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
-        session_ptr->getCatalog(), table_name);
     if (!loader->load(import_buffers, rows.size(), session_ptr.get())) {
       THROW_DB_EXCEPTION(loader->getErrorMessage());
     }
@@ -3459,8 +3535,7 @@ void DBHandler::load_table_binary(const TSessionId& session_id_or_json,
   }
 }
 
-std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>
-DBHandler::prepare_loader_generic(
+DBHandler::LoadTableLocks DBHandler::prepare_loader_generic(
     const Catalog_Namespace::SessionInfo& session_info,
     const std::string& table_name,
     size_t num_cols,
@@ -3481,6 +3556,9 @@ DBHandler::prepare_loader_generic(
   CHECK(td);
 
   check_table_load_privileges(session_info, table_name);
+
+  auto insert_data_lock = std::make_unique<lockmgr::WriteLock>(
+      lockmgr::InsertDataLockMgr::getWriteLockForTable(cat, table_name));
 
   loader->reset(new import_export::Loader(cat, td));
 
@@ -3507,7 +3585,7 @@ DBHandler::prepare_loader_generic(
   }
 
   *import_buffers = import_export::setup_column_loaders(td, loader->get());
-  return std::move(td_with_lock);
+  return {std::move(td_with_lock), std::move(insert_data_lock)};
 }
 namespace {
 
@@ -3539,7 +3617,7 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session_id_or_json,
   const auto execute_read_lock = legacylockmgr::getExecuteReadLock();
   std::unique_ptr<import_export::Loader> loader;
   std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
-  auto schema_read_lock = prepare_loader_generic(*session_ptr,
+  auto load_table_locks = prepare_loader_generic(*session_ptr,
                                                  table_name,
                                                  cols.size(),
                                                  &loader,
@@ -3615,8 +3693,6 @@ void DBHandler::load_table_binary_columnar(const TSessionId& session_id_or_json,
                      desc_id_to_column_id,
                      num_rows,
                      table_name);
-  auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
-      session_ptr->getCatalog(), table_name);
   if (!loader->load(import_buffers, num_rows, session_ptr.get())) {
     THROW_DB_EXCEPTION(loader->getErrorMessage());
   }
@@ -3691,7 +3767,7 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session_id_or_json,
     column_names = batch->schema()->field_names();
   }
   const auto execute_read_lock = legacylockmgr::getExecuteReadLock();
-  auto schema_read_lock =
+  auto load_table_locks =
       prepare_loader_generic(*session_ptr,
                              table_name,
                              static_cast<size_t>(batch->num_columns()),
@@ -3768,8 +3844,6 @@ void DBHandler::load_table_binary_arrow(const TSessionId& session_id_or_json,
                      desc_id_to_column_id,
                      num_rows,
                      table_name);
-  auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
-      session_ptr->getCatalog(), table_name);
   if (!loader->load(import_buffers, num_rows, session_ptr.get())) {
     THROW_DB_EXCEPTION(loader->getErrorMessage());
   }
@@ -3802,7 +3876,7 @@ void DBHandler::load_table(const TSessionId& session_id_or_json,
     const auto execute_read_lock = legacylockmgr::getExecuteReadLock();
     std::unique_ptr<import_export::Loader> loader;
     std::vector<std::unique_ptr<import_export::TypedImportBuffer>> import_buffers;
-    auto schema_read_lock =
+    auto load_table_locks =
         prepare_loader_generic(*session_ptr,
                                table_name,
                                static_cast<size_t>(rows.front().cols.size()),
@@ -3894,8 +3968,6 @@ void DBHandler::load_table(const TSessionId& session_id_or_json,
                        desc_id_to_column_id,
                        rows_completed,
                        table_name);
-    auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
-        session_ptr->getCatalog(), table_name);
     if (!loader->load(import_buffers, rows_completed, session_ptr.get())) {
       THROW_DB_EXCEPTION(loader->getErrorMessage());
     }
@@ -6926,11 +6998,19 @@ bool check_and_reset_in_memory_system_table(const Catalog& catalog,
           lockmgr::TableSchemaLockMgr::getWriteLockForTable(catalog, td.tableName);
       auto table_data_lock =
           lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, td.tableName);
-      catalog.removeFragmenterForTable(td.tableId);
 
       const auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(&td);
       CHECK(foreign_table);
       CHECK(foreign_table->foreign_server);
+      Executor::clearExternalCaches(true, foreign_table, catalog.getDatabaseId());
+      const ChunkKey table_key{catalog.getDatabaseId(), td.tableId};
+      catalog.getDataMgr().deleteChunksWithPrefix(table_key, Data_Namespace::CPU_LEVEL);
+      catalog.getDataMgr().deleteChunksWithPrefix(table_key, Data_Namespace::GPU_LEVEL);
+      catalog.removeFragmenterForTable(td.tableId);
+      auto foreign_storage_mgr =
+          catalog.getDataMgr().getPersistentStorageMgr()->getForeignStorageMgr();
+      CHECK(foreign_storage_mgr);
+      foreign_storage_mgr->refreshTable(table_key, true);
       if (foreign_table->foreign_server->data_wrapper_type ==
           foreign_storage::DataWrapperType::INTERNAL_MEMORY_STATS) {
         Catalog_Namespace::SysCatalog::instance().getDataMgr().takeMemoryInfoSnapshot(
@@ -6984,7 +7064,9 @@ TPlanResult DBHandler::processCalciteRequest(
   auto optimization_option = calcite_->getCalciteOptimizationOption(
       system_parameters.enable_calcite_view_optimize,
       g_enable_watchdog,
-      filter_push_down_info);
+      filter_push_down_info,
+      system_parameters.enable_experimental_query_rewrites,
+      system_parameters.trust_unenforced_table_constraints);
 
   TPlanResult result = query_parsing::process_and_check_access_privileges(
       calcite_.get(),

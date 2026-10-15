@@ -419,13 +419,18 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
       if (op == kMULTIPLY) {
         // Decimal multiplication requires common_type adjustment:
         // dimension and scale of the result should be increased.
-        auto new_dimension = left_type.get_dimension() + right_type.get_dimension();
-        // If new dimension is over 20 digits, the result may overflow, or it may not.
-        // Rely on the runtime overflow detection rather than a static check here.
-        if (common_type.get_dimension() < new_dimension) {
-          common_type.set_dimension(new_dimension);
+        const auto new_dimension = left_type.get_dimension() + right_type.get_dimension();
+        const auto new_scale = left_type.get_scale() + right_type.get_scale();
+        if (new_dimension > sql_constants::kMaxRepresentableNumericPrecision &&
+            new_scale > 4) {
+          common_type =
+              SQLTypeInfo(kDOUBLE, left_type.get_notnull() && right_type.get_notnull());
+        } else {
+          if (common_type.get_dimension() < new_dimension) {
+            common_type.set_dimension(new_dimension);
+          }
+          common_type.set_scale(new_scale);
         }
-        common_type.set_scale(left_type.get_scale() + right_type.get_scale());
       } else if (op == kPLUS || op == kMINUS) {
         // Scale should remain the same but dimension could actually go up
         common_type.set_dimension(common_type.get_dimension() + 1);
@@ -435,7 +440,7 @@ SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
     new_left_type->set_notnull(left_type.get_notnull());
     *new_right_type = common_type;
     new_right_type->set_notnull(right_type.get_notnull());
-    if (op == kMULTIPLY) {
+    if (op == kMULTIPLY && common_type.is_decimal()) {
       new_left_type->set_scale(left_type.get_scale());
       new_right_type->set_scale(right_type.get_scale());
     }
@@ -1577,6 +1582,11 @@ bool BinOper::simple_predicate_has_simple_cast(
     } else if (ti.is_integer() && u_expr->get_operand()->get_type_info().is_integer()) {
       // Allow casts between integer types to pass through
       return true;
+    } else if (ti.is_decimal() && u_expr->get_operand()->get_type_info().is_decimal() &&
+               ti.get_scale() == u_expr->get_operand()->get_type_info().get_scale()) {
+      // Allow precision-only decimal casts to pass through. Fragment min/max metadata is
+      // stored in the same scaled integer domain when the scale is unchanged.
+      return true;
     }
   }
   return false;
@@ -1714,7 +1724,14 @@ void InValues::group_predicates(std::list<const Expr*>& scan_predicates,
 InIntegerSet::InIntegerSet(const std::shared_ptr<const Analyzer::Expr> a,
                            const std::vector<int64_t>& l,
                            const bool not_null)
-    : Expr(kBOOLEAN, not_null), arg(a), value_list(l) {}
+    : InIntegerSet(a, std::make_shared<const std::vector<int64_t>>(l), not_null) {}
+
+InIntegerSet::InIntegerSet(const std::shared_ptr<const Analyzer::Expr> a,
+                           std::shared_ptr<const std::vector<int64_t>> l,
+                           const bool not_null)
+    : Expr(kBOOLEAN, not_null), arg(a), value_list(std::move(l)) {
+  CHECK(value_list);
+}
 
 void CharLengthExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                       std::list<const Expr*>& join_predicates,
@@ -2979,7 +2996,7 @@ bool InIntegerSet::operator==(const Expr& rhs) const {
     return false;
   }
   const auto& rhs_in_integer_set = static_cast<const InIntegerSet&>(rhs);
-  return *arg == *rhs_in_integer_set.arg && value_list == rhs_in_integer_set.value_list;
+  return *arg == *rhs_in_integer_set.arg && *value_list == *rhs_in_integer_set.value_list;
 }
 
 std::string InIntegerSet::toString() const {
@@ -2988,7 +3005,7 @@ std::string InIntegerSet::toString() const {
   str += "( ";
   int cnt = 0;
   bool shorted_value_list_str = false;
-  for (const auto e : value_list) {
+  for (const auto e : *value_list) {
     str += std::to_string(e) + " ";
     cnt++;
     if (cnt > 4) {
@@ -2999,7 +3016,7 @@ std::string InIntegerSet::toString() const {
   if (shorted_value_list_str) {
     str += "... | ";
     str += "Total # values: ";
-    str += std::to_string(value_list.size());
+    str += std::to_string(value_list->size());
   }
   str += ") ";
   return str;

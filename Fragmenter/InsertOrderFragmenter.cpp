@@ -6,12 +6,15 @@
 #include "Fragmenter/InsertOrderFragmenter.h"
 
 #include <algorithm>
+#include <atomic>
 #include <boost/lexical_cast.hpp>
 #include <cassert>
 #include <cmath>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <thread>
 #include <type_traits>
 
@@ -961,15 +964,61 @@ void InsertOrderFragmenter::insertChunksIntoFragment(
   insert_row_indices.erase(insert_row_indices.begin() + num_rows_to_insert,
                            insert_row_indices.end());
   CHECK_EQ(insert_row_indices.size(), num_rows_to_insert);
-  for (auto& [column_id, chunk] : insert_chunks.chunks) {
-    auto col_map_it = columnMap_.find(column_id);
-    CHECK(col_map_it != columnMap_.end());
-    current_fragment->shadowChunkMetadataMap[column_id] =
-        col_map_it->second.appendEncodedDataAtIndices(*chunk, insert_row_indices);
-    auto var_len_col_info_it = varLenColInfo_.find(column_id);
-    if (var_len_col_info_it != varLenColInfo_.end()) {
-      var_len_col_info_it->second = col_map_it->second.getBuffer()->size();
-      CHECK_LE(var_len_col_info_it->second, maxChunkSize_);
+
+  struct ColumnAppendResult {
+    int column_id;
+    std::shared_ptr<ChunkMetadata> metadata;
+    std::optional<size_t> var_len_size;
+  };
+  std::vector<std::pair<int, std::shared_ptr<Chunk>>> columns(
+      insert_chunks.chunks.begin(), insert_chunks.chunks.end());
+  std::vector<ColumnAppendResult> append_results(columns.size());
+  std::atomic<size_t> next_column_index{0};
+  auto append_columns = [&]() {
+    while (true) {
+      const auto column_index = next_column_index.fetch_add(1);
+      if (column_index >= columns.size()) {
+        return;
+      }
+
+      const auto& [column_id, chunk] = columns[column_index];
+      const auto col_map_it = columnMap_.find(column_id);
+      CHECK(col_map_it != columnMap_.end());
+      auto& target_chunk = col_map_it->second;
+      append_results[column_index] = {
+          column_id,
+          target_chunk.appendEncodedDataAtIndices(*chunk, insert_row_indices),
+          varLenColInfo_.count(column_id)
+              ? std::optional<size_t>{target_chunk.getBuffer()->size()}
+              : std::nullopt};
+    }
+  };
+
+  const auto num_append_threads =
+      std::min(insert_chunks.num_column_append_threads, append_results.size());
+  CHECK_GT(num_append_threads, size_t{0});
+  if (num_append_threads == 1) {
+    append_columns();
+  } else {
+    std::vector<std::future<void>> append_futures;
+    append_futures.reserve(num_append_threads);
+    for (size_t thread_idx = 0; thread_idx < num_append_threads; ++thread_idx) {
+      append_futures.emplace_back(std::async(std::launch::async, append_columns));
+    }
+    for (auto& future : append_futures) {
+      future.wait();
+    }
+    for (auto& future : append_futures) {
+      future.get();
+    }
+  }
+
+  for (auto& result : append_results) {
+    current_fragment->shadowChunkMetadataMap[result.column_id] =
+        std::move(result.metadata);
+    if (result.var_len_size) {
+      varLenColInfo_.at(result.column_id) = *result.var_len_size;
+      CHECK_LE(*result.var_len_size, maxChunkSize_);
     }
   }
   if (hasMaterializedRowId_) {

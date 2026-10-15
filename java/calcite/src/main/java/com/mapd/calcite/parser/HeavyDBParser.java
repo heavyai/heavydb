@@ -30,13 +30,18 @@ import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.RelShuttleImpl;
 import org.apache.calcite.rel.RelVisitor;
 import org.apache.calcite.rel.RelWriter;
+import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.TableModify.Operation;
 import org.apache.calcite.rel.externalize.HeavyDBRelWriterImpl;
+import org.apache.calcite.rel.hint.Hintable;
+import org.apache.calcite.rel.hint.RelHint;
 import org.apache.calcite.rel.logical.LogicalAggregate;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
 import org.apache.calcite.util.ImmutableBitSet;
+import org.apache.calcite.util.mapping.MappingType;
+import org.apache.calcite.util.mapping.Mappings;
 import com.google.common.collect.ImmutableSet;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
@@ -536,15 +541,25 @@ public final class HeavyDBParser {
 
   public String buildRATreeAndPerformQueryOptimization(
           String query, final HeavyDBParserOptions parserOptions) throws IOException {
-    HeavyDBSchema schema = new HeavyDBSchema(
-            dataDir, this, dbPort, dbUser, sock_transport_properties, dbUser.getDB());
-    HeavyDBPlanner planner = getPlanner(
-            true, parserOptions.isWatchdogEnabled());
+    final boolean previousMetadataState = HeavyDBTable.setOptimizerMetadataEnabled(
+            parserOptions.isExperimentalQueryRewritesEnabled());
+    final boolean previousConstraintTrustState =
+            HeavyDBTable.setTrustUnenforcedTableConstraints(
+                    parserOptions.trustUnenforcedTableConstraints());
+    try {
+      HeavyDBSchema schema = new HeavyDBSchema(
+              dataDir, this, dbPort, dbUser, sock_transport_properties, dbUser.getDB());
+      HeavyDBPlanner planner = getPlanner(
+              true, parserOptions.isWatchdogEnabled());
 
-    planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
-    RelRoot optRel = planner.buildRATreeAndPerformQueryOptimization(query, schema);
-    optRel = replaceIsTrue(planner.getTypeFactory(), optRel);
-    return HeavyDBSerializer.toString(optRel.project());
+      planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
+      RelRoot optRel = planner.buildRATreeAndPerformQueryOptimization(query, schema);
+      optRel = replaceIsTrue(planner.getTypeFactory(), optRel);
+      return HeavyDBSerializer.toString(normalizeAggregateGroupKeys(optRel.project()));
+    } finally {
+      HeavyDBTable.setTrustUnenforcedTableConstraints(previousConstraintTrustState);
+      HeavyDBTable.setOptimizerMetadataEnabled(previousMetadataState);
+    }
   }
 
   public Pair<String, Boolean> processSql(
@@ -564,37 +579,48 @@ public final class HeavyDBParser {
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
 
-    if (sqlNode instanceof JsonSerializableDdl) {
-      return new Pair<String, Boolean>(
-              ((JsonSerializableDdl) sqlNode).toJsonString(), false);
-    }
+    final boolean previousMetadataState = HeavyDBTable.setOptimizerMetadataEnabled(
+            parserOptions.isExperimentalQueryRewritesEnabled());
+    final boolean previousConstraintTrustState =
+            HeavyDBTable.setTrustUnenforcedTableConstraints(
+                    parserOptions.trustUnenforcedTableConstraints());
+    try {
 
-    if (sqlNode instanceof SqlDdl) {
-      return new Pair<String, Boolean>(sqlNode.toString(), false);
-    }
+      if (sqlNode instanceof JsonSerializableDdl) {
+        return new Pair<String, Boolean>(
+                ((JsonSerializableDdl) sqlNode).toJsonString(), false);
+      }
 
-    final HeavyDBPlanner planner = getPlanner(
-            true, parserOptions.isWatchdogEnabled());
-    planner.advanceToValidate();
+      if (sqlNode instanceof SqlDdl) {
+        return new Pair<String, Boolean>(sqlNode.toString(), false);
+      }
 
-    final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
-    RelNode project = sqlRel.project();
-    if (project == null) {
-      throw new RuntimeException("Cannot convert the sql to AST");
+      final HeavyDBPlanner planner = getPlanner(
+              true, parserOptions.isWatchdogEnabled());
+      planner.advanceToValidate();
+
+      final RelRoot sqlRel = convertSqlToRelNode(sqlNode, planner, parserOptions);
+      RelNode project = sqlRel.project();
+      if (project == null) {
+        throw new RuntimeException("Cannot convert the sql to AST");
+      }
+      // Normalize non-prefix Aggregate group keys (a Calcite 1.41.0 decorrelation shape
+      // HeavyDB can't execute) before explain/serialization. See normalizeAggregateGroupKeys.
+      project = normalizeAggregateGroupKeys(project);
+      if (parserOptions.isExplainDetail()) {
+        StringWriter sw = new StringWriter();
+        RelWriter planWriter = new HeavyDBRelWriterImpl(
+                new PrintWriter(sw), SqlExplainLevel.EXPPLAN_ATTRIBUTES, false);
+        project.explain(planWriter);
+        return new Pair<String, Boolean>(sw.toString(), true);
+      } else if (parserOptions.isExplain()) {
+        return new Pair<String, Boolean>(RelOptUtil.toString(project), true);
+      }
+      return new Pair<String, Boolean>(HeavyDBSerializer.toString(project), true);
+    } finally {
+      HeavyDBTable.setTrustUnenforcedTableConstraints(previousConstraintTrustState);
+      HeavyDBTable.setOptimizerMetadataEnabled(previousMetadataState);
     }
-    // Normalize non-prefix Aggregate group keys (a Calcite 1.41.0 decorrelation shape
-    // HeavyDB can't execute) before explain/serialization. See normalizeAggregateGroupKeys.
-    project = normalizeAggregateGroupKeys(project);
-    if (parserOptions.isExplainDetail()) {
-      StringWriter sw = new StringWriter();
-      RelWriter planWriter = new HeavyDBRelWriterImpl(
-              new PrintWriter(sw), SqlExplainLevel.EXPPLAN_ATTRIBUTES, false);
-      project.explain(planWriter);
-      return new Pair<String, Boolean>(sw.toString(), true);
-    } else if (parserOptions.isExplain()) {
-      return new Pair<String, Boolean>(RelOptUtil.toString(sqlRel.project()), true);
-    }
-    return new Pair<String, Boolean>(HeavyDBSerializer.toString(project), true);
   }
 
   // Calcite 1.41.0 (unlike 1.25.0) can emit a LogicalAggregate whose group keys aren't
@@ -607,10 +633,8 @@ public final class HeavyDBParser {
   //
   // Aggregate cases:
   //   * prefix group (with/without aggs) -> already valid; left untouched
-  //   * non-prefix, no agg calls         -> decorrelator DISTINCT-key aggs; normalized here
-  //   * non-prefix, with agg calls       -> not emitted by 1.41.0; throw if ever hit
-  //                                         (would also need agg-operand index remapping)
-  private static RelNode normalizeAggregateGroupKeys(RelNode root) {
+  //   * non-prefix group                 -> reorder the input and remap aggregate calls
+  static RelNode normalizeAggregateGroupKeys(RelNode root) {
     // Skip plans with nothing to rewrite (read-only scan).
     if (!hasNonPrefixGroupAggregate(root)) {
       return root;
@@ -635,41 +659,59 @@ public final class HeavyDBParser {
         final ImmutableBitSet groupSet = aggregate.getGroupSet();
         final int groupCount = groupSet.cardinality();
         final boolean isPrefix = groupSet.equals(ImmutableBitSet.range(groupCount));
-        // Already prefix, or GROUPING SETS (rejected by HeavyDB elsewhere): leave as-is,
-        // rebuilding only when a descendant actually changed.
-        if (isPrefix || aggregate.getGroupSets().size() != 1) {
+        // Already prefix: leave as-is, rebuilding only when a descendant changed.
+        if (isPrefix) {
           return input == aggregate.getInput()
                   ? aggregate
                   : aggregate.copy(aggregate.getTraitSet(), ImmutableList.of(input));
         }
-        if (!aggregate.getAggCallList().isEmpty()) {
-          throw new RuntimeException(
-                  "non-prefix aggregate group with agg calls is not handled");
-        }
         // Project the group columns to the front (ascending group-set order preserves
-        // the aggregate's output column order), then re-group on [0..N).
+        // the aggregate's output column order), followed by every non-group column.
+        // Keeping a full input permutation lets AggregateCall.transform remap arguments,
+        // FILTER columns, DISTINCT keys, and ordered-aggregate collations uniformly.
         final RexBuilder rexBuilder = aggregate.getCluster().getRexBuilder();
         final List<String> inNames = input.getRowType().getFieldNames();
         final List<RexNode> projExprs = new ArrayList<>();
         final List<String> projNames = new ArrayList<>();
+        final Mappings.TargetMapping inputMapping = Mappings.create(
+                MappingType.BIJECTION,
+                input.getRowType().getFieldCount(),
+                input.getRowType().getFieldCount());
         for (int col : groupSet) {
+          inputMapping.set(col, projExprs.size());
+          projExprs.add(rexBuilder.makeInputRef(input, col));
+          projNames.add(inNames.get(col));
+        }
+        for (int col = 0; col < input.getRowType().getFieldCount(); ++col) {
+          if (groupSet.get(col)) {
+            continue;
+          }
+          inputMapping.set(col, projExprs.size());
           projExprs.add(rexBuilder.makeInputRef(input, col));
           projNames.add(inNames.get(col));
         }
         final RelNode project = LogicalProject.create(
                 input, ImmutableList.of(), projExprs, projNames, ImmutableSet.of());
         final ImmutableBitSet newGroupSet = ImmutableBitSet.range(groupCount);
-        return LogicalAggregate.create(project,
-                ImmutableList.of(),
+        final List<ImmutableBitSet> remappedGroupSets = new ArrayList<>();
+        for (ImmutableBitSet aggregateGroupSet : aggregate.getGroupSets()) {
+          remappedGroupSets.add(aggregateGroupSet.permute(inputMapping));
+        }
+        final List<AggregateCall> remappedCalls = new ArrayList<>();
+        for (AggregateCall aggregateCall : aggregate.getAggCallList()) {
+          remappedCalls.add(aggregateCall.transform(inputMapping));
+        }
+        return aggregate.copy(aggregate.getTraitSet(),
+                project,
                 newGroupSet,
-                ImmutableList.of(newGroupSet),
-                ImmutableList.of());
+                remappedGroupSets,
+                remappedCalls);
       }
     });
   }
 
-  // Returns true iff the plan holds an aggregate whose single group set is not the
-  // leading [0..N) prefix
+  // Returns true iff the plan holds an aggregate whose group keys are not the leading
+  // [0..N) prefix.
   private static boolean hasNonPrefixGroupAggregate(RelNode root) {
     final boolean[] found = {false};
     new RelVisitor() {
@@ -677,8 +719,7 @@ public final class HeavyDBParser {
       public void visit(RelNode node, int ordinal, RelNode parent) {
         if (node instanceof LogicalAggregate) {
           final ImmutableBitSet g = ((LogicalAggregate) node).getGroupSet();
-          if (((LogicalAggregate) node).getGroupSets().size() == 1
-                  && !g.equals(ImmutableBitSet.range(g.cardinality()))) {
+          if (!g.equals(ImmutableBitSet.range(g.cardinality()))) {
             found[0] = true;
           }
         }
@@ -1209,14 +1250,26 @@ public final class HeavyDBParser {
     RelRoot relRootNode = planner.getRelRoot(validateR);
     relRootNode = replaceIsTrue(planner.getTypeFactory(), relRootNode);
     RelNode rootNode = planner.optimizeRATree(
-            relRootNode.project(), parserOptions.isViewOptimizeEnabled(), foundView);
+            relRootNode.project(),
+            parserOptions.isViewOptimizeEnabled(),
+            foundView,
+            parserOptions.isExperimentalQueryRewritesEnabled());
+    relRootNode = replaceIsTrue(planner.getTypeFactory(),
+            new RelRoot(rootNode,
+                    relRootNode.validatedRowType,
+                    relRootNode.kind,
+                    relRootNode.fields,
+                    relRootNode.collation,
+                    relRootNode.hints));
+    rootNode = relRootNode.rel;
+    rootNode = attachHintsToFirstHintable(rootNode, relRootNode.hints);
     planner.close();
     RelRoot rr = new RelRoot(rootNode,
             relRootNode.validatedRowType,
             relRootNode.kind,
             relRootNode.fields,
             relRootNode.collation,
-            Collections.emptyList());
+            relRootNode.hints);
     return rr;
   }
 
@@ -1265,7 +1318,42 @@ public final class HeavyDBParser {
             root.kind,
             root.fields,
             root.collation,
-            Collections.emptyList());
+            root.hints);
+  }
+
+  private static RelNode attachHintList(RelNode rel, List<RelHint> hints) {
+    if (!(rel instanceof Hintable) || hints.isEmpty()) {
+      return rel;
+    }
+    List<RelHint> mergedHints = new ArrayList<>(((Hintable) rel).getHints());
+    for (RelHint hint : hints) {
+      if (!mergedHints.contains(hint)) {
+        mergedHints.add(hint);
+      }
+    }
+    return ((Hintable) rel).attachHints(mergedHints);
+  }
+
+  private static RelNode attachHintsToFirstHintable(RelNode root, List<RelHint> hints) {
+    if (hints.isEmpty()) {
+      return root;
+    }
+    if (root instanceof Hintable) {
+      return attachHintList(root, hints);
+    }
+    return root.accept(new RelShuttleImpl() {
+      boolean attached = false;
+
+      @Override
+      protected RelNode visitChild(RelNode parent, int i, RelNode child) {
+        if (child instanceof Hintable && !attached) {
+          attached = true;
+          return attachHintList(child, hints);
+        } else {
+          return super.visitChild(parent, i, child);
+        }
+      }
+    });
   }
 
   private SqlNode parseSql(String sql, final boolean legacy_syntax, Planner planner)

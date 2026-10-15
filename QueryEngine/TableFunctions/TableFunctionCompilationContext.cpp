@@ -366,7 +366,6 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
 #endif
     return *cached_code;
   }
-  auto compile_start = timer_start();
   auto cgen_state = executor_->getCgenStatePtr();
   CHECK(cgen_state);
   CHECK(cgen_state->module_ == nullptr);
@@ -382,7 +381,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::compile(
   }
   std::shared_ptr<CompilationContext> code;
   try {
-    code = finalize(emit_only_preflight_fn, compile_start);
+    code = finalize(emit_only_preflight_fn);
   } catch (const std::exception& e) {
     // Erase unsuccesful key and release lock from the get_or_wait(key) call above:
     QueryEngine::getInstance()->tf_code_accessor->erase(key);
@@ -760,8 +759,7 @@ void TableFunctionCompilationContext::generateGpuKernel() {
 }
 
 std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
-    bool emit_only_preflight_fn,
-    std::chrono::steady_clock::time_point& compile_start_timer) {
+    bool emit_only_preflight_fn) {
   auto timer = DEBUG_TIMER(__func__);
   /*
     TODO 1: eliminate need for OverrideFromSrc
@@ -798,7 +796,7 @@ std::shared_ptr<CompilationContext> TableFunctionCompilationContext::finalize(
                                                 /*is_gpu_smem_used=*/false,
                                                 co_,
                                                 gpu_target,
-                                                compile_start_timer);
+                                                CodeCacheKey{});
   } else {
     auto ee =
         CodeGenerator::generateNativeCPUCode(entry_point_func_, {entry_point_func_}, co_);

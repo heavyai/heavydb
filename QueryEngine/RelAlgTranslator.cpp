@@ -19,9 +19,11 @@
 #include "Shared/likely.h"
 #include "Shared/scope.h"
 #include "Shared/thread_count.h"
+#include "StringDictionary/StringDictionary.h"
 #include "WindowContext.h"
 
 #include <future>
+#include <optional>
 #include <sstream>
 
 extern bool g_enable_watchdog;
@@ -32,6 +34,127 @@ extern size_t g_in_clause_num_elem_skip_bitmap;
 bool g_enable_string_functions{true};
 
 namespace {
+
+int64_t in_integer_set_null_val(const SQLTypeInfo& ti) {
+  if (ti.is_string() && ti.get_compression() == kENCODING_DICT) {
+    return StringDictionary::INVALID_STR_ID;
+  }
+  return inline_int_null_val(ti);
+}
+
+bool is_in_integer_set_null_val(const int64_t value, const SQLTypeInfo& ti) {
+  if (value == in_integer_set_null_val(ti)) {
+    return true;
+  }
+  return ti.is_string() && ti.get_compression() == kENCODING_DICT &&
+         value == inline_int_null_val(ti);
+}
+
+bool is_dictionary_encoded_row_null(const int64_t value,
+                                    const size_t source_storage_entry_count,
+                                    const int64_t needle_null_val) {
+  if (value == needle_null_val || value == inline_int_null_value<int32_t>()) {
+    return true;
+  }
+  return value >= 0 && static_cast<size_t>(value) >= source_storage_entry_count;
+}
+
+RexInput resolve_output_reference_for_translation(const RelAlgNode* node,
+                                                  const unsigned index) {
+  CHECK(node);
+  auto output = get_node_output(node);
+  CHECK_LT(static_cast<size_t>(index), output.size());
+  auto ref = output[index];
+
+  while (true) {
+    const auto source = ref.getSourceNode();
+    CHECK(source);
+    const auto ref_index = ref.getIndex();
+
+    if (const auto project = dynamic_cast<const RelProject*>(source)) {
+      if (!project->isSimple()) {
+        return ref;
+      }
+      CHECK_LT(static_cast<size_t>(ref_index), project->size());
+      const auto project_input =
+          dynamic_cast<const RexInput*>(project->getProjectAt(ref_index));
+      CHECK(project_input);
+      ref = *project_input;
+      continue;
+    }
+
+    if (const auto compound = dynamic_cast<const RelCompound*>(source)) {
+      if (compound->isAggregate()) {
+        return ref;
+      }
+      CHECK_LT(static_cast<size_t>(ref_index), compound->getScalarSourcesSize());
+      const auto compound_input =
+          dynamic_cast<const RexInput*>(compound->getScalarSource(ref_index));
+      if (!compound_input) {
+        return ref;
+      }
+      ref = *compound_input;
+      continue;
+    }
+
+    if (const auto filter = dynamic_cast<const RelFilter*>(source)) {
+      output = get_node_output(filter->getInput(0));
+      CHECK_LT(static_cast<size_t>(ref_index), output.size());
+      ref = output[ref_index];
+      continue;
+    }
+
+    if (const auto sort = dynamic_cast<const RelSort*>(source)) {
+      output = get_node_output(sort->getInput(0));
+      CHECK_LT(static_cast<size_t>(ref_index), output.size());
+      ref = output[ref_index];
+      continue;
+    }
+
+    if (dynamic_cast<const RelLeftDeepInnerJoin*>(source)) {
+      output = get_node_output(source);
+      CHECK_LT(static_cast<size_t>(ref_index), output.size());
+      ref = output[ref_index];
+      continue;
+    }
+
+    if (dynamic_cast<const RelJoin*>(source)) {
+      output = get_node_output(source);
+      CHECK_LT(static_cast<size_t>(ref_index), output.size());
+      ref = output[ref_index];
+      continue;
+    }
+
+    return ref;
+  }
+}
+
+std::optional<RexInput> find_direct_input_reference_for_translation(
+    const RexInput* rex_input,
+    const std::unordered_map<const RelAlgNode*, int>& input_to_nest_level) {
+  CHECK(rex_input);
+  const auto resolved_used_input = resolve_output_reference_for_translation(
+      rex_input->getSourceNode(), rex_input->getIndex());
+
+  std::optional<RexInput> matched_ref;
+  for (const auto& input_nest_level : input_to_nest_level) {
+    const auto input = input_nest_level.first;
+    CHECK(input);
+    for (size_t output_idx = 0; output_idx < input->size(); ++output_idx) {
+      const auto input_ref = resolve_output_reference_for_translation(
+          input, static_cast<unsigned>(output_idx));
+      if (input_ref.getSourceNode() != resolved_used_input.getSourceNode() ||
+          input_ref.getIndex() != resolved_used_input.getIndex()) {
+        continue;
+      }
+      if (matched_ref) {
+        return std::nullopt;
+      }
+      matched_ref = RexInput(input, output_idx);
+    }
+  }
+  return matched_ref;
+}
 
 SQLTypeInfo build_type_info(const SQLTypes sql_type,
                             const int scale,
@@ -346,6 +469,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     }
   }
   const auto agg_ti = get_agg_type(agg_kind, arg_expr.get());
+  if (agg_kind == kCOUNT && !is_distinct && arg_expr &&
+      arg_expr->get_type_info().get_notnull()) {
+    arg_expr.reset();
+  }
   return makeExpr<Analyzer::AggExpr>(agg_ti, agg_kind, arg_expr, is_distinct, arg1);
 }
 
@@ -489,8 +616,18 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     const RexInput* rex_input) const {
-  const auto source = rex_input->getSourceNode();
-  const auto it_rte_idx = input_to_nest_level_.find(source);
+  auto source = rex_input->getSourceNode();
+  auto input_idx = rex_input->getIndex();
+  auto it_rte_idx = input_to_nest_level_.find(source);
+  if (it_rte_idx == input_to_nest_level_.end()) {
+    const auto direct_ref =
+        find_direct_input_reference_for_translation(rex_input, input_to_nest_level_);
+    if (direct_ref) {
+      source = direct_ref->getSourceNode();
+      input_idx = direct_ref->getIndex();
+      it_rte_idx = input_to_nest_level_.find(source);
+    }
+  }
   CHECK(it_rte_idx != input_to_nest_level_.end())
       << "Not found in input_to_nest_level_, source="
       << source->toString(RelRexToStringConfig::defaults());
@@ -503,8 +640,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
     CHECK(in_metainfo.empty());
     const auto table_desc = scan_source->getTableDescriptor();
     const auto& catalog = scan_source->getCatalog();
-    const auto cd =
-        catalog.getMetadataForColumnBySpi(table_desc->tableId, rex_input->getIndex() + 1);
+    const auto cd = catalog.getMetadataForColumnBySpi(table_desc->tableId, input_idx + 1);
     CHECK(cd);
     auto col_ti = cd->columnType;
     if (col_ti.is_string()) {
@@ -528,7 +664,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
   CHECK(!in_metainfo.empty()) << "for "
                               << source->toString(RelRexToStringConfig::defaults());
   CHECK_GE(rte_idx, 0);
-  const int32_t col_id = rex_input->getIndex();
+  const int32_t col_id = input_idx;
   CHECK_LT(col_id, in_metainfo.size());
   auto col_ti = in_metainfo[col_id].get_type_info();
 
@@ -736,16 +872,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
   };
   row_set->moveToBegin();
   std::shared_ptr<Analyzer::Expr> expr;
-  if ((ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) &&
-      !row_set->didOutputColumnar()) {
+  if (ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) {
     expr = getInIntegerSetExpr(lhs, *row_set);
     // Handle the highly unlikely case when the InIntegerSet ended up being tiny.
     // Just let it fall through the usual InValues path at the end of this method,
-    // its codegen knows to use inline comparisons for few values.
+    // its codegen knows to use inline comparisons for few values. Keep nullable
+    // InIntegerSet expressions on the bitmap path: the tiny inline InValues path
+    // cannot always preserve dictionary-string NULL sentinels from subquery results or
+    // the source dictionary needed to translate cross-dictionary string ids.
     if (expr) {
       auto const num_values =
           std::static_pointer_cast<Analyzer::InIntegerSet>(expr)->get_value_list().size();
-      if (num_values <= g_in_clause_num_elem_skip_bitmap) {
+      if (!ti.is_dict_encoded_string() && expr->get_type_info().get_notnull() &&
+          num_values <= g_in_clause_num_elem_skip_bitmap) {
         VLOG(1) << "Skip to build a bitmap for tiny integer-set case: # values ("
                 << ::toString(num_values) << ") <= threshold ("
                 << ::toString(g_in_clause_num_elem_skip_bitmap) << ")";
@@ -804,20 +943,22 @@ void fill_dictionary_encoded_in_vals(
     const int64_t needle_null_val) {
   CHECK(in_vals.empty());
   bool dicts_are_equal = source_dict == dest_dict;
+  const auto source_storage_entry_count = source_dict->storageEntryCount();
   for (auto index = values_rowset_slice.first; index < values_rowset_slice.second;
        ++index) {
     const auto row = values_rowset->getOneColRow(index);
     if (UNLIKELY(!row.valid)) {
       continue;
     }
+    const auto row_is_null = is_dictionary_encoded_row_null(
+        row.value, source_storage_entry_count, needle_null_val);
     if (dicts_are_equal) {
-      in_vals.push_back(row.value);
+      in_vals.push_back(row_is_null ? needle_null_val : row.value);
     } else {
       const int string_id =
-          row.value == needle_null_val
-              ? needle_null_val
-              : dest_dict->getIdOfString(source_dict->getString(row.value));
-      if (string_id != StringDictionary::INVALID_STR_ID) {
+          row_is_null ? needle_null_val
+                      : dest_dict->getIdOfString(source_dict->getString(row.value));
+      if (string_id != StringDictionary::INVALID_STR_ID || row_is_null) {
         in_vals.push_back(string_id);
       }
     }
@@ -891,7 +1032,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
       const auto sd = executor_->getStringDictionaryProxy(
           col_type.getStringDictKey(), val_set.getRowSetMemOwner(), true);
       CHECK(sd);
-      const auto needle_null_val = inline_int_null_val(arg_type);
+      const auto needle_null_val = in_integer_set_null_val(arg_type);
       fetcher_threads.push_back(std::async(
           std::launch::async,
           [&val_set, &total_in_vals_count, sd, dd, needle_null_val](
@@ -929,8 +1070,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
   for (auto& exprs : expr_set) {
     value_exprs.insert(value_exprs.end(), exprs.begin(), exprs.end());
   }
+  const auto rhs_has_null_sentinel =
+      std::any_of(value_exprs.begin(), value_exprs.end(), [&](const auto value) {
+        return is_in_integer_set_null_val(value, arg_type);
+      });
+  const auto rhs_has_null =
+      rhs_has_null_sentinel &&
+      (!col_type.get_notnull() ||
+       (arg_type.is_string() && arg_type.get_compression() == kENCODING_DICT));
   return makeExpr<Analyzer::InIntegerSet>(
-      arg, value_exprs, arg_type.get_notnull() && col_type.get_notnull());
+      arg, value_exprs, arg_type.get_notnull() && !rhs_has_null);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
