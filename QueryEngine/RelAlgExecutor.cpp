@@ -6149,8 +6149,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   if (is_window_execution_unit(ra_exe_unit)) {
     CHECK_EQ(table_infos.size(), size_t(1));
     CHECK_EQ(table_infos.front().info.fragments.size(), size_t(1));
+    // Zero is the executor's CPU group-slot retry sentinel, not an empty input size.
     max_groups_buffer_entry_guess =
-        table_infos.front().info.fragments.front().getNumTuples();
+        std::max(table_infos.front().info.fragments.front().getNumTuples(), size_t(1));
     ra_exe_unit.scan_limit = max_groups_buffer_entry_guess;
   } else if (compute_output_buffer_size(ra_exe_unit) && !isRowidLookup(work_unit)) {
     if (previous_count && !exe_unit_has_quals(ra_exe_unit)) {

@@ -26286,6 +26286,78 @@ TEST_F(Select, WindowFunctionGpuEligibilityBoundary) {
   }
 }
 
+class WindowFunctionEmptyInput : public Select,
+                                 public testing::WithParamInterface<std::string> {
+ protected:
+  void checkEmptyResult(const std::string& query, const size_t column_count = 2) {
+    ScopeGuard restore_flags = [cpu_retry = g_allow_cpu_retry,
+                                step_cpu_retry = g_allow_query_step_cpu_retry,
+                                pipeline = g_enable_result_reduction_pipeline,
+                                columnar = g_enable_columnar_output] {
+      g_allow_cpu_retry = cpu_retry;
+      g_allow_query_step_cpu_retry = step_cpu_retry;
+      g_enable_result_reduction_pipeline = pipeline;
+      g_enable_columnar_output = columnar;
+    };
+    for (auto dt : {ExecutorDeviceType::GPU, ExecutorDeviceType::CPU}) {
+      SKIP_NO_GPU();
+      for (const bool pipeline : {true, false}) {
+        g_enable_result_reduction_pipeline = pipeline;
+        for (const bool retries : {true, false}) {
+          g_allow_cpu_retry = retries;
+          g_allow_query_step_cpu_retry = retries;
+          for (const bool columnar : {false, true}) {
+            g_enable_columnar_output = columnar;
+            SCOPED_TRACE(::testing::Message()
+                         << "device=" << dt << " pipeline=" << pipeline << " retries="
+                         << retries << " columnar=" << columnar << " query=" << query);
+            const auto result = run_multiple_agg(query, dt);
+            ASSERT_EQ(size_t(0), result->rowCount());
+            ASSERT_EQ(column_count, result->colCount());
+            ASSERT_TRUE(result->isEmpty());
+          }
+        }
+      }
+    }
+  }
+};
+
+TEST_P(WindowFunctionEmptyInput, Ranking) {
+  checkEmptyResult(
+      "SELECT ROW_NUMBER() OVER (ORDER BY x), RANK() OVER (ORDER BY x), "
+      "DENSE_RANK() OVER (ORDER BY x), NTILE(2) OVER (ORDER BY x) FROM " +
+          GetParam() + ";",
+      4);
+}
+
+TEST_P(WindowFunctionEmptyInput, RankingJoin) {
+  const auto window = "SELECT x, ROW_NUMBER() OVER (ORDER BY x) AS rn FROM " + GetParam();
+  checkEmptyResult("SELECT a.x, b.x FROM (" + window + ") a JOIN (" + window +
+                   ") b ON a.rn = b.rn;");
+}
+
+TEST_P(WindowFunctionEmptyInput, PartitionExtrema) {
+  checkEmptyResult(
+      "SELECT MIN(x) OVER (PARTITION BY x), "
+      "MAX(x) OVER (PARTITION BY x) FROM " +
+      GetParam() + ";");
+}
+
+TEST_P(WindowFunctionEmptyInput, CpuSelectedAggregate) {
+  checkEmptyResult(
+      "SELECT SUM(x) OVER (PARTITION BY x), AVG(x) OVER (PARTITION BY x), "
+      "COUNT(*) OVER (PARTITION BY x), COUNT_IF(x > 0) OVER (PARTITION BY x) FROM " +
+          GetParam() + ";",
+      4);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    Select,
+    WindowFunctionEmptyInput,
+    testing::Values("emptytab",
+                    "emptytab2",
+                    "(SELECT x FROM test_window_func_multi_frag WHERE x > 1000000) f"));
+
 TEST_F(Select, WindowFunctionJoins) {
   // Tests added separation of joins from window functions for
   // add_window_function_pre_project

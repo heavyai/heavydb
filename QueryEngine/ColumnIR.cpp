@@ -251,6 +251,10 @@ llvm::Value* CodeGenerator::codegenWindowPosition(
     const WindowFunctionContext* window_func_context,
     llvm::Value* pos_arg) {
   AUTOMATIC_IR_METADATA(cgen_state_);
+  if (window_func_context->elementCount() == 0) {
+    // Empty windows have no position buffer. The row loop will not execute.
+    return pos_arg;
+  }
   const auto window_position = cgen_state_->emitCall(
       "row_number_window_func",
       {cgen_state_->llInt(reinterpret_cast<const int64_t>(window_func_context->output())),

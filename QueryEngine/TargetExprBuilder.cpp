@@ -595,7 +595,8 @@ void TargetExprCodegen::codegenAggregate(
         window_function_requires_peer_handling(window_func)) {
       const auto window_func_context =
           WindowProjectNodeContext::getActiveWindowFunctionContext(executor);
-      if (!window_func_context->hasPrecomputedOutput()) {
+      if (window_func_context->elementCount() > 0 &&
+          !window_func_context->hasPrecomputedOutput()) {
         const auto pending_outputs =
             LL_INT(window_func_context->aggregateStatePendingOutputs());
         executor->cgen_state_->emitExternalCall("add_window_pending_output",

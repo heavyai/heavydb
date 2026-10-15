@@ -261,12 +261,27 @@ llvm::Value* Executor::aggregateWindowStatePtr(CodeGenerator* code_generator,
 llvm::Value* Executor::codegenWindowFunctionAggregate(CodeGenerator* code_generator,
                                                       const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
-  auto [reset_state_false_bb, aggregate_state] =
-      codegenWindowResetStateControlFlow(code_generator, co);
-  llvm::Value* aggregate_state_count = nullptr;
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext(this);
   const auto window_func = window_func_context->getWindowFunction();
+  if (window_func_context->elementCount() == 0) {
+    // Empty windows have no state or partition buffers. Handle them before generating
+    // state-reset code, which would reference those buffers and an invalid row range.
+    if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+      return cgen_state_->inlineFpNull(SQLTypeInfo(SQLTypes::kDOUBLE));
+    }
+    if (window_func->getKind() == SqlWindowFunctionKind::COUNT ||
+        window_func->getKind() == SqlWindowFunctionKind::COUNT_IF) {
+      return cgen_state_->llInt(int64_t(0));
+    }
+    const auto window_func_ti = get_adjusted_window_type_info(window_func);
+    return window_func_ti.is_fp() ? cgen_state_->inlineFpNull(window_func_ti)
+                                  : cgen_state_->castToTypeIn(
+                                        cgen_state_->inlineIntNull(window_func_ti), 64);
+  }
+  auto [reset_state_false_bb, aggregate_state] =
+      codegenWindowResetStateControlFlow(code_generator, co);
+  llvm::Value* aggregate_state_count = nullptr;
   if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
     const auto aggregate_state_count_i64 = cgen_state_->llInt(
         reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
@@ -1178,18 +1193,6 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
       window_func_ti.is_fp()
           ? cgen_state_->inlineFpNull(window_func_ti)
           : cgen_state_->castToTypeIn(cgen_state_->inlineIntNull(window_func_ti), 64);
-  if (window_func_context->elementCount() == 0) {
-    // We do not need to generate code for an empty input table, but COUNT still
-    // follows SQL aggregate semantics and returns 0 instead of the null sentinel.
-    if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
-      return cgen_state_->inlineFpNull(SQLTypeInfo(SQLTypes::kDOUBLE));
-    }
-    if (window_func->getKind() == SqlWindowFunctionKind::COUNT ||
-        window_func->getKind() == SqlWindowFunctionKind::COUNT_IF) {
-      return cgen_state_->llInt(int64_t(0));
-    }
-    return window_func_null_val;
-  }
   const auto& args = window_func->getArgs();
   CodeGenerator code_generator(this);
   if (window_func_context->needsToBuildAggregateTree()) {
