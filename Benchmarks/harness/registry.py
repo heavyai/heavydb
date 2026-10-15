@@ -38,7 +38,7 @@ class BenchmarkDef:
     disabled: dict = field(default_factory=dict)   # query name -> reason
     setup_sql: list = field(default_factory=list)
     teardown_sql: list = field(default_factory=list)
-    vars: dict = field(default_factory=dict)       # ${NAME} substitutions in the schema file
+    vars: dict = field(default_factory=dict)       # ${NAME} substitutions in the schema file and queries
 
     def schema_statements(self):
         text = (self.directory / self.schema_file).read_text()  # absolute paths win
@@ -47,6 +47,14 @@ class BenchmarkDef:
         return {m.group(1): m.group(0).strip()
                 for m in re.finditer(r"CREATE\s+TABLE\s+(\w+)\s*\(.*?\)\s*(?:WITH\s*\(.*?\))?\s*;",
                                      text, re.S | re.I)}
+
+    def render_query(self, name, text, extra_vars=None):
+        """Substitute ${NAME} in query text from [vars] plus run-time values such as ${SF}."""
+        try:
+            return string.Template(text).substitute({**self.vars, **(extra_vars or {})})
+        except KeyError as e:
+            raise SystemExit("query %s uses ${%s}, which is not set (dataset metadata.json "
+                             "scale_factor, a [vars] entry, or --var %s=VALUE)" % (name, e.args[0], e.args[0]))
 
     def queries(self):
         files = sorted((self.directory / self.query_dir).glob(self.query_glob))

@@ -9,11 +9,13 @@
 """
 
 import argparse
+import json
 import os
 import shutil
 import signal
 import sys
 import tempfile
+from decimal import Decimal
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -56,6 +58,16 @@ def parse_args(argv):
     return p.parse_args(argv)
 
 
+def dataset_scale_factor(data):
+    """scale_factor from <data>/metadata.json as a plain decimal string (e.g. '1000', '0.01')."""
+    meta = Path(data) / "metadata.json"
+    try:
+        sf = json.loads(meta.read_text()).get("scale_factor")
+        return None if sf is None else format(Decimal(str(sf)).normalize(), "f")
+    except (OSError, ValueError, ArithmeticError):
+        return None
+
+
 def select_queries(bench, wanted, log=print):
     qs = bench.queries()
     if wanted:
@@ -78,8 +90,8 @@ def cmd_run(a):
     bench = registry.load(a.benchmark)
     for kv in a.var:
         k, _, v = kv.partition("=")
-        if k not in bench.vars:
-            raise SystemExit("unknown --var %s (known: %s)" % (k, ", ".join(bench.vars) or "none"))
+        if k not in bench.vars and k != "SF":
+            raise SystemExit("unknown --var %s (known: SF, %s)" % (k, ", ".join(bench.vars) or "none"))
         bench.vars[k] = v
     if a.schema:
         bench.schema_file = str(Path(a.schema).resolve())
@@ -109,6 +121,12 @@ def _run(a, bench, data, work, queries_arg):
         kw.update(build_dir=a.build_dir)
     rt = make_runtime(a.runtime, **kw)
     queries = select_queries(bench, queries_arg)
+    extra = {}
+    if "SF" not in bench.vars:  # --var SF=... wins over the dataset's metadata.json
+        sf = dataset_scale_factor(data)
+        if sf is not None:
+            extra["SF"] = sf
+    queries = [(n, bench.render_query(n, t, extra)) for n, t in queries]
     iters = a.iterations or bench.iterations
     warm = a.warmup if a.warmup is not None else bench.warmup
     print("benchmark=%s data=%s runtime=%s mode=%s queries=%d iters=%d warmup=%d" % (

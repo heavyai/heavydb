@@ -83,6 +83,11 @@ all enabled TPC-H queries.
 Nothing else changes: any dataset of the right shape can be passed with `--data`.
 New execution environments (podman, apptainer, ...) are one class in `harness/runtime/`.
 
+Query files may use `${NAME}` placeholders, filled from `[vars]` in `benchmark.toml`. `${SF}` is
+always available: it comes from the dataset's `metadata.json` `scale_factor` (override with
+`--var SF=VALUE`), and a query that uses it fails with a clear error if neither is set. TPC-H Q11
+uses it for its scale-dependent threshold (`0.0001 / SF`). Write a literal dollar sign as `$$`.
+
 ## Slurm (enroot)
 
 Convert the product image yourself. On a cluster where `enroot import` can't write
