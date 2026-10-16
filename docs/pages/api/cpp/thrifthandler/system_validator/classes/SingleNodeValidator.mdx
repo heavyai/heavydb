@@ -1,0 +1,45 @@
+---
+title: system_validator::SingleNodeValidator
+description: "Driver for running validation on a single node."
+---
+
+Driver for running validation on a single node.
+
+```cpp showLineNumbers={false}
+#include <system_validator/SystemValidator.h>
+```
+
+---
+
+## Constructors
+
+### SingleNodeValidator [#singlenodevalidator]
+
+<CodeBlock links={{"SingleNodeValidator": "singlenodevalidator"}}>
+```cpp showLineNumbers={false}
+system_validator::SingleNodeValidator::SingleNodeValidator(
+    const std::string &type,
+    Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### validate [#validate]
+
+<CodeBlock links={{"SingleNodeValidator": "singlenodevalidator"}}>
+```cpp showLineNumbers={false}
+std::string system_validator::SingleNodeValidator::validate() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `catalog_` | `Catalog_Namespace::Catalog &` | |

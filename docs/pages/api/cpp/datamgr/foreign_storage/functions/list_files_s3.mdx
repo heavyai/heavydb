@@ -1,0 +1,15 @@
+---
+title: foreign_storage::list_files_s3
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<S3FileInfo> foreign_storage::list_files_s3(
+    const std::unique_ptr<Aws::S3::S3Client> &s3_client,
+    const std::string &prefix_name,
+    const std::string &bucket_name,
+    const shared::FilePathOptions &options
+)
+```
+</CodeBlock>

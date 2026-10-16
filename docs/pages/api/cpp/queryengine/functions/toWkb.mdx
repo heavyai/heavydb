@@ -1,0 +1,23 @@
+---
+title: toWkb
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE uint8_t * toWkb(
+    size_t *wkb_size,
+    int type,
+    int8_t *coords,
+    int64_t coords_size,
+    int32_t *meta1,
+    int64_t meta1_size,
+    int32_t *meta2,
+    int64_t meta2_size,
+    int32_t ic,
+    int32_t srid_in,
+    int32_t srid_out,
+    int32_t *best_planar_srid_ptr
+)
+```
+</CodeBlock>

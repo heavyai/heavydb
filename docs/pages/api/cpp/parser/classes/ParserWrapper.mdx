@@ -1,0 +1,116 @@
+---
+title: ParserWrapper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ParserWrapper.h>
+```
+
+---
+
+## Constructors
+
+### ParserWrapper [#parserwrapper]
+
+<CodeBlock links={{"ParserWrapper": "parserwrapper"}}>
+```cpp showLineNumbers={false}
+ParserWrapper::ParserWrapper(
+    std::string query_string
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~ParserWrapper
+
+<CodeBlock links={{"ParserWrapper": "parserwrapper"}}>
+```cpp showLineNumbers={false}
+ParserWrapper::~ParserWrapper()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### process [#process]
+
+<CodeBlock links={{"ParserWrapper": "parserwrapper"}}>
+```cpp showLineNumbers={false}
+std::string ParserWrapper::process(
+    std::string user,
+    std::string passwd,
+    std::string catalog,
+    std::string sql_string,
+    const bool legacy_syntax
+)
+```
+</CodeBlock>
+
+### getDMLType [#getdmltype]
+
+<CodeBlock links={{"ParserWrapper": "parserwrapper"}}>
+```cpp showLineNumbers={false}
+DMLType ParserWrapper::getDMLType() const
+```
+</CodeBlock>
+
+### getQueryType [#getquerytype]
+
+<CodeBlock links={{"ParserWrapper": "parserwrapper"}}>
+```cpp showLineNumbers={false}
+QueryType ParserWrapper::getQueryType() const
+```
+</CodeBlock>
+
+### isUpdateDelete [#isupdatedelete]
+
+<CodeBlock links={{"ParserWrapper": "parserwrapper"}}>
+```cpp showLineNumbers={false}
+bool ParserWrapper::isUpdateDelete() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### DMLType
+
+| Name | Value | Description |
+|---|---|---|
+| `Insert` | `= 0` | |
+| `Delete` | | |
+| `Update` | | |
+| `NotDML` | | |
+### QueryType
+
+| Name | Value | Description |
+|---|---|---|
+| `Unknown` | | |
+| `Read` | | |
+| `Write` | | |
+| `SchemaRead` | | |
+| `SchemaWrite` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_ddl` | `bool` | |
+| `is_update_dml` | `bool` | |
+| `is_ctas` | `bool` | |
+| `is_itas` | `bool` | |
+| `is_copy` | `bool` | |
+| `is_copy_to` | `bool` | |
+| `is_validate` | `bool` | |
+| `is_other_explain` | `bool` | |
+| `is_refresh` | `bool` | |
+| `dml_type_` | `DMLType` | |
+| `query_type_` | `QueryType` | |
+| `ddl_cmd` <Badge intent="note" minimal>static</Badge> | `const std::vector< std::string >` | |
+| `update_dml_cmd` <Badge intent="note" minimal>static</Badge> | `const std::vector< std::string >` | |

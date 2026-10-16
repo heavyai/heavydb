@@ -1,0 +1,59 @@
+---
+title: VarlenDatum
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Datum.h>
+```
+
+---
+
+## Constructors
+
+### VarlenDatum [#varlendatum]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"VarlenDatum": "varlendatum"}}>
+```cpp showLineNumbers={false}
+VarlenDatum::VarlenDatum()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"VarlenDatum": "varlendatum"}}>
+```cpp showLineNumbers={false}
+VarlenDatum::VarlenDatum(
+    const size_t l,
+    int8_t *p,
+    const bool n
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~VarlenDatum
+
+<CodeBlock links={{"VarlenDatum": "varlendatum"}}>
+```cpp showLineNumbers={false}
+virtual VarlenDatum::~VarlenDatum()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `length` | `size_t` | |
+| `pointer` | `int8_t *` | |
+| `is_null` | `bool` | |

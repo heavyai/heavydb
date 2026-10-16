@@ -1,0 +1,19 @@
+---
+title: ml_reg_predict_impl
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "AbstractMLModel": "../classes/abstractmlmodel", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t ml_reg_predict_impl(
+    TableFunctionManager &mgr,
+    const std::shared_ptr<AbstractMLModel> &model,
+    const Column<K> &input_ids,
+    const ColumnList<T> &input_features,
+    const TextEncodingNone &preferred_ml_framework_str,
+    Column<K> &output_ids,
+    Column<T> &output_predictions
+)
+```
+</CodeBlock>

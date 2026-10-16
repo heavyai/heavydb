@@ -1,0 +1,44 @@
+---
+title: OutOfHostMemory
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <checked_alloc.h>
+```
+
+**Inherits from:** `std::bad_alloc` (public)
+
+---
+
+## Constructors
+
+### OutOfHostMemory [#outofhostmemory]
+
+<CodeBlock links={{"OutOfHostMemory": "outofhostmemory"}}>
+```cpp showLineNumbers={false}
+OutOfHostMemory::OutOfHostMemory(
+    const size_t size
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### what [#what]
+
+<CodeBlock links={{"OutOfHostMemory": "outofhostmemory"}}>
+```cpp showLineNumbers={false}
+const char * OutOfHostMemory::what() const noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `what_str_` | `const std::string` | |

@@ -1,0 +1,110 @@
+---
+title: foreign_storage::ParquetImportBatchResult
+description: ""
+---
+
+**Inherits from:** `import_export::ImportBatchResult` (public)
+
+---
+
+## Constructors
+
+### ParquetImportBatchResult [#parquetimportbatchresult]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ParquetImportBatchResult": "parquetimportbatchresult"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetImportBatchResult::ParquetImportBatchResult() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetImportBatchResult": "parquetimportbatchresult", "ForeignTableSchema": "foreigntableschema"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetImportBatchResult::ParquetImportBatchResult(
+    const ForeignTable *foreign_table,
+    const int db_id,
+    const ForeignTableSchema *schema
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"ParquetImportBatchResult": "parquetimportbatchresult"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetImportBatchResult::ParquetImportBatchResult(
+    ParquetImportBatchResult &&other
+) = default
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getInsertData [#getinsertdata]
+
+<CodeBlock links={{"ParquetImportBatchResult": "parquetimportbatchresult"}}>
+```cpp showLineNumbers={false}
+std::optional<Fragmenter_Namespace::InsertData> foreign_storage::ParquetImportBatchResult::getInsertData() const override
+```
+</CodeBlock>
+
+### getImportStatus [#getimportstatus]
+
+<CodeBlock links={{"ParquetImportBatchResult": "parquetimportbatchresult"}}>
+```cpp showLineNumbers={false}
+import_export::ImportStatus foreign_storage::ParquetImportBatchResult::getImportStatus() const override
+```
+</CodeBlock>
+
+### getChunksAndDictionaries [#getchunksanddictionaries]
+
+<CodeBlock links={{"ParquetImportBatchResult": "parquetimportbatchresult", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+std::pair<std::map<int, Chunk_NS::Chunk>, std::map<int, StringDictionary *>> foreign_storage::ParquetImportBatchResult::getChunksAndDictionaries() const
+```
+</CodeBlock>
+
+### populateInsertData [#populateinsertdata]
+
+<CodeBlock links={{"ParquetImportBatchResult": "parquetimportbatchresult", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetImportBatchResult::populateInsertData(
+    const std::map<int, Chunk_NS::Chunk> &chunks
+)
+```
+</CodeBlock>
+
+### populateImportStatus [#populateimportstatus]
+
+<CodeBlock links={{"ParquetImportBatchResult": "parquetimportbatchresult"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetImportBatchResult::populateImportStatus(
+    const size_t num_rows_completed,
+    const size_t num_rows_rejected
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `insert_data_` | `std::optional< Fragmenter_Namespace::InsertData >` | |
+| `import_buffers_` | `std::map< int, std::unique_ptr< AbstractBuffer > >` | |
+| `foreign_table_` | `const ForeignTable *` | |
+| `db_id_` | `int` | |
+| `schema_` | `const ForeignTableSchema *` | |
+| `import_status_` | `import_export::ImportStatus` | |

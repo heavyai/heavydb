@@ -1,0 +1,227 @@
+---
+title: PlanState
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <PlanState.h>
+```
+
+---
+
+## Constructors
+
+### PlanState [#planstate]
+
+<CodeBlock links={{"PlanState": "planstate", "InputTableInfo": "inputtableinfo", "Executor": "../classes/executor"}}>
+```cpp showLineNumbers={false}
+PlanState::PlanState(
+    const bool allow_lazy_fetch,
+    const std::vector<InputTableInfo> &query_infos,
+    const DeletedColumnsMap &deleted_columns,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateLocalColumnIds [#allocatelocalcolumnids]
+
+<CodeBlock links={{"PlanState": "planstate", "InputColDescriptor": "../classes/inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+void PlanState::allocateLocalColumnIds(
+    const std::list<std::shared_ptr<const InputColDescriptor>> &global_col_ids
+)
+```
+</CodeBlock>
+
+### getLocalColumnId [#getlocalcolumnid]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+int PlanState::getLocalColumnId(
+    const Analyzer::ColumnVar *col_var,
+    const bool fetch_column
+)
+```
+</CodeBlock>
+
+### isLazyFetchColumn [#islazyfetchcolumn]
+
+<Tabs>
+<Tab title="Mutable">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"PlanState": "planstate", "InputColDescriptor": "../classes/inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+bool PlanState::isLazyFetchColumn(
+    const InputColDescriptor &col_desc
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+bool PlanState::isLazyFetchColumn(
+    const Analyzer::Expr *target_expr
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getDeletedColForTable [#getdeletedcolfortable]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * PlanState::getDeletedColForTable(
+    const shared::TableKey &table_key
+)
+```
+</CodeBlock>
+
+### addSimpleQual [#addsimplequal]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+void PlanState::addSimpleQual(
+    std::shared_ptr<Analyzer::Expr> simple_qual
+)
+```
+</CodeBlock>
+
+### getSimpleQuals [#getsimplequals]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+std::list<std::shared_ptr<Analyzer::Expr>> PlanState::getSimpleQuals() const
+```
+</CodeBlock>
+
+### addNonHashtableQualForLeftJoin [#addnonhashtablequalforleftjoin]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+void PlanState::addNonHashtableQualForLeftJoin(
+    size_t idx,
+    std::shared_ptr<Analyzer::Expr> expr
+)
+```
+</CodeBlock>
+
+### getColumnsToFetch [#getcolumnstofetch]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+const std::unordered_set<shared::ColumnKey> & PlanState::getColumnsToFetch() const
+```
+</CodeBlock>
+
+### getColumnsToNotFetch [#getcolumnstonotfetch]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+const std::unordered_set<shared::ColumnKey> & PlanState::getColumnsToNotFetch() const
+```
+</CodeBlock>
+
+### isColumnToFetch [#iscolumntofetch]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+bool PlanState::isColumnToFetch(
+    const shared::ColumnKey &column_key
+) const
+```
+</CodeBlock>
+
+### isColumnToNotFetch [#iscolumntonotfetch]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+bool PlanState::isColumnToNotFetch(
+    const shared::ColumnKey &column_key
+) const
+```
+</CodeBlock>
+
+### addColumnToFetch [#addcolumntofetch]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+void PlanState::addColumnToFetch(
+    const shared::ColumnKey &column_key,
+    bool unmark_lazy_fetch = false
+)
+```
+</CodeBlock>
+
+### addColumnToNotFetch [#addcolumntonotfetch]
+
+<CodeBlock links={{"PlanState": "planstate"}}>
+```cpp showLineNumbers={false}
+void PlanState::addColumnToNotFetch(
+    const shared::ColumnKey &column_key
+)
+```
+</CodeBlock>
+
+### hasExpressionNeedsLazyFetch [#hasexpressionneedslazyfetch]
+
+<CodeBlock links={{"PlanState": "planstate", "TargetExprCodegen": "targetexprcodegen"}}>
+```cpp showLineNumbers={false}
+bool PlanState::hasExpressionNeedsLazyFetch(
+    const std::vector<TargetExprCodegen> &target_exprs_to_codegen
+) const
+```
+</CodeBlock>
+
+### registerNonLazyFetchExpression [#registernonlazyfetchexpression]
+
+<CodeBlock links={{"PlanState": "planstate", "TargetExprCodegen": "targetexprcodegen"}}>
+```cpp showLineNumbers={false}
+void PlanState::registerNonLazyFetchExpression(
+    const std::vector<TargetExprCodegen> &target_exprs_to_codegen
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DeletedColumnsMap` | `std::unordered_map< shared::TableKey, const ColumnDescriptor * >` |
+| `HoistedFiltersSet` | `std::unordered_set< std::shared_ptr< Analyzer::Expr > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `init_agg_vals_` | `std::vector< int64_t >` | |
+| `hoisted_filters_` | `HoistedFiltersSet` | |
+| `global_to_local_col_ids_` | `std::unordered_map< InputColDescriptor, size_t >` | |
+| `left_join_non_hashtable_quals_` | `std::unordered_map< size_t, std::vector< std::shared_ptr< Analyzer::Expr > > >` | |
+| `allow_lazy_fetch_` | `bool` | |
+| `join_info_` | `JoinInfo` | |
+| `deleted_columns_` | `const DeletedColumnsMap` | |
+| `query_infos_` | `const std::vector< InputTableInfo > &` | |
+| `simple_quals_` | `std::list< std::shared_ptr< Analyzer::Expr > >` | |
+| `executor_` | `const Executor *` | |
+| `columns_to_fetch_` | `std::unordered_set< shared::ColumnKey >` | |
+| `columns_to_not_fetch_` | `std::unordered_set< shared::ColumnKey >` | |

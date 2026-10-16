@@ -1,0 +1,62 @@
+---
+title: "ColumnList< TextEncodingDict >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Methods
+
+### ColumnList [#columnlist]
+
+<CodeBlock links={{"ColumnList< TextEncodingDict >": "columnlisttextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ColumnList<TextEncodingDict>::ColumnList(
+    int8_t **ptrs,
+    const int64_t num_cols,
+    const int64_t num_rows,
+    StringDictionaryProxy **string_dict_proxies
+)
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"ColumnList< TextEncodingDict >": "columnlisttextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t ColumnList<TextEncodingDict>::size() const
+```
+</CodeBlock>
+
+### numCols [#numcols]
+
+<CodeBlock links={{"ColumnList< TextEncodingDict >": "columnlisttextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t ColumnList<TextEncodingDict>::numCols() const
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"ColumnList< TextEncodingDict >": "columnlisttextencodingdict", "Column": "column", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<TextEncodingDict> ColumnList<TextEncodingDict>::operator[](
+    const int index
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptrs_` | `int8_t **` | |
+| `num_cols_` | `int64_t` | |
+| `num_rows_` | `int64_t` | |
+| `string_dict_proxies_` | `StringDictionaryProxy **` | |

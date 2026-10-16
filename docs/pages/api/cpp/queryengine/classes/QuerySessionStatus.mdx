@@ -1,0 +1,150 @@
+---
+title: QuerySessionStatus
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Execute.h>
+```
+
+---
+
+## Constructors
+
+### QuerySessionStatus [#querysessionstatus]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+QuerySessionStatus::QuerySessionStatus(
+    const QuerySessionId &query_session,
+    const std::string &query_str,
+    const std::string &submitted_time
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with executor id)">
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+QuerySessionStatus::QuerySessionStatus(
+    const QuerySessionId &query_session,
+    const size_t executor_id,
+    const std::string &query_str,
+    const std::string &submitted_time
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with executor id and query status)">
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+QuerySessionStatus::QuerySessionStatus(
+    const QuerySessionId &query_session,
+    const size_t executor_id,
+    const std::string &query_str,
+    const std::string &submitted_time,
+    const QuerySessionStatus::QueryStatus &query_status
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getQuerySession [#getquerysession]
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+const QuerySessionId QuerySessionStatus::getQuerySession()
+```
+</CodeBlock>
+
+### getQueryStr [#getquerystr]
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+const std::string QuerySessionStatus::getQueryStr()
+```
+</CodeBlock>
+
+### getExecutorId [#getexecutorid]
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+const size_t QuerySessionStatus::getExecutorId()
+```
+</CodeBlock>
+
+### getQuerySubmittedTime [#getquerysubmittedtime]
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+const std::string & QuerySessionStatus::getQuerySubmittedTime()
+```
+</CodeBlock>
+
+### getQueryStatus [#getquerystatus]
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+const QuerySessionStatus::QueryStatus QuerySessionStatus::getQueryStatus()
+```
+</CodeBlock>
+
+### setQueryStatus [#setquerystatus]
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+void QuerySessionStatus::setQueryStatus(
+    const QuerySessionStatus::QueryStatus &status
+)
+```
+</CodeBlock>
+
+### setExecutorId [#setexecutorid]
+
+<CodeBlock links={{"QuerySessionStatus": "querysessionstatus"}}>
+```cpp showLineNumbers={false}
+void QuerySessionStatus::setExecutorId(
+    const size_t executor_id
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### QueryStatus
+
+| Name | Value | Description |
+|---|---|---|
+| `UNDEFINED` | `= 0` | |
+| `PENDING_QUEUE` | | |
+| `PENDING_EXECUTOR` | | |
+| `RUNNING_QUERY_KERNEL` | | |
+| `RUNNING_REDUCTION` | | |
+| `RUNNING_IMPORTER` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_session_` | `const QuerySessionId` | |
+| `executor_id_` | `size_t` | |
+| `query_str_` | `const std::string` | |
+| `submitted_time_` | `const std::string` | |
+| `query_status_` | `QuerySessionStatus::QueryStatus` | |

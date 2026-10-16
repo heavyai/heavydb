@@ -1,0 +1,54 @@
+---
+title: query_state::QueryStateProxy
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <query_state/QueryState.h>
+```
+
+---
+
+## Constructors
+
+### QueryStateProxy [#querystateproxy]
+
+<CodeBlock links={{"QueryStateProxy": "querystateproxy", "QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+query_state::QueryStateProxy::QueryStateProxy(
+    QueryState &query_state,
+    Events::iterator parent
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### createTimer [#createtimer]
+
+<CodeBlock links={{"QueryStateProxy": "querystateproxy", "Timer": "timer"}}>
+```cpp showLineNumbers={false}
+Timer query_state::QueryStateProxy::createTimer(
+    char const *event_name
+)
+```
+</CodeBlock>
+
+### operator-&gt; [#operator_arrow]
+
+<CodeBlock links={{"QueryStateProxy": "querystateproxy", "QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+QueryState * query_state::QueryStateProxy::operator->() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_state_` | `QueryState &` | |
+| `parent_` | `Events::iterator const` | |

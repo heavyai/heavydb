@@ -1,0 +1,53 @@
+---
+title: fill_one_to_many_baseline_hash_table_64
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo", "JoinBucketInfo": "../structs/joinbucketinfo"}}>
+```cpp showLineNumbers={false}
+void fill_one_to_many_baseline_hash_table_64(
+    int32_t *buff,
+    const int64_t *composite_key_dict,
+    const int64_t hash_entry_count,
+    const size_t key_component_count,
+    const std::vector<JoinColumn> &join_column_per_key,
+    const std::vector<JoinColumnTypeInfo> &type_info_per_key,
+    const std::vector<JoinBucketInfo> &join_bucket_info,
+    const std::vector<const int32_t *> &sd_inner_to_outer_translation_maps,
+    const std::vector<int32_t> &sd_min_inner_elems,
+    const int32_t cpu_thread_count,
+    const bool is_range_join,
+    const bool is_geo_compressed,
+    const bool for_window_framing
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo", "JoinBucketInfo": "../structs/joinbucketinfo"}}>
+```cpp showLineNumbers={false}
+void fill_one_to_many_baseline_hash_table_64(
+    int32_t *buff,
+    const int64_t *composite_key_dict,
+    const int64_t hash_entry_count,
+    const size_t key_component_count,
+    const std::vector<JoinColumn> &join_column_per_key,
+    const std::vector<JoinColumnTypeInfo> &type_info_per_key,
+    const std::vector<JoinBucketInfo> &join_bucket_info,
+    const std::vector<const int32_t *> &sd_inner_to_outer_translation_maps,
+    const std::vector<int32_t> &sd_min_inner_elems,
+    const int32_t cpu_thread_count,
+    const bool is_range_join = false,
+    const bool is_geo_compressed = false,
+    const bool for_window_framing = false
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

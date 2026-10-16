@@ -1,0 +1,21 @@
+---
+title: copy_group_by_buffers_from_gpu
+description: ""
+---
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../classes/querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void copy_group_by_buffers_from_gpu(
+    DeviceAllocator &device_allocator,
+    const std::vector<int64_t *> &group_by_buffers,
+    const size_t groups_buffer_size,
+    const int8_t *group_by_dev_buffers_mem,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const unsigned block_size_x,
+    const unsigned grid_size_x,
+    const int device_id,
+    const bool prepend_index_buffer,
+    const bool has_varlen_output
+)
+```
+</CodeBlock>

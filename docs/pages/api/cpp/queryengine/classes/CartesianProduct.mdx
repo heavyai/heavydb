@@ -1,0 +1,70 @@
+---
+title: CartesianProduct
+description: "Class that turns a forward iterable container of forward iterable containers into a forward iterable container which"
+---
+
+<CodeBlock id="CartesianProduct" links={{"CartesianProduct": "cartesianproduct"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class CartesianProduct
+```
+</CodeBlock>
+
+Class that turns a forward iterable container of forward iterable containers into a forward iterable container which
+
+```cpp showLineNumbers={false}
+#include <CartesianProduct.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### CartesianProduct [#cartesianproduct]
+
+<CodeBlock links={{"CartesianProduct": "cartesianproduct"}}>
+```cpp showLineNumbers={false}
+CartesianProduct<T>::CartesianProduct(
+    T const &t
+)
+```
+</CodeBlock>
+
+Constructor from type T.
+
+---
+
+## Methods
+
+### begin [#begin]
+
+<CodeBlock links={{"CartesianProduct": "cartesianproduct", "CartesianProductIterator": "cartesianproductiterator"}}>
+```cpp showLineNumbers={false}
+CartesianProductIterator<T> CartesianProduct<T>::begin() const
+```
+</CodeBlock>
+
+Iterator to beginning of Cartesian product.
+
+### end [#end]
+
+<CodeBlock links={{"CartesianProduct": "cartesianproduct", "CartesianProductIterator": "cartesianproductiterator"}}>
+```cpp showLineNumbers={false}
+CartesianProductIterator<T> CartesianProduct<T>::end() const
+```
+</CodeBlock>
+
+Iterator behind the last element of the Cartesian product.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `t_` | `T const  &` | |

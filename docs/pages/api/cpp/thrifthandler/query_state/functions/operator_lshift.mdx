@@ -1,0 +1,43 @@
+---
+title: "query_state::operator<<"
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QuoteFormatter": "../structs/quoteformatter"}}>
+```cpp showLineNumbers={false}
+std::ostream & query_state::operator<<(
+    std::ostream &os,
+    QuoteFormatter const &quote_formatter
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SessionData": "../structs/sessiondata"}}>
+```cpp showLineNumbers={false}
+std::ostream & query_state::operator<<(
+    std::ostream &os,
+    SessionData const &session_data
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"SessionInfoFormatter": "../structs/sessioninfoformatter"}}>
+```cpp showLineNumbers={false}
+std::ostream & query_state::operator<<(
+    std::ostream &os,
+    SessionInfoFormatter const &formatter
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,77 @@
+---
+title: foreign_storage::FileReaderMap
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetShared.h>
+```
+
+---
+
+## Methods
+
+### getOrInsert [#getorinsert]
+
+<CodeBlock links={{"FileReaderMap": "filereadermap"}}>
+```cpp showLineNumbers={false}
+const ReaderPtr foreign_storage::FileReaderMap::getOrInsert(
+    const std::string &path,
+    std::shared_ptr<arrow::fs::FileSystem> &file_system
+)
+```
+</CodeBlock>
+
+### insert [#insert]
+
+<CodeBlock links={{"FileReaderMap": "filereadermap"}}>
+```cpp showLineNumbers={false}
+const ReaderPtr foreign_storage::FileReaderMap::insert(
+    const std::string &path,
+    std::shared_ptr<arrow::fs::FileSystem> &file_system
+)
+```
+</CodeBlock>
+
+### initializeIfEmpty [#initializeifempty]
+
+<CodeBlock links={{"FileReaderMap": "filereadermap"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::FileReaderMap::initializeIfEmpty(
+    const std::string &path
+)
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"FileReaderMap": "filereadermap"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::FileReaderMap::clear()
+```
+</CodeBlock>
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"FileReaderMap": "filereadermap"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::FileReaderMap::isEmpty() const
+```
+</CodeBlock>
+
+### getFirst [#getfirst]
+
+<CodeBlock links={{"FileReaderMap": "filereadermap"}}>
+```cpp showLineNumbers={false}
+std::pair<const std::string, const ReaderPtr> foreign_storage::FileReaderMap::getFirst() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `mutex_` | `heavyai::shared_mutex` | |
+| `map_` | `std::map< const std::string, UniqueReaderPtr >` | |

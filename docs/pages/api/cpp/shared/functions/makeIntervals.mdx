@@ -1,0 +1,15 @@
+---
+title: makeIntervals
+description: ""
+---
+
+<CodeBlock links={{"Intervals": "../classes/intervals"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename U = typename std::make_unsigned<T>::type>
+Intervals<T> makeIntervals(
+    T begin,
+    T end,
+    std::size_t n_workers
+)
+```
+</CodeBlock>

@@ -1,0 +1,163 @@
+---
+title: CudaAllocator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CudaAllocator.h>
+```
+
+**Inherits from:** `DeviceAllocator` (public)
+
+---
+
+## Constructors
+
+### CudaAllocator [#cudaallocator]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator", "DataMgr": "../datanamespace/classes/datamgr"}}>
+```cpp showLineNumbers={false}
+CudaAllocator::CudaAllocator(
+    Data_Namespace::DataMgr *data_mgr,
+    const int device_id,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~CudaAllocator
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator"}}>
+```cpp showLineNumbers={false}
+CudaAllocator::~CudaAllocator() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### alloc [#alloc]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator"}}>
+```cpp showLineNumbers={false}
+int8_t * CudaAllocator::alloc(
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### free [#free]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator", "AbstractBuffer": "../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void CudaAllocator::free(
+    Data_Namespace::AbstractBuffer *ab
+) const override
+```
+</CodeBlock>
+
+### copyToDevice [#copytodevice]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator"}}>
+```cpp showLineNumbers={false}
+void CudaAllocator::copyToDevice(
+    void *device_dst,
+    const void *host_src,
+    const size_t num_bytes,
+    std::optional<std::string_view> tag
+) const override
+```
+</CodeBlock>
+
+### copyFromDevice [#copyfromdevice]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator"}}>
+```cpp showLineNumbers={false}
+void CudaAllocator::copyFromDevice(
+    void *host_dst,
+    const void *device_src,
+    const size_t num_bytes,
+    std::optional<std::string_view> tag
+) const override
+```
+</CodeBlock>
+
+### zeroDeviceMem [#zerodevicemem]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator"}}>
+```cpp showLineNumbers={false}
+void CudaAllocator::zeroDeviceMem(
+    int8_t *device_ptr,
+    const size_t num_bytes
+) const override
+```
+</CodeBlock>
+
+### setDeviceMem [#setdevicemem]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator"}}>
+```cpp showLineNumbers={false}
+void CudaAllocator::setDeviceMem(
+    int8_t *device_ptr,
+    unsigned char uc,
+    const size_t num_bytes
+) const override
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator"}}>
+```cpp showLineNumbers={false}
+int CudaAllocator::getDeviceId() const
+```
+</CodeBlock>
+
+### getDataMgr [#getdatamgr]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator", "DataMgr": "../datanamespace/classes/datamgr"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::DataMgr * CudaAllocator::getDataMgr() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### allocGpuAbstractBuffer [#allocgpuabstractbuffer]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator", "DataMgr": "../datanamespace/classes/datamgr", "AbstractBuffer": "../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::AbstractBuffer * CudaAllocator::allocGpuAbstractBuffer(
+    Data_Namespace::DataMgr *data_mgr,
+    const size_t num_bytes,
+    const int device_id
+)
+```
+</CodeBlock>
+
+### freeGpuAbstractBuffer [#freegpuabstractbuffer]
+
+<CodeBlock links={{"CudaAllocator": "cudaallocator", "DataMgr": "../datanamespace/classes/datamgr", "AbstractBuffer": "../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void CudaAllocator::freeGpuAbstractBuffer(
+    Data_Namespace::DataMgr *data_mgr,
+    Data_Namespace::AbstractBuffer *ab
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `owned_buffers_` | `std::vector< Data_Namespace::AbstractBuffer * >` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `device_id_` | `int` | |
+| `cuda_stream_` | `CUstream` | |

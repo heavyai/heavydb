@@ -1,0 +1,18 @@
+---
+title: LocalAttachmentUtils::build_attachments
+description: ""
+---
+
+<CodeBlock links={{"RenderTargetReturn": "../structs/rendertargetreturn"}}>
+```cpp showLineNumbers={false}
+RenderTargetReturn LocalAttachmentUtils::build_attachments(
+    gfx::ResourceManager &resource_mgr,
+    const uint32_t width,
+    const uint32_t height,
+    const std::vector<RenderTargetDesc> &target_descs,
+    const std::string &texture_name_base = "",
+    const uint32_t num_samples = 1,
+    const gfx::ImageUsageBits extra_color_usage_bits = gfx::ImageUsageBits::kNone
+)
+```
+</CodeBlock>

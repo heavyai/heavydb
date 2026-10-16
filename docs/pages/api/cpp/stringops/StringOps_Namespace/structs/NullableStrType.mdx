@@ -1,0 +1,69 @@
+---
+title: StringOps_Namespace::NullableStrType
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+---
+
+## Constructors
+
+### NullableStrType [#nullablestrtype]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::NullableStrType::NullableStrType(
+    const std::string &str
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::NullableStrType::NullableStrType(
+    const std::string_view sv
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::NullableStrType::NullableStrType()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### toPair [#topair]
+
+<CodeBlock links={{"NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+std::pair<std::string, bool> StringOps_Namespace::NullableStrType::toPair() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `str` | `std::string` | |
+| `is_null` | `bool` | |

@@ -1,0 +1,176 @@
+---
+title: BaselineHashTableEntryInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <BaselineHashTable.h>
+```
+
+**Inherits from:** `HashTableEntryInfo` (public)
+
+---
+
+## Constructors
+
+### BaselineHashTableEntryInfo [#baselinehashtableentryinfo]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+BaselineHashTableEntryInfo::BaselineHashTableEntryInfo(
+    size_t num_hash_entries,
+    size_t num_keys,
+    size_t rowid_size_in_bytes,
+    size_t num_join_keys,
+    size_t join_key_size_in_byte,
+    HashType layout,
+    bool for_window_framing = false
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### computeTotalNumSlots [#computetotalnumslots]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTableEntryInfo::computeTotalNumSlots() const override
+```
+</CodeBlock>
+
+### computeKeySize [#computekeysize]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTableEntryInfo::computeKeySize() const
+```
+</CodeBlock>
+
+### computeNumAdditionalSlotsForOneToManyJoin [#computenumadditionalslotsforonetomanyjoin]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTableEntryInfo::computeNumAdditionalSlotsForOneToManyJoin() const
+```
+</CodeBlock>
+
+### computeHashTableSize [#computehashtablesize]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTableEntryInfo::computeHashTableSize() const override
+```
+</CodeBlock>
+
+### getNumJoinKeys [#getnumjoinkeys]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTableEntryInfo::getNumJoinKeys() const
+```
+</CodeBlock>
+
+### getJoinKeysSize [#getjoinkeyssize]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTableEntryInfo::getJoinKeysSize() const
+```
+</CodeBlock>
+
+### getNumHashEntries [#getnumhashentries]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTableEntryInfo::getNumHashEntries() const
+```
+</CodeBlock>
+
+### getNumKeys [#getnumkeys]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTableEntryInfo::getNumKeys() const
+```
+</CodeBlock>
+
+### getRowIdSizeInBytes [#getrowidsizeinbytes]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTableEntryInfo::getRowIdSizeInBytes() const
+```
+</CodeBlock>
+
+### getHashTableLayout [#gethashtablelayout]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+HashType BaselineHashTableEntryInfo::getHashTableLayout() const
+```
+</CodeBlock>
+
+### setNumHashEntries [#setnumhashentries]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void BaselineHashTableEntryInfo::setNumHashEntries(
+    size_t num_hash_entries
+)
+```
+</CodeBlock>
+
+### setNumKeys [#setnumkeys]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void BaselineHashTableEntryInfo::setNumKeys(
+    size_t num_keys
+)
+```
+</CodeBlock>
+
+### setRowIdSizeInBytes [#setrowidsizeinbytes]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void BaselineHashTableEntryInfo::setRowIdSizeInBytes(
+    size_t rowid_size_in_bytes
+)
+```
+</CodeBlock>
+
+### setHashTableLayout [#sethashtablelayout]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void BaselineHashTableEntryInfo::setHashTableLayout(
+    HashType layout
+)
+```
+</CodeBlock>
+
+### forWindowFraming [#forwindowframing]
+
+<CodeBlock links={{"BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+bool BaselineHashTableEntryInfo::forWindowFraming() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `num_join_keys_` | `size_t const` | |
+| `join_key_size_in_byte_` | `size_t const` | |
+| `num_hash_entries_` | `size_t` | |
+| `num_keys_` | `size_t` | |
+| `rowid_size_in_bytes_` | `size_t` | |
+| `layout_` | `HashType` | |
+| `for_window_framing_` | `bool` | |

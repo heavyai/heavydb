@@ -1,0 +1,556 @@
+---
+title: Data_Namespace::DataMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Data_Namespace/DataMgr.h>
+```
+
+---
+
+## Constructors
+
+### DataMgr [#datamgr]
+
+<CodeBlock links={{"DataMgr": "datamgr", "DiskCacheConfig": "../../filenamespace/structs/diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::DataMgr::DataMgr(
+    const std::string &dataDir,
+    const SystemParameters &system_parameters,
+    std::unique_ptr<CudaMgr_Namespace::CudaMgr> cudaMgr,
+    const bool useGpus,
+    const size_t reservedGpuMem = (1<< 27), const size_t numReaderThreads = 0, const File_Namespace::DiskCacheConfig cacheConfig = File_Namespace::DiskCacheConfig()
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~DataMgr
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::DataMgr::~DataMgr()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### createChunkBuffer [#createchunkbuffer]
+
+<CodeBlock links={{"DataMgr": "datamgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * Data_Namespace::DataMgr::createChunkBuffer(
+    const ChunkKey &key,
+    const MemoryLevel memoryLevel,
+    const int deviceId = 0,
+    const size_t page_size = 0
+)
+```
+</CodeBlock>
+
+### getChunkBuffer [#getchunkbuffer]
+
+<CodeBlock links={{"DataMgr": "datamgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * Data_Namespace::DataMgr::getChunkBuffer(
+    const ChunkKey &key,
+    const MemoryLevel memoryLevel,
+    const int deviceId = 0,
+    const size_t numBytes = 0
+)
+```
+</CodeBlock>
+
+### deleteChunk [#deletechunk]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::deleteChunk(
+    const ChunkKey &key,
+    const MemoryLevel mem_level,
+    const int device_id
+)
+```
+</CodeBlock>
+
+### deleteChunksWithPrefix [#deletechunkswithprefix]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::deleteChunksWithPrefix(
+    const ChunkKey &keyPrefix
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::deleteChunksWithPrefix(
+    const ChunkKey &keyPrefix,
+    const MemoryLevel memLevel
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### alloc [#alloc]
+
+<CodeBlock links={{"DataMgr": "datamgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * Data_Namespace::DataMgr::alloc(
+    const MemoryLevel memoryLevel,
+    const int deviceId,
+    const size_t numBytes
+)
+```
+</CodeBlock>
+
+### free [#free]
+
+<CodeBlock links={{"DataMgr": "datamgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::free(
+    AbstractBuffer *buffer
+)
+```
+</CodeBlock>
+
+### copy [#copy]
+
+<CodeBlock links={{"DataMgr": "datamgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::copy(
+    AbstractBuffer *destBuffer,
+    AbstractBuffer *srcBuffer
+)
+```
+</CodeBlock>
+
+### isBufferOnDevice [#isbufferondevice]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::DataMgr::isBufferOnDevice(
+    const ChunkKey &key,
+    const MemoryLevel memLevel,
+    const int deviceId
+)
+```
+</CodeBlock>
+
+### takeMemoryInfoSnapshot [#takememoryinfosnapshot]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::takeMemoryInfoSnapshot(
+    const std::string &key
+)
+```
+</CodeBlock>
+
+### getAndResetMemoryInfoSnapshot [#getandresetmemoryinfosnapshot]
+
+<CodeBlock links={{"DataMgr": "datamgr", "MemoryInfoSnapshot": "../structs/memoryinfosnapshot"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<MemoryInfoSnapshot> Data_Namespace::DataMgr::getAndResetMemoryInfoSnapshot(
+    const std::string &key
+)
+```
+</CodeBlock>
+
+### getMemoryInfo [#getmemoryinfo]
+
+<CodeBlock links={{"DataMgr": "datamgr", "MemoryInfo": "../../buffernamespace/structs/memoryinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<Buffer_Namespace::MemoryInfo> Data_Namespace::DataMgr::getMemoryInfo(
+    const MemoryLevel memLevel
+) const
+```
+</CodeBlock>
+
+### dumpLevel [#dumplevel]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+std::string Data_Namespace::DataMgr::dumpLevel(
+    const MemoryLevel memLevel
+)
+```
+</CodeBlock>
+
+### clearMemory [#clearmemory]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::clearMemory(
+    const MemoryLevel memLevel
+)
+```
+</CodeBlock>
+
+### getChunkMap [#getchunkmap]
+
+<CodeBlock links={{"DataMgr": "datamgr", "FileBuffer": "../../filenamespace/classes/filebuffer"}}>
+```cpp showLineNumbers={false}
+const std::map<ChunkKey, File_Namespace::FileBuffer *> & Data_Namespace::DataMgr::getChunkMap()
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::checkpoint(
+    const int db_id,
+    const int tb_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::checkpoint(
+    const int db_id,
+    const int table_id,
+    const MemoryLevel memory_level
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::checkpoint()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getChunkMetadataVecForKeyPrefix [#getchunkmetadatavecforkeyprefix]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::getChunkMetadataVecForKeyPrefix(
+    ChunkMetadataVector &chunkMetadataVec,
+    const ChunkKey &keyPrefix
+)
+```
+</CodeBlock>
+
+### gpusPresent [#gpuspresent]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::DataMgr::gpusPresent() const
+```
+</CodeBlock>
+
+### removeTableRelatedDS [#removetablerelatedds]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::removeTableRelatedDS(
+    const int db_id,
+    const int tb_id
+)
+```
+</CodeBlock>
+
+### removeMutableTableDiskCacheData [#removemutabletablediskcachedata]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::removeMutableTableDiskCacheData(
+    const int db_id,
+    const int tb_id
+) const
+```
+</CodeBlock>
+
+### setTableEpoch [#settableepoch]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::setTableEpoch(
+    const int db_id,
+    const int tb_id,
+    const int start_epoch
+)
+```
+</CodeBlock>
+
+### getTableEpoch [#gettableepoch]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+size_t Data_Namespace::DataMgr::getTableEpoch(
+    const int db_id,
+    const int tb_id
+)
+```
+</CodeBlock>
+
+### resetTableEpochFloor [#resettableepochfloor]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::resetTableEpochFloor(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### getCudaMgr [#getcudamgr]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::CudaMgr * Data_Namespace::DataMgr::getCudaMgr() const
+```
+</CodeBlock>
+
+### getGlobalFileMgr [#getglobalfilemgr]
+
+<CodeBlock links={{"DataMgr": "datamgr", "GlobalFileMgr": "../../filenamespace/classes/globalfilemgr"}}>
+```cpp showLineNumbers={false}
+File_Namespace::GlobalFileMgr * Data_Namespace::DataMgr::getGlobalFileMgr() const
+```
+</CodeBlock>
+
+### getPersistentStorageMgr [#getpersistentstoragemgr]
+
+<CodeBlock links={{"DataMgr": "datamgr", "PersistentStorageMgr": "../../classes/persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+PersistentStorageMgr * Data_Namespace::DataMgr::getPersistentStorageMgr() const
+```
+</CodeBlock>
+
+### resetBufferMgrs [#resetbuffermgrs]
+
+<CodeBlock links={{"DataMgr": "datamgr", "DiskCacheConfig": "../../filenamespace/structs/diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::resetBufferMgrs(
+    const File_Namespace::DiskCacheConfig &cache_config,
+    const size_t num_reader_threads,
+    const SystemParameters &sys_params
+)
+```
+</CodeBlock>
+
+### getCpuBufferPoolSize [#getcpubufferpoolsize]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+size_t Data_Namespace::DataMgr::getCpuBufferPoolSize() const
+```
+</CodeBlock>
+
+### getGpuBufferPoolSize [#getgpubufferpoolsize]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+size_t Data_Namespace::DataMgr::getGpuBufferPoolSize() const
+```
+</CodeBlock>
+
+### getCpuBufferMgr [#getcpubuffermgr]
+
+<CodeBlock links={{"DataMgr": "datamgr", "CpuBufferMgr": "../../buffernamespace/classes/cpubuffermgr"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::CpuBufferMgr * Data_Namespace::DataMgr::getCpuBufferMgr() const
+```
+</CodeBlock>
+
+### getGpuBufferMgr [#getgpubuffermgr]
+
+<CodeBlock links={{"DataMgr": "datamgr", "GpuCudaBufferMgr": "../../buffernamespace/classes/gpucudabuffermgr"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::GpuCudaBufferMgr * Data_Namespace::DataMgr::getGpuBufferMgr(
+    int32_t device_id
+) const
+```
+</CodeBlock>
+
+### setMaxNumRows [#setmaxnumrows]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::setMaxNumRows(
+    const std::optional<int64_t> &new_max
+)
+```
+</CodeBlock>
+
+Set the new number of maximum allowed rows.
+
+Validates if this new number does not exceed current capacity, if so, throws.
+
+**Parameters**
+
+<ParamField path="new_max" type="const std::optional<int64_t> &">
+- Thew new maximum number, can be a std::nullopt, in which case this limit is ignored.
+</ParamField>
+
+### getMaxNumRows [#getmaxnumrows]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+std::optional<int64_t> Data_Namespace::DataMgr::getMaxNumRows() const
+```
+</CodeBlock>
+
+### validateNumRows [#validatenumrows]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::validateNumRows(
+    const int64_t additional_row_count = 0
+) const
+```
+</CodeBlock>
+
+Validate if current number of rows across the entire system, plus an optional additional amount of rows, exceeds the allowed number of rows, as typically determined by a license.
+
+### populateMgrs [#populatemgrs]
+
+<CodeBlock links={{"DataMgr": "datamgr", "DiskCacheConfig": "../../filenamespace/structs/diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::populateMgrs(
+    const SystemParameters &system_parameters,
+    const size_t userSpecifiedNumReaderThreads,
+    const File_Namespace::DiskCacheConfig &cache_config
+)
+```
+</CodeBlock>
+
+### convertDB [#convertdb]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::convertDB(
+    const std::string basePath
+)
+```
+</CodeBlock>
+
+### createTopLevelMetadata [#createtoplevelmetadata]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::createTopLevelMetadata() const
+```
+</CodeBlock>
+
+### allocateCpuBufferMgr [#allocatecpubuffermgr]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::allocateCpuBufferMgr(
+    int32_t device_id,
+    size_t total_cpu_size,
+    size_t min_cpu_slab_size,
+    size_t max_cpu_slab_size,
+    size_t default_cpu_slab_size,
+    size_t page_size
+)
+```
+</CodeBlock>
+
+### getGlobalLockIfEnabled [#getgloballockifenabled]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+std::unique_lock<std::mutex> Data_Namespace::DataMgr::getGlobalLockIfEnabled() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getSystemMemoryUsage [#getsystemmemoryusage]
+
+<CodeBlock links={{"DataMgr": "datamgr", "SystemMemoryUsage": "#systemmemoryusage"}}>
+```cpp showLineNumbers={false}
+DataMgr::SystemMemoryUsage Data_Namespace::DataMgr::getSystemMemoryUsage()
+```
+</CodeBlock>
+
+### getTotalSystemMemory [#gettotalsystemmemory]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+size_t Data_Namespace::DataMgr::getTotalSystemMemory()
+```
+</CodeBlock>
+
+### atExitHandler [#atexithandler]
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::DataMgr::atExitHandler()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `levelSizes_` | `std::vector< int >` | |
+| `max_num_rows_mutex_` | `std::shared_mutex` | |
+| `max_num_rows_` | `std::optional< int64_t >` | |
+| `bufferMgrs_` | `std::vector< std::vector< AbstractBufferMgr * > >` | |
+| `cudaMgr_` | `std::unique_ptr< CudaMgr_Namespace::CudaMgr >` | |
+| `dataDir_` | `std::string` | |
+| `hasGpus_` | `bool` | |
+| `reservedGpuMem_` | `size_t` | |
+| `buffer_access_mutex_` | `std::mutex` | |
+| `memory_info_snapshots_` | `std::map< std::string, std::unique_ptr< MemoryInfoSnapshot > >` | |
+| `memory_info_snapshots_mutex_` | `std::shared_mutex` | |
+
+---
+
+## Inner classes
+
+### SystemMemoryUsage
+
+<CodeBlock links={{"DataMgr": "datamgr"}}>
+```cpp showLineNumbers={false}
+struct Data_Namespace::DataMgr::SystemMemoryUsage
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `free` | `size_t` | |
+| `total` | `size_t` | |
+| `resident` | `size_t` | |
+| `vtotal` | `size_t` | |
+| `regular` | `size_t` | |
+| `shared` | `size_t` | |
+| `frag` | `double` | |
+| `avail_pages` | `size_t` | |
+| `high_blocks` | `size_t` | |

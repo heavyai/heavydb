@@ -1,0 +1,48 @@
+---
+title: ExecutorResourceMgr_Namespace::ExecutorStats
+description: "Stores current key statistics relating to ExecutorResourceMgr state, particularly around the number of requests in queue and currently executing."
+---
+
+Stores current key statistics relating to [`ExecutorResourceMgr`](../classes/executorresourcemgr) state, particularly around the number of requests in queue and currently executing.
+
+Some of these stats are used to populate the system table `executor_pool_summary`, and in the future they may be used along with the [`RequestStats`](requeststats) vector to learn from query patterns for more efficient scheduling.
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ExecutorResourceMgr.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `requests` | `size_t` | |
+| `cpu_requests` | `size_t` | |
+| `gpu_requests` | `size_t` | |
+| `queue_length` | `size_t` | |
+| `cpu_queue_length` | `size_t` | |
+| `gpu_queue_length` | `size_t` | |
+| `total_queue_time_ms` | `size_t` | |
+| `total_cpu_queue_time_ms` | `size_t` | |
+| `total_gpu_queue_time_ms` | `size_t` | |
+| `requests_actually_queued` | `size_t` | |
+| `cpu_requests_actually_queued` | `size_t` | |
+| `gpu_requests_actually_queued` | `size_t` | |
+| `sum_queue_size_at_entry` | `size_t` | |
+| `sum_cpu_queue_size_at_entry` | `size_t` | |
+| `sum_gpu_queue_size_at_entry` | `size_t` | |
+| `requests_executing` | `size_t` | |
+| `cpu_requests_executing` | `size_t` | |
+| `gpu_requests_executing` | `size_t` | |
+| `requests_executed` | `size_t` | |
+| `cpu_requests_executed` | `size_t` | |
+| `gpu_requests_executed` | `size_t` | |
+| `total_execution_time_ms` | `size_t` | |
+| `total_cpu_execution_time_ms` | `size_t` | |
+| `total_gpu_execution_time_ms` | `size_t` | |
+| `total_time_ms` | `size_t` | |
+| `total_cpu_time_ms` | `size_t` | |
+| `total_gpu_time_ms` | `size_t` | |
+| `requests_with_timeouts` | `size_t` | |
+| `requests_timed_out` | `size_t` | |

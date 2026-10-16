@@ -1,0 +1,80 @@
+---
+title: Arena
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ArenaAllocator.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~Arena
+
+<CodeBlock links={{"Arena": "arena"}}>
+```cpp showLineNumbers={false}
+virtual Arena::~Arena()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocate [#allocate]
+
+<CodeBlock links={{"Arena": "arena"}}>
+```cpp showLineNumbers={false}
+virtual void * Arena::allocate(
+    size_t size
+)
+```
+</CodeBlock>
+
+### allocateAndZero [#allocateandzero]
+
+<CodeBlock links={{"Arena": "arena"}}>
+```cpp showLineNumbers={false}
+virtual void * Arena::allocateAndZero(
+    const size_t size
+)
+```
+</CodeBlock>
+
+### bytesUsed [#bytesused]
+
+<CodeBlock links={{"Arena": "arena"}}>
+```cpp showLineNumbers={false}
+virtual size_t Arena::bytesUsed() const
+```
+</CodeBlock>
+
+### totalBytes [#totalbytes]
+
+<CodeBlock links={{"Arena": "arena"}}>
+```cpp showLineNumbers={false}
+virtual size_t Arena::totalBytes() const
+```
+</CodeBlock>
+
+### getMemoryType [#getmemorytype]
+
+<CodeBlock links={{"Arena": "arena"}}>
+```cpp showLineNumbers={false}
+virtual MemoryType Arena::getMemoryType() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### MemoryType
+
+| Name | Value | Description |
+|---|---|---|
+| `DRAM` | | |

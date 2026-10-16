@@ -1,0 +1,79 @@
+---
+title: omniverse_connector::Polygon
+description: ""
+---
+
+---
+
+## Constructors
+
+### Polygon [#polygon]
+
+<Tabs>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Polygon": "polygon"}}>
+```cpp showLineNumbers={false}
+omniverse_connector::Polygon::Polygon(
+    const double *coords,
+    const int32_t *ring_sizes,
+    const int32_t first_ring,
+    const int32_t num_rings
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Deleted overload 1">
+
+<CodeBlock links={{"Polygon": "polygon"}}>
+```cpp showLineNumbers={false}
+omniverse_connector::Polygon::Polygon() = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getPoly [#getpoly]
+
+<CodeBlock links={{"Polygon": "polygon"}}>
+```cpp showLineNumbers={false}
+const Poly & omniverse_connector::Polygon::getPoly() const
+```
+</CodeBlock>
+
+### triangulate [#triangulate]
+
+<CodeBlock links={{"Polygon": "polygon"}}>
+```cpp showLineNumbers={false}
+const Indices & omniverse_connector::Polygon::triangulate()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Point` | `std::array< double, 2 >` |
+| `Ring` | `std::vector< Point >` |
+| `Poly` | `std::vector< Ring >` |
+| `Index` | `int32_t` |
+| `Indices` | `std::vector< Index >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `poly_` | `Poly` | |
+| `indices_` | `Indices` | |

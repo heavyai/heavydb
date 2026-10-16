@@ -1,0 +1,53 @@
+---
+title: File_Namespace::PageMapping
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/FileMgr.h>
+```
+
+---
+
+## Constructors
+
+### PageMapping [#pagemapping]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"PageMapping": "pagemapping"}}>
+```cpp showLineNumbers={false}
+File_Namespace::PageMapping::PageMapping()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"PageMapping": "pagemapping"}}>
+```cpp showLineNumbers={false}
+File_Namespace::PageMapping::PageMapping(
+    int32_t source_file_id,
+    size_t source_page_num,
+    PageHeaderSizeType source_page_header_size,
+    int32_t destination_file_id,
+    size_t destination_page_num
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `source_file_id` | `int32_t` | |
+| `source_page_num` | `size_t` | |
+| `source_page_header_size` | `PageHeaderSizeType` | |
+| `destination_file_id` | `int32_t` | |
+| `destination_page_num` | `size_t` | |

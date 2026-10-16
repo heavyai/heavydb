@@ -1,0 +1,623 @@
+---
+title: heavyai::JSON
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavyai/json.h>
+```
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Constructors
+
+### JSON [#json]
+
+<Tabs>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::JSON()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with peer)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::JSON(
+    const JSON &peer
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::JSON(
+    JSON &&
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with json)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::JSON(
+    const std::string &json
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::JSON(
+    const char *json
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::JSON(
+    const char *json,
+    size_t len
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::JSON(
+    std::shared_ptr<rapidjson::Document> doc,
+    rapidjson::Value *vptr,
+    rapidjson::Document::AllocatorType &allo,
+    const std::string &name
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<Tabs>
+<Tab title="Copy assign (with peer)">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON & heavyai::JSON::operator=(
+    const JSON &peer
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy assign (with item)">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON & heavyai::JSON::operator=(
+    const std::string &item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON & heavyai::JSON::operator=(
+    const char *item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON & heavyai::JSON::operator=(
+    bool item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON & heavyai::JSON::operator=(
+    int32_t item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON & heavyai::JSON::operator=(
+    int64_t item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON & heavyai::JSON::operator=(
+    uint32_t item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON & heavyai::JSON::operator=(
+    uint64_t item
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### parse [#parse]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+void heavyai::JSON::parse(
+    const std::string &json
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+void heavyai::JSON::parse(
+    const char *json
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+void heavyai::JSON::parse(
+    const char *json,
+    size_t len
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### stringify [#stringify]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+std::string heavyai::JSON::stringify() const
+```
+</CodeBlock>
+
+### str [#str]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+std::string heavyai::JSON::str() const
+```
+</CodeBlock>
+
+### b1 [#b1]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+bool heavyai::JSON::b1() const
+```
+</CodeBlock>
+
+### u64 [#u64]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+uint64_t heavyai::JSON::u64() const
+```
+</CodeBlock>
+
+### i64 [#i64]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+int64_t heavyai::JSON::i64() const
+```
+</CodeBlock>
+
+### u32 [#u32]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+uint32_t heavyai::JSON::u32() const
+```
+</CodeBlock>
+
+### i32 [#i32]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+int32_t heavyai::JSON::i32() const
+```
+</CodeBlock>
+
+### u16 [#u16]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+uint16_t heavyai::JSON::u16() const
+```
+</CodeBlock>
+
+### i16 [#i16]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+int16_t heavyai::JSON::i16() const
+```
+</CodeBlock>
+
+### u8 [#u8]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+uint8_t heavyai::JSON::u8() const
+```
+</CodeBlock>
+
+### i8 [#i8]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+int8_t heavyai::JSON::i8() const
+```
+</CodeBlock>
+
+### d64 [#d64]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+double heavyai::JSON::d64() const
+```
+</CodeBlock>
+
+### f32 [#f32]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+float heavyai::JSON::f32() const
+```
+</CodeBlock>
+
+### isString [#isstring]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+bool heavyai::JSON::isString() const
+```
+</CodeBlock>
+
+### isNumber [#isnumber]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+bool heavyai::JSON::isNumber() const
+```
+</CodeBlock>
+
+### isBoolean [#isboolean]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+bool heavyai::JSON::isBoolean() const
+```
+</CodeBlock>
+
+### isObject [#isobject]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+bool heavyai::JSON::isObject() const
+```
+</CodeBlock>
+
+### isArray [#isarray]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+bool heavyai::JSON::isArray() const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+bool heavyai::JSON::isNull() const
+```
+</CodeBlock>
+
+### hasMember [#hasmember]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+bool heavyai::JSON::hasMember(
+    const std::string &name
+) const
+```
+</CodeBlock>
+
+### operator std::string [#operatorstdstring]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator std::string() const
+```
+</CodeBlock>
+
+### operator bool [#operatorbool]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator bool() const
+```
+</CodeBlock>
+
+### operator uint64_t [#operatoruint64t]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator uint64_t() const
+```
+</CodeBlock>
+
+### operator int64_t [#operatorint64t]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator int64_t() const
+```
+</CodeBlock>
+
+### operator uint32_t [#operatoruint32t]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator uint32_t() const
+```
+</CodeBlock>
+
+### operator int32_t [#operatorint32t]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator int32_t() const
+```
+</CodeBlock>
+
+### operator uint16_t [#operatoruint16t]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator uint16_t() const
+```
+</CodeBlock>
+
+### operator int16_t [#operatorint16t]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator int16_t() const
+```
+</CodeBlock>
+
+### operator uint8_t [#operatoruint8t]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator uint8_t() const
+```
+</CodeBlock>
+
+### operator int8_t [#operatorint8t]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator int8_t() const
+```
+</CodeBlock>
+
+### operator double [#operatordouble]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator double() const
+```
+</CodeBlock>
+
+### operator float [#operatorfloat]
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+heavyai::JSON::operator float() const
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON heavyai::JSON::operator[](
+    const std::string &name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON heavyai::JSON::operator[](
+    const char *name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with name) (1)">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON heavyai::JSON::operator[](
+    const std::string &name
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with name) (2)">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON heavyai::JSON::operator[](
+    const char *name
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+JSON heavyai::JSON::operator[](
+    T index
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON heavyai::JSON::operator[](
+    size_t index
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index) (1)">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+JSON heavyai::JSON::operator[](
+    T index
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index) (2)">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"JSON": "json"}}>
+```cpp showLineNumbers={false}
+JSON heavyai::JSON::operator[](
+    size_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `doc_` | `std::shared_ptr< rapidjson::Document >` | |
+| `vptr_` | `rapidjson::Value *` | |
+| `allo_` | `rapidjson::Document::AllocatorType &` | |
+| `name_` | `const std::string` | |
+| `kTypeNames` <Badge intent="note" minimal>static</Badge> | `std::string` | |

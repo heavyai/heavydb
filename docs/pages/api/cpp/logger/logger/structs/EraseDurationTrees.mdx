@@ -1,0 +1,50 @@
+---
+title: logger::EraseDurationTrees
+description: "Depth-first search and erase all DurationTrees. Not thread-safe."
+---
+
+Depth-first search and erase all DurationTrees. Not thread-safe.
+
+**Inherits from:** `boost::static_visitor<>` (public)
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with itr)">
+
+<CodeBlock links={{"EraseDurationTrees": "erasedurationtrees"}}>
+```cpp showLineNumbers={false}
+void logger::EraseDurationTrees::operator()(
+    DurationTreeMap::const_iterator const &itr
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"EraseDurationTrees": "erasedurationtrees", "Duration": "../classes/duration"}}>
+```cpp showLineNumbers={false}
+void logger::EraseDurationTrees::operator()(
+    Duration const &
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with duration tree)">
+
+<CodeBlock links={{"EraseDurationTrees": "erasedurationtrees", "DurationTree": "../classes/durationtree"}}>
+```cpp showLineNumbers={false}
+void logger::EraseDurationTrees::operator()(
+    DurationTree const &duration_tree
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

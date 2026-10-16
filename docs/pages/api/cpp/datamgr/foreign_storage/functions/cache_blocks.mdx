@@ -1,0 +1,18 @@
+---
+title: foreign_storage::cache_blocks
+description: ""
+---
+
+<CodeBlock links={{"Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::cache_blocks(
+    std::map<ChunkKey, Chunk_NS::Chunk> &cached_chunks,
+    DataBlockPtr data_block,
+    size_t row_count,
+    ChunkKey &chunk_key,
+    const ColumnDescriptor *column,
+    bool is_first_block,
+    bool disable_cache
+)
+```
+</CodeBlock>

@@ -1,0 +1,337 @@
+---
+title: AlterTableAlterColumnCommandRecoveryMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <AlterColumnRecovery.h>
+```
+
+---
+
+## Constructors
+
+### AlterTableAlterColumnCommandRecoveryMgr [#altertablealtercolumncommandrecoverymgr]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "Catalog": "../catalognamespace/classes/catalog"}}>
+```cpp showLineNumbers={false}
+AlterTableAlterColumnCommandRecoveryMgr::AlterTableAlterColumnCommandRecoveryMgr(
+    Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### rollback [#rollback]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "TableDescriptor": "../structs/tabledescriptor", "RecoveryInfo": "#recoveryinfo"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::rollback(
+    const TableDescriptor *td,
+    const RecoveryInfo &param
+)
+```
+</CodeBlock>
+
+### cleanup [#cleanup]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::cleanup(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::checkpoint(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### deserializeRecoveryInformation [#deserializerecoveryinformation]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "RecoveryInfo": "#recoveryinfo"}}>
+```cpp showLineNumbers={false}
+AlterTableAlterColumnCommandRecoveryMgr::RecoveryInfo AlterTableAlterColumnCommandRecoveryMgr::deserializeRecoveryInformation(
+    const std::string &filename
+)
+```
+</CodeBlock>
+
+### serializeRecoveryInformation [#serializerecoveryinformation]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "RecoveryInfo": "#recoveryinfo"}}>
+```cpp showLineNumbers={false}
+std::string AlterTableAlterColumnCommandRecoveryMgr::serializeRecoveryInformation(
+    const RecoveryInfo &param
+)
+```
+</CodeBlock>
+
+### writeSerializedRecoveryInformation [#writeserializedrecoveryinformation]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "RecoveryInfo": "#recoveryinfo", "RecoveryParamFilepathInfo": "#recoveryparamfilepathinfo"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::writeSerializedRecoveryInformation(
+    const RecoveryInfo &param,
+    const RecoveryParamFilepathInfo &filepath_info
+)
+```
+</CodeBlock>
+
+### readSerializedRecoveryInformation [#readserializedrecoveryinformation]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "RecoveryInfo": "#recoveryinfo", "RecoveryParamFilepathInfo": "#recoveryparamfilepathinfo"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::readSerializedRecoveryInformation(
+    RecoveryInfo &param,
+    const RecoveryParamFilepathInfo &filepath_info
+)
+```
+</CodeBlock>
+
+### recoveryFilepath [#recoveryfilepath]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "RecoveryParamFilepathInfo": "#recoveryparamfilepathinfo"}}>
+```cpp showLineNumbers={false}
+std::string AlterTableAlterColumnCommandRecoveryMgr::recoveryFilepath(
+    const RecoveryParamFilepathInfo &filepath_info
+)
+```
+</CodeBlock>
+
+### getRecoveryFilepathInfo [#getrecoveryfilepathinfo]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "RecoveryParamFilepathInfo": "#recoveryparamfilepathinfo"}}>
+```cpp showLineNumbers={false}
+AlterTableAlterColumnCommandRecoveryMgr::RecoveryParamFilepathInfo AlterTableAlterColumnCommandRecoveryMgr::getRecoveryFilepathInfo(
+    const int32_t table_id = -1
+)
+```
+</CodeBlock>
+
+### cleanupDeleteDictionaries [#cleanupdeletedictionaries]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::cleanupDeleteDictionaries(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### cleanupClearChunk [#cleanupclearchunk]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::cleanupClearChunk(
+    const ChunkKey &key,
+    const MemoryLevel mem_level
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::cleanupClearChunk(
+    const ChunkKey &key
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### cleanupClearRemainingChunks [#cleanupclearremainingchunks]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::cleanupClearRemainingChunks(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### cleanupDropSourceGeoColumns [#cleanupdropsourcegeocolumns]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::cleanupDropSourceGeoColumns(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### toPairedCds [#topairedcds]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "ColumnAltered": "#columnaltered", "ColumnDescriptor": "../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::list<std::pair<ColumnDescriptor, ColumnDescriptor>> AlterTableAlterColumnCommandRecoveryMgr::toPairedCds(
+    const std::list<ColumnAltered> &altered_columns
+)
+```
+</CodeBlock>
+
+### recoverAlterTableAlterColumnFromFile [#recoveraltertablealtercolumnfromfile]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::recoverAlterTableAlterColumnFromFile(
+    const std::string &filename
+)
+```
+</CodeBlock>
+
+### getRecoveryFiles [#getrecoveryfiles]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+std::list<std::filesystem::path> AlterTableAlterColumnCommandRecoveryMgr::getRecoveryFiles()
+```
+</CodeBlock>
+
+### getSrcDstCds [#getsrcdstcds]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "ColumnDescriptor": "../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+AlterTableAlterColumnCommandRecoveryMgr::TypePairs AlterTableAlterColumnCommandRecoveryMgr::getSrcDstCds(
+    int table_id,
+    std::list<std::pair<ColumnDescriptor, ColumnDescriptor>> &pairs_list
+)
+```
+</CodeBlock>
+
+### resolveIncompleteAlterColumnCommands [#resolveincompletealtercolumncommands]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::resolveIncompleteAlterColumnCommands()
+```
+</CodeBlock>
+
+### fromPairedCds [#frompairedcds]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr", "ColumnDescriptor": "../structs/columndescriptor", "ColumnAltered": "#columnaltered"}}>
+```cpp showLineNumbers={false}
+std::list<AlterTableAlterColumnCommandRecoveryMgr::ColumnAltered> AlterTableAlterColumnCommandRecoveryMgr::fromPairedCds(
+    const std::list<std::pair<ColumnDescriptor, ColumnDescriptor>> &altered_columns
+)
+```
+</CodeBlock>
+
+### getRecoveryPrefix [#getrecoveryprefix]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+std::filesystem::path AlterTableAlterColumnCommandRecoveryMgr::getRecoveryPrefix(
+    const std::string &base_path
+)
+```
+</CodeBlock>
+
+### createRecoveryManagersForCatalogs [#createrecoverymanagersforcatalogs]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+std::map<std::string, AlterTableAlterColumnCommandRecoveryMgr> AlterTableAlterColumnCommandRecoveryMgr::createRecoveryManagersForCatalogs()
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resolveIncompleteAlterColumnCommandsForAllCatalogs [#resolveincompletealtercolumncommandsforallcatalogs]
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommandRecoveryMgr::resolveIncompleteAlterColumnCommandsForAllCatalogs()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `TypePairs` | `alter_column_shared::TypePairs` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `kRecoveryDirectoryName` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `catalog_` | `Catalog_Namespace::Catalog &` | |
+
+---
+
+## Inner classes
+
+### ColumnAltered
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+struct AlterTableAlterColumnCommandRecoveryMgr::ColumnAltered
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `old_cd` | `ColumnDescriptor` | |
+| `new_cd` | `ColumnDescriptor` | |
+
+### RecoveryInfo
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+struct AlterTableAlterColumnCommandRecoveryMgr::RecoveryInfo
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `renamed_columns` | `std::list< ColumnDescriptor >` | |
+| `added_columns` | `std::list< ColumnDescriptor >` | |
+| `altered_columns` | `std::list< ColumnAltered >` | |
+| `updated_dict_cds` | `std::list< ColumnDescriptor >` | |
+| `table_epoch` | `int32_t` | |
+| `is_vacuumed` | `bool` | |
+| `src_dst_cds` | `std::list< std::pair< ColumnDescriptor, ColumnDescriptor > >` | |
+
+### RecoveryParamFilepathInfo
+
+<CodeBlock links={{"AlterTableAlterColumnCommandRecoveryMgr": "altertablealtercolumncommandrecoverymgr"}}>
+```cpp showLineNumbers={false}
+struct AlterTableAlterColumnCommandRecoveryMgr::RecoveryParamFilepathInfo
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `base_path` | `std::string` | |
+| `db_name` | `std::string` | |
+| `table_name` | `std::string` | |

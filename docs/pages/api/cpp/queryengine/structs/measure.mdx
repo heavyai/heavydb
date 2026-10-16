@@ -1,0 +1,32 @@
+---
+title: measure
+description: ""
+---
+
+<CodeBlock id="measure" links={{"measure": "measure"}}>
+```cpp showLineNumbers={false}
+template <typename TimeT = std::chrono::milliseconds>
+struct measure
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="TimeT" type="typename" default="std::chrono::milliseconds">
+</ParamField>
+
+---
+
+## Static methods
+
+### execution [#execution]
+
+<CodeBlock links={{"measure": "measure"}}>
+```cpp showLineNumbers={false}
+template <typename F, typename... Args>
+static TimeT::rep measure<TimeT>::execution(
+    F func,
+    Args &&... args
+)
+```
+</CodeBlock>

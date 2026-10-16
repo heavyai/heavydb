@@ -1,0 +1,48 @@
+---
+title: DdlCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+---
+
+## Constructors
+
+### DdlCommand [#ddlcommand]
+
+<CodeBlock links={{"DdlCommand": "ddlcommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+DdlCommand::DdlCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"DdlCommand": "ddlcommand"}}>
+```cpp showLineNumbers={false}
+virtual ExecutionResult DdlCommand::execute(
+    bool read_only_mode
+)
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

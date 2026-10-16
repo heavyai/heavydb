@@ -1,0 +1,67 @@
+---
+title: SqliteMemDatabase
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ExternalExecutor.h>
+```
+
+---
+
+## Constructors
+
+### SqliteMemDatabase [#sqlitememdatabase]
+
+<CodeBlock links={{"SqliteMemDatabase": "sqlitememdatabase", "ExternalQueryTable": "../structs/externalquerytable"}}>
+```cpp showLineNumbers={false}
+SqliteMemDatabase::SqliteMemDatabase(
+    const ExternalQueryTable &external_query_table
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~SqliteMemDatabase
+
+<CodeBlock links={{"SqliteMemDatabase": "sqlitememdatabase"}}>
+```cpp showLineNumbers={false}
+SqliteMemDatabase::~SqliteMemDatabase()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### run [#run]
+
+<CodeBlock links={{"SqliteMemDatabase": "sqlitememdatabase"}}>
+```cpp showLineNumbers={false}
+void SqliteMemDatabase::run(
+    const std::string &sql
+)
+```
+</CodeBlock>
+
+### runSelect [#runselect]
+
+<CodeBlock links={{"SqliteMemDatabase": "sqlitememdatabase", "ExternalQueryOutputSpec": "../structs/externalqueryoutputspec", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ResultSet> SqliteMemDatabase::runSelect(
+    const std::string &sql,
+    const ExternalQueryOutputSpec &output_spec
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `db_` | `sqlite3 *` | |
+| `external_query_table_` | `ExternalQueryTable` | |
+| `session_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |

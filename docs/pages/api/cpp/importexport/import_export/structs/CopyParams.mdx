@@ -1,0 +1,102 @@
+---
+title: import_export::CopyParams
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/CopyParams.h>
+```
+
+---
+
+## Constructors
+
+### CopyParams [#copyparams]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"CopyParams": "copyparams"}}>
+```cpp showLineNumbers={false}
+import_export::CopyParams::CopyParams()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CopyParams": "copyparams"}}>
+```cpp showLineNumbers={false}
+import_export::CopyParams::CopyParams(
+    char d,
+    const std::string &n,
+    char l,
+    size_t b,
+    size_t retries,
+    size_t wait
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `delimiter` | `char` | |
+| `null_str` | `std::string` | |
+| `has_header` | `ImportHeaderRow` | |
+| `quoted` | `bool` | |
+| `quote` | `char` | |
+| `escape` | `char` | |
+| `line_delim` | `char` | |
+| `array_delim` | `char` | |
+| `array_begin` | `char` | |
+| `array_end` | `char` | |
+| `threads` | `int` | |
+| `max_reject` | `size_t` | |
+| `source_type` | `import_export::SourceType` | |
+| `plain_text` | `bool` | |
+| `trim_spaces` | `bool` | |
+| `s3_config` | `shared::S3Config` | |
+| `retry_count` | `size_t` | |
+| `retry_wait` | `size_t` | |
+| `batch_size` | `size_t` | |
+| `buffer_size` | `size_t` | |
+| `max_import_batch_row_count` | `size_t` | |
+| `lonlat` | `bool` | |
+| `geo_coords_encoding` | `EncodingType` | |
+| `geo_coords_comp_param` | `int32_t` | |
+| `geo_coords_type` | `SQLTypes` | |
+| `geo_coords_srid` | `int32_t` | |
+| `sanitize_column_names` | `bool` | |
+| `geo_layer_name` | `std::string` | |
+| `geo_explode_collections` | `bool` | |
+| `geo_validate_geometry` | `bool` | |
+| `source_srid` | `int32_t` | |
+| `regex_path_filter` | `std::optional< std::string >` | |
+| `file_sort_order_by` | `std::optional< std::string >` | |
+| `file_sort_regex` | `std::optional< std::string >` | |
+| `raster_point_type` | `RasterPointType` | |
+| `raster_import_bands` | `std::string` | |
+| `raster_scanlines_per_thread` | `int32_t` | |
+| `raster_point_transform` | `RasterPointTransform` | |
+| `raster_import_dimensions` | `std::string` | |
+| `raster_width` | `std::optional< int >` | |
+| `raster_height` | `std::optional< int >` | |
+| `add_metadata_columns` | `std::string` | |
+| `raster_drop_if_all_null` | `bool` | |
+| `sql_select` | `std::string` | |
+| `sql_order_by` | `std::string` | |
+| `username` | `std::string` | |
+| `password` | `std::string` | |
+| `credential_string` | `std::string` | |
+| `dsn` | `std::string` | |
+| `connection_string` | `std::string` | |
+| `line_start_regex` | `std::string` | |
+| `line_regex` | `std::string` | |
+| `bounding_box_clip` | `std::string` | |

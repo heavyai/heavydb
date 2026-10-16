@@ -1,0 +1,54 @@
+---
+title: Parser::NameValueAssign
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public)
+
+---
+
+## Constructors
+
+### NameValueAssign [#namevalueassign]
+
+<CodeBlock links={{"NameValueAssign": "namevalueassign", "Literal": "literal"}}>
+```cpp showLineNumbers={false}
+Parser::NameValueAssign::NameValueAssign(
+    std::string *n,
+    Literal *v
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_name [#getname]
+
+<CodeBlock links={{"NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::NameValueAssign::get_name() const
+```
+</CodeBlock>
+
+### get_value [#getvalue]
+
+<CodeBlock links={{"NameValueAssign": "namevalueassign", "Literal": "literal"}}>
+```cpp showLineNumbers={false}
+const Literal * Parser::NameValueAssign::get_value() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name_` | `std::unique_ptr< std::string >` | |
+| `value_` | `std::unique_ptr< Literal >` | |

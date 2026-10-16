@@ -1,0 +1,72 @@
+---
+title: CreateForeignTableCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### CreateForeignTableCommand [#createforeigntablecommand]
+
+<CodeBlock links={{"CreateForeignTableCommand": "createforeigntablecommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+CreateForeignTableCommand::CreateForeignTableCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"CreateForeignTableCommand": "createforeigntablecommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult CreateForeignTableCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+### setTableDetails [#settabledetails]
+
+<CodeBlock links={{"CreateForeignTableCommand": "createforeigntablecommand", "TableDescriptor": "../structs/tabledescriptor", "ColumnDescriptor": "../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void CreateForeignTableCommand::setTableDetails(
+    const std::string &table_name,
+    TableDescriptor &td,
+    const std::list<ColumnDescriptor> &columns
+)
+```
+</CodeBlock>
+
+### setColumnDetails [#setcolumndetails]
+
+<CodeBlock links={{"CreateForeignTableCommand": "createforeigntablecommand", "ColumnDescriptor": "../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void CreateForeignTableCommand::setColumnDetails(
+    std::list<ColumnDescriptor> &columns
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

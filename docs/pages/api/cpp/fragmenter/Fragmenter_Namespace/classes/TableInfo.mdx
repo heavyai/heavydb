@@ -1,0 +1,84 @@
+---
+title: Fragmenter_Namespace::TableInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Fragmenter_Namespace/Fragmenter.h>
+```
+
+---
+
+## Constructors
+
+### TableInfo [#tableinfo]
+
+<CodeBlock links={{"TableInfo": "tableinfo"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::TableInfo::TableInfo()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNumTuples [#getnumtuples]
+
+<CodeBlock links={{"TableInfo": "tableinfo"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::TableInfo::getNumTuples() const
+```
+</CodeBlock>
+
+### getNumTuplesUpperBound [#getnumtuplesupperbound]
+
+<CodeBlock links={{"TableInfo": "tableinfo"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::TableInfo::getNumTuplesUpperBound() const
+```
+</CodeBlock>
+
+### getPhysicalNumTuples [#getphysicalnumtuples]
+
+<CodeBlock links={{"TableInfo": "tableinfo"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::TableInfo::getPhysicalNumTuples() const
+```
+</CodeBlock>
+
+### setPhysicalNumTuples [#setphysicalnumtuples]
+
+<CodeBlock links={{"TableInfo": "tableinfo"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::TableInfo::setPhysicalNumTuples(
+    const size_t physNumTuples
+)
+```
+</CodeBlock>
+
+### getFragmentNumTuplesUpperBound [#getfragmentnumtuplesupperbound]
+
+<CodeBlock links={{"TableInfo": "tableinfo"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::TableInfo::getFragmentNumTuplesUpperBound() const
+```
+</CodeBlock>
+
+### copyTableInfo [#copytableinfo]
+
+<CodeBlock links={{"TableInfo": "tableinfo"}}>
+```cpp showLineNumbers={false}
+TableInfo Fragmenter_Namespace::TableInfo::copyTableInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `chunkKeyPrefix` | `std::vector< int >` | |
+| `fragments` | `std::vector< FragmentInfo >` | |
+| `numTuples` | `size_t` | |

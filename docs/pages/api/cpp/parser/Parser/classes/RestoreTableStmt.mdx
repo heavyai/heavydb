@@ -1,0 +1,129 @@
+---
+title: Parser::RestoreTableStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DumpRestoreTableStmtBase` (public)
+
+---
+
+## Constructors
+
+### RestoreTableStmt [#restoretablestmt]
+
+<CodeBlock links={{"RestoreTableStmt": "restoretablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::RestoreTableStmt::RestoreTableStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"RestoreTableStmt": "restoretablestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RestoreTableStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### defaultCompression [#defaultcompression]
+
+<CodeBlock links={{"RestoreTableStmt": "restoretablestmt", "DumpRestoreTableStmtBase": "dumprestoretablestmtbase"}}>
+```cpp showLineNumbers={false}
+DumpRestoreTableStmtBase::CompressionType Parser::RestoreTableStmt::defaultCompression(
+    bool is_restore
+)
+```
+</CodeBlock>
+
+### validateCompression [#validatecompression]
+
+<CodeBlock links={{"RestoreTableStmt": "restoretablestmt", "DumpRestoreTableStmtBase": "dumprestoretablestmtbase"}}>
+```cpp showLineNumbers={false}
+DumpRestoreTableStmtBase::CompressionType Parser::RestoreTableStmt::validateCompression(
+    const std::string &compression,
+    const bool is_restore
+)
+```
+</CodeBlock>
+
+### tarCompressionStr [#tarcompressionstr]
+
+<CodeBlock links={{"RestoreTableStmt": "restoretablestmt", "DumpRestoreTableStmtBase": "dumprestoretablestmtbase"}}>
+```cpp showLineNumbers={false}
+std::string Parser::RestoreTableStmt::tarCompressionStr(
+    CompressionType compression,
+    const bool is_restore
+)
+```
+</CodeBlock>
+
+### getTable [#gettable]
+
+<CodeBlock links={{"RestoreTableStmt": "restoretablestmt", "DumpRestoreTableStmtBase": "dumprestoretablestmtbase"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::RestoreTableStmt::getTable() const
+```
+</CodeBlock>
+
+### getPath [#getpath]
+
+<CodeBlock links={{"RestoreTableStmt": "restoretablestmt", "DumpRestoreTableStmtBase": "dumprestoretablestmtbase"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::RestoreTableStmt::getPath() const
+```
+</CodeBlock>
+
+### getCompression [#getcompression]
+
+<CodeBlock links={{"RestoreTableStmt": "restoretablestmt", "DumpRestoreTableStmtBase": "dumprestoretablestmtbase"}}>
+```cpp showLineNumbers={false}
+const CompressionType Parser::RestoreTableStmt::getCompression() const
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"RestoreTableStmt": "restoretablestmt", "ColumnDef": "columndef", "DumpRestoreTableStmtBase": "dumprestoretablestmtbase"}}>
+```cpp showLineNumbers={false}
+void Parser::DDLStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### CompressionType
+
+| Name | Value | Description |
+|---|---|---|
+| `kGZIP` | | |
+| `kLZ4` | | |
+| `kNONE` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `path_` | `std::unique_ptr< std::string >` | |
+| `compression_` | `CompressionType` | |
+| `s3_options_` | `shared::S3Config` | |

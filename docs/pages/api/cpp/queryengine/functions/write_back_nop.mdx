@@ -1,0 +1,33 @@
+---
+title: write_back_nop
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ void write_back_nop(
+    int64_t *dest,
+    int64_t *src,
+    const int32_t sz
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE void write_back_nop(
+    int64_t *dest,
+    int64_t *src,
+    const int32_t sz
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

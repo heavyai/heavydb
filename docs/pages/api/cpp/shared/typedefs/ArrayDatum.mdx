@@ -1,0 +1,8 @@
+---
+title: ArrayDatum
+description: ""
+---
+
+```cpp showLineNumbers={false}
+using ArrayDatum = std::conditional_t<is_cuda_compiler(), DeviceArrayDatum, HostArrayDatum>;
+```

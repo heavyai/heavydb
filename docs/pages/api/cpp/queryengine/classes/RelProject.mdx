@@ -1,0 +1,805 @@
+---
+title: RelProject
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public), `ModifyManipulationTarget` (public)
+
+---
+
+## Constructors
+
+### RelProject [#relproject]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+RelProject::RelProject(
+    const TableDescriptor *td,
+    const Catalog_Namespace::Catalog *catalog
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with scalar exprs and fields and input)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelProject": "relproject", "RexScalar": "rexscalar", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RelProject::RelProject(
+    std::vector<std::unique_ptr<const RexScalar>> &scalar_exprs,
+    const std::vector<std::string> &fields,
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+RelProject::RelProject(
+    RelProject const &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelProject": "relproject", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelProject::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelProject": "relproject", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelProject::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### setExpressions [#setexpressions]
+
+<CodeBlock links={{"RelProject": "relproject", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelProject::setExpressions(
+    std::vector<std::unique_ptr<const RexScalar>> &exprs
+) const
+```
+</CodeBlock>
+
+### isSimple [#issimple]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+bool RelProject::isSimple() const
+```
+</CodeBlock>
+
+### isIdentity [#isidentity]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+bool RelProject::isIdentity() const
+```
+</CodeBlock>
+
+### isRenaming [#isrenaming]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+bool RelProject::isRenaming() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+size_t RelProject::size() const override
+```
+</CodeBlock>
+
+### propagateModifyManipulationTarget [#propagatemodifymanipulationtarget]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void RelProject::propagateModifyManipulationTarget(
+    std::shared_ptr<RelProject> new_project_node
+) const
+```
+</CodeBlock>
+
+### resetModifyManipulationTarget [#resetmodifymanipulationtarget]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void RelProject::resetModifyManipulationTarget() const
+```
+</CodeBlock>
+
+### hasPushedDownWindowExpr [#haspusheddownwindowexpr]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+bool RelProject::hasPushedDownWindowExpr() const
+```
+</CodeBlock>
+
+### setPushedDownWindowExpr [#setpusheddownwindowexpr]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void RelProject::setPushedDownWindowExpr()
+```
+</CodeBlock>
+
+### hasPushedDownFilterForStringOper [#haspusheddownfilterforstringoper]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+bool RelProject::hasPushedDownFilterForStringOper() const
+```
+</CodeBlock>
+
+### setPushedDownFilterForStringOper [#setpusheddownfilterforstringoper]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void RelProject::setPushedDownFilterForStringOper()
+```
+</CodeBlock>
+
+### getProjectAt [#getprojectat]
+
+<CodeBlock links={{"RelProject": "relproject", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelProject::getProjectAt(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getProjectAtAndRelease [#getprojectatandrelease]
+
+<CodeBlock links={{"RelProject": "relproject", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelProject::getProjectAtAndRelease(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getExpressionsAndRelease [#getexpressionsandrelease]
+
+<CodeBlock links={{"RelProject": "relproject", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::vector<std::unique_ptr<const RexScalar>> RelProject::getExpressionsAndRelease()
+```
+</CodeBlock>
+
+### getFields [#getfields]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & RelProject::getFields() const
+```
+</CodeBlock>
+
+### setFields [#setfields]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void RelProject::setFields(
+    std::vector<std::string> &&fields
+)
+```
+</CodeBlock>
+
+### getFieldName [#getfieldname]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+const std::string RelProject::getFieldName(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<Tabs>
+<Tab title="Single item">
+
+<Badge intent="note" minimal>inline</Badge> <Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelProject::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (with old to new index map)">
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelProject::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input,
+    std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### appendInput [#appendinput]
+
+<CodeBlock links={{"RelProject": "relproject", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelProject::appendInput(
+    std::string new_field_name,
+    std::unique_ptr<const RexScalar> new_input
+)
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelProject": "relproject", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelProject::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelProject::deepCopy() const override
+```
+</CodeBlock>
+
+### hasWindowFunctionExpr [#haswindowfunctionexpr]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+bool RelProject::hasWindowFunctionExpr() const
+```
+</CodeBlock>
+
+### addHint [#addhint]
+
+<CodeBlock links={{"RelProject": "relproject", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+void RelProject::addHint(
+    const ExplainedQueryHint &hint_explained
+)
+```
+</CodeBlock>
+
+### hasHintEnabled [#hashintenabled]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+const bool RelProject::hasHintEnabled(
+    QueryHint candidate_hint
+) const
+```
+</CodeBlock>
+
+### getHintInfo [#gethintinfo]
+
+<CodeBlock links={{"RelProject": "relproject", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+const ExplainedQueryHint & RelProject::getHintInfo(
+    QueryHint hint
+) const
+```
+</CodeBlock>
+
+### hasDeliveredHint [#hasdeliveredhint]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+bool RelProject::hasDeliveredHint()
+```
+</CodeBlock>
+
+### getDeliveredHints [#getdeliveredhints]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+Hints * RelProject::getDeliveredHints()
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelProject": "relproject", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelProject": "relproject", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+std::string RelProject::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+size_t RelProject::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelProject": "relproject", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelProject::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+unsigned RelProject::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+bool RelProject::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelProject": "relproject", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelProject::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const size_t RelProject::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelProject::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelProject::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelProject::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+bool RelProject::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+size_t RelProject::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+bool RelProject::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+size_t RelProject::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### setUpdateViaSelectFlag [#setupdateviaselectflag]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setUpdateViaSelectFlag(
+    bool required
+) const
+```
+</CodeBlock>
+
+### setDeleteViaSelectFlag [#setdeleteviaselectflag]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setDeleteViaSelectFlag(
+    bool required
+) const
+```
+</CodeBlock>
+
+### setVarlenUpdateRequired [#setvarlenupdaterequired]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setVarlenUpdateRequired(
+    bool required
+) const
+```
+</CodeBlock>
+
+### forceRowwiseOutput [#forcerowwiseoutput]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::forceRowwiseOutput() const
+```
+</CodeBlock>
+
+### getModifiedTableDescriptor [#getmodifiedtabledescriptor]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+TableDescriptor const  * RelProject::getModifiedTableDescriptor() const
+```
+</CodeBlock>
+
+### getTableDescriptor [#gettabledescriptor]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+TableDescriptor const  * RelProject::getTableDescriptor() const
+```
+</CodeBlock>
+
+### setModifiedTableDescriptor [#setmodifiedtabledescriptor]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setModifiedTableDescriptor(
+    TableDescriptor const *td
+) const
+```
+</CodeBlock>
+
+### getModifiedTableCatalog [#getmodifiedtablecatalog]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const Catalog_Namespace::Catalog * RelProject::getModifiedTableCatalog() const
+```
+</CodeBlock>
+
+### setModifiedTableCatalog [#setmodifiedtablecatalog]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setModifiedTableCatalog(
+    const Catalog_Namespace::Catalog *catalog
+) const
+```
+</CodeBlock>
+
+### isUpdateViaSelect [#isupdateviaselect]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelProject::isUpdateViaSelect() const
+```
+</CodeBlock>
+
+### isDeleteViaSelect [#isdeleteviaselect]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelProject::isDeleteViaSelect() const
+```
+</CodeBlock>
+
+### isVarlenUpdateRequired [#isvarlenupdaterequired]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelProject::isVarlenUpdateRequired() const
+```
+</CodeBlock>
+
+### isProjectForUpdate [#isprojectforupdate]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelProject::isProjectForUpdate() const
+```
+</CodeBlock>
+
+### isRowwiseOutputForced [#isrowwiseoutputforced]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelProject::isRowwiseOutputForced() const
+```
+</CodeBlock>
+
+### setTargetColumns [#settargetcolumns]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::setTargetColumns(
+    ColumnNameList const &target_columns
+) const
+```
+</CodeBlock>
+
+### getTargetColumns [#gettargetcolumns]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+ColumnNameList const  & RelProject::getTargetColumns() const
+```
+</CodeBlock>
+
+### invalidateTargetColumns [#invalidatetargetcolumns]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::invalidateTargetColumns() const
+```
+</CodeBlock>
+
+### validateTargetColumns [#validatetargetcolumns]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+template <typename VALIDATION_FUNCTOR>
+bool RelProject::validateTargetColumns(
+    VALIDATION_FUNCTOR validator
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+size_t RelProject::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+### visitScalarExprs [#visitscalarexprs]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+template <typename EXPR_VISITOR_FUNCTOR>
+void RelProject::visitScalarExprs(
+    EXPR_VISITOR_FUNCTOR visitor_functor
+) const
+```
+</CodeBlock>
+
+### injectOffsetInFragmentExpr [#injectoffsetinfragmentexpr]
+
+<CodeBlock links={{"RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void RelProject::injectOffsetInFragmentExpr() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelProject": "relproject", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelProject::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ConstRexScalarPtr` | `std::unique_ptr< const RexScalar >` |
+| `ConstRexScalarPtrVector` | `std::vector< ConstRexScalarPtr >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `scalar_exprs_` | `std::vector< std::unique_ptr< const RexScalar > >` | |
+| `fields_` | `std::vector< std::string >` | |
+| `hint_applied_` | `bool` | |
+| `hints_` | `std::unique_ptr< Hints >` | |
+| `has_pushed_down_window_expr_` | `bool` | |
+| `has_pushed_down_filter_for_string_oper_` | `bool` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

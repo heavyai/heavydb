@@ -1,0 +1,76 @@
+---
+title: "lockmgr::TableSchemaLockContainer< WriteLock >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgr.h>
+```
+
+**Inherits from:** `lockmgr::LockContainerImpl< const TableDescriptor *, WriteLock >` (public), `lockmgr::LockContainerImpl< const TableDescriptor *, WriteLock >` (public)
+
+---
+
+## Methods
+
+### TableSchemaLockContainer [#tableschemalockcontainer]
+
+<CodeBlock links={{"TableSchemaLockContainer< WriteLock >": "tableschemalockcontainerwritelock"}}>
+```cpp showLineNumbers={false}
+lockmgr::TableSchemaLockContainer<WriteLock>::TableSchemaLockContainer(
+    const TableDescriptor *obj,
+    WriteLock &&lock
+)
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"TableSchemaLockContainer< WriteLock >": "tableschemalockcontainerwritelock"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * lockmgr::LockContainerImpl<const TableDescriptor *, WriteLock>::operator()() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### acquireTableDescriptor [#acquiretabledescriptor]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableSchemaLockContainer< WriteLock >": "tableschemalockcontainerwritelock"}}>
+```cpp showLineNumbers={false}
+static auto lockmgr::TableSchemaLockContainer<WriteLock>::acquireTableDescriptor(
+    Catalog_Namespace::Catalog &cat,
+    const std::string &table_name,
+    const bool populate_fragmenter = true
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableSchemaLockContainer< WriteLock >": "tableschemalockcontainerwritelock"}}>
+```cpp showLineNumbers={false}
+static auto lockmgr::TableSchemaLockContainer<WriteLock>::acquireTableDescriptor(
+    Catalog_Namespace::Catalog &cat,
+    const int table_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `obj_` | `const TableDescriptor *` | |
+| `lock_` | `WriteLock` | |

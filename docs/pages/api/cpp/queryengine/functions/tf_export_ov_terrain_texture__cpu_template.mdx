@@ -1,0 +1,20 @@
+---
+title: tf_export_ov_terrain_texture__cpu_template
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone", "TextEncodingDict": "../structs/textencodingdict", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename TXY, typename TA>
+NEVER_INLINE HOST int32_t tf_export_ov_terrain_texture__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TXY> &x,
+    const Column<TXY> &y,
+    const ColumnList<TA> &attrs,
+    const TextEncodingNone &stats_requests_json,
+    Column<TextEncodingDict> &stat_names,
+    Column<TA> &stat_vals,
+    Column<Array<int8_t>> &png_bytes
+)
+```
+</CodeBlock>

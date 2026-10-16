@@ -1,0 +1,441 @@
+---
+title: DeepCopyVisitor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DeepCopyVisitor.h>
+```
+
+**Inherits from:** `ScalarExprVisitor< std::shared_ptr< Analyzer::Expr > >` (public)
+
+---
+
+## Methods
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitColumnVar(
+    const Analyzer::ColumnVar *col_var
+) const override
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *col_var_tuple
+) const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitVar(
+    const Analyzer::Var *var
+) const override
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitConstant(
+    const Analyzer::Constant *constant
+) const override
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitUOper(
+    const Analyzer::UOper *uoper
+) const override
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const override
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const override
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitInValues(
+    const Analyzer::InValues *in_values
+) const override
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const override
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const override
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitKeyForString(
+    const Analyzer::KeyForStringExpr *expr
+) const override
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *expr
+) const override
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitMLPredict(
+    const Analyzer::MLPredictExpr *expr
+) const override
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitPCAProject(
+    const Analyzer::PCAProjectExpr *expr
+) const override
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const override
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const override
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const override
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const override
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const override
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitCaseExpr(
+    const Analyzer::CaseExpr *case_expr
+) const override
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const override
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const override
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitArrayOper(
+    const Analyzer::ArrayExpr *array_expr
+) const override
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const override
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const override
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const override
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const override
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const override
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const override
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const override
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const override
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const override
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const override
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const override
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *oper
+) const override
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitFragmentId(
+    const Analyzer::FragmentId *oper
+) const override
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DeepCopyVisitor::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *oper
+) const override
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::aggregateResult(
+    const std::shared_ptr<Analyzer::Expr> &aggregate,
+    const std::shared_ptr<Analyzer::Expr> &next_result
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::visitBegin() const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::defaultResult() const
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"DeepCopyVisitor": "deepcopyvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `RetType` | `std::shared_ptr< Analyzer::Expr >` |

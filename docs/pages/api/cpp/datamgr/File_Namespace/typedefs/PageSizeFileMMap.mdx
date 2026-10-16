@@ -1,0 +1,14 @@
+---
+title: File_Namespace::PageSizeFileMMap
+description: "@type PageSizeFileMMap"
+---
+
+@type [PageSizeFileMMap](pagesizefilemmap)
+
+```cpp showLineNumbers={false}
+using PageSizeFileMMap = std::multimap<size_t, int32_t>;
+```
+
+Maps logical page sizes to files.
+
+The file manager uses this type in order to quickly find files of a certain page size. A multimap is used to associate the key (page size) with values (file identifiers of files having the matching page size).

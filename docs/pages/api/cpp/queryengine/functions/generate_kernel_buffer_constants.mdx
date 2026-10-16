@@ -1,0 +1,14 @@
+---
+title: generate_kernel_buffer_constants
+description: ""
+---
+
+<CodeBlock links={{"CgenState": "../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+std::pair<std::unordered_map<int, std::shared_ptr<const Analyzer::Constant>>, std::unordered_map<int, const Analyzer::Constant *>> generate_kernel_buffer_constants(
+    CgenState *cgen_state_ptr,
+    const std::unordered_map<int, const int8_t *> &kernel_buffers,
+    const bool hoist_literals
+)
+```
+</CodeBlock>

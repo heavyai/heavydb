@@ -1,0 +1,20 @@
+---
+title: get_decision_trees__cpu_2
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+EXTENSION_NOINLINE_HOST int32_t get_decision_trees__cpu_2(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &model_name,
+    Column<int64_t> &tree_id,
+    Column<int64_t> &entry_id,
+    Column<bool> &is_split_node,
+    Column<int64_t> &feature_id,
+    Column<int64_t> &left_child,
+    Column<int64_t> &right_child,
+    Column<double> &value
+)
+```
+</CodeBlock>

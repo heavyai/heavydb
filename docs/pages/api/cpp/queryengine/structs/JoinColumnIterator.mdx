@@ -1,0 +1,127 @@
+---
+title: JoinColumnIterator
+description: "Iterates over the rows of a JoinColumn across multiple fragments/chunks."
+---
+
+Iterates over the rows of a [JoinColumn](joincolumn) across multiple fragments/chunks.
+
+```cpp showLineNumbers={false}
+#include <JoinColumnIterator.h>
+```
+
+---
+
+## Constructors
+
+### JoinColumnIterator [#joincolumniterator]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+DEVICE JoinColumnIterator::JoinColumnIterator()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"JoinColumnIterator": "joincolumniterator", "JoinColumn": "joincolumn", "JoinColumnTypeInfo": "joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+DEVICE JoinColumnIterator::JoinColumnIterator(
+    const JoinColumn *join_column,
+    const JoinColumnTypeInfo *type_info,
+    size_t start,
+    size_t step
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator bool [#operatorbool]
+
+<CodeBlock links={{"JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+DEVICE FORCE_INLINE JoinColumnIterator::operator bool() const
+```
+</CodeBlock>
+
+### ptr [#ptr]
+
+<CodeBlock links={{"JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+DEVICE FORCE_INLINE const int8_t * JoinColumnIterator::ptr() const
+```
+</CodeBlock>
+
+### getElementSwitch [#getelementswitch]
+
+<CodeBlock links={{"JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+DEVICE FORCE_INLINE int64_t JoinColumnIterator::getElementSwitch() const
+```
+</CodeBlock>
+
+### operator* [#operator_mul]
+
+<CodeBlock links={{"JoinColumnIterator": "joincolumniterator", "IndexedElement": "#indexedelement"}}>
+```cpp showLineNumbers={false}
+DEVICE FORCE_INLINE IndexedElement JoinColumnIterator::operator*() const
+```
+</CodeBlock>
+
+### operator++ [#operator_inc]
+
+<CodeBlock links={{"JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+DEVICE FORCE_INLINE JoinColumnIterator & JoinColumnIterator::operator++()
+```
+</CodeBlock>
+
+### operator-- [#operator_dec]
+
+<CodeBlock links={{"JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+DEVICE FORCE_INLINE JoinColumnIterator & JoinColumnIterator::operator--()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `join_column` | `const JoinColumn *` | |
+| `type_info` | `const JoinColumnTypeInfo *` | |
+| `join_chunk_array` | `const struct JoinChunk *` | |
+| `chunk_data` | `const int8_t *` | |
+| `index_of_chunk` | `size_t` | |
+| `index_inside_chunk` | `size_t` | |
+| `index` | `size_t` | |
+| `start` | `size_t` | |
+| `step` | `size_t` | |
+
+---
+
+## Inner classes
+
+### IndexedElement
+
+<CodeBlock links={{"JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+struct JoinColumnIterator::IndexedElement
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `index` | `size_t` | |
+| `element` | `int64_t` | |

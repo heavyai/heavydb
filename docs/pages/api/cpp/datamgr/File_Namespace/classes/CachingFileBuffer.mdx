@@ -1,0 +1,607 @@
+---
+title: File_Namespace::CachingFileBuffer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/CachingFileMgr.h>
+```
+
+**Inherits from:** `File_Namespace::FileBuffer` (public)
+
+---
+
+## Methods
+
+### write [#write]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileBuffer::write(
+    int8_t *src,
+    const size_t numBytes,
+    const size_t offset = 0,
+    const MemoryLevel srcMemoryLevel = CPU_LEVEL,
+    const int32_t deviceId = -1
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBuffer::write(
+    int8_t *src,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel src_buffer_type = CPU_LEVEL,
+    const int src_device_id = -1
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### FileBuffer [#filebuffer]
+
+<Tabs>
+<Tab title="Constructs a [FileBuffer](filebuffer) object">
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer"}}>
+```cpp showLineNumbers={false}
+File_Namespace::FileBuffer::FileBuffer(
+    FileMgr *fm,
+    const size_t pageSize,
+    const ChunkKey &chunkKey,
+    const size_t initialSize = 0
+)
+```
+</CodeBlock>
+
+Constructs a [FileBuffer](filebuffer) object.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer"}}>
+```cpp showLineNumbers={false}
+File_Namespace::FileBuffer::FileBuffer(
+    FileMgr *fm,
+    const size_t pageSize,
+    const ChunkKey &chunkKey,
+    const SQLTypeInfo sqlType,
+    const size_t initialSize = 0
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "HeaderInfo": "../structs/headerinfo"}}>
+```cpp showLineNumbers={false}
+File_Namespace::FileBuffer::FileBuffer(
+    FileMgr *fm,
+    const ChunkKey &chunkKey,
+    const std::vector<HeaderInfo>::const_iterator &headerStartIt,
+    const std::vector<HeaderInfo>::const_iterator &headerEndIt
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### addNewMultiPage [#addnewmultipage]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "Page": "../structs/page", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+Page File_Namespace::CachingFileBuffer::addNewMultiPage(
+    const int32_t epoch
+)
+```
+</CodeBlock>
+
+### reserve [#reserve]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileBuffer::reserve(
+    const size_t numBytes
+) override
+```
+</CodeBlock>
+
+### freeMetadataPages [#freemetadatapages]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileBuffer::freeMetadataPages()
+```
+</CodeBlock>
+
+### freeChunkPages [#freechunkpages]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileBuffer::freeChunkPages()
+```
+</CodeBlock>
+
+### freePages [#freepages]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileBuffer::freePages()
+```
+</CodeBlock>
+
+### freePagesBeforeEpoch [#freepagesbeforeepoch]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileBuffer::freePagesBeforeEpoch(
+    const int32_t targetEpoch
+)
+```
+</CodeBlock>
+
+### read [#read]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileBuffer::read(
+    int8_t *const dst,
+    const size_t numBytes = 0,
+    const size_t offset = 0,
+    const MemoryLevel dstMemoryLevel = CPU_LEVEL,
+    const int32_t deviceId = -1
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBuffer::read(
+    int8_t *const dst,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel dst_buffer_type = CPU_LEVEL,
+    const int dst_device_id = -1
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### append [#append]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileBuffer::append(
+    int8_t *src,
+    const size_t numBytes,
+    const MemoryLevel srcMemoryLevel = CPU_LEVEL,
+    const int32_t deviceId = -1
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBuffer::append(
+    int8_t *src,
+    const size_t num_bytes,
+    const MemoryLevel src_buffer_type = CPU_LEVEL,
+    const int device_id = -1
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### copyPage [#copypage]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "Page": "../structs/page", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileBuffer::copyPage(
+    Page &srcPage,
+    Page &destPage,
+    const size_t numBytes,
+    const size_t offset = 0
+)
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::MemoryLevel File_Namespace::CachingFileBuffer::getType() const override
+```
+</CodeBlock>
+
+### getMemoryPtr [#getmemoryptr]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+int8_t * File_Namespace::CachingFileBuffer::getMemoryPtr() override
+```
+</CodeBlock>
+
+Not implemented for [FileMgr](filemgr) – throws a runtime_error.
+
+### pageCount [#pagecount]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileBuffer::pageCount() const override
+```
+</CodeBlock>
+
+Returns the number of pages in the [FileBuffer](filebuffer).
+
+### hasDataPages [#hasdatapages]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileBuffer::hasDataPages() const
+```
+</CodeBlock>
+
+Returns whether or not a buffer has data pages.
+
+It is possible for a buffer to represent metadata (have a size and encode) but not contain actual data.
+
+### pageSize [#pagesize]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileBuffer::pageSize() const override
+```
+</CodeBlock>
+
+Returns the size in bytes of each page in the [FileBuffer](filebuffer).
+
+### pageDataSize [#pagedatasize]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual size_t File_Namespace::CachingFileBuffer::pageDataSize() const
+```
+</CodeBlock>
+
+Returns the size in bytes of the data portion of each page in the [FileBuffer](filebuffer).
+
+### reservedHeaderSize [#reservedheadersize]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual size_t File_Namespace::CachingFileBuffer::reservedHeaderSize() const
+```
+</CodeBlock>
+
+Returns the size in bytes of the reserved header portion of each page in the [FileBuffer](filebuffer).
+
+### getMultiPage [#getmultipage]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "MultiPage": "../structs/multipage", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<MultiPage> File_Namespace::CachingFileBuffer::getMultiPage() const
+```
+</CodeBlock>
+
+Returns vector of MultiPages in the [FileBuffer](filebuffer).
+
+### getMetadataPage [#getmetadatapage]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "MultiPage": "../structs/multipage", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+MultiPage File_Namespace::CachingFileBuffer::getMetadataPage() const
+```
+</CodeBlock>
+
+### reservedSize [#reservedsize]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileBuffer::reservedSize() const override
+```
+</CodeBlock>
+
+Returns the total number of bytes allocated for the [FileBuffer](filebuffer).
+
+### numMetadataPages [#nummetadatapages]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileBuffer::numMetadataPages() const
+```
+</CodeBlock>
+
+Returns the total number of used bytes in the [FileBuffer](filebuffer).
+
+### isMissingPages [#ismissingpages]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileBuffer::isMissingPages() const
+```
+</CodeBlock>
+
+### numChunkPages [#numchunkpages]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileBuffer::numChunkPages() const
+```
+</CodeBlock>
+
+### dump [#dump]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileBuffer::dump() const
+```
+</CodeBlock>
+
+### freePage [#freepage]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "Page": "../structs/page", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileBuffer::freePage(
+    const Page &page
+)
+```
+</CodeBlock>
+
+### setMemoryPtr [#setmemoryptr]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBuffer::setMemoryPtr(
+    int8_t *new_ptr
+)
+```
+</CodeBlock>
+
+### pin [#pin]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual int Data_Namespace::AbstractBuffer::pin()
+```
+</CodeBlock>
+
+### unPin [#unpin]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual int Data_Namespace::AbstractBuffer::unPin()
+```
+</CodeBlock>
+
+### getPinCount [#getpincount]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+virtual int Data_Namespace::AbstractBuffer::getPinCount()
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t Data_Namespace::AbstractBuffer::size() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+int Data_Namespace::AbstractBuffer::getDeviceId() const
+```
+</CodeBlock>
+
+### isDirty [#isdirty]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::AbstractBuffer::isDirty() const
+```
+</CodeBlock>
+
+### isAppended [#isappended]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::AbstractBuffer::isAppended() const
+```
+</CodeBlock>
+
+### isUpdated [#isupdated]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::AbstractBuffer::isUpdated() const
+```
+</CodeBlock>
+
+### hasEncoder [#hasencoder]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::AbstractBuffer::hasEncoder() const
+```
+</CodeBlock>
+
+### getSqlType [#getsqltype]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo Data_Namespace::AbstractBuffer::getSqlType() const
+```
+</CodeBlock>
+
+### setSqlType [#setsqltype]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setSqlType(
+    const SQLTypeInfo &sql_type
+)
+```
+</CodeBlock>
+
+### getEncoder [#getencoder]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "Encoder": "../../classes/encoder", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+Encoder * Data_Namespace::AbstractBuffer::getEncoder() const
+```
+</CodeBlock>
+
+### setDirty [#setdirty]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setDirty()
+```
+</CodeBlock>
+
+### setUpdated [#setupdated]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setUpdated()
+```
+</CodeBlock>
+
+### setAppended [#setappended]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setAppended()
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setSize(
+    const size_t size
+)
+```
+</CodeBlock>
+
+### clearDirtyBits [#cleardirtybits]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::clearDirtyBits()
+```
+</CodeBlock>
+
+### initEncoder [#initencoder]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::initEncoder(
+    const SQLTypeInfo &tmp_sql_type
+)
+```
+</CodeBlock>
+
+### syncEncoder [#syncencoder]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "AbstractBuffer": "../../classes/abstractbuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::syncEncoder(
+    const AbstractBuffer *src_buffer
+)
+```
+</CodeBlock>
+
+### copyTo [#copyto]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "AbstractBuffer": "../../classes/abstractbuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::copyTo(
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes = 0
+)
+```
+</CodeBlock>
+
+### resetToEmpty [#resettoempty]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::resetToEmpty()
+```
+</CodeBlock>
+
+### setMetadata [#setmetadata]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "ChunkMetadata": "../../structs/chunkmetadata", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setMetadata(
+    const ChunkMetadata &meta
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getMinPageSize [#getminpagesize]
+
+<CodeBlock links={{"CachingFileBuffer": "cachingfilebuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileBuffer::getMinPageSize()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `kHeaderBufferOffset` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `encoder_` | `std::unique_ptr< Encoder >` | |
+| `sql_type_` | `SQLTypeInfo` | |
+| `size_` | `size_t` | |
+| `device_id_` | `int` | |

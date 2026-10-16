@@ -1,0 +1,50 @@
+---
+title: ct_test_calcite_casting_columnlist__template_cpu_
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE DEVICE int32_t ct_test_calcite_casting_columnlist__template_cpu_(
+    TableFunctionManager &mgr,
+    const Column<T> &first,
+    const ColumnList<T> &list,
+    Column<T> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t ct_test_calcite_casting_columnlist__template_cpu_(
+    TableFunctionManager &mgr,
+    const Column<float> &first,
+    const ColumnList<float> &list,
+    Column<float> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t ct_test_calcite_casting_columnlist__template_cpu_(
+    TableFunctionManager &mgr,
+    const Column<double> &first,
+    const ColumnList<double> &list,
+    Column<double> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

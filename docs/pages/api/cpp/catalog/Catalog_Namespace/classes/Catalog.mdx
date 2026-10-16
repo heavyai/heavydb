@@ -1,0 +1,3157 @@
+---
+title: Catalog_Namespace::Catalog
+description: "@type Catalog"
+---
+
+@type `Catalog`
+
+class for a per-database catalog. also includes metadata for the current database and the current user.
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/Catalog.h>
+```
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Constructors
+
+### Catalog [#catalog]
+
+<CodeBlock links={{"Catalog": "catalog", "DBMetadata": "../structs/dbmetadata", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::Catalog::Catalog(
+    const std::string &basePath,
+    const DBMetadata &curDB,
+    std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+    std::shared_ptr<Calcite> calcite,
+    bool is_new_db,
+    const std::map<int32_t, std::string> &user_id_name_map,
+    const UserMetadata &root_user
+)
+```
+</CodeBlock>
+
+Constructor - takes basePath to already extant data directory for writing.
+
+**Parameters**
+
+<ParamField path="basePath" type="const std::string &">
+Directory path for writing catalog
+</ParamField>
+
+### Destructor [#destructor]
+
+### ~Catalog
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::Catalog::~Catalog()
+```
+</CodeBlock>
+
+Destructor - deletes all [ColumnDescriptor](../../structs/columndescriptor) and [TableDescriptor](../../structs/tabledescriptor) structures which were allocated on the heap and writes `Catalog` to Sqlite.
+
+---
+
+## Methods
+
+### createTable [#createtable]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::createTable(
+    TableDescriptor &td,
+    const std::list<ColumnDescriptor> &columns,
+    const std::vector<Parser::SharedDictionaryDef> &shared_dict_defs,
+    bool isLogicalTable
+)
+```
+</CodeBlock>
+
+### createShardedTable [#createshardedtable]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::createShardedTable(
+    TableDescriptor &td,
+    const std::list<ColumnDescriptor> &columns,
+    const std::vector<Parser::SharedDictionaryDef> &shared_dict_defs
+)
+```
+</CodeBlock>
+
+### createDashboard [#createdashboard]
+
+<CodeBlock links={{"Catalog": "catalog", "DashboardDescriptor": "../../structs/dashboarddescriptor"}}>
+```cpp showLineNumbers={false}
+int32_t Catalog_Namespace::Catalog::createDashboard(
+    DashboardDescriptor &vd
+)
+```
+</CodeBlock>
+
+### replaceDashboard [#replacedashboard]
+
+<CodeBlock links={{"Catalog": "catalog", "DashboardDescriptor": "../../structs/dashboarddescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::replaceDashboard(
+    DashboardDescriptor &vd
+)
+```
+</CodeBlock>
+
+### createLink [#createlink]
+
+<CodeBlock links={{"Catalog": "catalog", "LinkDescriptor": "../../structs/linkdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::createLink(
+    LinkDescriptor &ld,
+    size_t min_length
+)
+```
+</CodeBlock>
+
+### dropTable [#droptable]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropTable(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+### truncateTable [#truncatetable]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::truncateTable(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+### renameTable [#renametable]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::renameTable(
+    const TableDescriptor *td,
+    const std::string &newTableName
+)
+```
+</CodeBlock>
+
+### renameTables [#renametables]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::renameTables(
+    const std::vector<std::pair<std::string, std::string>> &names
+)
+```
+</CodeBlock>
+
+### renameColumn [#renamecolumn]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::renameColumn(
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd,
+    const std::string &newColumnName
+)
+```
+</CodeBlock>
+
+### getNextAddedColumnId [#getnextaddedcolumnid]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+int Catalog_Namespace::Catalog::getNextAddedColumnId(
+    const TableDescriptor &td
+)
+```
+</CodeBlock>
+
+### addColumn [#addcolumn]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addColumn(
+    const TableDescriptor &td,
+    ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### addColumnTransactional [#addcolumntransactional]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addColumnTransactional(
+    const TableDescriptor &td,
+    ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### alterColumnTypeTransactional [#altercolumntypetransactional]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::alterColumnTypeTransactional(
+    const ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### dropColumnTransactional [#dropcolumntransactional]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropColumnTransactional(
+    const TableDescriptor &td,
+    const ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### dropColumnNontransactional [#dropcolumnnontransactional]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropColumnNontransactional(
+    const TableDescriptor &td,
+    const ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### dropColumn [#dropcolumn]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropColumn(
+    const TableDescriptor &td,
+    const ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### dropColumnPolicies [#dropcolumnpolicies]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropColumnPolicies(
+    const TableDescriptor &td,
+    const ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### invalidateCachesForTable [#invalidatecachesfortable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::invalidateCachesForTable(
+    const int table_id
+)
+```
+</CodeBlock>
+
+### removeFragmenterForTable [#removefragmenterfortable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::removeFragmenterForTable(
+    const int table_id
+) const
+```
+</CodeBlock>
+
+### getDictionaryToColumnMapping [#getdictionarytocolumnmapping]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+const std::map<int, const ColumnDescriptor *> Catalog_Namespace::Catalog::getDictionaryToColumnMapping()
+```
+</CodeBlock>
+
+### getMetadataForTable [#getmetadatafortable]
+
+<Tabs>
+<Tab title="Const (with tableName)">
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * Catalog_Namespace::Catalog::getMetadataForTable(
+    const std::string &tableName,
+    const bool populateFragmenter = true
+) const
+```
+</CodeBlock>
+
+Returns a pointer to a const [TableDescriptor](../../structs/tabledescriptor) struct matching the provided tableName.
+
+**Returns:** pointer to const [TableDescriptor](../../structs/tabledescriptor) object queried for or nullptr if it does not exist.
+
+**Parameters**
+
+<ParamField path="tableName" type="const std::string &">
+Table specified column belongs to
+</ParamField>
+
+</Tab>
+<Tab title="Const (with tableId)">
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * Catalog_Namespace::Catalog::getMetadataForTable(
+    int tableId,
+    bool populateFragmenter = true
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getTableName [#gettablename]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::optional<std::string> Catalog_Namespace::Catalog::getTableName(
+    int32_t table_id
+) const
+```
+</CodeBlock>
+
+### getTableId [#gettableid]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::optional<int32_t> Catalog_Namespace::Catalog::getTableId(
+    const std::string &table_name
+) const
+```
+</CodeBlock>
+
+### getMetadataForColumn [#getmetadataforcolumn]
+
+<Tabs>
+<Tab title="Const (with colName)">
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Catalog_Namespace::Catalog::getMetadataForColumn(
+    int tableId,
+    const std::string &colName
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with columnId)">
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Catalog_Namespace::Catalog::getMetadataForColumn(
+    int tableId,
+    int columnId
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getColumnName [#getcolumnname]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+const std::optional<std::string> Catalog_Namespace::Catalog::getColumnName(
+    int table_id,
+    int column_id
+) const
+```
+</CodeBlock>
+
+### getColumnIdBySpi [#getcolumnidbyspi]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+const int Catalog_Namespace::Catalog::getColumnIdBySpi(
+    const int tableId,
+    const size_t spi
+) const
+```
+</CodeBlock>
+
+### getMetadataForColumnBySpi [#getmetadataforcolumnbyspi]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Catalog_Namespace::Catalog::getMetadataForColumnBySpi(
+    const int tableId,
+    const size_t spi
+) const
+```
+</CodeBlock>
+
+### getMetadataForDashboard [#getmetadatafordashboard]
+
+<Tabs>
+<Tab title="Const (with userId and dashName)">
+
+<CodeBlock links={{"Catalog": "catalog", "DashboardDescriptor": "../../structs/dashboarddescriptor"}}>
+```cpp showLineNumbers={false}
+const DashboardDescriptor * Catalog_Namespace::Catalog::getMetadataForDashboard(
+    const std::string &userId,
+    const std::string &dashName
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with dashboard id)">
+
+<CodeBlock links={{"Catalog": "catalog", "DashboardDescriptor": "../../structs/dashboarddescriptor"}}>
+```cpp showLineNumbers={false}
+const DashboardDescriptor * Catalog_Namespace::Catalog::getMetadataForDashboard(
+    const int32_t dashboard_id
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### deleteMetadataForDashboards [#deletemetadatafordashboards]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::deleteMetadataForDashboards(
+    const std::vector<int32_t> ids,
+    const UserMetadata &user
+)
+```
+</CodeBlock>
+
+### getMetadataForLink [#getmetadataforlink]
+
+<Tabs>
+<Tab title="Const (with link)">
+
+<CodeBlock links={{"Catalog": "catalog", "LinkDescriptor": "../../structs/linkdescriptor"}}>
+```cpp showLineNumbers={false}
+const LinkDescriptor * Catalog_Namespace::Catalog::getMetadataForLink(
+    const std::string &link
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with linkId)">
+
+<CodeBlock links={{"Catalog": "catalog", "LinkDescriptor": "../../structs/linkdescriptor"}}>
+```cpp showLineNumbers={false}
+const LinkDescriptor * Catalog_Namespace::Catalog::getMetadataForLink(
+    int linkId
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getForeignTable [#getforeigntable]
+
+<Tabs>
+<Tab title="Const (with tableName)">
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignTable": "../../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+const foreign_storage::ForeignTable * Catalog_Namespace::Catalog::getForeignTable(
+    const std::string &tableName
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with table id)">
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignTable": "../../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+const foreign_storage::ForeignTable * Catalog_Namespace::Catalog::getForeignTable(
+    int table_id
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getAllColumnMetadataForTable [#getallcolumnmetadatafortable]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::list<const ColumnDescriptor *> Catalog_Namespace::Catalog::getAllColumnMetadataForTable(
+    const int tableId,
+    const bool fetchSystemColumns,
+    const bool fetchVirtualColumns,
+    const bool fetchPhysicalColumns
+) const
+```
+</CodeBlock>
+
+Returns a list of pointers to constant [ColumnDescriptor](../../structs/columndescriptor) structs for all the columns from a particular table specified by table id.
+
+**Returns:** list of pointers to const [ColumnDescriptor](../../structs/columndescriptor) structs - one for each and every column in the table
+
+**Parameters**
+
+<ParamField path="tableId" type="const int">
+Table id we want the column metadata for
+</ParamField>
+
+### getTotalNumRows [#gettotalnumrows]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+int64_t Catalog_Namespace::Catalog::getTotalNumRows() const
+```
+</CodeBlock>
+
+### getAllTableMetadata [#getalltablemetadata]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+list<const TableDescriptor *> Catalog_Namespace::Catalog::getAllTableMetadata() const
+```
+</CodeBlock>
+
+### getAllTableMetadataCopy [#getalltablemetadatacopy]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<TableDescriptor> Catalog_Namespace::Catalog::getAllTableMetadataCopy() const
+```
+</CodeBlock>
+
+### getAllColumnMetadataCopyForColumnsSystemTable [#getallcolumnmetadatacopyforcolumnssystemtable]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<ColumnDescriptor> Catalog_Namespace::Catalog::getAllColumnMetadataCopyForColumnsSystemTable() const
+```
+</CodeBlock>
+
+### getAllDashboardsMetadata [#getalldashboardsmetadata]
+
+<CodeBlock links={{"Catalog": "catalog", "DashboardDescriptor": "../../structs/dashboarddescriptor"}}>
+```cpp showLineNumbers={false}
+list<const DashboardDescriptor *> Catalog_Namespace::Catalog::getAllDashboardsMetadata() const
+```
+</CodeBlock>
+
+### getAllDashboardsMetadataForSysTable [#getalldashboardsmetadataforsystable]
+
+<CodeBlock links={{"Catalog": "catalog", "DashboardDescriptor": "../../structs/dashboarddescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<DashboardDescriptor> Catalog_Namespace::Catalog::getAllDashboardsMetadataForSysTable() const
+```
+</CodeBlock>
+
+### getCurrentDB [#getcurrentdb]
+
+<CodeBlock links={{"Catalog": "catalog", "DBMetadata": "../structs/dbmetadata"}}>
+```cpp showLineNumbers={false}
+const DBMetadata & Catalog_Namespace::Catalog::getCurrentDB() const
+```
+</CodeBlock>
+
+### getDataMgr [#getdatamgr]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::DataMgr & Catalog_Namespace::Catalog::getDataMgr() const
+```
+</CodeBlock>
+
+### getCalciteMgr [#getcalcitemgr]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Calcite> Catalog_Namespace::Catalog::getCalciteMgr() const
+```
+</CodeBlock>
+
+### setCalciteMgr [#setcalcitemgr]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setCalciteMgr(
+    const std::shared_ptr<Calcite> &new_calcite_mgr
+)
+```
+</CodeBlock>
+
+### getCatalogBasePath [#getcatalogbasepath]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+const std::string & Catalog_Namespace::Catalog::getCatalogBasePath() const
+```
+</CodeBlock>
+
+### getMetadataForDict [#getmetadatafordict]
+
+<CodeBlock links={{"Catalog": "catalog", "DictDescriptor": "../../structs/dictdescriptor"}}>
+```cpp showLineNumbers={false}
+const DictDescriptor * Catalog_Namespace::Catalog::getMetadataForDict(
+    int dict_ref,
+    bool loadDict = true
+) const
+```
+</CodeBlock>
+
+### getShardColumnMetadataForTable [#getshardcolumnmetadatafortable]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Catalog_Namespace::Catalog::getShardColumnMetadataForTable(
+    const TableDescriptor *td
+) const
+```
+</CodeBlock>
+
+### getPhysicalTablesDescriptors [#getphysicaltablesdescriptors]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<const TableDescriptor *> Catalog_Namespace::Catalog::getPhysicalTablesDescriptors(
+    const TableDescriptor *logical_table_desc,
+    bool populate_fragmenter = true
+) const
+```
+</CodeBlock>
+
+### getAllPersistedTableAndShardIds [#getallpersistedtableandshardids]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::vector<std::pair<int32_t, int32_t>> Catalog_Namespace::Catalog::getAllPersistedTableAndShardIds() const
+```
+</CodeBlock>
+
+### getTableNamesForUser [#gettablenamesforuser]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Catalog_Namespace::Catalog::getTableNamesForUser(
+    const UserMetadata &user,
+    const GetTablesType get_tables_type
+) const
+```
+</CodeBlock>
+
+Get names of all tables accessible to user.
+
+**Returns:** table_names - vector of table names accessible by user
+
+**Parameters**
+
+<ParamField path="user" type="const UserMetadata &">
+- User to retrieve table names for
+</ParamField>
+
+<ParamField path="get_tables_type" type="const GetTablesType">
+- Enum indicating if tables, views or tables & views should be returned
+</ParamField>
+
+### getTablesMetadataForUser [#gettablesmetadataforuser]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMetadata": "../structs/usermetadata", "TableMetadata": "../../structs/tablemetadata"}}>
+```cpp showLineNumbers={false}
+std::vector<TableMetadata> Catalog_Namespace::Catalog::getTablesMetadataForUser(
+    const UserMetadata &user_metadata,
+    const GetTablesType get_tables_type,
+    const std::string &filter_table_name
+) const
+```
+</CodeBlock>
+
+Get table descriptors of all tables accessible to user.
+
+**Returns:** table_descriptors - vector of table descriptors accessible by user
+
+**Parameters**
+
+<ParamField path="get_tables_type" type="const GetTablesType">
+- Enum indicating if tables, views or tables & views should be returned
+</ParamField>
+
+### getTableEpoch [#gettableepoch]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+int32_t Catalog_Namespace::Catalog::getTableEpoch(
+    const int32_t db_id,
+    const int32_t table_id
+) const
+```
+</CodeBlock>
+
+### setTableEpoch [#settableepoch]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setTableEpoch(
+    const int db_id,
+    const int table_id,
+    const int new_epoch
+)
+```
+</CodeBlock>
+
+### setMaxRollbackEpochs [#setmaxrollbackepochs]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setMaxRollbackEpochs(
+    const int32_t table_id,
+    const int32_t max_rollback_epochs
+)
+```
+</CodeBlock>
+
+### setMaxRows [#setmaxrows]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setMaxRows(
+    const int32_t table_id,
+    const int64_t max_rows
+)
+```
+</CodeBlock>
+
+### getTableEpochs [#gettableepochs]
+
+<CodeBlock links={{"Catalog": "catalog", "TableEpochInfo": "../structs/tableepochinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<TableEpochInfo> Catalog_Namespace::Catalog::getTableEpochs(
+    const int32_t db_id,
+    const int32_t table_id
+) const
+```
+</CodeBlock>
+
+### setTableEpochs [#settableepochs]
+
+<CodeBlock links={{"Catalog": "catalog", "TableEpochInfo": "../structs/tableepochinfo"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setTableEpochs(
+    const int32_t db_id,
+    const std::vector<TableEpochInfo> &table_epochs
+) const
+```
+</CodeBlock>
+
+### setTableEpochsLogExceptions [#settableepochslogexceptions]
+
+<CodeBlock links={{"Catalog": "catalog", "TableEpochInfo": "../structs/tableepochinfo"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setTableEpochsLogExceptions(
+    const int32_t db_id,
+    const std::vector<TableEpochInfo> &table_epochs
+) const
+```
+</CodeBlock>
+
+### getDatabaseId [#getdatabaseid]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+int Catalog_Namespace::Catalog::getDatabaseId() const
+```
+</CodeBlock>
+
+### getSqliteConnector [#getsqliteconnector]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+SqliteConnector & Catalog_Namespace::Catalog::getSqliteConnector()
+```
+</CodeBlock>
+
+### rollLegacy [#rolllegacy]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::rollLegacy(
+    const bool forward
+)
+```
+</CodeBlock>
+
+### getDictionary [#getdictionary]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::getDictionary(
+    const ColumnDescriptor &cd,
+    std::map<int, StringDictionary *> &stringDicts
+)
+```
+</CodeBlock>
+
+### getTotalMemorySizeForDictionariesForDatabase [#gettotalmemorysizefordictionariesfordatabase]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+size_t Catalog_Namespace::Catalog::getTotalMemorySizeForDictionariesForDatabase() const
+```
+</CodeBlock>
+
+### addDictionaryTransactional [#adddictionarytransactional]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+DictRef Catalog_Namespace::Catalog::addDictionaryTransactional(
+    ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### delDictionaryTransactional [#deldictionarytransactional]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::delDictionaryTransactional(
+    const ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### getAllDictionariesWithColumnInName [#getalldictionarieswithcolumninname]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor", "DictDescriptor": "../../structs/dictdescriptor"}}>
+```cpp showLineNumbers={false}
+std::list<const DictDescriptor *> Catalog_Namespace::Catalog::getAllDictionariesWithColumnInName(
+    const ColumnDescriptor *cd
+)
+```
+</CodeBlock>
+
+### checkMetadataForDeletedRecs [#checkmetadatafordeletedrecs]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+const bool Catalog_Namespace::Catalog::checkMetadataForDeletedRecs(
+    const TableDescriptor *td,
+    int column_id
+) const
+```
+</CodeBlock>
+
+### getDeletedColumn [#getdeletedcolumn]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Catalog_Namespace::Catalog::getDeletedColumn(
+    const TableDescriptor *td
+) const
+```
+</CodeBlock>
+
+### getDeletedColumnIfRowsDeleted [#getdeletedcolumnifrowsdeleted]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Catalog_Namespace::Catalog::getDeletedColumnIfRowsDeleted(
+    const TableDescriptor *td
+) const
+```
+</CodeBlock>
+
+### setDeletedColumn [#setdeletedcolumn]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setDeletedColumn(
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd
+)
+```
+</CodeBlock>
+
+### getLogicalTableId [#getlogicaltableid]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+int Catalog_Namespace::Catalog::getLogicalTableId(
+    const int physicalTableId
+) const
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::checkpoint(
+    const int logicalTableId
+) const
+```
+</CodeBlock>
+
+### checkpointWithAutoRollback [#checkpointwithautorollback]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::checkpointWithAutoRollback(
+    const int logical_table_id
+) const
+```
+</CodeBlock>
+
+### resetTableEpochFloor [#resettableepochfloor]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::resetTableEpochFloor(
+    const int logicalTableId
+) const
+```
+</CodeBlock>
+
+### name [#name]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::name() const
+```
+</CodeBlock>
+
+### eraseDbMetadata [#erasedbmetadata]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::eraseDbMetadata()
+```
+</CodeBlock>
+
+### eraseDbPhysicalData [#erasedbphysicaldata]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::eraseDbPhysicalData()
+```
+</CodeBlock>
+
+### eraseTablePhysicalData [#erasetablephysicaldata]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::eraseTablePhysicalData(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+### setForReload [#setforreload]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setForReload(
+    const int32_t tableId
+)
+```
+</CodeBlock>
+
+### getTableDataDirectories [#gettabledatadirectories]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Catalog_Namespace::Catalog::getTableDataDirectories(
+    const TableDescriptor *td
+) const
+```
+</CodeBlock>
+
+### getTableDictDirectories [#gettabledictdirectories]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Catalog_Namespace::Catalog::getTableDictDirectories(
+    const TableDescriptor *td
+) const
+```
+</CodeBlock>
+
+### getTableDictDirectoryPaths [#gettabledictdirectorypaths]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::set<std::string> Catalog_Namespace::Catalog::getTableDictDirectoryPaths(
+    int32_t table_id
+) const
+```
+</CodeBlock>
+
+### getColumnDictDirectory [#getcolumndictdirectory]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::getColumnDictDirectory(
+    const ColumnDescriptor *cd,
+    bool file_name_only = true
+) const
+```
+</CodeBlock>
+
+### dumpSchema [#dumpschema]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::dumpSchema(
+    const TableDescriptor *td
+) const
+```
+</CodeBlock>
+
+### dumpCreateTable [#dumpcreatetable]
+
+<Tabs>
+<Tab title="Const (with td)">
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::dumpCreateTable(
+    const TableDescriptor *td,
+    bool multiline_formatting = true,
+    bool dump_defaults = false
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with table id)">
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::optional<std::string> Catalog_Namespace::Catalog::dumpCreateTable(
+    int32_t table_id,
+    bool multiline_formatting = true,
+    bool dump_defaults = false
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### dumpCreateServer [#dumpcreateserver]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::dumpCreateServer(
+    const std::string &name,
+    bool multiline_formatting = true
+) const
+```
+</CodeBlock>
+
+### createForeignServer [#createforeignserver]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignServer": "../../foreignstorage/structs/foreignserver"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::createForeignServer(
+    std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
+    bool if_not_exists
+)
+```
+</CodeBlock>
+
+Creates a new foreign server DB object.
+
+**Parameters**
+
+<ParamField path="foreign_server" type="std::unique_ptr<foreign_storage::ForeignServer>">
+- Unique pointer to struct containing foreign server details
+</ParamField>
+
+<ParamField path="if_not_exists" type="bool">
+- Flag indicating whether or not an attempt to create a new foreign server should occur if a server with the same name already exists. An exception is thrown if this flag is set to "false" and an attempt is made to create a pre-existing foreign server
+</ParamField>
+
+### getForeignServer [#getforeignserver]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignServer": "../../foreignstorage/structs/foreignserver"}}>
+```cpp showLineNumbers={false}
+const foreign_storage::ForeignServer * Catalog_Namespace::Catalog::getForeignServer(
+    const std::string &server_name
+) const
+```
+</CodeBlock>
+
+Gets a pointer to a struct containing foreign server details.
+
+**Returns:** pointer to a struct containing foreign server details. nullptr is returned if no foreign server exists with the given name
+
+**Parameters**
+
+<ParamField path="server_name" type="const std::string &">
+- Name of foreign server whose details will be fetched
+</ParamField>
+
+### getForeignServerFromStorage [#getforeignserverfromstorage]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignServer": "../../foreignstorage/structs/foreignserver"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<const foreign_storage::ForeignServer> Catalog_Namespace::Catalog::getForeignServerFromStorage(
+    const std::string &server_name
+)
+```
+</CodeBlock>
+
+Gets a pointer to a struct containing foreign server details fetched from storage.
+
+This is mainly used for testing when asserting that expected catalog data is persisted.
+
+**Returns:** pointer to a struct containing foreign server details. nullptr is returned if no foreign server exists with the given name
+
+**Parameters**
+
+<ParamField path="server_name" type="const std::string &">
+- Name of foreign server whose details will be fetched
+</ParamField>
+
+### getForeignTableFromStorage [#getforeigntablefromstorage]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignTable": "../../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<const foreign_storage::ForeignTable> Catalog_Namespace::Catalog::getForeignTableFromStorage(
+    int table_id
+)
+```
+</CodeBlock>
+
+Gets a pointer to a struct containing foreign table details fetched from storage.
+
+This is mainly used for testing when asserting that expected catalog data is persisted.
+
+**Returns:** pointer to a struct containing foreign table details. nullptr is returned if no foreign table exists with the given name
+
+### changeForeignServerOwner [#changeforeignserverowner]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::changeForeignServerOwner(
+    const std::string &server_name,
+    const int new_owner_id
+)
+```
+</CodeBlock>
+
+Change the owner of a Foreign Server to a new owner.
+
+**Parameters**
+
+<ParamField path="server_name" type="const std::string &">
+- Name of the foreign server whose owner to change
+</ParamField>
+
+<ParamField path="new_owner_id" type="const int">
+- New owner's user id
+</ParamField>
+
+### setForeignServerDataWrapper [#setforeignserverdatawrapper]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setForeignServerDataWrapper(
+    const std::string &server_name,
+    const std::string &data_wrapper
+)
+```
+</CodeBlock>
+
+Set the data wrapper of a Foreign Server.
+
+**Parameters**
+
+<ParamField path="server_name" type="const std::string &">
+- Name of the foreign server whose data wrapper will be set
+</ParamField>
+
+<ParamField path="data_wrapper" type="const std::string &">
+- Data wrapper to use
+</ParamField>
+
+### setForeignServerOptions [#setforeignserveroptions]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setForeignServerOptions(
+    const std::string &server_name,
+    const std::string &options
+)
+```
+</CodeBlock>
+
+Set the options of a Foreign Server.
+
+**Parameters**
+
+<ParamField path="server_name" type="const std::string &">
+- Name of the foreign server whose options will be set
+</ParamField>
+
+<ParamField path="options" type="const std::string &">
+- Options to set
+</ParamField>
+
+### renameForeignServer [#renameforeignserver]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::renameForeignServer(
+    const std::string &server_name,
+    const std::string &name
+)
+```
+</CodeBlock>
+
+Rename a Foreign Server.
+
+**Parameters**
+
+<ParamField path="server_name" type="const std::string &">
+- Name of the foreign server whose name will be changed
+</ParamField>
+
+<ParamField path="name" type="const std::string &">
+- New name of server
+</ParamField>
+
+### dropForeignServer [#dropforeignserver]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropForeignServer(
+    const std::string &server_name
+)
+```
+</CodeBlock>
+
+Drops/deletes a foreign server DB object.
+
+**Parameters**
+
+<ParamField path="server_name" type="const std::string &">
+- Name of foreign server that will be deleted
+</ParamField>
+
+### getAllForeignTablesForForeignServer [#getallforeigntablesforforeignserver]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignTable": "../../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+std::vector<const foreign_storage::ForeignTable *> Catalog_Namespace::Catalog::getAllForeignTablesForForeignServer(
+    const int32_t foreign_server_id
+)
+```
+</CodeBlock>
+
+Get all of the foreign tables for associated with a foreign server id.
+
+**Returns:** std::vector&lt;const ForeignTable*&gt; a vector containing foreign tables which use the foreign server
+
+**Parameters**
+
+<ParamField path="foreign_server_id" type="const int32_t">
+- Id of foreign server
+</ParamField>
+
+### createUserMapping [#createusermapping]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMapping": "../../foreignstorage/structs/usermapping"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::createUserMapping(
+    std::unique_ptr<foreign_storage::UserMapping> user_mapping,
+    bool if_not_exists
+)
+```
+</CodeBlock>
+
+Creates a new user mapping.
+
+**Parameters**
+
+<ParamField path="user_mapping" type="std::unique_ptr<foreign_storage::UserMapping>">
+- Unique pointer to struct containing user mapping details
+</ParamField>
+
+<ParamField path="if_not_exists" type="bool">
+- Flag indicating whether or not an attempt to create a new user mapping should occur if a user mapping with the same user id and foreign server id already exists. An exception is thrown if this flag is set to "false" and an attempt is made to create a pre-existing user mapping
+</ParamField>
+
+### getUserMapping [#getusermapping]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMapping": "../../foreignstorage/structs/usermapping"}}>
+```cpp showLineNumbers={false}
+const foreign_storage::UserMapping * Catalog_Namespace::Catalog::getUserMapping(
+    const int32_t user_id,
+    const int32_t foreign_server_id
+) const
+```
+</CodeBlock>
+
+Gets a pointer to a struct containing user mapping details.
+
+**Returns:** pointer to a struct containing user mapping details. nullptr is returned if no user mapping exists for the given user id and foreign server id and no public user mapping exists for the given foreign server id
+
+**Parameters**
+
+<ParamField path="user_id" type="const int32_t">
+- Id of mapped user
+</ParamField>
+
+<ParamField path="foreign_server_id" type="const int32_t">
+- Id of mapped foreign server
+</ParamField>
+
+### getUserMappingFromStorage [#getusermappingfromstorage]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMapping": "../../foreignstorage/structs/usermapping"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<const foreign_storage::UserMapping> Catalog_Namespace::Catalog::getUserMappingFromStorage(
+    const int32_t user_id,
+    const int32_t foreign_server_id
+)
+```
+</CodeBlock>
+
+Gets a pointer to a struct containing user mapping details fetched from storage.
+
+This is mainly used for testing when asserting that expected catalog data is persisted.
+
+**Returns:** pointer to a struct containing user mapping details. nullptr is returned if no user mapping exists for the given user id and foreign server id and no public user mapping exists for the given foreign server id
+
+**Parameters**
+
+<ParamField path="user_id" type="const int32_t">
+- Id of mapped user
+</ParamField>
+
+<ParamField path="foreign_server_id" type="const int32_t">
+- Id of mapped foreign server
+</ParamField>
+
+### dropUserMapping [#dropusermapping]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropUserMapping(
+    const int32_t user_id,
+    const int32_t foreign_server_id,
+    const bool if_exists
+)
+```
+</CodeBlock>
+
+Drops/deletes a user mapping.
+
+**Parameters**
+
+<ParamField path="user_id" type="const int32_t">
+- Id of mapped user
+</ParamField>
+
+<ParamField path="foreign_server_id" type="const int32_t">
+- Id of mapped foreign server
+</ParamField>
+
+<ParamField path="if_exists" type="const bool">
+- Flag indicating whether or not an attempt to drop a user mapping should occur if a user mapping with the same user id and foreign server id does not exist. An exception is thrown if this flag is set to "false" and an attempt is made to drop a nonexistent user mapping
+</ParamField>
+
+### dropAllUserMappingsForUser [#dropallusermappingsforuser]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropAllUserMappingsForUser(
+    const int32_t user_id
+)
+```
+</CodeBlock>
+
+Drops/deletes all user mappings for the given user id.
+
+**Parameters**
+
+<ParamField path="user_id" type="const int32_t">
+- Id of mapped user
+</ParamField>
+
+### getForeignServersForUser [#getforeignserversforuser]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMetadata": "../structs/usermetadata", "ForeignServer": "../../foreignstorage/structs/foreignserver"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::getForeignServersForUser(
+    const rapidjson::Value *filters,
+    const UserMetadata &user,
+    std::vector<const foreign_storage::ForeignServer *> &results
+)
+```
+</CodeBlock>
+
+Performs a query on all foreign servers accessible to user with optional filter, and returns pointers toresulting server objects.
+
+**Parameters**
+
+<ParamField path="filters" type="const rapidjson::Value *">
+- Json Value representing SQL WHERE clause to filter results, eg.: "WHERE attribute1 = value1 AND attribute2 LIKE value2", or Null Value Array of Values with attribute, value, operator, and chain specifier after first entry
+</ParamField>
+
+<ParamField path="user" type="const UserMetadata &">
+- User to retrieve server names
+</ParamField>
+
+<ParamField path="results" type="std::vector<const foreign_storage::ForeignServer *> &">
+- Results returned as a vector of pointers to const [foreign_storage::ForeignServer](../../foreignstorage/structs/foreignserver)
+</ParamField>
+
+### createDefaultServersIfNotExists [#createdefaultserversifnotexists]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::createDefaultServersIfNotExists()
+```
+</CodeBlock>
+
+Creates default local file servers (if they don't already exist).
+
+### validateNonExistentTableOrView [#validatenonexistenttableorview]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::Catalog::validateNonExistentTableOrView(
+    const std::string &name,
+    const bool if_not_exists
+)
+```
+</CodeBlock>
+
+Validates that a table or view with given name does not already exist.
+
+An exception is thrown if a table or view with given name already exists and "if_not_exists" is false.
+
+**Returns:** true if table or view with name does not exist. Otherwise, return false
+
+**Parameters**
+
+<ParamField path="name" type="const std::string &">
+- Name of table or view whose existence is checked
+</ParamField>
+
+<ParamField path="if_not_exists" type="const bool">
+- Flag indicating whether or not existence of a table or view with given name is an exception
+</ParamField>
+
+### getAllForeignTableNamesForRefresh [#getallforeigntablenamesforrefresh]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Catalog_Namespace::Catalog::getAllForeignTableNamesForRefresh() const
+```
+</CodeBlock>
+
+Gets all the foreign tables that are pending refreshes.
+
+The list of tables includes tables that are configured for scheduled refreshes with next refresh timestamps that are in the past.
+
+**Returns:** foreign tables pending refreshes
+
+### updateForeignTableRefreshTimes [#updateforeigntablerefreshtimes]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateForeignTableRefreshTimes(
+    const int32_t table_id
+)
+```
+</CodeBlock>
+
+Updates the last and next (if applicable) refresh times of the foreign table with the given table id.
+
+**Parameters**
+
+<ParamField path="table_id" type="const int32_t">
+- Id of table to apply updates to
+</ParamField>
+
+### setForeignTableOptions [#setforeigntableoptions]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setForeignTableOptions(
+    const std::string &table_name,
+    foreign_storage::OptionsMap &options_map,
+    bool clear_existing_options = true
+)
+```
+</CodeBlock>
+
+Set the options of a Foreign Table.
+
+**Parameters**
+
+<ParamField path="table_name" type="const std::string &">
+- Name of the foreign table whose options will be set
+</ParamField>
+
+### setUncappedTableEpoch [#setuncappedtableepoch]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setUncappedTableEpoch(
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+### createCustomExpression [#createcustomexpression]
+
+<CodeBlock links={{"Catalog": "catalog", "CustomExpression": "../structs/customexpression"}}>
+```cpp showLineNumbers={false}
+int32_t Catalog_Namespace::Catalog::createCustomExpression(
+    std::unique_ptr<CustomExpression> custom_expression
+)
+```
+</CodeBlock>
+
+Creates a new custom expression.
+
+**Returns:** id of created custom expression
+
+**Parameters**
+
+<ParamField path="custom_expression" type="std::unique_ptr<CustomExpression>">
+- Unique pointer to struct containing custom expression details.
+</ParamField>
+
+### getCustomExpression [#getcustomexpression]
+
+<CodeBlock links={{"Catalog": "catalog", "CustomExpression": "../structs/customexpression"}}>
+```cpp showLineNumbers={false}
+const CustomExpression * Catalog_Namespace::Catalog::getCustomExpression(
+    int32_t custom_expression_id
+) const
+```
+</CodeBlock>
+
+Gets a pointer to the custom expression object with the given id.
+
+**Returns:** pointer to custom expression object. nullptr is returned if no custom expression is found for the given id.
+
+**Parameters**
+
+<ParamField path="custom_expression_id" type="int32_t">
+- Id of custom expression to get
+</ParamField>
+
+### getCustomExpressionFromStorage [#getcustomexpressionfromstorage]
+
+<CodeBlock links={{"Catalog": "catalog", "CustomExpression": "../structs/customexpression"}}>
+```cpp showLineNumbers={false}
+const std::unique_ptr<const CustomExpression> Catalog_Namespace::Catalog::getCustomExpressionFromStorage(
+    int32_t custom_expression_id
+)
+```
+</CodeBlock>
+
+Gets a pointer to a struct containing custom expression details fetched from storage.
+
+This is intended for use in tests, when asserting that expected custom expression data is persisted.
+
+**Returns:** pointer to custom expression object. nullptr is returned if no custom expression is found for the given id.
+
+**Parameters**
+
+<ParamField path="custom_expression_id" type="int32_t">
+- Id of custom expression to get
+</ParamField>
+
+### getCustomExpressionsForUser [#getcustomexpressionsforuser]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMetadata": "../structs/usermetadata", "CustomExpression": "../structs/customexpression"}}>
+```cpp showLineNumbers={false}
+std::vector<const CustomExpression *> Catalog_Namespace::Catalog::getCustomExpressionsForUser(
+    const UserMetadata &user
+) const
+```
+</CodeBlock>
+
+Gets pointers to all the custom expression objects that the given user has access to.
+
+For custom expressions that are associated with a table data source, custom expressions for tables that the given user has SELECT access to are returned.
+
+**Returns:** pointer to custom expression objects that the given user has access to
+
+**Parameters**
+
+<ParamField path="user" type="const UserMetadata &">
+- User for which to get accessible custom expressions
+</ParamField>
+
+### updateCustomExpression [#updatecustomexpression]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateCustomExpression(
+    int32_t custom_expression_id,
+    const std::string &expression_json
+)
+```
+</CodeBlock>
+
+Updates the custom expression for the given id with the given expression json string.
+
+**Parameters**
+
+<ParamField path="custom_expression_id" type="int32_t">
+- Id of custom expression to update
+</ParamField>
+
+<ParamField path="expression_json" type="const std::string &">
+- Expression json string to be set
+</ParamField>
+
+### deleteCustomExpressions [#deletecustomexpressions]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::deleteCustomExpressions(
+    const std::vector<int32_t> &custom_expression_ids,
+    bool do_soft_delete
+)
+```
+</CodeBlock>
+
+Deletes custom expressions with the given ids.
+
+**Parameters**
+
+<ParamField path="custom_expression_ids" type="const std::vector<int32_t> &">
+- Ids of custom expressions to delete
+</ParamField>
+
+<ParamField path="do_soft_delete" type="bool">
+- Flag indicating whether or not to do a soft delete
+</ParamField>
+
+### setColumnComment [#setcolumncomment]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setColumnComment(
+    const ColumnDescriptor *column_desc,
+    const std::optional<std::string> &comment = std::nullopt
+)
+```
+</CodeBlock>
+
+Set a column's comment.
+
+**Parameters**
+
+<ParamField path="column_desc" type="const ColumnDescriptor *">
+- The column to set the comment for
+</ParamField>
+
+<ParamField path="comment" type="const std::optional<std::string> &" default="std::nullopt">
+- The comment, if `std::nullopt` the comment is set to NULL (i.e. it is removed)
+</ParamField>
+
+### setTableComment [#settablecomment]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setTableComment(
+    const TableDescriptor *table_desc,
+    const std::optional<std::string> &comment = std::nullopt
+)
+```
+</CodeBlock>
+
+Set a table's comment.
+
+**Parameters**
+
+<ParamField path="table_desc" type="const TableDescriptor *">
+- The table to set the comment for
+</ParamField>
+
+<ParamField path="comment" type="const std::optional<std::string> &" default="std::nullopt">
+- The comment, if `std::nullopt` the comment is set to NULL (i.e. it is removed)
+</ParamField>
+
+### reassignOwners [#reassignowners]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::reassignOwners(
+    const std::set<std::string> &old_owners,
+    const std::string &new_owner
+)
+```
+</CodeBlock>
+
+Reassigns database object ownership from a set of users (old owners) to another user (new owner).
+
+**Parameters**
+
+<ParamField path="old_owners" type="const std::set<std::string> &">
+- Users whose database object ownership will be reassigned to a new user
+</ParamField>
+
+<ParamField path="new_owner" type="const std::string &">
+- User who will own reassigned database objects
+</ParamField>
+
+### isInfoSchemaDb [#isinfoschemadb]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::Catalog::isInfoSchemaDb() const
+```
+</CodeBlock>
+
+### checkDateInDaysColumnMigration [#checkdateindayscolumnmigration]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::checkDateInDaysColumnMigration()
+```
+</CodeBlock>
+
+### checkDropRenderGroupColumnsMigration [#checkdroprendergroupcolumnsmigration]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::Catalog::checkDropRenderGroupColumnsMigration()
+```
+</CodeBlock>
+
+### getDistributedMutex [#getdistributedmutex]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+heavyai::DistributedSharedMutex & Catalog_Namespace::Catalog::getDistributedMutex() const
+```
+</CodeBlock>
+
+### getColumnFromStorage [#getcolumnfromstorage]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ColumnDescriptor> Catalog_Namespace::Catalog::getColumnFromStorage(
+    const int table_id,
+    const int column_id
+)
+```
+</CodeBlock>
+
+Get a [ColumnDescriptor](../../structs/columndescriptor) from storage as it is represented in the `Catalog`.
+
+### getTableFromStorage [#gettablefromstorage]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<TableDescriptor> Catalog_Namespace::Catalog::getTableFromStorage(
+    const int table_id
+)
+```
+</CodeBlock>
+
+Get a [TableDescriptor](../../structs/tabledescriptor) from storage as it is represented in the `Catalog`.
+
+### setFragmentSizeForTable [#setfragmentsizefortable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setFragmentSizeForTable(
+    const int max_frag_rows,
+    const int table_id
+)
+```
+</CodeBlock>
+
+### setFragmenterTypeForTable [#setfragmentertypefortable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setFragmenterTypeForTable(
+    const Fragmenter_Namespace::FragmenterType frag_type,
+    const int table_id
+)
+```
+</CodeBlock>
+
+### CheckAndExecuteMigrations [#checkandexecutemigrations]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::CheckAndExecuteMigrations()
+```
+</CodeBlock>
+
+### updateDictionaryNames [#updatedictionarynames]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateDictionaryNames()
+```
+</CodeBlock>
+
+### updateTableDescriptorSchema [#updatetabledescriptorschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateTableDescriptorSchema()
+```
+</CodeBlock>
+
+### updateColumnDescriptorSchema [#updatecolumndescriptorschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateColumnDescriptorSchema()
+```
+</CodeBlock>
+
+### updateFixlenArrayColumns [#updatefixlenarraycolumns]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateFixlenArrayColumns()
+```
+</CodeBlock>
+
+### updateGeoColumns [#updategeocolumns]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateGeoColumns()
+```
+</CodeBlock>
+
+### updateFrontendViewSchema [#updatefrontendviewschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateFrontendViewSchema()
+```
+</CodeBlock>
+
+### updateLinkSchema [#updatelinkschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateLinkSchema()
+```
+</CodeBlock>
+
+### updateFrontendViewAndLinkUsers [#updatefrontendviewandlinkusers]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateFrontendViewAndLinkUsers()
+```
+</CodeBlock>
+
+### updateLogicalToPhysicalTableLinkSchema [#updatelogicaltophysicaltablelinkschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateLogicalToPhysicalTableLinkSchema()
+```
+</CodeBlock>
+
+### updateLogicalToPhysicalTableMap [#updatelogicaltophysicaltablemap]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateLogicalToPhysicalTableMap(
+    const int32_t logical_tb_id
+)
+```
+</CodeBlock>
+
+### updateDictionarySchema [#updatedictionaryschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateDictionarySchema()
+```
+</CodeBlock>
+
+### updatePageSize [#updatepagesize]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updatePageSize()
+```
+</CodeBlock>
+
+### updateDeletedColumnIndicator [#updatedeletedcolumnindicator]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateDeletedColumnIndicator()
+```
+</CodeBlock>
+
+### updateDefaultColumnValues [#updatedefaultcolumnvalues]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateDefaultColumnValues()
+```
+</CodeBlock>
+
+### updateFrontendViewsToDashboards [#updatefrontendviewstodashboards]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateFrontendViewsToDashboards()
+```
+</CodeBlock>
+
+### updateCustomExpressionsSchema [#updatecustomexpressionsschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateCustomExpressionsSchema()
+```
+</CodeBlock>
+
+### updateFsiSchemas [#updatefsischemas]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateFsiSchemas()
+```
+</CodeBlock>
+
+### renameLegacyDataWrappers [#renamelegacydatawrappers]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::renameLegacyDataWrappers()
+```
+</CodeBlock>
+
+### recordOwnershipOfObjectsInObjectPermissions [#recordownershipofobjectsinobjectpermissions]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::recordOwnershipOfObjectsInObjectPermissions()
+```
+</CodeBlock>
+
+### createDashboardSystemRoles [#createdashboardsystemroles]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::createDashboardSystemRoles()
+```
+</CodeBlock>
+
+### buildMaps [#buildmaps]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildMaps(
+    const std::map<int32_t, std::string> &user_id_to_name_map
+)
+```
+</CodeBlock>
+
+### addTableToMap [#addtabletomap]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor", "DictDescriptor": "../../structs/dictdescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addTableToMap(
+    const TableDescriptor *td,
+    const std::list<ColumnDescriptor> &columns,
+    const std::list<DictDescriptor> &dicts
+)
+```
+</CodeBlock>
+
+### addReferenceToForeignDict [#addreferencetoforeigndict]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addReferenceToForeignDict(
+    ColumnDescriptor &referencing_column,
+    Parser::SharedDictionaryDef shared_dict_def,
+    const bool persist_reference
+)
+```
+</CodeBlock>
+
+### setColumnSharedDictionary [#setcolumnshareddictionary]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor", "DictDescriptor": "../../structs/dictdescriptor", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::Catalog::setColumnSharedDictionary(
+    ColumnDescriptor &cd,
+    std::list<ColumnDescriptor> &cdd,
+    std::list<DictDescriptor> &dds,
+    const TableDescriptor td,
+    const std::vector<Parser::SharedDictionaryDef> &shared_dict_defs
+)
+```
+</CodeBlock>
+
+### setColumnDictionary [#setcolumndictionary]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor", "DictDescriptor": "../../structs/dictdescriptor", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setColumnDictionary(
+    ColumnDescriptor &cd,
+    std::list<DictDescriptor> &dds,
+    const TableDescriptor &td,
+    bool is_logical_table,
+    bool use_temp_dictionary = false
+)
+```
+</CodeBlock>
+
+### addFrontendViewToMap [#addfrontendviewtomap]
+
+<CodeBlock links={{"Catalog": "catalog", "DashboardDescriptor": "../../structs/dashboarddescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addFrontendViewToMap(
+    DashboardDescriptor &vd
+)
+```
+</CodeBlock>
+
+### addFrontendViewToMapNoLock [#addfrontendviewtomapnolock]
+
+<CodeBlock links={{"Catalog": "catalog", "DashboardDescriptor": "../../structs/dashboarddescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addFrontendViewToMapNoLock(
+    DashboardDescriptor &vd
+)
+```
+</CodeBlock>
+
+### addLinkToMap [#addlinktomap]
+
+<CodeBlock links={{"Catalog": "catalog", "LinkDescriptor": "../../structs/linkdescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addLinkToMap(
+    LinkDescriptor &ld
+)
+```
+</CodeBlock>
+
+### removeTableFromMap [#removetablefrommap]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::removeTableFromMap(
+    const std::string &tableName,
+    const int tableId,
+    const bool is_on_error = false
+)
+```
+</CodeBlock>
+
+### eraseTableMetadata [#erasetablemetadata]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::eraseTableMetadata(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+### executeDropTableSqliteQueries [#executedroptablesqlitequeries]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::executeDropTableSqliteQueries(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+### doTruncateTable [#dotruncatetable]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::doTruncateTable(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+### renamePhysicalTable [#renamephysicaltable]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::renamePhysicalTable(
+    const TableDescriptor *td,
+    const std::string &newTableName
+)
+```
+</CodeBlock>
+
+### renamePhysicalTables [#renamephysicaltables]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::renamePhysicalTables(
+    std::vector<std::pair<std::string, std::string>> &names,
+    std::vector<int> &tableIds
+)
+```
+</CodeBlock>
+
+### instantiateFragmenter [#instantiatefragmenter]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::instantiateFragmenter(
+    TableDescriptor *td
+) const
+```
+</CodeBlock>
+
+### getAllColumnMetadataForTableImpl [#getallcolumnmetadatafortableimpl]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::getAllColumnMetadataForTableImpl(
+    const TableDescriptor *td,
+    std::list<const ColumnDescriptor *> &colDescs,
+    const bool fetchSystemColumns,
+    const bool fetchVirtualColumns,
+    const bool fetchPhysicalColumns
+) const
+```
+</CodeBlock>
+
+### calculateSHA1 [#calculatesha1]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::calculateSHA1(
+    const std::string &data
+)
+```
+</CodeBlock>
+
+### generatePhysicalTableName [#generatephysicaltablename]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::generatePhysicalTableName(
+    const std::string &logicalTableName,
+    const size_t shardNumber
+)
+```
+</CodeBlock>
+
+### parseDashboardObjects [#parsedashboardobjects]
+
+<CodeBlock links={{"Catalog": "catalog", "DBObject": "../../classes/dbobject"}}>
+```cpp showLineNumbers={false}
+std::vector<DBObject> Catalog_Namespace::Catalog::parseDashboardObjects(
+    const std::string &view_meta,
+    const int &user_id
+)
+```
+</CodeBlock>
+
+### createOrUpdateDashboardSystemRole [#createorupdatedashboardsystemrole]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::createOrUpdateDashboardSystemRole(
+    const std::string &view_meta,
+    const int32_t &user_id,
+    const std::string &dash_role_name
+)
+```
+</CodeBlock>
+
+### getColumnIdBySpiUnlocked [#getcolumnidbyspiunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+const int Catalog_Namespace::Catalog::getColumnIdBySpiUnlocked(
+    const int table_id,
+    const size_t spi
+) const
+```
+</CodeBlock>
+
+### serializeTableJsonUnlocked [#serializetablejsonunlocked]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::serializeTableJsonUnlocked(
+    const TableDescriptor *td,
+    const std::list<ColumnDescriptor> &cds
+) const
+```
+</CodeBlock>
+
+### dropTableFromJsonUnlocked [#droptablefromjsonunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropTableFromJsonUnlocked(
+    const std::string &table_name
+) const
+```
+</CodeBlock>
+
+### addColumnDescriptor [#addcolumndescriptor]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addColumnDescriptor(
+    const ColumnDescriptor *cd
+)
+```
+</CodeBlock>
+
+### removeColumnDescriptor [#removecolumndescriptor]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::removeColumnDescriptor(
+    const ColumnDescriptor *cd
+)
+```
+</CodeBlock>
+
+### delDictionaryNontransactional [#deldictionarynontransactional]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::delDictionaryNontransactional(
+    const ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### addColumnNontransactional [#addcolumnnontransactional]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addColumnNontransactional(
+    const TableDescriptor &td,
+    ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### addDictionaryNontransactional [#adddictionarynontransactional]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+DictRef Catalog_Namespace::Catalog::addDictionaryNontransactional(
+    ColumnDescriptor &cd
+)
+```
+</CodeBlock>
+
+### buildDictionaryMapUnlocked [#builddictionarymapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildDictionaryMapUnlocked()
+```
+</CodeBlock>
+
+### reloadTableMetadata [#reloadtablemetadata]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::reloadTableMetadata(
+    int table_id
+)
+```
+</CodeBlock>
+
+### reloadTableMetadataUnlocked [#reloadtablemetadataunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::reloadTableMetadataUnlocked(
+    int table_id
+)
+```
+</CodeBlock>
+
+### createTableFromDiskUnlocked [#createtablefromdiskunlocked]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+TableDescriptor * Catalog_Namespace::Catalog::createTableFromDiskUnlocked(
+    int32_t table_id
+)
+```
+</CodeBlock>
+
+### reloadDictionariesFromDiskUnlocked [#reloaddictionariesfromdiskunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::reloadDictionariesFromDiskUnlocked()
+```
+</CodeBlock>
+
+### sqliteGetColumnsForTableUnlocked [#sqlitegetcolumnsfortableunlocked]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::list<ColumnDescriptor *> Catalog_Namespace::Catalog::sqliteGetColumnsForTableUnlocked(
+    int32_t table_id
+)
+```
+</CodeBlock>
+
+### reloadForeignTableUnlocked [#reloadforeigntableunlocked]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignTable": "../../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::reloadForeignTableUnlocked(
+    foreign_storage::ForeignTable &foreign_table
+)
+```
+</CodeBlock>
+
+### reloadCatalogMetadata [#reloadcatalogmetadata]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::reloadCatalogMetadata(
+    const std::map<int32_t, std::string> &user_name_by_user_id
+)
+```
+</CodeBlock>
+
+### reloadCatalogMetadataUnlocked [#reloadcatalogmetadataunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::reloadCatalogMetadataUnlocked(
+    const std::map<int32_t, std::string> &user_name_by_user_id
+)
+```
+</CodeBlock>
+
+### refreshDictionaryCachesForTableUnlocked [#refreshdictionarycachesfortableunlocked]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::refreshDictionaryCachesForTableUnlocked(
+    const TableDescriptor &td
+)
+```
+</CodeBlock>
+
+### buildTablesMapUnlocked [#buildtablesmapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildTablesMapUnlocked()
+```
+</CodeBlock>
+
+### buildColumnsMapUnlocked [#buildcolumnsmapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildColumnsMapUnlocked()
+```
+</CodeBlock>
+
+### updateViewsInMapUnlocked [#updateviewsinmapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateViewsInMapUnlocked()
+```
+</CodeBlock>
+
+### updateViewUnlocked [#updateviewunlocked]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateViewUnlocked(
+    TableDescriptor &
+)
+```
+</CodeBlock>
+
+### buildDashboardsMapUnlocked [#builddashboardsmapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildDashboardsMapUnlocked(
+    const std::map<int32_t, std::string> &user_name_by_user_id
+)
+```
+</CodeBlock>
+
+### buildLinksMapUnlocked [#buildlinksmapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildLinksMapUnlocked()
+```
+</CodeBlock>
+
+### buildLogicalToPhysicalMapUnlocked [#buildlogicaltophysicalmapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildLogicalToPhysicalMapUnlocked()
+```
+</CodeBlock>
+
+### updateForeignTablesInMapUnlocked [#updateforeigntablesinmapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateForeignTablesInMapUnlocked()
+```
+</CodeBlock>
+
+### gatherAdditionalInfo [#gatheradditionalinfo]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::gatherAdditionalInfo(
+    std::vector<std::string> &additional_info,
+    std::set<std::string> &shared_dict_column_names,
+    const TableDescriptor *td
+) const
+```
+</CodeBlock>
+
+### quoteIfRequired [#quoteifrequired]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::quoteIfRequired(
+    const std::string &column_name
+) const
+```
+</CodeBlock>
+
+### adjustAlteredTableFiles [#adjustalteredtablefiles]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::adjustAlteredTableFiles(
+    const std::string &temp_data_dir,
+    const std::unordered_map<int, int> &all_column_ids_map
+) const
+```
+</CodeBlock>
+
+### renameTableDirectories [#renametabledirectories]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::renameTableDirectories(
+    const std::string &temp_data_dir,
+    const std::vector<std::string> &target_paths,
+    const std::string &name_prefix
+) const
+```
+</CodeBlock>
+
+### buildForeignServerMapUnlocked [#buildforeignservermapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildForeignServerMapUnlocked()
+```
+</CodeBlock>
+
+### buildUserMappingMapUnlocked [#buildusermappingmapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildUserMappingMapUnlocked()
+```
+</CodeBlock>
+
+### dropAllUserMappingsForServer [#dropallusermappingsforserver]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::dropAllUserMappingsForServer(
+    const int32_t foreign_server_id
+)
+```
+</CodeBlock>
+
+### setForeignServerProperty [#setforeignserverproperty]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setForeignServerProperty(
+    const std::string &server_name,
+    const std::string &property,
+    const std::string &value
+)
+```
+</CodeBlock>
+
+### setForeignTableProperty [#setforeigntableproperty]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignTable": "../../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setForeignTableProperty(
+    const foreign_storage::ForeignTable *table,
+    const std::string &property,
+    const std::string &value
+)
+```
+</CodeBlock>
+
+### alterPhysicalTableMetadata [#alterphysicaltablemetadata]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "TableDescriptorUpdateParams": "../../structs/tabledescriptorupdateparams"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::alterPhysicalTableMetadata(
+    const TableDescriptor *td,
+    const TableDescriptorUpdateParams &table_update_params
+)
+```
+</CodeBlock>
+
+### alterTableMetadata [#altertablemetadata]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "TableDescriptorUpdateParams": "../../structs/tabledescriptorupdateparams"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::alterTableMetadata(
+    const TableDescriptor *td,
+    const TableDescriptorUpdateParams &table_update_params
+)
+```
+</CodeBlock>
+
+### setTableFileMgrParams [#settablefilemgrparams]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setTableFileMgrParams(
+    const int table_id,
+    const File_Namespace::FileMgrParams &file_mgr_params
+)
+```
+</CodeBlock>
+
+### filterTableByTypeAndUser [#filtertablebytypeanduser]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::Catalog::filterTableByTypeAndUser(
+    const TableDescriptor *td,
+    const UserMetadata &user_metadata,
+    const GetTablesType get_tables_type
+) const
+```
+</CodeBlock>
+
+### getMutableMetadataForTableUnlocked [#getmutablemetadatafortableunlocked]
+
+<Tabs>
+<Tab title="Const (with table id)">
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+TableDescriptor * Catalog_Namespace::Catalog::getMutableMetadataForTableUnlocked(
+    int table_id
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with table name)">
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+TableDescriptor * Catalog_Namespace::Catalog::getMutableMetadataForTableUnlocked(
+    const std::string &table_name
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### createForeignServerNoLocks [#createforeignservernolocks]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignServer": "../../foreignstorage/structs/foreignserver"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::createForeignServerNoLocks(
+    std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
+    bool if_not_exists
+)
+```
+</CodeBlock>
+
+Same as createForeignServer() but without acquiring locks.
+
+This should only be called from within a function/code block that already acquires appropriate locks.
+
+### getForeignTableUnlocked [#getforeigntableunlocked]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignTable": "../../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignTable * Catalog_Namespace::Catalog::getForeignTableUnlocked(
+    const std::string &tableName
+) const
+```
+</CodeBlock>
+
+### removeChunks [#removechunks]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::removeChunks(
+    const int table_id
+) const
+```
+</CodeBlock>
+
+### buildCustomExpressionsMapUnlocked [#buildcustomexpressionsmapunlocked]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::buildCustomExpressionsMapUnlocked()
+```
+</CodeBlock>
+
+### getCustomExpressionFromConnector [#getcustomexpressionfromconnector]
+
+<CodeBlock links={{"Catalog": "catalog", "CustomExpression": "../structs/customexpression"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<CustomExpression> Catalog_Namespace::Catalog::getCustomExpressionFromConnector(
+    size_t row
+)
+```
+</CodeBlock>
+
+### restoreOldOwners [#restoreoldowners]
+
+<CodeBlock links={{"Catalog": "catalog", "DBObject": "../../classes/dbobject"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::restoreOldOwners(
+    const std::map<int32_t, std::string> &old_owners_user_name_by_id,
+    const std::map<int32_t, std::vector<DBObject>> &old_owner_db_objects,
+    int32_t new_owner_id
+)
+```
+</CodeBlock>
+
+### restoreOldOwnersInMemory [#restoreoldownersinmemory]
+
+<CodeBlock links={{"Catalog": "catalog", "DBObject": "../../classes/dbobject"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::restoreOldOwnersInMemory(
+    const std::map<int32_t, std::string> &old_owners_user_name_by_id,
+    const std::map<int32_t, std::vector<DBObject>> &old_owner_db_objects,
+    int32_t new_owner_id
+)
+```
+</CodeBlock>
+
+### conditionallyInitializeSystemObjects [#conditionallyinitializesystemobjects]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::conditionallyInitializeSystemObjects(
+    const UserMetadata &root_user
+)
+```
+</CodeBlock>
+
+### initializeSystemServers [#initializesystemservers]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeSystemServers()
+```
+</CodeBlock>
+
+### initializeSystemTables [#initializesystemtables]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeSystemTables()
+```
+</CodeBlock>
+
+### initializeUsersSystemTable [#initializeuserssystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeUsersSystemTable()
+```
+</CodeBlock>
+
+### initializeDatabasesSystemTable [#initializedatabasessystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeDatabasesSystemTable()
+```
+</CodeBlock>
+
+### initializePermissionsSystemTable [#initializepermissionssystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializePermissionsSystemTable()
+```
+</CodeBlock>
+
+### initializeRolesSystemTable [#initializerolessystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeRolesSystemTable()
+```
+</CodeBlock>
+
+### initializeTablesSystemTable [#initializetablessystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeTablesSystemTable()
+```
+</CodeBlock>
+
+### initializeColumnsSystemTable [#initializecolumnssystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeColumnsSystemTable()
+```
+</CodeBlock>
+
+### initializeDashboardsSystemTable [#initializedashboardssystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeDashboardsSystemTable()
+```
+</CodeBlock>
+
+### initializeRoleAssignmentsSystemTable [#initializeroleassignmentssystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeRoleAssignmentsSystemTable()
+```
+</CodeBlock>
+
+### initializeMemorySummarySystemTable [#initializememorysummarysystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeMemorySummarySystemTable()
+```
+</CodeBlock>
+
+### initializeMemoryDetailsSystemTable [#initializememorydetailssystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeMemoryDetailsSystemTable()
+```
+</CodeBlock>
+
+### initializeStorageDetailsSystemTable [#initializestoragedetailssystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeStorageDetailsSystemTable()
+```
+</CodeBlock>
+
+### initializeExecutorResourcePoolSummarySystemTable [#initializeexecutorresourcepoolsummarysystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeExecutorResourcePoolSummarySystemTable()
+```
+</CodeBlock>
+
+### initializeMLModelMetadataSystemTable [#initializemlmodelmetadatasystemtable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeMLModelMetadataSystemTable()
+```
+</CodeBlock>
+
+### initializeServerLogsSystemTables [#initializeserverlogssystemtables]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeServerLogsSystemTables()
+```
+</CodeBlock>
+
+### initializeRequestLogsSystemTables [#initializerequestlogssystemtables]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeRequestLogsSystemTables()
+```
+</CodeBlock>
+
+### initializeWebServerLogsSystemTables [#initializewebserverlogssystemtables]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeWebServerLogsSystemTables()
+```
+</CodeBlock>
+
+### initializeWebServerAccessLogsSystemTables [#initializewebserveraccesslogssystemtables]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeWebServerAccessLogsSystemTables()
+```
+</CodeBlock>
+
+### initializeSystemDashboards [#initializesystemdashboards]
+
+<CodeBlock links={{"Catalog": "catalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::initializeSystemDashboards(
+    const UserMetadata &root_user
+)
+```
+</CodeBlock>
+
+### createSystemTableServer [#createsystemtableserver]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::createSystemTableServer(
+    const std::string &server_name,
+    const std::string &data_wrapper_type,
+    const foreign_storage::OptionsMap &options = {}
+)
+```
+</CodeBlock>
+
+### getSystemTableSchema [#getsystemtableschema]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignTable": "../../foreignstorage/structs/foreigntable", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::pair<foreign_storage::ForeignTable, std::list<ColumnDescriptor>> Catalog_Namespace::Catalog::getSystemTableSchema(
+    const std::string &table_name,
+    const std::string &server_name,
+    const std::vector<std::pair<std::string, SQLTypeInfo>> &column_type_by_name,
+    bool is_in_memory_system_table
+)
+```
+</CodeBlock>
+
+### recreateSystemTableIfUpdated [#recreatesystemtableifupdated]
+
+<CodeBlock links={{"Catalog": "catalog", "ForeignTable": "../../foreignstorage/structs/foreigntable", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::Catalog::recreateSystemTableIfUpdated(
+    foreign_storage::ForeignTable &foreign_table,
+    const std::list<ColumnDescriptor> &columns
+)
+```
+</CodeBlock>
+
+### setDeletedColumnUnlocked [#setdeletedcolumnunlocked]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::setDeletedColumnUnlocked(
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd
+)
+```
+</CodeBlock>
+
+### updateInColumnMap [#updateincolumnmap]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::updateInColumnMap(
+    ColumnDescriptor *cd,
+    ColumnDescriptor *old_cd
+)
+```
+</CodeBlock>
+
+### addToColumnMap [#addtocolumnmap]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::addToColumnMap(
+    ColumnDescriptor *cd
+)
+```
+</CodeBlock>
+
+### removeFromColumnMap [#removefromcolumnmap]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::removeFromColumnMap(
+    ColumnDescriptor *cd
+)
+```
+</CodeBlock>
+
+### deleteTableCatalogMetadata [#deletetablecatalogmetadata]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::deleteTableCatalogMetadata(
+    const TableDescriptor *logical_table,
+    const std::vector<const TableDescriptor *> &physical_tables
+)
+```
+</CodeBlock>
+
+### dumpCreateTableUnlocked [#dumpcreatetableunlocked]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::Catalog::dumpCreateTableUnlocked(
+    const TableDescriptor *td,
+    bool multiline_formatting,
+    bool dump_defaults
+) const
+```
+</CodeBlock>
+
+### removeDiskCachedDataForMutableTable [#removediskcacheddataformutabletable]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::removeDiskCachedDataForMutableTable(
+    int32_t table_id
+) const
+```
+</CodeBlock>
+
+### execInTransaction [#execintransaction]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+template <typename F, typename... Args>
+void Catalog_Namespace::Catalog::execInTransaction(
+    F &&f,
+    Args &&... args
+)
+```
+</CodeBlock>
+
+### getCachedTableDescriptor [#getcachedtabledescriptor]
+
+<CodeBlock links={{"Catalog": "catalog", "TableDescriptor": "../../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * Catalog_Namespace::Catalog::getCachedTableDescriptor(
+    const std::map<std::string, int> &cached_table_map,
+    const std::string &cur_table_name
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### expandGeoColumn [#expandgeocolumn]
+
+<CodeBlock links={{"Catalog": "catalog", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::Catalog::expandGeoColumn(
+    const ColumnDescriptor &cd,
+    std::list<ColumnDescriptor> &columns
+)
+```
+</CodeBlock>
+
+### getForeignTableSchema [#getforeigntableschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+const std::string Catalog_Namespace::Catalog::getForeignTableSchema(
+    bool if_not_exists = false
+)
+```
+</CodeBlock>
+
+Gets the DDL statement used to create a foreign table schema.
+
+**Returns:** string containing DDL statement
+
+**Parameters**
+
+<ParamField path="if_not_exists" type="bool" default="false">
+- Flag that indicates whether or not to include the "IF NOT EXISTS" phrase in the DDL statement
+</ParamField>
+
+### getForeignServerSchema [#getforeignserverschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+const std::string Catalog_Namespace::Catalog::getForeignServerSchema(
+    bool if_not_exists = false
+)
+```
+</CodeBlock>
+
+Gets the DDL statement used to create a foreign server schema.
+
+**Returns:** string containing DDL statement
+
+**Parameters**
+
+<ParamField path="if_not_exists" type="bool" default="false">
+- Flag that indicates whether or not to include the "IF NOT EXISTS" phrase in the DDL statement
+</ParamField>
+
+### getUserMappingSchema [#getusermappingschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+const std::string Catalog_Namespace::Catalog::getUserMappingSchema(
+    bool if_not_exists = false
+)
+```
+</CodeBlock>
+
+Gets the DDL statement used to create a user mapping schema.
+
+**Returns:** string containing DDL statement
+
+**Parameters**
+
+<ParamField path="if_not_exists" type="bool" default="false">
+- Flag that indicates whether or not to include the "IF NOT EXISTS" phrase in the DDL statement
+</ParamField>
+
+### getCustomExpressionsSchema [#getcustomexpressionsschema]
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+const std::string Catalog_Namespace::Catalog::getCustomExpressionsSchema(
+    bool if_not_exists = false
+)
+```
+</CodeBlock>
+
+Gets the DDL statement used to create the custom expressions table.
+
+**Returns:** string containing DDL statement
+
+**Parameters**
+
+<ParamField path="if_not_exists" type="bool" default="false">
+- Flag the indicates whether or not to include the "IF NOT
+EXISTS" phrase in the DDL statement.
+</ParamField>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ColumnDescriptorsForRoll` | `std::vector< std::pair< ColumnDescriptor *, ColumnDescriptor * > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `basePath_` | `std::string` | |
+| `tableDescriptorMap_` | `TableDescriptorMap` | |
+| `tableDescriptorMapById_` | `TableDescriptorMapById` | |
+| `columnDescriptorMap_` | `ColumnDescriptorMap` | |
+| `columnDescriptorMapById_` | `ColumnDescriptorMapById` | |
+| `dictDescriptorMapByRef_` | `DictDescriptorMapById` | |
+| `dashboardDescriptorMap_` | `DashboardDescriptorMap` | |
+| `linkDescriptorMap_` | `LinkDescriptorMap` | |
+| `linkDescriptorMapById_` | `LinkDescriptorMapById` | |
+| `foreignServerMap_` | `ForeignServerMap` | |
+| `foreignServerMapById_` | `ForeignServerMapById` | |
+| `userMappingMap_` | `UserMappingMap` | |
+| `custom_expr_map_by_id_` | `CustomExpressionMapById` | |
+| `dict_columns_by_table_id_` | `TableDictColumnsMap` | |
+| `sqliteConnector_` | `SqliteConnector` | |
+| `currentDB_` | `const DBMetadata` | |
+| `dataMgr_` | `std::shared_ptr< Data_Namespace::DataMgr >` | |
+| `calciteMgr_` | `std::shared_ptr< Calcite >` | |
+| `logicalToPhysicalTableMapById_` | `LogicalToPhysicalTableMapById` | |
+| `nextTempTableId_` | `int` | |
+| `nextTempDictId_` | `int` | |
+| `columnDescriptorsForRoll` | `ColumnDescriptorsForRoll` | |
+| `physicalTableNameTag_` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `deletedColumnPerTable_` | `DeletedColumnPerTableMap` | |
+| `mutex_desc_` | `SharedMutexWrapper` | |
+| `sqlite_mutex_desc_` | `SharedMutexWrapper` | |
+| `CATALOG_SERVER_NAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `MEMORY_STATS_SERVER_NAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `STORAGE_STATS_SERVER_NAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `EXECUTOR_STATS_SERVER_NAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `ML_METADATA_SERVER_NAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `LOGS_SERVER_NAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `INTERNAL_SERVERS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< const char *, 6 >` | |
+| `thread_holds_read_lock` <Badge intent="note" minimal>static</Badge> | `bool` | |
+| `initialized_` | `bool` | |
+
+---
+
+## Inner classes
+
+### NoTableFoundException
+
+<CodeBlock links={{"Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+struct Catalog_Namespace::Catalog::NoTableFoundException
+```
+</CodeBlock>
+
+**Inherits from:** `std::runtime_error` (public)

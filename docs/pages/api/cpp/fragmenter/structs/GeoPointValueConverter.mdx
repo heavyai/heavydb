@@ -1,0 +1,107 @@
+---
+title: GeoPointValueConverter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetValueConvertersImpl.h>
+```
+
+**Inherits from:** `TargetValueConverter` (public)
+
+---
+
+## Constructors
+
+### GeoPointValueConverter [#geopointvalueconverter]
+
+<CodeBlock links={{"GeoPointValueConverter": "geopointvalueconverter"}}>
+```cpp showLineNumbers={false}
+GeoPointValueConverter::GeoPointValueConverter(
+    const Catalog_Namespace::Catalog &cat,
+    size_t num_rows,
+    const ColumnDescriptor *logicalColumnDescriptor
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~GeoPointValueConverter
+
+<CodeBlock links={{"GeoPointValueConverter": "geopointvalueconverter"}}>
+```cpp showLineNumbers={false}
+GeoPointValueConverter::~GeoPointValueConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateColumnarData [#allocatecolumnardata]
+
+<CodeBlock links={{"GeoPointValueConverter": "geopointvalueconverter"}}>
+```cpp showLineNumbers={false}
+void GeoPointValueConverter::allocateColumnarData(
+    size_t num_rows
+) override
+```
+</CodeBlock>
+
+### toCompressedCoords [#tocompressedcoords]
+
+<CodeBlock links={{"GeoPointValueConverter": "geopointvalueconverter"}}>
+```cpp showLineNumbers={false}
+ArrayDatum GeoPointValueConverter::toCompressedCoords(
+    const std::shared_ptr<std::vector<double>> &coords
+)
+```
+</CodeBlock>
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"GeoPointValueConverter": "geopointvalueconverter"}}>
+```cpp showLineNumbers={false}
+void GeoPointValueConverter::convertToColumnarFormat(
+    size_t row,
+    const TargetValue *value
+) override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"GeoPointValueConverter": "geopointvalueconverter", "InsertData": "../fragmenternamespace/structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void GeoPointValueConverter::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+### finalizeDataBlocksForInsertData [#finalizedatablocksforinsertdata]
+
+<CodeBlock links={{"GeoPointValueConverter": "geopointvalueconverter", "TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+virtual void GeoPointValueConverter::finalizeDataBlocksForInsertData()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `coords_column_descriptor_` | `const ColumnDescriptor *` | |
+| `column_data_` | `std::unique_ptr< std::vector< std::string > >` | |
+| `signed_compressed_coords_data_` | `std::unique_ptr< std::vector< ArrayDatum > >` | |
+| `GEO_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `GEO_POINT_VALUE_ACCESSOR` | `boost_variant_accessor< GeoPointTargetValue >` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `SCALAR_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ScalarTargetValue >` | |
+| `ARRAY_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ArrayTargetValue >` | |
+| `GEO_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `NULLABLE_STRING_ACCESSOR` | `boost_variant_accessor< NullableString >` | |
+| `STRING_ACCESSOR` | `boost_variant_accessor< std::string >` | |

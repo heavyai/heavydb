@@ -1,0 +1,129 @@
+---
+title: RowToColumnLoader
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RowToColumnLoader.h>
+```
+
+---
+
+## Constructors
+
+### RowToColumnLoader [#rowtocolumnloader]
+
+<CodeBlock links={{"RowToColumnLoader": "rowtocolumnloader"}}>
+```cpp showLineNumbers={false}
+RowToColumnLoader::RowToColumnLoader(
+    const ThriftClientConnection &conn_details,
+    const std::string &user_name,
+    const std::string &passwd,
+    const std::string &db_name,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~RowToColumnLoader
+
+<CodeBlock links={{"RowToColumnLoader": "rowtocolumnloader"}}>
+```cpp showLineNumbers={false}
+RowToColumnLoader::~RowToColumnLoader()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### do_load [#doload]
+
+<CodeBlock links={{"RowToColumnLoader": "rowtocolumnloader", "CopyParams": "../importexport/structs/copyparams"}}>
+```cpp showLineNumbers={false}
+void RowToColumnLoader::do_load(
+    int &nrows,
+    int &nskipped,
+    import_export::CopyParams copy_params
+)
+```
+</CodeBlock>
+
+### convert_string_to_column [#convertstringtocolumn]
+
+<CodeBlock links={{"RowToColumnLoader": "rowtocolumnloader", "CopyParams": "../importexport/structs/copyparams"}}>
+```cpp showLineNumbers={false}
+bool RowToColumnLoader::convert_string_to_column(
+    std::vector<TStringValue> row,
+    const import_export::CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### get_row_descriptor [#getrowdescriptor]
+
+<CodeBlock links={{"RowToColumnLoader": "rowtocolumnloader"}}>
+```cpp showLineNumbers={false}
+TRowDescriptor RowToColumnLoader::get_row_descriptor()
+```
+</CodeBlock>
+
+### print_row_with_delim [#printrowwithdelim]
+
+<CodeBlock links={{"RowToColumnLoader": "rowtocolumnloader", "CopyParams": "../importexport/structs/copyparams"}}>
+```cpp showLineNumbers={false}
+std::string RowToColumnLoader::print_row_with_delim(
+    std::vector<TStringValue> row,
+    const import_export::CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### createConnection [#createconnection]
+
+<CodeBlock links={{"RowToColumnLoader": "rowtocolumnloader"}}>
+```cpp showLineNumbers={false}
+void RowToColumnLoader::createConnection(
+    const ThriftClientConnection &con
+)
+```
+</CodeBlock>
+
+### closeConnection [#closeconnection]
+
+<CodeBlock links={{"RowToColumnLoader": "rowtocolumnloader"}}>
+```cpp showLineNumbers={false}
+void RowToColumnLoader::closeConnection()
+```
+</CodeBlock>
+
+### wait_disconnect_reconnect_retry [#waitdisconnectreconnectretry]
+
+<CodeBlock links={{"RowToColumnLoader": "rowtocolumnloader", "CopyParams": "../importexport/structs/copyparams"}}>
+```cpp showLineNumbers={false}
+void RowToColumnLoader::wait_disconnect_reconnect_retry(
+    size_t tries,
+    import_export::CopyParams copy_params
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `user_name_` | `std::string` | |
+| `passwd_` | `std::string` | |
+| `db_name_` | `std::string` | |
+| `table_name_` | `std::string` | |
+| `conn_details_` | `ThriftClientConnection` | |
+| `input_columns_` | `std::vector< TColumn >` | |
+| `column_type_info_` | `std::vector< SQLTypeInfo >` | |
+| `array_column_type_info_` | `std::vector< SQLTypeInfo >` | |
+| `row_desc_` | `TRowDescriptor` | |
+| `client_` | `std::shared_ptr< HeavyClient >` | |
+| `session_` | `TSessionId` | |

@@ -1,0 +1,18 @@
+---
+title: copy_to_nvidia_gpu
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void copy_to_nvidia_gpu(
+    Data_Namespace::DataMgr *data_mgr,
+    CUstream cuda_stream,
+    CUdeviceptr dst,
+    const void *src,
+    const size_t num_bytes,
+    const int device_id,
+    std::string_view tag
+)
+```
+</CodeBlock>

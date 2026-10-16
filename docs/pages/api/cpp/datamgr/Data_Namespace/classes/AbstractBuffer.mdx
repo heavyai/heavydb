@@ -1,0 +1,360 @@
+---
+title: Data_Namespace::AbstractBuffer
+description: "An AbstractBuffer is a unit of data management for a data manager."
+---
+
+An `AbstractBuffer` is a unit of data management for a data manager.
+
+```cpp showLineNumbers={false}
+#include <Data_Namespace/AbstractBuffer.h>
+```
+
+---
+
+## Constructors
+
+### AbstractBuffer [#abstractbuffer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::AbstractBuffer::AbstractBuffer(
+    const int device_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::AbstractBuffer::AbstractBuffer(
+    const int device_id,
+    const SQLTypeInfo sql_type
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~AbstractBuffer
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual Data_Namespace::AbstractBuffer::~AbstractBuffer()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### read [#read]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBuffer::read(
+    int8_t *const dst,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel dst_buffer_type = CPU_LEVEL,
+    const int dst_device_id = -1
+)
+```
+</CodeBlock>
+
+### write [#write]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBuffer::write(
+    int8_t *src,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel src_buffer_type = CPU_LEVEL,
+    const int src_device_id = -1
+)
+```
+</CodeBlock>
+
+### reserve [#reserve]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBuffer::reserve(
+    size_t num_bytes
+)
+```
+</CodeBlock>
+
+### append [#append]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBuffer::append(
+    int8_t *src,
+    const size_t num_bytes,
+    const MemoryLevel src_buffer_type = CPU_LEVEL,
+    const int device_id = -1
+)
+```
+</CodeBlock>
+
+### getMemoryPtr [#getmemoryptr]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int8_t * Data_Namespace::AbstractBuffer::getMemoryPtr()
+```
+</CodeBlock>
+
+### setMemoryPtr [#setmemoryptr]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBuffer::setMemoryPtr(
+    int8_t *new_ptr
+)
+```
+</CodeBlock>
+
+### pageCount [#pagecount]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual size_t Data_Namespace::AbstractBuffer::pageCount() const
+```
+</CodeBlock>
+
+### pageSize [#pagesize]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual size_t Data_Namespace::AbstractBuffer::pageSize() const
+```
+</CodeBlock>
+
+### reservedSize [#reservedsize]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual size_t Data_Namespace::AbstractBuffer::reservedSize() const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual MemoryLevel Data_Namespace::AbstractBuffer::getType() const
+```
+</CodeBlock>
+
+### pin [#pin]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int Data_Namespace::AbstractBuffer::pin()
+```
+</CodeBlock>
+
+### unPin [#unpin]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int Data_Namespace::AbstractBuffer::unPin()
+```
+</CodeBlock>
+
+### getPinCount [#getpincount]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int Data_Namespace::AbstractBuffer::getPinCount()
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+size_t Data_Namespace::AbstractBuffer::size() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+int Data_Namespace::AbstractBuffer::getDeviceId() const
+```
+</CodeBlock>
+
+### isDirty [#isdirty]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::AbstractBuffer::isDirty() const
+```
+</CodeBlock>
+
+### isAppended [#isappended]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::AbstractBuffer::isAppended() const
+```
+</CodeBlock>
+
+### isUpdated [#isupdated]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::AbstractBuffer::isUpdated() const
+```
+</CodeBlock>
+
+### hasEncoder [#hasencoder]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool Data_Namespace::AbstractBuffer::hasEncoder() const
+```
+</CodeBlock>
+
+### getSqlType [#getsqltype]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo Data_Namespace::AbstractBuffer::getSqlType() const
+```
+</CodeBlock>
+
+### setSqlType [#setsqltype]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setSqlType(
+    const SQLTypeInfo &sql_type
+)
+```
+</CodeBlock>
+
+### getEncoder [#getencoder]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer", "Encoder": "../../classes/encoder"}}>
+```cpp showLineNumbers={false}
+Encoder * Data_Namespace::AbstractBuffer::getEncoder() const
+```
+</CodeBlock>
+
+### setDirty [#setdirty]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setDirty()
+```
+</CodeBlock>
+
+### setUpdated [#setupdated]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setUpdated()
+```
+</CodeBlock>
+
+### setAppended [#setappended]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setAppended()
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setSize(
+    const size_t size
+)
+```
+</CodeBlock>
+
+### clearDirtyBits [#cleardirtybits]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::clearDirtyBits()
+```
+</CodeBlock>
+
+### initEncoder [#initencoder]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::initEncoder(
+    const SQLTypeInfo &tmp_sql_type
+)
+```
+</CodeBlock>
+
+### syncEncoder [#syncencoder]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::syncEncoder(
+    const AbstractBuffer *src_buffer
+)
+```
+</CodeBlock>
+
+### copyTo [#copyto]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::copyTo(
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes = 0
+)
+```
+</CodeBlock>
+
+### resetToEmpty [#resettoempty]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::resetToEmpty()
+```
+</CodeBlock>
+
+### setMetadata [#setmetadata]
+
+<CodeBlock links={{"AbstractBuffer": "abstractbuffer", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::AbstractBuffer::setMetadata(
+    const ChunkMetadata &meta
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `encoder_` | `std::unique_ptr< Encoder >` | |
+| `sql_type_` | `SQLTypeInfo` | |
+| `size_` | `size_t` | |
+| `device_id_` | `int` | |
+| `is_dirty_` | `bool` | |
+| `is_appended_` | `bool` | |
+| `is_updated_` | `bool` | |

@@ -1,0 +1,106 @@
+---
+title: QueryDispatchQueue
+description: "QueryDispatchQueue maintains a list of pending queries and dispatches those queries as Executors become available."
+---
+
+`QueryDispatchQueue` maintains a list of pending queries and dispatches those queries as Executors become available.
+
+```cpp showLineNumbers={false}
+#include <QueryDispatchQueue.h>
+```
+
+---
+
+## Constructors
+
+### QueryDispatchQueue [#querydispatchqueue]
+
+<CodeBlock links={{"QueryDispatchQueue": "querydispatchqueue"}}>
+```cpp showLineNumbers={false}
+QueryDispatchQueue::QueryDispatchQueue(
+    const size_t parallel_executors_max
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~QueryDispatchQueue
+
+<CodeBlock links={{"QueryDispatchQueue": "querydispatchqueue"}}>
+```cpp showLineNumbers={false}
+QueryDispatchQueue::~QueryDispatchQueue()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### submit [#submit]
+
+<CodeBlock links={{"QueryDispatchQueue": "querydispatchqueue", "Task": "#task"}}>
+```cpp showLineNumbers={false}
+void QueryDispatchQueue::submit(
+    std::shared_ptr<Task> task,
+    const bool is_update_delete
+)
+```
+</CodeBlock>
+
+Submit a new task to the queue.
+
+Blocks until the task begins execution. The caller is expected to maintain a copy of the shared_ptr which will be used to access results once the task runs.
+
+### interrupt [#interrupt]
+
+<CodeBlock links={{"QueryDispatchQueue": "querydispatchqueue"}}>
+```cpp showLineNumbers={false}
+void QueryDispatchQueue::interrupt(
+    std::string const &query_session
+)
+```
+</CodeBlock>
+
+### worker [#worker]
+
+<CodeBlock links={{"QueryDispatchQueue": "querydispatchqueue"}}>
+```cpp showLineNumbers={false}
+void QueryDispatchQueue::worker(
+    const size_t worker_idx
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `queue_mutex_` | `std::mutex` | |
+| `cv_` | `std::condition_variable` | |
+| `update_delete_mutex_` | `std::mutex` | |
+| `threads_should_exit_` | `bool` | |
+| `queue_` | `std::deque< std::shared_ptr< Task > >` | |
+| `workers_` | `std::vector< std::thread >` | |
+| `num_running_workers_` | `int` | |
+| `num_workers_` | `int` | |
+
+---
+
+## Inner classes
+
+### Task
+
+<CodeBlock links={{"QueryDispatchQueue": "querydispatchqueue"}}>
+```cpp showLineNumbers={false}
+struct QueryDispatchQueue::Task
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `execute_rel_alg_task` | `std::unique_ptr< std::packaged_task< void(size_t, std::string, std::string)> >` | |
+| `query_session` | `std::string` | |
+| `submitted_time_str` | `std::string` | |

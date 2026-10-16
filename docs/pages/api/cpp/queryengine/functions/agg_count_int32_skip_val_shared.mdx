@@ -1,0 +1,33 @@
+---
+title: agg_count_int32_skip_val_shared
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+C __device__ uint32_t agg_count_int32_skip_val_shared(
+    uint32_t *agg,
+    const int32_t val,
+    const int32_t skip_val
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+C NEVER_INLINE uint32_t agg_count_int32_skip_val_shared(
+    uint32_t *agg,
+    const int32_t val,
+    const int32_t skip_val
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

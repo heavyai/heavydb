@@ -154,9 +154,8 @@ _do_build() {
 
   cmd_build_heavydb "${heavydb_args[@]}"
 
-  # Docs run after heavydb so optional Doxygen can use the configured build tree.
-  # Sphinx uses the docs Docker image; Doxygen (if any) runs on the host.
-  _build_docs "$output_dir"
+  # Validate the Fern docs site after heavydb builds.
+  _build_docs
 
   # Optionally run the test suite against the tree we just built.
   if [ "$run_tests" != "none" ]; then
@@ -178,8 +177,8 @@ cmd_build_all() {
 Usage: dev-tools/dev.sh build all [options]
 
 Builds ALL components from source (heavyiq, immerse, webserver, geos-dsos),
-then builds heavydb, bundles them, and builds docs. To build without HeavyIQ
-use "dev-tools/dev.sh build" instead.
+then builds heavydb, bundles them, and validates the Fern docs site. To build
+without HeavyIQ use "dev-tools/dev.sh build" instead.
 
 Component options:
   --ref=<branch|sha>      Ref to check out for all component repos (the shared
@@ -244,7 +243,7 @@ Targets:
   webserver           Build just the web server component
   heavyiq             Build just the HeavyIQ component
   geos-dsos           Build just the GEOS DSO component
-  docs                Build Sphinx developer docs (optional Doxygen if available)
+  docs                Validate the Fern developer docs site (fern check)
   heavydb             Build heavydb only (bundles existing component outputs)
   image               Build a product Docker image from a pre-existing tarball
   deps                Build the deps container image

@@ -1,0 +1,906 @@
+---
+title: PerfectJoinHashTable
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <PerfectJoinHashTable.h>
+```
+
+**Inherits from:** `HashJoin` (public)
+
+---
+
+## Constructors
+
+### PerfectJoinHashTable [#perfectjoinhashtable]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "InputTableInfo": "../structs/inputtableinfo", "ExpressionRange": "expressionrange", "BucketizedHashEntryInfo": "../structs/bucketizedhashentryinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+PerfectJoinHashTable::PerfectJoinHashTable(
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const Analyzer::ColumnVar *col_var,
+    const std::vector<InputTableInfo> &query_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
+    const HashType preferred_hash_type,
+    const ExpressionRange &col_range,
+    const ExpressionRange &rhs_source_col_range,
+    const BucketizedHashEntryInfo hash_entry_info,
+    ColumnCacheMap &column_cache,
+    Executor *executor,
+    const std::set<int> &device_ids,
+    const RegisteredQueryHint &query_hints,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const TableIdToNodeMap &table_id_to_node_map,
+    const size_t rowid_size,
+    const InnerOuterStringOpInfos &inner_outer_string_op_infos = {}
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~PerfectJoinHashTable
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+virtual PerfectJoinHashTable::~PerfectJoinHashTable()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### toString [#tostring]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::string PerfectJoinHashTable::toString(
+    const ExecutorDeviceType device_type,
+    const int device_id = 0,
+    bool raw = false
+) const override
+```
+</CodeBlock>
+
+### toSet [#toset]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "DecodedJoinHashBufferEntry": "../structs/decodedjoinhashbufferentry"}}>
+```cpp showLineNumbers={false}
+std::set<DecodedJoinHashBufferEntry> PerfectJoinHashTable::toSet(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const override
+```
+</CodeBlock>
+
+### codegenSlot [#codegenslot]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * PerfectJoinHashTable::codegenSlot(
+    const CompilationOptions &,
+    const size_t
+) override
+```
+</CodeBlock>
+
+### codegenMatchingSet [#codegenmatchingset]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "CompilationOptions": "../structs/compilationoptions", "HashJoinMatchingSet": "../structs/hashjoinmatchingset"}}>
+```cpp showLineNumbers={false}
+HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(
+    const CompilationOptions &,
+    const size_t
+) override
+```
+</CodeBlock>
+
+### getInnerTableId [#getinnertableid]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+shared::TableKey PerfectJoinHashTable::getInnerTableId() const noexcept override
+```
+</CodeBlock>
+
+### getInnerTableRteIdx [#getinnertablerteidx]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+int PerfectJoinHashTable::getInnerTableRteIdx() const noexcept override
+```
+</CodeBlock>
+
+### getHashType [#gethashtype]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+HashType PerfectJoinHashTable::getHashType() const noexcept override
+```
+</CodeBlock>
+
+### getMemoryLevel [#getmemorylevel]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::MemoryLevel PerfectJoinHashTable::getMemoryLevel() const noexcept override
+```
+</CodeBlock>
+
+### offsetBufferOff [#offsetbufferoff]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectJoinHashTable::offsetBufferOff() const noexcept override
+```
+</CodeBlock>
+
+### countBufferOff [#countbufferoff]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectJoinHashTable::countBufferOff() const noexcept override
+```
+</CodeBlock>
+
+### payloadBufferOff [#payloadbufferoff]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectJoinHashTable::payloadBufferOff() const noexcept override
+```
+</CodeBlock>
+
+### getHashJoinType [#gethashjointype]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::string PerfectJoinHashTable::getHashJoinType() const
+```
+</CodeBlock>
+
+### getRegisteredQueryHint [#getregisteredqueryhint]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+const RegisteredQueryHint & PerfectJoinHashTable::getRegisteredQueryHint()
+```
+</CodeBlock>
+
+### getHashEntryInfo [#gethashentryinfo]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "BucketizedHashEntryInfo": "../structs/bucketizedhashentryinfo"}}>
+```cpp showLineNumbers={false}
+BucketizedHashEntryInfo PerfectJoinHashTable::getHashEntryInfo() const
+```
+</CodeBlock>
+
+### getNormalizedHashEntryCount [#getnormalizedhashentrycount]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectJoinHashTable::getNormalizedHashEntryCount() const
+```
+</CodeBlock>
+
+### toStringFlat64 [#tostringflat64]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::string PerfectJoinHashTable::toStringFlat64(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### toStringFlat32 [#tostringflat32]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::string PerfectJoinHashTable::toStringFlat32(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### fetchJoinColumn [#fetchjoincolumn]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "Executor": "executor", "JoinColumn": "../structs/joincolumn", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+JoinColumn PerfectJoinHashTable::fetchJoinColumn(
+    const Analyzer::ColumnVar *hash_col,
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragment_info,
+    const Data_Namespace::MemoryLevel effective_memory_level,
+    const int device_id,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> &chunks_owner,
+    DeviceAllocator *dev_buff_owner,
+    std::vector<std::shared_ptr<void>> &malloc_owner,
+    Executor *executor,
+    ColumnCacheMap *column_cache
+)
+```
+</CodeBlock>
+
+fetchJoinColumn() calls ColumnFetcher::makeJoinColumn(), then copies the [JoinColumn](../structs/joincolumn)'s col_chunks_buff memory onto the GPU if required by the effective_memory_level parameter. The dev_buff_owner parameter will manage the GPU memory.
+
+### getJoinHashBufferSize [#getjoinhashbuffersize]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+size_t PerfectJoinHashTable::getJoinHashBufferSize(
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+size_t PerfectJoinHashTable::getJoinHashBufferSize(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getJoinHashBuffer [#getjoinhashbuffer]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+int8_t * PerfectJoinHashTable::getJoinHashBuffer(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### freeHashBufferMemory [#freehashbuffermemory]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTable::freeHashBufferMemory()
+```
+</CodeBlock>
+
+### getHashTableForDevice [#gethashtablefordevice]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> PerfectJoinHashTable::getHashTableForDevice(
+    int device_id
+) const
+```
+</CodeBlock>
+
+### replaceHashTableForDevice [#replacehashtablefordevice]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTable::replaceHashTableForDevice(
+    std::shared_ptr<HashTable> &&hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### getAnyHashTableForDevice [#getanyhashtablefordevice]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> PerfectJoinHashTable::getAnyHashTableForDevice() const
+```
+</CodeBlock>
+
+### moveHashTableForDevice [#movehashtablefordevice]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTable::moveHashTableForDevice(
+    std::shared_ptr<HashTable> &&hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### putHashTableForDevice [#puthashtablefordevice]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashTable": "hashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTable::putHashTableForDevice(
+    std::shared_ptr<HashTable> hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### clearHashTableForDevice [#clearhashtablefordevice]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTable::clearHashTableForDevice()
+```
+</CodeBlock>
+
+### isOneToOneHashPossible [#isonetoonehashpossible]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice"}}>
+```cpp showLineNumbers={false}
+bool PerfectJoinHashTable::isOneToOneHashPossible(
+    const std::unordered_map<int, ColumnsForDevice> &columns_per_device
+) const
+```
+</CodeBlock>
+
+### fetchColumnsForDevice [#fetchcolumnsfordevice]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice"}}>
+```cpp showLineNumbers={false}
+ColumnsForDevice PerfectJoinHashTable::fetchColumnsForDevice(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments,
+    const int device_id,
+    DeviceAllocator *dev_buff_owner
+)
+```
+</CodeBlock>
+
+### reifyForDevice [#reifyfordevice]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTable::reifyForDevice(
+    const ChunkKey &hash_table_key,
+    const ColumnsForDevice &columns_for_device,
+    const HashType layout,
+    const int device_id,
+    const logger::ThreadLocalIds
+)
+```
+</CodeBlock>
+
+### initHashTableForDevice [#inithashtablefordevice]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "JoinColumn": "../structs/joincolumn"}}>
+```cpp showLineNumbers={false}
+int PerfectJoinHashTable::initHashTableForDevice(
+    const ChunkKey &chunk_key,
+    const JoinColumn &join_column,
+    const InnerOuter &cols,
+    const HashType layout,
+    const Data_Namespace::MemoryLevel effective_memory_level,
+    const int device_id
+)
+```
+</CodeBlock>
+
+### getEffectiveMemoryLevel [#geteffectivememorylevel]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::MemoryLevel PerfectJoinHashTable::getEffectiveMemoryLevel(
+    const std::vector<InnerOuter> &inner_outer_pairs
+) const
+```
+</CodeBlock>
+
+### genChunkKey [#genchunkkey]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+ChunkKey PerfectJoinHashTable::genChunkKey(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments,
+    const Analyzer::Expr *outer_col,
+    const Analyzer::ColumnVar *inner_col
+) const
+```
+</CodeBlock>
+
+### reify [#reify]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTable::reify()
+```
+</CodeBlock>
+
+### initHashTableOnCpuFromCache [#inithashtableoncpufromcache]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<PerfectHashTable> PerfectJoinHashTable::initHashTableOnCpuFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### putHashTableOnCpuToCache [#puthashtableoncputocache]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTable::putHashTableOnCpuToCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    std::shared_ptr<PerfectHashTable> hashtable_ptr,
+    DeviceIdentifier device_identifier,
+    size_t hashtable_building_time
+)
+```
+</CodeBlock>
+
+### getInnerQueryInfo [#getinnerqueryinfo]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+const InputTableInfo & PerfectJoinHashTable::getInnerQueryInfo(
+    const Analyzer::ColumnVar *inner_col
+) const
+```
+</CodeBlock>
+
+### shardCount [#shardcount]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectJoinHashTable::shardCount() const
+```
+</CodeBlock>
+
+### codegenHashTableLoad [#codegenhashtableload]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+llvm::Value * PerfectJoinHashTable::codegenHashTableLoad(
+    const size_t table_idx
+)
+```
+</CodeBlock>
+
+### getHashJoinArgs [#gethashjoinargs]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> PerfectJoinHashTable::getHashJoinArgs(
+    llvm::Value *hash_ptr,
+    llvm::Value *key_lvs,
+    const Analyzer::Expr *key_col,
+    const int shard_count,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### isBitwiseEq [#isbitwiseeq]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+bool PerfectJoinHashTable::isBitwiseEq() const override
+```
+</CodeBlock>
+
+### getComponentBufferSize [#getcomponentbuffersize]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectJoinHashTable::getComponentBufferSize() const noexcept override
+```
+</CodeBlock>
+
+### copyCpuHashTableToGpu [#copycpuhashtabletogpu]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "PerfectHashTable": "perfecthashtable", "PerfectHashTableEntryInfo": "perfecthashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTable::copyCpuHashTableToGpu(
+    std::shared_ptr<PerfectHashTable> &cpu_hash_table,
+    const PerfectHashTableEntryInfo hash_table_entry_info,
+    const int device_id
+)
+```
+</CodeBlock>
+
+### getAlternativeCacheKey [#getalternativecachekey]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static QueryPlanHash PerfectJoinHashTable::getAlternativeCacheKey(
+    AlternativeCacheKeyForPerfectHashJoin &info
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getInstance [#getinstance]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "InputTableInfo": "../structs/inputtableinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<PerfectJoinHashTable> PerfectJoinHashTable::getInstance(
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const std::vector<InputTableInfo> &query_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const RegisteredQueryHint &query_hints,
+    const TableIdToNodeMap &table_id_to_node_map
+)
+```
+</CodeBlock>
+
+Make hash table from an in-flight SQL query's parse tree etc.
+
+### getHashTableCache [#gethashtablecache]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashtableRecycler": "hashtablerecycler"}}>
+```cpp showLineNumbers={false}
+static HashtableRecycler * PerfectJoinHashTable::getHashTableCache()
+```
+</CodeBlock>
+
+### getHashingSchemeCache [#gethashingschemecache]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashingSchemeRecycler": "hashingschemerecycler"}}>
+```cpp showLineNumbers={false}
+static HashingSchemeRecycler * PerfectJoinHashTable::getHashingSchemeCache()
+```
+</CodeBlock>
+
+### invalidateCache [#invalidatecache]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static void PerfectJoinHashTable::invalidateCache()
+```
+</CodeBlock>
+
+### markCachedItemAsDirty [#markcacheditemasdirty]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static void PerfectJoinHashTable::markCachedItemAsDirty(
+    size_t table_key
+)
+```
+</CodeBlock>
+
+### codegenMatchingSet [#codegenmatchingset]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "Executor": "executor", "HashJoinMatchingSet": "../structs/hashjoinmatchingset", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+HashJoinMatchingSet PerfectJoinHashTable::codegenMatchingSet(
+    const std::vector<llvm::Value *> &hash_join_idx_args_in,
+    const bool is_sharded,
+    const bool col_is_nullable,
+    const bool is_bw_eq,
+    const int64_t sub_buff_size,
+    Executor *executor,
+    const bool is_bucketized = false
+)
+```
+</CodeBlock>
+
+### getInnerTableId [#getinnertableid]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static shared::TableKey PerfectJoinHashTable::getInnerTableId(
+    const std::vector<InnerOuter> &inner_outer_pairs
+)
+```
+</CodeBlock>
+
+### getMaximumNumHashEntriesCanHold [#getmaximumnumhashentriescanhold]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+size_t PerfectJoinHashTable::getMaximumNumHashEntriesCanHold(
+    MemoryLevel memory_level,
+    const Executor *executor,
+    size_t rowid_size
+) noexcept
+```
+</CodeBlock>
+
+### generateTooManyHashEntriesErrMsg [#generatetoomanyhashentrieserrmsg]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static std::string PerfectJoinHashTable::generateTooManyHashEntriesErrMsg(
+    size_t num_entries,
+    size_t threshold,
+    MemoryLevel memory_level
+)
+```
+</CodeBlock>
+
+### layoutRequiresAdditionalBuffers [#layoutrequiresadditionalbuffers]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static bool PerfectJoinHashTable::layoutRequiresAdditionalBuffers(
+    HashType layout
+) noexcept
+```
+</CodeBlock>
+
+### getHashTypeString [#gethashtypestring]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+static std::string PerfectJoinHashTable::getHashTypeString(
+    HashType ht
+) noexcept
+```
+</CodeBlock>
+
+### codegenHashTableLoad [#codegenhashtableload]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+llvm::Value * PerfectJoinHashTable::codegenHashTableLoad(
+    const size_t table_idx,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### getSyntheticInstance [#getsyntheticinstance]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> PerfectJoinHashTable::getSyntheticInstance(
+    std::string_view table1,
+    std::string_view column1,
+    const Catalog_Namespace::Catalog &catalog1,
+    std::string_view table2,
+    std::string_view column2,
+    const Catalog_Namespace::Catalog &catalog2,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+Make hash table from named tables and columns (such as for testing).
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> PerfectJoinHashTable::getSyntheticInstance(
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+Make hash table from named tables and columns (such as for testing).
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<std::string, std::shared_ptr<HashJoin>> PerfectJoinHashTable::getSyntheticInstance(
+    std::vector<std::shared_ptr<Analyzer::BinOper>>,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### canAccessHashTable [#canaccesshashtable]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+bool PerfectJoinHashTable::canAccessHashTable(
+    bool allow_hash_table_recycling,
+    bool invalid_cache_key,
+    JoinType join_type
+)
+```
+</CodeBlock>
+
+### normalizeColumnPair [#normalizecolumnpair]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<InnerOuter, InnerOuterStringOpInfos> PerfectJoinHashTable::normalizeColumnPair(
+    const Analyzer::Expr *lhs,
+    const Analyzer::Expr *rhs,
+    const TemporaryTables *temporary_tables,
+    const bool is_bbox_intersect = false
+)
+```
+</CodeBlock>
+
+### getHashJoinColumn [#gethashjoincolumn]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+const T * PerfectJoinHashTable::getHashJoinColumn(
+    const Analyzer::Expr *expr
+)
+```
+</CodeBlock>
+
+### normalizeColumnPairs [#normalizecolumnpairs]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>> PerfectJoinHashTable::normalizeColumnPairs(
+    const Analyzer::BinOper *condition,
+    const TemporaryTables *temporary_tables
+)
+```
+</CodeBlock>
+
+### collectFragmentIds [#collectfragmentids]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::vector<int> PerfectJoinHashTable::collectFragmentIds(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments
+)
+```
+</CodeBlock>
+
+### getCompositeKeyInfo [#getcompositekeyinfo]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "Executor": "executor", "CompositeKeyInfo": "../structs/compositekeyinfo", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+CompositeKeyInfo PerfectJoinHashTable::getCompositeKeyInfo(
+    const std::vector<InnerOuter> &inner_outer_pairs,
+    const Executor *executor,
+    const std::vector<InnerOuterStringOpInfos> &inner_outer_string_op_infos_pairs = {}
+)
+```
+</CodeBlock>
+
+### translateCompositeStrDictProxies [#translatecompositestrdictproxies]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "CompositeKeyInfo": "../structs/compositekeyinfo", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::vector<const StringDictionaryProxy::IdMap *> PerfectJoinHashTable::translateCompositeStrDictProxies(
+    const CompositeKeyInfo &composite_key_info,
+    const std::vector<InnerOuterStringOpInfos> &string_op_infos_for_keys,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### getStrDictProxies [#getstrdictproxies]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+std::pair<const StringDictionaryProxy *, StringDictionaryProxy *> PerfectJoinHashTable::getStrDictProxies(
+    const InnerOuter &cols,
+    const Executor *executor,
+    const bool has_string_ops
+)
+```
+</CodeBlock>
+
+### translateInnerToOuterStrDictProxies [#translateinnertoouterstrdictproxies]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "ExpressionRange": "expressionrange", "Executor": "executor", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::IdMap * PerfectJoinHashTable::translateInnerToOuterStrDictProxies(
+    const InnerOuter &cols,
+    const InnerOuterStringOpInfos &inner_outer_string_op_infos,
+    ExpressionRange &old_col_range,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### codegenColOrStringOper [#codegencolorstringoper]
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions", "HashJoin": "hashjoin"}}>
+```cpp showLineNumbers={false}
+llvm::Value * PerfectJoinHashTable::codegenColOrStringOper(
+    const Analyzer::Expr *col_or_string_oper,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    CodeGenerator &code_generator,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `inner_outer_pairs_` | `std::vector< InnerOuter >` | |
+| `qual_bin_oper_` | `std::shared_ptr< Analyzer::BinOper >` | |
+| `join_type_` | `const JoinType` | |
+| `col_var_` | `std::shared_ptr< Analyzer::ColumnVar >` | |
+| `query_infos_` | `const std::vector< InputTableInfo > &` | |
+| `memory_level_` | `const Data_Namespace::MemoryLevel` | |
+| `hash_type_` | `HashType` | |
+| `cpu_hash_table_buff_mutex_` | `std::mutex` | |
+| `str_proxy_translation_mutex_` | `std::mutex` | |
+| `str_proxy_translation_map_` | `const StringDictionaryProxy::IdMap *` | |
+| `col_range_` | `ExpressionRange` | |
+| `rhs_source_col_range_` | `ExpressionRange` | |
+| `hash_entry_info_` | `BucketizedHashEntryInfo` | |
+| `executor_` | `Executor *` | |
+| `column_cache_` | `ColumnCacheMap &` | |
+| `device_ids_` | `const std::set< int >` | |
+| `query_hints_` | `RegisteredQueryHint` | |
+| `needs_dict_translation_` | `bool` | |
+| `hashtable_build_dag_map_` | `HashTableBuildDagMap` | |
+| `hashtable_cache_key_` | `std::unordered_map< int, QueryPlanHash >` | |
+| `hashtable_cache_meta_info_` | `HashtableCacheMetaInfo` | |
+| `table_keys_` | `std::unordered_set< size_t >` | |
+| `table_id_to_node_map_` | `const TableIdToNodeMap` | |
+| `inner_outer_string_op_infos_` | `const InnerOuterStringOpInfos` | |
+| `rowid_size_` | `const size_t` | |
+| `hash_table_cache_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< HashtableRecycler >` | |
+| `hash_table_layout_cache_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< HashingSchemeRecycler >` | |
+| `MAX_NUM_HASH_ENTRIES` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `hash_tables_mutex_` | `std::shared_mutex` | |
+| `hash_tables_for_device_` | `std::unordered_map< int, std::shared_ptr< HashTable > >` | |
+
+---
+
+## Inner classes
+
+### AlternativeCacheKeyForPerfectHashJoin
+
+<CodeBlock links={{"PerfectJoinHashTable": "perfectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+struct PerfectJoinHashTable::AlternativeCacheKeyForPerfectHashJoin
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `col_range` | `const ExpressionRange` | |
+| `inner_col` | `const Analyzer::ColumnVar *` | |
+| `outer_col` | `const Analyzer::ColumnVar *` | |
+| `inner_outer_string_op_infos` | `InnerOuterStringOpInfos` | |
+| `chunk_key` | `const ChunkKey` | |
+| `num_elements` | `const size_t` | |
+| `optype` | `const SQLOps` | |
+| `join_type` | `const JoinType` | |

@@ -1,0 +1,85 @@
+---
+title: heavyai::test::ScopedDebugTestHook
+description: ""
+---
+
+<CodeBlock id="ScopedDebugTestHook" links={{"ScopedDebugTestHook": "scopeddebugtesthook"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class ScopedDebugTestHook
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <heavyai/test/DebugTestHook.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### ScopedDebugTestHook [#scopeddebugtesthook]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ScopedDebugTestHook": "scopeddebugtesthook"}}>
+```cpp showLineNumbers={false}
+template <typename Callable>
+heavyai::test::ScopedDebugTestHook<T>::ScopedDebugTestHook(
+    std::string point,
+    Callable &&callable
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"ScopedDebugTestHook": "scopeddebugtesthook"}}>
+```cpp showLineNumbers={false}
+heavyai::test::ScopedDebugTestHook<T>::ScopedDebugTestHook(
+    const ScopedDebugTestHook &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~ScopedDebugTestHook
+
+<CodeBlock links={{"ScopedDebugTestHook": "scopeddebugtesthook"}}>
+```cpp showLineNumbers={false}
+heavyai::test::ScopedDebugTestHook<T>::~ScopedDebugTestHook()
+```
+</CodeBlock>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"ScopedDebugTestHook": "scopeddebugtesthook"}}>
+```cpp showLineNumbers={false}
+ScopedDebugTestHook & heavyai::test::ScopedDebugTestHook<T>::operator=(
+    const ScopedDebugTestHook &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `point_` | `const std::string` | |

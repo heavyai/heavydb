@@ -1,0 +1,19 @@
+---
+title: fill_one_to_many_hash_table_on_device_impl
+description: ""
+---
+
+<CodeBlock links={{"JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+template <typename COUNT_MATCHES_FUNCTOR, typename FILL_ROW_IDS_FUNCTOR>
+void fill_one_to_many_hash_table_on_device_impl(
+    int32_t *buff,
+    const int64_t hash_entry_count,
+    const JoinColumn &join_column,
+    const JoinColumnTypeInfo &type_info,
+    CUstream cuda_stream,
+    COUNT_MATCHES_FUNCTOR count_matches_func,
+    FILL_ROW_IDS_FUNCTOR fill_row_ids_func
+)
+```
+</CodeBlock>

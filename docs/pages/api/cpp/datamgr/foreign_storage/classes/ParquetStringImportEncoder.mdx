@@ -1,0 +1,243 @@
+---
+title: foreign_storage::ParquetStringImportEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetStringImportEncoder.h>
+```
+
+**Inherits from:** `foreign_storage::ParquetEncoder` (public), `foreign_storage::ParquetImportEncoder` (public)
+
+---
+
+## Constructors
+
+### ParquetStringImportEncoder [#parquetstringimportencoder]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetStringImportEncoder::ParquetStringImportEncoder(
+    Data_Namespace::AbstractBuffer *buffer
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### appendData [#appenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetStringImportEncoder::appendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetStringImportEncoder::appendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### appendDataTrackErrors [#appenddatatrackerrors]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetStringImportEncoder::appendDataTrackErrors(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetStringImportEncoder::appendDataTrackErrors(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### validateAndAppendData [#validateandappenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetStringImportEncoder::validateAndAppendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetStringImportEncoder::validateAndAppendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### eraseInvalidIndicesInBuffer [#eraseinvalidindicesinbuffer]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetStringImportEncoder::eraseInvalidIndicesInBuffer(
+    const InvalidRowGroupIndices &invalid_indices
+) override
+```
+</CodeBlock>
+
+### getRowGroupMetadata [#getrowgroupmetadata]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ChunkMetadata": "../../structs/chunkmetadata", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<ChunkMetadata> foreign_storage::ParquetStringImportEncoder::getRowGroupMetadata(
+    const parquet::RowGroupMetaData *group_metadata,
+    const int parquet_column_index,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### getRejectedRowIndices [#getrejectedrowindices]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+RejectedRowIndices foreign_storage::ParquetStringImportEncoder::getRejectedRowIndices() const
+```
+</CodeBlock>
+
+### disableMetadataStatsValidation [#disablemetadatastatsvalidation]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetStringImportEncoder::disableMetadataStatsValidation()
+```
+</CodeBlock>
+
+### initializeErrorTracking [#initializeerrortracking]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetStringImportEncoder::initializeErrorTracking()
+```
+</CodeBlock>
+
+### initializeColumnType [#initializecolumntype]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetStringImportEncoder::initializeColumnType(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### createMetadata [#createmetadata]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ChunkMetadata": "../../structs/chunkmetadata", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<ChunkMetadata> foreign_storage::ParquetStringImportEncoder::createMetadata(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### throwNotNullViolation [#thrownotnullviolation]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetStringImportEncoder::throwNotNullViolation(
+    const std::string &parquet_column_name
+)
+```
+</CodeBlock>
+
+### validateNullCount [#validatenullcount]
+
+<CodeBlock links={{"ParquetStringImportEncoder": "parquetstringimportencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetStringImportEncoder::validateNullCount(
+    const std::string &parquet_column_name,
+    int64_t null_count,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `string_buffer_` | `TypedParquetStorageBuffer< std::string > *` | |
+| `buffer_` | `Data_Namespace::AbstractBuffer *` | |
+| `is_error_tracking_enabled_` | `bool` | |
+| `invalid_indices_` | `RejectedRowIndices` | |
+| `current_chunk_offset_` | `size_t` | |
+| `column_type_` | `SQLTypeInfo` | |
+| `validate_metadata_stats_` | `bool` | |

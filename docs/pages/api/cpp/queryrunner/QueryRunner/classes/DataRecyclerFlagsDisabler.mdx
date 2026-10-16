@@ -1,0 +1,41 @@
+---
+title: QueryRunner::DataRecyclerFlagsDisabler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryRunner/QueryRunner.h>
+```
+
+---
+
+## Constructors
+
+### DataRecyclerFlagsDisabler [#datarecyclerflagsdisabler]
+
+<CodeBlock links={{"DataRecyclerFlagsDisabler": "datarecyclerflagsdisabler"}}>
+```cpp showLineNumbers={false}
+QueryRunner::DataRecyclerFlagsDisabler::DataRecyclerFlagsDisabler()
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~DataRecyclerFlagsDisabler
+
+<CodeBlock links={{"DataRecyclerFlagsDisabler": "datarecyclerflagsdisabler"}}>
+```cpp showLineNumbers={false}
+QueryRunner::DataRecyclerFlagsDisabler::~DataRecyclerFlagsDisabler()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `orig_chunk_metadata_cache_` | `bool` | |
+| `orig_resultset_cache_` | `bool` | |
+| `orig_allow_query_step_skipping_` | `bool` | |
+| `orig_allow_auto_resultset_caching_` | `bool` | |

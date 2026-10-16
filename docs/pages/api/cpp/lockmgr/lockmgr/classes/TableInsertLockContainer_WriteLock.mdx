@@ -1,0 +1,57 @@
+---
+title: "lockmgr::TableInsertLockContainer< WriteLock >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgr.h>
+```
+
+**Inherits from:** `lockmgr::LockContainerImpl< const TableDescriptor *, WriteLock >` (public), `lockmgr::LockContainerImpl< const TableDescriptor *, WriteLock >` (public)
+
+---
+
+## Methods
+
+### TableInsertLockContainer [#tableinsertlockcontainer]
+
+<CodeBlock links={{"TableInsertLockContainer< WriteLock >": "tableinsertlockcontainerwritelock"}}>
+```cpp showLineNumbers={false}
+lockmgr::TableInsertLockContainer<WriteLock>::TableInsertLockContainer(
+    const TableDescriptor *obj,
+    WriteLock &&lock
+)
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"TableInsertLockContainer< WriteLock >": "tableinsertlockcontainerwritelock"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * lockmgr::LockContainerImpl<const TableDescriptor *, WriteLock>::operator()() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### acquire [#acquire]
+
+<CodeBlock links={{"TableInsertLockContainer< WriteLock >": "tableinsertlockcontainerwritelock"}}>
+```cpp showLineNumbers={false}
+static auto lockmgr::TableInsertLockContainer<WriteLock>::acquire(
+    const int db_id,
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `obj_` | `const TableDescriptor *` | |
+| `lock_` | `WriteLock` | |

@@ -1,0 +1,90 @@
+---
+title: AlterForeignServerCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### AlterForeignServerCommand [#alterforeignservercommand]
+
+<CodeBlock links={{"AlterForeignServerCommand": "alterforeignservercommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+AlterForeignServerCommand::AlterForeignServerCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"AlterForeignServerCommand": "alterforeignservercommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult AlterForeignServerCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+### changeForeignServerOwner [#changeforeignserverowner]
+
+<CodeBlock links={{"AlterForeignServerCommand": "alterforeignservercommand"}}>
+```cpp showLineNumbers={false}
+void AlterForeignServerCommand::changeForeignServerOwner()
+```
+</CodeBlock>
+
+### renameForeignServer [#renameforeignserver]
+
+<CodeBlock links={{"AlterForeignServerCommand": "alterforeignservercommand"}}>
+```cpp showLineNumbers={false}
+void AlterForeignServerCommand::renameForeignServer()
+```
+</CodeBlock>
+
+### setForeignServerOptions [#setforeignserveroptions]
+
+<CodeBlock links={{"AlterForeignServerCommand": "alterforeignservercommand"}}>
+```cpp showLineNumbers={false}
+void AlterForeignServerCommand::setForeignServerOptions()
+```
+</CodeBlock>
+
+### setForeignServerDataWrapper [#setforeignserverdatawrapper]
+
+<CodeBlock links={{"AlterForeignServerCommand": "alterforeignservercommand"}}>
+```cpp showLineNumbers={false}
+void AlterForeignServerCommand::setForeignServerDataWrapper()
+```
+</CodeBlock>
+
+### hasAlterServerPrivileges [#hasalterserverprivileges]
+
+<CodeBlock links={{"AlterForeignServerCommand": "alterforeignservercommand"}}>
+```cpp showLineNumbers={false}
+bool AlterForeignServerCommand::hasAlterServerPrivileges()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

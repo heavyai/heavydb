@@ -1,0 +1,79 @@
+---
+title: Parser::CreateUserStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### CreateUserStmt [#createuserstmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"CreateUserStmt": "createuserstmt"}}>
+```cpp showLineNumbers={false}
+Parser::CreateUserStmt::CreateUserStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CreateUserStmt": "createuserstmt", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::CreateUserStmt::CreateUserStmt(
+    std::string *n,
+    std::list<NameValueAssign *> *l
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"CreateUserStmt": "createuserstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateUserStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"CreateUserStmt": "createuserstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateUserStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `user_name_` | `std::unique_ptr< std::string >` | |
+| `options_` | `std::list< std::unique_ptr< NameValueAssign > >` | |

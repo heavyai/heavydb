@@ -1,0 +1,86 @@
+---
+title: Parser::InExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### InExpr [#inexpr]
+
+<CodeBlock links={{"InExpr": "inexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::InExpr::InExpr(
+    bool n,
+    Expr *a
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_not [#getisnot]
+
+<CodeBlock links={{"InExpr": "inexpr"}}>
+```cpp showLineNumbers={false}
+bool Parser::InExpr::get_is_not() const
+```
+</CodeBlock>
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"InExpr": "inexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::InExpr::get_arg() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"InExpr": "inexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::InExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"InExpr": "inexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::InExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_not_` | `bool` | |
+| `arg_` | `std::unique_ptr< Expr >` | |

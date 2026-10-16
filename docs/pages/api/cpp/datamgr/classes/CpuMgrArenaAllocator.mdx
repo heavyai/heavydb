@@ -1,0 +1,89 @@
+---
+title: CpuMgrArenaAllocator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CpuMgrArenaAllocator.h>
+```
+
+**Inherits from:** `Arena` (public)
+
+---
+
+## Constructors
+
+### CpuMgrArenaAllocator [#cpumgrarenaallocator]
+
+<CodeBlock links={{"CpuMgrArenaAllocator": "cpumgrarenaallocator"}}>
+```cpp showLineNumbers={false}
+CpuMgrArenaAllocator::CpuMgrArenaAllocator()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocate [#allocate]
+
+<CodeBlock links={{"CpuMgrArenaAllocator": "cpumgrarenaallocator"}}>
+```cpp showLineNumbers={false}
+void * CpuMgrArenaAllocator::allocate(
+    size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### allocateAndZero [#allocateandzero]
+
+<CodeBlock links={{"CpuMgrArenaAllocator": "cpumgrarenaallocator"}}>
+```cpp showLineNumbers={false}
+void * CpuMgrArenaAllocator::allocateAndZero(
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### bytesUsed [#bytesused]
+
+<CodeBlock links={{"CpuMgrArenaAllocator": "cpumgrarenaallocator"}}>
+```cpp showLineNumbers={false}
+size_t CpuMgrArenaAllocator::bytesUsed() const override
+```
+</CodeBlock>
+
+### totalBytes [#totalbytes]
+
+<CodeBlock links={{"CpuMgrArenaAllocator": "cpumgrarenaallocator"}}>
+```cpp showLineNumbers={false}
+size_t CpuMgrArenaAllocator::totalBytes() const override
+```
+</CodeBlock>
+
+### getMemoryType [#getmemorytype]
+
+<CodeBlock links={{"CpuMgrArenaAllocator": "cpumgrarenaallocator"}}>
+```cpp showLineNumbers={false}
+Arena::MemoryType CpuMgrArenaAllocator::getMemoryType() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### MemoryType
+
+| Name | Value | Description |
+|---|---|---|
+| `DRAM` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `base_allocator_` | `CpuMgrBaseAllocator` | |
+| `size_` | `size_t` | |

@@ -1,0 +1,78 @@
+---
+title: ExecutorResourceMgr_Namespace::RequestInfo
+description: "A container to store requested and minimum neccessary resource requests across all resource types currently supported by ExecutorResourceMgr/ExecutorResourcePool."
+---
+
+A container to store requested and minimum neccessary resource requests across all resource types currently supported by [`ExecutorResourceMgr`](../classes/executorresourcemgr)/[`ExecutorResourcePool`](../classes/executorresourcepool).
+
+It also includes a [`ChunkRequestInfo`](chunkrequestinfo) struct to denote which `DataMgr` chunks (with their sizes in bytes) are neccesary for the query.
+
+`RequestInfo` is the principal data interface between `Executor::launchKernelsViaResourceMgr` and [`ExecutorResourceMgr`](../classes/executorresourcemgr).
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ResourceRequest.h>
+```
+
+---
+
+## Constructors
+
+### RequestInfo [#requestinfo]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RequestInfo": "requestinfo", "ChunkRequestInfo": "chunkrequestinfo"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::RequestInfo::RequestInfo(
+    const ExecutorDeviceType request_device_type,
+    const size_t priority_level,
+    const size_t cpu_slots,
+    const size_t min_cpu_slots,
+    const size_t gpu_slots,
+    const size_t min_gpu_slots,
+    const size_t cpu_result_mem,
+    const size_t min_cpu_result_mem,
+    const ChunkRequestInfo &chunk_request_info,
+    const bool output_buffers_reusable_intra_thread
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RequestInfo": "requestinfo"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::RequestInfo::RequestInfo(
+    const ExecutorDeviceType request_device_type,
+    const size_t num_kernels,
+    const size_t cpu_result_mem
+)
+```
+</CodeBlock>
+
+Simple constructor assuming no difference between min and requested resources, and no intra-thread cpu mem sharing.
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `request_device_type` | `ExecutorDeviceType` | |
+| `priority_level` | `size_t` | |
+| `cpu_slots` | `size_t` | |
+| `min_cpu_slots` | `size_t` | |
+| `gpu_slots` | `size_t` | |
+| `min_gpu_slots` | `size_t` | |
+| `cpu_result_mem` | `size_t` | |
+| `min_cpu_result_mem` | `size_t` | |
+| `chunk_request_info` | `ChunkRequestInfo` | |
+| `output_buffers_reusable_intra_thread` | `bool` | |
+| `chunk_memory_scales_by_num_threads` | `bool` | |
+| `request_must_run_alone` | `bool` | |
+| `request_must_run_alone_for_device_type` | `bool` | |

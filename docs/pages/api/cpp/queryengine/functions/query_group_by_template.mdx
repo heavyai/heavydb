@@ -1,0 +1,39 @@
+---
+title: query_group_by_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../classes/querymemorydescriptor", "GpuSharedMemoryContext": "../classes/gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+std::tuple<llvm::Function *, llvm::CallInst *> query_group_by_template(
+    llvm::Module *mod,
+    const bool hoist_literals,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const ExecutorDeviceType device_type,
+    const bool check_scan_limit,
+    const GpuSharedMemoryContext &gpu_smem_context
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../classes/querymemorydescriptor", "GpuSharedMemoryContext": "../classes/gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+std::tuple<llvm::Function *, llvm::CallInst *> query_group_by_template(
+    llvm::Module *,
+    const bool hoist_literals,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const ExecutorDeviceType,
+    const bool check_scan_limit,
+    const GpuSharedMemoryContext &gpu_smem_context
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,14 @@
+---
+title: shared::bswap_impl
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class T, std::size_t... N>
+T shared::bswap_impl(
+    T i,
+    std::index_sequence<N...>
+)
+```
+</CodeBlock>

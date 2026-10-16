@@ -1,0 +1,71 @@
+---
+title: Parser::ValuesList
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public)
+
+---
+
+## Constructors
+
+### ValuesList [#valueslist]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ValuesList": "valueslist"}}>
+```cpp showLineNumbers={false}
+Parser::ValuesList::ValuesList() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ValuesList": "valueslist", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::ValuesList::ValuesList(
+    std::list<Expr *> *values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### push_back [#pushback]
+
+<CodeBlock links={{"ValuesList": "valueslist", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Parser::ValuesList::push_back(
+    Expr *value
+)
+```
+</CodeBlock>
+
+### get_value_list [#getvaluelist]
+
+<CodeBlock links={{"ValuesList": "valueslist", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<Expr>> & Parser::ValuesList::get_value_list() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `value_list` | `std::list< std::unique_ptr< Expr > >` | |

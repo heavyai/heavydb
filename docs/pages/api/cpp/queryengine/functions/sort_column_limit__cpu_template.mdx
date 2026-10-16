@@ -1,0 +1,113 @@
+---
+title: sort_column_limit__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t sort_column_limit__cpu_template(
+    const Column<T> &input,
+    const int32_t limit,
+    const bool sort_ascending,
+    const bool nulls_last,
+    Column<T> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sort_column_limit__cpu_template(
+    const Column<int8_t> &input,
+    const int32_t limit,
+    const bool sort_ascending,
+    const bool nulls_last,
+    Column<int8_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sort_column_limit__cpu_template(
+    const Column<int16_t> &input,
+    const int32_t limit,
+    const bool sort_ascending,
+    const bool nulls_last,
+    Column<int16_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sort_column_limit__cpu_template(
+    const Column<int32_t> &input,
+    const int32_t limit,
+    const bool sort_ascending,
+    const bool nulls_last,
+    Column<int32_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sort_column_limit__cpu_template(
+    const Column<int64_t> &input,
+    const int32_t limit,
+    const bool sort_ascending,
+    const bool nulls_last,
+    Column<int64_t> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (6)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sort_column_limit__cpu_template(
+    const Column<float> &input,
+    const int32_t limit,
+    const bool sort_ascending,
+    const bool nulls_last,
+    Column<float> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (7)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t sort_column_limit__cpu_template(
+    const Column<double> &input,
+    const int32_t limit,
+    const bool sort_ascending,
+    const bool nulls_last,
+    Column<double> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

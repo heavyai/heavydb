@@ -1,4 +1,0 @@
-sphinx>=7.1
-nvidia-sphinx-theme==0.0.9.post1
-sphinxcontrib-plantuml>=0.18
-breathe>=4.35.0

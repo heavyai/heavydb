@@ -1,0 +1,68 @@
+---
+title: Fragmenter_Namespace::StringChunkConverter
+description: ""
+---
+
+**Inherits from:** `Fragmenter_Namespace::ChunkToInsertDataConverter` (public)
+
+---
+
+## Constructors
+
+### StringChunkConverter [#stringchunkconverter]
+
+<CodeBlock links={{"StringChunkConverter": "stringchunkconverter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::StringChunkConverter::StringChunkConverter(
+    size_t num_rows,
+    const Chunk_NS::Chunk *chunk
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~StringChunkConverter
+
+<CodeBlock links={{"StringChunkConverter": "stringchunkconverter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::StringChunkConverter::~StringChunkConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"StringChunkConverter": "stringchunkconverter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::StringChunkConverter::convertToColumnarFormat(
+    size_t row,
+    size_t indexInFragment
+) override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"StringChunkConverter": "stringchunkconverter", "InsertData": "insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::StringChunkConverter::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `chunk_` | `const Chunk_NS::Chunk *` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `column_data_` | `std::unique_ptr< std::vector< std::string > >` | |
+| `data_buffer_addr_` | `const int8_t *` | |
+| `index_buffer_addr_` | `const StringOffsetT *` | |

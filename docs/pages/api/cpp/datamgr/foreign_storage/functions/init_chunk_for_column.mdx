@@ -1,0 +1,15 @@
+---
+title: foreign_storage::init_chunk_for_column
+description: ""
+---
+
+<CodeBlock links={{"ChunkMetadata": "../../structs/chunkmetadata", "AbstractBuffer": "../../classes/abstractbuffer", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::init_chunk_for_column(
+    const ChunkKey &chunk_key,
+    const std::map<ChunkKey, std::shared_ptr<ChunkMetadata>> &chunk_metadata_map,
+    const std::map<ChunkKey, AbstractBuffer *> &buffers,
+    Chunk_NS::Chunk &chunk
+)
+```
+</CodeBlock>

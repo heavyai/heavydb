@@ -1,0 +1,33 @@
+---
+title: ThreadInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ThreadInfo.h>
+```
+
+---
+
+## Constructors
+
+### ThreadInfo [#threadinfo]
+
+<CodeBlock links={{"ThreadInfo": "threadinfo"}}>
+```cpp showLineNumbers={false}
+ThreadInfo::ThreadInfo(
+    const int64_t max_thread_count,
+    const int64_t num_elems,
+    const int64_t target_elems_per_thread
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `num_threads` | `int64_t` | |
+| `num_elems_per_thread` | `int64_t` | |

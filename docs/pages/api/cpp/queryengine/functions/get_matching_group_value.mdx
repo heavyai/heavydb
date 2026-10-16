@@ -1,0 +1,73 @@
+---
+title: get_matching_group_value
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+__device__ int64_t * get_matching_group_value(
+    int64_t *groups_buffer,
+    const uint32_t h,
+    const T *key,
+    const uint32_t key_count,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ int64_t * get_matching_group_value(
+    int64_t *groups_buffer,
+    const uint32_t h,
+    const int64_t *key,
+    const uint32_t key_count,
+    const uint32_t key_width,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+ALWAYS_INLINE int64_t * get_matching_group_value(
+    int64_t *groups_buffer,
+    const uint32_t h,
+    const T *key,
+    const uint32_t key_count,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE int64_t * get_matching_group_value(
+    int64_t *groups_buffer,
+    const uint32_t h,
+    const int64_t *key,
+    const uint32_t key_count,
+    const uint32_t key_width,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

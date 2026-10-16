@@ -1,0 +1,87 @@
+---
+title: InputDescriptor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <InputDescriptors.h>
+```
+
+---
+
+## Constructors
+
+### InputDescriptor [#inputdescriptor]
+
+<CodeBlock links={{"InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+InputDescriptor::InputDescriptor(
+    int32_t db_id,
+    int32_t table_id,
+    int32_t nest_level
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+bool InputDescriptor::operator==(
+    const InputDescriptor &that
+) const
+```
+</CodeBlock>
+
+### getTableKey [#gettablekey]
+
+<CodeBlock links={{"InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+const shared::TableKey & InputDescriptor::getTableKey() const
+```
+</CodeBlock>
+
+### getNestLevel [#getnestlevel]
+
+<CodeBlock links={{"InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+int32_t InputDescriptor::getNestLevel() const
+```
+</CodeBlock>
+
+### getSourceType [#getsourcetype]
+
+<CodeBlock links={{"InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+InputSourceType InputDescriptor::getSourceType() const
+```
+</CodeBlock>
+
+### hash [#hash]
+
+<CodeBlock links={{"InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+size_t InputDescriptor::hash() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"InputDescriptor": "inputdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string InputDescriptor::toString() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_key_` | `shared::TableKey` | |
+| `nest_level_` | `int32_t` | |

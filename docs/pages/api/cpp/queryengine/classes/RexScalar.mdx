@@ -1,0 +1,98 @@
+---
+title: RexScalar
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `Rex` (public)
+
+---
+
+## Methods
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexScalar": "rexscalar", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+virtual size_t RexScalar::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexScalar": "rexscalar", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+size_t RexScalar::toHash() const
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexScalar": "rexscalar", "Visitor": "relalgdagnode#visitor", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::accept(
+    Visitor &v,
+    std::string name
+) const
+```
+</CodeBlock>
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexScalar": "rexscalar", "Visitor": "relalgdagnode#visitor", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::acceptChildren(
+    Visitor &v
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexScalar": "rexscalar", "RelRexToStringConfig": "../structs/relrextostringconfig", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+virtual std::string RelAlgDagNode::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexScalar": "rexscalar", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexScalar": "rexscalar", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexScalar": "rexscalar", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

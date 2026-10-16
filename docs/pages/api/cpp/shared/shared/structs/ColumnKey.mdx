@@ -1,0 +1,94 @@
+---
+title: shared::ColumnKey
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <shared/DbObjectKeys.h>
+```
+
+---
+
+## Constructors
+
+### ColumnKey [#columnkey]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ColumnKey": "columnkey"}}>
+```cpp showLineNumbers={false}
+shared::ColumnKey::ColumnKey(
+    int32_t db_id,
+    int32_t table_id,
+    int32_t column_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"ColumnKey": "columnkey", "TableKey": "tablekey"}}>
+```cpp showLineNumbers={false}
+shared::ColumnKey::ColumnKey(
+    const TableKey &table_key,
+    int32_t column_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"ColumnKey": "columnkey"}}>
+```cpp showLineNumbers={false}
+bool shared::ColumnKey::operator==(
+    const ColumnKey &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"ColumnKey": "columnkey"}}>
+```cpp showLineNumbers={false}
+bool shared::ColumnKey::operator!=(
+    const ColumnKey &other
+) const
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"ColumnKey": "columnkey"}}>
+```cpp showLineNumbers={false}
+bool shared::ColumnKey::operator<(
+    const ColumnKey &other
+) const
+```
+</CodeBlock>
+
+### hash [#hash]
+
+<CodeBlock links={{"ColumnKey": "columnkey"}}>
+```cpp showLineNumbers={false}
+size_t shared::ColumnKey::hash() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `db_id` | `int32_t` | |
+| `table_id` | `int32_t` | |
+| `column_id` | `int32_t` | |

@@ -1,0 +1,34 @@
+---
+title: foreign_storage::AbstractRowGroupIntervalTracker
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetImporter.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~AbstractRowGroupIntervalTracker
+
+<CodeBlock links={{"AbstractRowGroupIntervalTracker": "abstractrowgroupintervaltracker"}}>
+```cpp showLineNumbers={false}
+virtual foreign_storage::AbstractRowGroupIntervalTracker::~AbstractRowGroupIntervalTracker() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNextRowGroupInterval [#getnextrowgroupinterval]
+
+<CodeBlock links={{"AbstractRowGroupIntervalTracker": "abstractrowgroupintervaltracker", "RowGroupInterval": "../structs/rowgroupinterval"}}>
+```cpp showLineNumbers={false}
+virtual std::optional<RowGroupInterval> foreign_storage::AbstractRowGroupIntervalTracker::getNextRowGroupInterval()
+```
+</CodeBlock>

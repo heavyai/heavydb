@@ -1,0 +1,623 @@
+---
+title: WindowFunctionContext
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <WindowContext.h>
+```
+
+---
+
+## Constructors
+
+### WindowFunctionContext [#windowfunctioncontext]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+WindowFunctionContext::WindowFunctionContext(
+    const Analyzer::WindowFunction *window_func,
+    const size_t elem_count,
+    const ExecutorDeviceType device_type,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    Data_Namespace::DataMgr *data_mgr,
+    DeviceAllocator *device_allocator,
+    const int device_id,
+    size_t aggregation_tree_fan_out = g_window_function_aggregation_tree_fanout
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext", "HashJoin": "hashjoin", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+WindowFunctionContext::WindowFunctionContext(
+    const Analyzer::WindowFunction *window_func,
+    QueryPlanHash cache_key,
+    std::shared_ptr<HashJoin> hash_table,
+    const size_t elem_count,
+    const ExecutorDeviceType device_type,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    Data_Namespace::DataMgr *data_mgr,
+    DeviceAllocator *device_allocator,
+    const int device_id,
+    size_t aggregation_tree_fan_out = g_window_function_aggregation_tree_fanout
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+WindowFunctionContext::WindowFunctionContext(
+    const WindowFunctionContext &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+WindowFunctionContext & WindowFunctionContext::operator=(
+    const WindowFunctionContext &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### addOrderColumn [#addordercolumn]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::addOrderColumn(
+    const int8_t *column,
+    const SQLTypeInfo &ti,
+    const std::vector<std::shared_ptr<Chunk_NS::Chunk>> &chunks_owner,
+    ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+### setSortedPartitionCacheKey [#setsortedpartitioncachekey]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::setSortedPartitionCacheKey(
+    QueryPlanHash cache_key
+)
+```
+</CodeBlock>
+
+### addColumnBufferForWindowFunctionExpression [#addcolumnbufferforwindowfunctionexpression]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::addColumnBufferForWindowFunctionExpression(
+    const int8_t *column,
+    const std::vector<std::shared_ptr<Chunk_NS::Chunk>> &chunks_owner,
+    ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+### createComparator [#createcomparator]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+std::vector<WindowFunctionContext::Comparator> WindowFunctionContext::createComparator(
+    size_t partition_idx
+)
+```
+</CodeBlock>
+
+### compute [#compute]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext", "AggregateTreeForWindowFraming": "../windowfunctionctx/structs/aggregatetreeforwindowframing"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::compute(
+    std::unordered_map<QueryPlanHash, size_t> &sorted_partition_key_ref_count_map,
+    std::unordered_map<QueryPlanHash, int8_t *> &sorted_partition_cache,
+    std::unordered_map<QueryPlanHash, WindowFunctionCtx::AggregateTreeForWindowFraming> &aggregate_tree_map
+)
+```
+</CodeBlock>
+
+### getWindowFunction [#getwindowfunction]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const Analyzer::WindowFunction * WindowFunctionContext::getWindowFunction() const
+```
+</CodeBlock>
+
+### output [#output]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int8_t * WindowFunctionContext::output() const
+```
+</CodeBlock>
+
+### sortedPartition [#sortedpartition]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int64_t * WindowFunctionContext::sortedPartition() const
+```
+</CodeBlock>
+
+### aggregateState [#aggregatestate]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int64_t * WindowFunctionContext::aggregateState() const
+```
+</CodeBlock>
+
+### aggregateStateCount [#aggregatestatecount]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int64_t * WindowFunctionContext::aggregateStateCount() const
+```
+</CodeBlock>
+
+### aggregateStatePendingOutputs [#aggregatestatependingoutputs]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+int64_t WindowFunctionContext::aggregateStatePendingOutputs() const
+```
+</CodeBlock>
+
+### partitionStartOffset [#partitionstartoffset]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int64_t * WindowFunctionContext::partitionStartOffset() const
+```
+</CodeBlock>
+
+### partitionNumCountBuf [#partitionnumcountbuf]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int64_t * WindowFunctionContext::partitionNumCountBuf() const
+```
+</CodeBlock>
+
+### getColumnBufferForWindowFunctionExpressions [#getcolumnbufferforwindowfunctionexpressions]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const std::vector<const int8_t *> & WindowFunctionContext::getColumnBufferForWindowFunctionExpressions() const
+```
+</CodeBlock>
+
+### getOrderKeyColumnBuffers [#getorderkeycolumnbuffers]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const std::vector<const int8_t *> & WindowFunctionContext::getOrderKeyColumnBuffers() const
+```
+</CodeBlock>
+
+### getOrderKeyColumnBufferTypes [#getorderkeycolumnbuffertypes]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const std::vector<SQLTypeInfo> & WindowFunctionContext::getOrderKeyColumnBufferTypes() const
+```
+</CodeBlock>
+
+### getAggregationTreesForIntegerTypeWindowExpr [#getaggregationtreesforintegertypewindowexpr]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+int64_t ** WindowFunctionContext::getAggregationTreesForIntegerTypeWindowExpr() const
+```
+</CodeBlock>
+
+### getAggregationTreesForDoubleTypeWindowExpr [#getaggregationtreesfordoubletypewindowexpr]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+double ** WindowFunctionContext::getAggregationTreesForDoubleTypeWindowExpr() const
+```
+</CodeBlock>
+
+### getDerivedAggregationTreesForIntegerTypeWindowExpr [#getderivedaggregationtreesforintegertypewindowexpr]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext", "SumAndCountPair": "../structs/sumandcountpair"}}>
+```cpp showLineNumbers={false}
+SumAndCountPair<int64_t> ** WindowFunctionContext::getDerivedAggregationTreesForIntegerTypeWindowExpr() const
+```
+</CodeBlock>
+
+### getDerivedAggregationTreesForDoubleTypeWindowExpr [#getderivedaggregationtreesfordoubletypewindowexpr]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext", "SumAndCountPair": "../structs/sumandcountpair"}}>
+```cpp showLineNumbers={false}
+SumAndCountPair<double> ** WindowFunctionContext::getDerivedAggregationTreesForDoubleTypeWindowExpr() const
+```
+</CodeBlock>
+
+### getAggregateTreeDepth [#getaggregatetreedepth]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const size_t * WindowFunctionContext::getAggregateTreeDepth() const
+```
+</CodeBlock>
+
+### getAggregateTreeLeafStartOffset [#getaggregatetreeleafstartoffset]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const size_t * WindowFunctionContext::getAggregateTreeLeafStartOffset() const
+```
+</CodeBlock>
+
+### getAggregateTreeFanout [#getaggregatetreefanout]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+size_t WindowFunctionContext::getAggregateTreeFanout() const
+```
+</CodeBlock>
+
+### getNullValueStartPos [#getnullvaluestartpos]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int64_t * WindowFunctionContext::getNullValueStartPos() const
+```
+</CodeBlock>
+
+### getNullValueEndPos [#getnullvalueendpos]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int64_t * WindowFunctionContext::getNullValueEndPos() const
+```
+</CodeBlock>
+
+### getPartitionStartBitmapBuf [#getpartitionstartbitmapbuf]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int8_t * WindowFunctionContext::getPartitionStartBitmapBuf(
+    ExecutorDeviceType const dt
+) const
+```
+</CodeBlock>
+
+### setPartitionStartBitmapSize [#setpartitionstartbitmapsize]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::setPartitionStartBitmapSize(
+    size_t sz
+)
+```
+</CodeBlock>
+
+### partitionStartBitmapSize [#partitionstartbitmapsize]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+size_t WindowFunctionContext::partitionStartBitmapSize() const
+```
+</CodeBlock>
+
+### getPartitionEndBitmapBuf [#getpartitionendbitmapbuf]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int8_t * WindowFunctionContext::getPartitionEndBitmapBuf(
+    ExecutorDeviceType const dt
+) const
+```
+</CodeBlock>
+
+### setPartitionEndBitmapSize [#setpartitionendbitmapsize]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::setPartitionEndBitmapSize(
+    size_t sz
+)
+```
+</CodeBlock>
+
+### elementCount [#elementcount]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+size_t WindowFunctionContext::elementCount() const
+```
+</CodeBlock>
+
+### getPartitionBuf [#getpartitionbuf]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int8_t * WindowFunctionContext::getPartitionBuf(
+    ExecutorDeviceType const dt
+) const
+```
+</CodeBlock>
+
+### getPayloadBuf [#getpayloadbuf]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int32_t * WindowFunctionContext::getPayloadBuf(
+    ExecutorDeviceType const dt
+) const
+```
+</CodeBlock>
+
+### getOffsetBuf [#getoffsetbuf]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int32_t * WindowFunctionContext::getOffsetBuf(
+    ExecutorDeviceType const dt
+) const
+```
+</CodeBlock>
+
+### getCountBuf [#getcountbuf]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const int32_t * WindowFunctionContext::getCountBuf(
+    ExecutorDeviceType const dt
+) const
+```
+</CodeBlock>
+
+### getNumWindowPartition [#getnumwindowpartition]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+size_t WindowFunctionContext::getNumWindowPartition() const
+```
+</CodeBlock>
+
+### needsToBuildAggregateTree [#needstobuildaggregatetree]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+const bool WindowFunctionContext::needsToBuildAggregateTree() const
+```
+</CodeBlock>
+
+### makeComparator [#makecomparator]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+WindowFunctionContext::Comparator WindowFunctionContext::makeComparator(
+    const Analyzer::ColumnVar *col_var,
+    const int8_t *partition_values,
+    const int32_t *partition_indices,
+    const bool asc_ordering,
+    const bool nulls_first
+)
+```
+</CodeBlock>
+
+### computePartitionBuffer [#computepartitionbuffer]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::computePartitionBuffer(
+    const size_t partition_idx,
+    int64_t *output_for_partition_buff,
+    const Analyzer::WindowFunction *window_func
+)
+```
+</CodeBlock>
+
+### sortPartition [#sortpartition]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::sortPartition(
+    const size_t partition_idx,
+    int64_t *output_for_partition_buff
+)
+```
+</CodeBlock>
+
+### computeNullRangeOfSortedPartition [#computenullrangeofsortedpartition]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::computeNullRangeOfSortedPartition(
+    const SQLTypeInfo &order_col_ti,
+    size_t partition_idx,
+    const int32_t *original_col_idx_buf,
+    const int64_t *ordered_col_idx_buf
+)
+```
+</CodeBlock>
+
+### buildAggregationTreeForPartition [#buildaggregationtreeforpartition]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::buildAggregationTreeForPartition(
+    SqlWindowFunctionKind agg_type,
+    size_t partition_idx,
+    size_t partition_size,
+    const int32_t *original_rowid_buf,
+    const int64_t *ordered_rowid_buf,
+    const SQLTypeInfo &input_col_ti
+)
+```
+</CodeBlock>
+
+### fillPartitionStart [#fillpartitionstart]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::fillPartitionStart()
+```
+</CodeBlock>
+
+### fillPartitionEnd [#fillpartitionend]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::fillPartitionEnd()
+```
+</CodeBlock>
+
+### resizeStorageForWindowFraming [#resizestorageforwindowframing]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::resizeStorageForWindowFraming(
+    bool const for_reuse = false
+)
+```
+</CodeBlock>
+
+### computeAggregateTreeCacheKey [#computeaggregatetreecachekey]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+QueryPlanHash const WindowFunctionContext::computeAggregateTreeCacheKey() const
+```
+</CodeBlock>
+
+### prepareEmptyPartition [#prepareemptypartition]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::prepareEmptyPartition(
+    bool for_gpu
+)
+```
+</CodeBlock>
+
+### preparePartitionStartOffsetBufs [#preparepartitionstartoffsetbufs]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::preparePartitionStartOffsetBufs(
+    bool for_gpu,
+    size_t partition_count
+)
+```
+</CodeBlock>
+
+### prepareAggregateTreeBufs [#prepareaggregatetreebufs]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionContext::prepareAggregateTreeBufs(
+    bool for_gpu,
+    size_t const partition_count
+)
+```
+</CodeBlock>
+
+### getDeviceType [#getdevicetype]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+ExecutorDeviceType WindowFunctionContext::getDeviceType() const
+```
+</CodeBlock>
+
+### forGpuExecution [#forgpuexecution]
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+bool WindowFunctionContext::forGpuExecution() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Comparator` | `std::function< WindowFunctionContext::WindowComparatorResult(const int64_t lhs, const int64_t rhs)>` |
+
+### WindowComparatorResult
+
+| Name | Value | Description |
+|---|---|---|
+| `LT` | | |
+| `EQ` | | |
+| `GT` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `NUM_EXECUTION_DEVICES` <Badge intent="note" minimal>static</Badge> | `const int` | |
+| `window_func_` | `const Analyzer::WindowFunction *` | |
+| `partition_cache_key_` | `QueryPlanHash` | |
+| `sorted_partition_cache_key_` | `QueryPlanHash` | |
+| `elem_count_` | `size_t` | |
+| `partitions_` | `std::shared_ptr< HashJoin >` | |
+| `row_set_mem_owner_` | `std::shared_ptr< RowSetMemoryOwner >` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `device_type_` | `const ExecutorDeviceType` | |
+| `device_id_` | `const int` | |
+| `device_allocator_` | `DeviceAllocator *` | |
+| `column_chunk_owned_` | `WindowFunctionCtx::ColumnChunkOwned` | |
+| `cpu_exec_ctx_` | `WindowFunctionCtx::CPUExecutionCtx` | |
+| `gpu_exec_ctx_` | `WindowFunctionCtx::GPUExecutionCtx` | |
+| `aggregate_trees_` | `WindowFunctionCtx::AggregateTreeForWindowFraming` | |
+| `aggregate_trees_fan_out_` | `size_t` | |
+| `aggregate_state_` | `AggregateState` | |
+| `hoisted_output_addr` | `llvm::Value *` | |
+| `output_addr_lock_` | `std::mutex` | |
+
+---
+
+## Inner classes
+
+### AggregateState
+
+<CodeBlock links={{"WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+struct WindowFunctionContext::AggregateState
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `val` | `int64_t` | |
+| `count` | `int64_t` | |
+| `outputs` | `std::vector< void * >` | |
+| `row_number` | `llvm::Value *` | |

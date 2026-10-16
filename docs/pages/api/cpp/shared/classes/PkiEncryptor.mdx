@@ -1,0 +1,130 @@
+---
+title: PkiEncryptor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Encryption.h>
+```
+
+---
+
+## Methods
+
+### getCertificatePath [#getcertificatepath]
+
+<CodeBlock links={{"PkiEncryptor": "pkiencryptor"}}>
+```cpp showLineNumbers={false}
+std::string PkiEncryptor::getCertificatePath()
+```
+</CodeBlock>
+
+### publicKeyEncryptSegment [#publickeyencryptsegment]
+
+<CodeBlock links={{"PkiEncryptor": "pkiencryptor"}}>
+```cpp showLineNumbers={false}
+std::string PkiEncryptor::publicKeyEncryptSegment(
+    const std::unique_ptr<EVP_PKEY_CTX, std::function<void(EVP_PKEY_CTX *)>> &ctx,
+    const std::string &plain_text
+)
+```
+</CodeBlock>
+
+### privateKeyDecryptSegment [#privatekeydecryptsegment]
+
+<CodeBlock links={{"PkiEncryptor": "pkiencryptor"}}>
+```cpp showLineNumbers={false}
+std::string PkiEncryptor::privateKeyDecryptSegment(
+    const std::unique_ptr<EVP_PKEY_CTX, std::function<void(EVP_PKEY_CTX *)>> &ctx,
+    const std::string &cipher_text
+)
+```
+</CodeBlock>
+
+### deserializeEncryptedSegments [#deserializeencryptedsegments]
+
+<CodeBlock links={{"PkiEncryptor": "pkiencryptor"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> PkiEncryptor::deserializeEncryptedSegments(
+    const std::string &serialized_cipher_text_segments
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generateEncryptionCertificateIfNotExists [#generateencryptioncertificateifnotexists]
+
+<CodeBlock links={{"PkiEncryptor": "pkiencryptor"}}>
+```cpp showLineNumbers={false}
+void PkiEncryptor::generateEncryptionCertificateIfNotExists()
+```
+</CodeBlock>
+
+Generates a new encryption certificate at the set key store path, if one does not already exist.
+
+Generated certificate file is only readable and writable by the owner of the server process.
+
+### publicKeyEncrypt [#publickeyencrypt]
+
+<CodeBlock links={{"PkiEncryptor": "pkiencryptor"}}>
+```cpp showLineNumbers={false}
+std::string PkiEncryptor::publicKeyEncrypt(
+    const std::string &plain_text
+)
+```
+</CodeBlock>
+
+Extracts the public key from encryption certificate at the set key store path and encrypts provided plain text using this key.
+
+**Returns:** A serialized series of cipher text segments resulting from encryption
+
+**Parameters**
+
+<ParamField path="plain_text" type="const std::string &">
+- Plain text that will be encrypted using public key from encryption certificate, length is not bound.
+</ParamField>
+
+### privateKeyDecrypt [#privatekeydecrypt]
+
+<CodeBlock links={{"PkiEncryptor": "pkiencryptor"}}>
+```cpp showLineNumbers={false}
+std::string PkiEncryptor::privateKeyDecrypt(
+    const std::string &serialized_cipher_text_segments
+)
+```
+</CodeBlock>
+
+Extracts the private key from encryption certificate at the set key store path and decrypts provided cipher text using this key.
+
+**Returns:** plain text resulting from decryption
+
+### setKeyStorePath [#setkeystorepath]
+
+<CodeBlock links={{"PkiEncryptor": "pkiencryptor"}}>
+```cpp showLineNumbers={false}
+static void PkiEncryptor::setKeyStorePath(
+    const std::string &key_store_path
+)
+```
+</CodeBlock>
+
+Sets the key store path that will contain the certificate used for encryption and decryption.
+
+**Parameters**
+
+<ParamField path="key_store_path" type="const std::string &">
+- Path to key store
+</ParamField>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `MAX_PLAIN_TEXT_SEGMENT_WIDTH` <Badge intent="note" minimal>static</Badge> | `const size_t` | |
+| `CIPHER_TEXT_SEGMENT_WIDTH` <Badge intent="note" minimal>static</Badge> | `const size_t` | |
+| `key_store_path_` <Badge intent="note" minimal>static</Badge> | `std::string` | |

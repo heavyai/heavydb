@@ -1,0 +1,23 @@
+---
+title: import_export::import_thread_shapefile
+description: ""
+---
+
+<CodeBlock links={{"Importer": "../classes/importer", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+static ImportStatus import_export::import_thread_shapefile(
+    int thread_id,
+    Importer *importer,
+    OGRCoordinateTransformation *coordinate_transformation,
+    const FeaturePtrVector &features,
+    size_t firstFeature,
+    size_t numFeatures,
+    const FieldNameToIndexMapType &fieldNameToIndexMap,
+    const ColumnNameToSourceNameMapType &columnNameToSourceNameMap,
+    const Catalog_Namespace::SessionInfo *session_info,
+    Executor *executor,
+    const MetadataColumnInfos &metadata_column_infos,
+    const std::optional<shared::LonLatBoundingBox> &bounding_box_clip
+)
+```
+</CodeBlock>

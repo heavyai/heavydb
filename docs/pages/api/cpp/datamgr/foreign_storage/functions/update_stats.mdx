@@ -1,0 +1,17 @@
+---
+title: foreign_storage::update_stats
+description: "Updates the statistics metadata encapsulated in the encoder given new data in a data block."
+---
+
+<CodeBlock links={{"Encoder": "../../classes/encoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::update_stats(
+    Encoder *encoder,
+    const SQLTypeInfo &column_type,
+    DataBlockPtr data_block,
+    const size_t row_count
+)
+```
+</CodeBlock>
+
+Updates the statistics metadata encapsulated in the encoder given new data in a data block.

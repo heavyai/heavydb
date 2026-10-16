@@ -1,0 +1,80 @@
+---
+title: "shared::operator<<"
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"StringDictKey": "../structs/stringdictkey"}}>
+```cpp showLineNumbers={false}
+std::ostream & shared::operator<<(
+    std::ostream &os,
+    const StringDictKey &dict_key
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableKey": "../structs/tablekey"}}>
+```cpp showLineNumbers={false}
+std::ostream & shared::operator<<(
+    std::ostream &os,
+    const TableKey &table_key
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ColumnKey": "../structs/columnkey"}}>
+```cpp showLineNumbers={false}
+std::ostream & shared::operator<<(
+    std::ostream &os,
+    const ColumnKey &column_key
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"FullyQualifiedTableName": "../structs/fullyqualifiedtablename"}}>
+```cpp showLineNumbers={false}
+std::ostream & shared::operator<<(
+    std::ostream &os,
+    const FullyQualifiedTableName &table_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"FileContentsEscaper": "../structs/filecontentsescaper"}}>
+```cpp showLineNumbers={false}
+std::ostream & shared::operator<<(
+    std::ostream &os,
+    FileContentsEscaper const &fce
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"PrintContainer": "../structs/printcontainer"}}>
+```cpp showLineNumbers={false}
+template <typename OSTREAM, typename CONTAINER>
+OSTREAM & shared::operator<<(
+    OSTREAM &os,
+    PrintContainer<CONTAINER> pc
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

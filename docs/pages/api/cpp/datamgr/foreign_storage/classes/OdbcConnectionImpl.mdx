@@ -1,0 +1,190 @@
+---
+title: foreign_storage::OdbcConnectionImpl
+description: ""
+---
+
+**Inherits from:** `foreign_storage::OdbcConnection` (public)
+
+---
+
+## Constructors
+
+### OdbcConnectionImpl [#odbcconnectionimpl]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl", "OdbcConnectionInfo": "../structs/odbcconnectioninfo"}}>
+```cpp showLineNumbers={false}
+foreign_storage::OdbcConnectionImpl::OdbcConnectionImpl(
+    OdbcConnectionInfo connection_info,
+    const UserMapping *user_mapping
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~OdbcConnectionImpl
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl"}}>
+```cpp showLineNumbers={false}
+foreign_storage::OdbcConnectionImpl::~OdbcConnectionImpl() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getRecordCnt [#getrecordcnt]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::OdbcConnectionImpl::getRecordCnt(
+    const std::string &sql_select
+) override
+```
+</CodeBlock>
+
+### getRemoteColumnDetailsValidateRemoteMetaData [#getremotecolumndetailsvalidateremotemetadata]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl", "RemoteColumnDescription": "../structs/remotecolumndescription"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcConnectionImpl::getRemoteColumnDetailsValidateRemoteMetaData(
+    std::string sql_command,
+    std::list<ColumnDescriptor const *> &catalog_sqltypes,
+    std::vector<foreign_storage::RemoteColumnDescription> &remote_column_details
+) override
+```
+</CodeBlock>
+
+### runSelectCmd [#runselectcmd]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcConnectionImpl::runSelectCmd(
+    const OdbcSelectDescriptor &select_desc,
+    const size_t buffer_byte_size,
+    ResultSetProcessor result_set_processor
+) override
+```
+</CodeBlock>
+
+### runDataPreviewMultiColumnSelectCmd [#rundatapreviewmulticolumnselectcmd]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl", "ColumnRemoteData": "../structs/columnremotedata"}}>
+```cpp showLineNumbers={false}
+std::vector<ColumnRemoteData> foreign_storage::OdbcConnectionImpl::runDataPreviewMultiColumnSelectCmd(
+    const std::string &select_command,
+    size_t row_count
+) override
+```
+</CodeBlock>
+
+### runSqlAllowSuccessWithInfo [#runsqlallowsuccesswithinfo]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcConnectionImpl::runSqlAllowSuccessWithInfo(
+    const std::string &sql
+) override
+```
+</CodeBlock>
+
+### runSql [#runsql]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcConnectionImpl::runSql(
+    const std::string &sql
+) override
+```
+</CodeBlock>
+
+### getChunkNullCount [#getchunknullcount]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::OdbcConnectionImpl::getChunkNullCount(
+    const OdbcSelectDescriptor &select_desc
+) override
+```
+</CodeBlock>
+
+### validateDbmsCompatible [#validatedbmscompatible]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OdbcConnectionImpl::validateDbmsCompatible()
+```
+</CodeBlock>
+
+### getStringWidthForColumn [#getstringwidthforcolumn]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::OdbcConnectionImpl::getStringWidthForColumn(
+    SQLSMALLINT column_index,
+    const std::string &select_command,
+    const std::string &col_name,
+    size_t row_count,
+    int64_t row_offset = 0
+)
+```
+</CodeBlock>
+
+### getColumnWidthAndBatchSize [#getcolumnwidthandbatchsize]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> foreign_storage::OdbcConnectionImpl::getColumnWidthAndBatchSize(
+    const OdbcSelectDescriptor &select_desc,
+    const int64_t buffer_byte_size,
+    const size_t max_buffer_size
+)
+```
+</CodeBlock>
+
+### getMaxStringLength [#getmaxstringlength]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl", "OdbcSelectDescriptor": "../structs/odbcselectdescriptor"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::OdbcConnectionImpl::getMaxStringLength(
+    const OdbcSelectDescriptor &select_desc
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getInstalledDrivers [#getinstalleddrivers]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl"}}>
+```cpp showLineNumbers={false}
+std::set<std::string> foreign_storage::OdbcConnectionImpl::getInstalledDrivers()
+```
+</CodeBlock>
+
+### create [#create]
+
+<CodeBlock links={{"OdbcConnectionImpl": "odbcconnectionimpl", "OdbcConnectionInfo": "../structs/odbcconnectioninfo", "OdbcConnection": "odbcconnection"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<OdbcConnection> foreign_storage::OdbcConnectionImpl::create(
+    const OdbcConnectionInfo &connection_info,
+    const UserMapping *user_mapping = nullptr
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `environment_handle_` | `OdbcEnvironmentHandle` | |
+| `db_connectionHandle_` | `OdbcDatabaseHandle` | |
+| `dbms_type_name_` | `std::string` | |
+| `dbms_type_vers_` | `std::string` | |
+| `dbms_quoted_identifier_string_` | `std::string` | |
+| `max_buffer_resize_limit_` <Badge intent="note" minimal>static</Badge> | `size_t` | |

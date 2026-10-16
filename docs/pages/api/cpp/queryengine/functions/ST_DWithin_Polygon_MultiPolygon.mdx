@@ -1,0 +1,31 @@
+---
+title: ST_DWithin_Polygon_MultiPolygon
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+EXTENSION_INLINE bool ST_DWithin_Polygon_MultiPolygon(
+    int8_t *poly_coords,
+    int64_t poly_coords_size,
+    int32_t *poly_ring_sizes,
+    int64_t poly_num_rings,
+    double *poly_bounds,
+    int64_t poly_bounds_size,
+    int8_t *mpoly_coords,
+    int64_t mpoly_coords_size,
+    int32_t *mpoly_ring_sizes,
+    int64_t mpoly_num_rings,
+    int32_t *mpoly_poly_sizes,
+    int64_t mpoly_num_polys,
+    double *mpoly_bounds,
+    int64_t mpoly_bounds_size,
+    int32_t ic1,
+    int32_t isr1,
+    int32_t ic2,
+    int32_t isr2,
+    int32_t osr,
+    double distance_within
+)
+```
+</CodeBlock>

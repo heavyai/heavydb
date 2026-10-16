@@ -1,0 +1,110 @@
+---
+title: Restriction
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Restriction.h>
+```
+
+---
+
+## Constructors
+
+### Restriction [#restriction]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"Restriction": "restriction"}}>
+```cpp showLineNumbers={false}
+Restriction::Restriction()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Restriction": "restriction"}}>
+```cpp showLineNumbers={false}
+Restriction::Restriction(
+    int32_t d,
+    int32_t t,
+    int c
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Restriction": "restriction"}}>
+```cpp showLineNumbers={false}
+Restriction::Restriction(
+    Key key
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Restriction": "restriction"}}>
+```cpp showLineNumbers={false}
+Restriction::Restriction(
+    int32_t d,
+    int32_t t,
+    int c,
+    const std::set<std::string> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Restriction": "restriction"}}>
+```cpp showLineNumbers={false}
+Restriction::Restriction(
+    Key key,
+    const std::set<std::string> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getKey [#getkey]
+
+<CodeBlock links={{"Restriction": "restriction"}}>
+```cpp showLineNumbers={false}
+Restriction::Key Restriction::getKey()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Key` | `std::tuple< int32_t, int32_t, int >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dbId` | `int32_t` | |
+| `tableId` | `int32_t` | |
+| `columnId` | `int` | |
+| `values` | `std::set< std::string >` | |
+| `deprecatedSamlColumnName` | `std::string` | |

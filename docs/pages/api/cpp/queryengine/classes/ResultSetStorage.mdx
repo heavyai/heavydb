@@ -1,0 +1,399 @@
+---
+title: ResultSetStorage
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetStorage.h>
+```
+
+---
+
+## Constructors
+
+### ResultSetStorage [#resultsetstorage]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+ResultSetStorage::ResultSetStorage(
+    const std::vector<TargetInfo> &targets,
+    const QueryMemoryDescriptor &query_mem_desc,
+    int8_t *buff,
+    const bool buff_is_provided
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### reduceEntriesNoCollisionsColWise [#reduceentriesnocollisionscolwise]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::reduceEntriesNoCollisionsColWise(
+    int8_t *this_buff,
+    const int8_t *that_buff,
+    const ResultSetStorage &that,
+    const size_t start_index,
+    const size_t end_index,
+    const std::vector<std::string> &serialized_varlen_buffer,
+    const size_t executor_id
+) const
+```
+</CodeBlock>
+
+### copyKeyColWise [#copykeycolwise]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::copyKeyColWise(
+    const size_t entry_idx,
+    int8_t *this_buff,
+    const int8_t *that_buff
+) const
+```
+</CodeBlock>
+
+### isEmptyEntry [#isemptyentry]
+
+<Tabs>
+<Tab title="Const (with buff)">
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+bool ResultSetStorage::isEmptyEntry(
+    const size_t entry_idx,
+    const int8_t *buff
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+bool ResultSetStorage::isEmptyEntry(
+    const size_t entry_idx
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### isEmptyEntryColumnar [#isemptyentrycolumnar]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+bool ResultSetStorage::isEmptyEntryColumnar(
+    const size_t entry_idx,
+    const int8_t *buff
+) const
+```
+</CodeBlock>
+
+### reduceOneEntryBaseline [#reduceoneentrybaseline]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::reduceOneEntryBaseline(
+    int8_t *this_buff,
+    const int8_t *that_buff,
+    const size_t i,
+    const size_t that_entry_count,
+    const ResultSetStorage &that
+) const
+```
+</CodeBlock>
+
+### reduceOneEntrySlotsBaseline [#reduceoneentryslotsbaseline]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::reduceOneEntrySlotsBaseline(
+    int64_t *this_entry_slots,
+    const int64_t *that_buff,
+    const size_t that_entry_idx,
+    const size_t that_entry_count,
+    const ResultSetStorage &that
+) const
+```
+</CodeBlock>
+
+### initializeBaselineValueSlots [#initializebaselinevalueslots]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::initializeBaselineValueSlots(
+    int64_t *this_entry_slots
+) const
+```
+</CodeBlock>
+
+### reduceOneSlotBaseline [#reduceoneslotbaseline]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::reduceOneSlotBaseline(
+    int64_t *this_buff,
+    const size_t this_slot,
+    const int64_t *that_buff,
+    const size_t that_entry_count,
+    const size_t that_slot,
+    const TargetInfo &target_info,
+    const size_t target_logical_idx,
+    const size_t target_slot_idx,
+    const size_t init_agg_val_idx,
+    const ResultSetStorage &that
+) const
+```
+</CodeBlock>
+
+### reduceOneSlotSingleValue [#reduceoneslotsinglevalue]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::reduceOneSlotSingleValue(
+    int8_t *this_ptr1,
+    const TargetInfo &target_info,
+    const size_t target_slot_idx,
+    const size_t init_agg_val_idx,
+    const int8_t *that_ptr1
+) const
+```
+</CodeBlock>
+
+### reduceOneSlot [#reduceoneslot]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::reduceOneSlot(
+    int8_t *this_ptr1,
+    int8_t *this_ptr2,
+    const int8_t *that_ptr1,
+    const int8_t *that_ptr2,
+    const TargetInfo &target_info,
+    const size_t target_logical_idx,
+    const size_t target_slot_idx,
+    const size_t init_agg_val_idx,
+    const ResultSetStorage &that,
+    const size_t first_slot_idx_for_target,
+    const std::vector<std::string> &serialized_varlen_buffer
+) const
+```
+</CodeBlock>
+
+### reduceOneCountDistinctSlot [#reduceonecountdistinctslot]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::reduceOneCountDistinctSlot(
+    int8_t *this_ptr1,
+    const int8_t *that_ptr1,
+    const size_t target_logical_idx,
+    const ResultSetStorage &that
+) const
+```
+</CodeBlock>
+
+### fillOneEntryRowWise [#filloneentryrowwise]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::fillOneEntryRowWise(
+    const std::vector<int64_t> &entry
+)
+```
+</CodeBlock>
+
+### fillOneEntryColWise [#filloneentrycolwise]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::fillOneEntryColWise(
+    const std::vector<int64_t> &entry
+)
+```
+</CodeBlock>
+
+### initializeRowWise [#initializerowwise]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::initializeRowWise() const
+```
+</CodeBlock>
+
+### initializeColWise [#initializecolwise]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::initializeColWise() const
+```
+</CodeBlock>
+
+### getVarlenOutputInfo [#getvarlenoutputinfo]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage", "VarlenOutputInfo": "../structs/varlenoutputinfo"}}>
+```cpp showLineNumbers={false}
+const VarlenOutputInfo * ResultSetStorage::getVarlenOutputInfo() const
+```
+</CodeBlock>
+
+### addCountDistinctSetPointerMapping [#addcountdistinctsetpointermapping]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::addCountDistinctSetPointerMapping(
+    const int64_t remote_ptr,
+    const int64_t ptr
+)
+```
+</CodeBlock>
+
+### mappedPtr [#mappedptr]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+int64_t ResultSetStorage::mappedPtr(
+    const int64_t
+) const
+```
+</CodeBlock>
+
+### binSearchRowCount [#binsearchrowcount]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+size_t ResultSetStorage::binSearchRowCount() const
+```
+</CodeBlock>
+
+### reduce [#reduce]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::reduce(
+    const ResultSetStorage &that,
+    const std::vector<std::string> &serialized_varlen_buffer,
+    const ReductionCode &reduction_code,
+    const size_t executor_id
+) const
+```
+</CodeBlock>
+
+### rewriteAggregateBufferOffsets [#rewriteaggregatebufferoffsets]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::rewriteAggregateBufferOffsets(
+    const std::vector<std::string> &serialized_varlen_buffer
+) const
+```
+</CodeBlock>
+
+### getUnderlyingBuffer [#getunderlyingbuffer]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+int8_t * ResultSetStorage::getUnderlyingBuffer() const
+```
+</CodeBlock>
+
+### getEntryCount [#getentrycount]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+size_t ResultSetStorage::getEntryCount() const
+```
+</CodeBlock>
+
+### moveEntriesToBuffer [#moveentriestobuffer]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+template <class KeyType>
+void ResultSetStorage::moveEntriesToBuffer(
+    int8_t *new_buff,
+    const size_t new_entry_count
+) const
+```
+</CodeBlock>
+
+### moveOneEntryToBuffer [#moveoneentrytobuffer]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+template <class KeyType>
+void ResultSetStorage::moveOneEntryToBuffer(
+    const size_t entry_index,
+    int64_t *new_buff_i64,
+    const size_t new_entry_count,
+    const size_t key_count,
+    const size_t row_qw_count,
+    const int64_t *src_buff,
+    const size_t key_byte_width
+) const
+```
+</CodeBlock>
+
+### updateEntryCount [#updateentrycount]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::updateEntryCount(
+    const size_t new_entry_count
+)
+```
+</CodeBlock>
+
+### reduceOneApproxQuantileSlot [#reduceoneapproxquantileslot]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage"}}>
+```cpp showLineNumbers={false}
+void ResultSetStorage::reduceOneApproxQuantileSlot(
+    int8_t *this_ptr1,
+    const int8_t *that_ptr1,
+    const size_t target_logical_idx,
+    const ResultSetStorage &that
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### reduceSingleRow [#reducesinglerow]
+
+<CodeBlock links={{"ResultSetStorage": "resultsetstorage", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool ResultSetStorage::reduceSingleRow(
+    const int8_t *row_ptr,
+    const int8_t warp_count,
+    const bool is_columnar,
+    const bool replace_bitmap_ptr_with_bitmap_sz,
+    std::vector<int64_t> &agg_vals,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::vector<TargetInfo> &targets,
+    const std::vector<int64_t> &agg_init_vals
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `targets_` | `const std::vector< TargetInfo >` | |
+| `query_mem_desc_` | `QueryMemoryDescriptor` | |
+| `buff_` | `int8_t *` | |
+| `buff_is_provided_` | `const bool` | |
+| `target_init_vals_` | `std::vector< int64_t >` | |
+| `count_distinct_sets_mapping_` | `std::unordered_map< int64_t, int64_t >` | |
+| `varlen_output_info_` | `std::shared_ptr< VarlenOutputInfo >` | |

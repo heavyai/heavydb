@@ -1,0 +1,57 @@
+---
+title: foreign_storage::RefreshTimeCalculator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/RefreshTimeCalculator.h>
+```
+
+---
+
+## Static methods
+
+### getNextRefreshTime [#getnextrefreshtime]
+
+<CodeBlock links={{"RefreshTimeCalculator": "refreshtimecalculator"}}>
+```cpp showLineNumbers={false}
+int64_t foreign_storage::RefreshTimeCalculator::getNextRefreshTime(
+    const std::map<std::string, std::string, std::less<>> &foreign_table_options
+)
+```
+</CodeBlock>
+
+### getCurrentTime [#getcurrenttime]
+
+<CodeBlock links={{"RefreshTimeCalculator": "refreshtimecalculator"}}>
+```cpp showLineNumbers={false}
+int64_t foreign_storage::RefreshTimeCalculator::getCurrentTime()
+```
+</CodeBlock>
+
+### setMockCurrentTime [#setmockcurrenttime]
+
+<CodeBlock links={{"RefreshTimeCalculator": "refreshtimecalculator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::RefreshTimeCalculator::setMockCurrentTime(
+    int64_t mock_current_time
+)
+```
+</CodeBlock>
+
+### resetMockCurrentTime [#resetmockcurrenttime]
+
+<CodeBlock links={{"RefreshTimeCalculator": "refreshtimecalculator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::RefreshTimeCalculator::resetMockCurrentTime()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `should_use_mock_current_time_` <Badge intent="note" minimal>static</Badge> | `std::atomic< bool >` | |
+| `mock_current_time_` <Badge intent="note" minimal>static</Badge> | `std::atomic< int64_t >` | |

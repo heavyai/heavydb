@@ -1,0 +1,15 @@
+---
+title: Geospatial::decompress_coords
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T, typename C>
+std::shared_ptr<std::vector<T>> Geospatial::decompress_coords(
+    const C &compression,
+    const int8_t *coords,
+    const size_t coords_sz
+)
+```
+</CodeBlock>

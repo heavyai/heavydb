@@ -1,0 +1,69 @@
+---
+title: is_null_order_entry
+description: ""
+---
+
+<CodeBlock id="is_null_order_entry" links={{"is_null_order_entry": "isnullorderentry"}}>
+```cpp showLineNumbers={false}
+template <class K, class I = int32_t>
+struct is_null_order_entry
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="K" type="class">
+</ParamField>
+
+<ParamField path="I" type="class" default="int32_t">
+</ParamField>
+
+---
+
+## Constructors
+
+### is_null_order_entry [#isnullorderentry]
+
+<CodeBlock links={{"is_null_order_entry": "isnullorderentry"}}>
+```cpp showLineNumbers={false}
+is_null_order_entry<K, I>::is_null_order_entry(
+    const int8_t *base,
+    const size_t stride,
+    const int64_t nul
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"is_null_order_entry": "isnullorderentry"}}>
+```cpp showLineNumbers={false}
+__host__ __device__ bool is_null_order_entry<K, I>::operator()(
+    const I index
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `argument_type` | `I` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `oe_base` | `const int8_t *` | |
+| `oe_stride` | `const size_t` | |
+| `null_val` | `const int64_t` | |

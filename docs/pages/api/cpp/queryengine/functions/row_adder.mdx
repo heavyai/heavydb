@@ -1,0 +1,15 @@
+---
+title: row_adder
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t row_adder(
+    const int copy_multiplier,
+    const Column<double> &input_col1,
+    const Column<double> &input_col2,
+    Column<double> &output_col
+)
+```
+</CodeBlock>

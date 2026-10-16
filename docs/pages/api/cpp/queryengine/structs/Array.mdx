@@ -1,0 +1,208 @@
+---
+title: Array
+description: ""
+---
+
+<CodeBlock id="Array" links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct Array
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### Array [#array]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE Array<T>::Array(
+    T *ptr,
+    const int64_t size,
+    const bool is_null = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE Array<T>::Array()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+template <typename M>
+HOST Array<T>::Array(
+    M &mgr,
+    const int64_t size,
+    const bool is_null = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE Array<T>::Array(
+    const int64_t size,
+    const bool is_null = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE Array<T>::Array(
+    const flatbuffer::Array<T> &arr
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### data [#data]
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE T * Array<T>::data() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE size_t Array<T>::size() const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE T Array<T>::operator()(
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE T & Array<T>::operator[](
+    const unsigned int index
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE const T & Array<T>::operator[](
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getSize [#getsize]
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t Array<T>::getSize() const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Array<T>::isNull() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index)">
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Array<T>::isNull(
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### null_value [#nullvalue]
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE constexpr T Array<T>::null_value() const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"Array": "array"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Array<T>::operator==(
+    const Array &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr_` | `T *` | |
+| `size_` | `int64_t` | |
+| `is_null_` | `int8_t` | |

@@ -1,0 +1,91 @@
+---
+title: TreeModelPredictionMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TreeModelPredictionMgr.h>
+```
+
+---
+
+## Constructors
+
+### TreeModelPredictionMgr [#treemodelpredictionmgr]
+
+<CodeBlock links={{"TreeModelPredictionMgr": "treemodelpredictionmgr", "Executor": "executor", "DecisionTreeEntry": "../structs/decisiontreeentry"}}>
+```cpp showLineNumbers={false}
+TreeModelPredictionMgr::TreeModelPredictionMgr(
+    const Data_Namespace::MemoryLevel memory_level,
+    Executor *executor,
+    const std::vector<std::vector<DecisionTreeEntry>> &decision_trees,
+    const std::vector<int64_t> &decision_tree_offsets,
+    const bool compute_avg
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~TreeModelPredictionMgr
+
+<CodeBlock links={{"TreeModelPredictionMgr": "treemodelpredictionmgr"}}>
+```cpp showLineNumbers={false}
+TreeModelPredictionMgr::~TreeModelPredictionMgr()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegen [#codegen]
+
+<CodeBlock links={{"TreeModelPredictionMgr": "treemodelpredictionmgr", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * TreeModelPredictionMgr::codegen(
+    const std::vector<llvm::Value *> &regressor_inputs,
+    const CompilationOptions &co
+) const
+```
+</CodeBlock>
+
+### allocateAndPopulateHostBuffers [#allocateandpopulatehostbuffers]
+
+<CodeBlock links={{"TreeModelPredictionMgr": "treemodelpredictionmgr", "DecisionTreeEntry": "../structs/decisiontreeentry"}}>
+```cpp showLineNumbers={false}
+void TreeModelPredictionMgr::allocateAndPopulateHostBuffers(
+    const std::vector<std::vector<DecisionTreeEntry>> &decision_trees,
+    const std::vector<int64_t> &decision_tree_offsets
+)
+```
+</CodeBlock>
+
+### createKernelBuffers [#createkernelbuffers]
+
+<CodeBlock links={{"TreeModelPredictionMgr": "treemodelpredictionmgr"}}>
+```cpp showLineNumbers={false}
+void TreeModelPredictionMgr::createKernelBuffers()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `memory_level_` | `const Data_Namespace::MemoryLevel` | |
+| `executor_` | `Executor *` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `device_ids_` | `const std::set< int >` | |
+| `num_trees_` | `const int32_t` | |
+| `compute_avg_` | `const bool` | |
+| `host_decision_tree_table_` | `int8_t *` | |
+| `host_decision_tree_offsets_` | `int8_t *` | |
+| `decision_tree_table_size_bytes_` | `int64_t` | |
+| `decision_tree_offsets_size_bytes_` | `int64_t` | |
+| `decision_tree_table_device_buffers_` | `std::vector< Data_Namespace::AbstractBuffer * >` | |
+| `decision_tree_offsets_device_buffers_` | `std::vector< Data_Namespace::AbstractBuffer * >` | |
+| `kernel_decision_tree_tables_` | `std::unordered_map< int, const int8_t * >` | |
+| `kernel_decision_tree_offsets_` | `std::unordered_map< int, const int8_t * >` | |

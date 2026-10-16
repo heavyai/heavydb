@@ -1,0 +1,76 @@
+---
+title: SystemParameters
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <SystemParameters.h>
+```
+
+---
+
+## Constructors
+
+### SystemParameters [#systemparameters]
+
+<CodeBlock links={{"SystemParameters": "systemparameters"}}>
+```cpp showLineNumbers={false}
+SystemParameters::SystemParameters()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### RuntimeUdfRegistrationPolicy
+
+| Name | Value | Description |
+|---|---|---|
+| `DISALLOWED` | | |
+| `ALLOWED_SUPERUSERS_ONLY` | | |
+| `ALLOWED_ALL_USERS` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cpu_only` | `bool` | |
+| `num_gpus` | `int` | |
+| `start_gpu` | `int` | |
+| `cuda_block_size` | `size_t` | |
+| `cuda_grid_size` | `size_t` | |
+| `calcite_max_mem` | `size_t` | |
+| `omnisci_server_port` | `int` | |
+| `calcite_port` | `int` | |
+| `master_address` | `std::string` | |
+| `master_port` | `int` | |
+| `is_decr_start_epoch` | `bool` | |
+| `cpu_buffer_mem_bytes` | `size_t` | |
+| `gpu_buffer_mem_bytes` | `size_t` | |
+| `min_cpu_slab_size` | `size_t` | |
+| `min_gpu_slab_size` | `size_t` | |
+| `max_cpu_slab_size` | `size_t` | |
+| `max_gpu_slab_size` | `size_t` | |
+| `default_cpu_slab_size` | `size_t` | |
+| `default_gpu_slab_size` | `size_t` | |
+| `gpu_input_mem_limit` | `double` | |
+| `config_file` | `std::string` | |
+| `ssl_cert_file` | `std::string` | |
+| `ssl_key_file` | `std::string` | |
+| `ssl_trust_store` | `std::string` | |
+| `ssl_trust_password` | `std::string` | |
+| `ssl_keystore` | `std::string` | |
+| `ssl_keystore_password` | `std::string` | |
+| `ssl_trust_ca_file` | `std::string` | |
+| `enable_calcite_view_optimize` | `bool` | |
+| `calcite_timeout` | `size_t` | |
+| `calcite_keepalive` | `size_t` | |
+| `num_executors` | `int` | |
+| `num_sessions` | `int` | |
+| `max_num_users` | `int` | |
+| `max_total_rows` | `int64_t` | |
+| `buffer_page_size` | `size_t` | |
+| `runtime_udf_registration_policy` | `RuntimeUdfRegistrationPolicy` | |

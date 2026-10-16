@@ -1,0 +1,38 @@
+---
+title: Fragmenter_Namespace::copyColumnDataOfShard
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+void Fragmenter_Namespace::copyColumnDataOfShard(
+    const std::vector<size_t> &rowIndices,
+    T *src,
+    T *dst
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ShardDataOwner": "../structs/sharddataowner", "BlockWithColumnId": "../structs/blockwithcolumnid"}}>
+```cpp showLineNumbers={false}
+BlockWithColumnId Fragmenter_Namespace::copyColumnDataOfShard(
+    const Catalog_Namespace::Catalog &cat,
+    ShardDataOwner &dataOwner,
+    const std::vector<size_t> &rowIndices,
+    const ColumnDescriptor *pCol,
+    size_t columnIndex,
+    DataBlockPtr dataBlock,
+    bool is_default
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

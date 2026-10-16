@@ -1,0 +1,93 @@
+---
+title: GpuCompilationContext
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <NvidiaKernel.h>
+```
+
+**Inherits from:** `CompilationContext` (public)
+
+---
+
+## Constructors
+
+### GpuCompilationContext [#gpucompilationcontext]
+
+<CodeBlock links={{"GpuCompilationContext": "gpucompilationcontext", "CubinResult": "../structs/cubinresult"}}>
+```cpp showLineNumbers={false}
+GpuCompilationContext::GpuCompilationContext(
+    CubinResult &&cubin_result,
+    std::string const &function_name
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~GpuCompilationContext
+
+<CodeBlock links={{"GpuCompilationContext": "gpucompilationcontext"}}>
+```cpp showLineNumbers={false}
+GpuCompilationContext::~GpuCompilationContext()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNativeCode [#getnativecode]
+
+<CodeBlock links={{"GpuCompilationContext": "gpucompilationcontext"}}>
+```cpp showLineNumbers={false}
+std::pair<void *, void *> GpuCompilationContext::getNativeCode(
+    const size_t device_id
+) const
+```
+</CodeBlock>
+
+### getNativeFunctionPointers [#getnativefunctionpointers]
+
+<CodeBlock links={{"GpuCompilationContext": "gpucompilationcontext"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<int, void *> GpuCompilationContext::getNativeFunctionPointers() const
+```
+</CodeBlock>
+
+### name [#name]
+
+<CodeBlock links={{"GpuCompilationContext": "gpucompilationcontext"}}>
+```cpp showLineNumbers={false}
+std::string const  & GpuCompilationContext::name(
+    size_t const device_id
+) const
+```
+</CodeBlock>
+
+### getMemSize [#getmemsize]
+
+<CodeBlock links={{"GpuCompilationContext": "gpucompilationcontext"}}>
+```cpp showLineNumbers={false}
+size_t GpuCompilationContext::getMemSize() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"GpuCompilationContext": "gpucompilationcontext", "CompilationContext": "compilationcontext"}}>
+```cpp showLineNumbers={false}
+size_t GpuCompilationContext::size() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cubin_result_` | `CubinResult` | |
+| `function_name_` | `std::string` | |
+| `contexts_per_device_` | `std::unordered_map< int, std::unique_ptr< GpuDeviceCompilationContext > >` | |

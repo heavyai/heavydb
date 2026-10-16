@@ -1,0 +1,107 @@
+---
+title: BoundingBoxIntersectJoinSupportedFunction
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ExpressionRewrite.h>
+```
+
+---
+
+## Static methods
+
+### is_bbox_intersect_supported_func [#isbboxintersectsupportedfunc]
+
+<CodeBlock links={{"BoundingBoxIntersectJoinSupportedFunction": "boundingboxintersectjoinsupportedfunction"}}>
+```cpp showLineNumbers={false}
+static bool BoundingBoxIntersectJoinSupportedFunction::is_bbox_intersect_supported_func(
+    std::string_view target_func_name
+)
+```
+</CodeBlock>
+
+### is_many_to_many_func [#ismanytomanyfunc]
+
+<CodeBlock links={{"BoundingBoxIntersectJoinSupportedFunction": "boundingboxintersectjoinsupportedfunction"}}>
+```cpp showLineNumbers={false}
+static bool BoundingBoxIntersectJoinSupportedFunction::is_many_to_many_func(
+    std::string_view target_func_name
+)
+```
+</CodeBlock>
+
+### is_poly_mpoly_rewrite_target_func [#ispolympolyrewritetargetfunc]
+
+<CodeBlock links={{"BoundingBoxIntersectJoinSupportedFunction": "boundingboxintersectjoinsupportedfunction"}}>
+```cpp showLineNumbers={false}
+static bool BoundingBoxIntersectJoinSupportedFunction::is_poly_mpoly_rewrite_target_func(
+    std::string_view target_func_name
+)
+```
+</CodeBlock>
+
+### is_point_poly_rewrite_target_func [#ispointpolyrewritetargetfunc]
+
+<CodeBlock links={{"BoundingBoxIntersectJoinSupportedFunction": "boundingboxintersectjoinsupportedfunction"}}>
+```cpp showLineNumbers={false}
+static bool BoundingBoxIntersectJoinSupportedFunction::is_point_poly_rewrite_target_func(
+    std::string_view target_func_name
+)
+```
+</CodeBlock>
+
+### is_poly_point_rewrite_target_func [#ispolypointrewritetargetfunc]
+
+<CodeBlock links={{"BoundingBoxIntersectJoinSupportedFunction": "boundingboxintersectjoinsupportedfunction"}}>
+```cpp showLineNumbers={false}
+static bool BoundingBoxIntersectJoinSupportedFunction::is_poly_point_rewrite_target_func(
+    std::string_view target_func_name
+)
+```
+</CodeBlock>
+
+### is_range_join_rewrite_target_func [#israngejoinrewritetargetfunc]
+
+<CodeBlock links={{"BoundingBoxIntersectJoinSupportedFunction": "boundingboxintersectjoinsupportedfunction"}}>
+```cpp showLineNumbers={false}
+static bool BoundingBoxIntersectJoinSupportedFunction::is_range_join_rewrite_target_func(
+    std::string_view target_func_name
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ST_CONTAINS_POLYGON_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_CONTAINS_POLYGON_POLYGON_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_CONTAINS_MULTIPOLYGON_MULTIPOLYGON_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_CONTAINS_MULTIPOLYGON_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_INTERSECTS_POINT_POLYGON_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_INTERSECTS_POINT_MULTIPOLYGON_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_INTERSECTS_POLYGON_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_INTERSECTS_POLYGON_POLYGON_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_INTERSECTS_POLYGON_MULTIPOLYGON_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_INTERSECTS_MULTIPOLYGON_MULTIPOLYGON_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_INTERSECTS_MULTIPOLYGON_POLYGON_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_INTERSECTS_MULTIPOLYGON_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_APPROX_OVERLAPS_MULTIPOLYGON_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_INTERSECTSBOX_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_DISTANCE_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_CCONTAINS_MULTIPOLYGON_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_CCONTAINS_POLYGON_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_CINTERSECTS_POLYGON_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_CINTERSECTS_MULTIPOLYGON_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `ST_DWITHIN_POINT_POINT_sv` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `BBOX_INTERSECT_SUPPORTED_FUNC` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< std::string_view, 19 >` | |
+| `MANY_TO_MANY_BBOX_INTERSECT_FUNC` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< std::string_view, 6 >` | |
+| `POLY_MPOLY_REWRITE_TARGET_FUNC` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< std::string_view, 6 >` | |
+| `POLY_POINT_REWRITE_TARGET_FUNC` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< std::string_view, 9 >` | |
+| `POINT_POLY_REWRITE_TARGET_FUNC` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< std::string_view, 2 >` | |
+| `RANGE_JOIN_REWRITE_TARGET_FUNC` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< std::string_view, 2 >` | |
+| `ST_CONTAIN_FORCE_TABLE_REORDERING_TARGET_FUNC` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< std::string_view, 4 >` | |
+| `ST_INTERSECTS_FORCE_TABLE_REORDERING_TARGET_FUNC` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< std::string_view, 6 >` | |

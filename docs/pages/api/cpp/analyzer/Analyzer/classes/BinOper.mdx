@@ -1,0 +1,394 @@
+---
+title: Analyzer::BinOper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### BinOper [#binoper]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::BinOper::BinOper(
+    const SQLTypeInfo &ti,
+    bool has_agg,
+    SQLOps o,
+    SQLQualifier q,
+    std::shared_ptr<Analyzer::Expr> l,
+    std::shared_ptr<Analyzer::Expr> r
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::BinOper::BinOper(
+    SQLTypes t,
+    SQLOps o,
+    SQLQualifier q,
+    std::shared_ptr<Analyzer::Expr> l,
+    std::shared_ptr<Analyzer::Expr> r
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_optype [#getoptype]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+SQLOps Analyzer::BinOper::get_optype() const
+```
+</CodeBlock>
+
+### is_bbox_intersect_oper [#isbboxintersectoper]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::BinOper::is_bbox_intersect_oper() const
+```
+</CodeBlock>
+
+### get_qualifier [#getqualifier]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+SQLQualifier Analyzer::BinOper::get_qualifier() const
+```
+</CodeBlock>
+
+### get_left_operand [#getleftoperand]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::BinOper::get_left_operand() const
+```
+</CodeBlock>
+
+### get_right_operand [#getrightoperand]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::BinOper::get_right_operand() const
+```
+</CodeBlock>
+
+### get_own_left_operand [#getownleftoperand]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::get_own_left_operand() const
+```
+</CodeBlock>
+
+### get_own_right_operand [#getownrightoperand]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::get_own_right_operand() const
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::BinOper::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const override
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::deep_copy() const override
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::normalize_simple_predicate(
+    int &rte_idx
+) const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::BinOper::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::BinOper::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"BinOper": "binoper", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::BinOper::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"BinOper": "binoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"BinOper": "binoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"BinOper": "binoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::BinOper::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::BinOper::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::BinOper::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::BinOper::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::BinOper::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::BinOper::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::BinOper::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::BinOper::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::BinOper::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::BinOper::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::BinOper::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::BinOper::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### analyze_type_info [#analyzetypeinfo]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo Analyzer::BinOper::analyze_type_info(
+    SQLOps op,
+    const SQLTypeInfo &left_type,
+    const SQLTypeInfo &right_type,
+    SQLTypeInfo *new_left_type,
+    SQLTypeInfo *new_right_type
+)
+```
+</CodeBlock>
+
+### common_numeric_type [#commonnumerictype]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo Analyzer::BinOper::common_numeric_type(
+    const SQLTypeInfo &type1,
+    const SQLTypeInfo &type2
+)
+```
+</CodeBlock>
+
+### common_string_type [#commonstringtype]
+
+<CodeBlock links={{"BinOper": "binoper"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo Analyzer::BinOper::common_string_type(
+    const SQLTypeInfo &type1,
+    const SQLTypeInfo &type2
+)
+```
+</CodeBlock>
+
+### simple_predicate_has_simple_cast [#simplepredicatehassimplecast]
+
+<CodeBlock links={{"BinOper": "binoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::BinOper::simple_predicate_has_simple_cast(
+    const std::shared_ptr<Analyzer::Expr> cast_operand,
+    const std::shared_ptr<Analyzer::Expr> const_operand
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `optype` | `SQLOps` | |
+| `qualifier` | `SQLQualifier` | |
+| `left_operand` | `std::shared_ptr< Analyzer::Expr >` | |
+| `right_operand` | `std::shared_ptr< Analyzer::Expr >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

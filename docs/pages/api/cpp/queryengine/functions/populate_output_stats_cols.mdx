@@ -1,0 +1,15 @@
+---
+title: populate_output_stats_cols
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "StatsRequest": "../structs/statsrequest"}}>
+```cpp showLineNumbers={false}
+template <typename TA>
+void populate_output_stats_cols(
+    Column<TextEncodingDict> &stat_names,
+    Column<TA> &stat_vals,
+    const std::vector<StatsRequest> &stats_requests
+)
+```
+</CodeBlock>

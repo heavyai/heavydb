@@ -1,0 +1,1471 @@
+---
+title: HAHandler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HAHandler.h>
+```
+
+**Inherits from:** `DBHandler` (public)
+
+---
+
+## Constructors
+
+### HAHandler [#hahandler]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+HAHandler::HAHandler(
+    const std::string &base_data_path,
+    const bool allow_multifrag,
+    const bool jit_debug,
+    const bool intel_jit_profile,
+    const bool read_only,
+    const bool allow_loop_joins,
+    const bool enable_rendering,
+    const bool renderer_prefer_igpu,
+    const unsigned renderer_vulkan_timeout_ms,
+    const bool renderer_use_parallel_executors,
+    const bool enable_auto_clear_render_mem,
+    const int render_oom_retry_threshold,
+    const size_t render_mem_bytes,
+    const size_t max_concurrent_render_sessions,
+    const size_t reserved_gpu_mem,
+    const bool render_compositor_use_last_gpu,
+    const bool renderer_enable_slab_allocation,
+    const size_t num_reader_threads,
+    const AuthMetadata &authMetadata,
+    SystemParameters &system_parameters,
+    const bool legacy_syntax,
+    const int idle_session_duration,
+    const int max_session_duration,
+    const std::string &udf_filename,
+    const std::string &clang_path,
+    const std::vector<std::string> &clang_options,
+    const File_Namespace::DiskCacheConfig &disk_cache_config,
+    const bool is_new_db
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### sql_execute [#sqlexecute]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::sql_execute(
+    TQueryResult &_return,
+    const TSessionId &session,
+    const std::string &query_str,
+    const bool column_format,
+    const std::string &nonce,
+    const int32_t first_n,
+    const int32_t at_most_n
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::sql_execute(
+    ExecutionResult &_return,
+    const TSessionId &session,
+    const std::string &query,
+    const bool column_format,
+    const int32_t first_n,
+    const int32_t at_most_n,
+    lockmgr::LockedTableDescriptors &locks
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### connect [#connect]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::connect(
+    TSessionId &session,
+    const std::string &username,
+    const std::string &passwd,
+    const std::string &dbname
+) override
+```
+</CodeBlock>
+
+### disconnect [#disconnect]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::disconnect(
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### switch_database [#switchdatabase]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::switch_database(
+    const TSessionId &session_id_or_json,
+    const std::string &dbname
+) override
+```
+</CodeBlock>
+
+### clone_session [#clonesession]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::clone_session(
+    TSessionId &session2_id,
+    const TSessionId &session1_id_or_json
+) override
+```
+</CodeBlock>
+
+### get_server_status [#getserverstatus]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_server_status(
+    TServerStatus &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_status [#getstatus]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_status(
+    std::vector<TServerStatus> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### create_custom_expression [#createcustomexpression]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+int32_t HAHandler::create_custom_expression(
+    const TSessionId &session,
+    const TCustomExpression &custom_expression
+) override
+```
+</CodeBlock>
+
+### get_custom_expressions [#getcustomexpressions]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_custom_expressions(
+    std::vector<TCustomExpression> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### update_custom_expression [#updatecustomexpression]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::update_custom_expression(
+    const TSessionId &session,
+    const int32_t id,
+    const std::string &expression_json
+) override
+```
+</CodeBlock>
+
+### delete_custom_expressions [#deletecustomexpressions]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::delete_custom_expressions(
+    const TSessionId &session,
+    const std::vector<int32_t> &custom_expression_ids,
+    const bool do_soft_delete
+) override
+```
+</CodeBlock>
+
+### get_dashboard [#getdashboard]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_dashboard(
+    TDashboard &_return,
+    const TSessionId &session,
+    const int32_t dashboard_id
+) override
+```
+</CodeBlock>
+
+### get_dashboards [#getdashboards]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_dashboards(
+    std::vector<TDashboard> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### create_dashboard [#createdashboard]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+int32_t HAHandler::create_dashboard(
+    const TSessionId &session,
+    const std::string &dashboard_name,
+    const std::string &dashboard_state,
+    const std::string &image_hash,
+    const std::string &dashboard_metadata
+) override
+```
+</CodeBlock>
+
+### replace_dashboard [#replacedashboard]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::replace_dashboard(
+    const TSessionId &session,
+    const int32_t dashboard_id,
+    const std::string &dashboard_name,
+    const std::string &dashboard_owner,
+    const std::string &dashboard_state,
+    const std::string &image_hash,
+    const std::string &dashboard_metadata
+) override
+```
+</CodeBlock>
+
+### delete_dashboard [#deletedashboard]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::delete_dashboard(
+    const TSessionId &session,
+    const int32_t dashboard_id
+) override
+```
+</CodeBlock>
+
+### share_dashboards [#sharedashboards]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::share_dashboards(
+    const TSessionId &session,
+    const std::vector<int32_t> &dashboard_ids,
+    const std::vector<std::string> &groups,
+    const TDashboardPermissions &permissions
+) override
+```
+</CodeBlock>
+
+### delete_dashboards [#deletedashboards]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::delete_dashboards(
+    const TSessionId &session,
+    const std::vector<int32_t> &dashboard_ids
+) override
+```
+</CodeBlock>
+
+### share_dashboard [#sharedashboard]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::share_dashboard(
+    const TSessionId &session,
+    const int32_t dashboard_id,
+    const std::vector<std::string> &groups,
+    const std::vector<std::string> &objects,
+    const TDashboardPermissions &permissions,
+    const bool grant_role
+) override
+```
+</CodeBlock>
+
+### unshare_dashboards [#unsharedashboards]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::unshare_dashboards(
+    const TSessionId &session,
+    const std::vector<int32_t> &dashboard_ids,
+    const std::vector<std::string> &groups,
+    const TDashboardPermissions &permissions
+) override
+```
+</CodeBlock>
+
+### unshare_dashboard [#unsharedashboard]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::unshare_dashboard(
+    const TSessionId &session,
+    const int32_t dashboard_id,
+    const std::vector<std::string> &groups,
+    const std::vector<std::string> &objects,
+    const TDashboardPermissions &permissions
+) override
+```
+</CodeBlock>
+
+### get_dashboard_grantees [#getdashboardgrantees]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_dashboard_grantees(
+    std::vector<TDashboardGrantees> &_return,
+    const TSessionId &session,
+    const int32_t dashboard_id
+) override
+```
+</CodeBlock>
+
+### get_db_object_privs [#getdbobjectprivs]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_db_object_privs(
+    std::vector<TDBObject> &TDBObjects,
+    const TSessionId &sessionId,
+    const std::string &objectName,
+    const TDBObjectType::type type
+) override
+```
+</CodeBlock>
+
+### get_queries_info [#getqueriesinfo]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_queries_info(
+    std::vector<TQueryInfo> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### initialize [#initialize]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::initialize(
+    const bool is_new_db
+)
+```
+</CodeBlock>
+
+### get_hardware_info [#gethardwareinfo]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_hardware_info(
+    TClusterHardwareInfo &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### hasTableAccessPrivileges [#hastableaccessprivileges]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+bool HAHandler::hasTableAccessPrivileges(
+    const TableDescriptor *td,
+    const Catalog_Namespace::SessionInfo &session_info
+)
+```
+</CodeBlock>
+
+### get_tables [#gettables]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_tables(
+    std::vector<std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_tables_for_database [#gettablesfordatabase]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_tables_for_database(
+    std::vector<std::string> &_return,
+    const TSessionId &session,
+    const std::string &database_name
+) override
+```
+</CodeBlock>
+
+### get_physical_tables [#getphysicaltables]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_physical_tables(
+    std::vector<std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_views [#getviews]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_views(
+    std::vector<std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_tables_meta [#gettablesmeta]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_tables_meta(
+    std::vector<TTableMeta> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_table_details [#gettabledetails]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_table_details(
+    TTableDetails &_return,
+    const TSessionId &session,
+    const std::string &table_name
+) override
+```
+</CodeBlock>
+
+### get_table_details_for_database [#gettabledetailsfordatabase]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_table_details_for_database(
+    TTableDetails &_return,
+    const TSessionId &session,
+    const std::string &table_name,
+    const std::string &database_name
+) override
+```
+</CodeBlock>
+
+### get_internal_table_details [#getinternaltabledetails]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_internal_table_details(
+    TTableDetails &_return,
+    const TSessionId &session,
+    const std::string &table_name,
+    const bool include_system_columns
+) override
+```
+</CodeBlock>
+
+### get_internal_table_details_for_database [#getinternaltabledetailsfordatabase]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_internal_table_details_for_database(
+    TTableDetails &_return,
+    const TSessionId &session,
+    const std::string &table_name,
+    const std::string &database_name
+) override
+```
+</CodeBlock>
+
+### get_users [#getusers]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_users(
+    std::vector<std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### put_immerse_users_metadata [#putimmerseusersmetadata]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::put_immerse_users_metadata(
+    const TSessionId &session,
+    const std::vector<TImmerseUserMetadata> &immerse_user_metadata_list
+) override
+```
+</CodeBlock>
+
+### get_users_info [#getusersinfo]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_users_info(
+    std::vector<TUserInfo> &return_list,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### put_immerse_database_metadata [#putimmersedatabasemetadata]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::put_immerse_database_metadata(
+    const TSessionId &session,
+    const std::string &immerse_metadata_json,
+    const std::string &database_name
+) override
+```
+</CodeBlock>
+
+### get_databases [#getdatabases]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_databases(
+    std::vector<TDBInfo> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_version [#getversion]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_version(
+    std::string &_return
+) override
+```
+</CodeBlock>
+
+### start_heap_profile [#startheapprofile]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::start_heap_profile(
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### stop_heap_profile [#stopheapprofile]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::stop_heap_profile(
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_heap_profile [#getheapprofile]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_heap_profile(
+    std::string &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_memory [#getmemory]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_memory(
+    std::vector<TNodeMemoryInfo> &_return,
+    const TSessionId &session,
+    const std::string &memory_level
+) override
+```
+</CodeBlock>
+
+### clear_cpu_memory [#clearcpumemory]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::clear_cpu_memory(
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### clear_gpu_memory [#cleargpumemory]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::clear_gpu_memory(
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### clearRenderMemory [#clearrendermemory]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::clearRenderMemory(
+    const TSessionId &session
+)
+```
+</CodeBlock>
+
+### pause_executor_queue [#pauseexecutorqueue]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::pause_executor_queue(
+    const TSessionId &session
+)
+```
+</CodeBlock>
+
+### resume_executor_queue [#resumeexecutorqueue]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::resume_executor_queue(
+    const TSessionId &session
+)
+```
+</CodeBlock>
+
+### set_table_epoch [#settableepoch]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::set_table_epoch(
+    const TSessionId &session,
+    const int db_id,
+    const int table_id,
+    const int new_epoch
+) override
+```
+</CodeBlock>
+
+### set_table_epoch_by_name [#settableepochbyname]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::set_table_epoch_by_name(
+    const TSessionId &session,
+    const std::string &table_name,
+    const int new_epoch
+) override
+```
+</CodeBlock>
+
+### get_table_epoch [#gettableepoch]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+int32_t HAHandler::get_table_epoch(
+    const TSessionId &session,
+    const int32_t db_id,
+    const int32_t table_id
+) override
+```
+</CodeBlock>
+
+### get_table_epoch_by_name [#gettableepochbyname]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+int32_t HAHandler::get_table_epoch_by_name(
+    const TSessionId &session,
+    const std::string &table_name
+) override
+```
+</CodeBlock>
+
+### get_table_epochs [#gettableepochs]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_table_epochs(
+    std::vector<TTableEpochInfo> &_return,
+    const TSessionId &session,
+    const int32_t db_id,
+    const int32_t table_id
+) override
+```
+</CodeBlock>
+
+### set_table_epochs [#settableepochs]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::set_table_epochs(
+    const TSessionId &session,
+    const int32_t db_id,
+    const std::vector<TTableEpochInfo> &table_epochs
+) override
+```
+</CodeBlock>
+
+### get_session_info [#getsessioninfo]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_session_info(
+    TSessionInfo &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_completion_hints [#getcompletionhints]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_completion_hints(
+    std::vector<TCompletionHint> &hints,
+    const TSessionId &session,
+    const std::string &sql,
+    const int cursor
+) override
+```
+</CodeBlock>
+
+### sql_execute_df [#sqlexecutedf]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::sql_execute_df(
+    TDataFrame &_return,
+    const TSessionId &session,
+    const std::string &query,
+    const TDeviceType::type device_type,
+    const int32_t device_id,
+    const int32_t first_n,
+    const TArrowTransport::type transport_method
+) override
+```
+</CodeBlock>
+
+### sql_execute_gdf [#sqlexecutegdf]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::sql_execute_gdf(
+    TDataFrame &_return,
+    const TSessionId &session,
+    const std::string &query,
+    const int32_t device_id,
+    const int32_t first_n
+) override
+```
+</CodeBlock>
+
+### deallocate_df [#deallocatedf]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::deallocate_df(
+    const TSessionId &session,
+    const TDataFrame &df,
+    const TDeviceType::type device_type,
+    const int32_t device_id
+) override
+```
+</CodeBlock>
+
+### interrupt [#interrupt]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::interrupt(
+    const TSessionId &query_session,
+    const TSessionId &interrupt_session
+) override
+```
+</CodeBlock>
+
+### sql_validate [#sqlvalidate]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::sql_validate(
+    TRowDescriptor &_return,
+    const TSessionId &session,
+    const std::string &query
+) override
+```
+</CodeBlock>
+
+### getExecutionMode [#getexecutionmode]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+TExecuteMode::type HAHandler::getExecutionMode(
+    const TSessionId &session
+)
+```
+</CodeBlock>
+
+### set_execution_mode [#setexecutionmode]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::set_execution_mode(
+    const TSessionId &session,
+    const TExecuteMode::type mode
+) override
+```
+</CodeBlock>
+
+### render_vega [#rendervega]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::render_vega(
+    TRenderResult &_return,
+    const TSessionId &session,
+    const int64_t widget_id,
+    const std::string &vega_json,
+    const int32_t compression_level,
+    const std::string &nonce
+) override
+```
+</CodeBlock>
+
+### get_result_row_for_pixel [#getresultrowforpixel]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_result_row_for_pixel(
+    TPixelTableRowResult &_return,
+    const TSessionId &session,
+    const int64_t widget_id,
+    const TPixel &pixel,
+    const std::map<std::string, std::vector<std::string>> &table_col_names,
+    const bool column_format,
+    const int32_t pixel_radius,
+    const std::string &nonce
+) override
+```
+</CodeBlock>
+
+### get_link_view [#getlinkview]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_link_view(
+    TFrontendView &_return,
+    const TSessionId &session,
+    const std::string &link
+) override
+```
+</CodeBlock>
+
+### create_link [#createlink]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::create_link(
+    std::string &_return,
+    const TSessionId &session,
+    const std::string &view_state,
+    const std::string &view_metadata
+) override
+```
+</CodeBlock>
+
+### load_table_binary [#loadtablebinary]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::load_table_binary(
+    const TSessionId &session,
+    const std::string &table_name,
+    const std::vector<TRow> &rows,
+    const std::vector<std::string> &column_names
+) override
+```
+</CodeBlock>
+
+### load_table_binary_columnar [#loadtablebinarycolumnar]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::load_table_binary_columnar(
+    const TSessionId &session,
+    const std::string &table_name,
+    const std::vector<TColumn> &cols,
+    const std::vector<std::string> &column_names
+) override
+```
+</CodeBlock>
+
+### load_table_binary_arrow [#loadtablebinaryarrow]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::load_table_binary_arrow(
+    const TSessionId &session,
+    const std::string &table_name,
+    const std::string &arrow_stream,
+    const bool use_column_names
+) override
+```
+</CodeBlock>
+
+### load_table [#loadtable]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::load_table(
+    const TSessionId &session,
+    const std::string &table_name,
+    const std::vector<TStringRow> &rows,
+    const std::vector<std::string> &column_names
+) override
+```
+</CodeBlock>
+
+### detect_column_types [#detectcolumntypes]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::detect_column_types(
+    TDetectResult &_return,
+    const TSessionId &session,
+    const std::string &file_name,
+    const TCopyParams &copy_params
+) override
+```
+</CodeBlock>
+
+### create_table [#createtable]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::create_table(
+    const TSessionId &session,
+    const std::string &table_name,
+    const TRowDescriptor &row_desc
+) override
+```
+</CodeBlock>
+
+### import_table [#importtable]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::import_table(
+    const TSessionId &session,
+    const std::string &table_name,
+    const std::string &file_name,
+    const TCopyParams &copy_params
+) override
+```
+</CodeBlock>
+
+### import_geo_table [#importgeotable]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::import_geo_table(
+    const TSessionId &session,
+    const std::string &table_name,
+    const std::string &file_name,
+    const TCopyParams &copy_params,
+    const TRowDescriptor &row_desc
+) override
+```
+</CodeBlock>
+
+### import_table_status [#importtablestatus]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::import_table_status(
+    TImportStatus &_return,
+    const TSessionId &session,
+    const std::string &import_id
+) override
+```
+</CodeBlock>
+
+### get_first_geo_file_in_archive [#getfirstgeofileinarchive]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_first_geo_file_in_archive(
+    std::string &_return,
+    const TSessionId &session,
+    const std::string &archive_path,
+    const TCopyParams &copy_params
+) override
+```
+</CodeBlock>
+
+### get_all_files_in_archive [#getallfilesinarchive]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_all_files_in_archive(
+    std::vector<std::string> &_return,
+    const TSessionId &session,
+    const std::string &archive_path,
+    const TCopyParams &copy_params
+) override
+```
+</CodeBlock>
+
+### get_layers_in_geo_file [#getlayersingeofile]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_layers_in_geo_file(
+    std::vector<TGeoFileLayerInfo> &_return,
+    const TSessionId &session,
+    const std::string &file_name,
+    const TCopyParams &copy_params
+) override
+```
+</CodeBlock>
+
+### get_roles [#getroles]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_roles(
+    std::vector<std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### has_role [#hasrole]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+bool HAHandler::has_role(
+    const TSessionId &sessionId,
+    const std::string &granteeName,
+    const std::string &roleName
+) override
+```
+</CodeBlock>
+
+### has_object_privilege [#hasobjectprivilege]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+bool HAHandler::has_object_privilege(
+    const TSessionId &sessionId,
+    const std::string &granteeName,
+    const std::string &objectName,
+    const TDBObjectType::type object_type,
+    const TDBObjectPermissions &permissions
+) override
+```
+</CodeBlock>
+
+### get_db_objects_for_grantee [#getdbobjectsforgrantee]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_db_objects_for_grantee(
+    std::vector<TDBObject> &_return,
+    const TSessionId &session,
+    const std::string &roleName
+) override
+```
+</CodeBlock>
+
+### get_all_roles_for_user [#getallrolesforuser]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_all_roles_for_user(
+    std::vector<std::string> &_return,
+    const TSessionId &session,
+    const std::string &granteeName
+) override
+```
+</CodeBlock>
+
+### get_all_effective_roles_for_user [#getalleffectiverolesforuser]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_all_effective_roles_for_user(
+    std::vector<std::string> &_return,
+    const TSessionId &session,
+    const std::string &granteeName
+) override
+```
+</CodeBlock>
+
+### get_valid_groups [#getvalidgroups]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> HAHandler::get_valid_groups(
+    const TSessionId &session,
+    int32_t dashboard_id,
+    std::vector<std::string> groups
+)
+```
+</CodeBlock>
+
+### get_device_parameters [#getdeviceparameters]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_device_parameters(
+    std::map<std::string, std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### register_runtime_extension_functions [#registerruntimeextensionfunctions]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::register_runtime_extension_functions(
+    const TSessionId &session,
+    const std::vector<TUserDefinedFunction> &udfs,
+    const std::vector<TUserDefinedTableFunction> &udtfs,
+    const std::map<std::string, std::string> &device_ir_map
+) override
+```
+</CodeBlock>
+
+### get_function_names [#getfunctionnames]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_function_names(
+    std::vector<std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_runtime_function_names [#getruntimefunctionnames]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_runtime_function_names(
+    std::vector<std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_function_details [#getfunctiondetails]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_function_details(
+    std::vector<TUserDefinedFunction> &_return,
+    const TSessionId &session,
+    const std::vector<std::string> &udf_names
+) override
+```
+</CodeBlock>
+
+### get_table_function_names [#gettablefunctionnames]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_table_function_names(
+    std::vector<std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_runtime_table_function_names [#getruntimetablefunctionnames]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_runtime_table_function_names(
+    std::vector<std::string> &_return,
+    const TSessionId &session
+) override
+```
+</CodeBlock>
+
+### get_table_function_details [#gettablefunctiondetails]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_table_function_details(
+    std::vector<TUserDefinedTableFunction> &_return,
+    const TSessionId &session,
+    const std::vector<std::string> &udtf_names
+) override
+```
+</CodeBlock>
+
+### shutdown [#shutdown]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::shutdown()
+```
+</CodeBlock>
+
+### emergency_shutdown [#emergencyshutdown]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::emergency_shutdown()
+```
+</CodeBlock>
+
+### getInvalidSessionId [#getinvalidsessionid]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+TSessionId HAHandler::getInvalidSessionId() const
+```
+</CodeBlock>
+
+### internal_connect [#internalconnect]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::internal_connect(
+    TSessionId &session,
+    const std::string &username,
+    const std::string &dbname
+)
+```
+</CodeBlock>
+
+### checkInMemorySystemTableQuery [#checkinmemorysystemtablequery]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+bool HAHandler::checkInMemorySystemTableQuery(
+    const std::unordered_set<shared::TableKey> &tables_selected_from
+) const
+```
+</CodeBlock>
+
+### create_query_state [#createquerystate]
+
+<CodeBlock links={{"HAHandler": "hahandler", "QueryState": "../querystate/classes/querystate", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+template <typename... ARGS>
+std::shared_ptr<query_state::QueryState> HAHandler::create_query_state(
+    ARGS &&... args
+)
+```
+</CodeBlock>
+
+### get_session_copy [#getsessioncopy]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::SessionInfo HAHandler::get_session_copy(
+    const TSessionId &session_id
+)
+```
+</CodeBlock>
+
+### get_tables_meta_impl [#gettablesmetaimpl]
+
+<CodeBlock links={{"HAHandler": "hahandler", "QueryStateProxy": "querystateproxy", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::get_tables_meta_impl(
+    std::vector<TTableMeta> &_return,
+    QueryStateProxy query_state_proxy,
+    const Catalog_Namespace::SessionInfo &session_info,
+    const bool with_table_locks = true
+)
+```
+</CodeBlock>
+
+### resizeDispatchQueue [#resizedispatchqueue]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::resizeDispatchQueue(
+    size_t queue_size
+)
+```
+</CodeBlock>
+
+### getClient [#getclient]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<HeavyClient> HAHandler::getClient()
+```
+</CodeBlock>
+
+### getMasterSession [#getmastersession]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+const TSessionId & HAHandler::getMasterSession(
+    const TSessionId &session
+)
+```
+</CodeBlock>
+
+### getSessionCredentials [#getsessioncredentials]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HAHandler::Credentials> HAHandler::getSessionCredentials(
+    const TSessionId &session
+)
+```
+</CodeBlock>
+
+### connectToMaster [#connecttomaster]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::connectToMaster(
+    const TSessionId &session,
+    const std::string &username,
+    const std::string &passwd,
+    const std::string &dbname
+)
+```
+</CodeBlock>
+
+### resetMasterSession [#resetmastersession]
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+void HAHandler::resetMasterSession(
+    const TSessionId &session
+)
+```
+</CodeBlock>
+
+### get_session_ptr [#getsessionptr]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog_Namespace::SessionInfo> HAHandler::get_session_ptr(
+    const TSessionId &session_id,
+    bool allow_empty_session_id = false
+)
+```
+</CodeBlock>
+
+### getConnectionInfo [#getconnectioninfo]
+
+<CodeBlock links={{"HAHandler": "hahandler", "ConnectionInfo": "../structs/connectioninfo", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+ConnectionInfo HAHandler::getConnectionInfo() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### max_bytes_for_thrift [#maxbytesforthrift]
+
+<CodeBlock links={{"HAHandler": "hahandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+static size_t HAHandler::max_bytes_for_thrift()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `MAX_RETRY` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int const  &` | |
+| `RETRY_SECONDS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int const  &` | |
+| `connMgr_` | `std::shared_ptr< ThriftClientConnection >` | |
+| `master_host_` | `std::shared_ptr< RemoteHostInfo >` | |
+| `master_session_map_` | `std::unordered_map< TSessionId, TSessionId >` | |
+| `master_session_map_mutex_` | `heavyai::shared_mutex` | |
+| `master_session_credentials_map_` | `std::unordered_map< TSessionId, std::shared_ptr< Credentials > >` | |
+| `data_mgr_` | `std::shared_ptr< Data_Namespace::DataMgr >` | |
+| `base_data_path_` | `const std::string` | |
+| `import_path_` | `boost::filesystem::path` | |
+| `executor_device_type_` | `ExecutorDeviceType` | |
+| `random_gen_` | `std::default_random_engine` | |
+| `session_id_dist_` | `std::uniform_int_distribution< int64_t >` | |
+| `jit_debug_` | `const bool` | |
+| `intel_jit_profile_` | `const bool` | |
+| `allow_multifrag_` | `bool` | |
+| `read_only_` | `const bool` | |
+| `allow_loop_joins_` | `const bool` | |
+| `cpu_mode_only_` | `bool` | |
+| `sessions_mutex_` | `heavyai::shared_mutex` | |
+| `render_mutex_` | `std::mutex` | |
+| `start_time_` | `int64_t` | |
+| `authMetadata_` | `const AuthMetadata &` | |
+| `system_parameters_` | `SystemParameters &` | |
+| `query_engine_` | `std::shared_ptr< QueryEngine >` | |
+| `render_handler_` | `std::unique_ptr< RenderHandler >` | |
+| `calcite_` | `std::shared_ptr< Calcite >` | |
+| `legacy_syntax_` | `const bool` | |
+| `dispatch_queue_` | `std::unique_ptr< QueryDispatchQueue >` | |
+| `num_imports_in_queue` | `std::atomic< size_t >` | |
+
+---
+
+## Inner classes
+
+### Credentials
+
+<CodeBlock links={{"HAHandler": "hahandler"}}>
+```cpp showLineNumbers={false}
+struct HAHandler::Credentials
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `user` | `const std::string` | |
+| `passwd` | `const std::string` | |
+| `dbname` | `const std::string` | |

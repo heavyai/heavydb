@@ -1,0 +1,131 @@
+---
+title: QueryExecutionError
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ErrorHandling.h>
+```
+
+**Inherits from:** `std::runtime_error` (public)
+
+---
+
+## Constructors
+
+### QueryExecutionError [#queryexecutionerror]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryExecutionError": "queryexecutionerror"}}>
+```cpp showLineNumbers={false}
+QueryExecutionError::QueryExecutionError(
+    const ErrorCode error_code,
+    const std::string &e
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryExecutionError": "queryexecutionerror", "QueryExecutionProperties": "../structs/queryexecutionproperties"}}>
+```cpp showLineNumbers={false}
+QueryExecutionError::QueryExecutionError(
+    const ErrorCode error_code,
+    const std::string &e,
+    const QueryExecutionProperties &execution_properties
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"QueryExecutionError": "queryexecutionerror", "QueryExecutionProperties": "../structs/queryexecutionproperties"}}>
+```cpp showLineNumbers={false}
+QueryExecutionError::QueryExecutionError(
+    const ErrorCode error_code,
+    const QueryExecutionProperties &execution_properties
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"QueryExecutionError": "queryexecutionerror"}}>
+```cpp showLineNumbers={false}
+QueryExecutionError::QueryExecutionError(
+    const ErrorCode error_code
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"QueryExecutionError": "queryexecutionerror"}}>
+```cpp showLineNumbers={false}
+QueryExecutionError::QueryExecutionError(
+    const int32_t error_code
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getErrorCode [#geterrorcode]
+
+<CodeBlock links={{"QueryExecutionError": "queryexecutionerror"}}>
+```cpp showLineNumbers={false}
+int32_t QueryExecutionError::getErrorCode() const
+```
+</CodeBlock>
+
+### hasErrorCode [#haserrorcode]
+
+<CodeBlock links={{"QueryExecutionError": "queryexecutionerror"}}>
+```cpp showLineNumbers={false}
+bool QueryExecutionError::hasErrorCode(
+    ErrorCode const ec
+) const
+```
+</CodeBlock>
+
+### wasMultifragKernelLaunch [#wasmultifragkernellaunch]
+
+<CodeBlock links={{"QueryExecutionError": "queryexecutionerror"}}>
+```cpp showLineNumbers={false}
+bool QueryExecutionError::wasMultifragKernelLaunch() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### toString [#tostring]
+
+<CodeBlock links={{"QueryExecutionError": "queryexecutionerror"}}>
+```cpp showLineNumbers={false}
+static std::string QueryExecutionError::toString(
+    int32_t error_code
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `error_code_` | `int32_t` | |
+| `execution_props_` | `boost::optional< QueryExecutionProperties >` | |

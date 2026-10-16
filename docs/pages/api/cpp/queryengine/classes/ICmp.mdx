@@ -1,0 +1,110 @@
+---
+title: ICmp
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### ICmp [#icmp]
+
+<CodeBlock links={{"ICmp": "icmp", "Value": "value"}}>
+```cpp showLineNumbers={false}
+ICmp::ICmp(
+    const Predicate predicate,
+    const Value *lhs,
+    const Value *rhs,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### predicate [#predicate]
+
+<CodeBlock links={{"ICmp": "icmp"}}>
+```cpp showLineNumbers={false}
+Predicate ICmp::predicate() const
+```
+</CodeBlock>
+
+### lhs [#lhs]
+
+<CodeBlock links={{"ICmp": "icmp", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * ICmp::lhs() const
+```
+</CodeBlock>
+
+### rhs [#rhs]
+
+<CodeBlock links={{"ICmp": "icmp", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * ICmp::rhs() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"ICmp": "icmp", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void ICmp::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"ICmp": "icmp", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"ICmp": "icmp", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"ICmp": "icmp", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Predicate
+
+| Name | Value | Description |
+|---|---|---|
+| `NE` | | |
+| `EQ` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `predicate_` | `const Predicate` | |
+| `lhs_` | `const Value *` | |
+| `rhs_` | `const Value *` | |

@@ -1,0 +1,431 @@
+---
+title: MaxRangeTableIndexVisitor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RangeTableIndexVisitor.h>
+```
+
+**Inherits from:** `ScalarExprVisitor< int >` (public)
+
+---
+
+## Methods
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor"}}>
+```cpp showLineNumbers={false}
+int MaxRangeTableIndexVisitor::visitColumnVar(
+    const Analyzer::ColumnVar *column
+) const override
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor"}}>
+```cpp showLineNumbers={false}
+int MaxRangeTableIndexVisitor::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *expr_tuple
+) const override
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor"}}>
+```cpp showLineNumbers={false}
+int MaxRangeTableIndexVisitor::aggregateResult(
+    const int &aggregate,
+    const int &next_result
+) const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitConstant(
+    const Analyzer::Constant *
+) const
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitUOper(
+    const Analyzer::UOper *uoper
+) const
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<int>::visitBegin() const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual int ScalarExprVisitor<int>::defaultResult() const
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"MaxRangeTableIndexVisitor": "maxrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+int ScalarExprVisitor<int>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>

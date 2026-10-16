@@ -1,0 +1,33 @@
+---
+title: fixed_width_int_decode_noinline
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+DEVICE NEVER_INLINE int64_t SUFFIX fixed_width_int_decode_noinline(
+    const int8_t *byte_stream,
+    const int32_t byte_width,
+    const int64_t pos
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT int64_t fixed_width_int_decode_noinline(
+    const int8_t *byte_stream,
+    const int32_t byte_width,
+    const int64_t pos
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

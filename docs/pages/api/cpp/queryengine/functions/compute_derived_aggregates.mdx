@@ -1,0 +1,20 @@
+---
+title: compute_derived_aggregates
+description: ""
+---
+
+<CodeBlock links={{"SumAndCountPair": "../structs/sumandcountpair"}}>
+```cpp showLineNumbers={false}
+template <typename AGG_VALUE_TYPE>
+void compute_derived_aggregates(
+    SumAndCountPair<AGG_VALUE_TYPE> *aggregation_tree_for_partition,
+    SumAndCountPair<AGG_VALUE_TYPE> &res,
+    size_t query_range_start_idx,
+    size_t query_range_end_idx,
+    size_t leaf_level,
+    size_t tree_fanout,
+    AGG_VALUE_TYPE invalid_val,
+    AGG_VALUE_TYPE null_val
+)
+```
+</CodeBlock>

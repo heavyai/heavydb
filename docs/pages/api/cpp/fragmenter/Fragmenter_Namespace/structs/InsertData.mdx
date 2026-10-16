@@ -1,0 +1,25 @@
+---
+title: Fragmenter_Namespace::InsertData
+description: "The data to be inserted using the fragment manager."
+---
+
+The data to be inserted using the fragment manager.
+
+The data being inserted is assumed to be in columnar format, and so the offset to the beginning of each column can be calculated by multiplying the column size by the number of rows.
+
+```cpp showLineNumbers={false}
+#include <Fragmenter_Namespace/Fragmenter.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `databaseId` | `int` | |
+| `tableId` | `int` | identifies the database into which the data is being inserted |
+| `columnIds` | `std::vector< int >` | identifies the table into which the data is being inserted |
+| `numRows` | `size_t` | a vector of column ids for the row(s) being inserted |
+| `data` | `std::vector< DataBlockPtr >` | the number of rows being inserted |
+| `is_default` | `std::vector< bool >` | points to the start of the data block per column for the row(s) being inserted |

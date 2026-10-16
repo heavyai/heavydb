@@ -1,0 +1,127 @@
+---
+title: foreign_storage::ArchiveWrapper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/FileReader.h>
+```
+
+---
+
+## Constructors
+
+### ArchiveWrapper [#archivewrapper]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ArchiveWrapper::ArchiveWrapper(
+    const std::string &file_path
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### skipToEntry [#skiptoentry]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ArchiveWrapper::skipToEntry(
+    int entry_number
+)
+```
+</CodeBlock>
+
+Skip to entry in archive.
+
+### nextEntry [#nextentry]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ArchiveWrapper::nextEntry()
+```
+</CodeBlock>
+
+### currentEntryFinished [#currententryfinished]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ArchiveWrapper::currentEntryFinished() const
+```
+</CodeBlock>
+
+### currentEntryDataAvailable [#currententrydataavailable]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ArchiveWrapper::currentEntryDataAvailable() const
+```
+</CodeBlock>
+
+### consumeDataFromCurrentEntry [#consumedatafromcurrententry]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ArchiveWrapper::consumeDataFromCurrentEntry(
+    size_t size,
+    char *dest_buffer = nullptr
+)
+```
+</CodeBlock>
+
+### peekNextChar [#peeknextchar]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+char foreign_storage::ArchiveWrapper::peekNextChar()
+```
+</CodeBlock>
+
+### getCurrentEntryIndex [#getcurrententryindex]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+int foreign_storage::ArchiveWrapper::getCurrentEntryIndex() const
+```
+</CodeBlock>
+
+### resetArchive [#resetarchive]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ArchiveWrapper::resetArchive()
+```
+</CodeBlock>
+
+### entryName [#entryname]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ArchiveWrapper::entryName()
+```
+</CodeBlock>
+
+### fetchBlock [#fetchblock]
+
+<CodeBlock links={{"ArchiveWrapper": "archivewrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ArchiveWrapper::fetchBlock()
+```
+</CodeBlock>
+
+Get the next block from the current archive file.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `arch_` | `std::unique_ptr< Archive >` | |
+| `current_block_` | `const void *` | |
+| `block_chars_remaining_` | `size_t` | |
+| `current_entry_` | `int` | |
+| `file_path_` | `std::string` | |

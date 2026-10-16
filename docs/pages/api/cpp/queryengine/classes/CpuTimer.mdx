@@ -1,0 +1,168 @@
+---
+title: CpuTimer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CpuTimer.hpp>
+```
+
+---
+
+## Constructors
+
+### CpuTimer [#cputimer]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+CpuTimer::CpuTimer(
+    const std::string &label
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with nest level)">
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+CpuTimer::CpuTimer(
+    const std::string &label,
+    const int64_t nest_level
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~CpuTimer
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+CpuTimer::~CpuTimer()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### start_event_timer [#starteventtimer]
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+void CpuTimer::start_event_timer(
+    const std::string &event_label
+)
+```
+</CodeBlock>
+
+### start_nested_event_timer [#startnestedeventtimer]
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CpuTimer> CpuTimer::start_nested_event_timer(
+    const std::string &event_label
+)
+```
+</CodeBlock>
+
+### end_event_timer [#endeventtimer]
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+void CpuTimer::end_event_timer()
+```
+</CodeBlock>
+
+### start_event_timer_impl [#starteventtimerimpl]
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+EventTimer & CpuTimer::start_event_timer_impl(
+    const std::string &event_label,
+    const bool make_nested
+)
+```
+</CodeBlock>
+
+### initialize [#initialize]
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+void CpuTimer::initialize()
+```
+</CodeBlock>
+
+### finalize [#finalize]
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+void CpuTimer::finalize()
+```
+</CodeBlock>
+
+### print_timings [#printtimings]
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+void CpuTimer::print_timings()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `time_point` | `std::chrono::time_point< std::chrono::high_resolution_clock >` |
+
+### TimerResolution
+
+| Name | Value | Description |
+|---|---|---|
+| `kSeconds` | | |
+| `kMilliseconds` | | |
+| `kMicroseconds` | | |
+| `kNanoseconds` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `timer_label_` | `const std::string` | |
+| `nest_level_` | `const size_t` | |
+| `timers_start_` | `time_point` | |
+| `timers_end_` | `time_point` | |
+| `event_timers_` | `std::vector< EventTimer >` | |
+
+---
+
+## Inner classes
+
+### EventTimer
+
+<CodeBlock links={{"CpuTimer": "cputimer"}}>
+```cpp showLineNumbers={false}
+struct CpuTimer::EventTimer
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `event_label` | `std::string` | |
+| `start_time` | `time_point` | |
+| `end_time` | `time_point` | |
+| `nested_event_timer` | `std::shared_ptr< CpuTimer >` | |
+| `is_finished` | `bool` | |

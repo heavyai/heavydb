@@ -1,0 +1,34 @@
+---
+title: logger::make_sink
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Collector": "../classes/collector", "LogOptions": "../classes/logoptions"}}>
+```cpp showLineNumbers={false}
+template <typename FILE_SINK, typename TAG>
+boost::shared_ptr<FILE_SINK> logger::make_sink(
+    boost::shared_ptr<Collector> &collector,
+    LogOptions const &log_opts,
+    fs::path const &full_log_dir,
+    TAG const tag
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"LogOptions": "../classes/logoptions"}}>
+```cpp showLineNumbers={false}
+template <typename CONSOLE_SINK>
+boost::shared_ptr<CONSOLE_SINK> logger::make_sink(
+    LogOptions const &log_opts
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

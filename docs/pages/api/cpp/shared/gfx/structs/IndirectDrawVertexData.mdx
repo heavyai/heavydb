@@ -1,0 +1,51 @@
+---
+title: gfx::IndirectDrawVertexData
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <gfx/ShapeDrawData.h>
+```
+
+---
+
+## Constructors
+
+### IndirectDrawVertexData [#indirectdrawvertexdata]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"IndirectDrawVertexData": "indirectdrawvertexdata"}}>
+```cpp showLineNumbers={false}
+gfx::IndirectDrawVertexData::IndirectDrawVertexData()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"IndirectDrawVertexData": "indirectdrawvertexdata"}}>
+```cpp showLineNumbers={false}
+gfx::IndirectDrawVertexData::IndirectDrawVertexData(
+    const uint32_t vertex_count,
+    const uint32_t instance_count = 1,
+    const uint32_t first_vertex = 0,
+    const uint32_t first_instance = 0
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `vertex_count` | `uint32_t` | |
+| `instance_count` | `uint32_t` | |
+| `first_vertex` | `uint32_t` | |
+| `first_instance` | `uint32_t` | |

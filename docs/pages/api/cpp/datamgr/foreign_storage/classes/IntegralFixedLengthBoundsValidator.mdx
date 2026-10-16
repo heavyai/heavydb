@@ -1,0 +1,126 @@
+---
+title: foreign_storage::IntegralFixedLengthBoundsValidator
+description: ""
+---
+
+<CodeBlock id="IntegralFixedLengthBoundsValidator" links={{"IntegralFixedLengthBoundsValidator": "integralfixedlengthboundsvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class IntegralFixedLengthBoundsValidator
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetMetadataValidator.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Methods
+
+### valueWithinBounds [#valuewithinbounds]
+
+<CodeBlock links={{"IntegralFixedLengthBoundsValidator": "integralfixedlengthboundsvalidator"}}>
+```cpp showLineNumbers={false}
+static bool foreign_storage::IntegralFixedLengthBoundsValidator<T>::valueWithinBounds(
+    const T &value,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### getMinMaxBoundsAsStrings [#getminmaxboundsasstrings]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"IntegralFixedLengthBoundsValidator": "integralfixedlengthboundsvalidator"}}>
+```cpp showLineNumbers={false}
+static std::pair<std::string, std::string> foreign_storage::IntegralFixedLengthBoundsValidator<T>::getMinMaxBoundsAsStrings(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"IntegralFixedLengthBoundsValidator": "integralfixedlengthboundsvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename D>
+static std::pair<std::string, std::string> foreign_storage::IntegralFixedLengthBoundsValidator<T>::getMinMaxBoundsAsStrings()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### checkBounds [#checkbounds]
+
+<Tabs>
+<Tab title="Check bounds for value in *signed* case">
+
+<CodeBlock links={{"IntegralFixedLengthBoundsValidator": "integralfixedlengthboundsvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename D, typename TT = T>
+static bool foreign_storage::IntegralFixedLengthBoundsValidator<T>::checkBounds(
+    const T &value
+)
+```
+</CodeBlock>
+
+Check bounds for value in *signed* case.
+
+**Returns:** true if value within bounds
+
+**Parameters**
+
+<ParamField path="value" type="const T &">
+- Value to check
+</ParamField>
+
+</Tab>
+<Tab title="Check bounds for value in *unsigned* case">
+
+<CodeBlock links={{"IntegralFixedLengthBoundsValidator": "integralfixedlengthboundsvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename D, typename TT = T>
+static bool foreign_storage::IntegralFixedLengthBoundsValidator<T>::checkBounds(
+    const T &value
+)
+```
+</CodeBlock>
+
+Check bounds for value in *unsigned* case.
+
+**Returns:** true if value within bounds
+
+**Parameters**
+
+<ParamField path="value" type="const T &">
+- Value to check
+</ParamField>
+
+</Tab>
+</Tabs>
+
+---
+
+## Static methods
+
+### validateValue [#validatevalue]
+
+<CodeBlock links={{"IntegralFixedLengthBoundsValidator": "integralfixedlengthboundsvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename D>
+static void foreign_storage::IntegralFixedLengthBoundsValidator<T>::validateValue(
+    const D &data_value,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>

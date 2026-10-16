@@ -1,0 +1,47 @@
+---
+title: threading_std::task_group
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <threading_std/threading_std.h>
+```
+
+---
+
+## Methods
+
+### run [#run]
+
+<CodeBlock links={{"task_group": "taskgroup"}}>
+```cpp showLineNumbers={false}
+template <typename F>
+void threading_std::task_group::run(
+    F &&f
+)
+```
+</CodeBlock>
+
+### cancel [#cancel]
+
+<CodeBlock links={{"task_group": "taskgroup"}}>
+```cpp showLineNumbers={false}
+void threading_std::task_group::cancel()
+```
+</CodeBlock>
+
+### wait [#wait]
+
+<CodeBlock links={{"task_group": "taskgroup"}}>
+```cpp showLineNumbers={false}
+void threading_std::task_group::wait()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `threads_` | `std::vector< future< void > >` | |

@@ -1,0 +1,89 @@
+---
+title: shared::TableKey
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <shared/DbObjectKeys.h>
+```
+
+---
+
+## Constructors
+
+### TableKey [#tablekey]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"TableKey": "tablekey"}}>
+```cpp showLineNumbers={false}
+shared::TableKey::TableKey()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableKey": "tablekey"}}>
+```cpp showLineNumbers={false}
+shared::TableKey::TableKey(
+    int32_t db_id,
+    int32_t table_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"TableKey": "tablekey"}}>
+```cpp showLineNumbers={false}
+bool shared::TableKey::operator==(
+    const TableKey &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"TableKey": "tablekey"}}>
+```cpp showLineNumbers={false}
+bool shared::TableKey::operator!=(
+    const TableKey &other
+) const
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"TableKey": "tablekey"}}>
+```cpp showLineNumbers={false}
+bool shared::TableKey::operator<(
+    const TableKey &other
+) const
+```
+</CodeBlock>
+
+### hash [#hash]
+
+<CodeBlock links={{"TableKey": "tablekey"}}>
+```cpp showLineNumbers={false}
+size_t shared::TableKey::hash() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `db_id` | `int32_t` | |
+| `table_id` | `int32_t` | |

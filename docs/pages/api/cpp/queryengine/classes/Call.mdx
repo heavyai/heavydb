@@ -1,0 +1,158 @@
+---
+title: Call
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### Call [#call]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Call": "call", "Function": "function", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Call::Call(
+    const Function *callee,
+    const std::vector<const Value *> &arguments,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"Call": "call", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Call::Call(
+    const std::string &callee_name,
+    const std::vector<const Value *> &arguments,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with returnType)">
+
+<CodeBlock links={{"Call": "call", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Call::Call(
+    const std::string &callee_name,
+    const Type returnType,
+    const std::vector<const Value *> &arguments,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### external [#external]
+
+<CodeBlock links={{"Call": "call"}}>
+```cpp showLineNumbers={false}
+bool Call::external() const
+```
+</CodeBlock>
+
+### callee_name [#calleename]
+
+<CodeBlock links={{"Call": "call"}}>
+```cpp showLineNumbers={false}
+const std::string & Call::callee_name() const
+```
+</CodeBlock>
+
+### callee [#callee]
+
+<CodeBlock links={{"Call": "call", "Function": "function"}}>
+```cpp showLineNumbers={false}
+const Function * Call::callee() const
+```
+</CodeBlock>
+
+### arguments [#arguments]
+
+<CodeBlock links={{"Call": "call", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const std::vector<const Value *> & Call::arguments() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"Call": "call", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void Call::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### cached_callee [#cachedcallee]
+
+<CodeBlock links={{"Call": "call"}}>
+```cpp showLineNumbers={false}
+void * Call::cached_callee() const
+```
+</CodeBlock>
+
+### set_cached_callee [#setcachedcallee]
+
+<CodeBlock links={{"Call": "call"}}>
+```cpp showLineNumbers={false}
+void Call::set_cached_callee(
+    void *cached_callee
+) const
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"Call": "call", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"Call": "call", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"Call": "call", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `callee_name_` | `const std::string` | |
+| `callee_` | `const Function *` | |
+| `arguments_` | `const std::vector< const Value * >` | |
+| `cached_callee_` | `void *` | |

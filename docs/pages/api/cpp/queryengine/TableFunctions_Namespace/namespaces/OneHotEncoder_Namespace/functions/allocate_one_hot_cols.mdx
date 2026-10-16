@@ -1,0 +1,48 @@
+---
+title: TableFunctions_Namespace::OneHotEncoder_Namespace::allocate_one_hot_cols
+description: "Allocates memory for the one-hot encoded columns and initializes them to zero."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename F>
+template NEVER_INLINE HOST std::vector<std::vector<double>> TableFunctions_Namespace::OneHotEncoder_Namespace::allocate_one_hot_cols(
+    const int64_t num_one_hot_cols,
+    const int64_t col_size
+)
+```
+</CodeBlock>
+
+Allocates memory for the one-hot encoded columns and initializes them to zero.
+
+It takes the number of one-hot columns and the column size as input and returns a vector of one-hot encoded columns.
+
+**Returns:** std::vector&lt;std::vector&lt;F&gt;&gt; - a vector of vectors, with each inner vector representing a one-hot encoding for a value in a column
+
+**Parameters**
+
+<ParamField path="num_one_hot_cols" type="const int64_t">
+- Number of one-hot encoded columns to allocate
+</ParamField>
+
+<ParamField path="col_size" type="const int64_t">
+- Size of each column in number of values/rows
+</ParamField>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST std::vector<std::vector<float>> TableFunctions_Namespace::OneHotEncoder_Namespace::allocate_one_hot_cols(
+    const int64_t num_one_hot_cols,
+    const int64_t col_size
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

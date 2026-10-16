@@ -1,0 +1,642 @@
+---
+title: RowSetMemoryOwner
+description: "Handles allocations and outputs for all stages in a query, either explicitly or via a managed allocator object."
+---
+
+Handles allocations and outputs for all stages in a query, either explicitly or via a managed allocator object.
+
+```cpp showLineNumbers={false}
+#include <RowSetMemoryOwner.h>
+```
+
+**Inherits from:** `SimpleAllocator` (public), `boost::noncopyable` (private)
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Constructors
+
+### RowSetMemoryOwner [#rowsetmemoryowner]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+RowSetMemoryOwner::RowSetMemoryOwner(
+    const size_t arena_block_size,
+    const size_t executor_id
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~RowSetMemoryOwner
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+RowSetMemoryOwner::~RowSetMemoryOwner()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setKernelMemoryAllocator [#setkernelmemoryallocator]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::setKernelMemoryAllocator(
+    const size_t num_kernels
+)
+```
+</CodeBlock>
+
+### allocate [#allocate]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+int8_t * RowSetMemoryOwner::allocate(
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+int8_t * RowSetMemoryOwner::allocate(
+    const size_t num_bytes,
+    const size_t thread_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### initCountDistinctBufferForFastAllocation [#initcountdistinctbufferforfastallocation]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::initCountDistinctBufferForFastAllocation(
+    int8_t *buffer,
+    size_t buffer_size,
+    size_t thread_idx
+)
+```
+</CodeBlock>
+
+### allocAndInitCountDistinctBufferForFastAllocator [#allocandinitcountdistinctbufferforfastallocator]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::allocAndInitCountDistinctBufferForFastAllocator(
+    size_t buffer_size,
+    size_t thread_idx
+)
+```
+</CodeBlock>
+
+### AddCountDistinctBufferFastAllocator [#addcountdistinctbufferfastallocator]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RowSetMemoryOwner::AddCountDistinctBufferFastAllocator(
+    size_t buffer_size
+)
+```
+</CodeBlock>
+
+### allocateCachedGroupByBuffer [#allocatecachedgroupbybuffer]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+std::pair<int64_t *, bool> RowSetMemoryOwner::allocateCachedGroupByBuffer(
+    const size_t num_bytes,
+    const size_t thread_idx
+)
+```
+</CodeBlock>
+
+### fastAllocateCountDistinctBuffer [#fastallocatecountdistinctbuffer]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+int8_t * RowSetMemoryOwner::fastAllocateCountDistinctBuffer(
+    const size_t num_bytes,
+    const size_t thread_idx = 0
+)
+```
+</CodeBlock>
+
+### slowAllocateCountDistinctBuffer [#slowallocatecountdistinctbuffer]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+int8_t * RowSetMemoryOwner::slowAllocateCountDistinctBuffer(
+    const size_t num_bytes,
+    const size_t thread_idx = 0
+)
+```
+</CodeBlock>
+
+### addCountDistinctBuffer [#addcountdistinctbuffer]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::addCountDistinctBuffer(
+    int8_t *count_distinct_buffer,
+    const size_t bytes,
+    const bool physical_buffer
+)
+```
+</CodeBlock>
+
+### addCountDistinctSet [#addcountdistinctset]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::addCountDistinctSet(
+    CountDistinctSet *count_distinct_set
+)
+```
+</CodeBlock>
+
+### clearNonOwnedGroupByBuffers [#clearnonownedgroupbybuffers]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::clearNonOwnedGroupByBuffers()
+```
+</CodeBlock>
+
+### addVarlenBuffer [#addvarlenbuffer]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::addVarlenBuffer(
+    void *varlen_buffer
+)
+```
+</CodeBlock>
+
+### addVarlenInputBuffer [#addvarleninputbuffer]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::addVarlenInputBuffer(
+    Data_Namespace::AbstractBuffer *buffer
+)
+```
+</CodeBlock>
+
+Adds a GPU buffer containing a variable length input column.
+
+Variable length inputs on GPU are referenced in output projected targets and should not be freed until the query results have been resolved.
+
+### addString [#addstring]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+std::string * RowSetMemoryOwner::addString(
+    const std::string &str
+)
+```
+</CodeBlock>
+
+### addArray [#addarray]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+std::vector<int64_t> * RowSetMemoryOwner::addArray(
+    const std::vector<int64_t> &arr
+)
+```
+</CodeBlock>
+
+### addStringDict [#addstringdict]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy * RowSetMemoryOwner::addStringDict(
+    std::shared_ptr<StringDictionary> str_dict,
+    const shared::StringDictKey &dict_key,
+    const int64_t generation
+)
+```
+</CodeBlock>
+
+### generate_translation_map_key [#generatetranslationmapkey]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+std::string RowSetMemoryOwner::generate_translation_map_key(
+    const shared::StringDictKey &source_proxy_dict_key,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+std::string RowSetMemoryOwner::generate_translation_map_key(
+    const shared::StringDictKey &source_proxy_dict_key,
+    const shared::StringDictKey &dest_proxy_dict_key,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### addStringProxyIntersectionTranslationMap [#addstringproxyintersectiontranslationmap]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::IdMap * RowSetMemoryOwner::addStringProxyIntersectionTranslationMap(
+    const StringDictionaryProxy *source_proxy,
+    const StringDictionaryProxy *dest_proxy,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos
+)
+```
+</CodeBlock>
+
+### addStringProxyNumericTranslationMap [#addstringproxynumerictranslationmap]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::TranslationMap<Datum> * RowSetMemoryOwner::addStringProxyNumericTranslationMap(
+    const StringDictionaryProxy *source_proxy,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos
+)
+```
+</CodeBlock>
+
+### addStringProxyUnionTranslationMap [#addstringproxyuniontranslationmap]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::IdMap * RowSetMemoryOwner::addStringProxyUnionTranslationMap(
+    const StringDictionaryProxy *source_proxy,
+    StringDictionaryProxy *dest_proxy,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos
+)
+```
+</CodeBlock>
+
+### getStringOps [#getstringops]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const StringOps_Namespace::StringOps * RowSetMemoryOwner::getStringOps(
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos
+)
+```
+</CodeBlock>
+
+### getStringDictProxy [#getstringdictproxy]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy * RowSetMemoryOwner::getStringDictProxy(
+    const shared::StringDictKey &dict_key
+) const
+```
+</CodeBlock>
+
+### getOrAddStringDictProxy [#getoraddstringdictproxy]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy * RowSetMemoryOwner::getOrAddStringDictProxy(
+    const shared::StringDictKey &dict_key,
+    const bool with_generation
+)
+```
+</CodeBlock>
+
+### addLiteralStringDictProxy [#addliteralstringdictproxy]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::addLiteralStringDictProxy(
+    std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy
+)
+```
+</CodeBlock>
+
+### getLiteralStringDictProxy [#getliteralstringdictproxy]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy * RowSetMemoryOwner::getLiteralStringDictProxy() const
+```
+</CodeBlock>
+
+### getOrAddStringProxyTranslationMap [#getoraddstringproxytranslationmap]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::IdMap * RowSetMemoryOwner::getOrAddStringProxyTranslationMap(
+    const shared::StringDictKey &source_dict_id_in,
+    const shared::StringDictKey &dest_dict_id_in,
+    const bool with_generation,
+    const StringTranslationType translation_map_type,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos
+)
+```
+</CodeBlock>
+
+### getOrAddStringProxyNumericTranslationMap [#getoraddstringproxynumerictranslationmap]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::TranslationMap<Datum> * RowSetMemoryOwner::getOrAddStringProxyNumericTranslationMap(
+    const shared::StringDictKey &source_dict_id_in,
+    const bool with_generation,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos
+)
+```
+</CodeBlock>
+
+### addColBuffer [#addcolbuffer]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::addColBuffer(
+    const void *col_buffer
+)
+```
+</CodeBlock>
+
+### cloneStrDictDataOnly [#clonestrdictdataonly]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RowSetMemoryOwner> RowSetMemoryOwner::cloneStrDictDataOnly()
+```
+</CodeBlock>
+
+### setDictionaryGenerations [#setdictionarygenerations]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner", "StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::setDictionaryGenerations(
+    StringDictionaryGenerations generations
+)
+```
+</CodeBlock>
+
+### getStringDictionaryGenerations [#getstringdictionarygenerations]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner", "StringDictionaryGenerations": "stringdictionarygenerations"}}>
+```cpp showLineNumbers={false}
+StringDictionaryGenerations & RowSetMemoryOwner::getStringDictionaryGenerations()
+```
+</CodeBlock>
+
+### initTDigest [#inittdigest]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner", "ApproxQuantileDescriptor": "../structs/approxquantiledescriptor"}}>
+```cpp showLineNumbers={false}
+quantile::TDigest * RowSetMemoryOwner::initTDigest(
+    size_t thread_idx,
+    ApproxQuantileDescriptor,
+    double q
+)
+```
+</CodeBlock>
+
+### reserveTDigestMemory [#reservetdigestmemory]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::reserveTDigestMemory(
+    size_t thread_idx,
+    size_t capacity
+)
+```
+</CodeBlock>
+
+### setTableFunctionMetadata [#settablefunctionmetadata]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::setTableFunctionMetadata(
+    const char *key,
+    const uint8_t *raw_data,
+    const size_t num_bytes,
+    const TableFunctionMetadataType value_type
+)
+```
+</CodeBlock>
+
+### getTableFunctionMetadata [#gettablefunctionmetadata]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::getTableFunctionMetadata(
+    const char *key,
+    const uint8_t *&raw_data,
+    size_t &num_bytes,
+    TableFunctionMetadataType &value_type
+) const
+```
+</CodeBlock>
+
+### allocateMode [#allocatemode]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner", "AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, AggMode *> RowSetMemoryOwner::allocateMode()
+```
+</CodeBlock>
+
+### getAggMode [#getaggmode]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner", "AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+AggMode * RowSetMemoryOwner::getAggMode(
+    int64_t const ival
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner", "AggMode": "aggmode"}}>
+```cpp showLineNumbers={false}
+AggMode const  * RowSetMemoryOwner::getAggMode(
+    int64_t const ival
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### allocateSourceSDToTempSDTransMap [#allocatesourcesdtotempsdtransmap]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::allocateSourceSDToTempSDTransMap(
+    size_t key,
+    int32_t const size
+)
+```
+</CodeBlock>
+
+### hasSourceSDToTempSDTransMap [#hassourcesdtotempsdtransmap]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+bool RowSetMemoryOwner::hasSourceSDToTempSDTransMap(
+    size_t key
+) const
+```
+</CodeBlock>
+
+### getSourceSDToTempSDTransMapSize [#getsourcesdtotempsdtransmapsize]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+const size_t RowSetMemoryOwner::getSourceSDToTempSDTransMapSize(
+    size_t key
+) const
+```
+</CodeBlock>
+
+### getSourceSDToTempSDTransMap [#getsourcesdtotempsdtransmap]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+int32_t * RowSetMemoryOwner::getSourceSDToTempSDTransMap(
+    size_t key
+) const
+```
+</CodeBlock>
+
+### getTempDictionaryKey [#gettempdictionarykey]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+shared::StringDictKey RowSetMemoryOwner::getTempDictionaryKey(
+    int32_t db_id,
+    const Analyzer::StringOper &string_oper
+)
+```
+</CodeBlock>
+
+### allocateUnlocked [#allocateunlocked]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+int8_t * RowSetMemoryOwner::allocateUnlocked(
+    const size_t num_bytes,
+    const size_t thread_idx,
+    bool skip_allocation_log = false
+)
+```
+</CodeBlock>
+
+### initAndAddCountDistinctBuffer [#initandaddcountdistinctbuffer]
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+void RowSetMemoryOwner::initAndAddCountDistinctBuffer(
+    int8_t *buffer,
+    size_t num_bytes
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `TDigestAllocator` | `FastAllocator< int8_t >` |
+| `CountDistinctBufferFastAllocator` | `FastAllocator< int8_t >` |
+| `MetadataValue` | `std::pair< std::vector< uint8_t >, TableFunctionMetadataType >` |
+
+### StringTranslationType
+
+| Name | Value | Description |
+|---|---|---|
+| `SOURCE_INTERSECTION` | | |
+| `SOURCE_UNION` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `count_distinct_bitmaps_` | `std::vector< CountDistinctBitmapBuffer >` | |
+| `count_distinct_sets_` | `std::vector< CountDistinctSet * >` | |
+| `non_owned_group_by_buffers_` | `std::vector< int64_t * >` | |
+| `varlen_buffers_` | `std::unordered_set< void * >` | |
+| `strings_` | `std::list< std::string >` | |
+| `arrays_` | `std::list< std::vector< int64_t > >` | |
+| `str_dict_proxy_owned_` | `std::unordered_map< shared::StringDictKey, std::shared_ptr< StringDictionaryProxy > >` | |
+| `str_proxy_intersection_translation_maps_owned_` | `std::map< std::string, StringDictionaryProxy::IdMap >` | |
+| `str_proxy_union_translation_maps_owned_` | `std::map< std::string, StringDictionaryProxy::IdMap >` | |
+| `str_proxy_numeric_translation_maps_owned_` | `std::map< std::string, StringDictionaryProxy::TranslationMap< Datum > >` | |
+| `lit_str_dict_proxy_` | `std::shared_ptr< StringDictionaryProxy >` | |
+| `string_dictionary_generations_` | `StringDictionaryGenerations` | |
+| `col_buffers_` | `std::vector< void * >` | |
+| `varlen_input_buffers_` | `std::vector< Data_Namespace::AbstractBuffer * >` | |
+| `t_digest_allocators_` | `std::deque< TDigestAllocator >` | |
+| `t_digests_` | `std::vector< std::unique_ptr< quantile::TDigest > >` | |
+| `string_ops_owned_` | `std::map< std::string, std::shared_ptr< StringOps_Namespace::StringOps > >` | |
+| `agg_modes_` | `std::deque< AggMode >` | |
+| `arena_block_size_` | `size_t` | |
+| `allocators_` | `std::vector< std::unique_ptr< Arena > >` | |
+| `count_distinct_buffer_fast_allocators_` | `std::vector< std::unique_ptr< CountDistinctBufferFastAllocator > >` | |
+| `source_sd_to_temp_sd_trans_map_` | `std::unordered_map< size_t, std::unique_ptr< std::vector< int32_t > > >` | |
+| `executor_id_` | `size_t` | |
+| `next_temp_dict_id_` | `int32_t` | |
+| `string_dict_key_by_string_oper_` | `std::map< std::string, shared::StringDictKey >` | |
+| `state_mutex_` | `std::mutex` | |
+| `table_function_metadata_store_` | `std::map< std::string, MetadataValue >` | |
+| `table_function_metadata_store_mutex_` | `std::mutex` | |
+
+---
+
+## Inner classes
+
+### CountDistinctBitmapBuffer
+
+<CodeBlock links={{"RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+struct RowSetMemoryOwner::CountDistinctBitmapBuffer
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr` | `int8_t *` | |
+| `size` | `const size_t` | |
+| `physical_buffer` | `const bool` | |

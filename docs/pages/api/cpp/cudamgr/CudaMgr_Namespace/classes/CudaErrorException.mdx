@@ -1,0 +1,44 @@
+---
+title: CudaMgr_Namespace::CudaErrorException
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CudaMgr_Namespace/CudaShared.h>
+```
+
+**Inherits from:** `std::runtime_error` (public)
+
+---
+
+## Constructors
+
+### CudaErrorException [#cudaerrorexception]
+
+<CodeBlock links={{"CudaErrorException": "cudaerrorexception"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::CudaErrorException::CudaErrorException(
+    CUresult status
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getStatus [#getstatus]
+
+<CodeBlock links={{"CudaErrorException": "cudaerrorexception"}}>
+```cpp showLineNumbers={false}
+CUresult CudaMgr_Namespace::CudaErrorException::getStatus() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `status_` | `CUresult const` | |

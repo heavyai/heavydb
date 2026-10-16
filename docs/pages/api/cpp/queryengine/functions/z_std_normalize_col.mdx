@@ -1,0 +1,53 @@
+---
+title: z_std_normalize_col
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+void z_std_normalize_col(
+    const T *input_data,
+    T *output_data,
+    const int64_t num_rows,
+    const double mean,
+    const double std_dev
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template void z_std_normalize_col(
+    const float *input_data,
+    float *output_data,
+    const int64_t num_rows,
+    const double mean,
+    const double std_dev
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template void z_std_normalize_col(
+    const double *input_data,
+    double *output_data,
+    const int64_t num_rows,
+    const double mean,
+    const double std_dev
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

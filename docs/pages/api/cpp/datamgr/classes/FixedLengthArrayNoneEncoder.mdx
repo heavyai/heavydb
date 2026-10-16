@@ -1,0 +1,672 @@
+---
+title: FixedLengthArrayNoneEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <FixedLengthArrayNoneEncoder.h>
+```
+
+**Inherits from:** `Encoder` (public)
+
+---
+
+## Constructors
+
+### FixedLengthArrayNoneEncoder [#fixedlengtharraynoneencoder]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+FixedLengthArrayNoneEncoder::FixedLengthArrayNoneEncoder(
+    AbstractBuffer *buffer,
+    size_t as
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNumElemsForBytesEncodedDataAtIndices [#getnumelemsforbytesencodeddataatindices]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+size_t FixedLengthArrayNoneEncoder::getNumElemsForBytesEncodedDataAtIndices(
+    const int8_t *index_data,
+    const std::vector<size_t> &selected_idx,
+    const size_t byte_limit
+) override
+```
+</CodeBlock>
+
+Compute the maximum number of variable length encoded elements given a byte limit.
+
+NOTE: optional parameters above may be ignored by the implementation, but may or may not be required depending on the encoder type backing the implementation.
+
+**Returns:** the number of elements
+
+**Parameters**
+
+<ParamField path="index_data" type="const int8_t *">
+- (Optional) index data for the encoded type
+</ParamField>
+
+<ParamField path="selected_idx" type="const std::vector<size_t> &">
+- Which indices in the encoded data to consider
+</ParamField>
+
+<ParamField path="byte_limit" type="const size_t">
+- Byte limit that must be respected
+</ParamField>
+
+### getNumElemsForBytesInsertData [#getnumelemsforbytesinsertdata]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+size_t FixedLengthArrayNoneEncoder::getNumElemsForBytesInsertData(
+    const ArrayDatum *srcData,
+    const int start_idx,
+    const size_t numAppendElems,
+    const size_t byteLimit,
+    const bool replicating = false
+)
+```
+</CodeBlock>
+
+### appendEncodedDataAtIndices [#appendencodeddataatindices]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> FixedLengthArrayNoneEncoder::appendEncodedDataAtIndices(
+    const int8_t *index_data,
+    int8_t *data,
+    const std::vector<size_t> &selected_idx
+) override
+```
+</CodeBlock>
+
+Append selected encoded data to the chunk buffer backing this encoder.
+
+NOTE: `index_data` must be non-null for varlen encoder types.
+
+**Returns:** updated chunk metadata for the chunk buffer backing this encoder
+
+**Parameters**
+
+<ParamField path="index_data" type="const int8_t *">
+- (Optional) the index data of data to append
+</ParamField>
+
+<ParamField path="data" type="int8_t *">
+- The data to append
+</ParamField>
+
+<ParamField path="selected_idx" type="const std::vector<size_t> &">
+- Which indices in the encoded data to append
+</ParamField>
+
+### appendEncodedData [#appendencodeddata]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> FixedLengthArrayNoneEncoder::appendEncodedData(
+    const int8_t *index_data,
+    int8_t *data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+Append encoded data to the chunk buffer backing this encoder.
+
+NOTE: `index_data` must be non-null for varlen encoder types.
+
+**Returns:** updated chunk metadata for the chunk buffer backing this encoder
+
+**Parameters**
+
+<ParamField path="index_data" type="const int8_t *">
+- (Optional) the index data of data to append
+</ParamField>
+
+<ParamField path="data" type="int8_t *">
+- The data to append
+</ParamField>
+
+<ParamField path="start_idx" type="const size_t">
+- The position to start encoding from in the `data` array
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to encode from the `data` array
+</ParamField>
+
+### appendData [#appenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> FixedLengthArrayNoneEncoder::appendData(
+    int8_t *&src_data,
+    const size_t num_elems_to_append,
+    const SQLTypeInfo &ti,
+    const bool replicating = false,
+    const int64_t offset = -1
+) override
+```
+</CodeBlock>
+
+Append data to the chunk buffer backing this encoder.
+
+**Parameters**
+
+<ParamField path="src_data" type="int8_t *&">
+Source data for the append
+</ParamField>
+
+<ParamField path="num_elems_to_append" type="const size_t">
+Number of elements to append
+</ParamField>
+
+<ParamField path="ti" type="const SQLTypeInfo &">
+SQL Type Info for the column TODO(adb): used?
+</ParamField>
+
+<ParamField path="replicating" type="const bool" default="false">
+Pass one value and fill the chunk with it
+</ParamField>
+
+<ParamField path="offset" type="const int64_t" default="-1">
+Write data starting at a given offset. Default is -1 which indicates an append, an offset of 0 rewrites the chunk up to `num_elems_to_append`.
+</ParamField>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> FixedLengthArrayNoneEncoder::appendData(
+    const std::vector<ArrayDatum> *srcData,
+    const int start_idx,
+    const size_t numAppendElems,
+    const bool replicating = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> FixedLengthArrayNoneEncoder::appendData(
+    const ArrayDatum *srcData,
+    const int start_idx,
+    const size_t numAppendElems,
+    const bool replicating
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getChunkStats [#getchunkstats]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkStats": "../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+ChunkStats FixedLengthArrayNoneEncoder::getChunkStats() const override
+```
+</CodeBlock>
+
+### synthesizeChunkStats [#synthesizechunkstats]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkStats": "../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+ChunkStats FixedLengthArrayNoneEncoder::synthesizeChunkStats(
+    const SQLTypeInfo &
+) const override
+```
+</CodeBlock>
+
+### updateStats [#updatestats]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::updateStats(
+    const int64_t,
+    const bool
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::updateStats(
+    const double,
+    const bool
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Update statistics for data without appending">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::updateStats(
+    const int8_t *const src_data,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+Update statistics for data without appending.
+
+**Parameters**
+
+<ParamField path="src_data" type="const int8_t *const">
+- The data with which to update statistics
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the data
+</ParamField>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::updateStats(
+    const std::vector<std::string> *const src_data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+Update statistics for string data without appending.
+
+**Parameters**
+
+<ParamField path="src_data" type="const std::vector<std::string> *const">
+- The string data with which to update statistics
+</ParamField>
+
+<ParamField path="start_idx" type="const size_t">
+- The offset into `src_data` to start the update
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the string data
+</ParamField>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::updateStats(
+    const std::string *src_data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Update statistics for array data without appending">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::updateStats(
+    const std::vector<ArrayDatum> *const src_data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+Update statistics for array data without appending.
+
+**Parameters**
+
+<ParamField path="src_data" type="const std::vector<ArrayDatum> *const">
+- The array data with which to update statistics
+</ParamField>
+
+<ParamField path="start_idx" type="const size_t">
+- The offset into `src_data` to start the update
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the array data
+</ParamField>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::updateStats(
+    const ArrayDatum *src_data,
+    const size_t start_idx,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### reduceStats [#reducestats]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::reduceStats(
+    const Encoder &
+) override
+```
+</CodeBlock>
+
+### writeChunkStats [#writechunkstats]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::writeChunkStats(
+    FILE *f
+) override
+```
+</CodeBlock>
+
+### readChunkStats [#readchunkstats]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::readChunkStats(
+    FILE *f
+) override
+```
+</CodeBlock>
+
+### copyChunkStats [#copychunkstats]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::copyChunkStats(
+    const Encoder *copyFromEncoder
+) override
+```
+</CodeBlock>
+
+### updateMetadata [#updatemetadata]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::updateMetadata(
+    int8_t *array
+)
+```
+</CodeBlock>
+
+### setChunkStats [#setchunkstats]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkStats": "../structs/chunkstats"}}>
+```cpp showLineNumbers={false}
+bool FixedLengthArrayNoneEncoder::setChunkStats(
+    const ChunkStats &stats
+) override
+```
+</CodeBlock>
+
+: Reset chunk level stats (min, max, nulls) using new values from the argument.
+
+**Returns:** : True if an update occurred and the chunk needs to be flushed. False otherwise. Default false if metadata update is unsupported. Only reset chunk stats if the incoming stats differ from the current stats.
+
+### resetChunkStats [#resetchunkstats]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::resetChunkStats() override
+```
+</CodeBlock>
+
+Resets chunk metadata stats to their default values.
+
+### updateStatsEncoded [#updatestatsencoded]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+virtual void FixedLengthArrayNoneEncoder::updateStatsEncoded(
+    const int8_t *const dst_data,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+Update statistics for encoded data without appending.
+
+**Parameters**
+
+<ParamField path="dst_data" type="const int8_t *const">
+- The data with which to update statistics
+</ParamField>
+
+<ParamField path="num_elements" type="const size_t">
+- The number of elements to scan in the data
+</ParamField>
+
+### copyMetadata [#copymetadata]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::copyMetadata(
+    const Encoder *copy_from_encoder
+)
+```
+</CodeBlock>
+
+### writeMetadata [#writemetadata]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::writeMetadata(
+    FILE *f
+)
+```
+</CodeBlock>
+
+### readMetadata [#readmetadata]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::readMetadata(
+    FILE *f,
+    int32_t version
+)
+```
+</CodeBlock>
+
+### getMetadata [#getmetadata]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkMetadata": "../structs/chunkmetadata", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+ChunkMetadata FixedLengthArrayNoneEncoder::getMetadata(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkMetadata": "../structs/chunkmetadata", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+ChunkMetadata FixedLengthArrayNoneEncoder::getMetadata() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNumElems [#getnumelems]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+size_t FixedLengthArrayNoneEncoder::getNumElems() const
+```
+</CodeBlock>
+
+### setNumElems [#setnumelems]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::setNumElems(
+    const size_t num_elems
+)
+```
+</CodeBlock>
+
+### getRasterTileInfo [#getrastertileinfo]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "RasterTileInfo": "../structs/rastertileinfo", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+RasterTileInfo FixedLengthArrayNoneEncoder::getRasterTileInfo() const
+```
+</CodeBlock>
+
+### setRasterTileInfo [#setrastertileinfo]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "RasterTileInfo": "../structs/rastertileinfo", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::setRasterTileInfo(
+    const RasterTileInfo &tile
+)
+```
+</CodeBlock>
+
+### setMetadata [#setmetadata]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "ChunkMetadata": "../structs/chunkmetadata", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::setMetadata(
+    const ChunkMetadata &meta
+)
+```
+</CodeBlock>
+
+### is_null [#isnull]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+bool FixedLengthArrayNoneEncoder::is_null(
+    int8_t *array
+)
+```
+</CodeBlock>
+
+### is_null_ignore_not_null [#isnullignorenotnull]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+bool FixedLengthArrayNoneEncoder::is_null_ignore_not_null(
+    int8_t *array
+)
+```
+</CodeBlock>
+
+### update_elem_stats [#updateelemstats]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+void FixedLengthArrayNoneEncoder::update_elem_stats(
+    const ArrayDatum &array
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### is_null_ignore_not_null [#isnullignorenotnull]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+static bool FixedLengthArrayNoneEncoder::is_null_ignore_not_null(
+    const SQLTypeInfo &type,
+    int8_t *array
+)
+```
+</CodeBlock>
+
+### is_null [#isnull]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder"}}>
+```cpp showLineNumbers={false}
+static bool FixedLengthArrayNoneEncoder::is_null(
+    const SQLTypeInfo &type,
+    int8_t *array
+)
+```
+</CodeBlock>
+
+### Create [#create]
+
+<CodeBlock links={{"FixedLengthArrayNoneEncoder": "fixedlengtharraynoneencoder", "AbstractBuffer": "../datanamespace/classes/abstractbuffer", "Encoder": "encoder"}}>
+```cpp showLineNumbers={false}
+Encoder * FixedLengthArrayNoneEncoder::Create(
+    Data_Namespace::AbstractBuffer *buffer,
+    const SQLTypeInfo sqlType
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### MetadataVersion
+
+| Name | Value | Description |
+|---|---|---|
+| `kBase` | `= 0` | |
+| `kRaster` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `elem_min` | `Datum` | |
+| `elem_max` | `Datum` | |
+| `has_nulls` | `bool` | |
+| `initialized` | `bool` | |
+| `EncoderMutex_` | `std::mutex` | |
+| `print_mutex_` | `std::mutex` | |
+| `array_size` | `size_t` | |
+| `metadata_version_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `num_elems_` | `size_t` | |
+| `raster_tile_` | `RasterTileInfo` | |
+| `buffer_` | `Data_Namespace::AbstractBuffer *` | |
+| `decimal_overflow_validator_` | `DecimalOverflowValidator` | |
+| `date_days_overflow_validator_` | `DateDaysOverflowValidator` | |

@@ -1,0 +1,56 @@
+---
+title: ct_binding_template__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_binding_template__cpu_template(
+    const Column<T> &input,
+    Column<T> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_template__cpu_template(
+    const Column<int> &input,
+    Column<int> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_template__cpu_template(
+    const Column<TextEncodingDict> &input,
+    Column<TextEncodingDict> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_template__cpu_template(
+    const Column<float> &input,
+    Column<float> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

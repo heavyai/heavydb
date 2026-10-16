@@ -1,0 +1,59 @@
+---
+title: NullAwareValidator
+description: ""
+---
+
+<CodeBlock id="NullAwareValidator" links={{"NullAwareValidator": "nullawarevalidator"}}>
+```cpp showLineNumbers={false}
+template <typename INNER_VALIDATOR>
+class NullAwareValidator
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <Encoder.h>
+```
+
+**Template parameters**
+
+<ParamField path="INNER_VALIDATOR" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### NullAwareValidator [#nullawarevalidator]
+
+<CodeBlock links={{"NullAwareValidator": "nullawarevalidator"}}>
+```cpp showLineNumbers={false}
+NullAwareValidator<INNER_VALIDATOR>::NullAwareValidator(
+    SQLTypeInfo type,
+    INNER_VALIDATOR *inner_validator
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### validate [#validate]
+
+<CodeBlock links={{"NullAwareValidator": "nullawarevalidator"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void NullAwareValidator<INNER_VALIDATOR>::validate(
+    T value
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `skip_null_check_` | `bool` | |
+| `inner_validator_` | `INNER_VALIDATOR *` | |

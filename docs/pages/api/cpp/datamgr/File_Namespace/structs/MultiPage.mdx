@@ -1,0 +1,97 @@
+---
+title: File_Namespace::MultiPage
+description: "The MultiPage stores versions of the same logical page in a deque."
+---
+
+The `MultiPage` stores versions of the same logical page in a deque.
+
+The purpose of `MultiPage` is to support storing multiple versions of the same page, which may be located in different locations and in different files. Associated with each version of a page is an "epoch" value, which is a temporal reference.
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/Page.h>
+```
+
+---
+
+## Constructors
+
+### MultiPage [#multipage]
+
+<CodeBlock links={{"MultiPage": "multipage"}}>
+```cpp showLineNumbers={false}
+File_Namespace::MultiPage::MultiPage(
+    size_t pageSizeIn
+)
+```
+</CodeBlock>
+
+Constructor.
+
+### Destructor [#destructor]
+
+### ~MultiPage
+
+<CodeBlock links={{"MultiPage": "multipage"}}>
+```cpp showLineNumbers={false}
+File_Namespace::MultiPage::~MultiPage()
+```
+</CodeBlock>
+
+Destructor – purges all pages.
+
+---
+
+## Methods
+
+### current [#current]
+
+<CodeBlock links={{"MultiPage": "multipage", "EpochedPage": "epochedpage"}}>
+```cpp showLineNumbers={false}
+EpochedPage File_Namespace::MultiPage::current() const
+```
+</CodeBlock>
+
+Returns a reference to the most recent version of the page.
+
+### push [#push]
+
+<CodeBlock links={{"MultiPage": "multipage", "Page": "page"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::MultiPage::push(
+    const Page &page,
+    const int epoch
+)
+```
+</CodeBlock>
+
+Pushes a new page with epoch value.
+
+### pop [#pop]
+
+<CodeBlock links={{"MultiPage": "multipage"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::MultiPage::pop()
+```
+</CodeBlock>
+
+Purges the oldest [Page](page).
+
+### freePagesBeforeEpoch [#freepagesbeforeepoch]
+
+<CodeBlock links={{"MultiPage": "multipage", "EpochedPage": "epochedpage"}}>
+```cpp showLineNumbers={false}
+std::vector<EpochedPage> File_Namespace::MultiPage::freePagesBeforeEpoch(
+    const int32_t target_epoch,
+    const int32_t current_epoch
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `pageSize` | `size_t` | |
+| `pageVersions` | `std::deque< EpochedPage >` | |

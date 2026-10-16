@@ -1,0 +1,34 @@
+---
+title: CheckedMallocDeleter
+description: ""
+---
+
+<CodeBlock id="CheckedMallocDeleter" links={{"CheckedMallocDeleter": "checkedmallocdeleter"}}>
+```cpp showLineNumbers={false}
+template <typename TARGET_TYPE>
+struct CheckedMallocDeleter
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TargetValueConverters.h>
+```
+
+**Template parameters**
+
+<ParamField path="TARGET_TYPE" type="typename">
+</ParamField>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"CheckedMallocDeleter": "checkedmallocdeleter"}}>
+```cpp showLineNumbers={false}
+void CheckedMallocDeleter<TARGET_TYPE>::operator()(
+    TARGET_TYPE *p
+)
+```
+</CodeBlock>

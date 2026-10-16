@@ -1,0 +1,99 @@
+---
+title: AntennaPattern
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <AntennaPattern.h>
+```
+
+---
+
+## Constructors
+
+### AntennaPattern [#antennapattern]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"AntennaPattern": "antennapattern"}}>
+```cpp showLineNumbers={false}
+AntennaPattern::AntennaPattern(
+    const std::string &ant_file_path
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"AntennaPattern": "antennapattern", "Array": "array"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+AntennaPattern::AntennaPattern(
+    const T antenna_gain,
+    const Array<T> &antenna_horizontal_degrees,
+    const Array<T> &antenna_horizontal_attenuations,
+    const Array<T> &antenna_vertical_degrees,
+    const Array<T> &antenna_vertical_attenuations
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"AntennaPattern": "antennapattern"}}>
+```cpp showLineNumbers={false}
+AntennaPattern::AntennaPattern()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### parse_2d_antenna_pattern [#parse2dantennapattern]
+
+<CodeBlock links={{"AntennaPattern": "antennapattern", "Array": "array"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+template void AntennaPattern::parse_2d_antenna_pattern(
+    const Array<T> &antenna_degrees,
+    const Array<T> &antenna_attenuations,
+    std::vector<double> &antenna_pattern,
+    double &max_gain
+)
+```
+</CodeBlock>
+
+### get_directional_tx_power_component [#getdirectionaltxpowercomponent]
+
+<CodeBlock links={{"AntennaPattern": "antennapattern"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+template double AntennaPattern::get_directional_tx_power_component(
+    const T antenna_azimuth_degrees,
+    const T bearing_degrees,
+    const AntennaAxis axis
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_isotropic` | `bool` | |
+| `gain` | `double` | |
+| `horizontal_pattern` | `std::vector< double >` | |
+| `vertical_pattern` | `std::vector< double >` | |
+| `max_horizontal_gain` | `double` | |
+| `max_vertical_gain` | `double` | |

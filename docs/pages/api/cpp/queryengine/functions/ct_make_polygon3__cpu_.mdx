@@ -1,0 +1,17 @@
+---
+title: ct_make_polygon3__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t ct_make_polygon3__cpu_(
+    TableFunctionManager &mgr,
+    const Column<GeoLineString> &rings,
+    const Column<GeoLineString> &holes1,
+    const Column<GeoLineString> &holes2,
+    Column<GeoPolygon> &polygons,
+    Column<int> &sizes
+)
+```
+</CodeBlock>

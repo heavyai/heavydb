@@ -1,0 +1,32 @@
+---
+title: TorchWarmer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TorchWrapper.h>
+```
+
+---
+
+## Static methods
+
+### warmup_torch [#warmuptorch]
+
+<CodeBlock links={{"TorchWarmer": "torchwarmer"}}>
+```cpp showLineNumbers={false}
+bool TorchWarmer::warmup_torch(
+    const std::string &model_path,
+    const bool use_gpu,
+    const int64_t device_num
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_torch_warmed` <Badge intent="note" minimal>static</Badge> | `bool` | |

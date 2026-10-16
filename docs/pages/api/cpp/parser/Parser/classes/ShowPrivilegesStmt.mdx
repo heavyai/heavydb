@@ -1,0 +1,86 @@
+---
+title: Parser::ShowPrivilegesStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### ShowPrivilegesStmt [#showprivilegesstmt]
+
+<CodeBlock links={{"ShowPrivilegesStmt": "showprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+Parser::ShowPrivilegesStmt::ShowPrivilegesStmt(
+    std::string *t,
+    std::string *o,
+    std::string *r
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_object_type [#getobjecttype]
+
+<CodeBlock links={{"ShowPrivilegesStmt": "showprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::ShowPrivilegesStmt::get_object_type() const
+```
+</CodeBlock>
+
+### get_object [#getobject]
+
+<CodeBlock links={{"ShowPrivilegesStmt": "showprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::ShowPrivilegesStmt::get_object() const
+```
+</CodeBlock>
+
+### get_role [#getrole]
+
+<CodeBlock links={{"ShowPrivilegesStmt": "showprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::ShowPrivilegesStmt::get_role() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"ShowPrivilegesStmt": "showprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::ShowPrivilegesStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"ShowPrivilegesStmt": "showprivilegesstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::ShowPrivilegesStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `object_type_` | `std::unique_ptr< std::string >` | |
+| `object_` | `std::unique_ptr< std::string >` | |
+| `role_` | `std::unique_ptr< std::string >` | |

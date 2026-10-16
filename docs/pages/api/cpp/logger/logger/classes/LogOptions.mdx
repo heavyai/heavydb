@@ -1,0 +1,101 @@
+---
+title: logger::LogOptions
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <logger/Logger.h>
+```
+
+---
+
+## Constructors
+
+### LogOptions [#logoptions]
+
+<CodeBlock links={{"LogOptions": "logoptions"}}>
+```cpp showLineNumbers={false}
+logger::LogOptions::LogOptions(
+    char const *argv0
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~LogOptions
+
+<CodeBlock links={{"LogOptions": "logoptions"}}>
+```cpp showLineNumbers={false}
+logger::LogOptions::~LogOptions()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### full_log_dir [#fulllogdir]
+
+<CodeBlock links={{"LogOptions": "logoptions"}}>
+```cpp showLineNumbers={false}
+boost::filesystem::path logger::LogOptions::full_log_dir() const
+```
+</CodeBlock>
+
+### get_options [#getoptions]
+
+<CodeBlock links={{"LogOptions": "logoptions"}}>
+```cpp showLineNumbers={false}
+boost::program_options::options_description const  & logger::LogOptions::get_options() const
+```
+</CodeBlock>
+
+### parse_command_line [#parsecommandline]
+
+<CodeBlock links={{"LogOptions": "logoptions"}}>
+```cpp showLineNumbers={false}
+void logger::LogOptions::parse_command_line(
+    int,
+    char const *const *
+)
+```
+</CodeBlock>
+
+### set_base_path [#setbasepath]
+
+<CodeBlock links={{"LogOptions": "logoptions"}}>
+```cpp showLineNumbers={false}
+void logger::LogOptions::set_base_path(
+    std::string const &base_path
+)
+```
+</CodeBlock>
+
+### set_options [#setoptions]
+
+<CodeBlock links={{"LogOptions": "logoptions"}}>
+```cpp showLineNumbers={false}
+void logger::LogOptions::set_options()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `base_path_` | `std::string` | |
+| `options_` | `std::unique_ptr< boost::program_options::options_description >` | |
+| `log_dir_` | `std::unique_ptr< boost::filesystem::path >` | |
+| `file_name_pattern_` | `std::string` | |
+| `symlink_` | `std::string` | |
+| `severity_` | `Severity` | |
+| `severity_clog_` | `Severity` | |
+| `channels_` | `Channels` | |
+| `auto_flush_` | `bool` | |
+| `max_files_` | `size_t` | |
+| `min_free_space_` | `size_t` | |
+| `rotate_daily_` | `bool` | |
+| `rotation_size_` | `size_t` | |

@@ -1,0 +1,481 @@
+---
+title: DotProductVisitor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DotProductVisitor.h>
+```
+
+**Inherits from:** `DeepCopyVisitor` (public)
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Methods
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> DotProductVisitor::visitDotProduct(
+    Analyzer::DotProductExpr const *dot_product_expr
+) const override
+```
+</CodeBlock>
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitColumnVar(
+    const Analyzer::ColumnVar *col_var
+) const override
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *col_var_tuple
+) const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitVar(
+    const Analyzer::Var *var
+) const override
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitConstant(
+    const Analyzer::Constant *constant
+) const override
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitUOper(
+    const Analyzer::UOper *uoper
+) const override
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const override
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const override
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitInValues(
+    const Analyzer::InValues *in_values
+) const override
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const override
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const override
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitKeyForString(
+    const Analyzer::KeyForStringExpr *expr
+) const override
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *expr
+) const override
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitMLPredict(
+    const Analyzer::MLPredictExpr *expr
+) const override
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitPCAProject(
+    const Analyzer::PCAProjectExpr *expr
+) const override
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const override
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const override
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const override
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const override
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitCaseExpr(
+    const Analyzer::CaseExpr *case_expr
+) const override
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const override
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const override
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitArrayOper(
+    const Analyzer::ArrayExpr *array_expr
+) const override
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const override
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const override
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const override
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const override
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const override
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const override
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const override
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const override
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const override
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const override
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const override
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *oper
+) const override
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitFragmentId(
+    const Analyzer::FragmentId *oper
+) const override
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType DotProductVisitor::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *oper
+) const override
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::aggregateResult(
+    const std::shared_ptr<Analyzer::Expr> &aggregate,
+    const std::shared_ptr<Analyzer::Expr> &next_result
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::visitBegin() const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::defaultResult() const
+```
+</CodeBlock>
+
+### castConstantFromDecimal [#castconstantfromdecimal]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor"}}>
+```cpp showLineNumbers={false}
+void DotProductVisitor::castConstantFromDecimal(
+    SQLTypeInfo const &return_type,
+    Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+Conditionally add a cast to constant decimal expressions because it is unwieldy to carry their precision and scale into the dot_product calculation.
+
+### homogenizeArrayExpr [#homogenizearrayexpr]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> DotProductVisitor::homogenizeArrayExpr(
+    SQLTypeInfo const &return_type,
+    std::shared_ptr<Analyzer::Expr> expr
+) const
+```
+</CodeBlock>
+
+When an [Array](../structs/array) is encountered under a DOT_PRODUCT(), if its elements are decimal, cast them to return_type_ by castConstantFromDecimal().
+
+If the array consists only of constants, then return it as a [Constant](constant) so that it can be hoisted with CgenState::getOrAddLiteral().
+
+### isConstant [#isconstant]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor"}}>
+```cpp showLineNumbers={false}
+static bool DotProductVisitor::isConstant(
+    std::shared_ptr<Analyzer::Expr> const &expr
+)
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"DotProductVisitor": "dotproductvisitor", "DeepCopyVisitor": "deepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `RetType` | `std::shared_ptr< Analyzer::Expr >` |

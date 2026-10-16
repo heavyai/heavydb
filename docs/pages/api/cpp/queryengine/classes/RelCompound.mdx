@@ -1,0 +1,726 @@
+---
+title: RelCompound
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public), `ModifyManipulationTarget` (public)
+
+---
+
+## Constructors
+
+### RelCompound [#relcompound]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+RelCompound::RelCompound(
+    const TableDescriptor *td,
+    const Catalog_Namespace::Catalog *catalog
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with filter expr and target exprs and groupby count and agg exprs and fields and scalar sources and is agg and update disguised as select and delete disguised as select and varlen update required and manipulation target table and target columns and catalog)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelCompound": "relcompound", "RexScalar": "rexscalar", "Rex": "rex", "RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+RelCompound::RelCompound(
+    std::unique_ptr<const RexScalar> &filter_expr,
+    const std::vector<const Rex *> &target_exprs,
+    const size_t groupby_count,
+    const std::vector<const RexAgg *> &agg_exprs,
+    const std::vector<std::string> &fields,
+    std::vector<std::unique_ptr<const RexScalar>> &scalar_sources,
+    const bool is_agg,
+    bool update_disguised_as_select = false,
+    bool delete_disguised_as_select = false,
+    bool varlen_update_required = false,
+    TableDescriptor const *manipulation_target_table = nullptr,
+    ColumnNameList target_columns = ColumnNameList(),
+    const Catalog_Namespace::Catalog *catalog = nullptr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+RelCompound::RelCompound(
+    RelCompound const &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelCompound": "relcompound", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelCompound::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelCompound": "relcompound", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelCompound::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelCompound::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+) override
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+size_t RelCompound::size() const override
+```
+</CodeBlock>
+
+### getFilterExpr [#getfilterexpr]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelCompound::getFilterExpr() const
+```
+</CodeBlock>
+
+### setFilterExpr [#setfilterexpr]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setFilterExpr(
+    std::unique_ptr<const RexScalar> &new_expr
+)
+```
+</CodeBlock>
+
+### getTargetExpr [#gettargetexpr]
+
+<CodeBlock links={{"RelCompound": "relcompound", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+const Rex * RelCompound::getTargetExpr(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getFields [#getfields]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & RelCompound::getFields() const
+```
+</CodeBlock>
+
+### getFieldName [#getfieldname]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+const std::string RelCompound::getFieldName(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### setFields [#setfields]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setFields(
+    std::vector<std::string> &&fields
+)
+```
+</CodeBlock>
+
+### getScalarSourcesSize [#getscalarsourcessize]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+const size_t RelCompound::getScalarSourcesSize() const
+```
+</CodeBlock>
+
+### getScalarSource [#getscalarsource]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelCompound::getScalarSource(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### setScalarSources [#setscalarsources]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setScalarSources(
+    std::vector<std::unique_ptr<const RexScalar>> &new_sources
+)
+```
+</CodeBlock>
+
+### getGroupByCount [#getgroupbycount]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+const size_t RelCompound::getGroupByCount() const
+```
+</CodeBlock>
+
+### isAggregate [#isaggregate]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+bool RelCompound::isAggregate() const
+```
+</CodeBlock>
+
+### getAggExprSize [#getaggexprsize]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+size_t RelCompound::getAggExprSize() const
+```
+</CodeBlock>
+
+### getAggExpr [#getaggexpr]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+const RexAgg * RelCompound::getAggExpr(
+    size_t i
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelCompound::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelCompound::deepCopy() const override
+```
+</CodeBlock>
+
+### addHint [#addhint]
+
+<CodeBlock links={{"RelCompound": "relcompound", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+void RelCompound::addHint(
+    const ExplainedQueryHint &hint_explained
+)
+```
+</CodeBlock>
+
+### hasHintEnabled [#hashintenabled]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+const bool RelCompound::hasHintEnabled(
+    QueryHint candidate_hint
+) const
+```
+</CodeBlock>
+
+### getHintInfo [#gethintinfo]
+
+<CodeBlock links={{"RelCompound": "relcompound", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+const ExplainedQueryHint & RelCompound::getHintInfo(
+    QueryHint hint
+) const
+```
+</CodeBlock>
+
+### hasDeliveredHint [#hasdeliveredhint]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+bool RelCompound::hasDeliveredHint()
+```
+</CodeBlock>
+
+### getDeliveredHints [#getdeliveredhints]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+Hints * RelCompound::getDeliveredHints()
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelCompound": "relcompound", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+std::string RelCompound::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+size_t RelCompound::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelCompound": "relcompound", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelCompound::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+unsigned RelCompound::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+bool RelCompound::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelCompound::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const size_t RelCompound::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelCompound::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelCompound::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelCompound::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+bool RelCompound::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+size_t RelCompound::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+bool RelCompound::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+size_t RelCompound::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### setUpdateViaSelectFlag [#setupdateviaselectflag]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setUpdateViaSelectFlag(
+    bool required
+) const
+```
+</CodeBlock>
+
+### setDeleteViaSelectFlag [#setdeleteviaselectflag]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setDeleteViaSelectFlag(
+    bool required
+) const
+```
+</CodeBlock>
+
+### setVarlenUpdateRequired [#setvarlenupdaterequired]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setVarlenUpdateRequired(
+    bool required
+) const
+```
+</CodeBlock>
+
+### forceRowwiseOutput [#forcerowwiseoutput]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::forceRowwiseOutput() const
+```
+</CodeBlock>
+
+### getModifiedTableDescriptor [#getmodifiedtabledescriptor]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+TableDescriptor const  * RelCompound::getModifiedTableDescriptor() const
+```
+</CodeBlock>
+
+### getTableDescriptor [#gettabledescriptor]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+TableDescriptor const  * RelCompound::getTableDescriptor() const
+```
+</CodeBlock>
+
+### setModifiedTableDescriptor [#setmodifiedtabledescriptor]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setModifiedTableDescriptor(
+    TableDescriptor const *td
+) const
+```
+</CodeBlock>
+
+### getModifiedTableCatalog [#getmodifiedtablecatalog]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+const Catalog_Namespace::Catalog * RelCompound::getModifiedTableCatalog() const
+```
+</CodeBlock>
+
+### setModifiedTableCatalog [#setmodifiedtablecatalog]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setModifiedTableCatalog(
+    const Catalog_Namespace::Catalog *catalog
+) const
+```
+</CodeBlock>
+
+### isUpdateViaSelect [#isupdateviaselect]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelCompound::isUpdateViaSelect() const
+```
+</CodeBlock>
+
+### isDeleteViaSelect [#isdeleteviaselect]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelCompound::isDeleteViaSelect() const
+```
+</CodeBlock>
+
+### isVarlenUpdateRequired [#isvarlenupdaterequired]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelCompound::isVarlenUpdateRequired() const
+```
+</CodeBlock>
+
+### isProjectForUpdate [#isprojectforupdate]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelCompound::isProjectForUpdate() const
+```
+</CodeBlock>
+
+### isRowwiseOutputForced [#isrowwiseoutputforced]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+auto const RelCompound::isRowwiseOutputForced() const
+```
+</CodeBlock>
+
+### setTargetColumns [#settargetcolumns]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::setTargetColumns(
+    ColumnNameList const &target_columns
+) const
+```
+</CodeBlock>
+
+### getTargetColumns [#gettargetcolumns]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+ColumnNameList const  & RelCompound::getTargetColumns() const
+```
+</CodeBlock>
+
+### invalidateTargetColumns [#invalidatetargetcolumns]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::invalidateTargetColumns() const
+```
+</CodeBlock>
+
+### validateTargetColumns [#validatetargetcolumns]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+template <typename VALIDATION_FUNCTOR>
+bool RelCompound::validateTargetColumns(
+    VALIDATION_FUNCTOR validator
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+size_t RelCompound::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelCompound": "relcompound", "RelAlgNode": "relalgnode", "ModifyManipulationTarget": "modifymanipulationtarget"}}>
+```cpp showLineNumbers={false}
+void RelCompound::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `filter_expr_` | `std::unique_ptr< const RexScalar >` | |
+| `groupby_count_` | `size_t` | |
+| `agg_exprs_` | `std::vector< std::unique_ptr< const RexAgg > >` | |
+| `fields_` | `std::vector< std::string >` | |
+| `is_agg_` | `bool` | |
+| `scalar_sources_` | `std::vector< std::unique_ptr< const RexScalar > >` | |
+| `target_exprs_` | `std::vector< const Rex * >` | |
+| `hint_applied_` | `bool` | |
+| `hints_` | `std::unique_ptr< Hints >` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

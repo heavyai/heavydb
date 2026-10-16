@@ -1,0 +1,40 @@
+---
+title: ThriftSerializers::from_thrift
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+ExtArgumentType ThriftSerializers::from_thrift(
+    const TExtArgumentType::type &t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<ExtArgumentType> ThriftSerializers::from_thrift(
+    const std::vector<TExtArgumentType::type> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+table_functions::OutputBufferSizeType ThriftSerializers::from_thrift(
+    const TOutputBufferSizeType::type &t
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

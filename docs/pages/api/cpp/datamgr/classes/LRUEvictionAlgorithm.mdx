@@ -1,0 +1,74 @@
+---
+title: LRUEvictionAlgorithm
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <LRUEvictionAlgorithm.h>
+```
+
+**Inherits from:** `CacheEvictionAlgorithm` (public)
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~LRUEvictionAlgorithm
+
+<CodeBlock links={{"LRUEvictionAlgorithm": "lruevictionalgorithm"}}>
+```cpp showLineNumbers={false}
+LRUEvictionAlgorithm::~LRUEvictionAlgorithm() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### evictNextChunk [#evictnextchunk]
+
+<CodeBlock links={{"LRUEvictionAlgorithm": "lruevictionalgorithm"}}>
+```cpp showLineNumbers={false}
+const ChunkKey LRUEvictionAlgorithm::evictNextChunk() override
+```
+</CodeBlock>
+
+### touchChunk [#touchchunk]
+
+<CodeBlock links={{"LRUEvictionAlgorithm": "lruevictionalgorithm"}}>
+```cpp showLineNumbers={false}
+void LRUEvictionAlgorithm::touchChunk(
+    const ChunkKey &
+) override
+```
+</CodeBlock>
+
+### removeChunk [#removechunk]
+
+<CodeBlock links={{"LRUEvictionAlgorithm": "lruevictionalgorithm"}}>
+```cpp showLineNumbers={false}
+void LRUEvictionAlgorithm::removeChunk(
+    const ChunkKey &
+) override
+```
+</CodeBlock>
+
+### dumpEvictionQueue [#dumpevictionqueue]
+
+<CodeBlock links={{"LRUEvictionAlgorithm": "lruevictionalgorithm"}}>
+```cpp showLineNumbers={false}
+std::string LRUEvictionAlgorithm::dumpEvictionQueue()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cache_items_list_` | `std::list< ChunkKey >` | |
+| `cache_items_map_` | `std::map< const ChunkKey, std::list< ChunkKey >::iterator >` | |
+| `cache_mutex_` | `heavyai::shared_mutex` | |

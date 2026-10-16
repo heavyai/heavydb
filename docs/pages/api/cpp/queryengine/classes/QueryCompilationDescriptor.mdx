@@ -1,0 +1,103 @@
+---
+title: QueryCompilationDescriptor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryCompilationDescriptor.h>
+```
+
+---
+
+## Constructors
+
+### QueryCompilationDescriptor [#querycompilationdescriptor]
+
+<CodeBlock links={{"QueryCompilationDescriptor": "querycompilationdescriptor"}}>
+```cpp showLineNumbers={false}
+QueryCompilationDescriptor::QueryCompilationDescriptor()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### compile [#compile]
+
+<CodeBlock links={{"QueryCompilationDescriptor": "querycompilationdescriptor", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "InputTableInfo": "../structs/inputtableinfo", "ColumnFetcher": "columnfetcher", "CompilationOptions": "../structs/compilationoptions", "ExecutionOptions": "../structs/executionoptions", "RenderInfo": "renderinfo", "Executor": "executor", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
+    const size_t max_groups_buffer_entry_guess,
+    const int8_t crt_min_byte_width,
+    const bool has_cardinality_estimation,
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<InputTableInfo> &table_infos,
+    const PlanState::DeletedColumnsMap &deleted_cols_map,
+    const ColumnFetcher &column_fetcher,
+    const CompilationOptions &co,
+    const ExecutionOptions &eo,
+    RenderInfo *render_info,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### getCompilationResult [#getcompilationresult]
+
+<CodeBlock links={{"QueryCompilationDescriptor": "querycompilationdescriptor"}}>
+```cpp showLineNumbers={false}
+auto QueryCompilationDescriptor::getCompilationResult() const
+```
+</CodeBlock>
+
+### getIR [#getir]
+
+<CodeBlock links={{"QueryCompilationDescriptor": "querycompilationdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string QueryCompilationDescriptor::getIR() const
+```
+</CodeBlock>
+
+### getDeviceType [#getdevicetype]
+
+<CodeBlock links={{"QueryCompilationDescriptor": "querycompilationdescriptor"}}>
+```cpp showLineNumbers={false}
+ExecutorDeviceType QueryCompilationDescriptor::getDeviceType() const
+```
+</CodeBlock>
+
+### hoistLiterals [#hoistliterals]
+
+<CodeBlock links={{"QueryCompilationDescriptor": "querycompilationdescriptor"}}>
+```cpp showLineNumbers={false}
+bool QueryCompilationDescriptor::hoistLiterals() const
+```
+</CodeBlock>
+
+### getMinByteWidth [#getminbytewidth]
+
+<CodeBlock links={{"QueryCompilationDescriptor": "querycompilationdescriptor"}}>
+```cpp showLineNumbers={false}
+int8_t QueryCompilationDescriptor::getMinByteWidth() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"QueryCompilationDescriptor": "querycompilationdescriptor"}}>
+```cpp showLineNumbers={false}
+std::string QueryCompilationDescriptor::toString() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `compilation_result_` | `CompilationResult` | |
+| `compilation_device_type_` | `ExecutorDeviceType` | |
+| `hoist_literals_` | `bool` | |
+| `actual_min_byte_width_` | `int8_t` | |

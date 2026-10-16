@@ -1,0 +1,76 @@
+---
+title: PostEvictionRefreshException
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ForeignStorageMgr.h>
+```
+
+**Inherits from:** `std::runtime_error` (public)
+
+---
+
+## Constructors
+
+### PostEvictionRefreshException [#postevictionrefreshexception]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"PostEvictionRefreshException": "postevictionrefreshexception"}}>
+```cpp showLineNumbers={false}
+PostEvictionRefreshException::PostEvictionRefreshException(
+    const std::runtime_error &exception
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Deleted overloads">
+
+The following overloads are deleted to prevent misuse:
+
+<CodeBlock links={{"PostEvictionRefreshException": "postevictionrefreshexception"}}>
+```cpp showLineNumbers={false}
+PostEvictionRefreshException::PostEvictionRefreshException() = delete;
+PostEvictionRefreshException::PostEvictionRefreshException(const PostEvictionRefreshException &) = delete;
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"PostEvictionRefreshException": "postevictionrefreshexception"}}>
+```cpp showLineNumbers={false}
+PostEvictionRefreshException & PostEvictionRefreshException::operator=(
+    const PostEvictionRefreshException &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getOriginalException [#getoriginalexception]
+
+<CodeBlock links={{"PostEvictionRefreshException": "postevictionrefreshexception"}}>
+```cpp showLineNumbers={false}
+std::runtime_error PostEvictionRefreshException::getOriginalException()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `original_exception_` | `std::runtime_error` | |

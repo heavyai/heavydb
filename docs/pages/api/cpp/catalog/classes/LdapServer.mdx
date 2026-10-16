@@ -1,0 +1,97 @@
+---
+title: LdapServer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <LdapServer.h>
+```
+
+---
+
+## Constructors
+
+### LdapServer [#ldapserver]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"LdapServer": "ldapserver"}}>
+```cpp showLineNumbers={false}
+LdapServer::LdapServer()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"LdapServer": "ldapserver", "AuthMetadata": "../structs/authmetadata"}}>
+```cpp showLineNumbers={false}
+LdapServer::LdapServer(
+    const AuthMetadata &authMetadata
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### authenticate_user [#authenticateuser]
+
+<CodeBlock links={{"LdapServer": "ldapserver"}}>
+```cpp showLineNumbers={false}
+bool LdapServer::authenticate_user(
+    const std::string &userName,
+    const std::string &passwd,
+    std::vector<std::string> &ldap_user_roles
+)
+```
+</CodeBlock>
+
+### login [#login]
+
+<CodeBlock links={{"LdapServer": "ldapserver"}}>
+```cpp showLineNumbers={false}
+void LdapServer::login(
+    const std::string &username,
+    const std::string &password
+)
+```
+</CodeBlock>
+
+### inUse [#inuse]
+
+<CodeBlock links={{"LdapServer": "ldapserver"}}>
+```cpp showLineNumbers={false}
+bool LdapServer::inUse() const
+```
+</CodeBlock>
+
+### isRoleSyncInUse [#isrolesyncinuse]
+
+<CodeBlock links={{"LdapServer": "ldapserver"}}>
+```cpp showLineNumbers={false}
+bool LdapServer::isRoleSyncInUse() const
+```
+</CodeBlock>
+
+### get_superuser_rolename [#getsuperuserrolename]
+
+<CodeBlock links={{"LdapServer": "ldapserver"}}>
+```cpp showLineNumbers={false}
+const std::string & LdapServer::get_superuser_rolename() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `authMetadata_` | `const AuthMetadata *` | |
+| `ldapInUse` | `bool` | |

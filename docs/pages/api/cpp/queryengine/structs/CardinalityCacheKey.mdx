@@ -1,0 +1,64 @@
+---
+title: CardinalityCacheKey
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Execute.h>
+```
+
+---
+
+## Constructors
+
+### CardinalityCacheKey [#cardinalitycachekey]
+
+<CodeBlock links={{"CardinalityCacheKey": "cardinalitycachekey", "RelAlgExecutionUnit": "relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+CardinalityCacheKey::CardinalityCacheKey(
+    const RelAlgExecutionUnit &ra_exe_unit
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"CardinalityCacheKey": "cardinalitycachekey"}}>
+```cpp showLineNumbers={false}
+bool CardinalityCacheKey::operator==(
+    const CardinalityCacheKey &other
+) const
+```
+</CodeBlock>
+
+### hash [#hash]
+
+<CodeBlock links={{"CardinalityCacheKey": "cardinalitycachekey"}}>
+```cpp showLineNumbers={false}
+size_t CardinalityCacheKey::hash() const
+```
+</CodeBlock>
+
+### containsTableKey [#containstablekey]
+
+<CodeBlock links={{"CardinalityCacheKey": "cardinalitycachekey"}}>
+```cpp showLineNumbers={false}
+bool CardinalityCacheKey::containsTableKey(
+    const shared::TableKey &table_key
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `key` | `std::string` | |
+| `query_plan_dag_hash` | `size_t` | |
+| `table_keys` | `std::unordered_set< shared::TableKey >` | |

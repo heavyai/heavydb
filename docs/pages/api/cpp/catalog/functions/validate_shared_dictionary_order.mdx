@@ -1,0 +1,15 @@
+---
+title: validate_shared_dictionary_order
+description: ""
+---
+
+<CodeBlock links={{"ColumnDescriptor": "../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void validate_shared_dictionary_order(
+    const Parser::CreateTableBaseStmt *stmt,
+    const Parser::SharedDictionaryDef *shared_dict_def,
+    const std::vector<Parser::SharedDictionaryDef> &shared_dict_defs,
+    const std::list<ColumnDescriptor> &columns
+)
+```
+</CodeBlock>

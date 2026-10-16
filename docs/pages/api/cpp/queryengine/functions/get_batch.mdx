@@ -1,0 +1,15 @@
+---
+title: get_batch
+description: ""
+---
+
+<CodeBlock links={{"ColumnList": "../structs/columnlist"}}>
+```cpp showLineNumbers={false}
+std::pair<torch::Tensor, torch::Tensor> get_batch(
+    const ColumnList<double> &cols,
+    torch::Tensor W_target,
+    torch::Tensor b_target,
+    int32_t batch_size
+)
+```
+</CodeBlock>

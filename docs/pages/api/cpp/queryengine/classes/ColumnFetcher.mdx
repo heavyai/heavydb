@@ -1,0 +1,309 @@
+---
+title: ColumnFetcher
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ColumnFetcher.h>
+```
+
+---
+
+## Constructors
+
+### ColumnFetcher [#columnfetcher]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+ColumnFetcher::ColumnFetcher(
+    Executor *executor,
+    ColumnCacheMap &column_cache
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getOneTableColumnFragment [#getonetablecolumnfragment]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher"}}>
+```cpp showLineNumbers={false}
+const int8_t * ColumnFetcher::getOneTableColumnFragment(
+    const shared::TableKey &table_key,
+    const int frag_id,
+    const int col_id,
+    const std::map<shared::TableKey, const TableFragments *> &all_tables_fragments,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> &chunk_holder,
+    std::list<ChunkIter> &chunk_iter_holder,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_id,
+    DeviceAllocator *device_allocator
+) const
+```
+</CodeBlock>
+
+### getAllTableColumnFragments [#getalltablecolumnfragments]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher"}}>
+```cpp showLineNumbers={false}
+const int8_t * ColumnFetcher::getAllTableColumnFragments(
+    const shared::TableKey &table_key,
+    const int col_id,
+    const std::map<shared::TableKey, const TableFragments *> &all_tables_fragments,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_id,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx
+) const
+```
+</CodeBlock>
+
+### getResultSetColumn [#getresultsetcolumn]
+
+<Tabs>
+<Tab title="Const (with col desc)">
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher", "InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+const int8_t * ColumnFetcher::getResultSetColumn(
+    const InputColDescriptor *col_desc,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_id,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with buffer and table key and col id)">
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher"}}>
+```cpp showLineNumbers={false}
+const int8_t * ColumnFetcher::getResultSetColumn(
+    const ResultSetPtr &buffer,
+    const shared::TableKey &table_key,
+    const int col_id,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_id,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### linearizeColumnFragments [#linearizecolumnfragments]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher"}}>
+```cpp showLineNumbers={false}
+const int8_t * ColumnFetcher::linearizeColumnFragments(
+    const shared::TableKey &table_key,
+    const int col_id,
+    const std::map<shared::TableKey, const TableFragments *> &all_tables_fragments,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> &chunk_holder,
+    std::list<ChunkIter> &chunk_iter_holder,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_id,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx
+) const
+```
+</CodeBlock>
+
+### freeTemporaryCpuLinearizedIdxBuf [#freetemporarycpulinearizedidxbuf]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher"}}>
+```cpp showLineNumbers={false}
+void ColumnFetcher::freeTemporaryCpuLinearizedIdxBuf()
+```
+</CodeBlock>
+
+### freeLinearizedBuf [#freelinearizedbuf]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher"}}>
+```cpp showLineNumbers={false}
+void ColumnFetcher::freeLinearizedBuf()
+```
+</CodeBlock>
+
+### transferColumnIfNeeded [#transfercolumnifneeded]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher", "ColumnarResults": "columnarresults"}}>
+```cpp showLineNumbers={false}
+const int8_t * ColumnFetcher::transferColumnIfNeeded(
+    const ColumnarResults *columnar_results,
+    const int col_id,
+    Data_Namespace::DataMgr *data_mgr,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_id,
+    DeviceAllocator *device_allocator
+)
+```
+</CodeBlock>
+
+### linearizeVarLenArrayColFrags [#linearizevarlenarraycolfrags]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher"}}>
+```cpp showLineNumbers={false}
+MergedChunk ColumnFetcher::linearizeVarLenArrayColFrags(
+    int32_t db_id,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> &chunk_holder,
+    std::list<ChunkIter> &chunk_iter_holder,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> &local_chunk_holder,
+    std::list<ChunkIter> &local_chunk_iter_holder,
+    std::list<size_t> &local_chunk_num_tuples,
+    MemoryLevel memory_level,
+    const ColumnDescriptor *cd,
+    const int device_id,
+    const size_t total_data_buf_size,
+    const size_t total_idx_buf_size,
+    const size_t total_num_tuples,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx
+) const
+```
+</CodeBlock>
+
+### linearizeFixedLenArrayColFrags [#linearizefixedlenarraycolfrags]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher"}}>
+```cpp showLineNumbers={false}
+MergedChunk ColumnFetcher::linearizeFixedLenArrayColFrags(
+    int32_t db_id,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> &chunk_holder,
+    std::list<ChunkIter> &chunk_iter_holder,
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> &local_chunk_holder,
+    std::list<ChunkIter> &local_chunk_iter_holder,
+    std::list<size_t> &local_chunk_num_tuples,
+    MemoryLevel memory_level,
+    const ColumnDescriptor *cd,
+    const int device_id,
+    const size_t total_data_buf_size,
+    const size_t total_idx_buf_size,
+    const size_t total_num_tuples,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx
+) const
+```
+</CodeBlock>
+
+### addMergedChunkIter [#addmergedchunkiter]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher", "InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+void ColumnFetcher::addMergedChunkIter(
+    const InputColDescriptor col_desc,
+    const int device_id,
+    int8_t *chunk_iter_ptr
+) const
+```
+</CodeBlock>
+
+### getChunkiter [#getchunkiter]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher", "InputColDescriptor": "inputcoldescriptor"}}>
+```cpp showLineNumbers={false}
+const int8_t * ColumnFetcher::getChunkiter(
+    const InputColDescriptor col_desc,
+    const int device_id = 0
+) const
+```
+</CodeBlock>
+
+### prepareChunkIter [#preparechunkiter]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher"}}>
+```cpp showLineNumbers={false}
+ChunkIter ColumnFetcher::prepareChunkIter(
+    AbstractBuffer *merged_data_buf,
+    AbstractBuffer *merged_index_buf,
+    ChunkIter &chunk_iter,
+    bool is_true_varlen_type,
+    const size_t total_num_tuples
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getOneColumnFragment [#getonecolumnfragment]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+std::pair<const int8_t *, size_t> ColumnFetcher::getOneColumnFragment(
+    Executor *executor,
+    const Analyzer::ColumnVar &hash_col,
+    const Fragmenter_Namespace::FragmentInfo &fragment,
+    const Data_Namespace::MemoryLevel effective_mem_lvl,
+    const int device_id,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> &chunks_owner,
+    ColumnCacheMap &column_cache
+)
+```
+</CodeBlock>
+
+Gets one chunk's pointer and element count on either CPU or GPU.
+
+Gets a column fragment chunk on CPU or on GPU depending on the effective memory level parameter. [For](for) temporary tables, the chunk will be copied to the GPU if needed. Returns a buffer pointer and an element count.
+
+### makeJoinColumn [#makejoincolumn]
+
+<CodeBlock links={{"ColumnFetcher": "columnfetcher", "Executor": "executor", "JoinColumn": "../structs/joincolumn"}}>
+```cpp showLineNumbers={false}
+JoinColumn ColumnFetcher::makeJoinColumn(
+    Executor *executor,
+    const Analyzer::ColumnVar &hash_col,
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments,
+    const Data_Namespace::MemoryLevel effective_mem_lvl,
+    const int device_id,
+    DeviceAllocator *device_allocator,
+    const size_t thread_idx,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> &chunks_owner,
+    std::vector<std::shared_ptr<void>> &malloc_owner,
+    ColumnCacheMap &column_cache
+)
+```
+</CodeBlock>
+
+Creates a [JoinColumn](../structs/joincolumn) struct containing an array of [JoinChunk](../structs/joinchunk) structs.
+
+makeJoinColumn() creates a [JoinColumn](../structs/joincolumn) struct containing a array of [JoinChunk](../structs/joinchunk) structs, col_chunks_buff, malloced in CPU memory. Although the col_chunks_buff array is in CPU memory here, each [JoinChunk](../structs/joinchunk) struct contains an int8_t* pointer from getOneColumnFragment(), col_buff, that can point to either CPU memory or GPU memory depending on the effective_mem_lvl parameter. See also the fetchJoinColumn() function where col_chunks_buff is copied into GPU memory if needed. The malloc_owner parameter will have the malloced array appended. The chunks_owner parameter will be appended with the chunks.
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DeviceMergedChunkIterMap` | `std::unordered_map< int, int8_t * >` |
+| `DeviceMergedChunkMap` | `std::unordered_map< int, AbstractBuffer * >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `Executor *` | |
+| `columnar_fetch_mutex_` | `std::mutex` | |
+| `varlen_chunk_fetch_mutex_` | `std::mutex` | |
+| `linearization_mutex_` | `std::mutex` | |
+| `chunk_list_mutex_` | `std::mutex` | |
+| `linearized_col_cache_mutex_` | `std::mutex` | |
+| `columnarized_table_cache_` | `ColumnCacheMap &` | |
+| `columnarized_scan_table_cache_` | `std::unordered_map< InputColDescriptor, std::unique_ptr< const ColumnarResults > >` | |
+| `linearized_multi_frag_chunk_iter_cache_` | `std::unordered_map< InputColDescriptor, DeviceMergedChunkIterMap >` | |
+| `linearlized_temporary_cpu_index_buf_cache_` | `std::unordered_map< int, AbstractBuffer * >` | |
+| `linearized_data_buf_cache_` | `std::unordered_map< InputColDescriptor, DeviceMergedChunkMap >` | |
+| `linearized_idx_buf_cache_` | `std::unordered_map< InputColDescriptor, DeviceMergedChunkMap >` | |

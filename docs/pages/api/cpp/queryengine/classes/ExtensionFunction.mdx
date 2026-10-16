@@ -1,0 +1,132 @@
+---
+title: ExtensionFunction
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ExtensionFunctionsWhitelist.h>
+```
+
+---
+
+## Constructors
+
+### ExtensionFunction [#extensionfunction]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+ExtensionFunction::ExtensionFunction(
+    const std::string &name,
+    const std::vector<ExtArgumentType> &args,
+    const ExtArgumentType ret,
+    const std::vector<std::map<std::string, std::string>> &annotations,
+    const bool is_runtime
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getName [#getname]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+const std::string ExtensionFunction::getName(
+    bool keep_suffix = true
+) const
+```
+</CodeBlock>
+
+### getInputArgs [#getinputargs]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+const std::vector<ExtArgumentType> & ExtensionFunction::getInputArgs() const
+```
+</CodeBlock>
+
+### getRet [#getret]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+const ExtArgumentType ExtensionFunction::getRet() const
+```
+</CodeBlock>
+
+### getAnnotations [#getannotations]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::map<std::string, std::string>> & ExtensionFunction::getAnnotations() const
+```
+</CodeBlock>
+
+### usesManager [#usesmanager]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+bool ExtensionFunction::usesManager() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::string ExtensionFunction::toString() const
+```
+</CodeBlock>
+
+### toStringSQL [#tostringsql]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::string ExtensionFunction::toStringSQL() const
+```
+</CodeBlock>
+
+### toSignature [#tosignature]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+std::string ExtensionFunction::toSignature() const
+```
+</CodeBlock>
+
+### isGPU [#isgpu]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+bool ExtensionFunction::isGPU() const
+```
+</CodeBlock>
+
+### isCPU [#iscpu]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+bool ExtensionFunction::isCPU() const
+```
+</CodeBlock>
+
+### isRuntime [#isruntime]
+
+<CodeBlock links={{"ExtensionFunction": "extensionfunction"}}>
+```cpp showLineNumbers={false}
+bool ExtensionFunction::isRuntime() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name_` | `const std::string` | |
+| `args_` | `const std::vector< ExtArgumentType >` | |
+| `ret_` | `const ExtArgumentType` | |
+| `annotations_` | `const std::vector< std::map< std::string, std::string > >` | |
+| `is_runtime_` | `const bool` | |

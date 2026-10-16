@@ -1,0 +1,23 @@
+---
+title: ExecutorResourceMgr_Namespace::ResourceConcurrencyPolicy
+description: "Specifies whether grants for a specified resource can be made concurrently (ALLOW_CONCURRENT_REQEUSTS), can only be made to one request at a time (ALOW_SINGLE_REQUEST), can be made only if there are no other requests in flight, regardless of type (ALLOW_SINGLE_REQUEST_GLOBALLY), or are not allowed at all (DISALLOW_REQUESTS)."
+---
+
+Specifies whether grants for a specified resource can be made concurrently (`ALLOW_CONCURRENT_REQEUSTS`), can only be made to one request at a time (`ALOW_SINGLE_REQUEST`), can be made only if there are no other requests in flight, regardless of type (`ALLOW_SINGLE_REQUEST_GLOBALLY`), or are not allowed at all (`DISALLOW_REQUESTS`).
+
+```cpp showLineNumbers={false}
+enum ExecutorResourceMgr_Namespace::ResourceConcurrencyPolicy
+```
+
+The policy is qualified with a [`ResourceType`](resourcetype) and whether the resource is under-subscribed or over-subscribed in [`ConcurrentResourceGrantPolicy`](../structs/concurrentresourcegrantpolicy). [For](../../classes/for) example, `DISALLOW_REQUESTS` would generally only be used to specify resource oversubscription policy, as if it was used for the under-subscription policy for that resource, the resource could not be used at all.
+
+---
+
+## Values
+
+| Name |
+| --- |
+| `ALLOW_CONCURRENT_REQUESTS` |
+| `ALLOW_SINGLE_REQUEST` |
+| `ALLOW_SINGLE_REQUEST_GLOBALLY` |
+| `DISALLOW_REQUESTS` |

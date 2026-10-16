@@ -1,0 +1,240 @@
+---
+title: CacheMetricTracker
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DataRecycler.h>
+```
+
+---
+
+## Constructors
+
+### CacheMetricTracker [#cachemetrictracker]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+CacheMetricTracker::CacheMetricTracker(
+    CacheItemType cache_item_type,
+    size_t total_cache_size,
+    size_t max_cache_item_size,
+    int num_gpus = 0
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getCacheItemMetrics [#getcacheitemmetrics]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker", "CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<CacheItemMetric>> & CacheMetricTracker::getCacheItemMetrics(
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### getCacheItemMetric [#getcacheitemmetric]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker", "CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CacheItemMetric> CacheMetricTracker::getCacheItemMetric(
+    QueryPlanHash key,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### setCurrentCacheSize [#setcurrentcachesize]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+void CacheMetricTracker::setCurrentCacheSize(
+    DeviceIdentifier device_identifier,
+    size_t bytes
+)
+```
+</CodeBlock>
+
+### getCurrentCacheSize [#getcurrentcachesize]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> CacheMetricTracker::getCurrentCacheSize(
+    DeviceIdentifier key
+) const
+```
+</CodeBlock>
+
+### putNewCacheItemMetric [#putnewcacheitemmetric]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker", "CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CacheItemMetric> CacheMetricTracker::putNewCacheItemMetric(
+    QueryPlanHash key,
+    DeviceIdentifier device_identifier,
+    size_t mem_size,
+    size_t compute_time
+)
+```
+</CodeBlock>
+
+### removeCacheItemMetric [#removecacheitemmetric]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+void CacheMetricTracker::removeCacheItemMetric(
+    QueryPlanHash key,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### removeMetricFromBeginning [#removemetricfrombeginning]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+void CacheMetricTracker::removeMetricFromBeginning(
+    DeviceIdentifier device_identifier,
+    int offset
+)
+```
+</CodeBlock>
+
+### calculateRequiredSpaceForItemAddition [#calculaterequiredspaceforitemaddition]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+size_t CacheMetricTracker::calculateRequiredSpaceForItemAddition(
+    DeviceIdentifier device_identifier,
+    size_t item_size
+) const
+```
+</CodeBlock>
+
+### clearCacheMetricTracker [#clearcachemetrictracker]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+void CacheMetricTracker::clearCacheMetricTracker()
+```
+</CodeBlock>
+
+### canAddItem [#canadditem]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+CacheAvailability CacheMetricTracker::canAddItem(
+    DeviceIdentifier device_identifier,
+    size_t item_size
+) const
+```
+</CodeBlock>
+
+### updateCurrentCacheSize [#updatecurrentcachesize]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+void CacheMetricTracker::updateCurrentCacheSize(
+    DeviceIdentifier device_identifier,
+    CacheUpdateAction action,
+    size_t size
+)
+```
+</CodeBlock>
+
+### sortCacheInfoByQueryMetric [#sortcacheinfobyquerymetric]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+void CacheMetricTracker::sortCacheInfoByQueryMetric(
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+std::string CacheMetricTracker::toString() const
+```
+</CodeBlock>
+
+### getTotalCacheSize [#gettotalcachesize]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+size_t CacheMetricTracker::getTotalCacheSize() const
+```
+</CodeBlock>
+
+### getMaxCacheItemSize [#getmaxcacheitemsize]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+size_t CacheMetricTracker::getMaxCacheItemSize() const
+```
+</CodeBlock>
+
+### setTotalCacheSize [#settotalcachesize]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+void CacheMetricTracker::setTotalCacheSize(
+    size_t new_total_cache_size
+)
+```
+</CodeBlock>
+
+### setMaxCacheItemSize [#setmaxcacheitemsize]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+void CacheMetricTracker::setMaxCacheItemSize(
+    size_t new_max_cache_item_size
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getCacheItemMetricItr [#getcacheitemmetricitr]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+static CacheMetricInfoMap::mapped_type::const_iterator CacheMetricTracker::getCacheItemMetricItr(
+    QueryPlanHash key,
+    CacheMetricInfoMap::mapped_type const &metrics
+)
+```
+</CodeBlock>
+
+### getCacheItemMetricImpl [#getcacheitemmetricimpl]
+
+<CodeBlock links={{"CacheMetricTracker": "cachemetrictracker", "CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<CacheItemMetric> CacheMetricTracker::getCacheItemMetricImpl(
+    QueryPlanHash key,
+    CacheMetricInfoMap::mapped_type const &metrics
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `item_type_` | `CacheItemType` | |
+| `total_cache_size_` | `size_t` | |
+| `max_cache_item_size_` | `size_t` | |
+| `cache_metrics_` | `CacheMetricInfoMap` | |
+| `current_cache_size_in_bytes_` | `CacheSizeMap` | |

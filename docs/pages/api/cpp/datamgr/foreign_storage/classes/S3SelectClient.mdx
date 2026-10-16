@@ -1,0 +1,123 @@
+---
+title: foreign_storage::S3SelectClient
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/S3SelectClient.h>
+```
+
+---
+
+## Constructors
+
+### S3SelectClient [#s3selectclient]
+
+<CodeBlock links={{"S3SelectClient": "s3selectclient"}}>
+```cpp showLineNumbers={false}
+foreign_storage::S3SelectClient::S3SelectClient(
+    const std::string &obj_key,
+    const ForeignServer *server_options,
+    std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_credentials,
+    const import_export::CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNumRows [#getnumrows]
+
+<CodeBlock links={{"S3SelectClient": "s3selectclient", "S3ScanRange": "../structs/s3scanrange"}}>
+```cpp showLineNumbers={false}
+std::vector<int> foreign_storage::S3SelectClient::getNumRows(
+    const std::vector<S3ScanRange> ranges
+) const
+```
+</CodeBlock>
+
+### getColumnsAsCsv [#getcolumnsascsv]
+
+<CodeBlock links={{"S3SelectClient": "s3selectclient", "S3ScanRange": "../structs/s3scanrange"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::S3SelectClient::getColumnsAsCsv(
+    const std::vector<int> &column_ids,
+    S3ScanRange range
+) const
+```
+</CodeBlock>
+
+### getStatsAsCsv [#getstatsascsv]
+
+<CodeBlock links={{"S3SelectClient": "s3selectclient", "S3ScanRange": "../structs/s3scanrange"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> foreign_storage::S3SelectClient::getStatsAsCsv(
+    const std::vector<std::pair<int, std::string>> &column_id_types,
+    const std::vector<S3ScanRange> ranges
+) const
+```
+</CodeBlock>
+
+### getFileInfos [#getfileinfos]
+
+<CodeBlock links={{"S3SelectClient": "s3selectclient"}}>
+```cpp showLineNumbers={false}
+std::vector<S3FileInfo> foreign_storage::S3SelectClient::getFileInfos(
+    const shared::FilePathOptions &options
+) const
+```
+</CodeBlock>
+
+### getFirstRowAsCsv [#getfirstrowascsv]
+
+<CodeBlock links={{"S3SelectClient": "s3selectclient", "S3ScanRange": "../structs/s3scanrange"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> foreign_storage::S3SelectClient::getFirstRowAsCsv(
+    const std::vector<S3ScanRange> ranges
+)
+```
+</CodeBlock>
+
+### createRequest [#createrequest]
+
+<CodeBlock links={{"S3SelectClient": "s3selectclient", "S3ScanRange": "../structs/s3scanrange"}}>
+```cpp showLineNumbers={false}
+Aws::S3::Model::SelectObjectContentRequest foreign_storage::S3SelectClient::createRequest(
+    const std::string sql,
+    const S3ScanRange range
+) const
+```
+</CodeBlock>
+
+### getSelectResult [#getselectresult]
+
+<CodeBlock links={{"S3SelectClient": "s3selectclient"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::S3SelectClient::getSelectResult(
+    Aws::S3::Model::SelectObjectContentRequest &request
+) const
+```
+</CodeBlock>
+
+### getSelectResults [#getselectresults]
+
+<CodeBlock links={{"S3SelectClient": "s3selectclient"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> foreign_storage::S3SelectClient::getSelectResults(
+    std::vector<Aws::S3::Model::SelectObjectContentRequest> &requests
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `s3_client_` | `std::unique_ptr< Aws::S3::S3Client >` | |
+| `obj_key_` | `std::string` | |
+| `bucket_name_` | `std::string` | |
+| `copy_params_` | `import_export::CopyParams` | |

@@ -1,0 +1,33 @@
+---
+title: get_node_input_permutation
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor"}}>
+```cpp showLineNumbers={false}
+std::vector<node_t> get_node_input_permutation(
+    const JoinQualsPerNestingLevel &left_deep_join_quals,
+    const std::vector<InputTableInfo> &table_infos,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor"}}>
+```cpp showLineNumbers={false}
+std::vector<size_t> get_node_input_permutation(
+    const JoinQualsPerNestingLevel &left_deep_join_quals,
+    const std::vector<InputTableInfo> &table_infos,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

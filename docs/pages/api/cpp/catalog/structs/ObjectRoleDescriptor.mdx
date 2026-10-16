@@ -1,0 +1,28 @@
+---
+title: ObjectRoleDescriptor
+description: "@type ObjectRoleDescriptor"
+---
+
+@type `ObjectRoleDescriptor`
+
+specifies the object_roles content in-memory of a row in mapd_object_permissions table
+
+```cpp showLineNumbers={false}
+#include <ObjectRoleDescriptor.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `roleName` | `std::string` | |
+| `roleType` | `bool` | |
+| `objectType` | `int32_t` | |
+| `dbId` | `int32_t` | |
+| `objectId` | `int` | |
+| `privs` | `AccessPrivileges` | |
+| `objectOwnerId` | `int32_t` | |
+| `objectName` | `std::string` | |
+| `subObjectId` | `int32_t` | |

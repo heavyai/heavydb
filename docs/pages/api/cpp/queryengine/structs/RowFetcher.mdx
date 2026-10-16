@@ -1,0 +1,58 @@
+---
+title: RowFetcher
+description: ""
+---
+
+<CodeBlock id="RowFetcher" links={{"RowFetcher": "rowfetcher"}}>
+```cpp showLineNumbers={false}
+template <class I>
+struct RowFetcher
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="I" type="class">
+</ParamField>
+
+---
+
+## Constructors
+
+### RowFetcher [#rowfetcher]
+
+<CodeBlock links={{"RowFetcher": "rowfetcher"}}>
+```cpp showLineNumbers={false}
+RowFetcher<I>::RowFetcher(
+    int8_t *out_base,
+    const int8_t *in_base,
+    const I *indices,
+    const size_t row_sz
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"RowFetcher": "rowfetcher"}}>
+```cpp showLineNumbers={false}
+__host__ __device__ void RowFetcher<I>::operator()(
+    const I index
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dst_base` | `int8_t *` | |
+| `src_base` | `const int8_t *` | |
+| `idx_base` | `const I *` | |
+| `row_size` | `const size_t` | |

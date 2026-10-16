@@ -1,0 +1,24 @@
+---
+title: WindowFunctionCtx::ColumnChunkOwned
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <WindowFunctionCtx/WindowContext.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `order_columns_owner_` | `std::vector< std::vector< std::shared_ptr< Chunk_NS::Chunk > > >` | |
+| `order_columns_` | `std::vector< const int8_t * >` | |
+| `window_func_expr_columns_owner_` | `std::vector< std::vector< std::shared_ptr< Chunk_NS::Chunk > > >` | |
+| `window_func_expr_columns_` | `std::vector< const int8_t * >` | |
+| `window_func_expr_columns_for_gpu_owner_` | `std::vector< std::vector< std::shared_ptr< Chunk_NS::Chunk > > >` | |
+| `window_func_expr_columns_for_gpu_` | `std::vector< const int8_t * >` | |
+| `order_columns_for_gpu_owner_` | `std::vector< std::vector< std::shared_ptr< Chunk_NS::Chunk > > >` | |
+| `order_columns_for_gpu_` | `std::vector< const int8_t * >` | |
+| `order_columns_ti_` | `std::vector< SQLTypeInfo >` | |

@@ -1,0 +1,45 @@
+---
+title: InjectTimer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <measure.h>
+```
+
+---
+
+## Constructors
+
+### InjectTimer [#injecttimer]
+
+<CodeBlock links={{"InjectTimer": "injecttimer"}}>
+```cpp showLineNumbers={false}
+InjectTimer::InjectTimer(
+    std::string const &description,
+    int const &lineNum,
+    std::string const &func
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~InjectTimer
+
+<CodeBlock links={{"InjectTimer": "injecttimer"}}>
+```cpp showLineNumbers={false}
+InjectTimer::~InjectTimer()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `description_` | `std::string` | |
+| `lineNum_` | `int` | |
+| `func_` | `std::string` | |
+| `start_` | `std::chrono::steady_clock::time_point` | |

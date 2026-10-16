@@ -1,0 +1,226 @@
+---
+title: PerfectHashTable
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <PerfectHashTable.h>
+```
+
+**Inherits from:** `HashTable` (public)
+
+---
+
+## Constructors
+
+### PerfectHashTable [#perfecthashtable]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable", "PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "BucketizedHashEntryInfo": "../structs/bucketizedhashentryinfo"}}>
+```cpp showLineNumbers={false}
+PerfectHashTable::PerfectHashTable(
+    const ExecutorDeviceType device_type,
+    PerfectHashTableEntryInfo hash_table_entry_info,
+    size_t max_slab_size,
+    BucketizedHashEntryInfo const &hash_entry_info,
+    size_t column_num_elems,
+    Data_Namespace::DataMgr *data_mgr = nullptr,
+    const int device_id = -1
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~PerfectHashTable
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+PerfectHashTable::~PerfectHashTable() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateGpuMemory [#allocategpumemory]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+void PerfectHashTable::allocateGpuMemory(
+    const size_t num_entries
+)
+```
+</CodeBlock>
+
+### getHashTableBufferSize [#gethashtablebuffersize]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTable::getHashTableBufferSize(
+    const ExecutorDeviceType device_type
+) const override
+```
+</CodeBlock>
+
+### getLayout [#getlayout]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+HashType PerfectHashTable::getLayout() const override
+```
+</CodeBlock>
+
+### getCpuBuffer [#getcpubuffer]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+int8_t * PerfectHashTable::getCpuBuffer() override
+```
+</CodeBlock>
+
+### getGpuBuffer [#getgpubuffer]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+int8_t * PerfectHashTable::getGpuBuffer() const override
+```
+</CodeBlock>
+
+### getEntryCount [#getentrycount]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTable::getEntryCount() const override
+```
+</CodeBlock>
+
+### getEmittedKeysCount [#getemittedkeyscount]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTable::getEmittedKeysCount() const override
+```
+</CodeBlock>
+
+### getRowIdSize [#getrowidsize]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTable::getRowIdSize() const override
+```
+</CodeBlock>
+
+### setHashEntryInfo [#sethashentryinfo]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable", "BucketizedHashEntryInfo": "../structs/bucketizedhashentryinfo"}}>
+```cpp showLineNumbers={false}
+void PerfectHashTable::setHashEntryInfo(
+    BucketizedHashEntryInfo const &hash_entry_info
+)
+```
+</CodeBlock>
+
+### setColumnNumElems [#setcolumnnumelems]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+void PerfectHashTable::setColumnNumElems(
+    size_t elem
+)
+```
+</CodeBlock>
+
+### getHashEntryInfo [#gethashentryinfo]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable", "BucketizedHashEntryInfo": "../structs/bucketizedhashentryinfo"}}>
+```cpp showLineNumbers={false}
+BucketizedHashEntryInfo PerfectHashTable::getHashEntryInfo() const
+```
+</CodeBlock>
+
+### getColumnNumElems [#getcolumnnumelems]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTable::getColumnNumElems() const
+```
+</CodeBlock>
+
+### getHashTableEntryInfo [#gethashtableentryinfo]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable", "PerfectHashTableEntryInfo": "perfecthashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+PerfectHashTableEntryInfo PerfectHashTable::getHashTableEntryInfo() const
+```
+</CodeBlock>
+
+### printInitLog [#printinitlog]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+void PerfectHashTable::printInitLog(
+    ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### toSet [#toset]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+DecodedJoinHashBufferSet PerfectHashTable::toSet(
+    size_t key_component_count,
+    size_t key_component_width,
+    size_t entry_count,
+    const int8_t *ptr1,
+    const int8_t *ptr2,
+    const int8_t *ptr3,
+    const int8_t *ptr4,
+    size_t buffer_size
+)
+```
+</CodeBlock>
+
+Decode hash table into a std::set for easy inspection and validation.
+
+### toString [#tostring]
+
+<CodeBlock links={{"PerfectHashTable": "perfecthashtable", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+std::string PerfectHashTable::toString(
+    const std::string &type,
+    const std::string &layout_type,
+    size_t key_component_count,
+    size_t key_component_width,
+    size_t entry_count,
+    const int8_t *ptr1,
+    const int8_t *ptr2,
+    const int8_t *ptr3,
+    const int8_t *ptr4,
+    size_t buffer_size,
+    bool raw = false
+)
+```
+</CodeBlock>
+
+Decode hash table into a human-readable string.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `gpu_hash_table_buff_` | `Data_Namespace::AbstractBuffer *` | |
+| `cpu_hash_table_buff_` | `int32_t *` | |
+| `hash_table_entry_info_` | `PerfectHashTableEntryInfo` | |
+| `hash_entry_info_` | `BucketizedHashEntryInfo` | |
+| `column_num_elems_` | `size_t` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `device_id_` | `int` | |
+| `allocator_` | `std::unique_ptr< Arena >` | |

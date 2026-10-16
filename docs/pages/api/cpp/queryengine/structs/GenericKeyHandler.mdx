@@ -1,0 +1,89 @@
+---
+title: GenericKeyHandler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashJoinKeyHandlers.h>
+```
+
+---
+
+## Constructors
+
+### GenericKeyHandler [#generickeyhandler]
+
+<CodeBlock links={{"GenericKeyHandler": "generickeyhandler", "JoinColumn": "joincolumn", "JoinColumnTypeInfo": "joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+GenericKeyHandler::GenericKeyHandler(
+    const size_t key_component_count,
+    const bool should_skip_entries,
+    const JoinColumn *join_column_per_key,
+    const JoinColumnTypeInfo *type_info_per_key,
+    const int32_t *const *sd_inner_to_outer_translation_maps,
+    const int32_t *sd_min_inner_elems
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"GenericKeyHandler": "generickeyhandler", "JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename KEY_BUFF_HANDLER>
+DEVICE int GenericKeyHandler::operator()(
+    JoinColumnIterator *join_column_iterators,
+    T *key_scratch_buff,
+    KEY_BUFF_HANDLER f
+) const
+```
+</CodeBlock>
+
+### get_number_of_columns [#getnumberofcolumns]
+
+<CodeBlock links={{"GenericKeyHandler": "generickeyhandler"}}>
+```cpp showLineNumbers={false}
+DEVICE size_t GenericKeyHandler::get_number_of_columns() const
+```
+</CodeBlock>
+
+### get_key_component_count [#getkeycomponentcount]
+
+<CodeBlock links={{"GenericKeyHandler": "generickeyhandler"}}>
+```cpp showLineNumbers={false}
+DEVICE size_t GenericKeyHandler::get_key_component_count() const
+```
+</CodeBlock>
+
+### get_join_columns [#getjoincolumns]
+
+<CodeBlock links={{"GenericKeyHandler": "generickeyhandler", "JoinColumn": "joincolumn"}}>
+```cpp showLineNumbers={false}
+DEVICE const JoinColumn * GenericKeyHandler::get_join_columns() const
+```
+</CodeBlock>
+
+### get_join_column_type_infos [#getjoincolumntypeinfos]
+
+<CodeBlock links={{"GenericKeyHandler": "generickeyhandler", "JoinColumnTypeInfo": "joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+DEVICE const JoinColumnTypeInfo * GenericKeyHandler::get_join_column_type_infos() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `key_component_count_` | `const size_t` | |
+| `should_skip_entries_` | `const bool` | |
+| `join_column_per_key_` | `const JoinColumn *` | |
+| `type_info_per_key_` | `const JoinColumnTypeInfo *` | |
+| `sd_inner_to_outer_translation_maps_` | `const int32_t *const  *` | |
+| `sd_min_inner_elems_` | `const int32_t *` | |

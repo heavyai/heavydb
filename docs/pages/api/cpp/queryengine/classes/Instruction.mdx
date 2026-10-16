@@ -1,0 +1,63 @@
+---
+title: Instruction
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Value` (public)
+
+---
+
+## Constructors
+
+### Instruction [#instruction]
+
+<CodeBlock links={{"Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Instruction::Instruction(
+    const Type type,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### run [#run]
+
+<CodeBlock links={{"Instruction": "instruction", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+virtual void Instruction::run(
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"Instruction": "instruction", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Type Instruction::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"Instruction": "instruction", "Value": "value"}}>
+```cpp showLineNumbers={false}
+size_t Instruction::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"Instruction": "instruction", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const std::string & Instruction::label() const
+```
+</CodeBlock>

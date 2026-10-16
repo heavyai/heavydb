@@ -1,0 +1,52 @@
+---
+title: Parser::QueryConnector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Fragmenter_Namespace::InsertDataLoader::InsertConnector` (public)
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~QueryConnector
+
+<CodeBlock links={{"QueryConnector": "queryconnector"}}>
+```cpp showLineNumbers={false}
+Parser::QueryConnector::~QueryConnector() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getOuterFragmentCount [#getouterfragmentcount]
+
+<CodeBlock links={{"QueryConnector": "queryconnector"}}>
+```cpp showLineNumbers={false}
+virtual size_t Parser::QueryConnector::getOuterFragmentCount(
+    QueryStateProxy,
+    std::string &sql_query_string
+)
+```
+</CodeBlock>
+
+### query [#query]
+
+<CodeBlock links={{"QueryConnector": "queryconnector"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<AggregatedResult> Parser::QueryConnector::query(
+    QueryStateProxy,
+    std::string &sql_query_string,
+    std::vector<size_t> outer_frag_indices,
+    bool allow_interrupt
+)
+```
+</CodeBlock>

@@ -1,0 +1,15 @@
+---
+title: Fragmenter_Namespace::get_var_len_null_array_indexes
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::set<size_t> Fragmenter_Namespace::get_var_len_null_array_indexes(
+    const SQLTypeInfo sql_type_info,
+    const std::vector<uint64_t> &frag_offsets,
+    const StringOffsetT *index_array,
+    size_t fragment_row_count
+)
+```
+</CodeBlock>

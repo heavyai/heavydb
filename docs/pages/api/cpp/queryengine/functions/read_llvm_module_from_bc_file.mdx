@@ -1,0 +1,31 @@
+---
+title: read_llvm_module_from_bc_file
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::unique_ptr<llvm::Module> read_llvm_module_from_bc_file(
+    const std::string &udf_ir_filename,
+    llvm::LLVMContext &ctx
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::unique_ptr<llvm::Module> read_llvm_module_from_bc_file(
+    const std::string &bc_filename,
+    llvm::LLVMContext &context
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

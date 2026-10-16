@@ -1,0 +1,21 @@
+---
+title: fill_row_ids_impl
+description: ""
+---
+
+<CodeBlock links={{"JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+template <typename SLOT_SELECTOR>
+DEVICE void fill_row_ids_impl(
+    int32_t *buff,
+    const int64_t hash_entry_count,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const int32_t *sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count,
+    SLOT_SELECTOR slot_selector
+)
+```
+</CodeBlock>

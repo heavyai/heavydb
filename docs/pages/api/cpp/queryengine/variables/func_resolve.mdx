@@ -1,0 +1,10 @@
+---
+title: func_resolve
+description: ""
+---
+
+```cpp showLineNumbers={false}
+auto func_resolve = [](auto funcname, auto&&... strlist) {
+  return ((funcname == strlist) || ...);
+}
+```

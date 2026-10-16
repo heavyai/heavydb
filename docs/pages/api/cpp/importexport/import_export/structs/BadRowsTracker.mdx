@@ -1,0 +1,21 @@
+---
+title: import_export::BadRowsTracker
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/Importer.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `mutex` | `std::mutex` | |
+| `rows` | `std::set< int64_t >` | |
+| `nerrors` | `std::atomic< int >` | |
+| `file_name` | `std::string` | |
+| `row_group` | `int` | |
+| `importer` | `Importer *` | |

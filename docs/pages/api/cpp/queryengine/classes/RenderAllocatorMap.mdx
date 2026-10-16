@@ -1,0 +1,105 @@
+---
+title: RenderAllocatorMap
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RenderAllocator.h>
+```
+
+---
+
+## Constructors
+
+### RenderAllocatorMap [#renderallocatormap]
+
+<CodeBlock links={{"RenderAllocatorMap": "renderallocatormap"}}>
+```cpp showLineNumbers={false}
+RenderAllocatorMap::RenderAllocatorMap(
+    ::QueryRenderer::QueryRenderManager *render_manager
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~RenderAllocatorMap
+
+<CodeBlock links={{"RenderAllocatorMap": "renderallocatormap"}}>
+```cpp showLineNumbers={false}
+RenderAllocatorMap::~RenderAllocatorMap()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getRenderAllocator [#getrenderallocator]
+
+<CodeBlock links={{"RenderAllocatorMap": "renderallocatormap", "RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+RenderAllocator * RenderAllocatorMap::getRenderAllocator(
+    size_t device_id
+)
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"RenderAllocatorMap": "renderallocatormap", "RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+RenderAllocator * RenderAllocatorMap::operator[](
+    size_t device_id
+)
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RenderAllocatorMap": "renderallocatormap"}}>
+```cpp showLineNumbers={false}
+size_t RenderAllocatorMap::size() const
+```
+</CodeBlock>
+
+### bufferData [#bufferdata]
+
+<CodeBlock links={{"RenderAllocatorMap": "renderallocatormap"}}>
+```cpp showLineNumbers={false}
+void RenderAllocatorMap::bufferData(
+    int8_t *data,
+    const size_t num_data_bytes,
+    const size_t device_id
+)
+```
+</CodeBlock>
+
+### setDataLayout [#setdatalayout]
+
+<CodeBlock links={{"RenderAllocatorMap": "renderallocatormap"}}>
+```cpp showLineNumbers={false}
+void RenderAllocatorMap::setDataLayout(
+    const std::shared_ptr<::QueryRenderer::QueryDataLayout> &query_data_layout
+)
+```
+</CodeBlock>
+
+### prepForRendering [#prepforrendering]
+
+<CodeBlock links={{"RenderAllocatorMap": "renderallocatormap"}}>
+```cpp showLineNumbers={false}
+void RenderAllocatorMap::prepForRendering(
+    const std::shared_ptr<::QueryRenderer::QueryDataLayout> &query_data_layout
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `render_manager_` | `::QueryRenderer::QueryRenderManager *` | |
+| `render_allocator_map_` | `std::vector< RenderAllocator >` | |

@@ -1,0 +1,316 @@
+---
+title: Analyzer::FunctionOper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### FunctionOper [#functionoper]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::FunctionOper::FunctionOper(
+    const SQLTypeInfo &ti,
+    const std::string &name,
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &args
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getName [#getname]
+
+<CodeBlock links={{"FunctionOper": "functionoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::FunctionOper::getName() const
+```
+</CodeBlock>
+
+### getArity [#getarity]
+
+<CodeBlock links={{"FunctionOper": "functionoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::FunctionOper::getArity() const
+```
+</CodeBlock>
+
+### getArg [#getarg]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Analyzer::Expr * Analyzer::FunctionOper::getArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getOwnArg [#getownarg]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::FunctionOper::getOwnArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::FunctionOper::deep_copy() const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"FunctionOper": "functionoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::FunctionOper::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::FunctionOper::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"FunctionOper": "functionoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::FunctionOper::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"FunctionOper": "functionoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::FunctionOper::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"FunctionOper": "functionoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::FunctionOper::operator==(
+    const FunctionOper &rhs
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### toString [#tostring]
+
+<CodeBlock links={{"FunctionOper": "functionoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::FunctionOper::toString() const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::FunctionOper::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::FunctionOper::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::FunctionOper::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::FunctionOper::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::FunctionOper::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::FunctionOper::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::FunctionOper::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::FunctionOper::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::FunctionOper::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::FunctionOper::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::FunctionOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::FunctionOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::FunctionOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::FunctionOper::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::FunctionOper::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::FunctionOper::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"FunctionOper": "functionoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::FunctionOper::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name_` | `const std::string` | |
+| `args_` | `const std::vector< std::shared_ptr< Analyzer::Expr > >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

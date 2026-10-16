@@ -1,0 +1,277 @@
+---
+title: RexLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RexScalar` (public)
+
+---
+
+## Constructors
+
+### RexLiteral [#rexliteral]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+RexLiteral::RexLiteral()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+RexLiteral::RexLiteral(
+    const int64_t val,
+    const SQLTypes type,
+    const SQLTypes target_type,
+    const unsigned scale,
+    const unsigned precision,
+    const unsigned target_scale,
+    const unsigned target_precision
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+RexLiteral::RexLiteral(
+    const double val,
+    const SQLTypes type,
+    const SQLTypes target_type,
+    const unsigned scale,
+    const unsigned precision,
+    const unsigned target_scale,
+    const unsigned target_precision
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+RexLiteral::RexLiteral(
+    const std::string &val,
+    const SQLTypes type,
+    const SQLTypes target_type,
+    const unsigned scale,
+    const unsigned precision,
+    const unsigned target_scale,
+    const unsigned target_precision
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+RexLiteral::RexLiteral(
+    const bool val,
+    const SQLTypes type,
+    const SQLTypes target_type,
+    const unsigned scale,
+    const unsigned precision,
+    const unsigned target_scale,
+    const unsigned target_precision
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+RexLiteral::RexLiteral(
+    const SQLTypes target_type
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexLiteral": "rexliteral", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexLiteral::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexLiteral": "rexliteral", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexLiteral::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### getVal [#getval]
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+template <class T>
+T RexLiteral::getVal() const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+SQLTypes RexLiteral::getType() const
+```
+</CodeBlock>
+
+### getTargetType [#gettargettype]
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+SQLTypes RexLiteral::getTargetType() const
+```
+</CodeBlock>
+
+### getScale [#getscale]
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+unsigned RexLiteral::getScale() const
+```
+</CodeBlock>
+
+### getPrecision [#getprecision]
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+unsigned RexLiteral::getPrecision() const
+```
+</CodeBlock>
+
+### getTargetScale [#gettargetscale]
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+unsigned RexLiteral::getTargetScale() const
+```
+</CodeBlock>
+
+### getTargetPrecision [#gettargetprecision]
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+unsigned RexLiteral::getTargetPrecision() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexLiteral": "rexliteral", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexLiteral::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RexLiteral> RexLiteral::deepCopy() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexLiteral": "rexliteral", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual size_t Rex::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexLiteral": "rexliteral", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+size_t Rex::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexLiteral": "rexliteral", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexLiteral": "rexliteral", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexLiteral": "rexliteral", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+size_t RexLiteral::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `literal_` | `boost::variant< boost::blank, int64_t, double, std::string, bool >` | |
+| `type_` | `SQLTypes` | |
+| `target_type_` | `SQLTypes` | |
+| `scale_` | `unsigned` | |
+| `precision_` | `unsigned` | |
+| `target_scale_` | `unsigned` | |
+| `target_precision_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

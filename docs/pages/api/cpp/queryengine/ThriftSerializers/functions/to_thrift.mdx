@@ -1,0 +1,73 @@
+---
+title: ThriftSerializers::to_thrift
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+TExtArgumentType::type ThriftSerializers::to_thrift(
+    const ExtArgumentType &t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<TExtArgumentType::type> ThriftSerializers::to_thrift(
+    const std::vector<ExtArgumentType> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+TOutputBufferSizeType::type ThriftSerializers::to_thrift(
+    const table_functions::OutputBufferSizeType &t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"ExtensionFunction": "../../classes/extensionfunction"}}>
+```cpp showLineNumbers={false}
+TUserDefinedFunction ThriftSerializers::to_thrift(
+    const ExtensionFunction &udf
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"TableFunction": "../../tablefunctions/classes/tablefunction"}}>
+```cpp showLineNumbers={false}
+TUserDefinedTableFunction ThriftSerializers::to_thrift(
+    const table_functions::TableFunction &func
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"TableFunction": "../../tablefunctions/classes/tablefunction"}}>
+```cpp showLineNumbers={false}
+std::vector<TUserDefinedTableFunction> ThriftSerializers::to_thrift(
+    const std::vector<table_functions::TableFunction> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

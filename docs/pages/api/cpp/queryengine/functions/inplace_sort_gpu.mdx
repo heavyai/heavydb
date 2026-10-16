@@ -1,0 +1,37 @@
+---
+title: inplace_sort_gpu
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../classes/querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers"}}>
+```cpp showLineNumbers={false}
+void inplace_sort_gpu(
+    const std::list<Analyzer::OrderEntry> &order_entries,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const GpuGroupByBuffers &group_by_buffers,
+    CudaAllocator *cuda_allocator,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../classes/querymemorydescriptor", "GpuGroupByBuffers": "../structs/gpugroupbybuffers"}}>
+```cpp showLineNumbers={false}
+void inplace_sort_gpu(
+    const std::list<Analyzer::OrderEntry> &,
+    const QueryMemoryDescriptor &,
+    const GpuGroupByBuffers &,
+    CudaAllocator *cuda_allocator,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

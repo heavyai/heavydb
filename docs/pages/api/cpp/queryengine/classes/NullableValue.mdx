@@ -1,0 +1,277 @@
+---
+title: NullableValue
+description: ""
+---
+
+<CodeBlock id="NullableValue" links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class NullableValue
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <NullableValue.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### NullableValue [#nullablevalue]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T>::NullableValue()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T>::NullableValue(
+    T v
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### isValid [#isvalid]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+bool NullableValue<T>::isValid() const
+```
+</CodeBlock>
+
+### isInvalid [#isinvalid]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+bool NullableValue<T>::isInvalid() const
+```
+</CodeBlock>
+
+### getValue [#getvalue]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+T NullableValue<T>::getValue() const
+```
+</CodeBlock>
+
+### operator+ [#operator_plus]
+
+<Tabs>
+<Tab title="Const (with v)">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T> NullableValue<T>::operator+(
+    T v
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with other)">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T> NullableValue<T>::operator+(
+    const NullableValue<T> &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator- [#operator_minus]
+
+<Tabs>
+<Tab title="Const (with v)">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T> NullableValue<T>::operator-(
+    T v
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with other)">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T> NullableValue<T>::operator-(
+    const NullableValue<T> &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator* [#operator_mul]
+
+<Tabs>
+<Tab title="Const (with v)">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T> NullableValue<T>::operator*(
+    T v
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with other)">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T> NullableValue<T>::operator*(
+    const NullableValue<T> &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator/ [#operator_div]
+
+<Tabs>
+<Tab title="Const (with v)">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T> NullableValue<T>::operator/(
+    T v
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with other)">
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+NullableValue<T> NullableValue<T>::operator/(
+    const NullableValue<T> &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+bool NullableValue<T>::operator==(
+    const T v
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+bool NullableValue<T>::operator!=(
+    const T v
+) const
+```
+</CodeBlock>
+
+### operator&gt; [#operator_gt]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+bool NullableValue<T>::operator>(
+    const T v
+) const
+```
+</CodeBlock>
+
+### operator&gt;= [#operator_ge]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+bool NullableValue<T>::operator>=(
+    const T v
+) const
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+bool NullableValue<T>::operator<(
+    const T v
+) const
+```
+</CodeBlock>
+
+### operator&lt;= [#operator_le]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+bool NullableValue<T>::operator<=(
+    const T v
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getDefaultValue [#getdefaultvalue]
+
+<CodeBlock links={{"NullableValue": "nullablevalue"}}>
+```cpp showLineNumbers={false}
+static T NullableValue<T>::getDefaultValue()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### State
+
+| Name | Value | Description |
+|---|---|---|
+| `Invalid` | | |
+| `Valid` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `state_` | `State` | |
+| `value_` | `T` | |

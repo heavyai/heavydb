@@ -1,0 +1,468 @@
+---
+title: foreign_storage::ParquetImporter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetImporter.h>
+```
+
+**Inherits from:** `foreign_storage::AbstractFileStorageDataWrapper` (public)
+
+---
+
+## Constructors
+
+### ParquetImporter [#parquetimporter]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetImporter::ParquetImporter()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetImporter::ParquetImporter(
+    const int db_id,
+    const ForeignTable *foreign_table,
+    const UserMapping *user_mapping
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### populateChunkMetadata [#populatechunkmetadata]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetImporter::populateChunkMetadata(
+    ChunkMetadataVector &chunk_metadata_vector
+) override
+```
+</CodeBlock>
+
+Populates given chunk metadata vector with metadata for all chunks in related foreign table.
+
+**Parameters**
+
+<ParamField path="chunk_metadata_vector" type="ChunkMetadataVector &">
+- Vector that will be populated with chunk metadata
+</ParamField>
+
+### populateChunkBuffers [#populatechunkbuffers]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetImporter::populateChunkBuffers(
+    const ChunkToBufferMap &required_buffers,
+    const ChunkToBufferMap &optional_buffers,
+    AbstractBuffer *delete_buffer
+) override
+```
+</CodeBlock>
+
+Populates given chunk buffers identified by chunk keys.
+
+All provided chunk buffers are expected to be for the same fragment.
+
+**Parameters**
+
+<ParamField path="required_buffers" type="const ChunkToBufferMap &">
+- Chunk buffers that must always be populated
+</ParamField>
+
+<ParamField path="optional_buffers" type="const ChunkToBufferMap &">
+- Chunk buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats)
+</ParamField>
+
+<ParamField path="delete_buffer" type="AbstractBuffer *">
+- Chunk buffer for fragment's delete column, if non-null data wrapper is expected to mark deleted rows in buffer and continue processing
+</ParamField>
+
+### getSerializedDataWrapper [#getserializeddatawrapper]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ParquetImporter::getSerializedDataWrapper() const override
+```
+</CodeBlock>
+
+Serialize internal state of wrapper into file at given path if implemented.
+
+### restoreDataWrapperInternals [#restoredatawrapperinternals]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetImporter::restoreDataWrapperInternals(
+    const std::string &file_path,
+    const ChunkMetadataVector &chunk_metadata_vector
+) override
+```
+</CodeBlock>
+
+Restore internal state of datawrapper.
+
+**Parameters**
+
+<ParamField path="file_path" type="const std::string &">
+- Location of file created by serializeMetadata
+</ParamField>
+
+### isRestored [#isrestored]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ParquetImporter::isRestored() const override
+```
+</CodeBlock>
+
+### getCachedParallelismLevel [#getcachedparallelismlevel]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+ParallelismLevel foreign_storage::ParquetImporter::getCachedParallelismLevel() const override
+```
+</CodeBlock>
+
+Gets the desired level of parallelism for the data wrapper when a cache is in use.
+
+This affects the optional buffers that the data wrapper is made aware of during data requests.
+
+### getNonCachedParallelismLevel [#getnoncachedparallelismlevel]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+ParallelismLevel foreign_storage::ParquetImporter::getNonCachedParallelismLevel() const override
+```
+</CodeBlock>
+
+Gets the desired level of parallelism for the data wrapper when no cache is in use.
+
+This affects the optional buffers that the data wrapper is made aware of during data requests.
+
+### getNextImportBatch [#getnextimportbatch]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<import_export::ImportBatchResult> foreign_storage::ParquetImporter::getNextImportBatch()
+```
+</CodeBlock>
+
+Produce the next `ImportBatchResult` for import.
+
+This is the only functionality of `ParquetImporter` that is required to be implemented.
+
+**Returns:** a `ImportBatchResult` for import.
+
+### getStringDictionaries [#getstringdictionaries]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+std::vector<std::pair<const ColumnDescriptor *, StringDictionary *>> foreign_storage::ParquetImporter::getStringDictionaries() const
+```
+</CodeBlock>
+
+Return string dictionaries that are used per column.
+
+**Returns:** a vector of StringDictionary and ColumnDescriptor pairs
+
+### getMaxNumUsefulThreads [#getmaxnumusefulthreads]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+int foreign_storage::ParquetImporter::getMaxNumUsefulThreads() const
+```
+</CodeBlock>
+
+Get the maximum number of threads that can do useful computation.
+
+### setNumThreads [#setnumthreads]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetImporter::setNumThreads(
+    const int num_threads
+)
+```
+</CodeBlock>
+
+Set the number of threads to use internally when reading batches.
+
+### validateServerOptions [#validateserveroptions]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetImporter::validateServerOptions(
+    const ForeignServer *foreign_server
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given foreign server object are valid.
+
+**Parameters**
+
+<ParamField path="foreign_server" type="const ForeignServer *">
+- Foreign server object containing options to be validated
+</ParamField>
+
+### validateTableOptions [#validatetableoptions]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetImporter::validateTableOptions(
+    const ForeignTable *foreign_table
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given foreign table object are valid.
+
+**Parameters**
+
+<ParamField path="foreign_table" type="const ForeignTable *">
+- Foreign table object containing options to be validated
+</ParamField>
+
+### getSupportedTableOptions [#getsupportedtableoptions]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string_view> & foreign_storage::ParquetImporter::getSupportedTableOptions() const override
+```
+</CodeBlock>
+
+Gets the set of supported table options for the data wrapper.
+
+### validateUserMappingOptions [#validateusermappingoptions]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetImporter::validateUserMappingOptions(
+    const UserMapping *user_mapping,
+    const ForeignServer *foreign_server
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given user mapping object are valid.
+
+**Parameters**
+
+<ParamField path="user_mapping" type="const UserMapping *">
+- User mapping object containing options to be validated
+</ParamField>
+
+### getSupportedUserMappingOptions [#getsupportedusermappingoptions]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string_view> & foreign_storage::ParquetImporter::getSupportedUserMappingOptions() const override
+```
+</CodeBlock>
+
+Gets the set of supported user mapping options for the data wrapper.
+
+### getAlterableTableOptions [#getalterabletableoptions]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string> foreign_storage::ParquetImporter::getAlterableTableOptions() const override
+```
+</CodeBlock>
+
+Gets the subset of table options that can be altered for the data wrapper.
+
+### populateChunkBatchBuffers [#populatechunkbatchbuffers]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractBuffer": "../../classes/abstractbuffer", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ForeignDataWrapper::populateChunkBatchBuffers(
+    const ChunkToBatchBufferMap &required_buffers,
+    const ChunkToBatchBufferMap &optional_buffers,
+    const std::vector<AbstractBuffer *> &delete_buffer = {}
+)
+```
+</CodeBlock>
+
+Mirrors [`populateChunkBuffers`](abstractfilestoragedatawrapper#populatechunkbuffers), but uses batch buffers instead as an optimization.
+
+Populates given chunk batch buffers identified by chunk keys. All provided chunk buffers are expected to be for the same fragment.
+
+**Parameters**
+
+<ParamField path="required_buffers" type="const ChunkToBatchBufferMap &">
+- Chunk batch buffers that must always be populated
+</ParamField>
+
+<ParamField path="optional_buffers" type="const ChunkToBatchBufferMap &">
+- Chunk batch buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats)
+</ParamField>
+
+<ParamField path="delete_buffer" type="const std::vector<AbstractBuffer *> &" default="{}">
+- Chunk batch buffer for fragment's delete column, if non-null data wrapper is expected to mark deleted rows in buffer and continue processing
+</ParamField>
+
+### getOptimalBatchSize [#getoptimalbatchsize]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::ForeignDataWrapper::getOptimalBatchSize()
+```
+</CodeBlock>
+
+Get the size of batches to be used in `BatchBuffer` code paths.
+
+This quantity must be a constant and can not change over the course of the lifetime of the data wrapper. Typically, this quantity is chosen to ensure concurrency can be best executed.
+
+### validateSchema [#validateschema]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ForeignDataWrapper::validateSchema(
+    const std::list<ColumnDescriptor> &columns,
+    const ForeignTable *foreign_table
+) const
+```
+</CodeBlock>
+
+Verifies the schema is supported by this foreign table.
+
+**Parameters**
+
+<ParamField path="columns" type="const std::list<ColumnDescriptor> &">
+- Column descriptors for this table
+</ParamField>
+
+### isLazyFragmentFetchingEnabled [#islazyfragmentfetchingenabled]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::ForeignDataWrapper::isLazyFragmentFetchingEnabled() const
+```
+</CodeBlock>
+
+If `true` data wrapper implements a lazy fragment fetching mode.
+
+This mode allows requests for fragments to be issued to `populateChunks` *without* the prerequisite that [`populateChunkMetadata`](abstractfilestoragedatawrapper#populatechunkmetadata) has successfully finished execution. This is an optimization that has some specific use-cases and is not required.
+
+NOTE: this mode is not guaranteed to work as expected when combined with certain types of refresh modes such as append. This is subject to change in the future, but has no impact on the intended use-cases of this mode.
+
+### acceptsPrepopulatedDeleteBuffer [#acceptsprepopulateddeletebuffer]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::ForeignDataWrapper::acceptsPrepopulatedDeleteBuffer() const
+```
+</CodeBlock>
+
+If `true` data wrapper accepts delete buffers that may be prepoulated with a speculative number of `false` values.
+
+This is an minor optimization that prevents unnecessary allocations and deallocations by reusing the buffer when it is large enouhg, and requiring a smaller allocation when it needs to be resized.
+
+This option is only used when delete buffers are in use.
+
+TODO: remove this method when it will become the default behaviour for all data wrappers going forward.
+
+### getAllFilePaths [#getallfilepaths]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter"}}>
+```cpp showLineNumbers={false}
+std::set<std::string> foreign_storage::ParquetImporter::getAllFilePaths()
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getFilePathOptions [#getfilepathoptions]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+shared::FilePathOptions foreign_storage::ParquetImporter::getFilePathOptions(
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+### getFullFilePath [#getfullfilepath]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ParquetImporter::getFullFilePath(
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+Returns the path to the source file/dir of the table.
+
+Depending on options this may result from a concatenation of server and table path options.
+
+### allowFileRollOff [#allowfilerolloff]
+
+<CodeBlock links={{"ParquetImporter": "parquetimporter", "AbstractFileStorageDataWrapper": "abstractfilestoragedatawrapper"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ParquetImporter::allowFileRollOff(
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### ParallelismLevel
+
+ParallelismLevel describes the desired level of parallelism of the data wrapper.
+
+| Name | Value | Description |
+|---|---|---|
+| `NONE` | | |
+| `INTRA_FRAGMENT` | | |
+| `INTER_FRAGMENT` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `db_id_` | `const int` | |
+| `foreign_table_` | `const ForeignTable *` | |
+| `num_threads_` | `int` | |
+| `row_group_interval_tracker_` | `std::unique_ptr< AbstractRowGroupIntervalTracker >` | |
+| `schema_` | `std::unique_ptr< ForeignTableSchema >` | |
+| `file_system_` | `std::shared_ptr< arrow::fs::FileSystem >` | |
+| `file_reader_cache_` | `std::unique_ptr< FileReaderMap >` | |
+| `column_map_` | `std::unique_ptr< HeavyColumnToParquetColumnMap >` | |
+| `string_dictionaries_per_column_` | `std::vector< std::pair< const ColumnDescriptor *, StringDictionary * > >` | |
+| `row_group_interval_tracker_mutex_` | `std::shared_mutex` | |
+| `string_dictionaries_per_column_mutex_` | `std::shared_mutex` | |
+| `STORAGE_TYPE_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `BASE_PATH_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `FILE_PATH_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `REGEX_PATH_FILTER_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `LOCAL_FILE_STORAGE_TYPE` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `S3_STORAGE_TYPE` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `FILE_SORT_ORDER_BY_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `FILE_SORT_REGEX_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `ALLOW_FILE_ROLL_OFF_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `THREADS_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `LONLAT_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `supported_storage_types` <Badge intent="note" minimal>static</Badge> | `const std::array< std::string, 1 >` | |

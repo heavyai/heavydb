@@ -1,0 +1,42 @@
+---
+title: import_export::ImportBatchResult
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/ImportBatchResult.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~ImportBatchResult
+
+<CodeBlock links={{"ImportBatchResult": "importbatchresult"}}>
+```cpp showLineNumbers={false}
+virtual import_export::ImportBatchResult::~ImportBatchResult() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getInsertData [#getinsertdata]
+
+<CodeBlock links={{"ImportBatchResult": "importbatchresult"}}>
+```cpp showLineNumbers={false}
+virtual std::optional<Fragmenter_Namespace::InsertData> import_export::ImportBatchResult::getInsertData() const
+```
+</CodeBlock>
+
+### getImportStatus [#getimportstatus]
+
+<CodeBlock links={{"ImportBatchResult": "importbatchresult", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+virtual ImportStatus import_export::ImportBatchResult::getImportStatus() const
+```
+</CodeBlock>

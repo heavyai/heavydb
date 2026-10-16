@@ -1,0 +1,74 @@
+---
+title: omniverse_connector::export_terrain_texture
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename TXY, typename TA>
+int8_t * omniverse_connector::export_terrain_texture(
+    const int32_t grid_size_x,
+    const int32_t grid_size_y,
+    const TXY x_min,
+    const TXY y_min,
+    const TXY x_scale_input_to_bin,
+    const TXY y_scale_input_to_bin,
+    const TXY *x,
+    const TXY *y,
+    const TA **attrs,
+    const int32_t num_attrs,
+    const int64_t num_points,
+    int32_t &num_png_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template int8_t * omniverse_connector::export_terrain_texture(
+    const int32_t grid_size_x,
+    const int32_t grid_size_y,
+    const float x_min,
+    const float y_min,
+    const float x_scale_input_to_bin,
+    const float y_scale_input_to_bin,
+    const float *x,
+    const float *y,
+    const float **attrs,
+    const int32_t num_attrs,
+    const int64_t num_rows,
+    int32_t &num_png_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template int8_t * omniverse_connector::export_terrain_texture(
+    const int32_t grid_size_x,
+    const int32_t grid_size_y,
+    const double x_min,
+    const double y_min,
+    const double x_scale_input_to_bin,
+    const double y_scale_input_to_bin,
+    const double *x,
+    const double *y,
+    const float **attrs,
+    const int32_t num_attrs,
+    const int64_t num_rows,
+    int32_t &num_png_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

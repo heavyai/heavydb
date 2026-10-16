@@ -1,0 +1,14 @@
+---
+title: read_llvm_module_from_ir_file
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::unique_ptr<llvm::Module> read_llvm_module_from_ir_file(
+    const std::string &udf_ir_filename,
+    llvm::LLVMContext &ctx,
+    bool is_gpu = false
+)
+```
+</CodeBlock>

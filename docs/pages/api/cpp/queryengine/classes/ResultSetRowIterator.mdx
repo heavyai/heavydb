@@ -1,0 +1,136 @@
+---
+title: ResultSetRowIterator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSet.h>
+```
+
+---
+
+## Constructors
+
+### ResultSetRowIterator [#resultsetrowiterator]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ResultSetRowIterator": "resultsetrowiterator", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSetRowIterator::ResultSetRowIterator(
+    const ResultSet *rs,
+    bool translate_strings,
+    bool decimal_to_double
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"ResultSetRowIterator": "resultsetrowiterator", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSetRowIterator::ResultSetRowIterator(
+    const ResultSet *rs
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"ResultSetRowIterator": "resultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+bool ResultSetRowIterator::operator==(
+    const ResultSetRowIterator &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"ResultSetRowIterator": "resultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+bool ResultSetRowIterator::operator!=(
+    const ResultSetRowIterator &other
+) const
+```
+</CodeBlock>
+
+### operator* [#operator_mul]
+
+<CodeBlock links={{"ResultSetRowIterator": "resultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ResultSetRowIterator::value_type ResultSetRowIterator::operator*() const
+```
+</CodeBlock>
+
+### operator++ [#operator_inc]
+
+<Tabs>
+<Tab title="Pre-increment">
+
+<CodeBlock links={{"ResultSetRowIterator": "resultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ResultSetRowIterator & ResultSetRowIterator::operator++(
+    void
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Post-increment">
+
+<CodeBlock links={{"ResultSetRowIterator": "resultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ResultSetRowIterator ResultSetRowIterator::operator++(
+    int
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getCurrentRowBufferIndex [#getcurrentrowbufferindex]
+
+<CodeBlock links={{"ResultSetRowIterator": "resultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+size_t ResultSetRowIterator::getCurrentRowBufferIndex() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `value_type` | `std::vector< TargetValue >` |
+| `difference_type` | `std::ptrdiff_t` |
+| `pointer` | `std::vector< TargetValue > *` |
+| `reference` | `std::vector< TargetValue > &` |
+| `iterator_category` | `std::input_iterator_tag` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `result_set_` | `const ResultSet *` | |
+| `crt_row_buff_idx_` | `size_t` | |
+| `global_entry_idx_` | `size_t` | |
+| `global_entry_idx_valid_` | `bool` | |
+| `fetched_so_far_` | `size_t` | |
+| `translate_strings_` | `bool` | |
+| `decimal_to_double_` | `bool` | |

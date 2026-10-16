@@ -1,0 +1,18 @@
+---
+title: foreign_storage::populate_chunks_using_data_blocks
+description: ""
+---
+
+<CodeBlock links={{"MetadataScanMultiThreadingParams": "../structs/metadatascanmultithreadingparams", "ParseBufferRequest": "../structs/parsebufferrequest", "ParseBufferResult": "../structs/parsebufferresult", "IterativeFileScanParameters": "../structs/iterativefilescanparameters"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::populate_chunks_using_data_blocks(
+    MetadataScanMultiThreadingParams &multi_threading_params,
+    int fragment_id,
+    const ParseBufferRequest &request,
+    ParseBufferResult &result,
+    std::map<int, const ColumnDescriptor *> &column_by_id,
+    foreign_storage::IterativeFileScanParameters &file_scan_param,
+    const int thread_id
+)
+```
+</CodeBlock>

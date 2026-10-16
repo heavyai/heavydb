@@ -1,0 +1,129 @@
+---
+title: HashTable
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashTable.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~HashTable
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+virtual HashTable::~HashTable()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getHashTableBufferSize [#gethashtablebuffersize]
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashTable::getHashTableBufferSize(
+    const ExecutorDeviceType device_type
+) const
+```
+</CodeBlock>
+
+### getCpuBuffer [#getcpubuffer]
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+virtual int8_t * HashTable::getCpuBuffer()
+```
+</CodeBlock>
+
+### getGpuBuffer [#getgpubuffer]
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+virtual int8_t * HashTable::getGpuBuffer() const
+```
+</CodeBlock>
+
+### getLayout [#getlayout]
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+virtual HashType HashTable::getLayout() const
+```
+</CodeBlock>
+
+### getEntryCount [#getentrycount]
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashTable::getEntryCount() const
+```
+</CodeBlock>
+
+### getEmittedKeysCount [#getemittedkeyscount]
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashTable::getEmittedKeysCount() const
+```
+</CodeBlock>
+
+### getRowIdSize [#getrowidsize]
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashTable::getRowIdSize() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### toSet [#toset]
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+DecodedJoinHashBufferSet HashTable::toSet(
+    size_t key_component_count,
+    size_t key_component_width,
+    size_t entry_count,
+    const int8_t *ptr1,
+    const int8_t *ptr2,
+    const int8_t *ptr3,
+    const int8_t *ptr4,
+    size_t buffer_size
+)
+```
+</CodeBlock>
+
+Decode hash table into a std::set for easy inspection and validation.
+
+### toString [#tostring]
+
+<CodeBlock links={{"HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+std::string HashTable::toString(
+    const std::string &type,
+    const std::string &layout_type,
+    size_t key_component_count,
+    size_t key_component_width,
+    size_t entry_count,
+    const int8_t *ptr1,
+    const int8_t *ptr2,
+    const int8_t *ptr3,
+    const int8_t *ptr4,
+    size_t buffer_size,
+    bool raw = false
+)
+```
+</CodeBlock>
+
+Decode hash table into a human-readable string.

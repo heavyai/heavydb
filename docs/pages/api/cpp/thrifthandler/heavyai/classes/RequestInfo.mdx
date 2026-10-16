@@ -1,0 +1,89 @@
+---
+title: heavyai::RequestInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavyai/RequestInfo.h>
+```
+
+---
+
+## Constructors
+
+### RequestInfo [#requestinfo]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"RequestInfo": "requestinfo"}}>
+```cpp showLineNumbers={false}
+heavyai::RequestInfo::RequestInfo(
+    std::string const &session_id_or_json
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RequestInfo": "requestinfo"}}>
+```cpp showLineNumbers={false}
+heavyai::RequestInfo::RequestInfo(
+    std::string session_id,
+    logger::RequestId const request_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### json [#json]
+
+<CodeBlock links={{"RequestInfo": "requestinfo"}}>
+```cpp showLineNumbers={false}
+std::string heavyai::RequestInfo::json() const
+```
+</CodeBlock>
+
+### requestId [#requestid]
+
+<CodeBlock links={{"RequestInfo": "requestinfo"}}>
+```cpp showLineNumbers={false}
+logger::RequestId heavyai::RequestInfo::requestId() const
+```
+</CodeBlock>
+
+### sessionId [#sessionid]
+
+<CodeBlock links={{"RequestInfo": "requestinfo"}}>
+```cpp showLineNumbers={false}
+std::string const  & heavyai::RequestInfo::sessionId() const
+```
+</CodeBlock>
+
+### setRequestId [#setrequestid]
+
+<CodeBlock links={{"RequestInfo": "requestinfo"}}>
+```cpp showLineNumbers={false}
+void heavyai::RequestInfo::setRequestId(
+    logger::RequestId const request_id
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `session_id_` | `std::string` | |
+| `request_id_` | `logger::RequestId` | |

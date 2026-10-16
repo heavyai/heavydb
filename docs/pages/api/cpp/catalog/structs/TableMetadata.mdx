@@ -1,0 +1,47 @@
+---
+title: TableMetadata
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableMetadata.h>
+```
+
+---
+
+## Constructors
+
+### TableMetadata [#tablemetadata]
+
+<CodeBlock links={{"TableMetadata": "tablemetadata", "TableDescriptor": "tabledescriptor"}}>
+```cpp showLineNumbers={false}
+TableMetadata::TableMetadata(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_id` | `int32_t` | |
+| `table_name` | `std::string` | |
+| `owner_id` | `int32_t` | |
+| `owner_name` | `std::string` | |
+| `is_temp_table` | `bool` | |
+| `num_columns` | `int32_t` | |
+| `is_sharded` | `bool` | |
+| `num_shards` | `int32_t` | |
+| `max_rows` | `int64_t` | |
+| `fragment_size` | `int32_t` | |
+| `max_rollback_epochs` | `int32_t` | |
+| `min_epoch` | `int32_t` | |
+| `max_epoch` | `int32_t` | |
+| `min_epoch_floor` | `int32_t` | |
+| `max_epoch_floor` | `int32_t` | |
+| `num_bytes` | `int64_t` | |
+| `num_files` | `int64_t` | |
+| `num_pages` | `int64_t` | |

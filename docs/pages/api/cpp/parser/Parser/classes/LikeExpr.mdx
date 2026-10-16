@@ -1,0 +1,159 @@
+---
+title: Parser::LikeExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### LikeExpr [#likeexpr]
+
+<CodeBlock links={{"LikeExpr": "likeexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::LikeExpr::LikeExpr(
+    bool n,
+    bool i,
+    Expr *a,
+    Expr *l,
+    Expr *e
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_not [#getisnot]
+
+<CodeBlock links={{"LikeExpr": "likeexpr"}}>
+```cpp showLineNumbers={false}
+bool Parser::LikeExpr::get_is_not() const
+```
+</CodeBlock>
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"LikeExpr": "likeexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::LikeExpr::get_arg() const
+```
+</CodeBlock>
+
+### get_like_string [#getlikestring]
+
+<CodeBlock links={{"LikeExpr": "likeexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::LikeExpr::get_like_string() const
+```
+</CodeBlock>
+
+### get_escape_string [#getescapestring]
+
+<CodeBlock links={{"LikeExpr": "likeexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::LikeExpr::get_escape_string() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"LikeExpr": "likeexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::LikeExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"LikeExpr": "likeexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::LikeExpr::to_string() const override
+```
+</CodeBlock>
+
+### check_like_expr [#checklikeexpr]
+
+<CodeBlock links={{"LikeExpr": "likeexpr"}}>
+```cpp showLineNumbers={false}
+void Parser::LikeExpr::check_like_expr(
+    const std::string &like_str,
+    char escape_char
+)
+```
+</CodeBlock>
+
+### test_is_simple_expr [#testissimpleexpr]
+
+<CodeBlock links={{"LikeExpr": "likeexpr"}}>
+```cpp showLineNumbers={false}
+bool Parser::LikeExpr::test_is_simple_expr(
+    const std::string &like_str,
+    char escape_char
+)
+```
+</CodeBlock>
+
+### erase_cntl_chars [#erasecntlchars]
+
+<CodeBlock links={{"LikeExpr": "likeexpr"}}>
+```cpp showLineNumbers={false}
+void Parser::LikeExpr::erase_cntl_chars(
+    std::string &like_str,
+    char escape_char
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### get [#get]
+
+<CodeBlock links={{"LikeExpr": "likeexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::LikeExpr::get(
+    std::shared_ptr<Analyzer::Expr> arg_expr,
+    std::shared_ptr<Analyzer::Expr> like_expr,
+    std::shared_ptr<Analyzer::Expr> escape_expr,
+    const bool is_ilike,
+    const bool is_not
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_not_` | `bool` | |
+| `is_ilike_` | `bool` | |
+| `arg_` | `std::unique_ptr< Expr >` | |
+| `like_string_` | `std::unique_ptr< Expr >` | |
+| `escape_string_` | `std::unique_ptr< Expr >` | |

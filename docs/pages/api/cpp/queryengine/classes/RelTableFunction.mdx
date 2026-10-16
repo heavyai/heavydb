@@ -1,0 +1,487 @@
+---
+title: RelTableFunction
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public)
+
+---
+
+## Constructors
+
+### RelTableFunction [#reltablefunction]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+RelTableFunction::RelTableFunction() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with function name and inputs and fields and col inputs and table func inputs and target exprs)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "Rex": "rex", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+RelTableFunction::RelTableFunction(
+    const std::string &function_name,
+    RelAlgInputs inputs,
+    std::vector<std::string> &fields,
+    std::vector<const Rex *> col_inputs,
+    std::vector<std::unique_ptr<const RexScalar>> &table_func_inputs,
+    std::vector<std::unique_ptr<const RexScalar>> &target_exprs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+RelTableFunction::RelTableFunction(
+    RelTableFunction const &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelTableFunction::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelTableFunction::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+) override
+```
+</CodeBlock>
+
+### getFunctionName [#getfunctionname]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+std::string RelTableFunction::getFunctionName() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+size_t RelTableFunction::size() const override
+```
+</CodeBlock>
+
+### getTargetExpr [#gettargetexpr]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelTableFunction::getTargetExpr(
+    size_t idx
+) const
+```
+</CodeBlock>
+
+### getTableFuncInputsSize [#gettablefuncinputssize]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+size_t RelTableFunction::getTableFuncInputsSize() const
+```
+</CodeBlock>
+
+### getColInputsSize [#getcolinputssize]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+size_t RelTableFunction::getColInputsSize() const
+```
+</CodeBlock>
+
+### countRexLiteralArgs [#countrexliteralargs]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+int32_t RelTableFunction::countRexLiteralArgs() const
+```
+</CodeBlock>
+
+### getTableFuncInputAt [#gettablefuncinputat]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelTableFunction::getTableFuncInputAt(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getTableFuncInputAtAndRelease [#gettablefuncinputatandrelease]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelTableFunction::getTableFuncInputAtAndRelease(
+    const size_t idx
+)
+```
+</CodeBlock>
+
+### setTableFuncInputs [#settablefuncinputs]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::setTableFuncInputs(
+    std::vector<std::unique_ptr<const RexScalar>> &&exprs
+)
+```
+</CodeBlock>
+
+### getFieldName [#getfieldname]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+std::string RelTableFunction::getFieldName(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getFields [#getfields]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & RelTableFunction::getFields() const
+```
+</CodeBlock>
+
+### setFields [#setfields]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::setFields(
+    std::vector<std::string> &&fields
+)
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelTableFunction::deepCopy() const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelTableFunction::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::string RelTableFunction::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelTableFunction::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelTableFunction::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+unsigned RelTableFunction::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelTableFunction::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelTableFunction::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const size_t RelTableFunction::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelTableFunction::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelTableFunction::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelTableFunction::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelTableFunction::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelTableFunction::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelTableFunction::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelTableFunction::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+size_t RelTableFunction::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelTableFunction": "reltablefunction", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelTableFunction::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `function_name_` | `std::string` | |
+| `fields_` | `std::vector< std::string >` | |
+| `col_inputs_` | `std::vector< const Rex * >` | |
+| `table_func_inputs_` | `std::vector< std::unique_ptr< const RexScalar > >` | |
+| `target_exprs_` | `std::vector< std::unique_ptr< const RexScalar > >` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

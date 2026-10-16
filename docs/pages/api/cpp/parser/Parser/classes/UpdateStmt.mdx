@@ -1,0 +1,75 @@
+---
+title: Parser::UpdateStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DMLStmt` (public)
+
+---
+
+## Constructors
+
+### UpdateStmt [#updatestmt]
+
+<CodeBlock links={{"UpdateStmt": "updatestmt", "Assignment": "assignment", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::UpdateStmt::UpdateStmt(
+    std::string *t,
+    std::list<Assignment *> *a,
+    Expr *w
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_table [#gettable]
+
+<CodeBlock links={{"UpdateStmt": "updatestmt"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::UpdateStmt::get_table() const
+```
+</CodeBlock>
+
+### get_assignment_list [#getassignmentlist]
+
+<CodeBlock links={{"UpdateStmt": "updatestmt", "Assignment": "assignment"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<Assignment>> & Parser::UpdateStmt::get_assignment_list() const
+```
+</CodeBlock>
+
+### get_where_clause [#getwhereclause]
+
+<CodeBlock links={{"UpdateStmt": "updatestmt", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::UpdateStmt::get_where_clause() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"UpdateStmt": "updatestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::UpdateStmt::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `assignment_list_` | `std::list< std::unique_ptr< Assignment > >` | |
+| `where_clause_` | `std::unique_ptr< Expr >` | |

@@ -1,0 +1,46 @@
+---
+title: "operator<"
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TypeHandler": "../structs/typehandler"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename U>
+bool operator<(
+    TypeHandler<T, U> const &lhs,
+    TypeHandler<T, U> const &rhs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TypeHandler": "../structs/typehandler"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename U>
+bool operator<(
+    TypeHandler<T, U> const &lhs,
+    std::type_index const &rhs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TypeHandler": "../structs/typehandler"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename U>
+bool operator<(
+    std::type_index const &lhs,
+    TypeHandler<T, U> const &rhs
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

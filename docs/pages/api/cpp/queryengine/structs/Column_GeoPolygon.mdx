@@ -1,0 +1,163 @@
+---
+title: "Column< GeoPolygon >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+**Inherits from:** `flatbuffer::Column< Geo::Polygon, GeoPolygon >` (public)
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon", "Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoPolygon> & Column<GeoPolygon>::operator=(
+    const Column<GeoPolygon> &other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### isNull [#isnull]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Column<Timestamp>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+### setNull [#setnull]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<Timestamp>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+### Column [#column]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoPolygon>::Column(
+    GeoPolygon *ptr,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoPolygon & Column<GeoPolygon>::operator[](
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### getPtr [#getptr]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoPolygon * Column<GeoPolygon>::getPtr() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t Column<GeoPolygon>::size() const
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<GeoPolygon>::setSize(
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon", "Polygon": "../geo/structs/polygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE Geo::Polygon flatbuffer::Column<Geo::Polygon, GeoPolygon>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoPolygon flatbuffer::Column<Geo::Polygon, GeoPolygon>::operator()(
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### setItem [#setitem]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon", "Polygon": "../geo/structs/polygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<Geo::Polygon, GeoPolygon>::setItem(
+    int64_t index,
+    const Geo::Polygon &item
+)
+```
+</CodeBlock>
+
+### getNofValues [#getnofvalues]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+int64_t flatbuffer::Column<Geo::Polygon, GeoPolygon>::getNofValues() const
+```
+</CodeBlock>
+
+### concatItem [#concatitem]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon", "Polygon": "../geo/structs/polygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<Geo::Polygon, GeoPolygon>::concatItem(
+    int64_t index,
+    const Geo::Polygon &item
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"Column< GeoPolygon >": "columngeopolygon", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::Column<Geo::Polygon, GeoPolygon>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr_` | `GeoPolygon *` | |
+| `num_rows_` | `int64_t` | |
+| `flatbuffer_` | `int8_t *` | |

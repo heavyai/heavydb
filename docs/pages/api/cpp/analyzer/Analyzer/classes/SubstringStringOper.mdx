@@ -1,0 +1,452 @@
+---
+title: Analyzer::SubstringStringOper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::StringOper` (public)
+
+---
+
+## Constructors
+
+### SubstringStringOper [#substringstringoper]
+
+<Tabs>
+<Tab title="Copy (with operand and start pos)">
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::SubstringStringOper::SubstringStringOper(
+    const std::shared_ptr<Analyzer::Expr> &operand,
+    const std::shared_ptr<Analyzer::Expr> &start_pos
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with operand and start pos and length)">
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::SubstringStringOper::SubstringStringOper(
+    const std::shared_ptr<Analyzer::Expr> &operand,
+    const std::shared_ptr<Analyzer::Expr> &start_pos,
+    const std::shared_ptr<Analyzer::Expr> &length
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with operands)">
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::SubstringStringOper::SubstringStringOper(
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &operands
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with string oper)">
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+Analyzer::SubstringStringOper::SubstringStringOper(
+    const std::shared_ptr<Analyzer::StringOper> &string_oper
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::SubstringStringOper::deep_copy() const override
+```
+</CodeBlock>
+
+### getMinArgs [#getminargs]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::SubstringStringOper::getMinArgs() const override
+```
+</CodeBlock>
+
+### getExpectedTypeFamilies [#getexpectedtypefamilies]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<OperandTypeFamily> Analyzer::SubstringStringOper::getExpectedTypeFamilies() const override
+```
+</CodeBlock>
+
+### getArgNames [#getargnames]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Analyzer::SubstringStringOper::getArgNames() const override
+```
+</CodeBlock>
+
+### get_kind [#getkind]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+SqlStringOpKind Analyzer::SubstringStringOper::get_kind() const
+```
+</CodeBlock>
+
+### getArity [#getarity]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::SubstringStringOper::getArity() const
+```
+</CodeBlock>
+
+### getLiteralsArity [#getliteralsarity]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::SubstringStringOper::getLiteralsArity() const
+```
+</CodeBlock>
+
+### getNonLiteralsArity [#getnonliteralsarity]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::SubstringStringOper::getNonLiteralsArity() const
+```
+</CodeBlock>
+
+### getArg [#getarg]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::SubstringStringOper::getArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getOwnArg [#getownarg]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::SubstringStringOper::getOwnArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getOwnArgs [#getownargs]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> Analyzer::SubstringStringOper::getOwnArgs() const
+```
+</CodeBlock>
+
+### getChainedStringOpExprs [#getchainedstringopexprs]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> Analyzer::SubstringStringOper::getChainedStringOpExprs() const
+```
+</CodeBlock>
+
+### requiresPerRowTranslation [#requiresperrowtranslation]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::SubstringStringOper::requiresPerRowTranslation() const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::SubstringStringOper::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "ColumnVar": "columnvar", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::SubstringStringOper::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### hasNoneEncodedTextArg [#hasnoneencodedtextarg]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::SubstringStringOper::hasNoneEncodedTextArg() const
+```
+</CodeBlock>
+
+### hasSingleDictEncodedColInput [#hassingledictencodedcolinput]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::SubstringStringOper::hasSingleDictEncodedColInput() const
+```
+</CodeBlock>
+
+returns whether we have one and only one column involved in this [StringOper](stringoper) and all its descendents, and that that column is a dictionary-encoded text type
+
+**Returns:** std::vector&lt;SqlTypeInfo&gt;
+
+### getLiteralArgIndexes [#getliteralargindexes]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<size_t> Analyzer::SubstringStringOper::getLiteralArgIndexes() const
+```
+</CodeBlock>
+
+### getLiteralArgs [#getliteralargs]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+LiteralArgMap Analyzer::SubstringStringOper::getLiteralArgs() const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::SubstringStringOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::SubstringStringOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::SubstringStringOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::SubstringStringOper::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::SubstringStringOper::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::SubstringStringOper::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::SubstringStringOper::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::Expr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Expr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::Expr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"SubstringStringOper": "substringstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `LiteralArgMap` | `std::map< size_t, std::pair< SQLTypes, Datum > >` |
+
+### OperandTypeFamily
+
+| Name | Value | Description |
+|---|---|---|
+| `STRING_FAMILY` | | |
+| `INT_FAMILY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

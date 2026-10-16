@@ -1,0 +1,47 @@
+---
+title: legacylockmgr::LockMgr
+description: ""
+---
+
+<CodeBlock id="LockMgr" links={{"LockMgr": "lockmgr"}}>
+```cpp showLineNumbers={false}
+template <typename MutexType, typename KeyType>
+class LockMgr
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <legacylockmgr/LegacyLockMgr.h>
+```
+
+**Template parameters**
+
+<ParamField path="MutexType" type="typename">
+</ParamField>
+
+<ParamField path="KeyType" type="typename">
+</ParamField>
+
+---
+
+## Static methods
+
+### getMutex [#getmutex]
+
+<CodeBlock links={{"LockMgr": "lockmgr", "WrapperType": "wrappertype"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<WrapperType<MutexType>> legacylockmgr::LockMgr<MutexType, KeyType>::getMutex(
+    const LockType lockType,
+    const KeyType &key
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `aMutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `mutexMap_` <Badge intent="note" minimal>static</Badge> | `std::map< std::tuple< LockType, KeyType >, std::shared_ptr< WrapperType< MutexType > > >` | |

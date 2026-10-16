@@ -1,0 +1,339 @@
+---
+title: heavyai::DistributedSharedMutex
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavyai/heavyai_locks.h>
+```
+
+**Inherits from:** `heavyai::SharedMutexInterface` (public)
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Constructors
+
+### DistributedSharedMutex [#distributedsharedmutex]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+heavyai::DistributedSharedMutex::DistributedSharedMutex(
+    std::filesystem::path lockfilename,
+    std::function<void(size_t)> reload_cache_callback = {}
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex", "Callbacks": "#callbacks"}}>
+```cpp showLineNumbers={false}
+heavyai::DistributedSharedMutex::DistributedSharedMutex(
+    std::filesystem::path lockfilename,
+    Callbacks callbacks
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~DistributedSharedMutex
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+heavyai::DistributedSharedMutex::~DistributedSharedMutex()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### lock [#lock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::lock() override
+```
+</CodeBlock>
+
+### try_lock [#trylock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+bool heavyai::DistributedSharedMutex::try_lock() override
+```
+</CodeBlock>
+
+### unlock [#unlock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::unlock() override
+```
+</CodeBlock>
+
+### lock_shared [#lockshared]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::lock_shared() override
+```
+</CodeBlock>
+
+### try_lock_shared [#trylockshared]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+bool heavyai::DistributedSharedMutex::try_lock_shared() override
+```
+</CodeBlock>
+
+### unlock_shared [#unlockshared]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::unlock_shared() override
+```
+</CodeBlock>
+
+### convert_lock [#convertlock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::convert_lock()
+```
+</CodeBlock>
+
+### try_convert_lock [#tryconvertlock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+bool heavyai::DistributedSharedMutex::try_convert_lock()
+```
+</CodeBlock>
+
+### convert_lock_shared [#convertlockshared]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::convert_lock_shared()
+```
+</CodeBlock>
+
+### try_convert_lock_shared [#tryconvertlockshared]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+bool heavyai::DistributedSharedMutex::try_convert_lock_shared()
+```
+</CodeBlock>
+
+### get_lockfilename [#getlockfilename]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+std::string heavyai::DistributedSharedMutex::get_lockfilename() const
+```
+</CodeBlock>
+
+### takeLock [#takelock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+bool heavyai::DistributedSharedMutex::takeLock(
+    Mode mode,
+    Block block
+)
+```
+</CodeBlock>
+
+### initializeRefCountIfNeeded [#initializerefcountifneeded]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::initializeRefCountIfNeeded()
+```
+</CodeBlock>
+
+### incrementRefCount [#incrementrefcount]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::incrementRefCount()
+```
+</CodeBlock>
+
+### decrementRefCount [#decrementrefcount]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::decrementRefCount()
+```
+</CodeBlock>
+
+### innerTakeLock [#innertakelock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+bool heavyai::DistributedSharedMutex::innerTakeLock(
+    Mode const mode,
+    Block const block
+)
+```
+</CodeBlock>
+
+### innerTakeLockAfterWaiting [#innertakelockafterwaiting]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+std::tuple<bool, bool> heavyai::DistributedSharedMutex::innerTakeLockAfterWaiting(
+    Mode const mode,
+    Block const block,
+    std::unique_lock<std::recursive_mutex> &lk
+)
+```
+</CodeBlock>
+
+### innerTakeLockRecursively [#innertakelockrecursively]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+bool heavyai::DistributedSharedMutex::innerTakeLockRecursively(
+    Mode const mode,
+    Block const block,
+    std::unique_lock<std::recursive_mutex> &lk
+)
+```
+</CodeBlock>
+
+### releaseLock [#releaselock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::releaseLock()
+```
+</CodeBlock>
+
+### innerReleaseLock [#innerreleaselock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+bool heavyai::DistributedSharedMutex::innerReleaseLock()
+```
+</CodeBlock>
+
+### maybeExtendLockDuration [#maybeextendlockduration]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+void heavyai::DistributedSharedMutex::maybeExtendLockDuration()
+```
+</CodeBlock>
+
+### convertLock [#convertlock]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+bool heavyai::DistributedSharedMutex::convertLock(
+    Mode const mode,
+    Block const block
+)
+```
+</CodeBlock>
+
+### prepareLockSettings [#preparelocksettings]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+std::pair<struct flock, int> heavyai::DistributedSharedMutex::prepareLockSettings(
+    Mode const mode,
+    Block const block
+)
+```
+</CodeBlock>
+
+### prepareUnlockSettings [#prepareunlocksettings]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+std::pair<struct flock, int> heavyai::DistributedSharedMutex::prepareUnlockSettings()
+```
+</CodeBlock>
+
+### modeString [#modestring]
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+std::string heavyai::DistributedSharedMutex::modeString(
+    Mode const mode
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Mode
+
+| Name | Value | Description |
+|---|---|---|
+| `UNDEFINED` | | |
+| `RO` | | |
+| `RW` | | |
+### Block
+
+| Name | Value | Description |
+|---|---|---|
+| `YES` | | |
+| `NO` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `lockfilename_` | `const std::string` | |
+| `callbacks_` | `Callbacks` | |
+| `mutex_` | `std::recursive_mutex` | |
+| `thread_queue_` | `std::queue< std::pair< Mode, std::promise< bool > * > >` | |
+| `lock_start_time_` | `std::invoke_result_t< decltype(std::chrono::steady_clock::now)>` | |
+| `ref_count_` | `size_t` | |
+| `fd_` | `int` | |
+| `version_` | `size_t` | |
+| `mode_` | `Mode` | |
+| `is_extended_` | `bool` | |
+| `extended_lock_` | `std::unique_ptr< std::shared_lock< DistributedSharedMutex > >` | |
+| `extended_lock_thread_` | `std::unique_ptr< std::thread >` | |
+| `thread_ref_count_` <Badge intent="note" minimal>static</Badge> | `std::unordered_map< DistributedSharedMutex *, size_t >` | |
+
+---
+
+## Inner classes
+
+### Callbacks
+
+<CodeBlock links={{"DistributedSharedMutex": "distributedsharedmutex"}}>
+```cpp showLineNumbers={false}
+struct heavyai::DistributedSharedMutex::Callbacks
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `pre_lock_callback` | `std::function< void(bool)>` | |
+| `reload_cache_callback` | `std::function< void(size_t)>` | |
+| `post_lock_callback` | `std::function< void(bool)>` | |
+| `pre_unlock_callback` | `std::function< void(bool)>` | |
+| `post_unlock_callback` | `std::function< void(bool)>` | |

@@ -1,0 +1,32 @@
+---
+title: Data_Namespace::MemoryInfoSnapshot
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Data_Namespace/DataMgr.h>
+```
+
+---
+
+## Constructors
+
+### MemoryInfoSnapshot [#memoryinfosnapshot]
+
+<CodeBlock links={{"MemoryInfoSnapshot": "memoryinfosnapshot", "MemoryInfo": "../../buffernamespace/structs/memoryinfo"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::MemoryInfoSnapshot::MemoryInfoSnapshot(
+    const Buffer_Namespace::MemoryInfo &cpu_memory_info,
+    const std::vector<Buffer_Namespace::MemoryInfo> &gpu_memory_info
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cpu_memory_info` | `Buffer_Namespace::MemoryInfo` | |
+| `gpu_memory_info` | `std::vector< Buffer_Namespace::MemoryInfo >` | |

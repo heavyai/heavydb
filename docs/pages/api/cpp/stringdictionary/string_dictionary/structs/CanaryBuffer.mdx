@@ -1,0 +1,56 @@
+---
+title: string_dictionary::CanaryBuffer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <string_dictionary/StringDictionary.h>
+```
+
+---
+
+## Constructors
+
+### CanaryBuffer [#canarybuffer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CanaryBuffer": "canarybuffer"}}>
+```cpp showLineNumbers={false}
+string_dictionary::CanaryBuffer::CanaryBuffer(
+    size_t new_size
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"CanaryBuffer": "canarybuffer"}}>
+```cpp showLineNumbers={false}
+string_dictionary::CanaryBuffer::CanaryBuffer()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~CanaryBuffer
+
+<CodeBlock links={{"CanaryBuffer": "canarybuffer"}}>
+```cpp showLineNumbers={false}
+string_dictionary::CanaryBuffer::~CanaryBuffer()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `size` | `size_t` | |
+| `buffer` | `char *` | |

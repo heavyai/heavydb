@@ -1,0 +1,69 @@
+---
+title: ConstantInt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Constant` (public)
+
+---
+
+## Constructors
+
+### ConstantInt [#constantint]
+
+<CodeBlock links={{"ConstantInt": "constantint"}}>
+```cpp showLineNumbers={false}
+ConstantInt::ConstantInt(
+    const int64_t value,
+    const Type target
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### value [#value]
+
+<CodeBlock links={{"ConstantInt": "constantint"}}>
+```cpp showLineNumbers={false}
+int64_t ConstantInt::value() const
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"ConstantInt": "constantint", "Constant": "constant"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"ConstantInt": "constantint", "Constant": "constant"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"ConstantInt": "constantint", "Constant": "constant"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `value_` | `const int64_t` | |

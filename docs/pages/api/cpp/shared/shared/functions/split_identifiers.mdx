@@ -1,0 +1,18 @@
+---
+title: shared::split_identifiers
+description: "Split a composite identifier."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<std::string> shared::split_identifiers(
+    const std::string &composite_identifier,
+    const char delimiter = '.',
+    const char quote = '\"'
+)
+```
+</CodeBlock>
+
+Split a composite identifier.
+
+NOTE: This function is intended as the inverse of [`concatenate_identifiers`](concatenateidentifiers).

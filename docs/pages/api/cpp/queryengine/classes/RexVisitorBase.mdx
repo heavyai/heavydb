@@ -1,0 +1,102 @@
+---
+title: RexVisitorBase
+description: ""
+---
+
+<CodeBlock id="RexVisitorBase" links={{"RexVisitorBase": "rexvisitorbase"}}>
+```cpp showLineNumbers={false}
+template <class T>
+class RexVisitorBase
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <RexVisitor.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="class">
+</ParamField>
+
+---
+
+## Methods
+
+### visit [#visit]
+
+<CodeBlock links={{"RexVisitorBase": "rexvisitorbase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitorBase<T>::visit(
+    const RexScalar *rex_scalar
+) const
+```
+</CodeBlock>
+
+### visitInput [#visitinput]
+
+<CodeBlock links={{"RexVisitorBase": "rexvisitorbase", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitorBase<T>::visitInput(
+    const RexInput *
+) const
+```
+</CodeBlock>
+
+### visitLiteral [#visitliteral]
+
+<CodeBlock links={{"RexVisitorBase": "rexvisitorbase", "RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitorBase<T>::visitLiteral(
+    const RexLiteral *
+) const
+```
+</CodeBlock>
+
+### visitSubQuery [#visitsubquery]
+
+<CodeBlock links={{"RexVisitorBase": "rexvisitorbase", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitorBase<T>::visitSubQuery(
+    const RexSubQuery *
+) const
+```
+</CodeBlock>
+
+### visitRef [#visitref]
+
+<CodeBlock links={{"RexVisitorBase": "rexvisitorbase", "RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitorBase<T>::visitRef(
+    const RexRef *
+) const
+```
+</CodeBlock>
+
+### visitOperator [#visitoperator]
+
+<CodeBlock links={{"RexVisitorBase": "rexvisitorbase", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitorBase<T>::visitOperator(
+    const RexOperator *rex_operator
+) const
+```
+</CodeBlock>
+
+### visitCase [#visitcase]
+
+<CodeBlock links={{"RexVisitorBase": "rexvisitorbase", "RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitorBase<T>::visitCase(
+    const RexCase *rex_case
+) const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"RexVisitorBase": "rexvisitorbase"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitorBase<T>::defaultResult() const
+```
+</CodeBlock>

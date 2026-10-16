@@ -1,0 +1,129 @@
+---
+title: ThriftClientConnection
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ThriftClient.h>
+```
+
+---
+
+## Constructors
+
+### ThriftClientConnection [#thriftclientconnection]
+
+<Tabs>
+<Tab title="Copy (with ca cert name and trust cert file)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ThriftClientConnection": "thriftclientconnection"}}>
+```cpp showLineNumbers={false}
+ThriftClientConnection::ThriftClientConnection(
+    const std::string &server_host,
+    const int port,
+    const ThriftConnectionType conn_type,
+    bool skip_host_verify,
+    const std::string &ca_cert_name,
+    const std::string &trust_cert_file
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with factory)">
+
+<CodeBlock links={{"ThriftClientConnection": "thriftclientconnection"}}>
+```cpp showLineNumbers={false}
+ThriftClientConnection::ThriftClientConnection(
+    const std::string &server_host,
+    const int port,
+    const ThriftConnectionType conn_type,
+    bool skip_host_verify,
+    std::shared_ptr<TSSLSocketFactory> factory
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ThriftClientConnection": "thriftclientconnection"}}>
+```cpp showLineNumbers={false}
+ThriftClientConnection::ThriftClientConnection()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~ThriftClientConnection
+
+<CodeBlock links={{"ThriftClientConnection": "thriftclientconnection"}}>
+```cpp showLineNumbers={false}
+ThriftClientConnection::~ThriftClientConnection()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### open_buffered_client_transport [#openbufferedclienttransport]
+
+<CodeBlock links={{"ThriftClientConnection": "thriftclientconnection"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transport(
+    const std::string &server_host,
+    const int port,
+    const std::string &ca_cert_name,
+    const bool with_timeout = false,
+    const bool with_keepalive = true,
+    const unsigned connect_timeout = 0,
+    const unsigned recv_timeount = 0,
+    const unsigned send_timeout = 0
+)
+```
+</CodeBlock>
+
+### open_http_client_transport [#openhttpclienttransport]
+
+<CodeBlock links={{"ThriftClientConnection": "thriftclientconnection"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<TTransport> ThriftClientConnection::open_http_client_transport(
+    const std::string &server_host,
+    const int port,
+    const std::string &trust_cert_file_,
+    bool use_https,
+    bool skip_verify
+)
+```
+</CodeBlock>
+
+### get_protocol [#getprotocol]
+
+<CodeBlock links={{"ThriftClientConnection": "thriftclientconnection"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<TProtocol> ThriftClientConnection::get_protocol()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `server_host_` | `std::string` | |
+| `port_` | `int` | |
+| `conn_type_` | `ThriftConnectionType` | |
+| `skip_host_verify_` | `bool` | |
+| `ca_cert_name_` | `std::string` | |
+| `trust_cert_file_` | `std::string` | |
+| `using_X509_store_` | `bool` | |
+| `factory_` | `std::shared_ptr< TSSLSocketFactory >` | |

@@ -1,0 +1,113 @@
+---
+title: query_state::Timer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <query_state/QueryState.h>
+```
+
+---
+
+## Constructors
+
+### Timer [#timer]
+
+<Tabs>
+<Tab title="Move (with event)">
+
+<CodeBlock links={{"Timer": "timer", "QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+query_state::Timer::Timer(
+    std::shared_ptr<QueryState> &&,
+    Events::iterator event
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+query_state::Timer::Timer(
+    Timer &&
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+query_state::Timer::Timer(
+    Timer const &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~Timer
+
+<CodeBlock links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+query_state::Timer::~Timer()
+```
+</CodeBlock>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<Tabs>
+<Tab title="Move assign">
+
+<CodeBlock links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+Timer & query_state::Timer::operator=(
+    Timer &&
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy assign (deleted)">
+
+<CodeBlock links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+Timer & query_state::Timer::operator=(
+    Timer const &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### createQueryStateProxy [#createquerystateproxy]
+
+<CodeBlock links={{"Timer": "timer", "QueryStateProxy": "../../classes/querystateproxy"}}>
+```cpp showLineNumbers={false}
+QueryStateProxy query_state::Timer::createQueryStateProxy()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_state_` | `std::shared_ptr< QueryState >` | |
+| `event_` | `Events::iterator` | |

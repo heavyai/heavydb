@@ -1,0 +1,431 @@
+---
+title: UsedColumnsVisitor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <UsedColumnsVisitor.h>
+```
+
+**Inherits from:** `ScalarExprVisitor< std::unordered_set< shared::ColumnKey > >` (public)
+
+---
+
+## Methods
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<shared::ColumnKey> UsedColumnsVisitor::visitColumnVar(
+    const Analyzer::ColumnVar *column
+) const override
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<shared::ColumnKey> UsedColumnsVisitor::aggregateResult(
+    const std::unordered_set<shared::ColumnKey> &aggregate,
+    const std::unordered_set<shared::ColumnKey> &next_result
+) const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *
+) const
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitConstant(
+    const Analyzer::Constant *
+) const
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitUOper(
+    const Analyzer::UOper *uoper
+) const
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visitBegin() const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::defaultResult() const
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"UsedColumnsVisitor": "usedcolumnsvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<shared::ColumnKey> ScalarExprVisitor<std::unordered_set<shared::ColumnKey>>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>

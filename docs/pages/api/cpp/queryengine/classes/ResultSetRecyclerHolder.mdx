@@ -1,0 +1,135 @@
+---
+title: ResultSetRecyclerHolder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetRecyclerHolder.h>
+```
+
+---
+
+## Methods
+
+### getCachedQueryResultSet [#getcachedqueryresultset]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder"}}>
+```cpp showLineNumbers={false}
+const ResultSetPtr ResultSetRecyclerHolder::getCachedQueryResultSet(
+    const size_t key
+)
+```
+</CodeBlock>
+
+### getOutputMetaInfo [#getoutputmetainfo]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+std::optional<std::vector<TargetMetaInfo>> ResultSetRecyclerHolder::getOutputMetaInfo(
+    QueryPlanHash key
+)
+```
+</CodeBlock>
+
+### hasCachedQueryResultSet [#hascachedqueryresultset]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder"}}>
+```cpp showLineNumbers={false}
+bool ResultSetRecyclerHolder::hasCachedQueryResultSet(
+    const size_t key
+)
+```
+</CodeBlock>
+
+### putQueryResultSetToCache [#putqueryresultsettocache]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecyclerHolder::putQueryResultSetToCache(
+    const size_t key,
+    const std::unordered_set<size_t> &input_table_keys,
+    const ResultSetPtr query_result,
+    size_t resultset_size,
+    std::vector<std::shared_ptr<Analyzer::Expr>> &target_exprs
+)
+```
+</CodeBlock>
+
+### getCachedChunkMetadata [#getcachedchunkmetadata]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder"}}>
+```cpp showLineNumbers={false}
+std::optional<ChunkMetadataMap> ResultSetRecyclerHolder::getCachedChunkMetadata(
+    const size_t key
+)
+```
+</CodeBlock>
+
+### putChunkMetadataToCache [#putchunkmetadatatocache]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecyclerHolder::putChunkMetadataToCache(
+    const size_t key,
+    const std::unordered_set<size_t> &input_table_keys,
+    const ChunkMetadataMap &chunk_metadata
+)
+```
+</CodeBlock>
+
+### getTargetExprs [#gettargetexprs]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> & ResultSetRecyclerHolder::getTargetExprs(
+    QueryPlanHash key
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### invalidateCache [#invalidatecache]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder"}}>
+```cpp showLineNumbers={false}
+static auto ResultSetRecyclerHolder::invalidateCache()
+```
+</CodeBlock>
+
+### markCachedItemAsDirty [#markcacheditemasdirty]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder"}}>
+```cpp showLineNumbers={false}
+static auto ResultSetRecyclerHolder::markCachedItemAsDirty(
+    size_t table_key
+)
+```
+</CodeBlock>
+
+### getResultSetRecycler [#getresultsetrecycler]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder", "ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+static ResultSetRecycler * ResultSetRecyclerHolder::getResultSetRecycler()
+```
+</CodeBlock>
+
+### getChunkMetadataRecycler [#getchunkmetadatarecycler]
+
+<CodeBlock links={{"ResultSetRecyclerHolder": "resultsetrecyclerholder", "ChunkMetadataRecycler": "chunkmetadatarecycler"}}>
+```cpp showLineNumbers={false}
+static ChunkMetadataRecycler * ResultSetRecyclerHolder::getChunkMetadataRecycler()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_resultset_cache_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< ResultSetRecycler >` | |
+| `chunk_metadata_cache_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< ChunkMetadataRecycler >` | |

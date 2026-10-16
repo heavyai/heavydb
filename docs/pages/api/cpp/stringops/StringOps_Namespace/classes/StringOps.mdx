@@ -1,0 +1,151 @@
+---
+title: StringOps_Namespace::StringOps
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+---
+
+## Constructors
+
+### StringOps [#stringops]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"StringOps": "stringops"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::StringOps::StringOps()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"StringOps": "stringops", "StringOpInfo": "../structs/stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::StringOps::StringOps(
+    const std::vector<StringOpInfo> &string_op_infos
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"StringOps": "stringops"}}>
+```cpp showLineNumbers={false}
+std::string StringOps_Namespace::StringOps::operator()(
+    const std::string &str
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with sv and sv storage)">
+
+<CodeBlock links={{"StringOps": "stringops"}}>
+```cpp showLineNumbers={false}
+std::string_view StringOps_Namespace::StringOps::operator()(
+    const std::string_view sv,
+    std::string &sv_storage
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### multi_input_eval [#multiinputeval]
+
+<CodeBlock links={{"StringOps": "stringops"}}>
+```cpp showLineNumbers={false}
+std::string StringOps_Namespace::StringOps::multi_input_eval(
+    const std::string_view str1,
+    const std::string_view str2
+) const
+```
+</CodeBlock>
+
+### numericEval [#numericeval]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"StringOps": "stringops"}}>
+```cpp showLineNumbers={false}
+Datum StringOps_Namespace::StringOps::numericEval(
+    const std::string_view str
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<CodeBlock links={{"StringOps": "stringops"}}>
+```cpp showLineNumbers={false}
+Datum StringOps_Namespace::StringOps::numericEval(
+    const std::string_view str1,
+    const std::string_view str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### size [#size]
+
+<CodeBlock links={{"StringOps": "stringops"}}>
+```cpp showLineNumbers={false}
+size_t StringOps_Namespace::StringOps::size() const
+```
+</CodeBlock>
+
+### getStringOps [#getstringops]
+
+<CodeBlock links={{"StringOps": "stringops", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::unique_ptr<const StringOp>> & StringOps_Namespace::StringOps::getStringOps() const
+```
+</CodeBlock>
+
+### getLastStringOpsReturnType [#getlaststringopsreturntype]
+
+<CodeBlock links={{"StringOps": "stringops"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & StringOps_Namespace::StringOps::getLastStringOpsReturnType() const
+```
+</CodeBlock>
+
+### genStringOpsFromOpInfos [#genstringopsfromopinfos]
+
+<CodeBlock links={{"StringOps": "stringops", "StringOpInfo": "../structs/stringopinfo", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+std::vector<std::unique_ptr<const StringOp>> StringOps_Namespace::StringOps::genStringOpsFromOpInfos(
+    const std::vector<StringOpInfo> &string_op_infos
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `string_ops_` | `const std::vector< std::unique_ptr< const StringOp > >` | |
+| `num_ops_` | `const size_t` | |

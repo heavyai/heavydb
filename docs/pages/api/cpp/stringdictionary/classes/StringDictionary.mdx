@@ -1,0 +1,1012 @@
+---
+title: StringDictionary
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringDictionary.h>
+```
+
+---
+
+## Constructors
+
+### StringDictionary [#stringdictionary]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+StringDictionary::StringDictionary(
+    const shared::StringDictKey &dict_key,
+    const std::string &folder,
+    const bool isTemp,
+    const bool recover,
+    const bool materializeHashes = false,
+    size_t initial_capacity = 256
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~StringDictionary
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+StringDictionary::~StringDictionary() noexcept
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getDictKey [#getdictkey]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+const shared::StringDictKey & StringDictionary::getDictKey() const noexcept
+```
+</CodeBlock>
+
+### eachStringSerially [#eachstringserially]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary", "StringCallback": "#stringcallback"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::eachStringSerially(
+    int64_t const generation,
+    StringCallback &
+) const
+```
+</CodeBlock>
+
+### getOrAdd [#getoradd]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+int32_t StringDictionary::getOrAdd(
+    const std::string &str
+) noexcept
+```
+</CodeBlock>
+
+### getBulk [#getbulk]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class T, class String>
+size_t StringDictionary::getBulk(
+    const std::vector<String> &string_vec,
+    T *encoded_vec
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with generation)">
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class T, class String>
+size_t StringDictionary::getBulk(
+    const std::vector<String> &string_vec,
+    T *encoded_vec,
+    const int64_t generation
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOrAddBulk [#getoraddbulk]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class T, class String>
+template void StringDictionary::getOrAddBulk(
+    const std::vector<String> &string_vec,
+    T *encoded_vec
+)
+```
+</CodeBlock>
+
+### getOrAddBulkParallel [#getoraddbulkparallel]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class T, class String>
+void StringDictionary::getOrAddBulkParallel(
+    const std::vector<String> &string_vec,
+    T *encoded_vec
+)
+```
+</CodeBlock>
+
+### getOrAddBulkArray [#getoraddbulkarray]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class String>
+template void StringDictionary::getOrAddBulkArray(
+    const std::vector<std::vector<String>> &string_array_vec,
+    std::vector<std::vector<int32_t>> &ids_array_vec
+)
+```
+</CodeBlock>
+
+### getIdOfString [#getidofstring]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class String>
+template int32_t StringDictionary::getIdOfString(
+    const String &
+) const
+```
+</CodeBlock>
+
+### getString [#getstring]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::string StringDictionary::getString(
+    int32_t string_id
+) const
+```
+</CodeBlock>
+
+### getStringView [#getstringview]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::string_view StringDictionary::getStringView(
+    int32_t string_id
+) const
+```
+</CodeBlock>
+
+### getStringBytes [#getstringbytes]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::pair<char *, size_t> StringDictionary::getStringBytes(
+    int32_t string_id
+) const noexcept
+```
+</CodeBlock>
+
+### storageEntryCount [#storageentrycount]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionary::storageEntryCount() const
+```
+</CodeBlock>
+
+### getSortedPermutation [#getsortedpermutation]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary", "SortedStringPermutation": "../structs/sortedstringpermutation"}}>
+```cpp showLineNumbers={false}
+SortedStringPermutation StringDictionary::getSortedPermutation(
+    const std::vector<std::pair<std::string, int32_t>> &transient_string_to_ids,
+    const bool should_sort_descending
+)
+```
+</CodeBlock>
+
+### getTransientSortPermutation [#gettransientsortpermutation]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<std::pair<int32_t, int32_t>> StringDictionary::getTransientSortPermutation(
+    const std::vector<std::pair<std::string, int32_t>> &transient_string_to_id_map
+) const
+```
+</CodeBlock>
+
+### getPersistedSortedPermutation [#getpersistedsortedpermutation]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionary::getPersistedSortedPermutation()
+```
+</CodeBlock>
+
+### getLike [#getlike]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+std::vector<T> StringDictionary::getLike(
+    const std::string &pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape,
+    const size_t generation
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionary::getLike(
+    const std::string &pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape,
+    const size_t generation
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (3)">
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<int64_t> StringDictionary::getLike(
+    const std::string &pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape,
+    const size_t generation
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getLikeImpl [#getlikeimpl]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+std::vector<T> StringDictionary::getLikeImpl(
+    const std::string &pattern,
+    const bool icase,
+    const bool is_simple,
+    const char escape,
+    const size_t generation
+) const
+```
+</CodeBlock>
+
+### getCompare [#getcompare]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionary::getCompare(
+    const std::string &pattern,
+    const std::string &comp_operator,
+    const size_t generation
+)
+```
+</CodeBlock>
+
+### getRegexpLike [#getregexplike]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionary::getRegexpLike(
+    const std::string &pattern,
+    const char escape,
+    const size_t generation
+) const
+```
+</CodeBlock>
+
+### copyStrings [#copystrings]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> StringDictionary::copyStrings() const
+```
+</CodeBlock>
+
+### getStringViews [#getstringviews]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string_view> StringDictionary::getStringViews() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with generation)">
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string_view> StringDictionary::getStringViews(
+    const size_t generation
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### buildDictionaryTranslationMap [#builddictionarytranslationmap]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionary::buildDictionaryTranslationMap(
+    const std::shared_ptr<StringDictionary> dest_dict,
+    StringLookupCallback const &dest_transient_lookup_callback
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with translated ids and source generation and dest generation and dest has transients and string ops)">
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionary::buildDictionaryTranslationMap(
+    const StringDictionary *dest_dict,
+    int32_t *translated_ids,
+    const int64_t source_generation,
+    const int64_t dest_generation,
+    const bool dest_has_transients,
+    StringLookupCallback const &dest_transient_lookup_callback,
+    const StringOps_Namespace::StringOps &string_ops
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### buildDictionaryNumericTranslationMap [#builddictionarynumerictranslationmap]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::buildDictionaryNumericTranslationMap(
+    Datum *translated_ids,
+    const int64_t source_generation,
+    const StringOps_Namespace::StringOps &string_ops
+) const
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+bool StringDictionary::checkpoint() noexcept
+```
+</CodeBlock>
+
+### computeCacheSize [#computecachesize]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionary::computeCacheSize() const
+```
+</CodeBlock>
+
+### getStringsForRange [#getstringsforrange]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> StringDictionary::getStringsForRange(
+    int32_t start_id,
+    int32_t end_id,
+    const StringOps_Namespace::StringOps &string_ops,
+    const std::function<bool(int32_t)> &mask_functor
+) const
+```
+</CodeBlock>
+
+### processDictionaryFutures [#processdictionaryfutures]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::processDictionaryFutures(
+    std::vector<std::future<std::vector<std::pair<string_dict_hash_t, unsigned int>>>> &dictionary_futures
+)
+```
+</CodeBlock>
+
+### getNumStringsFromStorage [#getnumstringsfromstorage]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionary::getNumStringsFromStorage(
+    const size_t storage_slots
+) const noexcept
+```
+</CodeBlock>
+
+Method to retrieve number of strings in storage via a binary search for the first canary.
+
+**Returns:** number of strings in storage
+
+**Parameters**
+
+<ParamField path="storage_slots" type="const size_t">
+Number of storage entries we should search to find the minimum canary
+</ParamField>
+
+### fillRateIsHigh [#fillrateishigh]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+bool StringDictionary::fillRateIsHigh(
+    const size_t num_strings
+) const noexcept
+```
+</CodeBlock>
+
+### increaseHashTableCapacity [#increasehashtablecapacity]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::increaseHashTableCapacity() noexcept
+```
+</CodeBlock>
+
+### increaseHashTableCapacityFromStorageAndMemory [#increasehashtablecapacityfromstorageandmemory]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class String>
+void StringDictionary::increaseHashTableCapacityFromStorageAndMemory(
+    const size_t str_count,
+    const size_t storage_high_water_mark,
+    const std::vector<String> &input_strings,
+    const std::vector<size_t> &string_memory_ids,
+    const std::vector<string_dict_hash_t> &input_strings_hashes
+) noexcept
+```
+</CodeBlock>
+
+### getOrAddImpl [#getoraddimpl]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+int32_t StringDictionary::getOrAddImpl(
+    const std::string_view &str
+) noexcept
+```
+</CodeBlock>
+
+### hashStrings [#hashstrings]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class String>
+void StringDictionary::hashStrings(
+    const std::vector<String> &string_vec,
+    std::vector<string_dict_hash_t> &hashes
+) const noexcept
+```
+</CodeBlock>
+
+Method to hash a vector of strings in parallel.
+
+**Parameters**
+
+<ParamField path="string_vec" type="const std::vector<String> &">
+Input vector of strings to be hashed
+</ParamField>
+
+<ParamField path="hashes" type="std::vector<string_dict_hash_t> &">
+Space for the output - should be pre-sized to match string_vec size
+</ParamField>
+
+### getUnlocked [#getunlocked]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+int32_t StringDictionary::getUnlocked(
+    const std::string_view sv
+) const noexcept
+```
+</CodeBlock>
+
+### getStringUnlocked [#getstringunlocked]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::string StringDictionary::getStringUnlocked(
+    int32_t string_id
+) const noexcept
+```
+</CodeBlock>
+
+### getStringViewUnlocked [#getstringviewunlocked]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::string_view StringDictionary::getStringViewUnlocked(
+    int32_t string_id
+) const noexcept
+```
+</CodeBlock>
+
+### getStringChecked [#getstringchecked]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::string StringDictionary::getStringChecked(
+    const int string_id
+) const noexcept
+```
+</CodeBlock>
+
+### getStringViewChecked [#getstringviewchecked]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::string_view StringDictionary::getStringViewChecked(
+    const int string_id
+) const noexcept
+```
+</CodeBlock>
+
+### getStringBytesChecked [#getstringbyteschecked]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::pair<char *, size_t> StringDictionary::getStringBytesChecked(
+    const int string_id
+) const noexcept
+```
+</CodeBlock>
+
+### computeBucket [#computebucket]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class String>
+uint32_t StringDictionary::computeBucket(
+    const string_dict_hash_t hash,
+    const String &input_string,
+    const std::vector<int32_t> &string_id_string_dict_hash_table
+) const noexcept
+```
+</CodeBlock>
+
+### computeBucketFromStorageAndMemory [#computebucketfromstorageandmemory]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class String>
+uint32_t StringDictionary::computeBucketFromStorageAndMemory(
+    const string_dict_hash_t input_string_hash,
+    const String &input_string,
+    const std::vector<int32_t> &string_id_string_dict_hash_table,
+    const size_t storage_high_water_mark,
+    const std::vector<String> &input_strings,
+    const std::vector<size_t> &string_memory_ids
+) const noexcept
+```
+</CodeBlock>
+
+### computeUniqueBucketWithHash [#computeuniquebucketwithhash]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+uint32_t StringDictionary::computeUniqueBucketWithHash(
+    const string_dict_hash_t hash,
+    const std::vector<int32_t> &string_id_string_dict_hash_table
+) noexcept
+```
+</CodeBlock>
+
+### checkAndConditionallyIncreasePayloadCapacity [#checkandconditionallyincreasepayloadcapacity]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::checkAndConditionallyIncreasePayloadCapacity(
+    const size_t write_length
+)
+```
+</CodeBlock>
+
+### checkAndConditionallyIncreaseOffsetCapacity [#checkandconditionallyincreaseoffsetcapacity]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::checkAndConditionallyIncreaseOffsetCapacity(
+    const size_t write_length
+)
+```
+</CodeBlock>
+
+### appendToStorage [#appendtostorage]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class String>
+void StringDictionary::appendToStorage(
+    const String str
+) noexcept
+```
+</CodeBlock>
+
+### appendToStorageBulk [#appendtostoragebulk]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+template <class String>
+void StringDictionary::appendToStorageBulk(
+    const std::vector<String> &input_strings,
+    const std::vector<size_t> &string_memory_ids,
+    const size_t sum_new_strings_lengths
+) noexcept
+```
+</CodeBlock>
+
+### getStringFromStorage [#getstringfromstorage]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+StringDictionary::PayloadString StringDictionary::getStringFromStorage(
+    const int string_id
+) const noexcept
+```
+</CodeBlock>
+
+### getStringFromStorageFast [#getstringfromstoragefast]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::string_view StringDictionary::getStringFromStorageFast(
+    const int string_id
+) const noexcept
+```
+</CodeBlock>
+
+### addPayloadCapacity [#addpayloadcapacity]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::addPayloadCapacity(
+    const size_t min_capacity_requested = 0
+) noexcept
+```
+</CodeBlock>
+
+### addOffsetCapacity [#addoffsetcapacity]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::addOffsetCapacity(
+    const size_t min_capacity_requested = 0
+) noexcept
+```
+</CodeBlock>
+
+### addStorageCapacity [#addstoragecapacity]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionary::addStorageCapacity(
+    int fd,
+    const size_t min_capacity_requested = 0
+) noexcept
+```
+</CodeBlock>
+
+### addMemoryCapacity [#addmemorycapacity]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void * StringDictionary::addMemoryCapacity(
+    void *addr,
+    size_t &mem_size,
+    const size_t min_capacity_requested = 0
+) noexcept
+```
+</CodeBlock>
+
+### invalidateInvertedIndex [#invalidateinvertedindex]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::invalidateInvertedIndex() noexcept
+```
+</CodeBlock>
+
+### getEquals [#getequals]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionary::getEquals(
+    std::string pattern,
+    std::string comp_operator,
+    size_t generation
+)
+```
+</CodeBlock>
+
+### buildSortedCache [#buildsortedcache]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::buildSortedCache()
+```
+</CodeBlock>
+
+### insertInSortedCache [#insertinsortedcache]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::insertInSortedCache(
+    std::string str,
+    int32_t str_id
+)
+```
+</CodeBlock>
+
+### sortCache [#sortcache]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::sortCache(
+    std::vector<int32_t> &cache
+)
+```
+</CodeBlock>
+
+### mergeSortedCache [#mergesortedcache]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::mergeSortedCache(
+    std::vector<int32_t> &temp_sorted_cache
+)
+```
+</CodeBlock>
+
+### storageEntryCountUnlocked [#storageentrycountunlocked]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionary::storageEntryCountUnlocked() const
+```
+</CodeBlock>
+
+### fillIndexVector [#fillindexvector]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+std::vector<int32_t> StringDictionary::fillIndexVector(
+    const size_t start_idx,
+    const size_t end_idx
+) const
+```
+</CodeBlock>
+
+### permuteSortedCache [#permutesortedcache]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::permuteSortedCache()
+```
+</CodeBlock>
+
+### binary_search_cache [#binarysearchcache]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+compare_cache_value_t * StringDictionary::binary_search_cache(
+    const std::string &pattern
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### populate_string_ids [#populatestringids]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::populate_string_ids(
+    std::vector<int32_t> &dest_ids,
+    StringDictionary *dest_dict,
+    const std::vector<int32_t> &source_ids,
+    const StringDictionary *source_dict,
+    const std::vector<std::string const *> &transient_string_vec = {}
+)
+```
+</CodeBlock>
+
+Populates provided `dest_ids` vector with string ids corresponding to given source strings.
+
+Given a vector of source string ids and corresponding source dictionary, this method populates a vector of destination string ids by either returning the string id of matching strings in the destination dictionary or creating new entries in the dictionary. Source string ids can also be transient if they were created by a function (e.g LOWER/UPPER functions). A map of transient string ids to string values is provided in order to handle this use case.
+
+**Parameters**
+
+<ParamField path="dest_ids" type="std::vector<int32_t> &">
+- Vector of destination string ids to be populated
+</ParamField>
+
+<ParamField path="dest_dict" type="StringDictionary *">
+- Destination dictionary
+</ParamField>
+
+<ParamField path="source_ids" type="const std::vector<int32_t> &">
+- Vector of source string ids for which destination ids are needed
+</ParamField>
+
+<ParamField path="source_dict" type="const StringDictionary *">
+- Source dictionary
+</ParamField>
+
+<ParamField path="transient_string_vec" type="const std::vector<std::string const *> &" default="{}">
+- Ordered vector of string value pointers
+</ParamField>
+
+### populate_string_array_ids [#populatestringarrayids]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+void StringDictionary::populate_string_array_ids(
+    std::vector<std::vector<int32_t>> &dest_array_ids,
+    StringDictionary *dest_dict,
+    const std::vector<std::vector<int32_t>> &source_array_ids,
+    const StringDictionary *source_dict
+)
+```
+</CodeBlock>
+
+### getTotalMmapSize [#gettotalmmapsize]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+static size_t StringDictionary::getTotalMmapSize()
+```
+</CodeBlock>
+
+### getTotalTempSize [#gettotaltempsize]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+static size_t StringDictionary::getTotalTempSize()
+```
+</CodeBlock>
+
+### getTotalCanarySize [#gettotalcanarysize]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+static size_t StringDictionary::getTotalCanarySize()
+```
+</CodeBlock>
+
+### getStringDictMemoryUsage [#getstringdictmemoryusage]
+
+<CodeBlock links={{"StringDictionary": "stringdictionary", "StringDictMemoryUsage": "#stringdictmemoryusage"}}>
+```cpp showLineNumbers={false}
+StringDictionary::StringDictMemoryUsage StringDictionary::getStringDictMemoryUsage()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `total_mmap_size` <Badge intent="note" minimal>static</Badge> | `std::atomic< size_t >` | |
+| `total_temp_size` <Badge intent="note" minimal>static</Badge> | `std::atomic< size_t >` | |
+| `INVALID_STR_ID` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `MAX_STRLEN` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `MAX_STRCOUNT` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `dict_key_` | `const shared::StringDictKey` | |
+| `folder_` | `const std::string` | |
+| `str_count_` | `size_t` | |
+| `collisions_` | `size_t` | |
+| `string_id_string_dict_hash_table_` | `std::vector< int32_t >` | |
+| `hash_cache_` | `std::vector< string_dict_hash_t >` | |
+| `sorted_cache_` | `std::vector< int32_t >` | |
+| `sorted_permutation_cache_` | `std::vector< int32_t >` | |
+| `isTemp_` | `bool` | |
+| `materialize_hashes_` | `bool` | |
+| `offsets_path_` | `std::string` | |
+| `payload_fd_` | `int` | |
+| `offset_fd_` | `int` | |
+| `offset_map_` | `StringIdxEntry *` | |
+| `payload_map_` | `char *` | |
+| `offset_file_size_` | `size_t` | |
+| `payload_file_size_` | `size_t` | |
+| `payload_file_off_` | `size_t` | |
+| `rw_mutex_` | `std::shared_mutex` | |
+| `like_i32_cache_` | `std::map< std::tuple< std::string, bool, bool, char >, std::vector< int32_t > >` | |
+| `like_i64_cache_` | `std::map< std::tuple< std::string, bool, bool, char >, std::vector< int64_t > >` | |
+| `like_cache_size_` | `size_t` | |
+| `regex_cache_` | `std::map< std::pair< std::string, char >, std::vector< int32_t > >` | |
+| `regex_cache_size_` | `size_t` | |
+| `equal_cache_` | `std::map< std::string, int32_t >` | |
+| `equal_cache_size_` | `size_t` | |
+| `compare_cache_` | `DictionaryCache< std::string, compare_cache_value_t >` | |
+| `compare_cache_size_` | `size_t` | |
+| `strings_cache_` | `std::shared_ptr< std::vector< std::string > >` | |
+| `strings_cache_size_` | `size_t` | |
+| `canary_buffer` <Badge intent="note" minimal>static</Badge> | `string_dictionary::CanaryBuffer` | |
+
+---
+
+## Inner classes
+
+### StringCallback
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+class StringDictionary::StringCallback
+```
+</CodeBlock>
+
+### StringDictMemoryUsage
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+struct StringDictionary::StringDictMemoryUsage
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `mmap_size` | `size_t` | |
+| `temp_dict_size` | `size_t` | |
+| `canary_buffer_size` | `size_t` | |
+
+### StringIdxEntry
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+struct StringDictionary::StringIdxEntry
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `off` | `uint64_t` | |
+| `size` | `uint64_t` | |
+
+### compare_cache_value_t
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+struct StringDictionary::compare_cache_value_t
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `index` | `int32_t` | |
+| `diff` | `int32_t` | |
+
+### PayloadString
+
+<CodeBlock links={{"StringDictionary": "stringdictionary"}}>
+```cpp showLineNumbers={false}
+struct StringDictionary::PayloadString
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `c_str_ptr` | `char *` | |
+| `size` | `size_t` | |
+| `canary` | `bool` | |

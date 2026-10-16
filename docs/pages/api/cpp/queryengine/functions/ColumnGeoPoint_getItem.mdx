@@ -1,0 +1,15 @@
+---
+title: ColumnGeoPoint_getItem
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column", "Point2D": "../geo/structs/point2d"}}>
+```cpp showLineNumbers={false}
+DEVICE RUNTIME_EXPORT void ColumnGeoPoint_getItem(
+    const Column<GeoPoint> &col,
+    int64_t index,
+    int32_t output_srid,
+    Geo::Point2D &result
+)
+```
+</CodeBlock>

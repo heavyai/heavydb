@@ -1,0 +1,42 @@
+---
+title: threading_tbb::tbb_packaged_task
+description: ""
+---
+
+<CodeBlock id="tbb_packaged_task" links={{"tbb_packaged_task": "tbbpackagedtask"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct tbb_packaged_task
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <threading_tbb/threading_tbb.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+**Inherits from:** `tbb::task_group` (public)
+
+---
+
+## Constructors
+
+### tbb_packaged_task [#tbbpackagedtask]
+
+<CodeBlock links={{"tbb_packaged_task": "tbbpackagedtask"}}>
+```cpp showLineNumbers={false}
+threading_tbb::tbb_packaged_task<T>::tbb_packaged_task()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `value_` | `T` | |

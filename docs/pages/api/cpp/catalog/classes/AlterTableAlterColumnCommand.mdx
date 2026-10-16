@@ -1,0 +1,179 @@
+---
+title: AlterTableAlterColumnCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### AlterTableAlterColumnCommand [#altertablealtercolumncommand]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+AlterTableAlterColumnCommand::AlterTableAlterColumnCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult AlterTableAlterColumnCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+### alterColumn [#altercolumn]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommand::alterColumn()
+```
+</CodeBlock>
+
+### populateAndWriteRecoveryInfo [#populateandwriterecoveryinfo]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommand::populateAndWriteRecoveryInfo(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### cleanupRecoveryInfo [#cleanuprecoveryinfo]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommand::cleanupRecoveryInfo(
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+### alterColumnTypes [#altercolumntypes]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommand::alterColumnTypes(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### collectExpectedCatalogChanges [#collectexpectedcatalogchanges]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommand::collectExpectedCatalogChanges(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### prepareGeoColumns [#preparegeocolumns]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor", "ColumnDescriptor": "../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::list<std::list<ColumnDescriptor>> AlterTableAlterColumnCommand::prepareGeoColumns(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### prepareColumns [#preparecolumns]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor", "ColumnDescriptor": "../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::list<const ColumnDescriptor *> AlterTableAlterColumnCommand::prepareColumns(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### alterColumns [#altercolumns]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommand::alterColumns(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+### alterNonGeoColumnData [#alternongeocolumndata]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor", "ColumnDescriptor": "../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommand::alterNonGeoColumnData(
+    const TableDescriptor *td,
+    const std::list<const ColumnDescriptor *> &cds
+)
+```
+</CodeBlock>
+
+### alterGeoColumnData [#altergeocolumndata]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor", "ColumnDescriptor": "../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommand::alterGeoColumnData(
+    const TableDescriptor *td,
+    const std::list<std::pair<const ColumnDescriptor *, std::list<const ColumnDescriptor *>>> &geo_src_dst_cds
+)
+```
+</CodeBlock>
+
+### clearInMemoryData [#clearinmemorydata]
+
+<CodeBlock links={{"AlterTableAlterColumnCommand": "altertablealtercolumncommand", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void AlterTableAlterColumnCommand::clearInMemoryData(
+    const TableDescriptor *td,
+    const TypePairs &src_dst_cds
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `TypePairs` | `alter_column_shared::TypePairs` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `recovery_info_` | `AlterTableAlterColumnCommandRecoveryMgr::RecoveryInfo` | |
+| `recovery_mgr_` | `AlterTableAlterColumnCommandRecoveryMgr` | |
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

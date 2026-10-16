@@ -1,0 +1,94 @@
+---
+title: RelAlgDagSerializer
+description: "Primary struct for serializing the RelAlgNode/Rex/RexScalar nodes in a RelAlgDag instance."
+---
+
+Primary struct for serializing the RelAlgNode/Rex/RexScalar nodes in a [RelAlgDag](../classes/relalgdag) instance.
+
+All RelAlgDag-related classes/structs that don't have public getter/setter interfaces for serialization-dependent members need to friend this struct for private access and provide a serialization specialization below.
+
+```cpp showLineNumbers={false}
+#include <RelAlgDagSerializer.h>
+```
+
+---
+
+## Static methods
+
+### serialize [#serialize]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RelAlgDagSerializer": "relalgdagserializer"}}>
+```cpp showLineNumbers={false}
+template <class Archive, class RexClass>
+static void RelAlgDagSerializer::serialize(
+    Archive &ar,
+    RexClass &obj,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+Primary serialization method for Rex/RexScalar-related classes.
+
+If you create a new class that inherits from the Rex/RexScalar base class that requires serialization, it needs to be added here.
+
+Making use of "if constexpr" statements to avoid the boilerplate of creating a new templatized method for each class type. This also potentially allows for doing version checking in one spot, if we ever need to version serialization.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelAlgDagSerializer": "relalgdagserializer"}}>
+```cpp showLineNumbers={false}
+template <class Archive, class RelAlgClass>
+static void RelAlgDagSerializer::serialize(
+    Archive &ar,
+    RelAlgClass &obj,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+Primary serialization method for RelAlgNode-related classes, including the root [RelAlgDag](../classes/relalgdag) class.
+
+If you create a new class that inherits from the [RelAlgNode](../classes/relalgnode) base class that requires serialization, it needs to be added here.
+
+NOTE: Making use of "if constexpr" statements to avoid the boilerplate of creating a new templatized method for each class type.
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RelAlgDagSerializer": "relalgdagserializer", "RelAlgDag": "../classes/relalgdag"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+static void RelAlgDagSerializer::serialize(
+    Archive &ar,
+    RelAlgDag &rel_alg_dag,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+Primary serialization method for the [RelAlgDag](../classes/relalgdag) clas.
+
+</Tab>
+</Tabs>
+
+### registerClassesWithArchive [#registerclasseswitharchive]
+
+<CodeBlock links={{"RelAlgDagSerializer": "relalgdagserializer"}}>
+```cpp showLineNumbers={false}
+template <class Archive, class... RelAlgNodeClasses>
+static void RelAlgDagSerializer::registerClassesWithArchive(
+    Archive &ar
+)
+```
+</CodeBlock>
+
+Utility method that registers polymorphic-derived classes with the boost archive.
+
+Registration is needed to ensure derived classes referenced via polymorphic pointer get properly designated for serialization. See: [https://www.boost.org/doc/libs/1_74_0/libs/serialization/doc/serialization.html#registration](https://www.boost.org/doc/libs/1_74_0/libs/serialization/doc/serialization.html#registration)
+
+NOTE: the class types that need to be serialized are passed as a list of template arguments

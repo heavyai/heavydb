@@ -1,0 +1,31 @@
+---
+title: foreign_storage::ParseFileRegionResult
+description: "Data structure containing data and metadata gotten from parsing a set of file regions."
+---
+
+Data structure containing data and metadata gotten from parsing a set of file regions.
+
+---
+
+## Methods
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"ParseFileRegionResult": "parsefileregionresult"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ParseFileRegionResult::operator<(
+    const ParseFileRegionResult &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `file_offset` | `size_t` | |
+| `row_count` | `size_t` | |
+| `column_id_to_data_blocks_map` | `std::map< int, DataBlockPtr >` | |
+| `rejected_row_indices` | `std::set< size_t >` | |

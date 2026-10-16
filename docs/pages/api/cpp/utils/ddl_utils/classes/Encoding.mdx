@@ -1,0 +1,74 @@
+---
+title: ddl_utils::Encoding
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ddl_utils/DdlUtils.h>
+```
+
+---
+
+## Constructors
+
+### Encoding [#encoding]
+
+<CodeBlock links={{"Encoding": "encoding"}}>
+```cpp showLineNumbers={false}
+ddl_utils::Encoding::Encoding(
+    std::string *encoding_name,
+    int encoding_param
+)
+```
+</CodeBlock>
+
+Encapsulates column definition encoding information.
+
+**Parameters**
+
+<ParamField path="encoding_name" type="std::string *">
+- Type of encoding. For example, "DICT", "FIXED", etc.
+</ParamField>
+
+<ParamField path="encoding_param" type="int">
+- `Encoding` size.
+</ParamField>
+
+### Destructor [#destructor]
+
+### ~Encoding
+
+<CodeBlock links={{"Encoding": "encoding"}}>
+```cpp showLineNumbers={false}
+virtual ddl_utils::Encoding::~Encoding()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_encoding_name [#getencodingname]
+
+<CodeBlock links={{"Encoding": "encoding"}}>
+```cpp showLineNumbers={false}
+const std::string * ddl_utils::Encoding::get_encoding_name() const
+```
+</CodeBlock>
+
+### get_encoding_param [#getencodingparam]
+
+<CodeBlock links={{"Encoding": "encoding"}}>
+```cpp showLineNumbers={false}
+int ddl_utils::Encoding::get_encoding_param() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `encoding_name` | `std::unique_ptr< std::string >` | |
+| `encoding_param` | `int` | |

@@ -1,0 +1,15 @@
+---
+title: row_copier2__cpu__
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t row_copier2__cpu__(
+    const Column<double> &input_col,
+    int copy_multiplier,
+    Column<double> &output_col,
+    Column<double> &output_col2
+)
+```
+</CodeBlock>

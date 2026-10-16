@@ -1,0 +1,44 @@
+---
+title: foreign_storage::FileOrderS3
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/S3FilePathUtil.h>
+```
+
+**Inherits from:** `shared::FileOrderBase< S3ObjectComparator >` (public)
+
+---
+
+## Constructors
+
+### FileOrderS3 [#fileorders3]
+
+<CodeBlock links={{"FileOrderS3": "fileorders3"}}>
+```cpp showLineNumbers={false}
+foreign_storage::FileOrderS3::FileOrderS3(
+    const shared::FilePathOptions &options
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getFileComparator [#getfilecomparator]
+
+<CodeBlock links={{"FileOrderS3": "fileorders3"}}>
+```cpp showLineNumbers={false}
+S3ObjectComparator foreign_storage::FileOrderS3::getFileComparator() override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `comparator_map_` | `const std::map< std::string, S3ObjectComparator >` | |

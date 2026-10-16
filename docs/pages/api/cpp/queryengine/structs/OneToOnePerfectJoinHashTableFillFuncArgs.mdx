@@ -1,0 +1,24 @@
+---
+title: OneToOnePerfectJoinHashTableFillFuncArgs
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashJoinRuntime.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buff` | `int32_t *` | |
+| `dev_err_buff` | `int32_t *` | |
+| `invalid_slot_val` | `const int32_t` | |
+| `for_semi_join` | `const bool` | |
+| `join_column` | `const JoinColumn` | |
+| `type_info` | `const JoinColumnTypeInfo` | |
+| `sd_inner_to_outer_translation_map` | `const int32_t *` | |
+| `min_inner_elem` | `const int32_t` | |
+| `bucket_normalization` | `const int64_t` | |

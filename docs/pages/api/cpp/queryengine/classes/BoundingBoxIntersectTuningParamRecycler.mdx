@@ -1,0 +1,329 @@
+---
+title: BoundingBoxIntersectTuningParamRecycler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <BoundingBoxIntersectTuningParamRecycler.h>
+```
+
+**Inherits from:** `DataRecycler< std::optional< AutoTunerMetaInfo >, EMPTY_META_INFO >` (public)
+
+---
+
+## Constructors
+
+### BoundingBoxIntersectTuningParamRecycler [#boundingboxintersecttuningparamrecycler]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler"}}>
+```cpp showLineNumbers={false}
+BoundingBoxIntersectTuningParamRecycler::BoundingBoxIntersectTuningParamRecycler()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getItemFromCache [#getitemfromcache]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "EMPTY_META_INFO": "../structs/emptymetainfo", "AutoTunerMetaInfo": "../structs/autotunermetainfo"}}>
+```cpp showLineNumbers={false}
+std::optional<AutoTunerMetaInfo> BoundingBoxIntersectTuningParamRecycler::getItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::optional<EMPTY_META_INFO> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### putItemToCache [#putitemtocache]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "AutoTunerMetaInfo": "../structs/autotunermetainfo", "EMPTY_META_INFO": "../structs/emptymetainfo"}}>
+```cpp showLineNumbers={false}
+void BoundingBoxIntersectTuningParamRecycler::putItemToCache(
+    QueryPlanHash key,
+    std::optional<AutoTunerMetaInfo> item,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    size_t item_size,
+    size_t compute_time,
+    std::optional<EMPTY_META_INFO> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### initCache [#initcache]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler"}}>
+```cpp showLineNumbers={false}
+void BoundingBoxIntersectTuningParamRecycler::initCache() override
+```
+</CodeBlock>
+
+### clearCache [#clearcache]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler"}}>
+```cpp showLineNumbers={false}
+void BoundingBoxIntersectTuningParamRecycler::clearCache() override
+```
+</CodeBlock>
+
+### markCachedItemAsDirty [#markcacheditemasdirty]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler"}}>
+```cpp showLineNumbers={false}
+void BoundingBoxIntersectTuningParamRecycler::markCachedItemAsDirty(
+    size_t table_key,
+    std::unordered_set<QueryPlanHash> &key_set,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler"}}>
+```cpp showLineNumbers={false}
+std::string BoundingBoxIntersectTuningParamRecycler::toString() const override
+```
+</CodeBlock>
+
+### markCachedItemAsDirtyImpl [#markcacheditemasdirtyimpl]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::markCachedItemAsDirtyImpl(
+    QueryPlanHash key,
+    CachedItemContainer &m
+) const
+```
+</CodeBlock>
+
+### isCachedItemDirty [#iscacheditemdirty]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+bool DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::isCachedItemDirty(
+    QueryPlanHash key,
+    CachedItemContainer &m
+) const
+```
+</CodeBlock>
+
+### getCachedItemContainer [#getcacheditemcontainer]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CachedItemContainer> DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getCachedItemContainer(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCachedItemWithoutConsideringMetaInfo [#getcacheditemwithoutconsideringmetainfo]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "CachedItem": "../structs/cacheditem", "AutoTunerMetaInfo": "../structs/autotunermetainfo", "EMPTY_META_INFO": "../structs/emptymetainfo", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::optional<CachedItem<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>> DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getCachedItemWithoutConsideringMetaInfo(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    CachedItemContainer &m,
+    std::lock_guard<std::mutex> &lock
+)
+```
+</CodeBlock>
+
+### getCurrentNumCachedItems [#getcurrentnumcacheditems]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getCurrentNumCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentNumDirtyCachedItems [#getcurrentnumdirtycacheditems]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getCurrentNumDirtyCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentNumCleanCachedItems [#getcurrentnumcleancacheditems]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getCurrentNumCleanCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentCacheSizeForDevice [#getcurrentcachesizefordevice]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getCurrentCacheSizeForDevice(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCachedItemMetric [#getcacheditemmetric]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "CacheItemMetric": "cacheitemmetric", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CacheItemMetric> DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getCachedItemMetric(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    QueryPlanHash key
+) const
+```
+</CodeBlock>
+
+### setTotalCacheSize [#settotalcachesize]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::setTotalCacheSize(
+    CacheItemType item_type,
+    size_t new_total_cache_size
+)
+```
+</CodeBlock>
+
+### setMaxCacheItemSize [#setmaxcacheitemsize]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::setMaxCacheItemSize(
+    CacheItemType item_type,
+    size_t new_max_cache_item_size
+)
+```
+</CodeBlock>
+
+### hasItemInCache [#hasitemincache]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "EMPTY_META_INFO": "../structs/emptymetainfo"}}>
+```cpp showLineNumbers={false}
+bool BoundingBoxIntersectTuningParamRecycler::hasItemInCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<EMPTY_META_INFO> meta_info = std::nullopt
+) const override
+```
+</CodeBlock>
+
+### removeItemFromCache [#removeitemfromcache]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "EMPTY_META_INFO": "../structs/emptymetainfo"}}>
+```cpp showLineNumbers={false}
+void BoundingBoxIntersectTuningParamRecycler::removeItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<EMPTY_META_INFO> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### cleanupCacheForInsertion [#cleanupcacheforinsertion]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "EMPTY_META_INFO": "../structs/emptymetainfo"}}>
+```cpp showLineNumbers={false}
+void BoundingBoxIntersectTuningParamRecycler::cleanupCacheForInsertion(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    size_t required_size,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<EMPTY_META_INFO> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### removeCachedItemFromBeginning [#removecacheditemfrombeginning]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::removeCachedItemFromBeginning(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    int offset
+)
+```
+</CodeBlock>
+
+### sortCacheContainerByQueryMetric [#sortcachecontainerbyquerymetric]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::sortCacheContainerByQueryMetric(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### getCacheLock [#getcachelock]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::mutex & DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getCacheLock() const
+```
+</CodeBlock>
+
+### getMetricTracker [#getmetrictracker]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "CacheMetricTracker": "cachemetrictracker", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+CacheMetricTracker & DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getMetricTracker(
+    CacheItemType item_type
+)
+```
+</CodeBlock>
+
+### getCacheItemType [#getcacheitemtype]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<CacheItemType> const & DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getCacheItemType() const
+```
+</CodeBlock>
+
+### getItemCache [#getitemcache]
+
+<CodeBlock links={{"BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+PerTypeCacheItemContainer const & DataRecycler<std::optional<AutoTunerMetaInfo>, EMPTY_META_INFO>::getItemCache() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `CachedItemContainer` | `std::vector< CachedItem< std::optional< AutoTunerMetaInfo >, EMPTY_META_INFO > >` |
+| `PerDeviceCacheItemContainer` | `std::unordered_map< DeviceIdentifier, std::shared_ptr< CachedItemContainer > >` |
+| `PerTypeCacheItemContainer` | `std::unordered_map< CacheItemType, std::shared_ptr< PerDeviceCacheItemContainer > >` |
+| `PerTypeCacheMetricTracker` | `std::unordered_map< CacheItemType, CacheMetricTracker >` |

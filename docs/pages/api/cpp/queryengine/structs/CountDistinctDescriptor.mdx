@@ -1,0 +1,42 @@
+---
+title: CountDistinctDescriptor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CountDistinctDescriptor.h>
+```
+
+---
+
+## Methods
+
+### bitmapSizeBytes [#bitmapsizebytes]
+
+<CodeBlock links={{"CountDistinctDescriptor": "countdistinctdescriptor"}}>
+```cpp showLineNumbers={false}
+size_t CountDistinctDescriptor::bitmapSizeBytes() const
+```
+</CodeBlock>
+
+### bitmapPaddedSizeBytes [#bitmappaddedsizebytes]
+
+<CodeBlock links={{"CountDistinctDescriptor": "countdistinctdescriptor"}}>
+```cpp showLineNumbers={false}
+size_t CountDistinctDescriptor::bitmapPaddedSizeBytes() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `impl_type_` | `CountDistinctImplType` | |
+| `min_val` | `int64_t` | |
+| `bucket_size` | `int64_t` | |
+| `bitmap_sz_bits` | `int64_t` | |
+| `approximate` | `bool` | |
+| `device_type` | `ExecutorDeviceType` | |
+| `sub_bitmap_count` | `size_t` | |

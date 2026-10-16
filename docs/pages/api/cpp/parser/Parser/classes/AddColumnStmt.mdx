@@ -1,0 +1,98 @@
+---
+title: Parser::AddColumnStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### AddColumnStmt [#addcolumnstmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"AddColumnStmt": "addcolumnstmt", "ColumnDef": "columndef"}}>
+```cpp showLineNumbers={false}
+Parser::AddColumnStmt::AddColumnStmt(
+    std::string *tab,
+    ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"AddColumnStmt": "addcolumnstmt", "ColumnDef": "columndef"}}>
+```cpp showLineNumbers={false}
+Parser::AddColumnStmt::AddColumnStmt(
+    std::string *tab,
+    std::list<ColumnDef *> *coldefs
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"AddColumnStmt": "addcolumnstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::AddColumnStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### check_executable [#checkexecutable]
+
+<CodeBlock links={{"AddColumnStmt": "addcolumnstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::AddColumnStmt::check_executable(
+    const Catalog_Namespace::SessionInfo &session,
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+### get_table [#gettable]
+
+<CodeBlock links={{"AddColumnStmt": "addcolumnstmt"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::AddColumnStmt::get_table() const
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"AddColumnStmt": "addcolumnstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::AddColumnStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `coldef_` | `std::unique_ptr< ColumnDef >` | |
+| `coldefs_` | `std::list< std::unique_ptr< ColumnDef > >` | |

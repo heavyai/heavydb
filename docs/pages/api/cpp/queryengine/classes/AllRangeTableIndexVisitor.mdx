@@ -1,0 +1,431 @@
+---
+title: AllRangeTableIndexVisitor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RangeTableIndexVisitor.h>
+```
+
+**Inherits from:** `ScalarExprVisitor< std::set< int > >` (public)
+
+---
+
+## Methods
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor"}}>
+```cpp showLineNumbers={false}
+std::set<int> AllRangeTableIndexVisitor::visitColumnVar(
+    const Analyzer::ColumnVar *column
+) const override
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor"}}>
+```cpp showLineNumbers={false}
+std::set<int> AllRangeTableIndexVisitor::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *expr_tuple
+) const override
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor"}}>
+```cpp showLineNumbers={false}
+std::set<int> AllRangeTableIndexVisitor::aggregateResult(
+    const std::set<int> &aggregate,
+    const std::set<int> &next_result
+) const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitConstant(
+    const Analyzer::Constant *
+) const
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitUOper(
+    const Analyzer::UOper *uoper
+) const
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<std::set<int>>::visitBegin() const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::set<int> ScalarExprVisitor<std::set<int>>::defaultResult() const
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"AllRangeTableIndexVisitor": "allrangetableindexvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+std::set<int> ScalarExprVisitor<std::set<int>>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>

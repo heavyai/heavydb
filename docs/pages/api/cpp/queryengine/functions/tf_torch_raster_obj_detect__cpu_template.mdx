@@ -1,0 +1,163 @@
+---
+title: tf_torch_raster_obj_detect__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename PixelType, typename ColorType>
+TEMPLATE_NOINLINE int32_t tf_torch_raster_obj_detect__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<PixelType> &input_x,
+    const Column<PixelType> &input_y,
+    const ColumnList<ColorType> &input_channels,
+    const PixelType x_input_units_per_pixel,
+    const PixelType y_input_units_per_pixel,
+    const float max_color_value,
+    const int64_t tile_boundary_halo_pixels,
+    const TextEncodingNone &model_path,
+    const TextEncodingNone &model_metadata_path,
+    const float min_confidence_threshold,
+    const float iou_threshold,
+    const bool use_gpu,
+    const int64_t device_num,
+    Column<TextEncodingDict> &detected_class_label,
+    Column<int32_t> &detected_class_id,
+    Column<double> &detected_centroid_x,
+    Column<double> &detected_centroid_y,
+    Column<double> &detected_width,
+    Column<double> &detected_height,
+    Column<float> &detected_confidence
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template TEMPLATE_NOINLINE int32_t tf_torch_raster_obj_detect__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<float> &input_x,
+    const Column<float> &input_y,
+    const ColumnList<int16_t> &input_channels,
+    const float x_input_units_per_pixel,
+    const float y_input_units_per_pixel,
+    const float max_color_value,
+    const int64_t tile_boundary_halo_pixels,
+    const TextEncodingNone &model_path,
+    const TextEncodingNone &model_metadata_path,
+    const float min_confidence_threshold,
+    const float iou_threshold,
+    const bool use_gpu,
+    const int64_t device_num,
+    Column<TextEncodingDict> &detected_class_label,
+    Column<int32_t> &detected_class_id,
+    Column<double> &detected_centroid_x,
+    Column<double> &detected_centroid_y,
+    Column<double> &detected_width,
+    Column<double> &detected_height,
+    Column<float> &detected_confidence
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template TEMPLATE_NOINLINE int32_t tf_torch_raster_obj_detect__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<float> &input_x,
+    const Column<float> &input_y,
+    const ColumnList<int32_t> &input_channels,
+    const float x_input_units_per_pixel,
+    const float y_input_units_per_pixel,
+    const float max_color_value,
+    const int64_t tile_boundary_halo_pixels,
+    const TextEncodingNone &model_path,
+    const TextEncodingNone &model_metadata_path,
+    const float min_confidence_threshold,
+    const float iou_threshold,
+    const bool use_gpu,
+    const int64_t device_num,
+    Column<TextEncodingDict> &detected_class_label,
+    Column<int32_t> &detected_class_id,
+    Column<double> &detected_centroid_x,
+    Column<double> &detected_centroid_y,
+    Column<double> &detected_width,
+    Column<double> &detected_height,
+    Column<float> &detected_confidence
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template TEMPLATE_NOINLINE int32_t tf_torch_raster_obj_detect__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<double> &input_x,
+    const Column<double> &input_y,
+    const ColumnList<int16_t> &input_channels,
+    const double x_input_units_per_pixel,
+    const double y_input_units_per_pixel,
+    const float max_color_value,
+    const int64_t tile_boundary_halo_pixels,
+    const TextEncodingNone &model_path,
+    const TextEncodingNone &model_metadata_path,
+    const float min_confidence_threshold,
+    const float iou_threshold,
+    const bool use_gpu,
+    const int64_t device_num,
+    Column<TextEncodingDict> &detected_class_label,
+    Column<int32_t> &detected_class_id,
+    Column<double> &detected_centroid_x,
+    Column<double> &detected_centroid_y,
+    Column<double> &detected_width,
+    Column<double> &detected_height,
+    Column<float> &detected_confidence
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template TEMPLATE_NOINLINE int32_t tf_torch_raster_obj_detect__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<double> &input_x,
+    const Column<double> &input_y,
+    const ColumnList<int32_t> &input_channels,
+    const double x_input_units_per_pixel,
+    const double y_input_units_per_pixel,
+    const float max_color_value,
+    const int64_t tile_boundary_halo_pixels,
+    const TextEncodingNone &model_path,
+    const TextEncodingNone &model_metadata_path,
+    const float min_confidence_threshold,
+    const float iou_threshold,
+    const bool use_gpu,
+    const int64_t device_num,
+    Column<TextEncodingDict> &detected_class_label,
+    Column<int32_t> &detected_class_id,
+    Column<double> &detected_centroid_x,
+    Column<double> &detected_centroid_y,
+    Column<double> &detected_width,
+    Column<double> &detected_height,
+    Column<float> &detected_confidence
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

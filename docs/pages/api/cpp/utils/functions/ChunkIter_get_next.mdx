@@ -1,0 +1,35 @@
+---
+title: ChunkIter_get_next
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ChunkIter": "../classes/chunkiter"}}>
+```cpp showLineNumbers={false}
+DEVICE void ChunkIter_get_next(
+    ChunkIter *it,
+    bool uncompress,
+    VarlenDatum *result,
+    bool *is_end
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ChunkIter": "../classes/chunkiter"}}>
+```cpp showLineNumbers={false}
+DEVICE void ChunkIter_get_next(
+    ChunkIter *it,
+    bool uncompress,
+    VarlenDatum *vd,
+    bool *is_end
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,83 @@
+---
+title: ShowModelFeatureDetailsCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### ShowModelFeatureDetailsCommand [#showmodelfeaturedetailscommand]
+
+<CodeBlock links={{"ShowModelFeatureDetailsCommand": "showmodelfeaturedetailscommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+ShowModelFeatureDetailsCommand::ShowModelFeatureDetailsCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"ShowModelFeatureDetailsCommand": "showmodelfeaturedetailscommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult ShowModelFeatureDetailsCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+### prepareLabelInfos [#preparelabelinfos]
+
+<CodeBlock links={{"ShowModelFeatureDetailsCommand": "showmodelfeaturedetailscommand"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetMetaInfo> ShowModelFeatureDetailsCommand::prepareLabelInfos() const
+```
+</CodeBlock>
+
+### extractExtraMetadata [#extractextrametadata]
+
+<CodeBlock links={{"ShowModelFeatureDetailsCommand": "showmodelfeaturedetailscommand"}}>
+```cpp showLineNumbers={false}
+std::pair<std::vector<double>, std::vector<std::vector<double>>> ShowModelFeatureDetailsCommand::extractExtraMetadata(
+    std::shared_ptr<AbstractMLModel> model,
+    std::vector<TargetMetaInfo> &label_infos
+) const
+```
+</CodeBlock>
+
+### prepareLogicalValues [#preparelogicalvalues]
+
+<CodeBlock links={{"ShowModelFeatureDetailsCommand": "showmodelfeaturedetailscommand"}}>
+```cpp showLineNumbers={false}
+std::vector<RelLogicalValues::RowValues> ShowModelFeatureDetailsCommand::prepareLogicalValues(
+    const MLModelMetadata &model_metadata,
+    const std::vector<std::vector<std::string>> &cat_sub_features,
+    std::vector<double> &extra_metadata,
+    const std::vector<std::vector<double>> &eigenvectors,
+    const std::vector<int64_t> &inverse_permutations
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

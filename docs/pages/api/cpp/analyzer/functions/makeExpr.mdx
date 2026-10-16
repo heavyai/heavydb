@@ -1,0 +1,13 @@
+---
+title: makeExpr
+description: ""
+---
+
+<CodeBlock links={{"Expr": "../analyzer/classes/expr"}}>
+```cpp showLineNumbers={false}
+template <typename Tp, typename... Args>
+std::enable_if<std::is_base_of<Analyzer::Expr, Tp>::value, std::shared_ptr<Tp>>::type makeExpr(
+    Args &&... args
+)
+```
+</CodeBlock>

@@ -1,0 +1,376 @@
+---
+title: RexWindowFunctionOperator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RexFunctionOperator` (public)
+
+---
+
+## Constructors
+
+### RexWindowFunctionOperator [#rexwindowfunctionoperator]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+RexWindowFunctionOperator::RexWindowFunctionOperator()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "SortField": "sortfield", "RexWindowBound": "#rexwindowbound"}}>
+```cpp showLineNumbers={false}
+RexWindowFunctionOperator::RexWindowFunctionOperator(
+    const SqlWindowFunctionKind kind,
+    ConstRexScalarPtrVector &operands,
+    ConstRexScalarPtrVector &partition_keys,
+    ConstRexScalarPtrVector &order_keys,
+    const std::vector<SortField> collation,
+    const RexWindowBound &frame_start_bound,
+    const RexWindowBound &frame_end_bound,
+    const bool is_rows,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~RexWindowFunctionOperator
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+virtual RexWindowFunctionOperator::~RexWindowFunctionOperator() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexWindowFunctionOperator::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexWindowFunctionOperator::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### getKind [#getkind]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+SqlWindowFunctionKind RexWindowFunctionOperator::getKind() const
+```
+</CodeBlock>
+
+### getPartitionKeys [#getpartitionkeys]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+const ConstRexScalarPtrVector & RexWindowFunctionOperator::getPartitionKeys() const
+```
+</CodeBlock>
+
+### getPartitionKeysAndRelease [#getpartitionkeysandrelease]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+ConstRexScalarPtrVector RexWindowFunctionOperator::getPartitionKeysAndRelease() const
+```
+</CodeBlock>
+
+### getOrderKeysAndRelease [#getorderkeysandrelease]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+ConstRexScalarPtrVector RexWindowFunctionOperator::getOrderKeysAndRelease() const
+```
+</CodeBlock>
+
+### getOrderKeys [#getorderkeys]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+const ConstRexScalarPtrVector & RexWindowFunctionOperator::getOrderKeys() const
+```
+</CodeBlock>
+
+### replacePartitionKey [#replacepartitionkey]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RexWindowFunctionOperator::replacePartitionKey(
+    size_t offset,
+    std::unique_ptr<const RexScalar> &&new_partition_key
+)
+```
+</CodeBlock>
+
+### replaceOrderKey [#replaceorderkey]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RexWindowFunctionOperator::replaceOrderKey(
+    size_t offset,
+    std::unique_ptr<const RexScalar> &&new_order_key
+)
+```
+</CodeBlock>
+
+### replaceOperands [#replaceoperands]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RexWindowFunctionOperator::replaceOperands(
+    std::vector<std::unique_ptr<const RexScalar>> &&new_operands
+)
+```
+</CodeBlock>
+
+### getCollation [#getcollation]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "SortField": "sortfield"}}>
+```cpp showLineNumbers={false}
+const std::vector<SortField> & RexWindowFunctionOperator::getCollation() const
+```
+</CodeBlock>
+
+### getFrameStartBound [#getframestartbound]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexWindowBound": "#rexwindowbound"}}>
+```cpp showLineNumbers={false}
+const RexWindowBound & RexWindowFunctionOperator::getFrameStartBound() const
+```
+</CodeBlock>
+
+### getFrameEndBound [#getframeendbound]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexWindowBound": "#rexwindowbound"}}>
+```cpp showLineNumbers={false}
+const RexWindowBound & RexWindowFunctionOperator::getFrameEndBound() const
+```
+</CodeBlock>
+
+### isRows [#isrows]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+bool RexWindowFunctionOperator::isRows() const
+```
+</CodeBlock>
+
+### disambiguatedOperands [#disambiguatedoperands]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "SortField": "sortfield", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<const RexOperator> RexWindowFunctionOperator::disambiguatedOperands(
+    ConstRexScalarPtrVector &operands,
+    ConstRexScalarPtrVector &partition_keys,
+    ConstRexScalarPtrVector &order_keys,
+    const std::vector<SortField> &collation
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexWindowFunctionOperator::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### getDisambiguated [#getdisambiguated]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexScalar": "rexscalar", "RexOperator": "rexoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<const RexOperator> RexWindowFunctionOperator::getDisambiguated(
+    std::vector<std::unique_ptr<const RexScalar>> &operands
+) const override
+```
+</CodeBlock>
+
+### getName [#getname]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+const std::string & RexWindowFunctionOperator::getName() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+size_t RexOperator::size() const
+```
+</CodeBlock>
+
+### getOperand [#getoperand]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexScalar": "rexscalar", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RexOperator::getOperand(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getOperandAndRelease [#getoperandandrelease]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexScalar": "rexscalar", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RexOperator::getOperandAndRelease(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getOperator [#getoperator]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+SQLOps RexOperator::getOperator() const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & RexOperator::getType() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+virtual size_t Rex::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+size_t Rex::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+size_t RexWindowFunctionOperator::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ConstRexScalarPtr` | `std::unique_ptr< const RexScalar >` |
+| `ConstRexScalarPtrVector` | `std::vector< ConstRexScalarPtr >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `kind_` | `SqlWindowFunctionKind` | |
+| `partition_keys_` | `ConstRexScalarPtrVector` | |
+| `order_keys_` | `ConstRexScalarPtrVector` | |
+| `collation_` | `std::vector< SortField >` | |
+| `frame_start_bound_` | `RexWindowBound` | |
+| `frame_end_bound_` | `RexWindowBound` | |
+| `is_rows_` | `bool` | |
+| `op_` | `SQLOps` | |
+| `operands_` | `std::vector< std::unique_ptr< const RexScalar > >` | |
+| `type_` | `SQLTypeInfo` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |
+
+---
+
+## Inner classes
+
+### RexWindowBound
+
+<CodeBlock links={{"RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+struct RexWindowFunctionOperator::RexWindowBound
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `unbounded` | `bool` | |
+| `preceding` | `bool` | |
+| `following` | `bool` | |
+| `is_current_row` | `bool` | |
+| `bound_expr` | `std::shared_ptr< const RexScalar >` | |
+| `order_key` | `int` | |

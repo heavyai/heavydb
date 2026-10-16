@@ -1,0 +1,18 @@
+---
+title: heavyai::DeviceIdentifier
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavyai/DeviceGroup.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `index` | `const int32_t` | index into device group (currently num_gpus - start_gpu) |
+| `gpu_id` | `const int32_t` | Gpu Id for device (ignores start_gpu). Assigned by CudaMgr or GfxDriver |
+| `uuid` | `const UUID` | [UUID](../classes/uuid) for device (hardware invariant). |

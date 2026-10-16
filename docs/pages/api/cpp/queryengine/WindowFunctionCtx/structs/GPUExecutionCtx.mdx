@@ -1,0 +1,41 @@
+---
+title: WindowFunctionCtx::GPUExecutionCtx
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <WindowFunctionCtx/WindowContext.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~GPUExecutionCtx
+
+<CodeBlock links={{"GPUExecutionCtx": "gpuexecutionctx"}}>
+```cpp showLineNumbers={false}
+WindowFunctionCtx::GPUExecutionCtx::~GPUExecutionCtx()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `output_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `partitions_buf_gpu_holder_` | `Data_Namespace::AbstractBuffer *` | |
+| `dummy_count_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `dummy_offset_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `dummy_payload_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `partition_start_offset_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `partition_start_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `partition_end_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `sorted_partition_buf_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `ordered_partition_null_start_pos_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `ordered_partition_null_end_pos_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |

@@ -1,0 +1,59 @@
+---
+title: KeyAccessor
+description: ""
+---
+
+<CodeBlock id="KeyAccessor" links={{"KeyAccessor": "keyaccessor"}}>
+```cpp showLineNumbers={false}
+template <typename KeyT = int64_t, typename IndexT = int32_t>
+struct KeyAccessor
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="KeyT" type="typename" default="int64_t">
+</ParamField>
+
+<ParamField path="IndexT" type="typename" default="int32_t">
+</ParamField>
+
+---
+
+## Constructors
+
+### KeyAccessor [#keyaccessor]
+
+<CodeBlock links={{"KeyAccessor": "keyaccessor"}}>
+```cpp showLineNumbers={false}
+DEVICE KeyAccessor<KeyT, IndexT>::KeyAccessor(
+    const int8_t *key_buff,
+    const size_t key_stride,
+    const size_t key_idx
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get [#get]
+
+<CodeBlock links={{"KeyAccessor": "keyaccessor"}}>
+```cpp showLineNumbers={false}
+ALWAYS_INLINE DEVICE KeyT KeyAccessor<KeyT, IndexT>::get(
+    const IndexT rowid
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buffer` | `const int8_t *` | |
+| `stride` | `const size_t` | |
+| `index` | `const size_t` | |

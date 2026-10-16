@@ -1,0 +1,64 @@
+---
+title: ChunkStats
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ChunkMetadata.h>
+```
+
+---
+
+## Constructors
+
+### ChunkStats [#chunkstats]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ChunkStats": "chunkstats"}}>
+```cpp showLineNumbers={false}
+ChunkStats::ChunkStats()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ChunkStats": "chunkstats"}}>
+```cpp showLineNumbers={false}
+ChunkStats::ChunkStats(
+    const Datum new_min,
+    const Datum new_max,
+    const bool new_has_nulls
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ChunkStats": "chunkstats"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+ChunkStats::ChunkStats(
+    const T new_min,
+    const T new_max,
+    const bool new_has_nulls,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `min` | `Datum` | |
+| `max` | `Datum` | |
+| `has_nulls` | `bool` | |

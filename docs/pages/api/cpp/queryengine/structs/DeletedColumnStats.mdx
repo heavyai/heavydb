@@ -1,0 +1,18 @@
+---
+title: DeletedColumnStats
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableOptimizer.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `total_row_count` | `size_t` | |
+| `visible_row_count_per_fragment` | `std::unordered_map< int, size_t >` | |
+| `chunk_stats_per_fragment` | `std::unordered_map< int, ChunkStats >` | |

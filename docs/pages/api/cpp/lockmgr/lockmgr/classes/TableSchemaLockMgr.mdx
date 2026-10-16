@@ -1,0 +1,90 @@
+---
+title: lockmgr::TableSchemaLockMgr
+description: "Locks protecting a physical table object returned from the catalog."
+---
+
+Locks protecting a physical table object returned from the catalog.
+
+Table Metadata Locks prevent incompatible concurrent operations on table objects. For example, before dropping or altering a table, a metadata write lock must be acquired. This prevents concurrent read + drop, concurrent drops, etc.
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgr.h>
+```
+
+**Inherits from:** `lockmgr::TableLockMgrImpl< TableSchemaLockMgr >` (public)
+
+---
+
+## Methods
+
+### getTableMutex [#gettablemutex]
+
+<CodeBlock links={{"TableSchemaLockMgr": "tableschemalockmgr", "MutexTracker": "mutextracker", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+MutexTracker * lockmgr::TableLockMgrImpl<TableSchemaLockMgr>::getTableMutex(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### getLockedTables [#getlockedtables]
+
+<CodeBlock links={{"TableSchemaLockMgr": "tableschemalockmgr", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+std::set<ChunkKey> lockmgr::TableLockMgrImpl<TableSchemaLockMgr>::getLockedTables() const
+```
+</CodeBlock>
+
+### getClusterTableMutex [#getclustertablemutex]
+
+<CodeBlock links={{"TableSchemaLockMgr": "tableschemalockmgr", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<heavyai::DistributedSharedMutex> lockmgr::TableLockMgrImpl<TableSchemaLockMgr>::getClusterTableMutex(
+    const ChunkKey &table_key
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### instance [#instance]
+
+<CodeBlock links={{"TableSchemaLockMgr": "tableschemalockmgr"}}>
+```cpp showLineNumbers={false}
+static TableSchemaLockMgr & lockmgr::TableSchemaLockMgr::instance()
+```
+</CodeBlock>
+
+### getWriteLockForTable [#getwritelockfortable]
+
+<CodeBlock links={{"TableSchemaLockMgr": "tableschemalockmgr", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+WriteLock lockmgr::TableLockMgrImpl<TableSchemaLockMgr>::getWriteLockForTable(
+    const Catalog_Namespace::Catalog &cat,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+### getReadLockForTable [#getreadlockfortable]
+
+<CodeBlock links={{"TableSchemaLockMgr": "tableschemalockmgr", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+ReadLock lockmgr::TableLockMgrImpl<TableSchemaLockMgr>::getReadLockForTable(
+    Catalog_Namespace::Catalog &cat,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `kind` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `map_mutex_` | `std::mutex` | |
+| `table_mutex_map_` | `std::map< ChunkKey, std::unique_ptr< MutexTracker > >` | |

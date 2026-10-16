@@ -1,0 +1,414 @@
+---
+title: RelLogicalUnion
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public)
+
+---
+
+## Constructors
+
+### RelLogicalUnion [#rellogicalunion]
+
+<Tabs>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+RelLogicalUnion::RelLogicalUnion()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+RelLogicalUnion::RelLogicalUnion(
+    RelAlgInputs,
+    bool is_all
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelLogicalUnion::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelLogicalUnion::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelLogicalUnion::deepCopy() const override
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalUnion::size() const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelLogicalUnion::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### getFieldName [#getfieldname]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+std::string RelLogicalUnion::getFieldName(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### isAll [#isall]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+bool RelLogicalUnion::isAll() const
+```
+</CodeBlock>
+
+### getCompatibleMetainfoTypes [#getcompatiblemetainfotypes]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetMetaInfo> RelLogicalUnion::getCompatibleMetainfoTypes() const
+```
+</CodeBlock>
+
+### copyAndRedirectSource [#copyandredirectsource]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+RexScalar const  * RelLogicalUnion::copyAndRedirectSource(
+    RexScalar const *,
+    size_t input_idx
+) const
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalUnion::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalUnion::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalUnion::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalUnion::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::string RelLogicalUnion::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalUnion::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelLogicalUnion::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+unsigned RelLogicalUnion::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelLogicalUnion::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelLogicalUnion::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const size_t RelLogicalUnion::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelLogicalUnion::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelLogicalUnion::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelLogicalUnion::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalUnion::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelLogicalUnion::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelLogicalUnion::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalUnion::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalUnion::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelLogicalUnion::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalUnion::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalUnion::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalUnion::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### allStringCastsAreToDictionaryEncodedStrings [#allstringcastsaretodictionaryencodedstrings]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+bool RelLogicalUnion::allStringCastsAreToDictionaryEncodedStrings() const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+size_t RelLogicalUnion::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelLogicalUnion": "rellogicalunion", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelLogicalUnion::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `scalar_exprs_` | `std::vector< std::shared_ptr< const RexScalar > >` | |
+| `is_all_` | `bool` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

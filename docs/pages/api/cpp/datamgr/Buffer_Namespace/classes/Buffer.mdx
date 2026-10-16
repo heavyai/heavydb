@@ -1,0 +1,470 @@
+---
+title: Buffer_Namespace::Buffer
+description: "Note(s): Forbid Copying Idiom 4.1."
+---
+
+Note(s): Forbid Copying Idiom 4.1.
+
+```cpp showLineNumbers={false}
+#include <Buffer_Namespace/Buffer.h>
+```
+
+**Inherits from:** `Data_Namespace::AbstractBuffer` (public)
+
+---
+
+## Constructors
+
+### Buffer [#buffer]
+
+<Tabs>
+<Tab title="Constructs a `Buffer` object">
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::Buffer::Buffer(
+    BufferMgr *bm,
+    BufferList::iterator seg_it,
+    const int device_id,
+    const size_t page_size = 512
+)
+```
+</CodeBlock>
+
+Constructs a `Buffer` object.
+
+The constructor requires a memory address (provided by [BufferMgr](buffermgr)), number of pages, and the size in bytes of each page. Additionally, the `Buffer` can be initialized with an epoch.
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::Buffer::Buffer(
+    const Buffer &
+)
+```
+</CodeBlock>
+
+pointer to beginning of buffer's memory
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~Buffer
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::Buffer::~Buffer() override
+```
+</CodeBlock>
+
+Destructor.
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+Buffer & Buffer_Namespace::Buffer::operator=(
+    const Buffer &
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### read [#read]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::read(
+    int8_t *const dst,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel dst_buffer_type = CPU_LEVEL,
+    const int device_id = -1
+) override
+```
+</CodeBlock>
+
+Reads (copies) data from the buffer to the destination (dst) memory location.
+
+Reads (copies) nbytes of data from the buffer, beginning at the specified byte offset, into the destination (dst) memory location.
+
+**Parameters**
+
+<ParamField path="dst" type="int8_t *const">
+The destination address to where the buffer's data is being copied.
+</ParamField>
+
+<ParamField path="offset" type="const size_t" default="0">
+The byte offset into the buffer from where reading (copying) begins.
+</ParamField>
+
+### reserve [#reserve]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::reserve(
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### write [#write]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::write(
+    int8_t *src,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel src_buffer_type = CPU_LEVEL,
+    const int device_id = -1
+) override
+```
+</CodeBlock>
+
+Writes (copies) data from src into the buffer.
+
+Writes (copies) nbytes of data into the buffer at the specified byte offset, from the source (src) memory location.
+
+**Parameters**
+
+<ParamField path="src" type="int8_t *">
+The source address from where data is being copied to the buffer.
+</ParamField>
+
+<ParamField path="num_bytes" type="const size_t">
+The number of bytes being written (copied) into the buffer.
+</ParamField>
+
+<ParamField path="offset" type="const size_t" default="0">
+The byte offset into the buffer to where writing begins.
+</ParamField>
+
+### append [#append]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::append(
+    int8_t *src,
+    const size_t num_bytes,
+    const MemoryLevel src_buffer_type = CPU_LEVEL,
+    const int deviceId = -1
+) override
+```
+</CodeBlock>
+
+### getMemoryPtr [#getmemoryptr]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+int8_t * Buffer_Namespace::Buffer::getMemoryPtr() override
+```
+</CodeBlock>
+
+Returns a raw, constant (read-only) pointer to the underlying buffer.
+
+**Returns:** A constant memory pointer for read-only access.
+
+### setMemoryPtr [#setmemoryptr]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::setMemoryPtr(
+    int8_t *new_ptr
+) override
+```
+</CodeBlock>
+
+### reservedSize [#reservedsize]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::Buffer::reservedSize() const override
+```
+</CodeBlock>
+
+Returns the total number of bytes allocated for the buffer.
+
+### pageCount [#pagecount]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::Buffer::pageCount() const override
+```
+</CodeBlock>
+
+Returns the number of pages in the buffer.
+
+### pageSize [#pagesize]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::Buffer::pageSize() const override
+```
+</CodeBlock>
+
+Returns the size in bytes of each page in the buffer.
+
+### pin [#pin]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+int Buffer_Namespace::Buffer::pin() override
+```
+</CodeBlock>
+
+### unPin [#unpin]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+int Buffer_Namespace::Buffer::unPin() override
+```
+</CodeBlock>
+
+### getPinCount [#getpincount]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+int Buffer_Namespace::Buffer::getPinCount() override
+```
+</CodeBlock>
+
+### getSlabNum [#getslabnum]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+int32_t Buffer_Namespace::Buffer::getSlabNum() const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual MemoryLevel Buffer_Namespace::Buffer::getType() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+size_t Buffer_Namespace::Buffer::size() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+int Buffer_Namespace::Buffer::getDeviceId() const
+```
+</CodeBlock>
+
+### isDirty [#isdirty]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool Buffer_Namespace::Buffer::isDirty() const
+```
+</CodeBlock>
+
+### isAppended [#isappended]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool Buffer_Namespace::Buffer::isAppended() const
+```
+</CodeBlock>
+
+### isUpdated [#isupdated]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool Buffer_Namespace::Buffer::isUpdated() const
+```
+</CodeBlock>
+
+### hasEncoder [#hasencoder]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool Buffer_Namespace::Buffer::hasEncoder() const
+```
+</CodeBlock>
+
+### getSqlType [#getsqltype]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo Buffer_Namespace::Buffer::getSqlType() const
+```
+</CodeBlock>
+
+### setSqlType [#setsqltype]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::setSqlType(
+    const SQLTypeInfo &sql_type
+)
+```
+</CodeBlock>
+
+### getEncoder [#getencoder]
+
+<CodeBlock links={{"Buffer": "buffer", "Encoder": "../../classes/encoder", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+Encoder * Buffer_Namespace::Buffer::getEncoder() const
+```
+</CodeBlock>
+
+### setDirty [#setdirty]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::setDirty()
+```
+</CodeBlock>
+
+### setUpdated [#setupdated]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::setUpdated()
+```
+</CodeBlock>
+
+### setAppended [#setappended]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::setAppended()
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::setSize(
+    const size_t size
+)
+```
+</CodeBlock>
+
+### clearDirtyBits [#cleardirtybits]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::clearDirtyBits()
+```
+</CodeBlock>
+
+### initEncoder [#initencoder]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::initEncoder(
+    const SQLTypeInfo &tmp_sql_type
+)
+```
+</CodeBlock>
+
+### syncEncoder [#syncencoder]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::syncEncoder(
+    const AbstractBuffer *src_buffer
+)
+```
+</CodeBlock>
+
+### copyTo [#copyto]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::copyTo(
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes = 0
+)
+```
+</CodeBlock>
+
+### resetToEmpty [#resettoempty]
+
+<CodeBlock links={{"Buffer": "buffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::resetToEmpty()
+```
+</CodeBlock>
+
+### setMetadata [#setmetadata]
+
+<CodeBlock links={{"Buffer": "buffer", "ChunkMetadata": "../../structs/chunkmetadata", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::Buffer::setMetadata(
+    const ChunkMetadata &meta
+)
+```
+</CodeBlock>
+
+### readData [#readdata]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+virtual void Buffer_Namespace::Buffer::readData(
+    int8_t *const dst,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel dst_buffer_type = CPU_LEVEL,
+    const int dst_device_id = -1
+)
+```
+</CodeBlock>
+
+### writeData [#writedata]
+
+<CodeBlock links={{"Buffer": "buffer"}}>
+```cpp showLineNumbers={false}
+virtual void Buffer_Namespace::Buffer::writeData(
+    int8_t *const src,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel src_buffer_type = CPU_LEVEL,
+    const int src_device_id = -1
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `mem_` | `int8_t *` | |
+| `encoder_` | `std::unique_ptr< Encoder >` | |
+| `sql_type_` | `SQLTypeInfo` | |
+| `size_` | `size_t` | |
+| `device_id_` | `int` | |
+| `bm_` | `BufferMgr *` | |
+| `seg_it_` | `BufferList::iterator` | |
+| `page_size_` | `size_t` | |
+| `num_pages_` | `size_t` | the size of each page in the buffer |
+| `epoch_` | `int` | |
+| `page_dirty_flags_` | `std::vector< bool >` | indicates when the buffer was last flushed |
+| `pin_count_` | `int` | |
+| `pin_mutex_` | `std::mutex` | |

@@ -1,0 +1,16 @@
+---
+title: TableFunctionManager_get_metadata
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST void TableFunctionManager_get_metadata(
+    int8_t *mgr_ptr,
+    const char *key,
+    const uint8_t *&raw_bytes,
+    size_t &num_bytes,
+    TableFunctionMetadataType &value_type
+)
+```
+</CodeBlock>

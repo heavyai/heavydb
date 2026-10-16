@@ -1,0 +1,156 @@
+---
+title: RexAbstractInput
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RexScalar` (public)
+
+---
+
+## Constructors
+
+### RexAbstractInput [#rexabstractinput]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+RexAbstractInput::RexAbstractInput()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+RexAbstractInput::RexAbstractInput(
+    const unsigned in_index
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexAbstractInput::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexAbstractInput::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### getIndex [#getindex]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+unsigned RexAbstractInput::getIndex() const
+```
+</CodeBlock>
+
+### setIndex [#setindex]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+void RexAbstractInput::setIndex(
+    const unsigned in_index
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexAbstractInput::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual size_t Rex::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+size_t Rex::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+size_t RexAbstractInput::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `in_index_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

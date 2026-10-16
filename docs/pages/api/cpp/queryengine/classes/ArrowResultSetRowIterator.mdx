@@ -1,0 +1,104 @@
+---
+title: ArrowResultSetRowIterator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ArrowResultSet.h>
+```
+
+---
+
+## Constructors
+
+### ArrowResultSetRowIterator [#arrowresultsetrowiterator]
+
+<CodeBlock links={{"ArrowResultSetRowIterator": "arrowresultsetrowiterator", "ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetRowIterator::ArrowResultSetRowIterator(
+    const ArrowResultSet *rs
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"ArrowResultSetRowIterator": "arrowresultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+bool ArrowResultSetRowIterator::operator==(
+    const ArrowResultSetRowIterator &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"ArrowResultSetRowIterator": "arrowresultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+bool ArrowResultSetRowIterator::operator!=(
+    const ArrowResultSetRowIterator &other
+) const
+```
+</CodeBlock>
+
+### operator* [#operator_mul]
+
+<CodeBlock links={{"ArrowResultSetRowIterator": "arrowresultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetRowIterator::value_type ArrowResultSetRowIterator::operator*() const
+```
+</CodeBlock>
+
+### operator++ [#operator_inc]
+
+<Tabs>
+<Tab title="Pre-increment">
+
+<CodeBlock links={{"ArrowResultSetRowIterator": "arrowresultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetRowIterator & ArrowResultSetRowIterator::operator++(
+    void
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Post-increment">
+
+<CodeBlock links={{"ArrowResultSetRowIterator": "arrowresultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetRowIterator ArrowResultSetRowIterator::operator++(
+    int
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `value_type` | `std::vector< TargetValue >` |
+| `difference_type` | `std::ptrdiff_t` |
+| `pointer` | `std::vector< TargetValue > *` |
+| `reference` | `std::vector< TargetValue > &` |
+| `iterator_category` | `std::input_iterator_tag` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `result_set_` | `const ArrowResultSet *` | |
+| `crt_row_idx_` | `size_t` | |

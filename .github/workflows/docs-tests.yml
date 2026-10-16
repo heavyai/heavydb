@@ -1,0 +1,163 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Tests for the Fern documentation site (fern/, docs/pages/, docs/images/).
+# Manual dispatch only for now, matching dev-tools-tests.yml.
+#
+# Jobs:
+#   fern-check   — validates fern/docs.yml and every page (`fern check`)
+#   api-generate — regenerates the C++ API reference pages from source
+#                  (`fern docs md generate --local`, requires Docker) and
+#                  fails if that changes any committed file, catching pages
+#                  that drifted from the source they were generated from
+#   preview      — when dispatched with pr_number (e.g. via `/test docs`),
+#                  builds a stable Fern preview link (--id pr-<number>) and
+#                  posts/updates a comment on the PR with it. Requires the
+#                  FERN_TOKEN repository secret.
+
+name: docs tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha1:
+        description: "PR head SHA to report status on (leave empty for manual runs)"
+        default: ""
+      pr_number:
+        description: "PR number (leave empty to skip posting a preview comment)"
+        default: ""
+
+permissions:
+  contents: read
+  statuses: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  fern-check:
+    name: Fern docs validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Check out the PR head when dispatched with sha1 (e.g. via
+          # `/test docs`); fall back to the dispatch ref for manual runs.
+          ref: ${{ inputs.sha1 || github.sha }}
+
+      - name: Install Fern CLI
+        run: npm install -g fern-api
+
+      - name: fern check
+        run: cd fern && fern check
+
+  api-generate:
+    name: C++ API reference drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.sha1 || github.sha }}
+
+      - name: Install Fern CLI
+        run: npm install -g fern-api
+
+      - name: Regenerate C++ API reference pages
+        run: cd fern && fern docs md generate --local
+
+      - name: Fail if regeneration changed committed pages
+        run: |
+          if ! git diff --quiet -- docs/pages/api/cpp; then
+            echo "::error::docs/pages/api/cpp is out of date. Run 'dev-tools/dev.sh build docs --regenerate-api' and commit the result." >&2
+            git diff --stat -- docs/pages/api/cpp >&2
+            exit 1
+          fi
+
+  preview:
+    name: Docs preview
+    needs: fern-check
+    # Only when dispatched with a PR number (manual runs via workflow_dispatch
+    # with no pr_number just validate, they don't need a preview comment).
+    if: inputs.pr_number != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.sha1 || github.sha }}
+
+      - name: Install Fern CLI
+        run: npm install -g fern-api
+
+      - name: Generate preview
+        id: preview
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+        run: |
+          cd fern
+          output=$(fern generate --docs --preview --id "pr-${{ inputs.pr_number }}")
+          echo "$output"
+          url=$(echo "$output" | grep -Eo 'https://[^[:space:]]+' | head -1)
+          if [ -z "$url" ]; then
+            echo "::error::Could not parse a preview URL from 'fern generate --docs --preview' output" >&2
+            exit 1
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview link on PR
+        uses: actions/github-script@v9
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.url }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = Number(process.env.PR_NUMBER);
+            // Hidden marker so re-running `/test docs` updates this same
+            // comment in place instead of piling up new ones.
+            const marker = '<!-- docs-preview-comment -->';
+            const body = `${marker}\n📖 **Docs preview:** ${process.env.PREVIEW_URL}\n\nUpdated by \`/test docs\`.`;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: prNumber });
+            const existing = comments.find(c => c.body.includes(marker));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: prNumber, body });
+            }
+
+  report:
+    name: report-status
+    needs: [fern-check, api-generate, preview]
+    if: always() && inputs.sha1 != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        env:
+          INPUT_SHA1: ${{ inputs.sha1 }}
+          FERN_CHECK_RESULT: ${{ needs.fern-check.result }}
+          API_GENERATE_RESULT: ${{ needs.api-generate.result }}
+          PREVIEW_RESULT: ${{ needs.preview.result }}
+        with:
+          script: |
+            const sha = process.env.INPUT_SHA1;
+            // 'skipped' counts as passing — a job can be skipped intentionally
+            // (e.g. via a future `if:` condition) without failing the overall check.
+            const ok = r => r === 'success' || r === 'skipped';
+            const state = ok(process.env.FERN_CHECK_RESULT) && ok(process.env.API_GENERATE_RESULT) && ok(process.env.PREVIEW_RESULT)
+              ? 'success' : 'failure';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha,
+              state,
+              context: 'docs tests',
+              description: state === 'success' ? 'All docs tests passed' : 'docs tests failed',
+            });

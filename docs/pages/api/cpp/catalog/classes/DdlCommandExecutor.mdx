@@ -1,0 +1,160 @@
+---
+title: DdlCommandExecutor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+---
+
+## Constructors
+
+### DdlCommandExecutor [#ddlcommandexecutor]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+DdlCommandExecutor::DdlCommandExecutor(
+    const std::string &ddl_statement,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+ExecutionResult DdlCommandExecutor::execute(
+    bool read_only_mode
+)
+```
+</CodeBlock>
+
+Parses given JSON string and routes resulting payload to appropriate DDL command class for execution.
+
+### isShowUserSessions [#isshowusersessions]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+bool DdlCommandExecutor::isShowUserSessions() const
+```
+</CodeBlock>
+
+Returns true if this command is SHOW USER SESSIONS.
+
+### isShowQueries [#isshowqueries]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+bool DdlCommandExecutor::isShowQueries() const
+```
+</CodeBlock>
+
+Returns true if this command is SHOW QUERIES.
+
+### isKillQuery [#iskillquery]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+bool DdlCommandExecutor::isKillQuery() const
+```
+</CodeBlock>
+
+Returns true if this command is KILL QUERY.
+
+### isAlterSystemClear [#isaltersystemclear]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+bool DdlCommandExecutor::isAlterSystemClear() const
+```
+</CodeBlock>
+
+Returns true if this command is ALTER SYSTEM CLEAR.
+
+### isAlterSessionSet [#isaltersessionset]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+bool DdlCommandExecutor::isAlterSessionSet() const
+```
+</CodeBlock>
+
+Returns true if this command is ALTER SESSION SET.
+
+### returnCacheType [#returncachetype]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+std::string DdlCommandExecutor::returnCacheType() const
+```
+</CodeBlock>
+
+Returns which kind of caches to clear if ALTER SYSTEM CLEAR.
+
+### isAlterSystemControlExecutorQueue [#isaltersystemcontrolexecutorqueue]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+bool DdlCommandExecutor::isAlterSystemControlExecutorQueue() const
+```
+</CodeBlock>
+
+Returns true if this command is ALTER SYSTEM PAUSE|RESUME EXECUTOR QUEUE.
+
+### returnQueueAction [#returnqueueaction]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+std::string DdlCommandExecutor::returnQueueAction() const
+```
+</CodeBlock>
+
+Returns whether PAUSE or RESUME request has been delivered to ALTER SYSTEM &lt;CONTROL&gt; EXECUTOR qUEUE.
+
+### getTargetQuerySessionToKill [#gettargetquerysessiontokill]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+const std::string DdlCommandExecutor::getTargetQuerySessionToKill() const
+```
+</CodeBlock>
+
+Returns target query session if this command is KILL QUERY.
+
+### commandStr [#commandstr]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+const std::string DdlCommandExecutor::commandStr() const
+```
+</CodeBlock>
+
+Returns command string, can be useful for logging, conversion.
+
+### getSessionParameter [#getsessionparameter]
+
+<CodeBlock links={{"DdlCommandExecutor": "ddlcommandexecutor"}}>
+```cpp showLineNumbers={false}
+std::pair<std::string, std::string> DdlCommandExecutor::getSessionParameter() const
+```
+</CodeBlock>
+
+Returns name and value of a Session parameter.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_statement_` | `std::string` | |
+| `ddl_command_` | `std::string` | |
+| `ddl_data_` | `std::unique_ptr< DdlCommandData >` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

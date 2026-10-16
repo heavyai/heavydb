@@ -1,0 +1,53 @@
+---
+title: DeviceKernel
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DeviceKernel.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~DeviceKernel
+
+<CodeBlock links={{"DeviceKernel": "devicekernel"}}>
+```cpp showLineNumbers={false}
+virtual DeviceKernel::~DeviceKernel() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### launch [#launch]
+
+<CodeBlock links={{"DeviceKernel": "devicekernel", "CompilationResult": "../structs/compilationresult", "KernelParamsLog": "../structs/kernelparamslog"}}>
+```cpp showLineNumbers={false}
+virtual void DeviceKernel::launch(
+    unsigned int grid_dim_x,
+    unsigned int grid_dim_y,
+    unsigned int grid_dim_z,
+    unsigned int block_dim_x,
+    unsigned int block_dim_y,
+    unsigned int block_dim_z,
+    CompilationResult const &compilation_result,
+    void **kernel_params,
+    KernelParamsLog const &,
+    bool optimize_block_and_grid_sizes
+)
+```
+</CodeBlock>
+
+### name [#name]
+
+<CodeBlock links={{"DeviceKernel": "devicekernel"}}>
+```cpp showLineNumbers={false}
+virtual char const  * DeviceKernel::name() const
+```
+</CodeBlock>

@@ -1,0 +1,166 @@
+---
+title: getExpressionRange
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::BinOper *expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Executor *,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::Constant *expr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::ColumnVar *col_expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Executor *executor,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::StringOper *string_oper_expr,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::LikeExpr *like_expr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::CaseExpr *case_expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Executor *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::UOper *u_expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Executor *,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::ExtractExpr *extract_expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Executor *,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::DatetruncExpr *datetrunc_expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Executor *executor,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::WidthBucketExpr *width_bucket_expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Executor *executor,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::Expr *expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Executor *executor,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock links={{"InputTableInfo": "../structs/inputtableinfo", "Executor": "../classes/executor", "ExpressionRange": "../classes/expressionrange"}}>
+```cpp showLineNumbers={false}
+ExpressionRange getExpressionRange(
+    const Analyzer::Expr *,
+    const std::vector<InputTableInfo> &,
+    const Executor *,
+    boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>>=boost::none
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

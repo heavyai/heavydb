@@ -1,0 +1,254 @@
+---
+title: double_sort::Iterator
+description: ""
+---
+
+<CodeBlock id="Iterator" links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+template <typename T0, typename T1>
+struct Iterator
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <double_sort/DoubleSort.h>
+```
+
+**Template parameters**
+
+<ParamField path="T0" type="typename">
+</ParamField>
+
+<ParamField path="T1" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### Iterator [#iterator]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+double_sort::Iterator<T0, T1>::Iterator(
+    T0 *ptr0,
+    T1 *ptr1
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+double_sort::Iterator<T0, T1>::Iterator(
+    Iterator const &b
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+double_sort::Iterator<T0, T1>::Iterator(
+    Iterator &&b
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<Tabs>
+<Tab title="Copy assign">
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+Iterator & double_sort::Iterator<T0, T1>::operator=(
+    Iterator const &b
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move assign">
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+Iterator & double_sort::Iterator<T0, T1>::operator=(
+    Iterator &&b
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator* [#operator_mul]
+
+<CodeBlock links={{"Iterator": "iterator", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Value<T0, T1> & double_sort::Iterator<T0, T1>::operator*() const
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"Iterator": "iterator", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Value<T0, T1> double_sort::Iterator<T0, T1>::operator[](
+    int i
+) const
+```
+</CodeBlock>
+
+### operator++ [#operator_inc]
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+Iterator & double_sort::Iterator<T0, T1>::operator++()
+```
+</CodeBlock>
+
+### operator+= [#operator_plus_assign]
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+Iterator & double_sort::Iterator<T0, T1>::operator+=(
+    int i
+)
+```
+</CodeBlock>
+
+### operator-- [#operator_dec]
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+Iterator & double_sort::Iterator<T0, T1>::operator--()
+```
+</CodeBlock>
+
+### operator- [#operator_minus]
+
+<Tabs>
+<Tab title="Const (with b)">
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+auto double_sort::Iterator<T0, T1>::operator-(
+    Iterator const &b
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with i)">
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+Iterator double_sort::Iterator<T0, T1>::operator-(
+    int i
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator+ [#operator_plus]
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+Iterator double_sort::Iterator<T0, T1>::operator+(
+    int i
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+bool double_sort::Iterator<T0, T1>::operator==(
+    Iterator const &b
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+bool double_sort::Iterator<T0, T1>::operator!=(
+    Iterator const &b
+) const
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+bool double_sort::Iterator<T0, T1>::operator<(
+    Iterator const &b
+) const
+```
+</CodeBlock>
+
+### operator&gt; [#operator_gt]
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+bool double_sort::Iterator<T0, T1>::operator>(
+    Iterator const &b
+) const
+```
+</CodeBlock>
+
+### operator&gt;= [#operator_ge]
+
+<CodeBlock links={{"Iterator": "iterator"}}>
+```cpp showLineNumbers={false}
+bool double_sort::Iterator<T0, T1>::operator>=(
+    Iterator const &b
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `iterator_category` | `std::input_iterator_tag` |
+| `value_type` | `Value< T0, T1 >` |
+| `difference_type` | `std::ptrdiff_t` |
+| `pointer` | `value_type *` |
+| `reference` | `value_type &` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `this_` | `Value< T0, T1 >` | |

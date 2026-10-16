@@ -1,0 +1,21 @@
+---
+title: range_mode_int16_t_int16_t_int64_t_sub_frame_upper_bound
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE int64_t range_mode_int16_t_int16_t_int64_t_sub_frame_upper_bound(
+    const int64_t num_elems,
+    const int16_t target_value,
+    const int16_t *col_buf,
+    const int32_t *partition_rowid_buf,
+    const int64_t *ordered_index_buf,
+    const int64_t frame_bound_val,
+    const int64_t null_val,
+    const bool nulls_first,
+    const int64_t null_start_pos,
+    const int64_t null_end_pos
+)
+```
+</CodeBlock>

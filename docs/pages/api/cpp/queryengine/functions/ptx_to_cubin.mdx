@@ -1,0 +1,16 @@
+---
+title: ptx_to_cubin
+description: "Compile and link PTX from the LLVM NVPTX backend with the CUDA runtime module and device linker to create executable GPU device code."
+---
+
+<CodeBlock links={{"CubinResult": "../structs/cubinresult"}}>
+```cpp showLineNumbers={false}
+CubinResult ptx_to_cubin(
+    const std::string &ptx,
+    const CudaMgr_Namespace::CudaMgr *cuda_mgr,
+    int const device_id
+)
+```
+</CodeBlock>
+
+Compile and link PTX from the LLVM NVPTX backend with the CUDA runtime module and device linker to create executable GPU device code.

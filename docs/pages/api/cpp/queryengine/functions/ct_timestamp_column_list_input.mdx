@@ -1,0 +1,15 @@
+---
+title: ct_timestamp_column_list_input
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Column": "../structs/column", "Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_timestamp_column_list_input(
+    TableFunctionManager &mgr,
+    const ColumnList<int64_t> &input,
+    const Column<Timestamp> &input2,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>

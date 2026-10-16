@@ -1,0 +1,15 @@
+---
+title: translate_function
+description: ""
+---
+
+<CodeBlock links={{"Function": "../classes/function", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+void translate_function(
+    const Function *function,
+    llvm::Function *llvm_function,
+    const ReductionCode &reduction_code,
+    const std::unordered_map<const Function *, llvm::Function *> &f
+)
+```
+</CodeBlock>

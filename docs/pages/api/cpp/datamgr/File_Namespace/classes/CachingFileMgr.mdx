@@ -1,0 +1,1791 @@
+---
+title: File_Namespace::CachingFileMgr
+description: "A FileMgr capable of limiting it's size and storing data from multiple tables in a shared directory."
+---
+
+A [FileMgr](filemgr) capable of limiting it's size and storing data from multiple tables in a shared directory.
+
+For any table that supports DiskCaching, the `CachingFileMgr` must contain either metadata for all table chunks, or for none (the cache is either has no knowledge of that table, or has complete knowledge of that table). Any data chunk within a table may or may not be contained within the cache.
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/CachingFileMgr.h>
+```
+
+**Inherits from:** `File_Namespace::FileMgr` (public)
+
+---
+
+## Constructors
+
+### CachingFileMgr [#cachingfilemgr]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "DiskCacheConfig": "../structs/diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+File_Namespace::CachingFileMgr::CachingFileMgr(
+    const DiskCacheConfig &config
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~CachingFileMgr
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+File_Namespace::CachingFileMgr::~CachingFileMgr() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getMgrType [#getmgrtype]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+MgrType File_Namespace::CachingFileMgr::getMgrType() override
+```
+</CodeBlock>
+
+### getStringMgrType [#getstringmgrtype]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::getStringMgrType() override
+```
+</CodeBlock>
+
+### getPageSize [#getpagesize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getPageSize() const
+```
+</CodeBlock>
+
+### getMaxSize [#getmaxsize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getMaxSize() const override
+```
+</CodeBlock>
+
+### getMaxDataFiles [#getmaxdatafiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getMaxDataFiles() const
+```
+</CodeBlock>
+
+### getMaxMetaFiles [#getmaxmetafiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getMaxMetaFiles() const
+```
+</CodeBlock>
+
+### getMaxWrapperSize [#getmaxwrappersize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getMaxWrapperSize() const
+```
+</CodeBlock>
+
+### getDataFileSize [#getdatafilesize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getDataFileSize() const
+```
+</CodeBlock>
+
+### getMetadataFileSize [#getmetadatafilesize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getMetadataFileSize() const
+```
+</CodeBlock>
+
+### getNumDataFiles [#getnumdatafiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getNumDataFiles() const
+```
+</CodeBlock>
+
+### getNumMetaFiles [#getnummetafiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getNumMetaFiles() const
+```
+</CodeBlock>
+
+### getAvailableSpace [#getavailablespace]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getAvailableSpace()
+```
+</CodeBlock>
+
+### getAvailableWrapperSpace [#getavailablewrapperspace]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getAvailableWrapperSpace()
+```
+</CodeBlock>
+
+### getAllocated [#getallocated]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getAllocated() const override
+```
+</CodeBlock>
+
+### getMaxDataFilesSize [#getmaxdatafilessize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getMaxDataFilesSize() const
+```
+</CodeBlock>
+
+### removeChunkKeepMetadata [#removechunkkeepmetadata]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::removeChunkKeepMetadata(
+    const ChunkKey &key
+)
+```
+</CodeBlock>
+
+Free pages for chunk and remove it from the chunk eviction algorithm.
+
+### clearForTable [#clearfortable]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::clearForTable(
+    int32_t db_id,
+    int32_t tb_id
+)
+```
+</CodeBlock>
+
+Removes all data related to the given table (pages and subdirectories).
+
+### hasFileMgrKey [#hasfilemgrkey]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileMgr::hasFileMgrKey() const override
+```
+</CodeBlock>
+
+Query to determine if the contained pages will have their database and table ids overriden by the filemgr key ([FileMgr](filemgr) does this).
+
+### closeRemovePhysical [#closeremovephysical]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::closeRemovePhysical() override
+```
+</CodeBlock>
+
+Closes files and removes the caching directory.
+
+### getChunkSpaceReservedByTable [#getchunkspacereservedbytable]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getChunkSpaceReservedByTable(
+    int32_t db_id,
+    int32_t tb_id
+) const
+```
+</CodeBlock>
+
+Set of functions to determine how much space is reserved in a table by type.
+
+### getMetadataSpaceReservedByTable [#getmetadataspacereservedbytable]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getMetadataSpaceReservedByTable(
+    int32_t db_id,
+    int32_t tb_id
+) const
+```
+</CodeBlock>
+
+### getTableFileMgrSpaceReserved [#gettablefilemgrspacereserved]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getTableFileMgrSpaceReserved(
+    int32_t db_id,
+    int32_t tb_id
+) const
+```
+</CodeBlock>
+
+### getSpaceReservedByTable [#getspacereservedbytable]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getSpaceReservedByTable(
+    int32_t db_id,
+    int32_t tb_id
+) const
+```
+</CodeBlock>
+
+### describeSelf [#describeself]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::describeSelf() const override
+```
+</CodeBlock>
+
+describes this [FileMgr](filemgr) for logging purposes.
+
+### checkpoint [#checkpoint]
+
+<Tabs>
+<Tab title="Writes buffers for the given table">
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::checkpoint(
+    const int32_t db_id,
+    const int32_t tb_id
+) override
+```
+</CodeBlock>
+
+writes buffers for the given table, synchronizes files to disk, updates file epoch, and commits free pages.
+
+</Tab>
+<Tab title="Fsyncs data files">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::checkpoint() override
+```
+</CodeBlock>
+
+Fsyncs data files, writes out epoch and fsyncs that.
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBufferMgr::checkpoint(
+    const int db_id,
+    const int tb_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### epoch [#epoch]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::CachingFileMgr::epoch(
+    int32_t db_id,
+    int32_t tb_id
+) const override
+```
+</CodeBlock>
+
+obtain the epoch version for the given table.
+
+### putBuffer [#putbuffer]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "AbstractBuffer": "../../classes/abstractbuffer", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+FileBuffer * File_Namespace::CachingFileMgr::putBuffer(
+    const ChunkKey &key,
+    AbstractBuffer *srcBuffer,
+    const size_t numBytes = 0
+) override
+```
+</CodeBlock>
+
+deletes any existing buffer for the given key then copies in a new one.
+
+putBuffer() needs to behave differently than it does in [FileMgr](filemgr).
+
+Specifically, it needs to delete the buffer beforehand and then append, rather than overwrite the existing buffer. This way we only store a single version of the buffer rather than accumulating versions that need to be rolled off.
+
+### allocateBuffer [#allocatebuffer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "CachingFileBuffer": "cachingfilebuffer"}}>
+```cpp showLineNumbers={false}
+CachingFileBuffer * File_Namespace::CachingFileMgr::allocateBuffer(
+    const size_t page_size,
+    const ChunkKey &key,
+    const size_t num_bytes = 0
+) override
+```
+</CodeBlock>
+
+allocates a new [CachingFileBuffer](cachingfilebuffer) and tracks it's use in the eviction algorithms.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "HeaderInfo": "../structs/headerinfo", "CachingFileBuffer": "cachingfilebuffer"}}>
+```cpp showLineNumbers={false}
+CachingFileBuffer * File_Namespace::CachingFileMgr::allocateBuffer(
+    const ChunkKey &key,
+    const std::vector<HeaderInfo>::const_iterator &headerStartIt,
+    const std::vector<HeaderInfo>::const_iterator &headerEndIt
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### updatePageIfDeleted [#updatepageifdeleted]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileInfo": "../structs/fileinfo"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileMgr::updatePageIfDeleted(
+    FileInfo *file_info,
+    ChunkKey &chunk_key,
+    int32_t contingent,
+    int32_t page_epoch,
+    int32_t page_num
+) override
+```
+</CodeBlock>
+
+checks whether a page should be deleted.
+
+### failOnReadError [#failonreaderror]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileMgr::failOnReadError() const override
+```
+</CodeBlock>
+
+True if a read error should cause a fatal error.
+
+### deleteBufferIfExists [#deletebufferifexists]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::deleteBufferIfExists(
+    const ChunkKey &key
+)
+```
+</CodeBlock>
+
+deletes a buffer if it exists in the mgr.
+
+Otherwise do nothing.
+
+### getNumChunksWithMetadata [#getnumchunkswithmetadata]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getNumChunksWithMetadata() const
+```
+</CodeBlock>
+
+Returns the number of buffers with metadata in the CFM.
+
+Any buffer with an encoder counts.
+
+### getNumDataChunks [#getnumdatachunks]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getNumDataChunks() const
+```
+</CodeBlock>
+
+Returns the number of buffers with chunk data in the CFM.
+
+### getChunkKeysForPrefix [#getchunkkeysforprefix]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::vector<ChunkKey> File_Namespace::CachingFileMgr::getChunkKeysForPrefix(
+    const ChunkKey &prefix
+) const
+```
+</CodeBlock>
+
+Returns the keys for chunks with chunk data that match the given prefix.
+
+### reconstruct [#reconstruct]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<CachingFileMgr> File_Namespace::CachingFileMgr::reconstruct() const
+```
+</CodeBlock>
+
+Initializes a new CFM using the initialization values in the current CFM.
+
+### deleteWrapperFile [#deletewrapperfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::deleteWrapperFile(
+    int32_t db,
+    int32_t tb
+)
+```
+</CodeBlock>
+
+Deletes the wrapper file from a table subdir.
+
+### writeWrapperFile [#writewrapperfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::writeWrapperFile(
+    const std::string &doc,
+    int32_t db,
+    int32_t tb
+)
+```
+</CodeBlock>
+
+Writes a wrapper file to a table subdir.
+
+### hasWrapperFile [#haswrapperfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileMgr::hasWrapperFile(
+    int32_t db_id,
+    int32_t table_id
+) const
+```
+</CodeBlock>
+
+Checks if data wrapper file has been written to disk/cached.
+
+### getTableFileMgrPath [#gettablefilemgrpath]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::getTableFileMgrPath(
+    int32_t db,
+    int32_t tb
+) const
+```
+</CodeBlock>
+
+### getFilesSize [#getfilessize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getFilesSize() const
+```
+</CodeBlock>
+
+Get the total size of page files (data and metadata files).
+
+This includes allocated, but unused space.
+
+### getTableFileMgrsSize [#gettablefilemgrssize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getTableFileMgrsSize() const
+```
+</CodeBlock>
+
+Returns the total size of all subdirectory files.
+
+Each table represented in the CFM has a subdirectory for serialized data wrappers and epoch files.
+
+### getBufferIfExists [#getbufferifexists]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+std::optional<FileBuffer *> File_Namespace::CachingFileMgr::getBufferIfExists(
+    const ChunkKey &key
+)
+```
+</CodeBlock>
+
+an optional version of get buffer if we are not sure a chunk exists.
+
+### free_page [#freepage]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileInfo": "../structs/fileinfo"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::free_page(
+    std::pair<FileInfo *, int32_t> &&page
+) override
+```
+</CodeBlock>
+
+Unlike the [FileMgr](filemgr), the CFM frees pages immediately instead of holding them until the next checkpoint.
+
+### getChunkMetadataVecForKeyPrefix [#getchunkmetadatavecforkeyprefix]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::getChunkMetadataVecForKeyPrefix(
+    ChunkMetadataVector &chunkMetadataVec,
+    const ChunkKey &keyPrefix
+) override
+```
+</CodeBlock>
+
+### dumpKeysWithMetadata [#dumpkeyswithmetadata]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::dumpKeysWithMetadata() const
+```
+</CodeBlock>
+
+### dumpKeysWithChunkData [#dumpkeyswithchunkdata]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::dumpKeysWithChunkData() const
+```
+</CodeBlock>
+
+### dumpTableQueue [#dumptablequeue]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::dumpTableQueue() const
+```
+</CodeBlock>
+
+### dumpEvictionQueue [#dumpevictionqueue]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::dumpEvictionQueue() const
+```
+</CodeBlock>
+
+### dump [#dump]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::dump() const
+```
+</CodeBlock>
+
+### setMaxNumDataFiles [#setmaxnumdatafiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::setMaxNumDataFiles(
+    size_t max
+)
+```
+</CodeBlock>
+
+### setMaxNumMetadataFiles [#setmaxnummetadatafiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::setMaxNumMetadataFiles(
+    size_t max
+)
+```
+</CodeBlock>
+
+### setMaxWrapperSpace [#setmaxwrapperspace]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::setMaxWrapperSpace(
+    size_t max
+)
+```
+</CodeBlock>
+
+### getKeysWithMetadata [#getkeyswithmetadata]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::set<ChunkKey> File_Namespace::CachingFileMgr::getKeysWithMetadata() const
+```
+</CodeBlock>
+
+### setDataSizeLimit [#setdatasizelimit]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::setDataSizeLimit(
+    size_t max
+)
+```
+</CodeBlock>
+
+### requestFreePage [#requestfreepage]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "Page": "../structs/page"}}>
+```cpp showLineNumbers={false}
+Page File_Namespace::CachingFileMgr::requestFreePage(
+    size_t pagesize,
+    const bool isMetadata
+) override
+```
+</CodeBlock>
+
+requests a free page similar to [FileMgr](filemgr), but this override will also evict existing pages to make space if there are none available.
+
+### getStorageStats [#getstoragestats]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "StorageStats": "../structs/storagestats", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+StorageStats File_Namespace::CachingFileMgr::getStorageStats() const
+```
+</CodeBlock>
+
+### createBuffer [#createbuffer]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileBuffer": "filebuffer", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileBuffer * File_Namespace::CachingFileMgr::createBuffer(
+    const ChunkKey &key,
+    size_t pageSize = 0,
+    const size_t numBytes = 0
+) override
+```
+</CodeBlock>
+
+Creates a chunk with the specified key and page size.
+
+### isBufferOnDevice [#isbufferondevice]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileMgr::isBufferOnDevice(
+    const ChunkKey &key
+) override
+```
+</CodeBlock>
+
+### deleteBuffer [#deletebuffer]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::deleteBuffer(
+    const ChunkKey &key,
+    const bool purge = true
+) override
+```
+</CodeBlock>
+
+Deletes the chunk with the specified key.
+
+### deleteBuffersWithPrefix [#deletebufferswithprefix]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::deleteBuffersWithPrefix(
+    const ChunkKey &keyPrefix,
+    const bool purge = true
+) override
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileBuffer": "filebuffer", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileBuffer * File_Namespace::CachingFileMgr::getBuffer(
+    const ChunkKey &key,
+    const size_t numBytes = 0
+) override
+```
+</CodeBlock>
+
+Returns the a pointer to the chunk with the specified key.
+
+### fetchBuffer [#fetchbuffer]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "AbstractBuffer": "../../classes/abstractbuffer", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::fetchBuffer(
+    const ChunkKey &key,
+    AbstractBuffer *destBuffer,
+    const size_t numBytes
+) override
+```
+</CodeBlock>
+
+### alloc [#alloc]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "AbstractBuffer": "../../classes/abstractbuffer", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * File_Namespace::CachingFileMgr::alloc(
+    const size_t numBytes
+) override
+```
+</CodeBlock>
+
+### free [#free]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "AbstractBuffer": "../../classes/abstractbuffer", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::free(
+    AbstractBuffer *buffer
+) override
+```
+</CodeBlock>
+
+### printSlabs [#printslabs]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::printSlabs() override
+```
+</CodeBlock>
+
+### getInUseSize [#getinusesize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getInUseSize() const override
+```
+</CodeBlock>
+
+### isAllocationCapped [#isallocationcapped]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileMgr::isAllocationCapped() const override
+```
+</CodeBlock>
+
+### getFileInfoForFileId [#getfileinfoforfileid]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileInfo": "../structs/fileinfo", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileInfo * File_Namespace::CachingFileMgr::getFileInfoForFileId(
+    const int32_t fileId
+) const
+```
+</CodeBlock>
+
+### getMetadataForFile [#getmetadataforfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMetadata": "../structs/filemetadata", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileMetadata File_Namespace::CachingFileMgr::getMetadataForFile(
+    const boost::filesystem::directory_iterator &fileIterator
+) const
+```
+</CodeBlock>
+
+### copyPage [#copypage]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "Page": "../structs/page", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::copyPage(
+    Page &srcPage,
+    FileMgr *destFileMgr,
+    Page &destPage,
+    const size_t reservedHeaderSize,
+    const size_t numBytes,
+    const size_t offset
+)
+```
+</CodeBlock>
+
+### requestFreePages [#requestfreepages]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "Page": "../structs/page", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::requestFreePages(
+    size_t npages,
+    size_t pagesize,
+    std::vector<Page> &pages,
+    const bool isMetadata
+)
+```
+</CodeBlock>
+
+Obtains free pages – creates new files if necessary – of the requested size.
+
+Given a page size and number of pages, this method updates the vector "pages" to include free pages of the requested size. These pages are immediately removed from the free list of the affected file(s). If there are not enough pages available among current files, new files are created and their pages are included in the vector.
+
+**Parameters**
+
+<ParamField path="npages" type="size_t">
+The number of free pages requested
+</ParamField>
+
+<ParamField path="pagesize" type="size_t">
+The size of each requested page
+</ParamField>
+
+<ParamField path="pages" type="std::vector<Page> &">
+A vector containing the free pages obtained by this method
+</ParamField>
+
+### hasChunkMetadataForKeyPrefix [#haschunkmetadataforkeyprefix]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileMgr::hasChunkMetadataForKeyPrefix(
+    const ChunkKey &keyPrefix
+)
+```
+</CodeBlock>
+
+### epochFloor [#epochfloor]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::CachingFileMgr::epochFloor() const
+```
+</CodeBlock>
+
+### incrementEpoch [#incrementepoch]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::CachingFileMgr::incrementEpoch()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Increments epoch for the given table">
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::incrementEpoch(
+    int32_t db_id,
+    int32_t tb_id
+)
+```
+</CodeBlock>
+
+Increments epoch for the given table.
+
+</Tab>
+</Tabs>
+
+### lastCheckpointedEpoch [#lastcheckpointedepoch]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::CachingFileMgr::lastCheckpointedEpoch() const
+```
+</CodeBlock>
+
+Returns value of epoch at last checkpoint.
+
+### resetEpochFloor [#resetepochfloor]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::resetEpochFloor()
+```
+</CodeBlock>
+
+### maxRollbackEpochs [#maxrollbackepochs]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::CachingFileMgr::maxRollbackEpochs()
+```
+</CodeBlock>
+
+Returns value max_rollback_epochs.
+
+### getNumReaderThreads [#getnumreaderthreads]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getNumReaderThreads()
+```
+</CodeBlock>
+
+Returns number of threads defined by parameter num-reader-threads which should be used during initial load and consequent read of data.
+
+### getFileForFileId [#getfileforfileid]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FILE * File_Namespace::CachingFileMgr::getFileForFileId(
+    const int32_t fileId
+)
+```
+</CodeBlock>
+
+Returns FILE pointer associated with requested fileId.
+
+**See also:**
+[FileBuffer](filebuffer)
+
+
+### getNumChunks [#getnumchunks]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getNumChunks() override
+```
+</CodeBlock>
+
+### getNumUsedMetadataPagesForChunkKey [#getnumusedmetadatapagesforchunkkey]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getNumUsedMetadataPagesForChunkKey(
+    const ChunkKey &chunkKey
+) const
+```
+</CodeBlock>
+
+### getDBConvert [#getdbconvert]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::CachingFileMgr::getDBConvert() const
+```
+</CodeBlock>
+
+Index for looking up chunks.
+
+### createOrMigrateTopLevelMetadata [#createormigratetoplevelmetadata]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::createOrMigrateTopLevelMetadata()
+```
+</CodeBlock>
+
+### getFileMgrBasePath [#getfilemgrbasepath]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::CachingFileMgr::getFileMgrBasePath() const
+```
+</CodeBlock>
+
+### removeTableRelatedDS [#removetablerelatedds]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::removeTableRelatedDS(
+    const int32_t db_id,
+    const int32_t table_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+virtual void Data_Namespace::AbstractBufferMgr::removeTableRelatedDS(
+    const int db_id,
+    const int table_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_fileMgrKey [#getfilemgrkey]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+const TablePair File_Namespace::CachingFileMgr::get_fileMgrKey() const
+```
+</CodeBlock>
+
+### getFilePath [#getfilepath]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+boost::filesystem::path File_Namespace::CachingFileMgr::getFilePath(
+    const std::string &file_name
+) const
+```
+</CodeBlock>
+
+### writePageMappingsToStatusFile [#writepagemappingstostatusfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "PageMapping": "../structs/pagemapping", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::writePageMappingsToStatusFile(
+    const std::vector<PageMapping> &page_mappings
+)
+```
+</CodeBlock>
+
+Serializes a page mapping vector to expected status file.
+
+[Page](../structs/page) mapping vector is serialized in the following format: [&#123;page mapping vector size&#125;, &#123;page mapping vector data bytes ...&#125;]
+
+### renameCompactionStatusFile [#renamecompactionstatusfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::renameCompactionStatusFile(
+    const char *const from_status,
+    const char *const to_status
+)
+```
+</CodeBlock>
+
+Renames a given status file name to a new given file name.
+
+### compactFiles [#compactfiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::compactFiles()
+```
+</CodeBlock>
+
+Compacts metadata and data file pages and deletes resulting empty files (if any exists).
+
+Compaction occurs in 3 idempotent phases in order to enable graceful recovery if a crash/process interruption occurs in the middle data compaction.
+
+Phase 1: Create a status file that indicates initiation of this phase. Sort metadata/data files in order of files with the lowest number of free pages to those with the highest number of free pages. Copy over used pages from files at the end of the sorted order (files with the highest number of free pages) to those at the beginning of the sorted order (files with the lowest number of free pages). Keep destination/copied to pages as free while copying. Keep track of copied source to destination page mapping. Write page mapping to the status file (to be used during crash recovery if needed).
+
+Phase 2: Rename status file to a file name that indicates initiation of this phase. Go through page mapping and mark source/copied from pages as free while making the destination/copied to pages as used.
+
+Phase 3: Rename status file to a file name that indicates initiation of this phase. Delete all empty files (files containing only free pages). Delete status file.
+
+### getMetadataPageSize [#getmetadatapagesize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::getMetadataPageSize() const
+```
+</CodeBlock>
+
+### createFile [#createfile]
+
+<Tabs>
+<Tab title="Const (with full path and requested file size)">
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FILE * File_Namespace::CachingFileMgr::createFile(
+    const std::string &full_path,
+    const size_t requested_file_size
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with base path and file id and page size and num pages)">
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+std::pair<FILE *, std::string> File_Namespace::CachingFileMgr::createFile(
+    const std::string &base_path,
+    const int file_id,
+    const size_t page_size,
+    const size_t num_pages
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### writeFile [#writefile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::CachingFileMgr::writeFile(
+    FILE *f,
+    const size_t offset,
+    const size_t size,
+    const int8_t *buf
+) const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+int Data_Namespace::AbstractBufferMgr::getDeviceId()
+```
+</CodeBlock>
+
+### init [#init]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::init(
+    const size_t num_reader_threads
+)
+```
+</CodeBlock>
+
+Initializes a CFM, parsing any existing files and initializing data structures appropriately (currently not thread-safe).
+
+### writeAndSyncEpochToDisk [#writeandsyncepochtodisk]
+
+<Tabs>
+<Tab title="Flushes epoch value to disk for a table">
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::writeAndSyncEpochToDisk(
+    int32_t db_id,
+    int32_t tb_id
+)
+```
+</CodeBlock>
+
+Flushes epoch value to disk for a table.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::writeAndSyncEpochToDisk()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### readTableFileMgrs [#readtablefilemgrs]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::readTableFileMgrs()
+```
+</CodeBlock>
+
+Checks for any sub-directories containing table-specific data and creates epochs from found files.
+
+### createBufferFromHeaders [#createbufferfromheaders]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "HeaderInfo": "../structs/headerinfo", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+FileBuffer * File_Namespace::CachingFileMgr::createBufferFromHeaders(
+    const ChunkKey &key,
+    const std::vector<HeaderInfo>::const_iterator &startIt,
+    const std::vector<HeaderInfo>::const_iterator &endIt
+) override
+```
+</CodeBlock>
+
+Creates a buffer and initializes it with info read from files on disk.
+
+### createBufferUnlocked [#createbufferunlocked]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+FileBuffer * File_Namespace::CachingFileMgr::createBufferUnlocked(
+    const ChunkKey &key,
+    size_t pageSize = 0,
+    const size_t numBytes = 0
+) override
+```
+</CodeBlock>
+
+Creates a buffer.
+
+### createTableFileMgrIfNoneExists [#createtablefilemgrifnoneexists]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::createTableFileMgrIfNoneExists(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+Create and initialize a subdirectory for a table if none exists.
+
+### incrementAllEpochs [#incrementallepochs]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::incrementAllEpochs()
+```
+</CodeBlock>
+
+Increment epochs for each table in the CFM.
+
+### removeTableFileMgr [#removetablefilemgr]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::removeTableFileMgr(
+    int32_t db_id,
+    int32_t tb_id
+)
+```
+</CodeBlock>
+
+Removes the subdirectory content for a table.
+
+### removeTableBuffers [#removetablebuffers]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::removeTableBuffers(
+    int32_t db_id,
+    int32_t tb_id
+)
+```
+</CodeBlock>
+
+Erases and cleans up all buffers for a table.
+
+### writeDirtyBuffers [#writedirtybuffers]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::writeDirtyBuffers(
+    int32_t db_id,
+    int32_t tb_id
+)
+```
+</CodeBlock>
+
+helper function to flush all dirty buffers to disk.
+
+### touchKey [#touchkey]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::touchKey(
+    const ChunkKey &key
+) const
+```
+</CodeBlock>
+
+Used to track which tables/chunks were least recently used.
+
+### removeKey [#removekey]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::removeKey(
+    const ChunkKey &key
+) const
+```
+</CodeBlock>
+
+### getKeysForTable [#getkeysfortable]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+std::vector<ChunkKey> File_Namespace::CachingFileMgr::getKeysForTable(
+    int32_t db_id,
+    int32_t tb_id
+) const
+```
+</CodeBlock>
+
+returns set of keys contained in chunkIndex_ that match the given table prefix.
+
+### evictMetadataPages [#evictmetadatapages]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileInfo": "../structs/fileinfo"}}>
+```cpp showLineNumbers={false}
+FileInfo * File_Namespace::CachingFileMgr::evictMetadataPages()
+```
+</CodeBlock>
+
+evicts all metadata pages for the least recently used table.
+
+Returns the first [FileInfo](../structs/fileinfo) that a page was evicted from (guaranteed to now have at least one free page in it).
+
+### evictPages [#evictpages]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileInfo": "../structs/fileinfo"}}>
+```cpp showLineNumbers={false}
+FileInfo * File_Namespace::CachingFileMgr::evictPages()
+```
+</CodeBlock>
+
+evicts all data pages for the least recently used [Chunk](../typedefs/chunk) (metadata pages persist).
+
+Returns the first [FileInfo](../structs/fileinfo) that a page was evicted from (guaranteed to now have at least one free page in it).
+
+### deleteCacheIfTooLarge [#deletecacheiftoolarge]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::deleteCacheIfTooLarge()
+```
+</CodeBlock>
+
+When the cache is read from disk, we don't know which chunks were least recently used.
+
+Rather than try to evict random pages to get down to size we just reset the cache to make sure we have space.
+
+### setMaxSizes [#setmaxsizes]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::setMaxSizes()
+```
+</CodeBlock>
+
+Sets the maximum number of files/space for each type of storage based on the maximum size.
+
+### getBufferUnlocked [#getbufferunlocked]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileBuffer": "filebuffer"}}>
+```cpp showLineNumbers={false}
+FileBuffer * File_Namespace::CachingFileMgr::getBufferUnlocked(
+    const ChunkKey &key,
+    const size_t numBytes = 0
+) const override
+```
+</CodeBlock>
+
+### deleteBufferUnlocked [#deletebufferunlocked]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+ChunkKeyToChunkMap::iterator File_Namespace::CachingFileMgr::deleteBufferUnlocked(
+    const ChunkKeyToChunkMap::iterator chunk_it,
+    const bool purge = true
+) override
+```
+</CodeBlock>
+
+### readOnlyCheck [#readonlycheck]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::readOnlyCheck(
+    const std::string &action,
+    const std::optional<std::string> &file_name = {}
+) const override
+```
+</CodeBlock>
+
+### createFileInfo [#createfileinfo]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileInfo": "../structs/fileinfo", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileInfo * File_Namespace::CachingFileMgr::createFileInfo(
+    const size_t pageSize,
+    const size_t numPages
+)
+```
+</CodeBlock>
+
+Adds a file to the file manager repository.
+
+This method will create a [FileInfo](../structs/fileinfo) object for the file being added, and it will create the corresponding file on physical disk with the indicated number of pages pre-allocated.
+
+A pointer to the [FileInfo](../structs/fileinfo) object is returned, which itself has a file pointer (FILE*) and a file identifier (int32_t fileId).
+
+**Returns:** FileInfo* A pointer to the [FileInfo](../structs/fileinfo) object of the added file.
+
+**Parameters**
+
+<ParamField path="pageSize" type="const size_t">
+The logical page size for the pages in the file.
+</ParamField>
+
+<ParamField path="numPages" type="const size_t">
+The number of logical pages to initially allocate for the file.
+</ParamField>
+
+### openExistingFile [#openexistingfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "HeaderInfo": "../structs/headerinfo", "FileInfo": "../structs/fileinfo", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileInfo * File_Namespace::CachingFileMgr::openExistingFile(
+    const std::string &path,
+    const int32_t fileId,
+    const size_t pageSize,
+    const size_t numPages,
+    std::vector<HeaderInfo> &headerVec
+)
+```
+</CodeBlock>
+
+### createEpochFile [#createepochfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::createEpochFile(
+    const std::string &epochFileName
+)
+```
+</CodeBlock>
+
+### openAndReadLegacyEpochFile [#openandreadlegacyepochfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::CachingFileMgr::openAndReadLegacyEpochFile(
+    const std::string &epochFileName
+)
+```
+</CodeBlock>
+
+### openAndReadEpochFile [#openandreadepochfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::openAndReadEpochFile(
+    const std::string &epochFileName
+)
+```
+</CodeBlock>
+
+### setEpoch [#setepoch]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::setEpoch(
+    const int32_t newEpoch
+)
+```
+</CodeBlock>
+
+### readVersionFromDisk [#readversionfromdisk]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::CachingFileMgr::readVersionFromDisk(
+    const std::string &versionFileName
+) const
+```
+</CodeBlock>
+
+### writeAndSyncVersionToDisk [#writeandsyncversiontodisk]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::writeAndSyncVersionToDisk(
+    const std::string &versionFileName,
+    const int32_t version
+)
+```
+</CodeBlock>
+
+### processFileFutures [#processfilefutures]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "HeaderInfo": "../structs/headerinfo", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::processFileFutures(
+    std::vector<std::future<std::vector<HeaderInfo>>> &file_futures,
+    std::vector<HeaderInfo> &headerVec
+)
+```
+</CodeBlock>
+
+### migrateToLatestFileMgrVersion [#migratetolatestfilemgrversion]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::migrateToLatestFileMgrVersion()
+```
+</CodeBlock>
+
+### migrateEpochFileV0 [#migrateepochfilev0]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::migrateEpochFileV0()
+```
+</CodeBlock>
+
+### migrateLegacyFilesV1 [#migratelegacyfilesv1]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::migrateLegacyFilesV1()
+```
+</CodeBlock>
+
+### openFiles [#openfiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "OpenFilesResult": "../structs/openfilesresult", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+OpenFilesResult File_Namespace::CachingFileMgr::openFiles()
+```
+</CodeBlock>
+
+### clearFileInfos [#clearfileinfos]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::clearFileInfos()
+```
+</CodeBlock>
+
+### copySourcePageForCompaction [#copysourcepageforcompaction]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "Page": "../structs/page", "FileInfo": "../structs/fileinfo", "PageMapping": "../structs/pagemapping", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::copySourcePageForCompaction(
+    const Page &source_page,
+    FileInfo *destination_file_info,
+    std::vector<PageMapping> &page_mappings,
+    std::set<Page> &touched_pages
+)
+```
+</CodeBlock>
+
+Copies a used page (indicated by the top of the source_used_pages set) from the given source file to a free page in the given destination file.
+
+Source and destination pages are recorded in the given page_mappings vector after copying is done.
+
+### copyPageWithoutHeaderSize [#copypagewithoutheadersize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "Page": "../structs/page", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::CachingFileMgr::copyPageWithoutHeaderSize(
+    const Page &source_page,
+    const Page &destination_page
+)
+```
+</CodeBlock>
+
+Copies content of source_page to destination_page without copying over the source_page header size.
+
+The header size is instead returned by the method. Not copying over the header size enables a use case where destination_page has all the content of the source_page but is still marked as a free page.
+
+### sortAndCopyFilePagesForCompaction [#sortandcopyfilepagesforcompaction]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "PageMapping": "../structs/pagemapping", "Page": "../structs/page", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::sortAndCopyFilePagesForCompaction(
+    size_t page_size,
+    std::vector<PageMapping> &page_mappings,
+    std::set<Page> &touched_pages
+)
+```
+</CodeBlock>
+
+Sorts all files with the given page size in ascending order of number of free pages.
+
+Then copy over pages from files with more free pages to those with less free pages. Leave destination/copied to pages as free when copying. Record copied source and destination pages in page mapping.
+
+### updateMappedPagesVisibility [#updatemappedpagesvisibility]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "PageMapping": "../structs/pagemapping", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::updateMappedPagesVisibility(
+    const std::vector<PageMapping> &page_mappings
+)
+```
+</CodeBlock>
+
+Goes through the given page mapping and marks source/copied from pages as free while marking destination/copied to pages as used (by setting the header size).
+
+### deleteEmptyFiles [#deleteemptyfiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::deleteEmptyFiles()
+```
+</CodeBlock>
+
+Deletes files that contain only free pages.
+
+Also deletes the compaction status file.
+
+### resumeFileCompaction [#resumefilecompaction]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::resumeFileCompaction(
+    const std::string &status_file_name
+)
+```
+</CodeBlock>
+
+Resumes an interrupted file compaction process.
+
+This method would normally only be called when re-initializing the file manager after a crash occurred in the middle of file compaction.
+
+### readPageMappingsFromStatusFile [#readpagemappingsfromstatusfile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "PageMapping": "../structs/pagemapping", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+std::vector<PageMapping> File_Namespace::CachingFileMgr::readPageMappingsFromStatusFile()
+```
+</CodeBlock>
+
+Deserializes a page mapping vector from expected status file.
+
+### closePhysicalUnlocked [#closephysicalunlocked]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::closePhysicalUnlocked()
+```
+</CodeBlock>
+
+### syncFilesToDisk [#syncfilestodisk]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::syncFilesToDisk()
+```
+</CodeBlock>
+
+### freePages [#freepages]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::freePages()
+```
+</CodeBlock>
+
+### initializeNumThreads [#initializenumthreads]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::initializeNumThreads(
+    size_t num_reader_threads = 0
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getMinimumSize [#getminimumsize]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr"}}>
+```cpp showLineNumbers={false}
+static size_t File_Namespace::CachingFileMgr::getMinimumSize()
+```
+</CodeBlock>
+
+### setNumPagesPerDataFile [#setnumpagesperdatafile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::setNumPagesPerDataFile(
+    size_t num_pages
+)
+```
+</CodeBlock>
+
+### setNumPagesPerMetadataFile [#setnumpagespermetadatafile]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::setNumPagesPerMetadataFile(
+    size_t num_pages
+)
+```
+</CodeBlock>
+
+### renameAndSymlinkLegacyFiles [#renameandsymlinklegacyfiles]
+
+<CodeBlock links={{"CachingFileMgr": "cachingfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::CachingFileMgr::renameAndSymlinkLegacyFiles(
+    const std::string &table_data_dir
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `WRAPPER_FILE_NAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char` | |
+| `METADATA_SPACE_PERCENTAGE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `float` | |
+| `METADATA_FILE_SPACE_PERCENTAGE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `float` | |
+| `DEFAULT_NUM_PAGES_PER_DATA_FILE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `DEFAULT_NUM_PAGES_PER_METADATA_FILE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `COPY_PAGES_STATUS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `UPDATE_PAGE_VISIBILITY_STATUS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `DELETE_EMPTY_FILES_STATUS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char const  *` | |
+| `LEGACY_EPOCH_FILENAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char` | |
+| `EPOCH_FILENAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char` | |
+| `DB_META_FILENAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char` | |
+| `FILE_MGR_VERSION_FILENAME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char` | |
+| `INVALID_VERSION` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `LATEST_FILE_MGR_VERSION` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `table_dirs_mutex_` | `heavyai::shared_mutex` | |
+| `table_dirs_` | `std::map< TablePair, std::unique_ptr< TableFileMgr > >` | |
+| `max_num_data_files_` | `size_t` | |
+| `max_num_meta_files_` | `size_t` | |
+| `max_wrapper_space_` | `size_t` | |
+| `max_size_` | `size_t` | |
+| `limit_data_size_` | `std::optional< size_t >` | |
+| `chunk_evict_alg_` | `LRUEvictionAlgorithm` | |
+| `table_evict_alg_` | `LRUEvictionAlgorithm` | |
+| `chunkIndex_` | `ChunkKeyToChunkMap` | |
+| `maxRollbackEpochs_` | `int32_t` | |
+| `fileMgrBasePath_` | `std::string` | |
+| `files_` | `std::map< int32_t, std::unique_ptr< FileInfo > >` | The OS file system path containing files related to this [FileMgr](filemgr). |
+| `fileIndex_` | `PageSizeFileMMap` | |
+| `num_reader_threads_` | `size_t` | Maps page sizes to [FileInfo](../structs/fileinfo) objects. |
+| `nextFileId_` | `unsigned` | number of threads used when loading data |
+| `fileMgrVersion_` | `int32_t` | the index of the next file id |
+| `DBMetaFile_` | `FILE *` | |
+| `getPageMutex_` | `std::mutex` | pointer to DB level metadata |
+| `chunkIndexMutex_` | `heavyai::shared_mutex` | |
+| `files_rw_mutex_` | `heavyai::shared_mutex` | |
+| `mutex_free_page_` | `heavyai::shared_mutex` | |
+| `free_pages_` | `std::vector< std::pair< FileInfo *, int32_t > >` | |
+| `isFullyInitted_` | `bool` | |
+| `page_size_` | `const size_t` | |
+| `metadata_page_size_` | `const size_t` | |
+| `parentMgr_` | `AbstractBufferMgr *` | |
+| `device_id_` | `int` | |
+| `num_pages_per_data_file_` <Badge intent="note" minimal>static</Badge> | `size_t` | |
+| `num_pages_per_metadata_file_` <Badge intent="note" minimal>static</Badge> | `size_t` | |

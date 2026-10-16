@@ -1,0 +1,51 @@
+---
+title: baseline_sort
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"PodOrderEntry": "../structs/podorderentry", "GroupByBufferLayoutInfo": "../structs/groupbybufferlayoutinfo"}}>
+```cpp showLineNumbers={false}
+template <class K>
+std::vector<uint32_t> baseline_sort(
+    const ExecutorDeviceType device_type,
+    int device_id,
+    Data_Namespace::DataMgr *data_mgr,
+    CudaAllocator *cuda_allocator,
+    const int8_t *groupby_buffer,
+    const PodOrderEntry &oe,
+    const GroupByBufferLayoutInfo &layout,
+    const size_t top_n,
+    const size_t start,
+    const size_t step,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"PodOrderEntry": "../structs/podorderentry", "GroupByBufferLayoutInfo": "../structs/groupbybufferlayoutinfo"}}>
+```cpp showLineNumbers={false}
+template <class K>
+std::vector<uint32_t> baseline_sort(
+    const ExecutorDeviceType device_type,
+    const int device_id,
+    Data_Namespace::DataMgr *data_mgr,
+    CudaAllocator *cuda_allocator,
+    const int8_t *groupby_buffer,
+    const PodOrderEntry &oe,
+    const GroupByBufferLayoutInfo &layout,
+    const size_t top_n,
+    const size_t start,
+    const size_t step,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

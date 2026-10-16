@@ -1,0 +1,64 @@
+---
+title: Parser::ForeignKeyDef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::TableConstraintDef` (public)
+
+---
+
+## Constructors
+
+### ForeignKeyDef [#foreignkeydef]
+
+<CodeBlock links={{"ForeignKeyDef": "foreignkeydef"}}>
+```cpp showLineNumbers={false}
+Parser::ForeignKeyDef::ForeignKeyDef(
+    std::list<std::string *> *cl,
+    std::string *t,
+    std::list<std::string *> *fcl
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_column_list [#getcolumnlist]
+
+<CodeBlock links={{"ForeignKeyDef": "foreignkeydef"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<std::string>> & Parser::ForeignKeyDef::get_column_list() const
+```
+</CodeBlock>
+
+### get_foreign_table [#getforeigntable]
+
+<CodeBlock links={{"ForeignKeyDef": "foreignkeydef"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::ForeignKeyDef::get_foreign_table() const
+```
+</CodeBlock>
+
+### get_foreign_column_list [#getforeigncolumnlist]
+
+<CodeBlock links={{"ForeignKeyDef": "foreignkeydef"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<std::string>> & Parser::ForeignKeyDef::get_foreign_column_list() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_list_` | `std::list< std::unique_ptr< std::string > >` | |
+| `foreign_table_` | `std::unique_ptr< std::string >` | |
+| `foreign_column_list_` | `std::list< std::unique_ptr< std::string > >` | |

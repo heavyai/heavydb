@@ -1,0 +1,37 @@
+---
+title: StubGenerator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionInterpreterStubs.h>
+```
+
+---
+
+## Static methods
+
+### generateStub [#generatestub]
+
+<CodeBlock links={{"StubGenerator": "stubgenerator"}}>
+```cpp showLineNumbers={false}
+StubGenerator::Stub StubGenerator::generateStub(
+    const size_t executor_id,
+    const std::string &name,
+    const std::vector<Type> &arg_types,
+    const Type ret_type,
+    const bool is_external
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Stub` | `ReductionInterpreter::EvalValue(*)(void *output_handle, const void *inputs_handle)` |
+| `InputsType` | `std::vector< ReductionInterpreter::EvalValue >` |

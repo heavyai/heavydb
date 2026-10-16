@@ -1,0 +1,55 @@
+---
+title: "operator<<"
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"FileLocalCoords": "../structs/filelocalcoords"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &out,
+    const FileLocalCoords &flc
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RasterTileInfo": "../structs/rastertileinfo"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &out,
+    const RasterTileInfo &tile
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ChunkMetadata": "../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &out,
+    const ChunkMetadata &chunk_metadata
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & operator<<(
+    std::ostream &os,
+    const ChunkMetadataVector &meta_vec
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

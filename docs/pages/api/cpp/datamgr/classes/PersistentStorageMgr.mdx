@@ -1,0 +1,387 @@
+---
+title: PersistentStorageMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <PersistentStorageMgr.h>
+```
+
+**Inherits from:** `Data_Namespace::AbstractBufferMgr` (public)
+
+---
+
+## Constructors
+
+### PersistentStorageMgr [#persistentstoragemgr]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "DiskCacheConfig": "../filenamespace/structs/diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+PersistentStorageMgr::PersistentStorageMgr(
+    const std::string &data_dir,
+    const size_t num_reader_threads,
+    const File_Namespace::DiskCacheConfig &disk_cache_config
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### createBuffer [#createbuffer]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * PersistentStorageMgr::createBuffer(
+    const ChunkKey &chunk_key,
+    const size_t page_size,
+    const size_t initial_size
+) override
+```
+</CodeBlock>
+
+### deleteBuffer [#deletebuffer]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::deleteBuffer(
+    const ChunkKey &chunk_key,
+    const bool purge
+) override
+```
+</CodeBlock>
+
+### deleteBuffersWithPrefix [#deletebufferswithprefix]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::deleteBuffersWithPrefix(
+    const ChunkKey &chunk_key_prefix,
+    const bool purge
+) override
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * PersistentStorageMgr::getBuffer(
+    const ChunkKey &chunk_key,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### fetchBuffer [#fetchbuffer]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::fetchBuffer(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### putBuffer [#putbuffer]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * PersistentStorageMgr::putBuffer(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *source_buffer,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### getChunkMetadataVecForKeyPrefix [#getchunkmetadatavecforkeyprefix]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::getChunkMetadataVecForKeyPrefix(
+    ChunkMetadataVector &chunk_metadata,
+    const ChunkKey &chunk_key_prefix
+) override
+```
+</CodeBlock>
+
+### isBufferOnDevice [#isbufferondevice]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool PersistentStorageMgr::isBufferOnDevice(
+    const ChunkKey &chunk_key
+) override
+```
+</CodeBlock>
+
+### printSlabs [#printslabs]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::string PersistentStorageMgr::printSlabs() override
+```
+</CodeBlock>
+
+### getMaxSize [#getmaxsize]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t PersistentStorageMgr::getMaxSize() const override
+```
+</CodeBlock>
+
+### getInUseSize [#getinusesize]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t PersistentStorageMgr::getInUseSize() const override
+```
+</CodeBlock>
+
+### getAllocated [#getallocated]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t PersistentStorageMgr::getAllocated() const override
+```
+</CodeBlock>
+
+### isAllocationCapped [#isallocationcapped]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool PersistentStorageMgr::isAllocationCapped() const override
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::checkpoint() override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::checkpoint(
+    const int db_id,
+    const int tb_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### alloc [#alloc]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * PersistentStorageMgr::alloc(
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### free [#free]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "AbstractBuffer": "abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::free(
+    AbstractBuffer *buffer
+) override
+```
+</CodeBlock>
+
+### getMgrType [#getmgrtype]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+MgrType PersistentStorageMgr::getMgrType() override
+```
+</CodeBlock>
+
+### getStringMgrType [#getstringmgrtype]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::string PersistentStorageMgr::getStringMgrType() override
+```
+</CodeBlock>
+
+### getNumChunks [#getnumchunks]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t PersistentStorageMgr::getNumChunks() override
+```
+</CodeBlock>
+
+### removeTableRelatedDS [#removetablerelatedds]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::removeTableRelatedDS(
+    const int db_id,
+    const int table_id
+) override
+```
+</CodeBlock>
+
+### removeMutableTableCacheData [#removemutabletablecachedata]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::removeMutableTableCacheData(
+    const int db_id,
+    const int table_id
+) const
+```
+</CodeBlock>
+
+### getGlobalFileMgr [#getglobalfilemgr]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "GlobalFileMgr": "../filenamespace/classes/globalfilemgr"}}>
+```cpp showLineNumbers={false}
+File_Namespace::GlobalFileMgr * PersistentStorageMgr::getGlobalFileMgr() const
+```
+</CodeBlock>
+
+### getForeignStorageMgr [#getforeignstoragemgr]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "ForeignStorageMgr": "../foreignstorage/classes/foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignStorageMgr * PersistentStorageMgr::getForeignStorageMgr() const
+```
+</CodeBlock>
+
+### getDiskCache [#getdiskcache]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "ForeignStorageCache": "../foreignstorage/classes/foreignstoragecache"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignStorageCache * PersistentStorageMgr::getDiskCache() const
+```
+</CodeBlock>
+
+### getDiskCacheConfig [#getdiskcacheconfig]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "DiskCacheConfig": "../filenamespace/structs/diskcacheconfig"}}>
+```cpp showLineNumbers={false}
+const File_Namespace::DiskCacheConfig PersistentStorageMgr::getDiskCacheConfig() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr", "AbstractBufferMgr": "../datanamespace/classes/abstractbuffermgr"}}>
+```cpp showLineNumbers={false}
+int PersistentStorageMgr::getDeviceId()
+```
+</CodeBlock>
+
+### isForeignStorage [#isforeignstorage]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool PersistentStorageMgr::isForeignStorage(
+    const ChunkKey &chunk_key
+) const
+```
+</CodeBlock>
+
+### getStorageMgrForTableKey [#getstoragemgrfortablekey]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+AbstractBufferMgr * PersistentStorageMgr::getStorageMgrForTableKey(
+    const ChunkKey &table_key
+) const
+```
+</CodeBlock>
+
+### isChunkPrefixCacheable [#ischunkprefixcacheable]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool PersistentStorageMgr::isChunkPrefixCacheable(
+    const ChunkKey &chunk_prefix
+) const
+```
+</CodeBlock>
+
+### recoverDataWrapperIfCachedAndGetHighestFragId [#recoverdatawrapperifcachedandgethighestfragid]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+int PersistentStorageMgr::recoverDataWrapperIfCachedAndGetHighestFragId(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### getTableAccessLock [#gettableaccesslock]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::unique_lock<std::mutex> PersistentStorageMgr::getTableAccessLock(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### getTableAccessMutex [#gettableaccessmutex]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::mutex & PersistentStorageMgr::getTableAccessMutex(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### deleteTableAccessMutex [#deletetableaccessmutex]
+
+<CodeBlock links={{"PersistentStorageMgr": "persistentstoragemgr"}}>
+```cpp showLineNumbers={false}
+void PersistentStorageMgr::deleteTableAccessMutex(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DbAndTableId` | `std::pair< int32_t, int32_t >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `global_file_mgr_` | `std::unique_ptr< File_Namespace::GlobalFileMgr >` | |
+| `foreign_storage_mgr_` | `std::unique_ptr< foreign_storage::ForeignStorageMgr >` | |
+| `disk_cache_` | `std::unique_ptr< foreign_storage::ForeignStorageCache >` | |
+| `disk_cache_config_` | `File_Namespace::DiskCacheConfig` | |
+| `parentMgr_` | `AbstractBufferMgr *` | |
+| `device_id_` | `int` | |
+| `table_access_mutex_map_mutex_` | `std::mutex` | |
+| `table_access_mutex_map_` | `std::map< DbAndTableId, std::mutex >` | |

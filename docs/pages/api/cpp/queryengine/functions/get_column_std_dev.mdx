@@ -1,0 +1,134 @@
+---
+title: get_column_std_dev
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST double get_column_std_dev(
+    const Column<T> &col,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_std_dev(
+    const Column<int32_t> &col,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_std_dev(
+    const Column<int64_t> &col,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_std_dev(
+    const Column<float> &col,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_std_dev(
+    const Column<double> &col,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (1)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST double get_column_std_dev(
+    const T *data,
+    const int64_t num_rows,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_std_dev(
+    const int32_t *data,
+    const int64_t num_rows,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_std_dev(
+    const int64_t *data,
+    const int64_t num_rows,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_std_dev(
+    const float *data,
+    const int64_t num_rows,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double get_column_std_dev(
+    const double *data,
+    const int64_t num_rows,
+    const double mean
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

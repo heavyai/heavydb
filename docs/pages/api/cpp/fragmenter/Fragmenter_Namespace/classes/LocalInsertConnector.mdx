@@ -1,0 +1,68 @@
+---
+title: Fragmenter_Namespace::LocalInsertConnector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Fragmenter_Namespace/InsertDataLoader.h>
+```
+
+**Inherits from:** `Fragmenter_Namespace::InsertDataLoader::InsertConnector` (public)
+
+---
+
+## Methods
+
+### shardCount [#shardcount]
+
+<CodeBlock links={{"LocalInsertConnector": "localinsertconnector"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::LocalInsertConnector::shardCount() override
+```
+</CodeBlock>
+
+### insertChunksToLeaf [#insertchunkstoleaf]
+
+<CodeBlock links={{"LocalInsertConnector": "localinsertconnector", "InsertChunks": "../structs/insertchunks"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::LocalInsertConnector::insertChunksToLeaf(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    const size_t shard_idx,
+    const Fragmenter_Namespace::InsertChunks &insert_chunks
+) override
+```
+</CodeBlock>
+
+### insertDataToLeaf [#insertdatatoleaf]
+
+<CodeBlock links={{"LocalInsertConnector": "localinsertconnector", "InsertData": "../structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::LocalInsertConnector::insertDataToLeaf(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    const size_t shard_idx,
+    Fragmenter_Namespace::InsertData &insert_data
+) override
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<CodeBlock links={{"LocalInsertConnector": "localinsertconnector"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::LocalInsertConnector::checkpoint(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    int tableId
+) override
+```
+</CodeBlock>
+
+### rollback [#rollback]
+
+<CodeBlock links={{"LocalInsertConnector": "localinsertconnector"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::LocalInsertConnector::rollback(
+    const Catalog_Namespace::SessionInfo &parent_session_info,
+    int tableId
+) override
+```
+</CodeBlock>

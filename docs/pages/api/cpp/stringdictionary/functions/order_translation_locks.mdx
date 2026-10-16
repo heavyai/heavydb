@@ -1,0 +1,35 @@
+---
+title: order_translation_locks
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void order_translation_locks(
+    const shared::StringDictKey &source_dict_key,
+    const shared::StringDictKey &dest_dict_key,
+    std::shared_lock<std::shared_mutex> &source_read_lock,
+    std::shared_lock<std::shared_mutex> &dest_read_lock
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void order_translation_locks(
+    const shared::StringDictKey &source_dict_key,
+    const shared::StringDictKey &dest_dict_key,
+    std::shared_lock<std::shared_mutex> &source_proxy_read_lock,
+    std::unique_lock<std::shared_mutex> &dest_proxy_write_lock
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

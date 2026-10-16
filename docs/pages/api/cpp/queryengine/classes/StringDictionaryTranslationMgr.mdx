@@ -1,0 +1,171 @@
+---
+title: StringDictionaryTranslationMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringDictionaryTranslationMgr.h>
+```
+
+---
+
+## Constructors
+
+### StringDictionaryTranslationMgr [#stringdictionarytranslationmgr]
+
+<Tabs>
+<Tab title="Copy (with dest string dict key and translate intersection only and src to tmp trans map)">
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
+    const shared::StringDictKey &source_string_dict_key,
+    const shared::StringDictKey &dest_string_dict_key,
+    const bool translate_intersection_only,
+    const SQLTypeInfo &output_ti,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const std::set<int> &device_ids,
+    Executor *executor,
+    Data_Namespace::DataMgr *data_mgr,
+    const bool delay_translation,
+    int32_t const *src_to_tmp_trans_map
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+StringDictionaryTranslationMgr::StringDictionaryTranslationMgr(
+    const shared::StringDictKey &source_string_dict_key,
+    const SQLTypeInfo &output_ti,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const std::set<int> &device_ids,
+    Executor *executor,
+    Data_Namespace::DataMgr *data_mgr,
+    const bool delay_translation
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~StringDictionaryTranslationMgr
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+StringDictionaryTranslationMgr::~StringDictionaryTranslationMgr()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### buildTranslationMap [#buildtranslationmap]
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+void StringDictionaryTranslationMgr::buildTranslationMap()
+```
+</CodeBlock>
+
+### createKernelBuffers [#createkernelbuffers]
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+void StringDictionaryTranslationMgr::createKernelBuffers()
+```
+</CodeBlock>
+
+### codegen [#codegen]
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * StringDictionaryTranslationMgr::codegen(
+    llvm::Value *str_id_input,
+    const SQLTypeInfo &input_ti,
+    const bool add_nullcheck,
+    const CompilationOptions &co
+) const
+```
+</CodeBlock>
+
+### isMapValid [#ismapvalid]
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+bool StringDictionaryTranslationMgr::isMapValid() const
+```
+</CodeBlock>
+
+### data [#data]
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+const int8_t * StringDictionaryTranslationMgr::data() const
+```
+</CodeBlock>
+
+### minSourceStringId [#minsourcestringid]
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+int32_t StringDictionaryTranslationMgr::minSourceStringId() const
+```
+</CodeBlock>
+
+### mapSize [#mapsize]
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+size_t StringDictionaryTranslationMgr::mapSize() const
+```
+</CodeBlock>
+
+### getConstants [#getconstants]
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>> StringDictionaryTranslationMgr::getConstants() const
+```
+</CodeBlock>
+
+### getTranslationMappedConstants [#gettranslationmappedconstants]
+
+<CodeBlock links={{"StringDictionaryTranslationMgr": "stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<int, std::shared_ptr<Analyzer::Constant const>> StringDictionaryTranslationMgr::getTranslationMappedConstants() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `source_string_dict_key_` | `const shared::StringDictKey` | |
+| `dest_string_dict_key_` | `const shared::StringDictKey` | |
+| `translate_intersection_only_` | `const bool` | |
+| `output_ti_` | `const SQLTypeInfo` | |
+| `string_op_infos_` | `const std::vector< StringOps_Namespace::StringOpInfo >` | |
+| `has_null_string_op_` | `const bool` | |
+| `memory_level_` | `const Data_Namespace::MemoryLevel` | |
+| `device_ids_` | `const std::set< int >` | |
+| `executor_` | `Executor *` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `dest_type_is_string_` | `const bool` | |
+| `host_translation_map_` | `const StringDictionaryProxy::IdMap *` | |
+| `host_numeric_translation_map_` | `const StringDictionaryProxy::TranslationMap< Datum > *` | |
+| `kernel_translation_maps_` | `std::unordered_map< int, const int8_t * >` | |
+| `device_buffers_` | `std::unordered_map< int, Data_Namespace::AbstractBuffer * >` | |
+| `source_sd_to_temp_sd_translation_map_` | `int32_t const  *` | |
+| `source_sd_to_temp_sd_translation_map_device_buffer_` | `std::unordered_map< int, Data_Namespace::AbstractBuffer * >` | |

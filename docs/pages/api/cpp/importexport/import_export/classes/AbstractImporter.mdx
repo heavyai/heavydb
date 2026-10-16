@@ -1,0 +1,36 @@
+---
+title: import_export::AbstractImporter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/AbstractImporter.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~AbstractImporter
+
+<CodeBlock links={{"AbstractImporter": "abstractimporter"}}>
+```cpp showLineNumbers={false}
+virtual import_export::AbstractImporter::~AbstractImporter() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### import [#import]
+
+<CodeBlock links={{"AbstractImporter": "abstractimporter", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+virtual ImportStatus import_export::AbstractImporter::import(
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>

@@ -1,0 +1,33 @@
+---
+title: needs_dictionary_translation
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Executor": "../classes/executor"}}>
+```cpp showLineNumbers={false}
+bool needs_dictionary_translation(
+    const std::vector<InnerOuter> &inner_outer_pairs,
+    const std::vector<InnerOuterStringOpInfos> &inner_outer_string_op_infos_pairs,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Executor": "../classes/executor"}}>
+```cpp showLineNumbers={false}
+bool needs_dictionary_translation(
+    const InnerOuter &inner_outer_col_pair,
+    const InnerOuterStringOpInfos &inner_outer_string_op_infos,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

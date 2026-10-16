@@ -1,0 +1,42 @@
+---
+title: File_Namespace::readPage
+description: "Reads the specified page from the file f into buf."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+size_t File_Namespace::readPage(
+    FILE *f,
+    const size_t pageSize,
+    const size_t pageNum,
+    int8_t *buf,
+    const std::string &file_path
+)
+```
+</CodeBlock>
+
+Reads the specified page from the file f into buf.
+
+**Returns:** size_t The number of bytes read (should be equal to pageSize).
+
+**Parameters**
+
+<ParamField path="f" type="FILE *">
+Pointer to the FILE.
+</ParamField>
+
+<ParamField path="pageSize" type="const size_t">
+The logical page size of the file.
+</ParamField>
+
+<ParamField path="pageNum" type="const size_t">
+The page number from where data is being read.
+</ParamField>
+
+<ParamField path="buf" type="int8_t *">
+The destination buffer to where data is being written.
+</ParamField>
+
+<ParamField path="file_path" type="const std::string &">
+Path of file to read from.
+</ParamField>

@@ -1,0 +1,1770 @@
+---
+title: Catalog_Namespace::SysCatalog
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/SysCatalog.h>
+```
+
+**Inherits from:** `Catalog_Namespace::CommonFileOperations` (private)
+
+---
+
+## Constructors
+
+### SysCatalog [#syscatalog]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::SysCatalog::SysCatalog()
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~SysCatalog
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::SysCatalog::~SysCatalog()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### init [#init]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "AuthMetadata": "../../structs/authmetadata"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::init(
+    const std::string &basePath,
+    std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+    const AuthMetadata &authMetadata,
+    std::shared_ptr<Calcite> calcite,
+    bool is_new_db,
+    std::optional<int32_t> max_num_users
+)
+```
+</CodeBlock>
+
+### isInitialized [#isinitialized]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::isInitialized() const
+```
+</CodeBlock>
+
+### login [#login]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog> Catalog_Namespace::SysCatalog::login(
+    std::string &db,
+    std::string &username,
+    const std::string &password,
+    UserMetadata &user_meta,
+    bool check_password = true
+)
+```
+</CodeBlock>
+
+logins (connects) a user against a database.
+
+throws a std::exception in all error cases! (including wrong password)
+
+### switchDatabase [#switchdatabase]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog> Catalog_Namespace::SysCatalog::switchDatabase(
+    std::string &dbname,
+    const std::string &username
+)
+```
+</CodeBlock>
+
+### createUser [#createuser]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserAlterations": "../structs/useralterations", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+UserMetadata Catalog_Namespace::SysCatalog::createUser(
+    std::string const &name,
+    UserAlterations alts,
+    bool is_temporary
+)
+```
+</CodeBlock>
+
+### dropUser [#dropuser]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::dropUser(
+    const std::string &name,
+    bool if_exists = false
+)
+```
+</CodeBlock>
+
+### dropUserUnchecked [#dropuserunchecked]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::dropUserUnchecked(
+    const std::string &name,
+    const UserMetadata &user
+)
+```
+</CodeBlock>
+
+### alterUser [#alteruser]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserAlterations": "../structs/useralterations", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+UserMetadata Catalog_Namespace::SysCatalog::alterUser(
+    std::string const &name,
+    UserAlterations alts
+)
+```
+</CodeBlock>
+
+### renameUser [#renameuser]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::renameUser(
+    std::string const &old_name,
+    std::string const &new_name
+)
+```
+</CodeBlock>
+
+### createDatabase [#createdatabase]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::createDatabase(
+    const std::string &dbname,
+    int owner
+)
+```
+</CodeBlock>
+
+### renameDatabase [#renamedatabase]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::renameDatabase(
+    std::string const &old_name,
+    std::string const &new_name
+)
+```
+</CodeBlock>
+
+### changeDatabaseOwner [#changedatabaseowner]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::changeDatabaseOwner(
+    std::string const &dbname,
+    const std::string &new_owner
+)
+```
+</CodeBlock>
+
+### dropDatabase [#dropdatabase]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBMetadata": "../structs/dbmetadata"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::dropDatabase(
+    const DBMetadata &db
+)
+```
+</CodeBlock>
+
+### createLegacyPolicyInMemory [#createlegacypolicyinmemory]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::createLegacyPolicyInMemory(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::string &column_name,
+    const std::string &grantee_name,
+    std::vector<std::string> values_list
+)
+```
+</CodeBlock>
+
+### dropLegacyPolicyInMemory [#droplegacypolicyinmemory]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::dropLegacyPolicyInMemory(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::string &grantee_name
+)
+```
+</CodeBlock>
+
+### createPolicy [#createpolicy]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::createPolicy(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::vector<std::string> column_name_components,
+    const std::string &grantee_name,
+    std::vector<std::string> values_list
+)
+```
+</CodeBlock>
+
+### dropPolicy [#droppolicy]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::dropPolicy(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::vector<std::string> column_name_components,
+    const std::string &grantee_name
+)
+```
+</CodeBlock>
+
+### dropPoliciesForTable [#droppoliciesfortable]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::dropPoliciesForTable(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+### dropPoliciesForColumn [#droppoliciesforcolumn]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::dropPoliciesForColumn(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::string &table_name,
+    const std::string &column_name
+)
+```
+</CodeBlock>
+
+### getUser [#getuser]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+std::optional<UserMetadata> Catalog_Namespace::SysCatalog::getUser(
+    std::string const &uname
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+std::optional<UserMetadata> Catalog_Namespace::SysCatalog::getUser(
+    int32_t const uid
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getDB [#getdb]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBMetadata": "../structs/dbmetadata"}}>
+```cpp showLineNumbers={false}
+std::optional<DBMetadata> Catalog_Namespace::SysCatalog::getDB(
+    std::string const &dbname
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBMetadata": "../structs/dbmetadata"}}>
+```cpp showLineNumbers={false}
+std::optional<DBMetadata> Catalog_Namespace::SysCatalog::getDB(
+    int32_t const dbid
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getMetadataForUser [#getmetadataforuser]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::getMetadataForUser(
+    const std::string &name,
+    UserMetadata &user
+)
+```
+</CodeBlock>
+
+### getMetadataForUserById [#getmetadataforuserbyid]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::getMetadataForUserById(
+    const int32_t idIn,
+    UserMetadata &user
+)
+```
+</CodeBlock>
+
+### checkPasswordForUser [#checkpasswordforuser]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::checkPasswordForUser(
+    const std::string &passwd,
+    std::string &name,
+    UserMetadata &user
+)
+```
+</CodeBlock>
+
+### getMetadataForDB [#getmetadatafordb]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBMetadata": "../structs/dbmetadata"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::getMetadataForDB(
+    const std::string &name,
+    DBMetadata &db
+)
+```
+</CodeBlock>
+
+### getMetadataForDBById [#getmetadatafordbbyid]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBMetadata": "../structs/dbmetadata"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::getMetadataForDBById(
+    const int32_t idIn,
+    DBMetadata &db
+)
+```
+</CodeBlock>
+
+### getDataMgr [#getdatamgr]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::DataMgr & Catalog_Namespace::SysCatalog::getDataMgr() const
+```
+</CodeBlock>
+
+### getCalciteMgr [#getcalcitemgr]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+Calcite & Catalog_Namespace::SysCatalog::getCalciteMgr() const
+```
+</CodeBlock>
+
+### getCatalogBasePath [#getcatalogbasepath]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+const std::string & Catalog_Namespace::SysCatalog::getCatalogBasePath() const
+```
+</CodeBlock>
+
+### getSqliteConnector [#getsqliteconnector]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+SqliteConnector * Catalog_Namespace::SysCatalog::getSqliteConnector()
+```
+</CodeBlock>
+
+### getAllDBMetadata [#getalldbmetadata]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBMetadata": "../structs/dbmetadata"}}>
+```cpp showLineNumbers={false}
+list<DBMetadata> Catalog_Namespace::SysCatalog::getAllDBMetadata()
+```
+</CodeBlock>
+
+### getAllUserMetadata [#getallusermetadata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+list<UserMetadata> Catalog_Namespace::SysCatalog::getAllUserMetadata()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Return the users associated with the given DB">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+list<UserMetadata> Catalog_Namespace::SysCatalog::getAllUserMetadata(
+    const int64_t dbId
+)
+```
+</CodeBlock>
+
+return the users associated with the given DB
+
+</Tab>
+</Tabs>
+
+### getNumUsers [#getnumusers]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+int32_t Catalog_Namespace::SysCatalog::getNumUsers() const
+```
+</CodeBlock>
+
+### putImmerseUsersMetadata [#putimmerseusersmetadata]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::putImmerseUsersMetadata(
+    const std::vector<UserMetadata> &immerse_user_metadata_list
+)
+```
+</CodeBlock>
+
+### getUsersInfo [#getusersinfo]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata", "UserInfo": "../structs/userinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<UserInfo> Catalog_Namespace::SysCatalog::getUsersInfo(
+    const UserMetadata &user
+)
+```
+</CodeBlock>
+
+### putImmerseDatabaseMetadata [#putimmersedatabasemetadata]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::putImmerseDatabaseMetadata(
+    const std::string &database_name,
+    const std::string &immerse_metadata_json
+)
+```
+</CodeBlock>
+
+### getDatabaseListForUser [#getdatabaselistforuser]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+DBSummaryList Catalog_Namespace::SysCatalog::getDatabaseListForUser(
+    const UserMetadata &user
+)
+```
+</CodeBlock>
+
+### createDBObject [#createdbobject]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::createDBObject(
+    const UserMetadata &user,
+    const std::string &objectName,
+    DBObjectType type,
+    const Catalog_Namespace::Catalog &catalog,
+    int32_t objectId = -1
+)
+```
+</CodeBlock>
+
+### renameDBObject [#renamedbobject]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::renameDBObject(
+    const std::string &objectName,
+    const std::string &newName,
+    DBObjectType type,
+    int32_t objectId,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+Renames an [DBObject](../../classes/dbobject).
+
+**Parameters**
+
+<ParamField path="objectName" type="const std::string &">
+- Original [DBObject](../../classes/dbobject) name
+</ParamField>
+
+<ParamField path="newName" type="const std::string &">
+- New name of [DBObject](../../classes/dbobject)
+</ParamField>
+
+<ParamField path="type" type="DBObjectType">
+- Type of [DBObject](../../classes/dbobject)
+</ParamField>
+
+<ParamField path="objectId" type="int32_t">
+- Original [DBObject](../../classes/dbobject) ID
+</ParamField>
+
+<ParamField path="catalog" type="const Catalog_Namespace::Catalog &">
+- [Catalog](catalog) instance object exists in
+</ParamField>
+
+### grantDBObjectPrivileges [#grantdbobjectprivileges]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantDBObjectPrivileges(
+    const std::string &grantee,
+    const DBObject &object,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### grantDBObjectPrivilegesBatch [#grantdbobjectprivilegesbatch]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantDBObjectPrivilegesBatch(
+    const std::vector<std::string> &grantees,
+    const std::vector<DBObject> &objects,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### revokeDBObjectPrivileges [#revokedbobjectprivileges]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeDBObjectPrivileges(
+    const std::string &grantee,
+    const DBObject &object,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### revokeDBObjectPrivilegesBatch [#revokedbobjectprivilegesbatch]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesBatch(
+    const std::vector<std::string> &grantees,
+    const std::vector<DBObject> &objects,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### revokeDBObjectPrivilegesFromAll [#revokedbobjectprivilegesfromall]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesFromAll(
+    DBObject object,
+    Catalog *catalog
+)
+```
+</CodeBlock>
+
+### revokeDBObjectPrivilegesFromAll_unsafe [#revokedbobjectprivilegesfromallunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesFromAll_unsafe(
+    DBObject object,
+    Catalog *catalog
+)
+```
+</CodeBlock>
+
+### revokeDBObjectPrivilegesFromAllBatch [#revokedbobjectprivilegesfromallbatch]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesFromAllBatch(
+    std::vector<DBObject> &objects,
+    Catalog *catalog
+)
+```
+</CodeBlock>
+
+### revokeDBObjectPrivilegesFromAllBatch_unsafe [#revokedbobjectprivilegesfromallbatchunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesFromAllBatch_unsafe(
+    std::vector<DBObject> &objects,
+    Catalog *catalog
+)
+```
+</CodeBlock>
+
+### getDBObjectPrivileges [#getdbobjectprivileges]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::getDBObjectPrivileges(
+    const std::string &granteeName,
+    DBObject &object,
+    const Catalog_Namespace::Catalog &catalog
+) const
+```
+</CodeBlock>
+
+### verifyDBObjectOwnership [#verifydbobjectownership]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::verifyDBObjectOwnership(
+    const UserMetadata &user,
+    DBObject object,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### changeDBObjectOwnership [#changedbobjectownership]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::changeDBObjectOwnership(
+    const UserMetadata &new_owner,
+    const UserMetadata &previous_owner,
+    DBObject object,
+    const Catalog_Namespace::Catalog &catalog,
+    bool revoke_privileges = true
+)
+```
+</CodeBlock>
+
+Change ownership of a [DBObject](../../classes/dbobject).
+
+**Parameters**
+
+<ParamField path="new_owner" type="const UserMetadata &">
+- New owner of [DBObject](../../classes/dbobject)
+</ParamField>
+
+<ParamField path="previous_owner" type="const UserMetadata &">
+- Previous owner of [DBObject](../../classes/dbobject)
+</ParamField>
+
+<ParamField path="object" type="DBObject">
+- [DBObject](../../classes/dbobject) to change ownership of
+</ParamField>
+
+<ParamField path="catalog" type="const Catalog_Namespace::Catalog &">
+- [Catalog](catalog) instance object exists in
+</ParamField>
+
+<ParamField path="revoke_privileges" type="bool" default="true">
+- If true, revoke previous_owner's privileges
+</ParamField>
+
+### createRole [#createrole]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::createRole(
+    const std::string &roleName,
+    const bool user_private_role,
+    const bool is_temporary = false
+)
+```
+</CodeBlock>
+
+### dropRole [#droprole]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::dropRole(
+    const std::string &roleName,
+    const bool is_temporary = false
+)
+```
+</CodeBlock>
+
+### grantRoleBatch [#grantrolebatch]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantRoleBatch(
+    const std::vector<std::string> &roles,
+    const std::vector<std::string> &grantees
+)
+```
+</CodeBlock>
+
+### grantRole [#grantrole]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantRole(
+    const std::string &role,
+    const std::string &grantee,
+    const bool is_temporary = false
+)
+```
+</CodeBlock>
+
+### revokeRoleBatch [#revokerolebatch]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeRoleBatch(
+    const std::vector<std::string> &roles,
+    const std::vector<std::string> &grantees
+)
+```
+</CodeBlock>
+
+### revokeRole [#revokerole]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeRole(
+    const std::string &role,
+    const std::string &grantee,
+    const bool is_temporary = false
+)
+```
+</CodeBlock>
+
+### hasAnyTablePrivileges [#hasanytableprivileges]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata", "DBObject": "../../classes/dbobject"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::hasAnyTablePrivileges(
+    const UserMetadata &user,
+    std::vector<DBObject> &privObjects
+)
+```
+</CodeBlock>
+
+Check if a user has any privileges on a table.
+
+### hasAnyPrivileges [#hasanyprivileges]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata", "DBObject": "../../classes/dbobject"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::hasAnyPrivileges(
+    const UserMetadata &user,
+    std::vector<DBObject> &privObjects
+)
+```
+</CodeBlock>
+
+### checkPrivileges [#checkprivileges]
+
+<Tabs>
+<Tab title="Const (with user)">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata", "DBObject": "../../classes/dbobject"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::checkPrivileges(
+    const UserMetadata &user,
+    const std::vector<DBObject> &privObjects
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with userName)">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::checkPrivileges(
+    const std::string &userName,
+    const std::vector<DBObject> &privObjects
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getGrantee [#getgrantee]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Grantee": "../../classes/grantee"}}>
+```cpp showLineNumbers={false}
+Grantee * Catalog_Namespace::SysCatalog::getGrantee(
+    const std::string &name
+) const
+```
+</CodeBlock>
+
+### getRoleGrantee [#getrolegrantee]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Role": "../../classes/role"}}>
+```cpp showLineNumbers={false}
+Role * Catalog_Namespace::SysCatalog::getRoleGrantee(
+    const std::string &name
+) const
+```
+</CodeBlock>
+
+### getUserGrantee [#getusergrantee]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "User": "../../classes/user"}}>
+```cpp showLineNumbers={false}
+User * Catalog_Namespace::SysCatalog::getUserGrantee(
+    const std::string &name
+) const
+```
+</CodeBlock>
+
+### getMetadataForObject [#getmetadataforobject]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "ObjectRoleDescriptor": "../../structs/objectroledescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<ObjectRoleDescriptor *> Catalog_Namespace::SysCatalog::getMetadataForObject(
+    int32_t dbId,
+    int32_t dbType,
+    int32_t objectId,
+    int32_t subObjectId = -1
+) const
+```
+</CodeBlock>
+
+### getMetadataForSubObjects [#getmetadataforsubobjects]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "ObjectRoleDescriptor": "../../structs/objectroledescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<ObjectRoleDescriptor *> Catalog_Namespace::SysCatalog::getMetadataForSubObjects(
+    int32_t dbId,
+    int32_t dbType,
+    int32_t objectId
+) const
+```
+</CodeBlock>
+
+Returns metadata for all subobjects that match `objectId`.
+
+### getMetadataForAllObjects [#getmetadataforallobjects]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "ObjectRoleDescriptor": "../../structs/objectroledescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<ObjectRoleDescriptor> Catalog_Namespace::SysCatalog::getMetadataForAllObjects() const
+```
+</CodeBlock>
+
+### isRoleGrantedToGrantee [#isrolegrantedtograntee]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::isRoleGrantedToGrantee(
+    const std::string &granteeName,
+    const std::string &roleName,
+    bool only_direct
+) const
+```
+</CodeBlock>
+
+### getRoles [#getroles]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Catalog_Namespace::SysCatalog::getRoles(
+    const std::string &user_name,
+    bool effective = true
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Catalog_Namespace::SysCatalog::getRoles(
+    bool include_user_private_role,
+    bool is_super,
+    const std::string &user_name,
+    bool ignore_deleted_user = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Catalog_Namespace::SysCatalog::getRoles(
+    const std::string &userName,
+    const int32_t dbId
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getRestrictions [#getrestrictions]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+Restrictions Catalog_Namespace::SysCatalog::getRestrictions(
+    const std::string &user_name,
+    bool effective = true
+)
+```
+</CodeBlock>
+
+### getCreatedRoles [#getcreatedroles]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+std::set<std::string> Catalog_Namespace::SysCatalog::getCreatedRoles() const
+```
+</CodeBlock>
+
+### populateRoleDbObjects [#populateroledbobjects]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::populateRoleDbObjects(
+    const std::vector<DBObject> &objects
+)
+```
+</CodeBlock>
+
+### name [#name]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::SysCatalog::name() const
+```
+</CodeBlock>
+
+### renameObjectsInDescriptorMap [#renameobjectsindescriptormap]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::renameObjectsInDescriptorMap(
+    DBObject &object,
+    const Catalog_Namespace::Catalog &cat
+)
+```
+</CodeBlock>
+
+### syncUserWithRemoteProvider [#syncuserwithremoteprovider]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserAlterations": "../structs/useralterations"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::syncUserWithRemoteProvider(
+    const std::string &user_name,
+    std::vector<std::string> idp_roles,
+    UserAlterations alts
+)
+```
+</CodeBlock>
+
+### getGranteesOfSharedDashboards [#getgranteesofshareddashboards]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<std::string, std::vector<std::string>> Catalog_Namespace::SysCatalog::getGranteesOfSharedDashboards(
+    const std::vector<std::string> &dashboard_ids
+)
+```
+</CodeBlock>
+
+### getCatalogsForAllDbs [#getcatalogsforalldbs]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::vector<Catalog *> Catalog_Namespace::SysCatalog::getCatalogsForAllDbs()
+```
+</CodeBlock>
+
+### getCatalog [#getcatalog]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog> Catalog_Namespace::SysCatalog::getCatalog(
+    const std::string &dbName
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog> Catalog_Namespace::SysCatalog::getCatalog(
+    const int32_t db_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBMetadata": "../structs/dbmetadata", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog> Catalog_Namespace::SysCatalog::getCatalog(
+    const DBMetadata &curDB,
+    bool is_new_db
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### removeCatalog [#removecatalog]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::removeCatalog(
+    const std::string &dbName
+)
+```
+</CodeBlock>
+
+### reassignObjectOwners [#reassignobjectowners]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::reassignObjectOwners(
+    const std::map<int32_t, std::vector<DBObject>> &old_owner_db_objects,
+    int32_t new_owner_id,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+Reassigns database object ownership from a set of users (old owners) to another user (new owner).
+
+**Parameters**
+
+<ParamField path="old_owner_db_objects" type="const std::map<int32_t, std::vector<DBObject>> &">
+- Map of user ids and database objects whose ownership will be reassigned
+</ParamField>
+
+<ParamField path="new_owner_id" type="int32_t">
+- Id of user who will own reassigned database objects
+</ParamField>
+
+<ParamField path="catalog" type="const Catalog_Namespace::Catalog &">
+- Catalog for database where ownership reassignment occurred
+</ParamField>
+
+### hasExecutedMigration [#hasexecutedmigration]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::hasExecutedMigration(
+    const std::string &migration_name
+) const
+```
+</CodeBlock>
+
+### checkDateInDaysMigration [#checkdateindaysmigration]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::checkDateInDaysMigration() const
+```
+</CodeBlock>
+
+### checkDropRenderGroupColumnsMigration [#checkdroprendergroupcolumnsmigration]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::checkDropRenderGroupColumnsMigration() const
+```
+</CodeBlock>
+
+### getDistributedMutex [#getdistributedmutex]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+heavyai::DistributedSharedMutex & Catalog_Namespace::SysCatalog::getDistributedMutex() const
+```
+</CodeBlock>
+
+### setMaxNumUsers [#setmaxnumusers]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::setMaxNumUsers(
+    const std::optional<int32_t> &num_users
+)
+```
+</CodeBlock>
+
+Set the new number of allowed users across the entire system.
+
+Validates if this new number does not exceed current capacity, if so, throws.
+
+**Parameters**
+
+<ParamField path="num_users" type="const std::optional<int32_t> &">
+- The new maximum number of users allowed, can be std::nullopt in which case this limit is ignored.
+</ParamField>
+
+### getMaxNumUsers [#getmaxnumusers]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+std::optional<int32_t> Catalog_Namespace::SysCatalog::getMaxNumUsers() const
+```
+</CodeBlock>
+
+### initDB [#initdb]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::initDB()
+```
+</CodeBlock>
+
+### buildMaps [#buildmaps]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::buildMaps(
+    bool is_new_db = false
+)
+```
+</CodeBlock>
+
+### buildMapsUnlocked [#buildmapsunlocked]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::buildMapsUnlocked(
+    bool is_new_db = false
+)
+```
+</CodeBlock>
+
+### buildRoleMapUnlocked [#buildrolemapunlocked]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::buildRoleMapUnlocked()
+```
+</CodeBlock>
+
+### buildUserRoleMapUnlocked [#builduserrolemapunlocked]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::buildUserRoleMapUnlocked()
+```
+</CodeBlock>
+
+### buildObjectDescriptorMapUnlocked [#buildobjectdescriptormapunlocked]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::buildObjectDescriptorMapUnlocked()
+```
+</CodeBlock>
+
+### rebuildObjectMapsUnlocked [#rebuildobjectmapsunlocked]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::rebuildObjectMapsUnlocked()
+```
+</CodeBlock>
+
+### checkAndExecuteMigrations [#checkandexecutemigrations]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::checkAndExecuteMigrations()
+```
+</CodeBlock>
+
+### importDataFromOldMapdDB [#importdatafromoldmapddb]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::importDataFromOldMapdDB()
+```
+</CodeBlock>
+
+### createRoles [#createroles]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::createRoles()
+```
+</CodeBlock>
+
+### createPolicies [#createpolicies]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::createPolicies()
+```
+</CodeBlock>
+
+### fixRolesMigration [#fixrolesmigration]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::fixRolesMigration()
+```
+</CodeBlock>
+
+### addAdminUserRole [#addadminuserrole]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::addAdminUserRole()
+```
+</CodeBlock>
+
+### migratePrivileges [#migrateprivileges]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::migratePrivileges()
+```
+</CodeBlock>
+
+### migrateColumnLevelSecurity [#migratecolumnlevelsecurity]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::migrateColumnLevelSecurity()
+```
+</CodeBlock>
+
+### migrateImmerseUserMetadata [#migrateimmerseusermetadata]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::migrateImmerseUserMetadata()
+```
+</CodeBlock>
+
+### migrateImmerseDatabaseMetadata [#migrateimmersedatabasemetadata]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::migrateImmerseDatabaseMetadata()
+```
+</CodeBlock>
+
+### migratePrivileged_old [#migrateprivilegedold]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::migratePrivileged_old()
+```
+</CodeBlock>
+
+### updateUserSchema [#updateuserschema]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::updateUserSchema()
+```
+</CodeBlock>
+
+### updatePasswordsToHashes [#updatepasswordstohashes]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::updatePasswordsToHashes()
+```
+</CodeBlock>
+
+### updateBlankPasswordsToRandom [#updateblankpasswordstorandom]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::updateBlankPasswordsToRandom()
+```
+</CodeBlock>
+
+### updateSupportUserDeactivation [#updatesupportuserdeactivation]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::updateSupportUserDeactivation()
+```
+</CodeBlock>
+
+### migrateDBAccessPrivileges [#migratedbaccessprivileges]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::migrateDBAccessPrivileges()
+```
+</CodeBlock>
+
+### loginImpl [#loginimpl]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::loginImpl(
+    std::string &username,
+    const std::string &password,
+    UserMetadata &user_meta
+)
+```
+</CodeBlock>
+
+### checkPasswordForUserImpl [#checkpasswordforuserimpl]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::checkPasswordForUserImpl(
+    const std::string &passwd,
+    std::string &name,
+    UserMetadata &user
+)
+```
+</CodeBlock>
+
+### checkDuplicateCaseInsensitiveDbNames [#checkduplicatecaseinsensitivedbnames]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::checkDuplicateCaseInsensitiveDbNames() const
+```
+</CodeBlock>
+
+### rejectLegacyReplicatedPartitions [#rejectlegacyreplicatedpartitions]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::rejectLegacyReplicatedPartitions() const
+```
+</CodeBlock>
+
+### runUpdateQueriesAndChangeOwnership [#runupdatequeriesandchangeownership]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "UserMetadata": "../structs/usermetadata", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::runUpdateQueriesAndChangeOwnership(
+    const UserMetadata &new_owner,
+    const UserMetadata &previous_owner,
+    DBObject object,
+    const Catalog_Namespace::Catalog &catalog,
+    const UpdateQueries &update_queries,
+    bool revoke_privileges = true
+)
+```
+</CodeBlock>
+
+### grantDefaultPrivilegesToRole_unsafe [#grantdefaultprivilegestoroleunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantDefaultPrivilegesToRole_unsafe(
+    const std::string &name,
+    bool issuper
+)
+```
+</CodeBlock>
+
+### createRole_unsafe [#createroleunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::createRole_unsafe(
+    const std::string &roleName,
+    const bool userPrivateRole,
+    const bool is_temporary
+)
+```
+</CodeBlock>
+
+### dropRole_unsafe [#droproleunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::dropRole_unsafe(
+    const std::string &roleName,
+    const bool is_temporary
+)
+```
+</CodeBlock>
+
+### grantRoleBatch_unsafe [#grantrolebatchunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantRoleBatch_unsafe(
+    const std::vector<std::string> &roles,
+    const std::vector<std::string> &grantees
+)
+```
+</CodeBlock>
+
+### grantRole_unsafe [#grantroleunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantRole_unsafe(
+    const std::string &roleName,
+    const std::string &granteeName,
+    const bool is_temporary
+)
+```
+</CodeBlock>
+
+### revokeRoleBatch_unsafe [#revokerolebatchunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeRoleBatch_unsafe(
+    const std::vector<std::string> &roles,
+    const std::vector<std::string> &grantees
+)
+```
+</CodeBlock>
+
+### revokeRole_unsafe [#revokeroleunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeRole_unsafe(
+    const std::string &roleName,
+    const std::string &granteeName,
+    const bool is_temporary
+)
+```
+</CodeBlock>
+
+### updateObjectDescriptorMap [#updateobjectdescriptormap]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::updateObjectDescriptorMap(
+    const std::string &roleName,
+    DBObject &object,
+    bool roleType,
+    const Catalog_Namespace::Catalog &cat
+)
+```
+</CodeBlock>
+
+### deleteObjectDescriptorMap [#deleteobjectdescriptormap]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::deleteObjectDescriptorMap(
+    const std::string &roleName
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::deleteObjectDescriptorMap(
+    const std::string &roleName,
+    DBObject &object,
+    const Catalog_Namespace::Catalog &cat
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### grantDBObjectPrivilegesBatch_unsafe [#grantdbobjectprivilegesbatchunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantDBObjectPrivilegesBatch_unsafe(
+    const std::vector<std::string> &grantees,
+    const std::vector<DBObject> &objects,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### grantDBObjectPrivileges_unsafe [#grantdbobjectprivilegesunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantDBObjectPrivileges_unsafe(
+    const std::string &granteeName,
+    const DBObject object,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### revokeDBObjectPrivilegesBatch_unsafe [#revokedbobjectprivilegesbatchunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeDBObjectPrivilegesBatch_unsafe(
+    const std::vector<std::string> &grantees,
+    const std::vector<DBObject> &objects,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### revokeDBObjectPrivileges_unsafe [#revokedbobjectprivilegesunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeDBObjectPrivileges_unsafe(
+    const std::string &granteeName,
+    DBObject object,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### grantAllOnDatabase_unsafe [#grantallondatabaseunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBObject": "../../classes/dbobject", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::grantAllOnDatabase_unsafe(
+    const std::string &roleName,
+    DBObject &object,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+### revokeAllOnDatabase_unsafe [#revokeallondatabaseunsafe]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "Grantee": "../../classes/grantee"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::revokeAllOnDatabase_unsafe(
+    const std::string &roleName,
+    int32_t dbId,
+    Grantee *grantee
+)
+```
+</CodeBlock>
+
+### isDashboardSystemRole [#isdashboardsystemrole]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::isDashboardSystemRole(
+    const std::string &roleName
+) const
+```
+</CodeBlock>
+
+### updateUserRoleName [#updateuserrolename]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::updateUserRoleName(
+    const std::string &roleName,
+    const std::string &newName
+)
+```
+</CodeBlock>
+
+### getMetadataWithDefaultDB [#getmetadatawithdefaultdb]
+
+<CodeBlock links={{"SysCatalog": "syscatalog", "DBMetadata": "../structs/dbmetadata", "UserMetadata": "../structs/usermetadata"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::getMetadataWithDefaultDB(
+    std::string &dbname,
+    const std::string &username,
+    Catalog_Namespace::DBMetadata &db_meta,
+    UserMetadata &user_meta
+)
+```
+</CodeBlock>
+
+### getObjectPermissionsSchema [#getobjectpermissionsschema]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+const std::string Catalog_Namespace::SysCatalog::getObjectPermissionsSchema()
+```
+</CodeBlock>
+
+### allowLocalLogin [#allowlocallogin]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::allowLocalLogin() const
+```
+</CodeBlock>
+
+For servers configured to use external authentication providers, determine whether users will be allowed to fallback to local login accounts.
+
+If no external providers are configured, returns true.
+
+### execInTransaction [#execintransaction]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+template <typename F, typename... Args>
+void Catalog_Namespace::SysCatalog::execInTransaction(
+    F &&f,
+    Args &&... args
+)
+```
+</CodeBlock>
+
+### initializeInformationSchemaDb [#initializeinformationschemadb]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::initializeInformationSchemaDb()
+```
+</CodeBlock>
+
+### recordExecutedMigration [#recordexecutedmigration]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::recordExecutedMigration(
+    const std::string &migration_name
+) const
+```
+</CodeBlock>
+
+### hasVersionHistoryTable [#hasversionhistorytable]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::SysCatalog::hasVersionHistoryTable() const
+```
+</CodeBlock>
+
+### createVersionHistoryTable [#createversionhistorytable]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::createVersionHistoryTable() const
+```
+</CodeBlock>
+
+### yieldTransactionStreamer [#yieldtransactionstreamer]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+auto Catalog_Namespace::SysCatalog::yieldTransactionStreamer()
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### instance [#instance]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+SysCatalog & Catalog_Namespace::SysCatalog::instance()
+```
+</CodeBlock>
+
+### destroy [#destroy]
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::SysCatalog::destroy()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `GranteeMap` | `std::map< std::string, std::unique_ptr< Grantee > >` |
+| `ObjectRoleDescriptorMap` | `std::multimap< std::string, std::unique_ptr< ObjectRoleDescriptor > >` |
+| `UpdateQueries` | `std::list< UpdateQuery >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `basePath_` | `std::string` | |
+| `granteeMap_` | `GranteeMap` | |
+| `objectDescriptorMap_` | `ObjectRoleDescriptorMap` | |
+| `sqliteConnector_` | `std::unique_ptr< SqliteConnector >` | |
+| `dataMgr_` | `std::shared_ptr< Data_Namespace::DataMgr >` | |
+| `authMetadata_` | `const AuthMetadata *` | |
+| `calciteMgr_` | `std::shared_ptr< Calcite >` | |
+| `cat_map_` | `std::map< std::string, std::shared_ptr< Catalog > >` | |
+| `is_initialized_` | `bool` | |
+| `max_num_users_` | `std::optional< int32_t >` | |
+| `mutex_desc_` | `SharedMutexWrapper` | |
+| `sqlite_mutex_desc_` | `SharedMutexWrapper` | |
+| `cat_init_mutex_desc_` | `SharedMutexWrapper` | |
+| `instance_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `instance_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< SysCatalog >` | |
+| `thread_holds_read_lock` <Badge intent="note" minimal>static</Badge> | `bool` | |
+| `temporary_users_by_name_` | `std::unordered_map< std::string, std::shared_ptr< UserMetadata > >` | |
+| `temporary_users_by_id_` | `std::unordered_map< int32_t, std::shared_ptr< UserMetadata > >` | |
+| `next_temporary_user_id_` | `int32_t` | |
+
+---
+
+## Inner classes
+
+### UpdateQuery
+
+<CodeBlock links={{"SysCatalog": "syscatalog"}}>
+```cpp showLineNumbers={false}
+struct Catalog_Namespace::SysCatalog::UpdateQuery
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `query` | `std::string` | |
+| `text_params` | `std::vector< std::string >` | |

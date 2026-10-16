@@ -1,0 +1,28 @@
+---
+title: File_Namespace::append
+description: "Appends the specified number of bytes to the end of the file f from buf."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+size_t File_Namespace::append(
+    FILE *f,
+    const size_t size,
+    const int8_t *buf
+)
+```
+</CodeBlock>
+
+Appends the specified number of bytes to the end of the file f from buf.
+
+**Returns:** size_t The number of bytes written.
+
+**Parameters**
+
+<ParamField path="f" type="FILE *">
+Pointer to the FILE.
+</ParamField>
+
+<ParamField path="buf" type="const int8_t *">
+The source buffer containing the data to be appended.
+</ParamField>

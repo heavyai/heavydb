@@ -1,0 +1,29 @@
+---
+title: cast_to_agg_expr
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+const Analyzer::AggExpr * cast_to_agg_expr(
+    const Analyzer::Expr *target_expr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+const Analyzer::AggExpr * cast_to_agg_expr(
+    const std::shared_ptr<Analyzer::Expr> target_expr
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

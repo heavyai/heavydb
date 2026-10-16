@@ -1,0 +1,44 @@
+---
+title: _test_runtime_sub
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+T _test_runtime_sub(
+    T x,
+    T y
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template int64_t _test_runtime_sub(
+    int64_t,
+    int64_t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template double _test_runtime_sub(
+    double,
+    double
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,18 @@
+---
+title: fill_int8_t_missing_value
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+C RUNTIME_EXPORT ALWAYS_INLINE int8_t fill_int8_t_missing_value(
+    int64_t const cur_row_idx_in_frame,
+    int8_t const null_val,
+    int8_t *const col_buf,
+    int64_t const num_elems_in_partition,
+    int32_t *const partition_rowid_buf,
+    int64_t *const ordered_index_buf,
+    bool const is_forward_fill
+)
+```
+</CodeBlock>

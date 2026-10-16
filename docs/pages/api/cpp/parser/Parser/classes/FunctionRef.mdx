@@ -1,0 +1,127 @@
+---
+title: Parser::FunctionRef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### FunctionRef [#functionref]
+
+<Tabs>
+<Tab title="From raw pointer">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"FunctionRef": "functionref"}}>
+```cpp showLineNumbers={false}
+Parser::FunctionRef::FunctionRef(
+    std::string *n
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"FunctionRef": "functionref", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::FunctionRef::FunctionRef(
+    std::string *n,
+    Expr *a
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"FunctionRef": "functionref", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::FunctionRef::FunctionRef(
+    std::string *n,
+    bool d,
+    Expr *a
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_name [#getname]
+
+<CodeBlock links={{"FunctionRef": "functionref"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::FunctionRef::get_name() const
+```
+</CodeBlock>
+
+### get_distinct [#getdistinct]
+
+<CodeBlock links={{"FunctionRef": "functionref"}}>
+```cpp showLineNumbers={false}
+bool Parser::FunctionRef::get_distinct() const
+```
+</CodeBlock>
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"FunctionRef": "functionref", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Expr * Parser::FunctionRef::get_arg() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"FunctionRef": "functionref"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::FunctionRef::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"FunctionRef": "functionref"}}>
+```cpp showLineNumbers={false}
+std::string Parser::FunctionRef::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name_` | `std::unique_ptr< std::string >` | |
+| `distinct_` | `bool` | |
+| `arg_` | `std::unique_ptr< Expr >` | |

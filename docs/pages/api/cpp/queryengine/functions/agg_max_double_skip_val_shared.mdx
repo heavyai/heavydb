@@ -1,0 +1,33 @@
+---
+title: agg_max_double_skip_val_shared
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ void agg_max_double_skip_val_shared(
+    int64_t *agg,
+    const double val,
+    const double skip_val
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+C NEVER_INLINE void agg_max_double_skip_val_shared(
+    int64_t *agg,
+    const double val,
+    const double skip_val
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

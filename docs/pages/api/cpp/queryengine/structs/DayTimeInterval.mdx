@@ -1,0 +1,85 @@
+---
+title: DayTimeInterval
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Constructors
+
+### DayTimeInterval [#daytimeinterval]
+
+<CodeBlock links={{"DayTimeInterval": "daytimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE DayTimeInterval::DayTimeInterval(
+    int64_t init
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"DayTimeInterval": "daytimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool DayTimeInterval::operator==(
+    const DayTimeInterval &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"DayTimeInterval": "daytimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool DayTimeInterval::operator!=(
+    const DayTimeInterval &other
+) const
+```
+</CodeBlock>
+
+### operator+ [#operator_plus]
+
+<CodeBlock links={{"DayTimeInterval": "daytimeinterval", "Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp DayTimeInterval::operator+(
+    const Timestamp &t
+) const
+```
+</CodeBlock>
+
+### operator* [#operator_mul]
+
+<CodeBlock links={{"DayTimeInterval": "daytimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE DayTimeInterval DayTimeInterval::operator*(
+    const int64_t multiplier
+) const
+```
+</CodeBlock>
+
+### numStepsBetween [#numstepsbetween]
+
+<CodeBlock links={{"DayTimeInterval": "daytimeinterval", "Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t DayTimeInterval::numStepsBetween(
+    const Timestamp &begin,
+    const Timestamp &end
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `timeval` | `int64_t` | |

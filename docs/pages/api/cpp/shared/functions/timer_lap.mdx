@@ -1,0 +1,15 @@
+---
+title: timer_lap
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename Type = std::chrono::steady_clock::time_point,
+          typename TypeR = std::chrono::milliseconds>
+std::string timer_lap(
+    Type clock_begin,
+    Type &clock_last
+)
+```
+</CodeBlock>

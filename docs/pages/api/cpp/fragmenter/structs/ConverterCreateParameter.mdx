@@ -1,0 +1,23 @@
+---
+title: ConverterCreateParameter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetValueConvertersFactories.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `num_rows` | `size_t` | |
+| `source` | `const TargetMetaInfo` | |
+| `target` | `const ColumnDescriptor *` | |
+| `target_cat` | `const Catalog_Namespace::Catalog &` | |
+| `type` | `const SQLTypeInfo &` | |
+| `can_be_null` | `bool` | |
+| `literals_dictionary` | `StringDictionaryProxy *` | |
+| `source_dictionary_proxy` | `StringDictionaryProxy *` | |

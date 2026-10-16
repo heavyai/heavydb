@@ -1,0 +1,44 @@
+---
+title: pca_fit__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "ColumnList": "../structs/columnlist", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t pca_fit__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const ColumnList<T> &input_features,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t pca_fit__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const ColumnList<TextEncodingDict> &input_cat_features,
+    const ColumnList<T> &input_numeric_features,
+    const int32_t cat_top_k,
+    const float cat_min_fraction,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

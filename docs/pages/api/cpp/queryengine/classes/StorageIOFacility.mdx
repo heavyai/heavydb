@@ -1,0 +1,139 @@
+---
+title: StorageIOFacility
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StorageIOFacility.h>
+```
+
+---
+
+## Constructors
+
+### StorageIOFacility [#storageiofacility]
+
+<CodeBlock links={{"StorageIOFacility": "storageiofacility", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+StorageIOFacility::StorageIOFacility(
+    Executor *executor
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### yieldUpdateCallback [#yieldupdatecallback]
+
+<CodeBlock links={{"StorageIOFacility": "storageiofacility", "UpdateTransactionParameters": "#updatetransactionparameters"}}>
+```cpp showLineNumbers={false}
+StorageIOFacility::UpdateCallback StorageIOFacility::yieldUpdateCallback(
+    UpdateTransactionParameters &update_parameters
+)
+```
+</CodeBlock>
+
+### yieldDeleteCallback [#yielddeletecallback]
+
+<CodeBlock links={{"StorageIOFacility": "storageiofacility", "DeleteTransactionParameters": "#deletetransactionparameters"}}>
+```cpp showLineNumbers={false}
+StorageIOFacility::UpdateCallback StorageIOFacility::yieldDeleteCallback(
+    DeleteTransactionParameters &delete_parameters
+)
+```
+</CodeBlock>
+
+### normalized_cpu_threads [#normalizedcputhreads]
+
+<CodeBlock links={{"StorageIOFacility": "storageiofacility"}}>
+```cpp showLineNumbers={false}
+int StorageIOFacility::normalized_cpu_threads() const
+```
+</CodeBlock>
+
+### getRsBufferNoPadding [#getrsbuffernopadding]
+
+<CodeBlock links={{"StorageIOFacility": "storageiofacility", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+static std::unique_ptr<int8_t[]> StorageIOFacility::getRsBufferNoPadding(
+    const ResultSet *rs,
+    size_t col_idx,
+    const SQLTypeInfo &column_type,
+    size_t row_count
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `UpdateCallback` | `UpdateLogForFragment::Callback` |
+| `TableDescriptorType` | `TableDescriptor` |
+| `DeleteVictimOffsetList` | `std::vector< uint64_t >` |
+| `UpdateTargetOffsetList` | `std::vector< uint64_t >` |
+| `UpdateTargetTypeList` | `std::vector< TargetMetaInfo >` |
+| `UpdateTargetColumnNamesList` | `std::vector< std::string >` |
+| `TransactionLog` | `Fragmenter_Namespace::InsertOrderFragmenter::ModifyTransactionTracker` |
+| `TransactionLogPtr` | `std::unique_ptr< TransactionLog >` |
+| `ColumnValidationFunction` | `std::function< bool(std::string const  &)>` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `Executor *` | |
+
+---
+
+## Inner classes
+
+### TransactionParameters
+
+<CodeBlock links={{"StorageIOFacility": "storageiofacility"}}>
+```cpp showLineNumbers={false}
+class StorageIOFacility::TransactionParameters
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `transaction_tracker_` | `StorageIOFacility::TransactionLog` | |
+| `table_descriptor_` | `TableDescriptorType const  *` | |
+| `table_is_temporary_` | `bool` | |
+| `catalog_` | `const Catalog_Namespace::Catalog &` | |
+| `input_source_node_` | `const RelAlgNode *` | |
+
+### DeleteTransactionParameters
+
+<CodeBlock links={{"StorageIOFacility": "storageiofacility"}}>
+```cpp showLineNumbers={false}
+struct StorageIOFacility::DeleteTransactionParameters
+```
+</CodeBlock>
+
+**Inherits from:** `StorageIOFacility::TransactionParameters` (public)
+
+### UpdateTransactionParameters
+
+<CodeBlock links={{"StorageIOFacility": "storageiofacility"}}>
+```cpp showLineNumbers={false}
+class StorageIOFacility::UpdateTransactionParameters
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `update_column_names_` | `UpdateTargetColumnNamesList` | |
+| `targets_meta_` | `UpdateTargetTypeList const  &` | |
+| `varlen_update_required_` | `bool` | |
+
+**Inherits from:** `StorageIOFacility::TransactionParameters` (public)

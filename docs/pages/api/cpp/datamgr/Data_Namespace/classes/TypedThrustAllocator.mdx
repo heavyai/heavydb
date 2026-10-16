@@ -1,0 +1,102 @@
+---
+title: Data_Namespace::TypedThrustAllocator
+description: "a Templated version of Data_Namespace::ThrustAllocator that can be used as a custom allocator in thrust device containers such as thrust::device_vector."
+---
+
+<CodeBlock id="TypedThrustAllocator" links={{"TypedThrustAllocator": "typedthrustallocator"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class TypedThrustAllocator
+```
+</CodeBlock>
+
+a Templated version of Data_Namespace::ThrustAllocator that can be used as a custom allocator in thrust device containers such as thrust::device_vector.
+
+Note that this class derives from thrust::mr::allocator in order to meet the requirements of an [Allocator](../../classes/allocator)
+
+```cpp showLineNumbers={false}
+#include <Data_Namespace/TypedThrustAllocator.h>
+```
+
+## Example
+
+```cpp showLineNumbers={false}
+// creates a thrust allocator on device 0
+ThrustAllocator thrust_allocator(data_mgr, 0);
+// creates a device vector that allocates storage via the above ThrustAllocator
+thrust::device_vector<int, TypedThrustAllocator<int>>
+vec(10, TypedThrustAllocator<int>(thrust_allocator));
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+**Inherits from:** `Data_Namespace::detail::TypedThrustAllocatorState` (public), `thrust::mr::allocator< T, detail::TypedThrustAllocatorState::DeviceResource >` (public)
+
+---
+
+## Constructors
+
+### TypedThrustAllocator [#typedthrustallocator]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TypedThrustAllocator": "typedthrustallocator", "ThrustAllocator": "../../classes/thrustallocator"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::TypedThrustAllocator<T>::TypedThrustAllocator(
+    ThrustAllocator &thrust_allocator
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"TypedThrustAllocator": "typedthrustallocator"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::TypedThrustAllocator<T>::TypedThrustAllocator(
+    const TypedThrustAllocator &other
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"TypedThrustAllocator": "typedthrustallocator"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::TypedThrustAllocator<T>::TypedThrustAllocator(
+    TypedThrustAllocator &&other
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"TypedThrustAllocator": "typedthrustallocator"}}>
+```cpp showLineNumbers={false}
+__host__ __device__ void Data_Namespace::TypedThrustAllocator<T>::operator=(
+    const TypedThrustAllocator<T> &other
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Base` | `thrust::mr::allocator< T, detail::TypedThrustAllocatorState::DeviceResource >` |

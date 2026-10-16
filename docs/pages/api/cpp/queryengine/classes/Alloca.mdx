@@ -1,0 +1,80 @@
+---
+title: Alloca
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### Alloca [#alloca]
+
+<CodeBlock links={{"Alloca": "alloca", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Alloca::Alloca(
+    const Type element_type,
+    const Value *array_size,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### array_size [#arraysize]
+
+<CodeBlock links={{"Alloca": "alloca", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * Alloca::array_size() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"Alloca": "alloca", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void Alloca::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"Alloca": "alloca", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"Alloca": "alloca", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"Alloca": "alloca", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `array_size_` | `const Value *` | |

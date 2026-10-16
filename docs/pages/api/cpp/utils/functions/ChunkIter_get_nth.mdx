@@ -1,0 +1,65 @@
+---
+title: ChunkIter_get_nth
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ChunkIter": "../classes/chunkiter"}}>
+```cpp showLineNumbers={false}
+DEVICE void ChunkIter_get_nth(
+    ChunkIter *it,
+    int n,
+    bool uncompress,
+    VarlenDatum *result,
+    bool *is_end
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ChunkIter": "../classes/chunkiter"}}>
+```cpp showLineNumbers={false}
+DEVICE void ChunkIter_get_nth(
+    ChunkIter *it,
+    int n,
+    ArrayDatum *result,
+    bool *is_end
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ChunkIter": "../classes/chunkiter"}}>
+```cpp showLineNumbers={false}
+DEVICE void ChunkIter_get_nth(
+    ChunkIter *it,
+    int nth,
+    bool uncompress,
+    VarlenDatum *vd,
+    bool *is_end
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"ChunkIter": "../classes/chunkiter"}}>
+```cpp showLineNumbers={false}
+DEVICE void ChunkIter_get_nth(
+    ChunkIter *it,
+    int nth,
+    ArrayDatum *vd,
+    bool *is_end
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

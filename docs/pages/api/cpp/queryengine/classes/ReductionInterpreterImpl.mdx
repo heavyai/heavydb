@@ -1,0 +1,221 @@
+---
+title: ReductionInterpreterImpl
+description: ""
+---
+
+---
+
+## Constructors
+
+### ReductionInterpreterImpl [#reductioninterpreterimpl]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+ReductionInterpreterImpl::ReductionInterpreterImpl(
+    const size_t executor_id,
+    const std::vector<ReductionInterpreter::EvalValue> &vars
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### ret [#ret]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+std::optional<ReductionInterpreter::EvalValue> ReductionInterpreterImpl::ret() const
+```
+</CodeBlock>
+
+### getExecutorId [#getexecutorid]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+size_t ReductionInterpreterImpl::getExecutorId() const
+```
+</CodeBlock>
+
+### setVar [#setvar]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Value": "value"}}>
+```cpp showLineNumbers={false}
+void ReductionInterpreterImpl::setVar(
+    const Value *var,
+    ReductionInterpreter::EvalValue value
+)
+```
+</CodeBlock>
+
+### getCallInputs [#getcallinputs]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Call": "call"}}>
+```cpp showLineNumbers={false}
+template <class Call>
+static std::vector<ReductionInterpreter::EvalValue> ReductionInterpreterImpl::getCallInputs(
+    const Call *call,
+    const ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### bindStub [#bindstub]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Call": "call"}}>
+```cpp showLineNumbers={false}
+template <class Call>
+static StubGenerator::Stub ReductionInterpreterImpl::bindStub(
+    const size_t executor_id,
+    const Call *call
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### runGetElementPtr [#rungetelementptr]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runGetElementPtr(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runLoad [#runload]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runLoad(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runICmp [#runicmp]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runICmp(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runBinaryOperator [#runbinaryoperator]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runBinaryOperator(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runCast [#runcast]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runCast(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runRet [#runret]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runRet(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runCall [#runcall]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runCall(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runExternalCall [#runexternalcall]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runExternalCall(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runAlloca [#runalloca]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runAlloca(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runMemCpy [#runmemcpy]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runMemCpy(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runReturnEarly [#runreturnearly]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runReturnEarly(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+### runFor [#runfor]
+
+<CodeBlock links={{"ReductionInterpreterImpl": "reductioninterpreterimpl", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+static void ReductionInterpreterImpl::runFor(
+    const Instruction *instruction,
+    ReductionInterpreterImpl *interpreter
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_id_` | `size_t` | |
+| `vars_` | `std::vector< ReductionInterpreter::EvalValue >` | |
+| `alloca_buffers_` | `std::vector< std::vector< int8_t > >` | |
+| `ret_` | `std::optional< ReductionInterpreter::EvalValue >` | |

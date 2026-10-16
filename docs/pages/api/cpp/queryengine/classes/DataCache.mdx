@@ -1,0 +1,65 @@
+---
+title: DataCache
+description: ""
+---
+
+<CodeBlock id="DataCache" links={{"DataCache": "datacache"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class DataCache
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TableFunctionsDataCache.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Methods
+
+### isKeyCached [#iskeycached]
+
+<CodeBlock links={{"DataCache": "datacache"}}>
+```cpp showLineNumbers={false}
+bool DataCache<T>::isKeyCached(
+    const std::string &key
+) const
+```
+</CodeBlock>
+
+### getDataForKey [#getdataforkey]
+
+<CodeBlock links={{"DataCache": "datacache"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<T> DataCache<T>::getDataForKey(
+    const std::string &key
+) const
+```
+</CodeBlock>
+
+### putDataForKey [#putdataforkey]
+
+<CodeBlock links={{"DataCache": "datacache"}}>
+```cpp showLineNumbers={false}
+void DataCache<T>::putDataForKey(
+    const std::string &key,
+    std::shared_ptr<T> const data
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `data_cache_` | `std::unordered_map< std::string, std::shared_ptr< T > >` | |
+| `cache_mutex_` | `std::shared_mutex` | |
+| `debug_print_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `bool` | |

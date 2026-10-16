@@ -1,0 +1,15 @@
+---
+title: foreign_storage::create_futures_for_workers
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename Container>
+std::vector<std::future<void>> foreign_storage::create_futures_for_workers(
+    const Container &items,
+    size_t max_threads,
+    std::function<void(const Container &)> lambda
+)
+```
+</CodeBlock>

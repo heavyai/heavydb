@@ -1,0 +1,49 @@
+---
+title: DataRecyclerUtil
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DataRecycler.h>
+```
+
+---
+
+## Static methods
+
+### getDeviceIdentifierString [#getdeviceidentifierstring]
+
+<CodeBlock links={{"DataRecyclerUtil": "datarecyclerutil"}}>
+```cpp showLineNumbers={false}
+static std::string DataRecyclerUtil::getDeviceIdentifierString(
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### getUnitaryTableKey [#getunitarytablekey]
+
+<CodeBlock links={{"DataRecyclerUtil": "datarecyclerutil"}}>
+```cpp showLineNumbers={false}
+static QueryPlanHash DataRecyclerUtil::getUnitaryTableKey()
+```
+</CodeBlock>
+
+### getAlternativeTableKeys [#getalternativetablekeys]
+
+<CodeBlock links={{"DataRecyclerUtil": "datarecyclerutil"}}>
+```cpp showLineNumbers={false}
+static std::unordered_set<size_t> DataRecyclerUtil::getAlternativeTableKeys(
+    const std::unordered_map<int, ChunkKey> &chunk_keys,
+    const shared::TableKey &inner_table_key
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `CPU_DEVICE_IDENTIFIER` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `DeviceIdentifier` | |

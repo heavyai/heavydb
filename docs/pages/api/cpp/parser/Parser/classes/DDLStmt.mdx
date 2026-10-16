@@ -1,0 +1,36 @@
+---
+title: Parser::DDLStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Stmt` (public)
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+virtual void Parser::DDLStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+)
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"DDLStmt": "ddlstmt", "ColumnDef": "columndef"}}>
+```cpp showLineNumbers={false}
+void Parser::DDLStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>

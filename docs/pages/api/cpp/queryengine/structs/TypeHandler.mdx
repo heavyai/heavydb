@@ -1,0 +1,32 @@
+---
+title: TypeHandler
+description: ""
+---
+
+<CodeBlock id="TypeHandler" links={{"TypeHandler": "typehandler"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename U>
+struct TypeHandler
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TypeHandler.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+<ParamField path="U" type="typename">
+</ParamField>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_index` | `std::type_index` | |
+| `handler` | `void(T::*` | |

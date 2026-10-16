@@ -1,0 +1,70 @@
+---
+title: Timer
+description: ""
+---
+
+<CodeBlock id="Timer" links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+template <typename TimeT = std::chrono::milliseconds>
+class Timer
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <measure.h>
+```
+
+**Template parameters**
+
+<ParamField path="TimeT" type="typename" default="std::chrono::milliseconds">
+</ParamField>
+
+---
+
+## Constructors
+
+### Timer [#timer]
+
+<CodeBlock links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+Timer<TimeT>::Timer()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### start [#start]
+
+<CodeBlock links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+void Timer<TimeT>::start()
+```
+</CodeBlock>
+
+### stop [#stop]
+
+<CodeBlock links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+void Timer<TimeT>::stop()
+```
+</CodeBlock>
+
+### elapsed [#elapsed]
+
+<CodeBlock links={{"Timer": "timer"}}>
+```cpp showLineNumbers={false}
+TimeT::rep Timer<TimeT>::elapsed()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `start_time_` | `std::chrono::steady_clock::time_point` | |
+| `duration` | `TimeT::rep` | |
+| `timer_started_` | `bool` | |

@@ -1,0 +1,101 @@
+---
+title: ChunkMetadata
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ChunkMetadata.h>
+```
+
+---
+
+## Constructors
+
+### ChunkMetadata [#chunkmetadata]
+
+<Tabs>
+<Tab title="Copy (with chunk stats and raster tile)">
+
+<CodeBlock links={{"ChunkMetadata": "chunkmetadata", "ChunkStats": "chunkstats", "RasterTileInfo": "rastertileinfo"}}>
+```cpp showLineNumbers={false}
+ChunkMetadata::ChunkMetadata(
+    const SQLTypeInfo &sql_type,
+    const size_t num_bytes,
+    const size_t num_elements,
+    const ChunkStats &chunk_stats,
+    const RasterTileInfo &raster_tile
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"ChunkMetadata": "chunkmetadata"}}>
+```cpp showLineNumbers={false}
+ChunkMetadata::ChunkMetadata(
+    const SQLTypeInfo &sql_type,
+    const size_t num_bytes,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"ChunkMetadata": "chunkmetadata"}}>
+```cpp showLineNumbers={false}
+ChunkMetadata::ChunkMetadata()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### fillChunkStats [#fillchunkstats]
+
+<CodeBlock links={{"ChunkMetadata": "chunkmetadata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void ChunkMetadata::fillChunkStats(
+    const T min,
+    const T max,
+    const bool has_nulls
+)
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"ChunkMetadata": "chunkmetadata"}}>
+```cpp showLineNumbers={false}
+bool ChunkMetadata::operator==(
+    const ChunkMetadata &that
+) const
+```
+</CodeBlock>
+
+### isPlaceholder [#isplaceholder]
+
+<CodeBlock links={{"ChunkMetadata": "chunkmetadata"}}>
+```cpp showLineNumbers={false}
+bool ChunkMetadata::isPlaceholder() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `sqlType` | `SQLTypeInfo` | |
+| `numBytes` | `size_t` | |
+| `numElements` | `size_t` | |
+| `chunkStats` | `ChunkStats` | |
+| `rasterTile` | `RasterTileInfo` | |

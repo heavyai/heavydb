@@ -1,0 +1,343 @@
+---
+title: RexSubQueryIdCollector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RexSubQueryIdCollector.h>
+```
+
+**Inherits from:** `RelRexDagVisitor` (public)
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Methods
+
+### visit [#visit]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+void RexSubQueryIdCollector::visit(
+    RexSubQuery const *
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelAlgNode const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexScalar const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelAggregate const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelCompound const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelFilter": "relfilter"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelFilter const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelJoin": "reljoin"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelLeftDeepInnerJoin": "relleftdeepinnerjoin"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelLeftDeepInnerJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelLogicalUnion const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelLogicalValues const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelModify": "relmodify"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelModify const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelProject const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelScan const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelSort const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelTableFunction const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 16">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelTranslatedJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 17">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RexAbstractInput const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 18">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexCase const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 19">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexFunctionOperator const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 20">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexInput const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 21">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RexLiteral const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 22">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexOperator const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 23">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RexRef const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 24">
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexWindowFunctionOperator const *
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### castAndVisit [#castandvisit]
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelAlgNode": "relalgnode", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void RexSubQueryIdCollector::castAndVisit(
+    RelAlgNode const *
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getLiveRexSubQueryIds [#getliverexsubqueryids]
+
+<CodeBlock links={{"RexSubQueryIdCollector": "rexsubqueryidcollector", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RexSubQueryIdCollector::Ids RexSubQueryIdCollector::getLiveRexSubQueryIds(
+    RelAlgNode const *
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Ids` | `std::unordered_set< unsigned >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ids_` | `Ids` | |

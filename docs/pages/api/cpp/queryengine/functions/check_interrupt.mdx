@@ -1,0 +1,34 @@
+---
+title: check_interrupt
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ bool check_interrupt()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE DEVICE bool check_interrupt()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+bool RUNTIME_EXPORT check_interrupt()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

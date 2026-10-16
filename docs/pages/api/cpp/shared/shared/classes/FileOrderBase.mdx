@@ -1,0 +1,73 @@
+---
+title: shared::FileOrderBase
+description: ""
+---
+
+<CodeBlock id="FileOrderBase" links={{"FileOrderBase": "fileorderbase"}}>
+```cpp showLineNumbers={false}
+template <class T>
+class FileOrderBase
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <shared/file_path_util.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="class">
+</ParamField>
+
+---
+
+## Constructors
+
+### FileOrderBase [#fileorderbase]
+
+<CodeBlock links={{"FileOrderBase": "fileorderbase", "FilePathOptions": "../structs/filepathoptions"}}>
+```cpp showLineNumbers={false}
+shared::FileOrderBase<T>::FileOrderBase(
+    const FilePathOptions &options
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### concatCaptureGroups [#concatcapturegroups]
+
+<CodeBlock links={{"FileOrderBase": "fileorderbase"}}>
+```cpp showLineNumbers={false}
+virtual std::string shared::FileOrderBase<T>::concatCaptureGroups(
+    const std::string &file_name
+) const
+```
+</CodeBlock>
+
+### getSortBy [#getsortby]
+
+<CodeBlock links={{"FileOrderBase": "fileorderbase"}}>
+```cpp showLineNumbers={false}
+virtual std::string shared::FileOrderBase<T>::getSortBy()
+```
+</CodeBlock>
+
+### getFileComparator [#getfilecomparator]
+
+<CodeBlock links={{"FileOrderBase": "fileorderbase"}}>
+```cpp showLineNumbers={false}
+virtual T shared::FileOrderBase<T>::getFileComparator()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `sort_regex_` | `std::optional< std::string >` | |
+| `sort_by_` | `std::optional< std::string >` | |

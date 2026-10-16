@@ -1,0 +1,143 @@
+---
+title: AutomaticIRMetadataGuard
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <AutomaticIRMetadataGuard.h>
+```
+
+---
+
+## Constructors
+
+### AutomaticIRMetadataGuard [#automaticirmetadataguard]
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard", "CgenState": "../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+AutomaticIRMetadataGuard::AutomaticIRMetadataGuard(
+    CgenState *cgen_state,
+    const std::string &ppfile,
+    const size_t ppline,
+    const std::string &ppfunc
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~AutomaticIRMetadataGuard
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard"}}>
+```cpp showLineNumbers={false}
+AutomaticIRMetadataGuard::~AutomaticIRMetadataGuard()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### done [#done]
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard"}}>
+```cpp showLineNumbers={false}
+void AutomaticIRMetadataGuard::done() noexcept
+```
+</CodeBlock>
+
+### rememberPreexistingInstructions [#rememberpreexistinginstructions]
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard"}}>
+```cpp showLineNumbers={false}
+void AutomaticIRMetadataGuard::rememberPreexistingInstructions() noexcept
+```
+</CodeBlock>
+
+### rememberOurInstructions [#rememberourinstructions]
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard"}}>
+```cpp showLineNumbers={false}
+void AutomaticIRMetadataGuard::rememberOurInstructions() noexcept
+```
+</CodeBlock>
+
+### markInstructions [#markinstructions]
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard"}}>
+```cpp showLineNumbers={false}
+void AutomaticIRMetadataGuard::markInstructions() noexcept
+```
+</CodeBlock>
+
+### makeBaseFilename [#makebasefilename]
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard"}}>
+```cpp showLineNumbers={false}
+std::string AutomaticIRMetadataGuard::makeBaseFilename()
+```
+</CodeBlock>
+
+### makeQueryEngineFilename [#makequeryenginefilename]
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard"}}>
+```cpp showLineNumbers={false}
+std::string AutomaticIRMetadataGuard::makeQueryEngineFilename()
+```
+</CodeBlock>
+
+### replacePunctuation [#replacepunctuation]
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard"}}>
+```cpp showLineNumbers={false}
+std::string AutomaticIRMetadataGuard::replacePunctuation(
+    std::string text
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `OurInstructions` | `std::unordered_map< llvm::Instruction *, InstructionInfo >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cgen_state_` | `CgenState *` | |
+| `ppfile_` | `const std::string` | |
+| `ppline_` | `const size_t` | |
+| `ppfunc_` | `const std::string` | |
+| `preexisting_instructions_` | `std::unordered_set< llvm::Instruction * >` | |
+| `our_instructions_` | `OurInstructions *` | |
+| `done_` | `bool` | |
+| `this_is_root_` | `bool` | |
+| `enabled_` | `bool` | |
+| `instructions_` <Badge intent="note" minimal>static</Badge> | `std::unordered_map< CgenState *, OurInstructions >` | |
+| `detailed_footnote_prefix_` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `instructions_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+
+---
+
+## Inner classes
+
+### InstructionInfo
+
+<CodeBlock links={{"AutomaticIRMetadataGuard": "automaticirmetadataguard"}}>
+```cpp showLineNumbers={false}
+struct AutomaticIRMetadataGuard::InstructionInfo
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `main_filename_` | `std::string` | |
+| `detailed_footnote_` | `std::string` | |

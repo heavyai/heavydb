@@ -1,0 +1,18 @@
+---
+title: Catalog_Namespace::SharedMutexWrapper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/RWLocks.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `thread_holding_lock` | `std::atomic< std::thread::id >` | |
+| `local_mutex` | `heavyai::shared_mutex` | |
+| `dist_mutex` | `std::unique_ptr< heavyai::DistributedSharedMutex >` | |

@@ -1,0 +1,92 @@
+---
+title: SQLTypeInfoLite
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <sqltypes_lite.h>
+```
+
+---
+
+## Methods
+
+### is_geoint [#isgeoint]
+
+<CodeBlock links={{"SQLTypeInfoLite": "sqltypeinfolite"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfoLite::is_geoint() const
+```
+</CodeBlock>
+
+### get_input_srid [#getinputsrid]
+
+<CodeBlock links={{"SQLTypeInfoLite": "sqltypeinfolite"}}>
+```cpp showLineNumbers={false}
+int32_t SQLTypeInfoLite::get_input_srid() const
+```
+</CodeBlock>
+
+### get_output_srid [#getoutputsrid]
+
+<CodeBlock links={{"SQLTypeInfoLite": "sqltypeinfolite"}}>
+```cpp showLineNumbers={false}
+int32_t SQLTypeInfoLite::get_output_srid() const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"SQLTypeInfoLite": "sqltypeinfolite"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfoLite::operator==(
+    const SQLTypeInfoLite &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### SQLTypes
+
+| Name | Value | Description |
+|---|---|---|
+| `UNSPECIFIED` | `= 0` | |
+| `BOOLEAN` | | |
+| `TINYINT` | | |
+| `SMALLINT` | | |
+| `INT` | | |
+| `BIGINT` | | |
+| `FLOAT` | | |
+| `DOUBLE` | | |
+| `POINT` | | |
+| `LINESTRING` | | |
+| `POLYGON` | | |
+| `MULTIPOINT` | | |
+| `MULTILINESTRING` | | |
+| `MULTIPOLYGON` | | |
+| `TEXT` | | |
+| `ARRAY` | | |
+### EncodingType
+
+| Name | Value | Description |
+|---|---|---|
+| `NONE` | `= 0` | |
+| `DICT` | | |
+| `GEOINT` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type` | `SQLTypes` | |
+| `subtype` | `SQLTypes` | |
+| `compression` | `EncodingType` | |
+| `dimension` | `int32_t` | |
+| `scale` | `int32_t` | |
+| `db_id` | `int32_t` | |
+| `dict_id` | `int32_t` | |

@@ -1,0 +1,65 @@
+---
+title: GpuSharedMemoryContext
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <GpuSharedMemoryContext.h>
+```
+
+---
+
+## Constructors
+
+### GpuSharedMemoryContext [#gpusharedmemorycontext]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"GpuSharedMemoryContext": "gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+GpuSharedMemoryContext::GpuSharedMemoryContext()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GpuSharedMemoryContext": "gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+GpuSharedMemoryContext::GpuSharedMemoryContext(
+    const size_t shared_mem_size
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### isSharedMemoryUsed [#issharedmemoryused]
+
+<CodeBlock links={{"GpuSharedMemoryContext": "gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+bool GpuSharedMemoryContext::isSharedMemoryUsed() const
+```
+</CodeBlock>
+
+### getSharedMemorySize [#getsharedmemorysize]
+
+<CodeBlock links={{"GpuSharedMemoryContext": "gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+size_t GpuSharedMemoryContext::getSharedMemorySize() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `shared_memory_size_` | `size_t` | |

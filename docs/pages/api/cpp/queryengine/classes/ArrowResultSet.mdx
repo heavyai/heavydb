@@ -1,0 +1,249 @@
+---
+title: ArrowResultSet
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ArrowResultSet.h>
+```
+
+---
+
+## Constructors
+
+### ArrowResultSet [#arrowresultset]
+
+<Tabs>
+<Tab title="Copy (with targets meta)">
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset", "ResultSet": "resultset", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+ArrowResultSet::ArrowResultSet(
+    const std::shared_ptr<ResultSet> &rows,
+    const std::vector<TargetMetaInfo> &targets_meta,
+    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with targets meta and min result size for bulk dictionary fetch and max dictionary to result size ratio for bulk dictionary fetch)">
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset", "ResultSet": "resultset", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+ArrowResultSet::ArrowResultSet(
+    const std::shared_ptr<ResultSet> &rows,
+    const std::vector<TargetMetaInfo> &targets_meta,
+    const ExecutorDeviceType device_type,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ArrowResultSet::ArrowResultSet(
+    const std::shared_ptr<ResultSet> &rows,
+    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### rowIterator [#rowiterator]
+
+<Tabs>
+<Tab title="Const (with from index)">
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset", "ArrowResultSetRowIterator": "arrowresultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetRowIterator ArrowResultSet::rowIterator(
+    size_t from_index,
+    bool translate_strings,
+    bool decimal_to_double
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset", "ArrowResultSetRowIterator": "arrowresultsetrowiterator"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetRowIterator ArrowResultSet::rowIterator(
+    bool translate_strings,
+    bool decimal_to_double
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getDictionaryStrings [#getdictionarystrings]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> ArrowResultSet::getDictionaryStrings(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getRowAt [#getrowat]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> ArrowResultSet::getRowAt(
+    const size_t index
+) const
+```
+</CodeBlock>
+
+### getNextRow [#getnextrow]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> ArrowResultSet::getNextRow(
+    const bool translate_strings,
+    const bool decimal_to_double
+) const
+```
+</CodeBlock>
+
+### colCount [#colcount]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+size_t ArrowResultSet::colCount() const
+```
+</CodeBlock>
+
+### getColType [#getcoltype]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo ArrowResultSet::getColType(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### definitelyHasNoRows [#definitelyhasnorows]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+bool ArrowResultSet::definitelyHasNoRows() const
+```
+</CodeBlock>
+
+### rowCount [#rowcount]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+size_t ArrowResultSet::rowCount() const
+```
+</CodeBlock>
+
+### entryCount [#entrycount]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+size_t ArrowResultSet::entryCount() const
+```
+</CodeBlock>
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+bool ArrowResultSet::isEmpty() const
+```
+</CodeBlock>
+
+### resultSetArrowLoopback [#resultsetarrowloopback]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+void ArrowResultSet::resultSetArrowLoopback(
+    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+void ArrowResultSet::resultSetArrowLoopback(
+    const ExecutorDeviceType device_type,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### appendValue [#appendvalue]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset"}}>
+```cpp showLineNumbers={false}
+template <typename Type, typename ArrayType>
+void ArrowResultSet::appendValue(
+    std::vector<TargetValue> &row,
+    const arrow::Array &column,
+    const Type null_val,
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### deallocateArrowResultBuffer [#deallocatearrowresultbuffer]
+
+<CodeBlock links={{"ArrowResultSet": "arrowresultset", "ArrowResult": "../structs/arrowresult"}}>
+```cpp showLineNumbers={false}
+void ArrowResultSet::deallocateArrowResultBuffer(
+    const ArrowResult &result,
+    const ExecutorDeviceType device_type,
+    const size_t device_id,
+    std::shared_ptr<Data_Namespace::DataMgr> &data_mgr
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `results_` | `std::shared_ptr< ArrowResult >` | |
+| `rows_` | `std::shared_ptr< ResultSet >` | |
+| `targets_meta_` | `std::vector< TargetMetaInfo >` | |
+| `record_batch_` | `std::shared_ptr< arrow::RecordBatch >` | |
+| `dictionary_memo_` | `arrow::ipc::DictionaryMemo` | |
+| `columns_` | `std::vector< std::shared_ptr< arrow::Array > >` | |
+| `crt_row_idx_` | `size_t` | |
+| `column_metainfo_` | `std::vector< TargetMetaInfo >` | |

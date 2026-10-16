@@ -1,0 +1,163 @@
+---
+title: "Column< GeoMultiLineString >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+**Inherits from:** `flatbuffer::Column< Geo::MultiLineString, GeoMultiLineString >` (public)
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring", "Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoMultiLineString> & Column<GeoMultiLineString>::operator=(
+    const Column<GeoMultiLineString> &other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### isNull [#isnull]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Column<Timestamp>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+### setNull [#setnull]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<Timestamp>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+### Column [#column]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoMultiLineString>::Column(
+    GeoMultiLineString *ptr,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoMultiLineString & Column<GeoMultiLineString>::operator[](
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### getPtr [#getptr]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoMultiLineString * Column<GeoMultiLineString>::getPtr() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t Column<GeoMultiLineString>::size() const
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<GeoMultiLineString>::setSize(
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring", "MultiLineString": "../geo/structs/multilinestring", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE Geo::MultiLineString flatbuffer::Column<Geo::MultiLineString, GeoMultiLineString>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoMultiLineString flatbuffer::Column<Geo::MultiLineString, GeoMultiLineString>::operator()(
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### setItem [#setitem]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring", "MultiLineString": "../geo/structs/multilinestring", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<Geo::MultiLineString, GeoMultiLineString>::setItem(
+    int64_t index,
+    const Geo::MultiLineString &item
+)
+```
+</CodeBlock>
+
+### getNofValues [#getnofvalues]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+int64_t flatbuffer::Column<Geo::MultiLineString, GeoMultiLineString>::getNofValues() const
+```
+</CodeBlock>
+
+### concatItem [#concatitem]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring", "MultiLineString": "../geo/structs/multilinestring", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<Geo::MultiLineString, GeoMultiLineString>::concatItem(
+    int64_t index,
+    const Geo::MultiLineString &item
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"Column< GeoMultiLineString >": "columngeomultilinestring", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::Column<Geo::MultiLineString, GeoMultiLineString>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr_` | `GeoMultiLineString *` | |
+| `num_rows_` | `int64_t` | |
+| `flatbuffer_` | `int8_t *` | |

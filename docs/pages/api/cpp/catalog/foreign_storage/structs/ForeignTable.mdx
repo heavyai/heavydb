@@ -1,0 +1,343 @@
+---
+title: foreign_storage::ForeignTable
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ForeignTable.h>
+```
+
+**Inherits from:** `TableDescriptor` (public), `foreign_storage::OptionsContainer` (public)
+
+---
+
+## Constructors
+
+### ForeignTable [#foreigntable]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignTable::ForeignTable()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "ForeignServer": "foreignserver"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignTable::ForeignTable(
+    const int32_t id,
+    const ForeignServer *server,
+    const std::string &options_str,
+    const int64_t last_refresh,
+    const int64_t next_refresh
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### validateOptionValues [#validateoptionvalues]
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::validateOptionValues() const
+```
+</CodeBlock>
+
+Verifies the values for mapped options are valid.
+
+### initializeOptions [#initializeoptions]
+
+<Tabs>
+<Tab title="Creates an empty option map for the table">
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::initializeOptions()
+```
+</CodeBlock>
+
+Creates an empty option map for the table.
+
+Verifies that the required option keys are present and that they contain legal values (as far as they can be checked statically). This is necessary even on a set of empty options because some options may be required based on the options set in the server (e.g. file_path is needed if the server has no base_path).
+
+</Tab>
+<Tab title="Creates an option map from the given json options">
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::initializeOptions(
+    const rapidjson::Value &options
+)
+```
+</CodeBlock>
+
+Creates an option map from the given json options.
+
+Verifies that the required option keys are present and that they contain legal values (as far as they can be checked statically).
+
+</Tab>
+</Tabs>
+
+### validateSupportedOptionKeys [#validatesupportedoptionkeys]
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::validateSupportedOptionKeys(
+    const OptionsMap &options_map
+) const
+```
+</CodeBlock>
+
+Verifies that the options_map contains the keys required by a foreign table; including those specified by the table's data wrapper.
+
+### isAppendMode [#isappendmode]
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignTable::isAppendMode() const
+```
+</CodeBlock>
+
+Checks if the table is in append mode.
+
+### validateAlterOptions [#validatealteroptions]
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::validateAlterOptions(
+    const OptionsMap &options_map
+) const
+```
+</CodeBlock>
+
+Verifies that the given options map only contains options that can be legally altered.
+
+### validateSchema [#validateschema]
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "ColumnDescriptor": "../../structs/columndescriptor"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::validateSchema(
+    const std::list<ColumnDescriptor> &columns
+) const
+```
+</CodeBlock>
+
+Verifies the schema is supported by this foreign table.
+
+### validateAndGetOptionAsBool [#validateandgetoptionasbool]
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+std::optional<bool> foreign_storage::ForeignTable::validateAndGetOptionAsBool(
+    const std::string &option
+) const
+```
+</CodeBlock>
+
+@breif Validates a specific option as a boolean.
+
+### isForeignTable [#isforeigntable]
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignTable::isForeignTable() const
+```
+</CodeBlock>
+
+### isTemporaryTable [#istemporarytable]
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignTable::isTemporaryTable() const
+```
+</CodeBlock>
+
+### getTableChunkKey [#gettablechunkkey]
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::vector<int> foreign_storage::ForeignTable::getTableChunkKey(
+    const int getCurrentDBId
+) const
+```
+</CodeBlock>
+
+### populateOptionsMap [#populateoptionsmap]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::populateOptionsMap(
+    OptionsMap &&options_map,
+    bool clear = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::populateOptionsMap(
+    const rapidjson::Value &ddl_options,
+    bool clear = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::populateOptionsMap(
+    const std::string &options_json,
+    bool clear = false
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOptionsAsJsonString [#getoptionsasjsonstring]
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignTable::getOptionsAsJsonString() const
+```
+</CodeBlock>
+
+### getOption [#getoption]
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::optional<std::string> foreign_storage::ForeignTable::getOption(
+    const std::string_view &key
+) const
+```
+</CodeBlock>
+
+### getOptionAsBool [#getoptionasbool]
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignTable::getOptionAsBool(
+    const std::string_view &key,
+    const bool default_value = false
+) const
+```
+</CodeBlock>
+
+### getOptionAsString [#getoptionasstring]
+
+<CodeBlock links={{"ForeignTable": "foreigntable", "TableDescriptor": "../../structs/tabledescriptor", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignTable::getOptionAsString(
+    const std::string_view &key
+) const
+```
+</CodeBlock>
+
+### validateDataWrapperOptions [#validatedatawrapperoptions]
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::validateDataWrapperOptions() const
+```
+</CodeBlock>
+
+### validateRefreshOptionValues [#validaterefreshoptionvalues]
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignTable::validateRefreshOptionValues() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### createOptionsMap [#createoptionsmap]
+
+<CodeBlock links={{"ForeignTable": "foreigntable"}}>
+```cpp showLineNumbers={false}
+OptionsMap foreign_storage::ForeignTable::createOptionsMap(
+    const rapidjson::Value &json_options
+)
+```
+</CodeBlock>
+
+Creates an options map from given options.
+
+Converts options that must be upper case appropriately.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `FRAGMENT_SIZE_KEY` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `MAX_CHUNK_SIZE_KEY` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `REFRESH_TIMING_TYPE_KEY` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `REFRESH_START_DATE_TIME_KEY` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `REFRESH_INTERVAL_KEY` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `REFRESH_UPDATE_TYPE_KEY` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `BUFFER_SIZE_KEY` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `GEO_VALIDATE_GEOMETRY_KEY` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `ALL_REFRESH_UPDATE_TYPE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `APPEND_REFRESH_UPDATE_TYPE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `SCHEDULE_REFRESH_TIMING_TYPE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `MANUAL_REFRESH_TIMING_TYPE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `const char *` | |
+| `NULL_REFRESH_TIME` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int` | |
+| `supported_options` <Badge intent="note" minimal>static</Badge> | `const std::set< const char * >` | |
+| `upper_case_options` <Badge intent="note" minimal>static</Badge> | `const std::set< const char * >` | |
+| `alterable_options` <Badge intent="note" minimal>static</Badge> | `const std::set< const char * >` | |
+| `foreign_server` | `const ForeignServer *` | |
+| `last_refresh_time` | `int64_t` | |
+| `next_refresh_time` | `int64_t` | |
+| `tableId` | `int32_t` | tableId starts at 0 for valid tables. |
+| `shard` | `int32_t` | |
+| `tableName` | `std::string` | tableName is the name of the table table -must be unique |
+| `userId` | `int32_t` | |
+| `nColumns` | `int32_t` | |
+| `isView` | `bool` | |
+| `viewSQL` | `std::string` | |
+| `fragments` | `std::string` | |
+| `fragType` | `Fragmenter_Namespace::FragmenterType` | |
+| `maxFragRows` | `int32_t` | |
+| `maxChunkSize` | `int64_t` | |
+| `fragPageSize` | `int32_t` | |
+| `maxRows` | `int64_t` | |
+| `partitions` | `std::string` | |
+| `keyMetainfo` | `std::string` | |
+| `fragmenter` | `std::shared_ptr< Fragmenter_Namespace::AbstractFragmenter >` | |
+| `nShards` | `int32_t` | |
+| `shardedColumnId` | `int` | |
+| `sortedColumnId` | `int` | |
+| `persistenceLevel` | `Data_Namespace::MemoryLevel` | |
+| `hasDeletedCol` | `bool` | |
+| `columnIdBySpi_` | `std::vector< int >` | |
+| `storageType` | `std::string` | |
+| `maxRollbackEpochs` | `int32_t` | |
+| `is_system_table` | `bool` | |
+| `is_in_memory_system_table` | `bool` | |
+| `comment` | `std::optional< std::string >` | |
+| `mutex_` | `std::shared_ptr< std::mutex >` | |
+| `options` | `OptionsMap` | |

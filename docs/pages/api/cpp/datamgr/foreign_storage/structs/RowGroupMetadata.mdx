@@ -1,0 +1,18 @@
+---
+title: foreign_storage::RowGroupMetadata
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetShared.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `file_path` | `std::string` | |
+| `row_group_index` | `int` | |
+| `column_chunk_metadata` | `std::list< std::shared_ptr< ChunkMetadata > >` | |

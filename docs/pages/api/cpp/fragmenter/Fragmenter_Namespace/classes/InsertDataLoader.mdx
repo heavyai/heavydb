@@ -1,0 +1,93 @@
+---
+title: Fragmenter_Namespace::InsertDataLoader
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Fragmenter_Namespace/InsertDataLoader.h>
+```
+
+---
+
+## Constructors
+
+### InsertDataLoader [#insertdataloader]
+
+<CodeBlock links={{"InsertDataLoader": "insertdataloader", "InsertConnector": "#insertconnector"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::InsertDataLoader::InsertDataLoader(
+    InsertConnector &connector
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### insertData [#insertdata]
+
+<CodeBlock links={{"InsertDataLoader": "insertdataloader", "InsertData": "../structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::InsertDataLoader::insertData(
+    const Catalog_Namespace::SessionInfo &session_info,
+    InsertData &insert_data
+)
+```
+</CodeBlock>
+
+### insertChunks [#insertchunks]
+
+<CodeBlock links={{"InsertDataLoader": "insertdataloader", "InsertChunks": "../structs/insertchunks"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::InsertDataLoader::insertChunks(
+    const Catalog_Namespace::SessionInfo &session_info,
+    const InsertChunks &insert_chunks
+)
+```
+</CodeBlock>
+
+### getShardCount [#getshardcount]
+
+<CodeBlock links={{"InsertDataLoader": "insertdataloader"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::InsertDataLoader::getShardCount() const
+```
+</CodeBlock>
+
+### moveToNextShard [#movetonextshard]
+
+<CodeBlock links={{"InsertDataLoader": "insertdataloader"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::InsertDataLoader::moveToNextShard()
+```
+</CodeBlock>
+
+Move to the next available shard index internally.
+
+Done under a lock to prevent contention.
+
+**Returns:** the current shard index (prior to moving to the next index)
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `shard_count_` | `size_t` | |
+| `current_shard_index_` | `size_t` | |
+| `connector_` | `InsertConnector &` | |
+| `current_shard_index_mutex_` | `std::shared_mutex` | |
+
+---
+
+## Inner classes
+
+### InsertConnector
+
+<CodeBlock links={{"InsertDataLoader": "insertdataloader"}}>
+```cpp showLineNumbers={false}
+class Fragmenter_Namespace::InsertDataLoader::InsertConnector
+```
+</CodeBlock>

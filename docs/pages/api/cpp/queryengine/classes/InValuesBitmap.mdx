@@ -1,0 +1,111 @@
+---
+title: InValuesBitmap
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <InValuesBitmap.h>
+```
+
+---
+
+## Constructors
+
+### InValuesBitmap [#invaluesbitmap]
+
+<CodeBlock links={{"InValuesBitmap": "invaluesbitmap", "Executor": "executor", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+InValuesBitmap::InValuesBitmap(
+    const std::vector<int64_t> &values,
+    const int64_t null_val,
+    const Data_Namespace::MemoryLevel memory_level,
+    Executor *executor,
+    CompilationOptions const &co
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~InValuesBitmap
+
+<CodeBlock links={{"InValuesBitmap": "invaluesbitmap"}}>
+```cpp showLineNumbers={false}
+InValuesBitmap::~InValuesBitmap()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegen [#codegen]
+
+<CodeBlock links={{"InValuesBitmap": "invaluesbitmap", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+llvm::Value * InValuesBitmap::codegen(
+    llvm::Value *needle,
+    Executor *executor
+) const
+```
+</CodeBlock>
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"InValuesBitmap": "invaluesbitmap"}}>
+```cpp showLineNumbers={false}
+bool InValuesBitmap::isEmpty() const
+```
+</CodeBlock>
+
+### hasNull [#hasnull]
+
+<CodeBlock links={{"InValuesBitmap": "invaluesbitmap"}}>
+```cpp showLineNumbers={false}
+bool InValuesBitmap::hasNull() const
+```
+</CodeBlock>
+
+### prepareBitIsSetParams [#preparebitissetparams]
+
+<CodeBlock links={{"InValuesBitmap": "invaluesbitmap", "Executor": "executor", "BitIsSetParams": "#bitissetparams"}}>
+```cpp showLineNumbers={false}
+InValuesBitmap::BitIsSetParams InValuesBitmap::prepareBitIsSetParams(
+    Executor *executor,
+    std::unordered_map<int, std::shared_ptr<const Analyzer::Constant>> const &constant_owned
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `bitsets_per_devices_` | `std::unordered_map< int, int8_t * >` | |
+| `rhs_has_null_` | `bool` | |
+| `min_val_` | `int64_t` | |
+| `max_val_` | `int64_t` | |
+| `null_val_` | `const int64_t` | |
+| `memory_level_` | `const Data_Namespace::MemoryLevel` | |
+| `co_` | `CompilationOptions` | |
+
+---
+
+## Inner classes
+
+### BitIsSetParams
+
+<CodeBlock links={{"InValuesBitmap": "invaluesbitmap"}}>
+```cpp showLineNumbers={false}
+struct InValuesBitmap::BitIsSetParams
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `bitmap_ptr_lv` | `llvm::Value *` | |
+| `min_val_lv` | `llvm::Value *` | |
+| `max_val_lv` | `llvm::Value *` | |
+| `null_val_lv` | `llvm::Value *` | |

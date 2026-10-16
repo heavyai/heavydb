@@ -1,0 +1,255 @@
+---
+title: QueryPlanDagExtractor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryPlanDagExtractor.h>
+```
+
+---
+
+## Constructors
+
+### QueryPlanDagExtractor [#queryplandagextractor]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "QueryPlanDagCache": "queryplandagcache", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+QueryPlanDagExtractor::QueryPlanDagExtractor(
+    QueryPlanDagCache &global_dag,
+    std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_tree_infos,
+    Executor *executor,
+    bool analyze_join_ops
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getHashTableBuildDag [#gethashtablebuilddag]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor"}}>
+```cpp showLineNumbers={false}
+HashTableBuildDagMap QueryPlanDagExtractor::getHashTableBuildDag()
+```
+</CodeBlock>
+
+### getPerNestingJoinQualInfo [#getpernestingjoinqualinfo]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor"}}>
+```cpp showLineNumbers={false}
+const JoinQualsPerNestingLevel * QueryPlanDagExtractor::getPerNestingJoinQualInfo(
+    std::optional<unsigned> left_deep_join_tree_id
+)
+```
+</CodeBlock>
+
+### isDagExtractionAvailable [#isdagextractionavailable]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor"}}>
+```cpp showLineNumbers={false}
+bool QueryPlanDagExtractor::isDagExtractionAvailable()
+```
+</CodeBlock>
+
+### getExtractedQueryPlanDagStr [#getextractedqueryplandagstr]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor"}}>
+```cpp showLineNumbers={false}
+std::string QueryPlanDagExtractor::getExtractedQueryPlanDagStr(
+    size_t start_pos = 0
+)
+```
+</CodeBlock>
+
+### normalizeColumnsPair [#normalizecolumnspair]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "InnerOuterOrLoopQual": "../structs/innerouterorloopqual"}}>
+```cpp showLineNumbers={false}
+std::vector<InnerOuterOrLoopQual> QueryPlanDagExtractor::normalizeColumnsPair(
+    const Analyzer::BinOper *condition
+)
+```
+</CodeBlock>
+
+### isEmptyQueryPlanDag [#isemptyqueryplandag]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor"}}>
+```cpp showLineNumbers={false}
+bool QueryPlanDagExtractor::isEmptyQueryPlanDag(
+    const std::string &dag
+)
+```
+</CodeBlock>
+
+### getTableIdToNodeMap [#gettableidtonodemap]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor"}}>
+```cpp showLineNumbers={false}
+TableIdToNodeMap QueryPlanDagExtractor::getTableIdToNodeMap()
+```
+</CodeBlock>
+
+### addTableIdToNodeLink [#addtableidtonodelink]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagExtractor::addTableIdToNodeLink(
+    const shared::TableKey &table_id,
+    const RelAlgNode *node
+)
+```
+</CodeBlock>
+
+### clearInternalStatus [#clearinternalstatus]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagExtractor::clearInternalStatus()
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagExtractor::visit(
+    const RelAlgNode *,
+    const RelAlgNode *
+)
+```
+</CodeBlock>
+
+### getColVar [#getcolvar]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor"}}>
+```cpp showLineNumbers={false}
+std::vector<Analyzer::ColumnVar const *> QueryPlanDagExtractor::getColVar(
+    const Analyzer::Expr *col_info
+)
+```
+</CodeBlock>
+
+### register_and_visit [#registerandvisit]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagExtractor::register_and_visit(
+    const RelAlgNode *parent_node,
+    const RelAlgNode *child_node
+)
+```
+</CodeBlock>
+
+### handleLeftDeepJoinTree [#handleleftdeepjointree]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode", "RelLeftDeepInnerJoin": "relleftdeepinnerjoin"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagExtractor::handleLeftDeepJoinTree(
+    const RelAlgNode *,
+    const RelLeftDeepInnerJoin *
+)
+```
+</CodeBlock>
+
+### handleTranslatedJoin [#handletranslatedjoin]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode", "RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagExtractor::handleTranslatedJoin(
+    const RelAlgNode *,
+    const RelTranslatedJoin *
+)
+```
+</CodeBlock>
+
+### validateNodeId [#validatenodeid]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool QueryPlanDagExtractor::validateNodeId(
+    const RelAlgNode *node,
+    std::optional<RelNodeId> retrieved_node_id
+)
+```
+</CodeBlock>
+
+### registerNodeToDagCache [#registernodetodagcache]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool QueryPlanDagExtractor::registerNodeToDagCache(
+    const RelAlgNode *parent_node,
+    const RelAlgNode *child_node,
+    std::optional<RelNodeId> retrieved_node_id
+)
+```
+</CodeBlock>
+
+### extractQueryPlanDagImpl [#extractqueryplandagimpl]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagExtractor::extractQueryPlanDagImpl(
+    const RelAlgNode *top_npde,
+    QueryPlanDagExtractor &dag_extractor
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### extractJoinInfo [#extractjoininfo]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode", "Executor": "executor", "ExtractedJoinInfo": "../structs/extractedjoininfo"}}>
+```cpp showLineNumbers={false}
+ExtractedJoinInfo QueryPlanDagExtractor::extractJoinInfo(
+    const RelAlgNode *top_node,
+    std::optional<unsigned> left_deep_tree_id,
+    std::unordered_map<unsigned, JoinQualsPerNestingLevel> left_deep_tree_infos,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### extractQueryPlanDag [#extractqueryplandag]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "RelAlgNode": "relalgnode", "Executor": "executor", "ExtractedQueryPlanDag": "../structs/extractedqueryplandag"}}>
+```cpp showLineNumbers={false}
+ExtractedQueryPlanDag QueryPlanDagExtractor::extractQueryPlanDag(
+    const RelAlgNode *top_node,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### applyLimitClauseToCacheKey [#applylimitclausetocachekey]
+
+<CodeBlock links={{"QueryPlanDagExtractor": "queryplandagextractor", "SortInfo": "../structs/sortinfo"}}>
+```cpp showLineNumbers={false}
+size_t QueryPlanDagExtractor::applyLimitClauseToCacheKey(
+    size_t cache_key,
+    SortInfo const &sort_info
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `global_dag_` | `QueryPlanDagCache &` | |
+| `contain_not_supported_rel_node_` | `bool` | |
+| `left_deep_tree_infos_` | `std::unordered_map< unsigned, JoinQualsPerNestingLevel >` | |
+| `executor_` | `Executor *` | |
+| `analyze_join_ops_` | `bool` | |
+| `translated_join_info_` | `std::shared_ptr< TranslatedJoinInfo >` | |
+| `hash_table_query_plan_dag_` | `HashTableBuildDagMap` | |
+| `table_id_to_node_map_` | `TableIdToNodeMap` | |
+| `extracted_dag_` | `std::vector< std::string >` | |

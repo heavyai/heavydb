@@ -1,0 +1,44 @@
+---
+title: fill_one_to_many_baseline_hash_table_on_device
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename SIZE, class KEY_HANDLER>
+void fill_one_to_many_baseline_hash_table_on_device(
+    int32_t *buff,
+    const SIZE *composite_key_dict,
+    const size_t hash_entry_count,
+    const size_t key_component_count,
+    const KEY_HANDLER *key_handler,
+    const size_t num_elems,
+    const bool for_window_framing,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T, typename KEY_HANDLER>
+void fill_one_to_many_baseline_hash_table_on_device(
+    int32_t *buff,
+    const T *composite_key_dict,
+    const int64_t hash_entry_count,
+    const KEY_HANDLER *key_handler,
+    const size_t num_elems,
+    const bool for_window_framing,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

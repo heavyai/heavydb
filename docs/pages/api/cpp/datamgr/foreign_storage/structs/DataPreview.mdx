@@ -1,0 +1,33 @@
+---
+title: foreign_storage::DataPreview
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/DataPreview.h>
+```
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"DataPreview": "datapreview"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::DataPreview::operator==(
+    const DataPreview &o
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_names` | `std::vector< std::string >` | |
+| `column_types` | `std::vector< SQLTypeInfo >` | |
+| `sample_rows` | `SampleRows` | |
+| `num_rejected_rows` | `size_t` | |

@@ -1,0 +1,64 @@
+---
+title: shared::FileOrderLocal
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <shared/file_path_util.h>
+```
+
+**Inherits from:** `shared::FileOrderBase< LocalFileComparator >` (public)
+
+---
+
+## Constructors
+
+### FileOrderLocal [#fileorderlocal]
+
+<CodeBlock links={{"FileOrderLocal": "fileorderlocal", "FilePathOptions": "../structs/filepathoptions"}}>
+```cpp showLineNumbers={false}
+shared::FileOrderLocal::FileOrderLocal(
+    const FilePathOptions &options
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getFileComparator [#getfilecomparator]
+
+<CodeBlock links={{"FileOrderLocal": "fileorderlocal"}}>
+```cpp showLineNumbers={false}
+LocalFileComparator shared::FileOrderLocal::getFileComparator() override
+```
+</CodeBlock>
+
+### concatCaptureGroups [#concatcapturegroups]
+
+<CodeBlock links={{"FileOrderLocal": "fileorderlocal", "FileOrderBase": "fileorderbase"}}>
+```cpp showLineNumbers={false}
+virtual std::string shared::FileOrderBase<LocalFileComparator>::concatCaptureGroups(
+    const std::string &file_name
+) const
+```
+</CodeBlock>
+
+### getSortBy [#getsortby]
+
+<CodeBlock links={{"FileOrderLocal": "fileorderlocal", "FileOrderBase": "fileorderbase"}}>
+```cpp showLineNumbers={false}
+virtual std::string shared::FileOrderBase<LocalFileComparator>::getSortBy()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `comparator_map_` | `const std::map< std::string, LocalFileComparator >` | |
+| `sort_regex_` | `std::optional< std::string >` | |
+| `sort_by_` | `std::optional< std::string >` | |

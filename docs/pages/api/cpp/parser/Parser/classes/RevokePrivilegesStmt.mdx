@@ -1,0 +1,85 @@
+---
+title: Parser::RevokePrivilegesStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### RevokePrivilegesStmt [#revokeprivilegesstmt]
+
+<CodeBlock links={{"RevokePrivilegesStmt": "revokeprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+Parser::RevokePrivilegesStmt::RevokePrivilegesStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_object_type [#getobjecttype]
+
+<CodeBlock links={{"RevokePrivilegesStmt": "revokeprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::RevokePrivilegesStmt::get_object_type() const
+```
+</CodeBlock>
+
+### get_object [#getobject]
+
+<CodeBlock links={{"RevokePrivilegesStmt": "revokeprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::RevokePrivilegesStmt::get_object() const
+```
+</CodeBlock>
+
+### get_grantees [#getgrantees]
+
+<CodeBlock links={{"RevokePrivilegesStmt": "revokeprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & Parser::RevokePrivilegesStmt::get_grantees() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"RevokePrivilegesStmt": "revokeprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RevokePrivilegesStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"RevokePrivilegesStmt": "revokeprivilegesstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RevokePrivilegesStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_` | `std::unique_ptr< std::string >` | |
+| `target_` | `std::unique_ptr< std::string >` | |
+| `grantees_` | `std::vector< std::string >` | |
+| `privileges_` | `std::vector< Privilege >` | |

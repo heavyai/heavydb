@@ -1,0 +1,23 @@
+---
+title: GDALTableFunctions::tf_raster_contour_direct_impl
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../../structs/tablefunctionmanager", "Column": "../../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename TLL, typename TV, typename TG>
+int32_t GDALTableFunctions::tf_raster_contour_direct_impl(
+    TableFunctionManager &mgr,
+    const Column<TLL> &lon,
+    const Column<TLL> &lat,
+    const Column<TV> &values,
+    const int32_t raster_width,
+    const int32_t raster_height,
+    const bool flip_latitude,
+    const TV contour_interval,
+    const TV contour_offset,
+    Column<TG> &contour_features,
+    Column<TV> &contour_values
+)
+```
+</CodeBlock>

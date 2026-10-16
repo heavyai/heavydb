@@ -1,0 +1,50 @@
+---
+title: import_export::ImportStatus
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/Importer.h>
+```
+
+---
+
+## Constructors
+
+### ImportStatus [#importstatus]
+
+<CodeBlock links={{"ImportStatus": "importstatus"}}>
+```cpp showLineNumbers={false}
+import_export::ImportStatus::ImportStatus()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator+= [#operator_plus_assign]
+
+<CodeBlock links={{"ImportStatus": "importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus & import_export::ImportStatus::operator+=(
+    const ImportStatus &is
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `start` | `std::chrono::steady_clock::time_point` | |
+| `end` | `std::chrono::steady_clock::time_point` | |
+| `rows_completed` | `size_t` | |
+| `rows_estimated` | `size_t` | |
+| `rows_rejected` | `size_t` | |
+| `elapsed` | `std::chrono::duration< size_t, std::milli >` | |
+| `load_failed` | `bool` | |
+| `load_msg` | `std::string` | |
+| `thread_id` | `int` | |

@@ -1,0 +1,30 @@
+---
+title: TableFunctions_Namespace::InputData
+description: ""
+---
+
+<CodeBlock id="InputData" links={{"InputData": "inputdata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct InputData
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TableFunctions_Namespace/NullRowsRemoval.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `col_ptrs` | `std::vector< T * >` | |
+| `num_rows` | `int32_t` | |
+| `null_val` | `T` | |

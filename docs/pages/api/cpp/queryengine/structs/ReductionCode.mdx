@@ -1,0 +1,33 @@
+---
+title: ReductionCode
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionJIT.h>
+```
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `FuncPtr` | `int32_t(*)(int8_t *this_buff, const int8_t *that_buff, const int32_t start_entry_index, const int32_t end_entry_index, const int32_t that_entry_count, const void *this_qmd, const void *that_qmd, const void *serialized_varlen_buffer)` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `func_ptr` | `FuncPtr` | |
+| `llvm_reduce_loop` | `llvm::Function *` | |
+| `cgen_state` | `CgenState *` | |
+| `module` | `llvm::Module *` | |
+| `ir_is_empty` | `std::unique_ptr< Function >` | |
+| `ir_reduce_one_entry` | `std::unique_ptr< Function >` | |
+| `ir_reduce_one_entry_idx` | `std::unique_ptr< Function >` | |
+| `ir_reduce_loop` | `std::unique_ptr< Function >` | |

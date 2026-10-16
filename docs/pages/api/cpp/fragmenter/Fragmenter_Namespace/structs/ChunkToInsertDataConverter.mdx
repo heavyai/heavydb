@@ -1,0 +1,43 @@
+---
+title: Fragmenter_Namespace::ChunkToInsertDataConverter
+description: ""
+---
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~ChunkToInsertDataConverter
+
+<CodeBlock links={{"ChunkToInsertDataConverter": "chunktoinsertdataconverter"}}>
+```cpp showLineNumbers={false}
+virtual Fragmenter_Namespace::ChunkToInsertDataConverter::~ChunkToInsertDataConverter()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"ChunkToInsertDataConverter": "chunktoinsertdataconverter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::ChunkToInsertDataConverter::convertToColumnarFormat(
+    size_t row,
+    size_t indexInFragment
+)
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"ChunkToInsertDataConverter": "chunktoinsertdataconverter", "InsertData": "insertdata"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::ChunkToInsertDataConverter::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+)
+```
+</CodeBlock>

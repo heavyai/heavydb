@@ -1,0 +1,80 @@
+---
+title: Parser::TimestampLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Literal` (public)
+
+---
+
+## Constructors
+
+### TimestampLiteral [#timestampliteral]
+
+<CodeBlock links={{"TimestampLiteral": "timestampliteral"}}>
+```cpp showLineNumbers={false}
+Parser::TimestampLiteral::TimestampLiteral()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### analyze [#analyze]
+
+<CodeBlock links={{"TimestampLiteral": "timestampliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::TimestampLiteral::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"TimestampLiteral": "timestampliteral"}}>
+```cpp showLineNumbers={false}
+std::string Parser::TimestampLiteral::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### get [#get]
+
+<CodeBlock links={{"TimestampLiteral": "timestampliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::TimestampLiteral::get(
+    const int64_t
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `timestampval_` | `int64_t` | |

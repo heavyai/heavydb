@@ -1,0 +1,34 @@
+---
+title: TargetInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetInfo.h>
+```
+
+---
+
+## Methods
+
+### toString [#tostring]
+
+<CodeBlock links={{"TargetInfo": "targetinfo"}}>
+```cpp showLineNumbers={false}
+std::string TargetInfo::toString() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_agg` | `bool` | |
+| `agg_kind` | `SQLAgg` | |
+| `sql_type` | `SQLTypeInfo` | |
+| `agg_arg_type` | `SQLTypeInfo` | |
+| `skip_null_val` | `bool` | |
+| `is_distinct` | `bool` | |
+| `is_varlen_projection` | `bool` | |

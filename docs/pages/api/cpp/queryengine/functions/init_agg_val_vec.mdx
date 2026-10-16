@@ -1,0 +1,32 @@
+---
+title: init_agg_val_vec
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../classes/querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<int64_t> init_agg_val_vec(
+    const std::vector<TargetInfo> &targets,
+    const QueryMemoryDescriptor &query_mem_desc
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../classes/querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+std::vector<int64_t> init_agg_val_vec(
+    const std::vector<Analyzer::Expr *> &targets,
+    const std::list<std::shared_ptr<Analyzer::Expr>> &quals,
+    const QueryMemoryDescriptor &query_mem_desc
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

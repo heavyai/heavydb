@@ -1,0 +1,97 @@
+---
+title: ColumnDescriptor
+description: "@type ColumnDescriptor"
+---
+
+@type `ColumnDescriptor`
+
+specifies the content in-memory of a row in the column metadata table
+
+```cpp showLineNumbers={false}
+#include <ColumnDescriptor.h>
+```
+
+---
+
+## Constructors
+
+### ColumnDescriptor [#columndescriptor]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ColumnDescriptor": "columndescriptor"}}>
+```cpp showLineNumbers={false}
+ColumnDescriptor::ColumnDescriptor()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ColumnDescriptor": "columndescriptor"}}>
+```cpp showLineNumbers={false}
+ColumnDescriptor::ColumnDescriptor(
+    const int tableId,
+    const int columnId,
+    const std::string &columnName,
+    const SQLTypeInfo columnType,
+    int32_t db_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ColumnDescriptor": "columndescriptor"}}>
+```cpp showLineNumbers={false}
+ColumnDescriptor::ColumnDescriptor(
+    const bool isGeoPhyCol
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### toString [#tostring]
+
+<CodeBlock links={{"ColumnDescriptor": "columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::string ColumnDescriptor::toString() const
+```
+</CodeBlock>
+
+### getDefaultValueLiteral [#getdefaultvalueliteral]
+
+<CodeBlock links={{"ColumnDescriptor": "columndescriptor"}}>
+```cpp showLineNumbers={false}
+std::string ColumnDescriptor::getDefaultValueLiteral() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `tableId` | `int` | |
+| `columnId` | `int` | |
+| `columnName` | `std::string` | |
+| `sourceName` | `std::string` | |
+| `columnType` | `SQLTypeInfo` | |
+| `chunks` | `std::string` | |
+| `isSystemCol` | `bool` | |
+| `isVirtualCol` | `bool` | |
+| `virtualExpr` | `std::string` | |
+| `isDeletedCol` | `bool` | |
+| `isGeoPhyCol` | `bool` | |
+| `default_value` | `std::optional< std::string >` | |
+| `db_id` | `int32_t` | |
+| `comment` | `std::optional< std::string >` | |

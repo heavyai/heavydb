@@ -1,0 +1,65 @@
+---
+title: File_Namespace::StorageStats
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/FileMgr.h>
+```
+
+---
+
+## Constructors
+
+### StorageStats [#storagestats]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"StorageStats": "storagestats"}}>
+```cpp showLineNumbers={false}
+File_Namespace::StorageStats::StorageStats() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"StorageStats": "storagestats"}}>
+```cpp showLineNumbers={false}
+File_Namespace::StorageStats::StorageStats(
+    const StorageStats &storage_stats
+) = default
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~StorageStats
+
+<CodeBlock links={{"StorageStats": "storagestats"}}>
+```cpp showLineNumbers={false}
+virtual File_Namespace::StorageStats::~StorageStats() = default
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `epoch` | `int32_t` | |
+| `epoch_floor` | `int32_t` | |
+| `metadata_file_count` | `uint32_t` | |
+| `total_metadata_file_size` | `uint64_t` | |
+| `total_metadata_page_count` | `uint64_t` | |
+| `total_free_metadata_page_count` | `std::optional< uint64_t >` | |
+| `data_file_count` | `uint32_t` | |
+| `total_data_file_size` | `uint64_t` | |
+| `total_data_page_count` | `uint64_t` | |
+| `total_free_data_page_count` | `std::optional< uint64_t >` | |
+| `fragment_count` | `std::optional< uint32_t >` | |

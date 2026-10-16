@@ -1,0 +1,42 @@
+---
+title: query_state::QueryStates
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <query_state/QueryState.h>
+```
+
+---
+
+## Methods
+
+### create [#create]
+
+<CodeBlock links={{"QueryStates": "querystates"}}>
+```cpp showLineNumbers={false}
+template <typename... ARGS>
+CircleBuffer::value_type query_state::QueryStates::create(
+    ARGS &&... args
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `CircleBuffer` | `boost::circular_buffer< std::shared_ptr< QueryState > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `circle_buffer_` | `CircleBuffer` | |
+| `circle_mutex_` | `std::mutex` | |

@@ -1,0 +1,16 @@
+---
+title: writeBackCellGeoPoint
+description: ""
+---
+
+<CodeBlock links={{"FlatBufferManager": "../structs/flatbuffermanager"}}>
+```cpp showLineNumbers={false}
+void writeBackCellGeoPoint(
+    FlatBufferManager &m,
+    const size_t row_idx,
+    const SQLTypeInfo &type_info,
+    const TargetValue &col_val,
+    std::mutex *write_mutex
+)
+```
+</CodeBlock>

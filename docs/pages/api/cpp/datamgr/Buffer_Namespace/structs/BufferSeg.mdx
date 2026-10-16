@@ -1,0 +1,133 @@
+---
+title: Buffer_Namespace::BufferSeg
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Buffer_Namespace/BufferSeg.h>
+```
+
+---
+
+## Constructors
+
+### BufferSeg [#bufferseg]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"BufferSeg": "bufferseg"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::BufferSeg::BufferSeg()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"BufferSeg": "bufferseg"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::BufferSeg::BufferSeg(
+    const int start_page,
+    const size_t num_pages
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"BufferSeg": "bufferseg"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::BufferSeg::BufferSeg(
+    const int start_page,
+    const size_t num_pages,
+    const MemStatus mem_status
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"BufferSeg": "bufferseg"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::BufferSeg::BufferSeg(
+    const int start_page,
+    const size_t num_pages,
+    const MemStatus mem_status,
+    const int last_touched
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"BufferSeg": "bufferseg"}}>
+```cpp showLineNumbers={false}
+Buffer_Namespace::BufferSeg::BufferSeg(
+    const BufferSeg &buffer_seg
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### setBuffer [#setbuffer]
+
+<CodeBlock links={{"BufferSeg": "bufferseg", "Buffer": "../classes/buffer"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::BufferSeg::setBuffer(
+    Buffer *buffer_ptr
+)
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"BufferSeg": "bufferseg", "Buffer": "../classes/buffer"}}>
+```cpp showLineNumbers={false}
+Buffer * Buffer_Namespace::BufferSeg::getBuffer() const
+```
+</CodeBlock>
+
+### setLastTouched [#setlasttouched]
+
+<CodeBlock links={{"BufferSeg": "bufferseg"}}>
+```cpp showLineNumbers={false}
+void Buffer_Namespace::BufferSeg::setLastTouched(
+    uint32_t last_touched_param
+)
+```
+</CodeBlock>
+
+### getLastTouched [#getlasttouched]
+
+<CodeBlock links={{"BufferSeg": "bufferseg"}}>
+```cpp showLineNumbers={false}
+uint32_t Buffer_Namespace::BufferSeg::getLastTouched() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `start_page` | `int` | |
+| `num_pages` | `size_t` | |
+| `mem_status` | `MemStatus` | |
+| `chunk_key` | `ChunkKey` | |
+| `pin_count` | `unsigned int` | |
+| `slab_num` | `int` | |
+| `last_touched` | `uint32_t` | |
+| `buffer` | `Buffer *` | |
+| `last_touched_mutex` | `std::shared_mutex` | |
+| `buffer_mutex` | `std::shared_mutex` | |

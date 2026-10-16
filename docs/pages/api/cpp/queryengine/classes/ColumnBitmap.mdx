@@ -1,0 +1,62 @@
+---
+title: ColumnBitmap
+description: "A helper data structure to track non-empty entries in the input buffer Currently only used for direct columnarization with columnar outputs."
+---
+
+A helper data structure to track non-empty entries in the input buffer Currently only used for direct columnarization with columnar outputs.
+
+Each bank is assigned to a thread so that concurrent updates of the data structure is non-blocking.
+
+```cpp showLineNumbers={false}
+#include <ColumnarResults.h>
+```
+
+---
+
+## Constructors
+
+### ColumnBitmap [#columnbitmap]
+
+<CodeBlock links={{"ColumnBitmap": "columnbitmap"}}>
+```cpp showLineNumbers={false}
+ColumnBitmap::ColumnBitmap(
+    const size_t num_elements_per_bank,
+    size_t num_banks
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get [#get]
+
+<CodeBlock links={{"ColumnBitmap": "columnbitmap"}}>
+```cpp showLineNumbers={false}
+bool ColumnBitmap::get(
+    const size_t index,
+    const size_t bank_index
+) const
+```
+</CodeBlock>
+
+### set [#set]
+
+<CodeBlock links={{"ColumnBitmap": "columnbitmap"}}>
+```cpp showLineNumbers={false}
+void ColumnBitmap::set(
+    const size_t index,
+    const size_t bank_index,
+    const bool val
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `bitmaps_` | `std::vector< std::vector< bool > >` | |

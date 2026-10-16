@@ -1,0 +1,59 @@
+---
+title: heavyai::operator!=
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"JSON": "../classes/json"}}>
+```cpp showLineNumbers={false}
+bool heavyai::operator!=(
+    const JSON &json1,
+    const JSON &json2
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"JSON": "../classes/json"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+bool heavyai::operator!=(
+    const JSON &json,
+    const T &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"JSON": "../classes/json"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+bool heavyai::operator!=(
+    const T &value,
+    const JSON &json
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>noexcept</Badge>
+
+<CodeBlock links={{"UUID": "../classes/uuid"}}>
+```cpp showLineNumbers={false}
+bool heavyai::operator!=(
+    const UUID &lhs,
+    const UUID &rhs
+) noexcept
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

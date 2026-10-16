@@ -1,0 +1,20 @@
+---
+title: bbox_intersect_fill_baseline_hash_join_buff_on_device_64
+description: ""
+---
+
+<CodeBlock links={{"BoundingBoxIntersectKeyHandler": "../structs/boundingboxintersectkeyhandler"}}>
+```cpp showLineNumbers={false}
+void bbox_intersect_fill_baseline_hash_join_buff_on_device_64(
+    int8_t *hash_buff,
+    const int64_t entry_count,
+    const int32_t invalid_slot_val,
+    const size_t key_component_count,
+    const bool with_val_slot,
+    int *dev_err_buff,
+    const BoundingBoxIntersectKeyHandler *key_handler,
+    const int64_t num_elems,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>

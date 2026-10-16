@@ -1,0 +1,68 @@
+---
+title: Fragmenter_Namespace::FixedLenArrayChunkConverter
+description: ""
+---
+
+**Inherits from:** `Fragmenter_Namespace::ChunkToInsertDataConverter` (public)
+
+---
+
+## Constructors
+
+### FixedLenArrayChunkConverter [#fixedlenarraychunkconverter]
+
+<CodeBlock links={{"FixedLenArrayChunkConverter": "fixedlenarraychunkconverter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::FixedLenArrayChunkConverter::FixedLenArrayChunkConverter(
+    const size_t num_rows,
+    const Chunk_NS::Chunk *chunk
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~FixedLenArrayChunkConverter
+
+<CodeBlock links={{"FixedLenArrayChunkConverter": "fixedlenarraychunkconverter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::FixedLenArrayChunkConverter::~FixedLenArrayChunkConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"FixedLenArrayChunkConverter": "fixedlenarraychunkconverter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::FixedLenArrayChunkConverter::convertToColumnarFormat(
+    size_t row,
+    size_t indexInFragment
+) override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"FixedLenArrayChunkConverter": "fixedlenarraychunkconverter", "InsertData": "insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::FixedLenArrayChunkConverter::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `chunk_` | `const Chunk_NS::Chunk *` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `column_data_` | `std::unique_ptr< std::vector< ArrayDatum > >` | |
+| `data_buffer_addr_` | `int8_t *` | |
+| `fixed_array_length_` | `size_t` | |

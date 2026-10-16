@@ -1,0 +1,49 @@
+---
+title: ResultSetManager
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSet.h>
+```
+
+---
+
+## Methods
+
+### reduce [#reduce]
+
+<CodeBlock links={{"ResultSetManager": "resultsetmanager", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSet * ResultSetManager::reduce(
+    std::vector<ResultSet *> &,
+    const size_t executor_id
+)
+```
+</CodeBlock>
+
+### getOwnResultSet [#getownresultset]
+
+<CodeBlock links={{"ResultSetManager": "resultsetmanager", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ResultSet> ResultSetManager::getOwnResultSet()
+```
+</CodeBlock>
+
+### rewriteVarlenAggregates [#rewritevarlenaggregates]
+
+<CodeBlock links={{"ResultSetManager": "resultsetmanager", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSetManager::rewriteVarlenAggregates(
+    ResultSet *
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `rs_` | `std::shared_ptr< ResultSet >` | |

@@ -1,0 +1,71 @@
+---
+title: get_matching_group_value_columnar_slot
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+__device__ int32_t get_matching_group_value_columnar_slot(
+    int64_t *groups_buffer,
+    const uint32_t entry_count,
+    const uint32_t h,
+    const T *key,
+    const uint32_t key_count
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ int32_t get_matching_group_value_columnar_slot(
+    int64_t *groups_buffer,
+    const uint32_t entry_count,
+    const uint32_t h,
+    const int64_t *key,
+    const uint32_t key_count,
+    const uint32_t key_width
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+ALWAYS_INLINE int32_t get_matching_group_value_columnar_slot(
+    int64_t *groups_buffer,
+    const uint32_t entry_count,
+    const uint32_t h,
+    const T *key,
+    const uint32_t key_count
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE int32_t get_matching_group_value_columnar_slot(
+    int64_t *groups_buffer,
+    const uint32_t entry_count,
+    const uint32_t h,
+    const int64_t *key,
+    const uint32_t key_count,
+    const uint32_t key_width
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

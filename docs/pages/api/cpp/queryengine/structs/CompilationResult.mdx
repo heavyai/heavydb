@@ -1,0 +1,20 @@
+---
+title: CompilationResult
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryCompilationDescriptor.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `generated_code` | `std::shared_ptr< CompilationContext >` | |
+| `literal_values` | `std::unordered_map< int, CgenState::LiteralValues >` | |
+| `output_columnar` | `bool` | |
+| `llvm_ir` | `std::string` | |
+| `gpu_smem_context` | `GpuSharedMemoryContext` | |

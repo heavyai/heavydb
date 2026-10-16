@@ -1,0 +1,226 @@
+---
+title: File_Namespace::FileInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/FileInfo.h>
+```
+
+---
+
+## Constructors
+
+### FileInfo [#fileinfo]
+
+<CodeBlock links={{"FileInfo": "fileinfo", "FileMgr": "../classes/filemgr"}}>
+```cpp showLineNumbers={false}
+File_Namespace::FileInfo::FileInfo(
+    FileMgr *fileMgr,
+    const int32_t fileId,
+    FILE *f,
+    const size_t pageSize,
+    const size_t numPages,
+    const std::string &file_path,
+    const bool init = false
+)
+```
+</CodeBlock>
+
+Constructor.
+
+### Destructor [#destructor]
+
+### ~FileInfo
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+File_Namespace::FileInfo::~FileInfo()
+```
+</CodeBlock>
+
+Destructor.
+
+---
+
+## Methods
+
+### initNewFile [#initnewfile]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::FileInfo::initNewFile()
+```
+</CodeBlock>
+
+Adds all pages to freePages and zeroes first four bytes of header.
+
+### freePageDeferred [#freepagedeferred]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::FileInfo::freePageDeferred(
+    int32_t pageId
+)
+```
+</CodeBlock>
+
+### freePage [#freepage]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::FileInfo::freePage(
+    int32_t pageId,
+    const bool isRolloff,
+    int32_t epoch
+)
+```
+</CodeBlock>
+
+### getFreePage [#getfreepage]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::FileInfo::getFreePage()
+```
+</CodeBlock>
+
+### write [#write]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::FileInfo::write(
+    const size_t offset,
+    const size_t size,
+    const int8_t *buf
+)
+```
+</CodeBlock>
+
+### read [#read]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::FileInfo::read(
+    const size_t offset,
+    const size_t size,
+    int8_t *buf
+)
+```
+</CodeBlock>
+
+### openExistingFile [#openexistingfile]
+
+<CodeBlock links={{"FileInfo": "fileinfo", "HeaderInfo": "headerinfo"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::FileInfo::openExistingFile(
+    std::vector<HeaderInfo> &headerVec
+)
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::FileInfo::print() const
+```
+</CodeBlock>
+
+Prints a summary of the file to stdout.
+
+### size [#size]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::FileInfo::size() const
+```
+</CodeBlock>
+
+Returns the number of bytes used by the file.
+
+### syncToDisk [#synctodisk]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::FileInfo::syncToDisk()
+```
+</CodeBlock>
+
+Syncs file to disk via a buffer flush and then a sync (fflush and fsync on posix systems).
+
+### available [#available]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::FileInfo::available() const
+```
+</CodeBlock>
+
+Returns the number of free bytes available.
+
+### numFreePages [#numfreepages]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::FileInfo::numFreePages() const
+```
+</CodeBlock>
+
+Returns the number of free pages available.
+
+### getFreePages [#getfreepages]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+std::set<size_t> File_Namespace::FileInfo::getFreePages() const
+```
+</CodeBlock>
+
+### used [#used]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::FileInfo::used() const
+```
+</CodeBlock>
+
+Returns the amount of used bytes; size() - available().
+
+### freePageImmediate [#freepageimmediate]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::FileInfo::freePageImmediate(
+    int32_t page_num
+)
+```
+</CodeBlock>
+
+### recoverPage [#recoverpage]
+
+<CodeBlock links={{"FileInfo": "fileinfo"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::FileInfo::recoverPage(
+    const ChunkKey &chunk_key,
+    int32_t page_num
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `fileMgr` | `FileMgr *` | |
+| `fileId` | `int32_t` | |
+| `f` | `FILE *` | unique file identifier (i.e., used for a file name) |
+| `pageSize` | `size_t` | file stream object for the represented file |
+| `numPages` | `size_t` | the fixed size of each page in the file |
+| `isDirty` | `bool` | the number of pages in the file |
+| `freePages` | `std::set< size_t >` | |
+| `file_path` | `std::string` | set of page numbers of free pages |
+| `freePagesMutex_` | `std::mutex` | |
+| `readWriteMutex_` | `std::mutex` | |

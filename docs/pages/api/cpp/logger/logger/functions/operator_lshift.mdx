@@ -1,0 +1,91 @@
+---
+title: "logger::operator<<"
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+boost::log::formatting_ostream & logger::operator<<(
+    boost::log::formatting_ostream &strm,
+    boost::log::to_log_manip<Channel, tag::channel> const &manip
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+boost::log::formatting_ostream & logger::operator<<(
+    boost::log::formatting_ostream &strm,
+    boost::log::to_log_manip<Severity, tag::severity> const &manip
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & logger::operator<<(
+    std::ostream &out,
+    Channels const &channels
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::ostream & logger::operator<<(
+    std::ostream &out,
+    Severity const &sev
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Duration": "../classes/duration"}}>
+```cpp showLineNumbers={false}
+std::ostream & logger::operator<<(
+    std::ostream &os,
+    Duration const &duration
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"DurationTree": "../classes/durationtree"}}>
+```cpp showLineNumbers={false}
+std::ostream & logger::operator<<(
+    std::ostream &os,
+    DurationTree const &duration_tree
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+boost::log::record_ostream & logger::operator<<(
+    boost::log::record_ostream &os,
+    DurationTreeMap::const_reference kv_pair
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
