@@ -212,8 +212,8 @@ DEVICE int SUFFIX(fill_hash_join_buff_bitwise_eq)(
   auto filling_func = args.for_semi_join ? SUFFIX(fill_hashtable_for_semi_join)
                                          : SUFFIX(fill_one_to_one_hashtable);
   auto hashtable_filling_func = [&](auto elem, size_t index) {
-    auto entry_ptr = SUFFIX(get_hash_slot_bitwise_eq)(
-        args.buff, elem, args.type_info.min_val, args.type_info.translated_null_val);
+    // NULL is already translated to max + 1, the final allocated slot.
+    auto entry_ptr = SUFFIX(get_hash_slot)(args.buff, elem, args.type_info.min_val);
     return filling_func(index, entry_ptr, args.invalid_slot_val);
   };
 

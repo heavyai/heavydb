@@ -11,6 +11,7 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/Runtime/HashJoinRuntime.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/thread_count.h"
@@ -22,8 +23,10 @@
 #include <boost/filesystem/operations.hpp>
 #include <boost/program_options.hpp>
 
+#include <array>
 #include <csignal>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <ostream>
 #include <set>
@@ -45,6 +48,44 @@ ExecutorDeviceType g_device_type;
 class Build : public TestHelpers::TbbPrivateServerKiller {};
 class MultiFragmentTest : public TestHelpers::TbbPrivateServerKiller {};
 class Other : public TestHelpers::TbbPrivateServerKiller {};
+
+TEST_F(Build, PerfectOneToOneNullSlotBoundary) {
+  constexpr int32_t null_value = std::numeric_limits<int32_t>::min();
+  for (const int32_t min_key : {-6, 0, 5}) {
+    const std::array<int32_t, 4> keys{{min_key, min_key + 1, null_value, null_value}};
+    for (const bool duplicate_null : {false, true}) {
+      const size_t count = duplicate_null ? 4 : 3;
+      const JoinChunk chunk{reinterpret_cast<const int8_t*>(keys.data()), count, 0};
+      const JoinColumn column{reinterpret_cast<const int8_t*>(&chunk),
+                              sizeof(chunk),
+                              1,
+                              count,
+                              sizeof(int32_t)};
+      const JoinColumnTypeInfo type_info{sizeof(int32_t),
+                                         min_key,
+                                         min_key + 1,
+                                         null_value,
+                                         true,
+                                         min_key + 2,
+                                         ColumnType::Signed};
+      for (const bool semi : {false, true}) {
+        // Guard words make a misplaced NULL write deterministic, without an
+        // out-of-bounds access by the test itself.
+        for (const int32_t guard : {-1, 12345}) {
+          SCOPED_TRACE(::testing::Message()
+                       << "min=" << min_key << " duplicate=" << duplicate_null
+                       << " semi=" << semi << " guard=" << guard);
+          std::array<int32_t, 5> buffer{{guard, -1, -1, -1, guard}};
+          const OneToOnePerfectJoinHashTableFillFuncArgs args{
+              buffer.data() + 1, nullptr, -1, semi, column, type_info, nullptr, 0, 0, 1};
+          EXPECT_EQ(duplicate_null && !semi ? -1 : 0,
+                    fill_hash_join_buff_bitwise_eq(args, 0, 1));
+          EXPECT_EQ((std::array<int32_t, 5>{{guard, 0, 1, 2, guard}}), buffer);
+        }
+      }
+    }
+  }
+}
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA

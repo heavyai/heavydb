@@ -14413,6 +14413,132 @@ TEST_F(Select, CorrelatedExistsPreservesEmptyInputs) {
   }
 }
 
+TEST_F(Select, NullSafePerfectJoinPreservesNullOnlyKeys) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  BitmapHashJoinTestMode bitmap_mode;
+  RankedBitmapHashJoinTestMode ranked_bitmap_mode;
+  g_enable_bitmap_hashjoin = false;
+  g_enable_ranked_bitmap_hashjoin = false;
+  ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
+  ResultReductionPipelineTestMode pipeline_mode;
+
+  const std::string probe{"null_safe_probe"};
+  const std::string build{"null_safe_build"};
+  for (const auto& table : {probe, build}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    run_ddl_statement("CREATE TABLE " + table +
+                      " (id INT NOT NULL, k INT) WITH (FRAGMENT_SIZE=2);");
+  }
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build + ";");
+    }
+  };
+  run_multiple_agg("INSERT INTO " + probe + " VALUES (1,NULL),(2,NULL),(3,5),(4,6);",
+                   ExecutorDeviceType::CPU);
+  const auto query = "SELECT p.id, b.id FROM " + probe + " p JOIN " + build +
+                     " b ON p.k IS NOT DISTINCT FROM b.k ORDER BY p.id, b.id;";
+  for (const bool null_only : {false, true}) {
+    for (const bool duplicate : {false, true}) {
+      run_ddl_statement("TRUNCATE TABLE " + build + ";");
+      run_multiple_agg("INSERT INTO " + build + " VALUES " +
+                           (null_only ? "(10,NULL);" : "(10,NULL),(11,5),(12,6);"),
+                       ExecutorDeviceType::CPU);
+      if (duplicate) {
+        run_multiple_agg("INSERT INTO " + build + " VALUES (13,NULL);",
+                         ExecutorDeviceType::CPU);
+      }
+      std::vector<std::vector<int64_t>> expected =
+          duplicate
+              ? std::vector<std::vector<int64_t>>{{1, 10}, {1, 13}, {2, 10}, {2, 13}}
+              : std::vector<std::vector<int64_t>>{{1, 10}, {2, 10}};
+      if (!null_only) {
+        expected.push_back({3, 11});
+        expected.push_back({4, 12});
+      }
+      for (const bool pipeline : {false, true}) {
+        g_enable_result_reduction_pipeline = pipeline;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          SCOPED_TRACE(::testing::Message()
+                       << "null_only=" << null_only << " duplicate=" << duplicate
+                       << " pipeline=" << pipeline << " device=" << dt);
+          ASSERT_NO_FATAL_FAILURE(
+              assertInt64RowsEqual(run_multiple_agg(query, dt), expected));
+        }
+      }
+    }
+  }
+}
+
+TEST_F(Select, CorrelatedHavingPreservesNullKeys) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  ResultReductionPipelineTestMode pipeline_mode;
+  BitmapHashJoinTestMode bitmap_mode;
+  RankedBitmapHashJoinTestMode ranked_bitmap_mode;
+  g_enable_bitmap_hashjoin = false;
+  g_enable_ranked_bitmap_hashjoin = false;
+  ScopeGuard restore_columnar = [columnar = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar;
+  };
+  const std::string probe{"having_null_probe"};
+  const std::string build{"having_null_build"};
+  for (const auto& table : {probe, build}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    run_ddl_statement("CREATE TABLE " + table +
+                      " (id INT NOT NULL, k INT, v INT) WITH (FRAGMENT_SIZE=2);");
+  }
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build + ";");
+    }
+  };
+  run_multiple_agg("INSERT INTO " + probe +
+                       " VALUES (1,1,3),(2,1,4),(3,2,5),(4,NULL,8),(5,3,NULL),"
+                       "(6,3,2),(7,4,4),(8,4,4),(9,5,-1),(10,NULL,NULL),(11,6,8);",
+                   ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO " + build +
+                       " VALUES (1,1,1),(2,1,2),(3,2,NULL),(4,NULL,7),"
+                       "(5,3,8),(6,3,8),(7,4,NULL),(8,4,NULL),(9,7,-3);",
+                   ExecutorDeviceType::CPU);
+  const auto from = " FROM " + probe + " p WHERE ";
+  const auto empty_group =
+      "EXISTS (SELECT COUNT(*) FROM " + build + " b WHERE b.k = p.k HAVING COUNT(*) = 0)";
+  for (const bool rewrites : {false, true}) {
+    ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+    for (const bool pipeline : {false, true}) {
+      g_enable_result_reduction_pipeline = pipeline;
+      for (const bool columnar : {false, true}) {
+        g_enable_columnar_output = columnar;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          SCOPED_TRACE(::testing::Message()
+                       << "rewrites=" << rewrites << " pipeline=" << pipeline
+                       << " columnar=" << columnar << " device=" << dt);
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg("SELECT id" + from + "EXISTS (SELECT SUM(v) FROM " +
+                                   build +
+                                   " b WHERE b.k = p.k HAVING SUM(v) > 2) ORDER BY id;",
+                               dt),
+              {{1}, {2}, {5}, {6}}));
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg("SELECT id" + from + empty_group + " ORDER BY id;", dt),
+              {{4}, {9}, {10}, {11}}));
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg(
+                  "SELECT id" + from + "NOT " + empty_group + " ORDER BY id;", dt),
+              {{1}, {2}, {3}, {5}, {6}, {7}, {8}}));
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, InSubqueryPreservesEmptySetNullSemantics) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
