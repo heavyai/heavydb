@@ -435,6 +435,8 @@ public class HeavyDBPlanner extends PlannerImpl {
                     .addRuleInstance(HeavyDBJoinTreeKeysetReductionRule.INSTANCE)
                     .addRuleInstance(HeavyDBRedundantSemiJoinPruneRule.INSTANCE)
                     .addRuleInstance(HeavyDBOuterJoinMultiJoinDecomposeRule.INSTANCE)
+                    // Lower graphs declined by the specialized rules before serialization.
+                    .addRuleInstance(CoreRules.MULTI_JOIN_OPTIMIZE)
                     .addRuleInstance(HeavyDBJoinFilterSplitRule.INSTANCE)
                     .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.PROJECT_INSTANCE)
                     .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.INSTANCE)
