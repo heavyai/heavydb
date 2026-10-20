@@ -1257,8 +1257,8 @@ TEST_F(PlannerRuleCoverage, ExistenceCountToGroupByRewritesCountStarExistenceSet
       GROUP BY c.c_name
   )sql");
   expect_join_type(distinct_plan, "semi");
-  EXPECT_EQ(size_t{2}, count_occurrences(distinct_plan, "LogicalJoin(")) << distinct_plan;
-  EXPECT_EQ(size_t{3}, count_occurrences(distinct_plan, "LogicalAggregate("))
+  EXPECT_EQ(size_t{1}, count_occurrences(distinct_plan, "LogicalJoin(")) << distinct_plan;
+  EXPECT_EQ(size_t{2}, count_occurrences(distinct_plan, "LogicalAggregate("))
       << distinct_plan;
 
   const std::string marker_plan = calcite_explain_plan(R"sql(
@@ -1272,9 +1272,25 @@ TEST_F(PlannerRuleCoverage, ExistenceCountToGroupByRewritesCountStarExistenceSet
       GROUP BY c.c_name
   )sql");
   expect_join_type(marker_plan, "semi");
-  EXPECT_EQ(size_t{2}, count_occurrences(marker_plan, "LogicalJoin(")) << marker_plan;
-  EXPECT_EQ(size_t{3}, count_occurrences(marker_plan, "LogicalAggregate("))
+  EXPECT_EQ(size_t{1}, count_occurrences(marker_plan, "LogicalJoin(")) << marker_plan;
+  EXPECT_EQ(size_t{2}, count_occurrences(marker_plan, "LogicalAggregate("))
       << marker_plan;
+}
+
+TEST_F(PlannerRuleCoverage, ExistenceCountDoesNotIntroduceOuterKeyReduction) {
+  for (const std::string outer_filter : {"", "o_orderkey > 10 AND "}) {
+    const auto plan =
+        calcite_explain_plan("SELECT COUNT(*) FROM planner_orders WHERE " + outer_filter +
+                             "o_custkey IN (SELECT k FROM (SELECT c_custkey AS k "
+                             "FROM planner_customer_no_key WHERE c_custkey < 500) d);");
+    expect_join_type(plan, "semi");
+    EXPECT_EQ(size_t{1}, count_occurrences(plan, "LogicalJoin(")) << plan;
+    EXPECT_EQ(size_t{2}, count_occurrences(plan, "LogicalAggregate(")) << plan;
+    EXPECT_EQ(
+        size_t{1},
+        count_occurrences(plan, "LogicalTableScan(table=[[test_db, planner_orders]])"))
+        << plan;
+  }
 }
 
 TEST_F(PlannerRuleCoverage, ExistenceCountToGroupByProvesDecorrelatedOuterKeyset) {

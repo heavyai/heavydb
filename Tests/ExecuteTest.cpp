@@ -14167,6 +14167,90 @@ TEST_F(Select, PipelinedGpuTemporaryResultPreservesTransientDictionaryKeys) {
   ASSERT_NO_FATAL_FAILURE(assert_rows(run_multiple_agg(query, dt)));
 }
 
+TEST_F(Select, ExistenceCountPreservesDuplicatesNullsAndEmptyInputs) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  const std::string probe_table{"existence_count_probe"};
+  const std::string build_table{"existence_count_build"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+  run_ddl_statement("CREATE TABLE " + probe_table +
+                    " (k INT, bucket INT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+  run_ddl_statement("CREATE TABLE " + build_table +
+                    " (k INT, allowed INT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+
+  // Disable CPU retry so GPU assertions cannot silently exercise another path.
+  ResultReductionPipelineTestMode pipeline_mode;
+  BitmapHashJoinTestMode bitmap_mode;
+  for (int state = 0; state < 4; ++state) {
+    if (state == 1) {
+      run_multiple_agg("INSERT INTO " + probe_table +
+                           " VALUES (1, 0), (1, 0), (2, 0), (3, 1), "
+                           "(3, 1), (NULL, 1), (4, 1), (5, 2);",
+                       ExecutorDeviceType::CPU);
+    } else if (state == 2) {
+      run_multiple_agg("INSERT INTO " + build_table + " VALUES (NULL, 1), (NULL, 1);",
+                       ExecutorDeviceType::CPU);
+    } else if (state == 3) {
+      run_multiple_agg("INSERT INTO " + build_table +
+                           " VALUES (1, 1), (1, 1), (2, 0), (3, 1), (3, 1), (9, 1);",
+                       ExecutorDeviceType::CPU);
+    }
+    for (const bool rewrites : {false, true}) {
+      ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+      for (const bool bitmap : {false, true}) {
+        g_enable_bitmap_hashjoin = bitmap;
+        for (const bool pipeline : {false, true}) {
+          g_enable_result_reduction_pipeline = pipeline;
+          for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+            SKIP_NO_GPU();
+            SCOPED_TRACE(::testing::Message()
+                         << "state=" << state << " rewrites=" << rewrites << " bitmap="
+                         << bitmap << " pipeline=" << pipeline << " device=" << dt);
+            const bool matches = state == 3;
+            const auto membership = " FROM " + probe_table +
+                                    " p WHERE p.k IN "
+                                    "(SELECT k FROM " +
+                                    build_table + " WHERE allowed = 1)";
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + membership + ";", dt),
+                {{matches ? 4 : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + membership + " AND p.bucket = 1;",
+                                 dt),
+                {{matches ? 2 : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + membership + " AND p.bucket = 99;",
+                                 dt),
+                {{0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT bucket, COUNT(*)" + membership +
+                                     " GROUP BY bucket ORDER BY bucket;",
+                                 dt),
+                matches ? std::vector<std::vector<int64_t>>{{0, 2}, {1, 2}}
+                        : std::vector<std::vector<int64_t>>{}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*) FROM " + probe_table +
+                                     " p JOIN (SELECT k, MIN(TRUE) AS marker FROM " +
+                                     build_table +
+                                     " WHERE allowed = 1 GROUP BY k) b "
+                                     "ON p.k = b.k;",
+                                 dt),
+                {{matches ? 4 : 0}}));
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, MembershipJoinPreservesNullableSemiAntiSemantics) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();

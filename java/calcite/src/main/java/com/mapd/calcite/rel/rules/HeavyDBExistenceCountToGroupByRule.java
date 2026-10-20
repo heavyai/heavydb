@@ -201,8 +201,15 @@ public class HeavyDBExistenceCountToGroupByRule extends RelOptRule {
           List<String> groupNames) {
     final RelOptCluster cluster = outerRel.getCluster();
     final RexBuilder rexBuilder = cluster.getRexBuilder();
-    final RelNode existenceKeys =
-            createReducedExistenceKeys(outerRel, outerKey, existenceInput, rexBuilder);
+    // Membership does not require filtering the right keys by the outer domain.
+    // Preserve a reduction already present in the decorrelated plan, but do not
+    // introduce a second scan and grouping of the outer relation just to use SEMI.
+    final RelNode existenceKeys = existenceInput.reducedByOuterKeys
+            ? createReducedExistenceKeys(outerRel, outerKey, existenceInput, rexBuilder)
+            : createDistinctKeyRelation(existenceInput.rel,
+                    existenceInput.keyIndex,
+                    existenceInput.rel.getRowType().getFieldNames().get(
+                            existenceInput.keyIndex));
     final RexNode semiJoinCondition = RelOptUtil.createEquiJoinCondition(outerRel,
             ImmutableList.of(outerKey),
             existenceKeys,
@@ -417,7 +424,8 @@ public class HeavyDBExistenceCountToGroupByRule extends RelOptRule {
                       outerKey)) {
         return null;
       }
-      return findKeySource(join.getLeft(), keyIndex, outerRel, outerKey);
+      return withOuterKeyReduction(
+              findKeySource(join.getLeft(), keyIndex, outerRel, outerKey));
     }
 
     final int rightKey = keyIndex - leftFieldCount;
@@ -426,7 +434,12 @@ public class HeavyDBExistenceCountToGroupByRule extends RelOptRule {
                     join.getLeft(), leftRef.getIndex(), outerRel, outerKey)) {
       return null;
     }
-    return findKeySource(join.getRight(), rightKey, outerRel, outerKey);
+    return withOuterKeyReduction(
+            findKeySource(join.getRight(), rightKey, outerRel, outerKey));
+  }
+
+  private static KeySource withOuterKeyReduction(KeySource source) {
+    return source == null ? null : new KeySource(source.rel, source.keyIndex, true);
   }
 
   private static boolean isExactOuterKeyDomain(
@@ -563,10 +576,16 @@ public class HeavyDBExistenceCountToGroupByRule extends RelOptRule {
   private static class KeySource {
     final RelNode rel;
     final int keyIndex;
+    final boolean reducedByOuterKeys;
 
     KeySource(RelNode rel, int keyIndex) {
+      this(rel, keyIndex, false);
+    }
+
+    KeySource(RelNode rel, int keyIndex, boolean reducedByOuterKeys) {
       this.rel = rel;
       this.keyIndex = keyIndex;
+      this.reducedByOuterKeys = reducedByOuterKeys;
     }
   }
 }
