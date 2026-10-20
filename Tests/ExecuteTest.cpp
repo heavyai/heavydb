@@ -11461,6 +11461,62 @@ TEST_F(Select, SparseAggregateSortMaterialization) {
   }
 }
 
+TEST_F(Select, GroupedTopNWithProjectedKey) {
+  const std::string table = "grouped_top_n_projected_key";
+  const auto drop = "DROP TABLE IF EXISTS " + table + ";";
+  run_ddl_statement(drop);
+  g_sqlite_comparator.query(drop);
+  ScopeGuard cleanup = [&] {
+    run_ddl_statement(drop);
+    g_sqlite_comparator.query(drop);
+  };
+  const auto create = "CREATE TABLE " + table + " (k INT, v DOUBLE)";
+  run_ddl_statement(create + " WITH (FRAGMENT_SIZE=2);");
+  g_sqlite_comparator.query(create + ";");
+  const auto insert = "INSERT INTO " + table +
+                      " VALUES (0, 1), (0, 2), (31, 10), (31, 20), "
+                      "(127, -5), (127, -6), (255, NULL);";
+  run_multiple_agg(insert, ExecutorDeviceType::CPU);
+  g_sqlite_comparator.query(insert);
+  ScopeGuard restore = [pipeline = g_enable_result_reduction_pipeline,
+                        columnar = g_enable_columnar_output,
+                        top_min = g_parallel_top_min,
+                        retry = g_allow_cpu_retry,
+                        step_retry = g_allow_query_step_cpu_retry] {
+    g_enable_result_reduction_pipeline = pipeline;
+    g_enable_columnar_output = columnar;
+    g_parallel_top_min = top_min;
+    g_allow_cpu_retry = retry;
+    g_allow_query_step_cpu_retry = step_retry;
+  };
+  g_enable_columnar_output = false;
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  // INT keys beside DOUBLE aggregates exercise the pipeline's projected-key layout.
+  for (const bool pipeline : {false, true}) {
+    g_enable_result_reduction_pipeline = pipeline;
+    for (const size_t top_min : {0, 100000}) {
+      g_parallel_top_min = top_min;
+      for (const auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+        SKIP_NO_GPU();
+        for (const std::string order : {"ASC NULLS FIRST",
+                                        "ASC NULLS LAST",
+                                        "DESC NULLS FIRST",
+                                        "DESC NULLS LAST"}) {
+          for (const int limit : {2, 10}) {
+            SCOPED_TRACE(::testing::Message()
+                         << "pipeline=" << pipeline << " top_min=" << top_min
+                         << " device=" << dt << " order=" << order << " limit=" << limit);
+            c("SELECT k, SUM(v) AS total FROM " + table + " GROUP BY k ORDER BY total " +
+                  order + " LIMIT " + std::to_string(limit) + ";",
+              dt);
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, TopNDictionaryOrderMatchesGlobalOrdering) {
   constexpr std::string_view table_name{"parallel_top_dictionary_test"};
   const auto drop_table = "DROP TABLE IF EXISTS " + std::string(table_name) + ";";
