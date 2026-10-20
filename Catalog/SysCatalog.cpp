@@ -3867,42 +3867,87 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is
     }
   }
 
-  // No cat found and we have the init lock, so we know no other thread is initializing
-  // a catalog.  Initialize a new catalog and add it to the map.
-  std::shared_ptr<Catalog> cat;
-  // There are some syscat values (root_user & user_name_by_user_id) that are needed for
-  // catalog initialization.  We would rather acquire them here and pass them in so that
-  // the Catalog does not need to reach back and lock the SysCatalog.
-  auto users = getAllUserMetadata();
-  std::map<int32_t, std::string> user_name_by_user_id;
-  for (const auto& user : users) {
-    user_name_by_user_id[user.userId] = user.userName;
-  }
-  UserMetadata root_user;
-  CHECK(getMetadataForUserById(shared::kRootUserId, root_user));
-
+  // Only one thread builds the Catalog for a given database; others wait for its result.
+  // Building a second Catalog concurrently would open a second SqliteConnector on the same
+  // catalog file (see cat_inflight_), and the init lock alone cannot prevent that: it is
+  // released before the new Catalog is registered, and the sys lock cannot be taken while
+  // holding it (createDatabase holds the sys lock while waiting for the init lock).
+  std::promise<std::shared_ptr<Catalog>> promise;
+  std::shared_future<std::shared_ptr<Catalog>> pending;
+  bool is_builder = false;
   {
-    // Hold a lock here to prevent concurrent initialization of catalogs.
-    // Note: cat_init_lock is not (and does not need to be) a distributed mutex.  See
-    // RWLocks.cpp for details.
-    cat_init_lock cat_lock(this);
-    cat = std::make_shared<Catalog>(basePath_,
-                                    curDB,
-                                    dataMgr_,
-                                    calciteMgr_,
-                                    is_new_db,
-                                    user_name_by_user_id,
-                                    root_user);
+    std::lock_guard<std::mutex> lock(cat_inflight_mutex_);
+    if (auto it = cat_inflight_.find(key); it != cat_inflight_.end()) {
+      pending = it->second;
+    } else {
+      pending = promise.get_future().share();
+      cat_inflight_.emplace(key, pending);
+      is_builder = true;
+    }
+  }
+  if (!is_builder) {
+    return pending.get();  // rethrows the builder's exception, if it failed
   }
 
-  // Check again for the catalog, as another thread may have added it while we were
-  // waiting for the initialization lock.
-  sys_write_lock write_lock(this);
-  if (auto it = cat_map_.find(key); it != cat_map_.end()) {
-    return it->second;
+  auto finish = [&] {
+    std::lock_guard<std::mutex> lock(cat_inflight_mutex_);
+    cat_inflight_.erase(key);
+  };
+  try {
+    std::shared_ptr<Catalog> cat;
+    {
+      // A builder that finished after our first check but before we registered as
+      // builder has already added the Catalog to the map.
+      sys_read_lock read_lock(this);
+      if (auto it = cat_map_.find(key); it != cat_map_.end()) {
+        cat = it->second;
+      }
+    }
+    if (!cat) {
+      // Initialize a new catalog and add it to the map.
+      // There are some syscat values (root_user & user_name_by_user_id) that are needed
+      // for catalog initialization.  We would rather acquire them here and pass them in
+      // so that the Catalog does not need to reach back and lock the SysCatalog.
+      auto users = getAllUserMetadata();
+      std::map<int32_t, std::string> user_name_by_user_id;
+      for (const auto& user : users) {
+        user_name_by_user_id[user.userId] = user.userName;
+      }
+      UserMetadata root_user;
+      CHECK(getMetadataForUserById(shared::kRootUserId, root_user));
+
+      {
+        // Hold a lock here to prevent concurrent initialization of catalogs.
+        // Note: cat_init_lock is not (and does not need to be) a distributed mutex.  See
+        // RWLocks.cpp for details.
+        cat_init_lock cat_lock(this);
+        cat = std::make_shared<Catalog>(basePath_,
+                                        curDB,
+                                        dataMgr_,
+                                        calciteMgr_,
+                                        is_new_db,
+                                        user_name_by_user_id,
+                                        root_user);
+      }
+
+      // Register it before releasing the waiters and the in-flight entry, so a caller
+      // always finds either the map entry or the in-flight entry. The map may already
+      // hold an entry if one was added while we built (e.g. by createDatabase).
+      sys_write_lock write_lock(this);
+      if (auto it = cat_map_.find(key); it != cat_map_.end()) {
+        cat = it->second;
+      } else {
+        cat_map_.emplace(key, cat);
+      }
+    }
+    promise.set_value(cat);
+    finish();
+    return cat;
+  } catch (...) {
+    promise.set_exception(std::current_exception());
+    finish();
+    throw;
   }
-  cat_map_.emplace(key, cat);
-  return cat;
 }
 
 void SysCatalog::removeCatalog(const std::string& dbName) {

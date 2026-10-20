@@ -85,6 +85,10 @@ class SqliteConnector {
   };
 
   void throwError();
+  // Like throwError(), but finalizes `stmt` first. A statement that failed in
+  // sqlite3_step() (e.g. a COMMIT that got SQLITE_BUSY) otherwise stays active on the
+  // connection after the exception is thrown.
+  void throwError(sqlite3_stmt* stmt);
 
   sqlite3* db_;
   std::string dbName_;

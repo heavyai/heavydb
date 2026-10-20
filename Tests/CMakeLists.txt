@@ -212,6 +212,11 @@ list(APPEND SANITY_TEST_PROGRAMS CorrelatedSubqueryTest)
 
 ##########
 
+add_executable(SysCatalogConcurrencyTest SysCatalogConcurrencyTest.cpp)
+target_link_libraries(SysCatalogConcurrencyTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(SysCatalogConcurrencyTest SysCatalogConcurrencyTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS SysCatalogConcurrencyTest)
+
 add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})

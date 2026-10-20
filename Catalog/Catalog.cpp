@@ -158,6 +158,14 @@ inline auto table_json_filepath(const std::string& base_path,
 std::map<int32_t, std::string> get_user_id_to_user_name_map();
 }  // namespace
 
+namespace {
+std::atomic<uint64_t> g_num_catalogs_constructed{0};
+}  // namespace
+
+uint64_t Catalog::numConstructed() {
+  return g_num_catalogs_constructed.load();
+}
+
 Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
@@ -172,6 +180,7 @@ Catalog::Catalog(const string& basePath,
     , calciteMgr_(calcite)
     , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
     , nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
+  g_num_catalogs_constructed++;
   mutex_desc_.dist_mutex = std::make_unique<heavyai::DistributedSharedMutex>(
       std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
           shared::kCatalogDirectoryName / (currentDB_.dbName + ".lockfile"),
@@ -1642,6 +1651,21 @@ std::unique_ptr<CustomExpression> Catalog::getCustomExpressionFromConnector(size
       is_deleted);
 }
 
+namespace {
+// A new dictionary id must map to an empty location. Dictionary ids are reused (the sqlite
+// ids are not AUTOINCREMENT), so an existing directory is an orphan from an earlier table
+// whose catalog rows were lost. Adopting it would load stale strings under a new schema.
+void create_new_dictionary_directory(const boost::filesystem::path& path) {
+  if (boost::filesystem::exists(path)) {
+    throw std::runtime_error("Cannot create string dictionary: directory " +
+                             path.string() +
+                             " already exists. It is likely left over from a table whose "
+                             "creation was not committed; move it aside and retry.");
+  }
+  boost::filesystem::create_directory(path);
+}
+}  // namespace
+
 void Catalog::addTableToMap(const TableDescriptor* td,
                             const list<ColumnDescriptor>& columns,
                             const list<DictDescriptor>& dicts) {
@@ -1686,11 +1710,14 @@ void Catalog::addTableToMap(const TableDescriptor* td,
       continue;
     }
     dict_ref.dictId = dd.dictRef.dictId;
+    // Create the directory before registering the dictionary: if it already exists the
+    // throw must leave no map entry, or the error cleanup would rename the pre-existing
+    // (orphan) directory away.
+    if (!dd.dictIsTemp) {
+      create_new_dictionary_directory(dd.dictFolderPath);
+    }
     DictDescriptor* new_dd = new DictDescriptor(dd);
     dictDescriptorMapByRef_[dict_ref].reset(new_dd);
-    if (!dd.dictIsTemp) {
-      boost::filesystem::create_directory(new_dd->dictFolderPath);
-    }
   }
 }
 
@@ -2395,11 +2422,11 @@ DictRef Catalog::addDictionaryNontransactional(ColumnDescriptor& cd) {
   auto& dd = dds.back();
   CHECK(dd.dictRef.dictId);
 
+  if (!dd.dictIsTemp) {
+    create_new_dictionary_directory(dd.dictFolderPath);
+  }
   DictDescriptor* new_dd = new DictDescriptor(dd);
   dictDescriptorMapByRef_[dd.dictRef].reset(new_dd);
-  if (!dd.dictIsTemp) {
-    boost::filesystem::create_directory(new_dd->dictFolderPath);
-  }
   return dd.dictRef;
 }
 
@@ -3300,12 +3327,21 @@ void Catalog::createTable(
 
     addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
+    // The commit must be inside the try: if it fails (e.g. SQLITE_BUSY, no busy timeout
+    // is configured), the table must not stay in the in-memory maps with the SQLite
+    // transaction left open, or later DDL/imports operate on a table that is lost on
+    // restart while its on-disk directories are left behind.
+    sqliteConnector_.query("END TRANSACTION");
   } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    try {
+      sqliteConnector_.query("ROLLBACK TRANSACTION");
+    } catch (std::exception& rollback_error) {
+      LOG(ERROR) << "Rollback after failed CREATE TABLE of " << td.tableName
+                 << " failed: " << rollback_error.what();
+    }
     removeTableFromMap(td.tableName, td.tableId, true);
     throw;
   }
-  sqliteConnector_.query("END TRANSACTION");
 
   if (td.storageType != StorageType::FOREIGN_TABLE) {
     write_lock.unlock();

@@ -139,6 +139,10 @@ class Catalog final {
           const std::map<int32_t, std::string>& user_id_name_map,
           const UserMetadata& root_user);
 
+  // Number of Catalog objects constructed in this process. Lets tests check that
+  // concurrent SysCatalog::getCatalog() calls build a single Catalog per database.
+  static uint64_t numConstructed();
+
   /**
    * @brief Destructor - deletes all
    * ColumnDescriptor and TableDescriptor structures
