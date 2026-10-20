@@ -1,0 +1,35 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+name = "tpch"
+description = "TPC-H decision support benchmark (22 queries)"
+iterations = 3
+warmup = 1
+
+# Substituted into schema.sql as ${NAME}; override per run with --var NAME=VALUE.
+# Must match the dataset's Parquet decimal precision (15 for most generators, 12 for gqe-dbgen).
+[vars]
+DEC_PRECISION = 15
+
+# Each table's data lives in <dataset-root>/<path>/ as one or more parquet files
+# (names are not assumed).  Override `path`/`glob` per table if a dataset differs.
+[[tables]]
+name = "region"
+[[tables]]
+name = "nation"
+[[tables]]
+name = "supplier"
+[[tables]]
+name = "customer"
+[[tables]]
+name = "part"
+[[tables]]
+name = "partsupp"
+[[tables]]
+name = "orders"
+[[tables]]
+name = "lineitem"
+
+# Queries HeavyDB cannot currently run: name = "reason"
+[disabled]
+q21 = "correlated EXISTS/NOT EXISTS with <> predicate: no equijoin (hash join failure)"
