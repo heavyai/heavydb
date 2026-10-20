@@ -22,6 +22,7 @@
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/scope.h"
+#include "Shared/thread_count.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Tests/DataMgrTestHelpers.h"
 #include "Tests/TestHelpers.h"
@@ -260,6 +261,108 @@ TEST(Sort, WatchdogUsesLiveRowsWhenCapacityExceedsLimit) {
             EXPECT_EQ(v<int64_t>(row.back()), int64_t(0));
           }
           EXPECT_TRUE(result->getNextRow(false, false).empty());
+        }
+      }
+    }
+  }
+}
+
+TEST(Sort, ParallelTopMergesSortedRanges) {
+  ScopeGuard restore = [parallel_min = g_parallel_top_min,
+                        cpu_threads = g_cpu_threads_override] {
+    g_parallel_top_min = parallel_min;
+    g_cpu_threads_override = cpu_threads;
+  };
+  g_parallel_top_min = 0;
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  ASSERT_TRUE(executor);
+  const auto targets =
+      generate_custom_agg_target_infos({8}, {kSUM}, {kBIGINT}, {kBIGINT});
+  const auto value_for_key = [](int64_t key) {
+    return key % 11 ? (key * 37) % 19 : inline_int_null_value<int64_t>();
+  };
+  for (const bool columnar : {false, true}) {
+    for (const size_t capacity : {size_t{7}, size_t{257}}) {
+      for (const unsigned workers : {1U, 3U, 64U}) {
+        g_cpu_threads_override = workers;
+        for (const bool appended : {false, true}) {
+          // Sparse inputs include empty worker ranges, not just holes within a range.
+          for (const int shape : {0, 1, 2}) {
+            const auto populated = [&](size_t key) {
+              return shape == 0 || (shape == 1 && key % 17 == 0);
+            };
+            for (const bool descending : {false, true}) {
+              for (const size_t top_n : {size_t{1}, size_t{7}, size_t{64}, size_t{300}}) {
+                SCOPED_TRACE(::testing::Message()
+                             << "capacity=" << capacity << " workers=" << workers
+                             << " appended=" << appended << " shape=" << shape
+                             << " descending=" << descending << " top_n=" << top_n
+                             << " columnar=" << columnar);
+                auto owner = std::make_shared<RowSetMemoryOwner>(
+                    Executor::getArenaBlockSize(), Executor::UNITARY_EXECUTOR_ID);
+                const auto make_result = [&](size_t entries, size_t offset) {
+                  QueryMemoryDescriptor descriptor(
+                      QueryDescriptionType::GroupByPerfectHash, 0, capacity, false, {8});
+                  descriptor.addColSlotInfo({std::make_tuple(int8_t{8}, int8_t{8})});
+                  descriptor.addColSlotInfo({std::make_tuple(int8_t{8}, int8_t{8})});
+                  descriptor.setAllTargetGroupbyIndices({0, -1});
+                  descriptor.setEntryCount(entries);
+                  descriptor.setOutputColumnar(columnar);
+                  auto result = std::make_unique<ResultSet>(
+                      targets, ExecutorDeviceType::CPU, descriptor, owner, 0, 0);
+                  auto* buffer = result->allocateStorage()->getUnderlyingBuffer();
+                  for (size_t i = 0; i < entries; ++i) {
+                    const auto key = offset + i;
+                    auto* row = buffer + i * (columnar ? 8 : descriptor.getRowSize());
+                    write_key(populated(key) ? static_cast<int64_t>(key) : EMPTY_KEY_64,
+                              row,
+                              8);
+                    auto* first = columnar
+                                      ? buffer + descriptor.getColOffInBytes(0) + i * 8
+                                      : row + 8;
+                    auto* second = columnar
+                                       ? buffer + descriptor.getColOffInBytes(1) + i * 8
+                                       : row + 16;
+                    write_int(first, 0, 8);
+                    write_int(second, value_for_key(key), 8);
+                  }
+                  return result;
+                };
+                const auto first_capacity = appended ? capacity / 2 : capacity;
+                auto result = make_result(first_capacity, 0);
+                if (appended) {
+                  auto second = make_result(capacity - first_capacity, first_capacity);
+                  result->append(*second);
+                }
+                std::vector<int64_t> expected;
+                for (size_t key = 0; key < capacity; ++key) {
+                  if (populated(key)) {
+                    expected.push_back(key);
+                  }
+                }
+                // The NULL sentinel sorts first ascending and last descending.
+                std::sort(expected.begin(), expected.end(), [&](int64_t a, int64_t b) {
+                  const auto va = value_for_key(a);
+                  const auto vb = value_for_key(b);
+                  return va == vb ? a < b : (descending ? va > vb : va < vb);
+                });
+                expected.resize(std::min(top_n, expected.size()));
+                result->sort({{2, descending, !descending}, {1, false, false}},
+                             top_n,
+                             ExecutorDeviceType::CPU,
+                             executor.get(),
+                             true);
+                ASSERT_EQ(result->rowCount(), expected.size());
+                for (const auto key : expected) {
+                  const auto row = result->getNextRow(false, false);
+                  ASSERT_EQ(row.size(), size_t{2});
+                  EXPECT_EQ(v<int64_t>(row[0]), key);
+                  EXPECT_EQ(v<int64_t>(row[1]), value_for_key(key));
+                }
+                EXPECT_TRUE(result->getNextRow(false, false).empty());
+              }
+            }
+          }
         }
       }
     }

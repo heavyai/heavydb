@@ -45,6 +45,7 @@
 #include <future>
 #include <iterator>
 #include <numeric>
+#include <queue>
 #include <set>
 #include <sstream>
 #include <string_view>
@@ -3023,17 +3024,12 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
                             const size_t top_n,
                             const size_t entry_count,
                             const Executor* executor) {
-  // Each worker contributes up to top_n rows to the final merge. Bound both the
-  // scan grain and that partial-winner fan-in instead of oversubscribing small
-  // ranges on high-core-count hosts.
-  const auto min_entries_per_worker = std::max(g_parallel_top_min, size_t{1});
-  const auto workers_for_entry_count =
-      entry_count / min_entries_per_worker +
-      static_cast<size_t>(entry_count % min_entries_per_worker != 0);
+  // The parallel-sort activation threshold is not a per-worker scan grain.
+  // Bound task count independently; the merge below visits only the final winners.
   const auto nthreads = std::max(size_t{1},
                                  std::min({static_cast<size_t>(cpu_threads()),
                                            parallel_top_max_worker_count,
-                                           workers_for_entry_count}));
+                                           entry_count}));
 
   // Split permutation_ into nthreads subranges and initialize them
   permutation_.resize(entry_count);
@@ -3098,25 +3094,54 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
     top_sort_threads.wait();
   }
 
-  // In case you are considering implementing a parallel reduction, note that the
-  // ResultSetComparator constructor is O(N) in order to materialize some of the aggregate
-  // columns as necessary to perform a comparison. This cost is why reduction is chosen to
-  // be serial instead; only one more Comparator is needed below.
-
-  // Left-copy disjoint top-sorted subranges into one contiguous range.
-  // ++++....+++.....+++++...  ->  ++++++++++++............
-  auto end = permutation_.begin() + permutation_views.front().size();
-  for (size_t i = 1; i < nthreads; ++i) {
-    std::copy(permutation_views[i].begin(), permutation_views[i].end(), end);
-    end += permutation_views[i].size();
-  }
-
-  // Top sort final range.
-  PermutationView pv(permutation_.data(), end - permutation_.begin());
+  const auto candidate_count = std::accumulate(
+      permutation_views.begin(),
+      permutation_views.end(),
+      size_t{0},
+      [](const size_t count, const auto& view) { return count + view.size(); });
+  PermutationView pv(permutation_.data(), permutation_.size());
   const auto comparator = createComparator(order_entries, pv, executor, false);
-  pv = topPermutation(pv, top_n, comparator.get());
-  permutation_.resize(pv.size());
-  permutation_.shrink_to_fit();
+  // Each view is already sorted. Merge its head instead of sorting up to
+  // nthreads * top_n candidates again; final selection is O(top_n * log(nthreads)).
+  const auto merge_top = [&](const auto* rsc) {
+    struct Cursor {
+      const PermutationIdx* current;
+      const PermutationIdx* end;
+    };
+    auto compare = [rsc](const Cursor& lhs, const Cursor& rhs) {
+      return (*rsc)(*rhs.current, *lhs.current);
+    };
+    std::vector<Cursor> heads;
+    heads.reserve(nthreads);
+    for (const auto& view : permutation_views) {
+      if (!view.empty()) {
+        heads.push_back({view.begin(), view.end()});
+      }
+    }
+    std::priority_queue<Cursor, std::vector<Cursor>, decltype(compare)> heap(
+        compare, std::move(heads));
+    Permutation winners;
+    winners.reserve(std::min(top_n, candidate_count));
+    while (!heap.empty() && winners.size() < top_n) {
+      auto cursor = heap.top();
+      heap.pop();
+      winners.push_back(*cursor.current++);
+      if (cursor.current != cursor.end) {
+        heap.push(cursor);
+      }
+    }
+    return winners;
+  };
+  if (const auto* rsc =
+          dynamic_cast<const ResultSetComparator<ColumnWiseTargetAccessor>*>(
+              comparator.get())) {
+    permutation_ = merge_top(rsc);
+  } else {
+    const auto* row_rsc =
+        dynamic_cast<const ResultSetComparator<RowWiseTargetAccessor>*>(comparator.get());
+    CHECK(row_rsc);
+    permutation_ = merge_top(row_rsc);
+  }
 }
 
 namespace {
