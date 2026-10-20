@@ -3458,8 +3458,9 @@ bool window_function_can_precompute_partition_extrema_on_gpu(
 #ifdef HAVE_CUDA
 bool window_function_can_execute_on_gpu(const Analyzer::WindowFunction* window_func) {
   CHECK(window_func);
-  if (window_function_can_precompute_partition_extrema_on_gpu(window_func)) {
-    return true;
+  if (window_func->getKind() == SqlWindowFunctionKind::MIN ||
+      window_func->getKind() == SqlWindowFunctionKind::MAX) {
+    return window_function_can_precompute_partition_extrema_on_gpu(window_func);
   }
   if (!is_gpu_window_function_kind_supported(window_func->getKind())) {
     return false;

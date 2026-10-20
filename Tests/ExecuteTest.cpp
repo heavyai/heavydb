@@ -27805,6 +27805,95 @@ TEST_F(Select, WindowFunctionWholePartitionMinMaxGpu) {
   ASSERT_EQ(ExecutorDeviceType::GPU, result->getDeviceType());
 }
 
+TEST_F(Select, WindowFunctionPartitionExtremaGpuEligibility) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const auto dt = ExecutorDeviceType::GPU;
+  SKIP_NO_GPU_P(dt);
+
+  const std::string table{"window_extrema_eligibility"};
+  const auto drop = "DROP TABLE IF EXISTS " + table + ";";
+  run_ddl_statement(drop);
+  g_sqlite_comparator.query(drop);
+  ScopeGuard cleanup = [&] {
+    run_ddl_statement(drop);
+    g_sqlite_comparator.query(drop);
+  };
+  const auto columns =
+      " (id INT, p INT, k BIGINT, i INT, s SMALLINT, t TINYINT, f FLOAT, d DOUBLE, c ";
+  run_ddl_statement("CREATE TABLE " + table + columns +
+                    "BIGINT ENCODING FIXED(32)) WITH (FRAGMENT_SIZE=2);");
+  g_sqlite_comparator.query("CREATE TABLE " + table + columns + "BIGINT);");
+  for (const auto& row : {"(0,0,5,5,5,5,2.5,2.5,5)",
+                          "(1,0,3,3,3,3,0.5,0.5,3)",
+                          "(2,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL)",
+                          "(3,1,-2,-2,-2,-2,-1.25,-1.25,-2)",
+                          "(4,1,-5,-5,-5,-5,-3.5,-3.5,-5)",
+                          "(5,2,NULL,NULL,NULL,NULL,NULL,NULL,NULL)",
+                          "(6,NULL,7,7,7,7,8.0,8.0,7)",
+                          "(7,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)"}) {
+    const auto insert = "INSERT INTO " + table + " VALUES " + row + ";";
+    run_multiple_agg(insert, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert);
+  }
+  ScopeGuard restore_flags = [retry = g_allow_cpu_retry,
+                              step_retry = g_allow_query_step_cpu_retry,
+                              pipeline = g_enable_result_reduction_pipeline,
+                              columnar = g_enable_columnar_output] {
+    g_allow_cpu_retry = retry;
+    g_allow_query_step_cpu_retry = step_retry;
+    g_enable_result_reduction_pipeline = pipeline;
+    g_enable_columnar_output = columnar;
+  };
+  g_allow_cpu_retry = false;
+  g_allow_query_step_cpu_retry = false;
+  g_enable_result_reduction_pipeline = true;
+
+  for (const bool columnar : {false, true}) {
+    g_enable_columnar_output = columnar;
+    for (const auto& arg : {"i", "s", "t", "f", "c", "k + 1"}) {
+      for (const auto& window : {"PARTITION BY p", ""}) {
+        SCOPED_TRACE(::testing::Message()
+                     << "columnar=" << columnar << " arg=" << arg << " over=" << window);
+        const auto extrema = std::string{"MIN("} + arg + ") OVER (" + window + "), MAX(" +
+                             arg + ") OVER (" + window + ")";
+        const auto query = "SELECT id, " + extrema + " FROM " + table + " ORDER BY id;";
+        c(query, query, ExecutorDeviceType::CPU);
+        c(query, query, dt);
+      }
+    }
+
+    // Unsupported types must select CPU before codegen, without needing a retry.
+    const auto cpu_selected =
+        run_multiple_agg("SELECT MIN(i) OVER (PARTITION BY p) FROM " + table + ";", dt);
+    ASSERT_EQ(ExecutorDeviceType::CPU, cpu_selected->getDeviceType());
+
+    // Keep supported 64-bit whole-partition extrema on GPU, including explicit frames.
+    for (const auto& arg : {"k", "d"}) {
+      for (const auto& window :
+           {"PARTITION BY p",
+            "PARTITION BY p ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"}) {
+        SCOPED_TRACE(::testing::Message()
+                     << "columnar=" << columnar << " arg=" << arg << " over=" << window);
+        const auto extrema = std::string{"MIN("} + arg + ") OVER (" + window + "), MAX(" +
+                             arg + ") OVER (" + window + ")";
+        const auto query = "SELECT id, " + extrema + " FROM " + table + " ORDER BY id;";
+        c(query, query, dt);
+        const auto gpu_selected =
+            run_multiple_agg("SELECT " + extrema + " FROM " + table + ";", dt);
+        ASSERT_EQ(ExecutorDeviceType::GPU, gpu_selected->getDeviceType());
+      }
+    }
+    for (const auto& window :
+         {"PARTITION BY p ORDER BY id",
+          "PARTITION BY p ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW"}) {
+      const auto query = "SELECT id, MIN(k) OVER (" + std::string{window} +
+                         "), MAX(k) OVER (" + window + ") FROM " + table +
+                         " ORDER BY id;";
+      c(query, query, dt);
+    }
+  }
+}
+
 TEST_F(Select, WindowFunctionWholePartitionDoubleExtremaMatchesCpuWithNan) {
   const auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
