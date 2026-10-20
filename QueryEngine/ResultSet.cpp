@@ -2894,13 +2894,16 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
   CHECK(permutation_.empty());
 
   const bool is_top_n_sort = top_n != 0;
+  // Capacity bounds the live row count; only scan oversized buffers for the watchdog.
   if (top_n && sort_entry_count > g_parallel_top_min) {
-    if (g_enable_watchdog && sortRowCountForWatchdog() > g_parallel_top_max) {
+    if (g_enable_watchdog && sort_entry_count > g_parallel_top_max &&
+        sortRowCountForWatchdog() > g_parallel_top_max) {
       throw WatchdogException("Sorting the result would be too slow");
     }
     parallelTop(order_entries, top_n, sort_entry_count, executor);
   } else {
-    if (g_enable_watchdog && sortRowCountForWatchdog() > g_watchdog_baseline_sort_max) {
+    if (g_enable_watchdog && sort_entry_count > g_watchdog_baseline_sort_max &&
+        sortRowCountForWatchdog() > g_watchdog_baseline_sort_max) {
       throw WatchdogException("Sorting the result would be too slow");
     }
     PermutationView pv;

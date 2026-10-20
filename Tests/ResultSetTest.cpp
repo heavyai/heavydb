@@ -21,6 +21,7 @@
 #include "QueryEngine/RuntimeFunctions.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/checked_alloc.h"
+#include "Shared/scope.h"
 #include "StringDictionary/StringDictionary.h"
 #include "Tests/DataMgrTestHelpers.h"
 #include "Tests/TestHelpers.h"
@@ -38,6 +39,10 @@
 using QR = QueryRunner::QueryRunner;
 
 extern bool g_is_test_env;
+extern bool g_enable_watchdog;
+extern size_t g_parallel_top_min;
+extern size_t g_parallel_top_max;
+extern size_t g_watchdog_baseline_sort_max;
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
@@ -164,6 +169,101 @@ TEST(Append, BaselineHashDensityRequiresDenseSource) {
 
   EXPECT_FALSE(target.isBaselineHashDenseForReduction());
   EXPECT_EQ(target.entryCount(), size_t(5));
+}
+
+TEST(Sort, WatchdogUsesLiveRowsWhenCapacityExceedsLimit) {
+  ScopeGuard restore = [watchdog = g_enable_watchdog,
+                        parallel_min = g_parallel_top_min,
+                        parallel_max = g_parallel_top_max,
+                        baseline_max = g_watchdog_baseline_sort_max] {
+    g_enable_watchdog = watchdog;
+    g_parallel_top_min = parallel_min;
+    g_parallel_top_max = parallel_max;
+    g_watchdog_baseline_sort_max = baseline_max;
+  };
+  constexpr size_t row_limit = 5;
+  g_parallel_top_max = row_limit;
+  g_watchdog_baseline_sort_max = row_limit;
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  ASSERT_TRUE(executor);
+  const auto target_infos =
+      generate_custom_agg_target_infos({8}, {kSUM}, {kBIGINT}, {kBIGINT});
+  // Multiple keys select the permutation sorter, where these watchdogs apply.
+  const std::list<Analyzer::OrderEntry> order_entries{{1, true, false},
+                                                      {2, false, false}};
+
+  for (const bool watchdog : {false, true}) {
+    g_enable_watchdog = watchdog;
+    // Exercise full sort, serial Top-N, and parallel Top-N independently.
+    for (const int sort_mode : {0, 1, 2}) {
+      const size_t top_n = sort_mode == 0 ? 0 : 3;
+      g_parallel_top_min = sort_mode == 2 ? 0 : 100;
+      for (const bool appended : {false, true}) {
+        for (const auto& shape : {std::pair<size_t, size_t>{4, 4},
+                                  {5, 5},
+                                  {6, 6},
+                                  {12, 0},
+                                  {12, 4},
+                                  {12, 5},
+                                  {12, 6}}) {
+          const auto capacity = shape.first;
+          const auto live_rows = shape.second;
+          SCOPED_TRACE(::testing::Message()
+                       << "watchdog=" << watchdog << " sort_mode=" << sort_mode
+                       << " appended=" << appended << " capacity=" << capacity
+                       << " live_rows=" << live_rows);
+          auto owner = std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(),
+                                                           Executor::UNITARY_EXECUTOR_ID);
+          const auto make_result = [&](size_t entries, size_t rows, size_t offset) {
+            QueryMemoryDescriptor descriptor(
+                QueryDescriptionType::GroupByPerfectHash, 0, capacity, false, {8});
+            descriptor.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+            descriptor.addColSlotInfo({std::make_tuple(int8_t(8), int8_t(8))});
+            descriptor.setAllTargetGroupbyIndices({0, -1});
+            descriptor.setEntryCount(entries);
+            auto result = std::make_unique<ResultSet>(
+                target_infos, ExecutorDeviceType::CPU, descriptor, owner, 0, 0);
+            auto* buffer = result->allocateStorage()->getUnderlyingBuffer();
+            for (size_t i = 0; i < entries; ++i) {
+              auto* row = buffer + i * descriptor.getRowSize();
+              write_key(
+                  i < rows ? static_cast<int64_t>(offset + i) : EMPTY_KEY_64, row, 8);
+              write_int(row + 8, 0, 8);
+              write_int(row + 16, 0, 8);
+            }
+            return result;
+          };
+          const size_t first_capacity = appended ? capacity / 2 : capacity;
+          const size_t first_rows = appended ? live_rows / 2 : live_rows;
+          auto result = make_result(first_capacity, first_rows, 0);
+          if (appended) {
+            auto second = make_result(
+                capacity - first_capacity, live_rows - first_rows, first_rows);
+            result->append(*second);
+          }
+          ASSERT_EQ(result->entryCount(), capacity);
+          const auto sort = [&] {
+            result->sort(
+                order_entries, top_n, ExecutorDeviceType::CPU, executor.get(), true);
+          };
+          if (watchdog && live_rows > row_limit) {
+            EXPECT_THROW(sort(), WatchdogException);
+            continue;
+          }
+          ASSERT_NO_THROW(sort());
+          const auto expected_rows = top_n ? std::min(top_n, live_rows) : live_rows;
+          ASSERT_EQ(result->rowCount(), expected_rows);
+          for (size_t i = 0; i < expected_rows; ++i) {
+            const auto row = result->getNextRow(false, false);
+            ASSERT_EQ(row.size(), size_t(2));
+            EXPECT_EQ(v<int64_t>(row.front()), static_cast<int64_t>(live_rows - i - 1));
+            EXPECT_EQ(v<int64_t>(row.back()), int64_t(0));
+          }
+          EXPECT_TRUE(result->getNextRow(false, false).empty());
+        }
+      }
+    }
+  }
 }
 
 TEST(LazyFetch, GlobalRowIdsDoNotAliasAppendedStorageLocalRows) {
