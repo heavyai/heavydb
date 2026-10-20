@@ -191,13 +191,15 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     pos_arg = codegenWindowPosition(window_func_context, pos_arg);
   }
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
-  if (update_query_plan && fetch_column &&
+  // A plain projection may request lazy fetch after another expression has already
+  // required this column. Its decoding must still match the plan-wide input layout.
+  if (update_query_plan && plan_state_->isColumnToFetch(column_key) &&
       plan_state_->canUseSegmentedColumnFetch(col_desc, col_ti, co.device_type)) {
     plan_state_->addColumnToFetchSegmented(col_desc);
   }
   const bool use_segmented_column_fetch =
-      fetch_column && plan_state_->isColumnToFetchSegmented(col_desc) &&
-      !col_ti.is_varlen() && !col_ti.usesFlatBuffer() && col_ti.get_size() > 0;
+      plan_state_->isColumnToFetchSegmented(col_desc) && !col_ti.is_varlen() &&
+      !col_ti.usesFlatBuffer() && col_ti.get_size() > 0;
   if (plan_state_->isLazyFetchColumn(col_var)) {
     if (update_query_plan) {
       plan_state_->addColumnToNotFetch(col_var->getColumnKey());

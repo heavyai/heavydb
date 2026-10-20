@@ -12705,6 +12705,82 @@ class ExperimentalConstraintTrustTestMode {
 
 void assertInt64RowsEqual(const std::shared_ptr<ResultSet>& rows,
                           const std::vector<std::vector<int64_t>>& expected);
+void assertInt64RowSetEqual(const std::shared_ptr<ResultSet>& rows,
+                            std::vector<std::vector<int64_t>> expected);
+
+TEST_F(Select, SegmentedTemporaryColumnsRespectFetchPlan) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  const std::string table_name{"segmented_column_fetch_plan_test"};
+  ResultReductionPipelineTestMode pipeline_mode;
+  ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
+  ScopeGuard restore_output = [columnar = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar;
+  };
+  for (const int fragment_size : {2, 1024}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    run_ddl_statement("CREATE TABLE " + table_name +
+                      " (id BIGINT NOT NULL) WITH (FRAGMENT_SIZE=" +
+                      std::to_string(fragment_size) + ");");
+    ScopeGuard drop_table = [&] {
+      if (!g_keep_test_data) {
+        run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+      }
+    };
+    run_multiple_agg("INSERT INTO " + table_name +
+                         " VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9);",
+                     ExecutorDeviceType::CPU);
+    const auto scalar_input = [&](const std::string& aggregate,
+                                  const std::string& filter = "id > 2") {
+      return "SELECT " + aggregate + " AS val FROM " + table_name + " WHERE " + filter;
+    };
+    const std::vector<std::pair<std::string, std::vector<int64_t>>> inputs{
+        {scalar_input("COUNT(*)"), {7}},
+        {scalar_input("SUM(id)"), {42}},
+        {scalar_input("MIN(id)"), {3}},
+        {scalar_input("MAX(id)"), {9}},
+        {scalar_input("COUNT(*)", "id < 0"), {0}},
+        {scalar_input("MIN(id)", "id < 0"), {inline_int_null_value<int64_t>()}},
+        {"SELECT SUM(id) AS val FROM " + table_name + " GROUP BY MOD(id, 3)",
+         {12, 15, 18}},
+        {"SELECT id AS val FROM " + table_name + " ORDER BY id LIMIT 4", {1, 2, 3, 4}}};
+    for (const bool pipeline : {false, true}) {
+      g_enable_result_reduction_pipeline = pipeline;
+      for (const bool columnar : {false, true}) {
+        g_enable_columnar_output = columnar;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          for (const auto& [input, values] : inputs) {
+            for (const bool column_first : {false, true}) {
+              SCOPED_TRACE(::testing::Message()
+                           << "fragment_size=" << fragment_size << " pipeline="
+                           << pipeline << " columnar=" << columnar << " device=" << dt
+                           << " input=" << input << " column_first=" << column_first);
+              const std::string expression{"CASE WHEN n.val > 5 THEN 20 ELSE 50 END"};
+              const auto targets =
+                  column_first ? "n.val, " + expression : expression + ", n.val";
+              // CASE scopes its decoded-value cache. Both projection orders must
+              // honor the input layout even when a column is already marked fetched.
+              const auto query = "WITH n AS (" + input + ") SELECT a.id, " + targets +
+                                 " FROM " + table_name + " a, n WHERE a.id > 2;";
+              std::vector<std::vector<int64_t>> expected;
+              for (int64_t id = 3; id <= 9; ++id) {
+                for (const auto value : values) {
+                  const int64_t branch_value = value > 5 ? 20 : 50;
+                  expected.push_back(column_first
+                                         ? std::vector<int64_t>{id, value, branch_value}
+                                         : std::vector<int64_t>{id, branch_value, value});
+                }
+              }
+              ASSERT_NO_FATAL_FAILURE(
+                  assertInt64RowSetEqual(run_multiple_agg(query, dt), expected));
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 TEST_F(Select, ScalarCountDistinctRewritePreservesNullAndEmptyInputs) {
   const std::string table_name{"scalar_count_distinct_rewrite_test"};
