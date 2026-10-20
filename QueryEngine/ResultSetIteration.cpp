@@ -2713,11 +2713,8 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
           ival, query_mem_desc_.getCountDistinctDescriptor(target_logical_idx)));
     }
     ival = normalize_encoded_null_value(chosen_type, ival);
-    const auto translated_null_key =
-        query_mem_desc.getTranslatedGroupbyNullForTarget(target_logical_idx);
-    if (translated_null_key && ival == *translated_null_key) {
-      return inline_int_null_val(type_info);
-    }
+    ival = normalize_translated_group_key_null(
+        query_mem_desc, target_info, target_logical_idx, ival);
     // TODO(alex): remove int_resize_cast, make read_int_from_buff return the
     // right type instead
     if (inline_int_null_val(chosen_type) ==

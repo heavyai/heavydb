@@ -60,10 +60,12 @@ inline int64_t direct_columnar_nullable_val(const int64_t val,
                                             const SQLTypeInfo& type_info,
                                             const ResultSet& rows,
                                             const size_t target_idx) {
-  const auto translated_null_key =
-      rows.getQueryMemDesc().getTranslatedGroupbyNullForTarget(target_idx);
-  if (translated_null_key && val == *translated_null_key) {
-    return inline_int_null_val(type_info);
+  if (!rows.getTargetInfos()[target_idx].is_agg) {
+    const auto translated_null_key =
+        rows.getQueryMemDesc().getTranslatedGroupbyNullForTarget(target_idx);
+    if (translated_null_key && val == *translated_null_key) {
+      return inline_int_null_val(type_info);
+    }
   }
   if (type_info.is_string() && type_info.get_compression() == kENCODING_DICT) {
     const auto null_val = inline_fixed_encoding_null_val(type_info);

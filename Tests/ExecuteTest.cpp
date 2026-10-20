@@ -14605,6 +14605,85 @@ TEST_F(Select, NullSafePerfectJoinPreservesNullOnlyKeys) {
   }
 }
 
+TEST_F(Select, PipelinedGroupedExtremaPreserveNullableValues) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  ResultReductionPipelineTestMode pipeline_mode;
+  ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
+  ScopeGuard restore_columnar = [columnar = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar;
+  };
+  const std::string table{"grouped_extrema_nulls"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+  ScopeGuard drop_table = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    }
+  };
+  for (const auto fragment_size : {2, 100}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    run_ddl_statement("CREATE TABLE " + table +
+                      " (id INT NOT NULL, k INT, v INT) WITH (FRAGMENT_SIZE=" +
+                      std::to_string(fragment_size) + ");");
+    // The nullable key range ends at 7, so 8 is the translated NULL key, but it
+    // remains a valid aggregate value for k = 3.
+    run_multiple_agg("INSERT INTO " + table +
+                         " VALUES (1,1,1),(2,1,2),(3,2,NULL),(4,NULL,7),"
+                         "(5,3,8),(6,3,8),(7,4,NULL),(8,4,NULL),(9,7,-3);",
+                     ExecutorDeviceType::CPU);
+    for (const bool pipeline : {false, true}) {
+      g_enable_result_reduction_pipeline = pipeline;
+      for (const bool columnar : {false, true}) {
+        g_enable_columnar_output = columnar;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          for (const std::string aggregate : {"MIN", "MAX"}) {
+            SCOPED_TRACE(::testing::Message()
+                         << "fragment_size=" << fragment_size << " pipeline=" << pipeline
+                         << " columnar=" << columnar << " device=" << dt
+                         << " aggregate=" << aggregate);
+            const auto rows = run_multiple_agg(
+                "SELECT " + aggregate + "(v) FROM " + table + " GROUP BY k;", dt);
+            ASSERT_TRUE(rows);
+            EXPECT_EQ(rows->rowCount(), size_t(6));
+            std::vector<int64_t> actual;
+            rows->moveToBegin();
+            for (auto row = rows->getNextRow(true, true); !row.empty();
+                 row = rows->getNextRow(true, true)) {
+              ASSERT_EQ(row.size(), size_t(1));
+              actual.push_back(v<int64_t>(row[0]));
+            }
+            std::sort(actual.begin(), actual.end());
+            const std::vector<int64_t> expected{inline_int_null_value<int32_t>(),
+                                                inline_int_null_value<int32_t>(),
+                                                -3,
+                                                aggregate == "MIN" ? 1 : 2,
+                                                7,
+                                                8};
+            EXPECT_EQ(actual, expected);
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT p.id FROM " + table + " p JOIN (SELECT " +
+                                     aggregate + "(v) AS val FROM " + table +
+                                     " GROUP BY k) n ON p.v = n.val ORDER BY p.id;",
+                                 dt),
+                {{aggregate == "MIN" ? 1 : 2}, {4}, {5}, {6}, {9}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT k, " + aggregate + "(v) FROM " + table +
+                                     " GROUP BY k ORDER BY k NULLS FIRST;",
+                                 dt),
+                {{inline_int_null_value<int32_t>(), 7},
+                 {1, aggregate == "MIN" ? 1 : 2},
+                 {2, inline_int_null_value<int32_t>()},
+                 {3, 8},
+                 {4, inline_int_null_value<int32_t>()},
+                 {7, -3}}));
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, CorrelatedHavingPreservesNullKeys) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
