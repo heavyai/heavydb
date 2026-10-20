@@ -2660,6 +2660,39 @@ bool is_window_function_operator(const RexScalar* rex) {
 
 }  // namespace
 
+void add_project_before_aggregate_scan(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
+  for (auto it = node_list.begin(); it != node_list.end(); ++it) {
+    const auto aggregate = std::dynamic_pointer_cast<RelAggregate>(*it);
+    if (!aggregate || aggregate->inputCount() != size_t(1)) {
+      continue;
+    }
+    const auto scan =
+        std::dynamic_pointer_cast<const RelScan>(aggregate->getAndOwnInput(0));
+    if (!scan) {
+      continue;
+    }
+    // Operand-free scalar aggregates already have a column-free execution path.
+    if (!aggregate->getGroupByCount() &&
+        std::all_of(aggregate->getAggExprs().begin(),
+                    aggregate->getAggExprs().end(),
+                    [](const auto& expr) { return expr->size() == 0; })) {
+      continue;
+    }
+    // Scan columns obtain their types through translation, not output metadata.
+    // Supply the project expected by aggregate coalescing; dead-column pruning
+    // removes unused columns before the project is fused with the aggregate.
+    std::vector<std::unique_ptr<const RexScalar>> expressions;
+    for (size_t i = 0; i < scan->size(); ++i) {
+      expressions.push_back(std::make_unique<RexInput>(scan.get(), i));
+    }
+    auto project = std::make_shared<RelProject>(expressions, scan->getFieldNames(), scan);
+    aggregate->replaceInput(scan, project);
+    node_list.insert(it, std::move(project));
+  }
+  nodes.assign(node_list.begin(), node_list.end());
+}
+
 void coalesce_nodes(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     const std::vector<const RelAlgNode*>& left_deep_joins,
@@ -4488,6 +4521,7 @@ void RelAlgDagBuilder::optimizeDag(RelAlgDag& rel_alg_dag) {
   if (filtered_left_deep_joins.empty()) {
     hoist_filter_cond_to_cross_join(nodes);
   }
+  add_project_before_aggregate_scan(nodes);
   eliminate_dead_columns(nodes);
   eliminate_dead_subqueries(subqueries, nodes.back().get());
   separate_window_function_expressions(nodes, query_hints);

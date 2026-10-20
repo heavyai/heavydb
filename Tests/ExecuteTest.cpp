@@ -33,6 +33,9 @@
 #include "../SqliteConnector/SqliteConnector.h"
 
 #include <gtest/gtest.h>
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/any.hpp>
 #include <boost/program_options.hpp>
@@ -44,6 +47,7 @@
 #include <map>
 #include <numeric>
 #include <random>
+#include <set>
 #include <sstream>
 
 #ifndef BASE_PATH
@@ -1513,6 +1517,84 @@ class RelAlgDagOptimizationTest : public TestHelpers::TbbPrivateServerKiller {
     run_ddl_statement("DROP TABLE IF EXISTS table_2;");
   }
 };
+
+TEST_F(RelAlgDagOptimizationTest, AggregateScanCoalescesWithoutMaterialization) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  run_ddl_statement("DROP TABLE IF EXISTS aggregate_scan_input;");
+  run_ddl_statement("CREATE TABLE aggregate_scan_input (k INT, unused INT, v BIGINT);");
+  ScopeGuard drop_table = [] {
+    run_ddl_statement("DROP TABLE IF EXISTS aggregate_scan_input;");
+  };
+
+  const std::vector<std::pair<std::string, std::set<unsigned>>> cases{
+      {R"({"fields":["k"],"group":[0],"aggs":[]})", {0}},
+      {R"({"fields":["k","sum_v"],"group":[0],"aggs":[
+        {"agg":"SUM","type":{"type":"BIGINT","nullable":true},
+         "distinct":false,"operands":[2]}]})",
+       {0, 2}},
+      {R"({"fields":["n"],"group":[],"aggs":[
+        {"agg":"COUNT","type":{"type":"BIGINT","nullable":false},
+         "distinct":true,"operands":[2]}]})",
+       {2}}};
+  for (const auto& [aggregate_json, expected_inputs] : cases) {
+    SCOPED_TRACE(aggregate_json);
+    rapidjson::Document document;
+    document.Parse(R"({"rels":[
+      {"id":"0","relOp":"LogicalTableScan","fieldNames":["k","unused","v"],
+       "table":["heavyai","aggregate_scan_input"],"inputs":[]},
+      {"id":"1","relOp":"LogicalAggregate"}
+    ]})");
+    rapidjson::Document aggregate;
+    aggregate.Parse(aggregate_json.c_str());
+    for (auto member = aggregate.MemberBegin(); member != aggregate.MemberEnd();
+         ++member) {
+      document["rels"][1].AddMember(
+          rapidjson::Value(member->name, document.GetAllocator()),
+          rapidjson::Value(member->value, document.GetAllocator()),
+          document.GetAllocator());
+    }
+    rapidjson::StringBuffer buffer;
+    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+    document.Accept(writer);
+    auto dag = RelAlgDagBuilder::buildDag(buffer.GetString(), true);
+    const auto compound = dynamic_cast<const RelCompound*>(&dag->getRootNode());
+    ASSERT_NE(nullptr, compound);
+    EXPECT_TRUE(compound->isAggregate());
+    ASSERT_EQ(size_t(1), compound->inputCount());
+    const auto scan = dynamic_cast<const RelScan*>(compound->getInput(0));
+    ASSERT_NE(nullptr, scan);
+    std::set<unsigned> actual_inputs;
+    for (size_t i = 0; i < compound->getScalarSourcesSize(); ++i) {
+      if (const auto input =
+              dynamic_cast<const RexInput*>(compound->getScalarSource(i))) {
+        EXPECT_EQ(scan, input->getSourceNode());
+        actual_inputs.insert(input->getIndex());
+      }
+    }
+    EXPECT_EQ(expected_inputs, actual_inputs);
+  }
+}
+
+TEST_F(RelAlgDagOptimizationTest, ScalarCountScanPreservesColumnFreePlan) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  auto dag = RelAlgDagBuilder::buildDag(R"({"rels":[
+    {"id":"0","relOp":"LogicalTableScan","fieldNames":["t1"],
+     "table":["heavyai","table_1"],"inputs":[]},
+    {"id":"1","relOp":"LogicalAggregate","fields":["n"],"group":[],"aggs":[
+      {"agg":"COUNT","type":{"type":"BIGINT","nullable":false},
+       "distinct":false,"operands":[]}]}]})",
+                                        true);
+  const auto aggregate = dynamic_cast<const RelAggregate*>(&dag->getRootNode());
+  ASSERT_NE(nullptr, aggregate);
+  ASSERT_EQ(size_t(1), aggregate->inputCount());
+  ASSERT_NE(nullptr, dynamic_cast<const RelScan*>(aggregate->getInput(0)));
+  EXPECT_EQ(size_t(0), aggregate->getGroupByCount());
+  ASSERT_EQ(size_t(1), aggregate->getAggExprs().size());
+  EXPECT_EQ(kCOUNT, aggregate->getAggExprs().front()->getKind());
+  EXPECT_EQ(size_t(0), aggregate->getAggExprs().front()->size());
+}
 
 TEST_F(RelAlgDagOptimizationTest, FoldFiltersRepeatedFilters) {
   // The RA used in this test case may arise due to what appears to be a
@@ -14244,6 +14326,86 @@ TEST_F(Select, ExistenceCountPreservesDuplicatesNullsAndEmptyInputs) {
                                      "ON p.k = b.k;",
                                  dt),
                 {{matches ? 4 : 0}}));
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_F(Select, CorrelatedExistsPreservesEmptyInputs) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  const std::string probe_table{"empty_exists_probe"};
+  const std::string build_table{"empty_exists_build"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+  run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+  ScopeGuard drop_tables = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    }
+  };
+  run_ddl_statement("CREATE TABLE " + probe_table +
+                    " (k INT, bucket INT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+  run_ddl_statement("CREATE TABLE " + build_table +
+                    " (k INT, allowed INT NOT NULL) WITH (FRAGMENT_SIZE=2);");
+
+  ResultReductionPipelineTestMode pipeline_mode;
+  BitmapHashJoinTestMode bitmap_mode;
+  // Cover both empty, empty build, populated inputs, then empty probe only.
+  for (int state = 0; state < 4; ++state) {
+    if (state == 1) {
+      run_multiple_agg("INSERT INTO " + probe_table +
+                           " VALUES (1, 0), (1, 0), (2, 0), (3, 1), "
+                           "(3, 1), (NULL, 1), (4, 1), (5, 2);",
+                       ExecutorDeviceType::CPU);
+    } else if (state == 2) {
+      run_multiple_agg("INSERT INTO " + build_table +
+                           " VALUES (NULL, 1), (1, 1), (1, 1), (2, 0), "
+                           "(3, 1), (3, 1), (9, 1);",
+                       ExecutorDeviceType::CPU);
+    } else if (state == 3) {
+      run_ddl_statement("TRUNCATE TABLE " + probe_table + ";");
+    }
+    for (const bool rewrites : {false, true}) {
+      ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+      for (const bool bitmap : {false, true}) {
+        g_enable_bitmap_hashjoin = bitmap;
+        for (const bool pipeline : {false, true}) {
+          g_enable_result_reduction_pipeline = pipeline;
+          for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+            SKIP_NO_GPU();
+            SCOPED_TRACE(::testing::Message()
+                         << "state=" << state << " rewrites=" << rewrites << " bitmap="
+                         << bitmap << " pipeline=" << pipeline << " device=" << dt);
+            const bool matches = state == 2;
+            const auto subquery = "EXISTS (SELECT 1 FROM " + build_table +
+                                  " b WHERE b.k = p.k AND b.allowed = 1)";
+            const auto from = " FROM " + probe_table + " p WHERE ";
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + from + subquery + ";", dt),
+                {{matches ? 4 : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT COUNT(*)" + from + "NOT " + subquery + ";", dt),
+                {{state == 1 ? 8
+                  : matches  ? 4
+                             : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg(
+                    "SELECT COUNT(*)" + from + subquery + " AND p.bucket = 1;", dt),
+                {{matches ? 2 : 0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg(
+                    "SELECT COUNT(*)" + from + subquery + " AND p.bucket = 99;", dt),
+                {{0}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT bucket, COUNT(*)" + from + subquery +
+                                     " GROUP BY bucket ORDER BY bucket;",
+                                 dt),
+                matches ? std::vector<std::vector<int64_t>>{{0, 2}, {1, 2}}
+                        : std::vector<std::vector<int64_t>>{}));
           }
         }
       }
