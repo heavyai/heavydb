@@ -3858,6 +3858,32 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const int32_t db_id) {
   return nullptr;
 }
 
+std::shared_ptr<Catalog> SysCatalog::buildCatalog(const DBMetadata& curDB,
+                                                  bool is_new_db) {
+  // There are some syscat values (root_user & user_name_by_user_id) that are needed for
+  // catalog initialization.  We would rather acquire them here and pass them in so that
+  // the Catalog does not need to reach back and lock the SysCatalog.
+  auto users = getAllUserMetadata();
+  std::map<int32_t, std::string> user_name_by_user_id;
+  for (const auto& user : users) {
+    user_name_by_user_id[user.userId] = user.userName;
+  }
+  UserMetadata root_user;
+  CHECK(getMetadataForUserById(shared::kRootUserId, root_user));
+
+  // Hold a lock here to prevent concurrent initialization of catalogs.
+  // Note: cat_init_lock is not (and does not need to be) a distributed mutex.  See
+  // RWLocks.cpp for details.
+  cat_init_lock cat_lock(this);
+  return std::make_shared<Catalog>(basePath_,
+                                   curDB,
+                                   dataMgr_,
+                                   calciteMgr_,
+                                   is_new_db,
+                                   user_name_by_user_id,
+                                   root_user);
+}
+
 std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is_new_db) {
   const auto key = to_upper(curDB.dbName);
   {
@@ -3904,31 +3930,7 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is
       }
     }
     if (!cat) {
-      // Initialize a new catalog and add it to the map.
-      // There are some syscat values (root_user & user_name_by_user_id) that are needed
-      // for catalog initialization.  We would rather acquire them here and pass them in
-      // so that the Catalog does not need to reach back and lock the SysCatalog.
-      auto users = getAllUserMetadata();
-      std::map<int32_t, std::string> user_name_by_user_id;
-      for (const auto& user : users) {
-        user_name_by_user_id[user.userId] = user.userName;
-      }
-      UserMetadata root_user;
-      CHECK(getMetadataForUserById(shared::kRootUserId, root_user));
-
-      {
-        // Hold a lock here to prevent concurrent initialization of catalogs.
-        // Note: cat_init_lock is not (and does not need to be) a distributed mutex.  See
-        // RWLocks.cpp for details.
-        cat_init_lock cat_lock(this);
-        cat = std::make_shared<Catalog>(basePath_,
-                                        curDB,
-                                        dataMgr_,
-                                        calciteMgr_,
-                                        is_new_db,
-                                        user_name_by_user_id,
-                                        root_user);
-      }
+      cat = buildCatalog(curDB, is_new_db);
 
       // Register it before releasing the waiters and the in-flight entry, so a caller
       // always finds either the map entry or the in-flight entry. The map may already

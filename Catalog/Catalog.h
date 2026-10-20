@@ -830,6 +830,8 @@ class Catalog final {
   ColumnDescriptorsForRoll columnDescriptorsForRoll;
 
  private:
+  static std::atomic<uint64_t> num_constructed_;
+
   void addColumnDescriptor(const ColumnDescriptor* cd);
   void removeColumnDescriptor(const ColumnDescriptor* cd);
   void delDictionaryNontransactional(const ColumnDescriptor& cd);

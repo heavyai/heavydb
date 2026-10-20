@@ -587,6 +587,8 @@ class SysCatalog : private CommonFileOperations {
   // timeout is set). Only ever held briefly, never while building or waiting.
   std::mutex cat_inflight_mutex_;
   std::map<std::string, std::shared_future<std::shared_ptr<Catalog>>> cat_inflight_;
+  // Constructs the Catalog for `curDB`. Does not register it in cat_map_.
+  std::shared_ptr<Catalog> buildCatalog(const DBMetadata& curDB, bool is_new_db);
 
   static std::mutex instance_mutex_;
   static std::unique_ptr<SysCatalog> instance_;
