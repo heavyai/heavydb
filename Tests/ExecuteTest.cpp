@@ -12568,6 +12568,78 @@ class ExperimentalConstraintTrustTestMode {
 void assertInt64RowsEqual(const std::shared_ptr<ResultSet>& rows,
                           const std::vector<std::vector<int64_t>>& expected);
 
+TEST_F(Select, ScalarCountDistinctRewritePreservesNullAndEmptyInputs) {
+  const std::string table_name{"scalar_count_distinct_rewrite_test"};
+  run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement("CREATE TABLE " + table_name +
+                    "(k INT NOT NULL, v INT, f DOUBLE, nn INT NOT NULL) "
+                    "WITH (FRAGMENT_SIZE=2);");
+  ScopeGuard drop_table = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  // GPU assertions must exercise the requested plan, not a CPU retry.
+  ResultReductionPipelineTestMode pipeline_mode;
+  for (const bool populated : {false, true}) {
+    if (populated) {
+      run_multiple_agg("INSERT INTO " + table_name +
+                           " VALUES (1, 10, 1.25, 10), (1, 10, 1.25, 10), "
+                           "(1, NULL, NULL, 10), (2, NULL, NULL, 20), "
+                           "(2, NULL, NULL, 20), (3, 20, 2.5, 30), "
+                           "(3, 30, 2.5, 30), (3, NULL, NULL, 30);",
+                       ExecutorDeviceType::CPU);
+    }
+    for (const bool rewrites : {false, true}) {
+      ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+      for (const bool pipeline : {false, true}) {
+        g_enable_result_reduction_pipeline = pipeline;
+        for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+          SKIP_NO_GPU();
+          SCOPED_TRACE(::testing::Message()
+                       << "populated=" << populated << " rewrites=" << rewrites
+                       << " pipeline=" << pipeline << " device=" << dt);
+          for (const std::string column :
+               {"v", "nn", "CAST(v AS BIGINT)", "CAST(v AS DECIMAL(10, 2))"}) {
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg(
+                    "SELECT COUNT(DISTINCT " + column + ") FROM " + table_name + ";", dt),
+                {{populated ? 3 : 0}}));
+          }
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg(
+                  "SELECT COUNT(DISTINCT v) FROM " + table_name + " WHERE k = 2;", dt),
+              {{0}}));
+          ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+              run_multiple_agg(
+                  "SELECT COUNT(DISTINCT v) FROM " + table_name + " WHERE k = 99;", dt),
+              {{0}}));
+          if (rewrites || dt == ExecutorDeviceType::CPU) {
+            for (const std::string filter : {"", " WHERE k = 2", " WHERE k = 99"}) {
+              ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                  run_multiple_agg(
+                      "SELECT COUNT(DISTINCT f) FROM " + table_name + filter + ";", dt),
+                  {{populated && filter.empty() ? 2 : 0}}));
+            }
+          }
+          if (populated) {
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT k, COUNT(DISTINCT v) FROM " + table_name +
+                                     " GROUP BY k ORDER BY k;",
+                                 dt),
+                {{1, 1}, {2, 0}, {3, 2}}));
+            ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                run_multiple_agg("SELECT k, COUNT(DISTINCT nn) FROM " + table_name +
+                                     " GROUP BY k ORDER BY k;",
+                                 dt),
+                {{1, 1}, {2, 1}, {3, 1}}));
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, UnenforcedForeignKeyDoesNotEliminateJoinWithoutExplicitTrust) {
   constexpr auto dt = ExecutorDeviceType::CPU;
   const std::string parent_table{"unenforced_fk_parent"};

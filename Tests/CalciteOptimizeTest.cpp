@@ -730,13 +730,39 @@ TEST_F(PlannerRuleCoverage, SingleCountDistinctPreservesAllNullGroups) {
   EXPECT_EQ(size_t{1}, count_occurrences(grouped_plan, R"("relOp": "LogicalAggregate")"))
       << grouped_plan;
   EXPECT_NE(std::string::npos, grouped_plan.find(R"("distinct": true)")) << grouped_plan;
+}
 
-  const std::string scalar_plan =
-      rel_alg_plan("SELECT COUNT(DISTINCT v) FROM planner_count_distinct;");
+TEST_F(PlannerRuleCoverage, ScalarCountDistinctKeepsNativeBitmapCandidates) {
+  for (const auto& query :
+       {"SELECT COUNT(DISTINCT v) FROM planner_count_distinct;",
+        "SELECT COUNT(DISTINCT v) FROM planner_count_distinct_not_null;",
+        "SELECT COUNT(DISTINCT projected_v) FROM "
+        "(SELECT v AS projected_v FROM planner_count_distinct WHERE k = 1);"}) {
+    const auto plan = rel_alg_plan(query);
+    EXPECT_EQ(size_t{1}, count_occurrences(plan, R"("relOp": "LogicalAggregate")"))
+        << plan;
+    EXPECT_NE(std::string::npos, plan.find(R"("distinct": true)")) << plan;
+    EXPECT_EQ(std::string::npos, plan.find("IS NOT NULL")) << plan;
+  }
+}
+
+TEST_F(PlannerRuleCoverage, ScalarFloatingPointCountDistinctUsesTwoPhaseGroupBy) {
+  const std::string scalar_plan = rel_alg_plan(
+      "SELECT COUNT(DISTINCT CAST(v AS DOUBLE)) FROM planner_count_distinct;");
   EXPECT_EQ(size_t{2}, count_occurrences(scalar_plan, R"("relOp": "LogicalAggregate")"))
       << scalar_plan;
   EXPECT_NE(std::string::npos, scalar_plan.find("IS NOT NULL")) << scalar_plan;
   EXPECT_EQ(std::string::npos, scalar_plan.find(R"("distinct": true)")) << scalar_plan;
+}
+
+TEST_F(PlannerRuleCoverage, ScalarExpressionCountDistinctUsesTwoPhaseGroupBy) {
+  for (const auto& expression : {"CASE WHEN k = 1 THEN v END", "v + 1"}) {
+    const auto plan = rel_alg_plan(std::string("SELECT COUNT(DISTINCT ") + expression +
+                                   ") FROM planner_count_distinct;");
+    EXPECT_EQ(size_t{2}, count_occurrences(plan, R"("relOp": "LogicalAggregate")"))
+        << plan;
+    EXPECT_EQ(std::string::npos, plan.find(R"("distinct": true)")) << plan;
+  }
 }
 
 TEST_F(PlannerRuleCoverage, SingleCountDistinctRejectsUnsupportedShapes) {

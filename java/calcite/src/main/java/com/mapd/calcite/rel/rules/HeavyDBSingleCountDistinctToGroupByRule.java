@@ -27,6 +27,7 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Aggregate;
 import org.apache.calcite.rel.core.AggregateCall;
 import org.apache.calcite.rel.core.RelFactories;
+import org.apache.calcite.rel.metadata.RelColumnOrigin;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.type.SqlTypeName;
@@ -47,6 +48,8 @@ import java.util.TreeSet;
  * distinct argument, then counts those groups. This avoids the per-group
  * set-count-distinct runtime path and lets the engine use its normal grouped
  * aggregation machinery for exact distinct counts.
+ * Scalar counts of non-floating-point table columns retain the native
+ * range-based bitmap path.
  */
 public class HeavyDBSingleCountDistinctToGroupByRule extends RelOptRule {
   public static final HeavyDBSingleCountDistinctToGroupByRule INSTANCE =
@@ -90,6 +93,20 @@ public class HeavyDBSingleCountDistinctToGroupByRule extends RelOptRule {
     final SqlTypeName distinctArgType = distinctArgRelType.getSqlTypeName();
     if (!isSupportedGroupByDistinctArgType(distinctArgType)) {
       return;
+    }
+    // A scalar count needs only one distinct bitmap, not one per group. Expanding
+    // it can materialize and reduce one row per distinct value instead. Calcite
+    // has no argument-range metadata to cost that tradeoff; keep the executor's
+    // native choice for direct columns. Expressions may lack usable ranges, and
+    // floating point arguments cannot use a distinct bitmap at all.
+    if (aggregate.getGroupSet().isEmpty() &&
+            !SqlTypeName.APPROX_TYPES.contains(distinctArgType)) {
+      final RelColumnOrigin origin =
+              aggregate.getCluster().getMetadataQuery().getColumnOrigin(
+                      aggregate.getInput(), distinctArg);
+      if (origin != null && !origin.isDerived()) {
+        return;
+      }
     }
     // Removing nulls is required before grouping by the distinct argument, but doing
     // so would also remove an original group whose distinct argument is always null.
