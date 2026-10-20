@@ -883,6 +883,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
     if (expr) {
       auto const num_values =
           std::static_pointer_cast<Analyzer::InIntegerSet>(expr)->get_value_list().size();
+      // An empty RHS makes IN false even for a NULL probe. An empty translated
+      // dictionary keyset can also represent a nonempty, disjoint RHS, so verify
+      // the source result before using the empty-list path.
+      if (num_values == 0 && row_set->isEmpty()) {
+        return makeExpr<Analyzer::InValues>(lhs,
+                                            std::list<std::shared_ptr<Analyzer::Expr>>{});
+      }
       if (!ti.is_dict_encoded_string() && expr->get_type_info().get_notnull() &&
           num_values <= g_in_clause_num_elem_skip_bitmap) {
         VLOG(1) << "Skip to build a bitmap for tiny integer-set case: # values ("

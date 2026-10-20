@@ -14413,6 +14413,115 @@ TEST_F(Select, CorrelatedExistsPreservesEmptyInputs) {
   }
 }
 
+TEST_F(Select, InSubqueryPreservesEmptySetNullSemantics) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+
+  ResultReductionPipelineTestMode pipeline_mode;
+  BitmapHashJoinTestMode bitmap_mode;
+  ScopeGuard restore_modes = [columnar = g_enable_columnar_output,
+                              hoist = g_hoist_literals] {
+    g_enable_columnar_output = columnar;
+    g_hoist_literals = hoist;
+  };
+  g_enable_bitmap_hashjoin = false;
+  g_enable_ranked_bitmap_hashjoin = false;
+
+  const std::string probe_table{"empty_in_probe"};
+  const std::string build_table{"empty_in_build"};
+  for (const bool dictionary : {false, true}) {
+    run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+    run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+    ScopeGuard drop_tables = [&] {
+      if (!g_keep_test_data) {
+        run_ddl_statement("DROP TABLE IF EXISTS " + probe_table + ";");
+        run_ddl_statement("DROP TABLE IF EXISTS " + build_table + ";");
+      }
+    };
+    const std::string key_type = dictionary ? "TEXT ENCODING DICT(32)" : "INT";
+    for (const auto& table : {probe_table, build_table}) {
+      run_ddl_statement("CREATE TABLE " + table + " (id INT NOT NULL, k " + key_type +
+                        ") WITH (FRAGMENT_SIZE=2);");
+    }
+    const auto key = [dictionary](const int value) {
+      return dictionary ? "'" + std::to_string(value) + "'" : std::to_string(value);
+    };
+    run_multiple_agg("INSERT INTO " + probe_table + " VALUES (0, NULL), (1, " + key(1) +
+                         "), (2, " + key(2) + "), (3, NULL), (4, " + key(3) + ");",
+                     ExecutorDeviceType::CPU);
+
+    // Empty table, disjoint keys, NULL-only, mixed, non-NULL, and filtered-empty RHS.
+    for (int state = 0; state < 6; ++state) {
+      if (state > 0 && state < 5) {
+        run_ddl_statement("TRUNCATE TABLE " + build_table + ";");
+        const auto values =
+            state == 1 ? "(1, " + key(9) + "), (2, " + key(10) + "), (3, " + key(11) +
+                             "), (4, " + key(12) + ")"
+            : state == 2 ? std::string{"(1, NULL), (2, NULL)"}
+            : state == 3
+                ? "(1, " + key(2) + "), (2, " + key(2) + "), (3, NULL), (4, " + key(9) +
+                      ")"
+                : "(1, " + key(2) + "), (2, " + key(2) + "), (3, " + key(9) + ")";
+        run_multiple_agg("INSERT INTO " + build_table + " VALUES " + values + ";",
+                         ExecutorDeviceType::CPU);
+      }
+      const auto rhs =
+          "(SELECT k FROM " + build_table + (state == 5 ? " WHERE id < 0)" : ")");
+      const bool empty_rhs = state == 0 || state == 5;
+      const bool matches = state == 3 || state == 4;
+      const bool rhs_has_null = state == 2 || state == 3;
+      for (const bool rewrites : {false, true}) {
+        ExperimentalConstraintTrustTestMode rewrite_mode(rewrites, false);
+        for (const bool pipeline : {false, true}) {
+          g_enable_result_reduction_pipeline = pipeline;
+          for (const bool columnar : {false, true}) {
+            g_enable_columnar_output = columnar;
+            for (const bool hoist : {true, false}) {
+              g_hoist_literals = hoist;
+              for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+                SKIP_NO_GPU();
+                SCOPED_TRACE(::testing::Message()
+                             << "dictionary=" << dictionary << " state=" << state
+                             << " rewrites=" << rewrites << " pipeline=" << pipeline
+                             << " columnar=" << columnar << " hoist=" << hoist
+                             << " device=" << dt);
+                ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                    run_multiple_agg("SELECT COUNT(*) FROM " + probe_table +
+                                         " WHERE k IN " + rhs + ";",
+                                     dt),
+                    {{matches ? 1 : 0}}));
+                ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                    run_multiple_agg("SELECT COUNT(*) FROM " + probe_table +
+                                         " WHERE k NOT IN " + rhs + ";",
+                                     dt),
+                    {{empty_rhs      ? 5
+                      : rhs_has_null ? 0
+                      : matches      ? 2
+                                     : 3}}));
+                std::vector<std::vector<int64_t>> expected;
+                for (int id = 0; id < 5; ++id) {
+                  const auto value = empty_rhs                            ? 0
+                                     : matches && id == 2                 ? 1
+                                     : rhs_has_null || id == 0 || id == 3 ? -1
+                                                                          : 0;
+                  expected.push_back({id, value});
+                }
+                ASSERT_NO_FATAL_FAILURE(assertInt64RowsEqual(
+                    run_multiple_agg("SELECT id, CASE WHEN k IN " + rhs +
+                                         " THEN 1 WHEN k NOT IN " + rhs +
+                                         " THEN 0 ELSE -1 END FROM " + probe_table +
+                                         " ORDER BY id;",
+                                     dt),
+                    expected));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, MembershipJoinPreservesNullableSemiAntiSemantics) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
