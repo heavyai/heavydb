@@ -13,7 +13,10 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/QueryEngine.h"
 #include "QueryEngine/ResultSet.h"
+#include "QueryEngine/ResultSetSortImpl.h"
 #include "QueryEngine/RuntimeFunctions.h"
+#include "Shared/scope.h"
+#include "Shared/thread_count.h"
 #include "Tests/DataMgrTestHelpers.h"
 #include "Tests/ResultSetTestUtils.h"
 #include "Tests/TestHelpers.h"
@@ -31,6 +34,7 @@ std::shared_ptr<QueryEngine> g_query_engine;
 #include <random>
 
 extern bool g_is_test_env;
+extern size_t g_parallel_top_min;
 
 namespace {
 
@@ -238,6 +242,100 @@ void SortBaselineIntegersTestImpl(const bool desc) {
 }
 
 }  // namespace
+
+TEST(SortBaseline, CpuWorkerCount) {
+  for (const size_t threads : {1, 4, 64, 512}) {
+    EXPECT_EQ(size_t{1}, baseline_sort_cpu_worker_count(0, threads, 100000));
+    EXPECT_EQ(size_t{1}, baseline_sort_cpu_worker_count(1000, threads, 100000));
+    EXPECT_EQ(size_t{1}, baseline_sort_cpu_worker_count(100000, threads, 100000));
+    EXPECT_EQ(threads, baseline_sort_cpu_worker_count(100001, threads, 100000));
+    EXPECT_EQ(std::min(size_t{3}, threads),
+              baseline_sort_cpu_worker_count(3, threads, 0));
+  }
+  EXPECT_EQ(size_t{1}, baseline_sort_cpu_worker_count(100001, 0, 100000));
+}
+
+namespace {
+
+template <typename K, typename T>
+void check_cpu_scheduling(const SQLTypes sql_type) {
+  ScopeGuard restore = [top_min = g_parallel_top_min, threads = g_cpu_threads_override] {
+    g_parallel_top_min = top_min;
+    g_cpu_threads_override = threads;
+  };
+  g_cpu_threads_override = 4;
+  const SQLTypeInfo ti(sql_type, false);
+  const std::vector<TargetInfo> targets{{true, kMIN, ti, ti, true, false}};
+  const auto qmd = baseline_sort_desc(targets, 400, sizeof(K));
+  auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
+  for (const size_t top_min : {0, 100000}) {
+    g_parallel_top_min = top_min;
+    for (const bool empty : {false, true}) {
+      for (const bool desc : {false, true}) {
+        for (const bool nulls_first : {false, true}) {
+          for (const size_t top_n : {5, 500}) {
+            SCOPED_TRACE(::testing::Message()
+                         << "key_width=" << sizeof(K) << "type=" << sql_type
+                         << " top_min=" << top_min << " empty=" << empty << " desc="
+                         << desc << " nulls_first=" << nulls_first << " top_n=" << top_n);
+            auto owner =
+                std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), 0);
+            ResultSet rs(targets, ExecutorDeviceType::CPU, qmd, owner, 0, 0);
+            auto storage = rs.allocateStorage();
+            std::vector<T> expected;
+            for (size_t i = 0; i < qmd.getEntryCount(); ++i) {
+              auto row = storage->getUnderlyingBuffer() + i * get_row_bytes(qmd);
+              const bool live = !empty && i % 4 == 0;
+              for (size_t k = 0; k < qmd.getKeyCount(); ++k) {
+                reinterpret_cast<K*>(row)[k] = live ? i : empty_key_val<K>();
+              }
+              const int64_t value = static_cast<int64_t>(i % 37) - 18;
+              const bool null = i % 11 == 0;
+              fill_one_entry_baseline(
+                  reinterpret_cast<int64_t*>(row) + get_slot_off_quad(qmd),
+                  value,
+                  targets,
+                  !live,
+                  null);
+              if (live) {
+                expected.push_back(null ? inline_null_value<T>() : T(value));
+              }
+            }
+            std::sort(expected.begin(), expected.end(), [=](const T a, const T b) {
+              const bool a_null = a == inline_null_value<T>();
+              const bool b_null = b == inline_null_value<T>();
+              if (a_null || b_null) {
+                return a_null != b_null && a_null == nulls_first;
+              }
+              return desc ? a > b : a < b;
+            });
+            expected.resize(std::min(top_n, expected.size()));
+            rs.sort({Analyzer::OrderEntry(1, desc, nulls_first)},
+                    top_n,
+                    ExecutorDeviceType::CPU,
+                    executor.get(),
+                    /*need_to_initialize_device_ids_to_use=*/true);
+            ASSERT_EQ(expected.size(), rs.rowCount());
+            for (const T value : expected) {
+              const auto row = rs.getNextRow(true, false);
+              ASSERT_EQ(size_t{1}, row.size());
+              EXPECT_EQ(value, v<T>(row.front()));
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+}  // namespace
+
+TEST(SortBaseline, CpuSchedulingPreservesOrdering) {
+  check_cpu_scheduling<int32_t, int64_t>(kBIGINT);
+  check_cpu_scheduling<int64_t, int64_t>(kBIGINT);
+  check_cpu_scheduling<int32_t, float>(kFLOAT);
+  check_cpu_scheduling<int64_t, double>(kDOUBLE);
+}
 
 TEST(SortBaseline, IntegersKey64) {
   for (const bool desc : {true, false}) {
