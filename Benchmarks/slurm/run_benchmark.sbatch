@@ -24,6 +24,8 @@ finish() {
   echo "[$$(date '+%F %T')] job finished: exit code $$rc; cleaning up"
   # keep the server log: scratch is node-local and gets deleted
   cp -f "$$SCRATCH/heavydb.log" "$OUTPUT_DIR/heavydb-$${SLURM_JOB_ID}_$${SLURM_ARRAY_TASK_ID:-0}.log" 2>/dev/null || true
+  # the server's own logs (heavydb.INFO etc.) were saved to $$SCRATCH/logs by the harness
+  [ -d "$$SCRATCH/logs" ] && cp -r "$$SCRATCH/logs" "$OUTPUT_DIR/heavydb-logs-$${SLURM_JOB_ID}_$${SLURM_ARRAY_TASK_ID:-0}" 2>/dev/null || true
   # stop anything the harness left behind (failure, scancel, timeout), then remove scratch
   enroot list 2>/dev/null | grep -E "^hdb-bench-$${SLURM_JOB_ID:-none}-" | xargs -r -n1 enroot remove -f >/dev/null 2>&1 || true
   rm -rf "$$SCRATCH"

@@ -50,6 +50,9 @@ def heavy_type_for(parquet_type):
     return _PARQUET_TO_HEAVY.get(parquet_type.strip().upper())
 
 
+_COL_DEF = r"(\b%s\s+)(DECIMAL\s*\(\s*\d+\s*,\s*\d+\s*\)|\w+)"  # "<col> <type>" in a CREATE TABLE
+
+
 def adjust_ddl(ddl, error):
     """Return (new_ddl, description) changing the offending column to the Parquet type,
     or None if the error is not a type-conversion error we can fix."""
@@ -60,13 +63,10 @@ def adjust_ddl(ddl, error):
     new = heavy_type_for(parquet_type)
     if not new:
         return None
-    pat = re.compile(r"(\b%s\s+)(DECIMAL\s*\(\s*\d+\s*,\s*\d+\s*\)|\w+)" % re.escape(col))
+    pat = re.compile(_COL_DEF % re.escape(col))
     if not pat.search(ddl):
         return None
     return pat.sub(lambda mo: mo.group(1) + new, ddl, count=1), "%s %s -> %s" % (col, old, new)
-
-
-_COL_DEF = r"(\b%s\s+)(DECIMAL\s*\(\s*\d+\s*,\s*\d+\s*\)|\w+)"
 
 
 def adapt_ddl_to_files(ddl, first_file):
@@ -92,17 +92,20 @@ def adapt_ddl_to_files(ddl, first_file):
     return ddl, changes
 
 
-def import_dataset(bench, client, runtime, data_root, mode="native", log=print, adapt_types=True):
-    """Create and load all tables; return {table: {seconds, files, bytes, adjusted}}.
+def import_dataset(bench, client, runtime, data_root, mode="native", log=print, adapt_types=True,
+                   stats=None):
+    """Create and load all tables; return {table: {seconds, files, bytes, rows, adjusted}}.
 
     HeavyDB does not convert Parquet column types on import.  When adapt_types is set,
     numeric/date column types in the benchmark schema are first set from the Parquet
     footer of the table's first file, and, as a fallback, a conversion error makes the importer change that column of the benchmark schema to
     the dataset's Parquet type and retry, so one schema.sql serves datasets that store
     keys as int32/int64 or money as double/decimal(p,s).  Adjustments are recorded in the report.
+    The conversion-error fallback applies to native imports only: CREATE FOREIGN TABLE does not
+    validate column types, so in foreign mode a mismatch only fails the queries that read the column.
     """
     schemas = bench.schema_statements()
-    stats = {}
+    stats = {} if stats is None else stats  # filled in place, so a failure keeps the tables done so far
     for t in bench.tables:
         if t.name not in schemas:
             raise SystemExit("table %s has no CREATE TABLE in %s" % (t.name, bench.schema_file))
@@ -115,7 +118,7 @@ def import_dataset(bench, client, runtime, data_root, mode="native", log=print, 
         for _ in range(64):
             client.execute("DROP TABLE IF EXISTS %s;" % t.name)
             try:
-                _load(client, runtime, t, src, files, ddl_native, mode)
+                rows = _load(client, runtime, t, src, files, ddl_native, mode)
                 break
             except Exception as e:
                 fix = adjust_ddl(ddl_native, e) if adapt_types else None
@@ -130,9 +133,11 @@ def import_dataset(bench, client, runtime, data_root, mode="native", log=print, 
         else:
             raise SystemExit("too many schema adjustments for table %s" % t.name)
         stats[t.name] = {"seconds": time.perf_counter() - t0, "files": len(files),
-                         "bytes": sum(f.stat().st_size for f in files), "adjusted": adjusted}
-        log("  %-10s %2d file(s) %8.1f MB  %7.2fs%s" % (
-            t.name, len(files), stats[t.name]["bytes"] / 1e6, stats[t.name]["seconds"],
+                         "bytes": sum(f.stat().st_size for f in files), "rows": rows,
+                         "adjusted": adjusted}
+        log("  %-10s %2d file(s) %8.1f MB %12s rows  %7.2fs%s" % (
+            t.name, len(files), stats[t.name]["bytes"] / 1e6,
+            "-" if rows is None else format(rows, ","), stats[t.name]["seconds"],
             ("  [column types adapted: %s]" % "; ".join(adjusted)) if adjusted else ""))
     return stats
 
@@ -146,24 +151,52 @@ def _load(client, runtime, t, src, files, ddl_native, mode):
             opts += ", regex_path_filter='%s'" % path_filter_regex(t.glob)
         ddl += " SERVER default_local_parquet WITH (%s);" % opts
         client.execute(ddl)
-    else:
-        client.execute(ddl_native)
-        _copy(client, runtime, t, src, files)
+        return None
+    client.execute(ddl_native)
+    return _copy(client, runtime, t, src, files)
+
+
+_COPY_RESULT = re.compile(r"Loaded:\s*(\d+)\s*recs,\s*Rejected:\s*(\d+)\s*recs")
+
+
+class ImportRejected(RuntimeError):
+    """COPY loaded fewer rows than the source holds (rejected rows or a loader failure)."""
+
+
+def _copy_checked(client, table, sql):
+    """Run one COPY; return the rows loaded, raising ImportRejected on any rejected row."""
+    if client.runtime.dry_run:
+        client.execute(sql)
+        return 0
+    out = client.execute(sql).output
+    if "Loader Failed due to" in out:
+        raise ImportRejected("COPY into %s failed: %s" % (table, out.strip()))
+    m = _COPY_RESULT.search(out)
+    if not m:
+        raise ImportRejected("COPY into %s: could not read the load result from:\n%s"
+                             % (table, out.strip()))
+    loaded, rejected = int(m.group(1)), int(m.group(2))
+    if rejected:
+        raise ImportRejected("COPY into %s rejected %d row(s) (loaded %d)" % (table, rejected, loaded))
+    return loaded
 
 
 def _copy(client, runtime, table, src, files):
+    """COPY the table's parquet data; return the number of rows loaded."""
     opts = "WITH (source_type='parquet_file'%s)" % (
         ", regex_path_filter='%s'" % path_filter_regex(table.glob) if src.is_dir() else "")
+    whole = "COPY %s FROM '%s' %s;" % (table.name, runtime.server_path(src), opts)
     if src.is_file():
-        client.execute("COPY %s FROM '%s' %s;" % (table.name, runtime.server_path(src), opts))
-        return
+        return _copy_checked(client, table.name, whole)
     try:  # whole directory in one COPY
-        client.execute("COPY %s FROM '%s' %s;" % (table.name, runtime.server_path(src), opts))
+        return _copy_checked(client, table.name, whole)
+    except ImportRejected:
+        raise  # data was rejected: do not paper over it with a file-by-file retry
     except Exception as e:  # fall back to appending file by file
         if "Conversion from Parquet type" in str(e):
             raise  # a schema problem, not a directory problem: let the caller adapt the schema
         print("    directory COPY failed (%s); importing file by file" % str(e).splitlines()[-1][:100])
         client.execute("TRUNCATE TABLE %s;" % table.name)
-        for f in files:
-            client.execute("COPY %s FROM '%s' WITH (source_type='parquet_file');"
-                           % (table.name, runtime.server_path(f)))
+        return sum(_copy_checked(client, table.name,
+                                 "COPY %s FROM '%s' WITH (source_type='parquet_file');"
+                                 % (table.name, runtime.server_path(f))) for f in files)

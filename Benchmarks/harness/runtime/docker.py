@@ -10,9 +10,8 @@ docker/Dockerfile.{cpu,cuda}: binaries live in /opt/heavyai/bin.
 import os
 import shutil
 import subprocess
-import time
 
-from .base import DATA_MOUNT, Runtime, server_shell_script
+from .base import DATA_MOUNT, STOP_TIMEOUT, Runtime, server_shell_script
 
 CONTAINER_BIN = "/opt/heavyai/bin"
 CONTAINER_STORAGE = "/var/lib/heavyai/storage"
@@ -50,7 +49,7 @@ class DockerRuntime(Runtime):
         return "%s/%s" % (DATA_MOUNT, rel)
 
     def _run_cmd(self):
-        cmd = ["docker", "run", "-d", "--rm", "--name", self.container,
+        cmd = ["docker", "run", "-d", "--name", self.container,  # no --rm: keep logs of a dead container
                "--user", "%d:%d" % (os.getuid(), os.getgid()), "-e", "HOME=/tmp",
                "-v", "%s:%s:ro" % (self.data_root, DATA_MOUNT),
                "-v", "%s:%s" % (self.storage, CONTAINER_STORAGE)]
@@ -65,8 +64,8 @@ class DockerRuntime(Runtime):
         if not self.dry_run:
             shutil.rmtree(self.storage, ignore_errors=True)
             self.storage.mkdir(parents=True)
+        self.started = True  # set first: a failed `docker run` can still leave a created container
         self.run(self._run_cmd(), check=True)
-        self.started = True
 
     def check_alive(self):
         r = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", self.container],
@@ -85,7 +84,12 @@ class DockerRuntime(Runtime):
         if not self.dry_run:
             self.work_dir.mkdir(parents=True, exist_ok=True)
             (self.work_dir / "heavydb.log").write_text(self.server_log_tail(100000))
-        self.run(["docker", "stop", "-t", "60", self.container], stdout=subprocess.DEVNULL)
+        self.run(["docker", "stop", "-t", str(STOP_TIMEOUT), self.container], stdout=subprocess.DEVNULL,
+                 stderr=subprocess.DEVNULL)
+        self.preserve_logs()
+        # replaces `docker run --rm` (-v drops anonymous volumes, as --rm does)
+        self.run(["docker", "rm", "-f", "-v", self.container], stdout=subprocess.DEVNULL,
+                 stderr=subprocess.DEVNULL)
         if not self.dry_run:
             shutil.rmtree(self.storage, ignore_errors=True)
 

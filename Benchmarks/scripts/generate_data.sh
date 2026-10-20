@@ -9,7 +9,7 @@
 #   VELOX_TESTING_DIR=/path/to/velox-testing \
 #     generate_data.sh <scale-factor> <output-dir> [generate_data_files.py options]
 #
-# e.g.  generate_data.sh 10 /home/misiug/Data/tpch-sf10-decimal -j 16
+# e.g.  generate_data.sh 10 /path/to/tpch-sf10-decimal -j 16
 # Do NOT pass --convert-decimals-to-floats: the benchmarks want decimal columns.
 # Needs tpchgen-cli (on PATH or in <velox-testing>/benchmark_data_tools/.local_installs/bin;
 # install with benchmark_data_tools/scripts/install_tpchgen_cli.sh) and python3 with duckdb.

@@ -16,6 +16,8 @@ _STOP, _TRUE, _FALSE, _BYTE, _I16, _I32, _I64, _DOUBLE, _BINARY, _LIST, _SET, _M
 _BOOLEAN, _INT32, _INT64, _INT96, _FLOAT, _DOUBLE_T, _BYTE_ARRAY, _FIXED = range(8)
 # ConvertedType values we care about
 _CT_DECIMAL, _CT_DATE, _CT_INT_8, _CT_INT_16 = 5, 6, 15, 16
+_CT_TEMPORAL = {7, 8, 9, 10}  # TIME_MILLIS, TIME_MICROS, TIMESTAMP_MILLIS, TIMESTAMP_MICROS
+_LT_DATE, _LT_TIME, _LT_TIMESTAMP = 6, 7, 8  # LogicalType union fields
 
 
 class _Reader:
@@ -97,7 +99,11 @@ def _heavy_type(el):
         scale = el.get(7, dec.get(1) if dec else None)
         prec = el.get(8, dec.get(2) if dec else None)
         return "DECIMAL(%d,%d)" % (prec, scale) if prec is not None and scale is not None else None
+    if _LT_TIME in logical or _LT_TIMESTAMP in logical or conv in _CT_TEMPORAL:
+        return None  # TIME/TIMESTAMP (any unit): keep the schema's declared type, not an integer
     if phys == _INT32:
+        if _LT_DATE in logical:
+            return "DATE"
         return {_CT_DATE: "DATE", _CT_INT_8: "TINYINT", _CT_INT_16: "SMALLINT"}.get(conv, "INTEGER")
     if phys == _INT64:
         return "BIGINT" if conv is None else None  # timestamps etc.: keep declared type

@@ -13,8 +13,8 @@ HeavyDB runs inside the product container image by default (the image produced b
 ```bash
 # 1. product image (once): dev-tools/dev.sh build --docker   -> heavyai-<distro>-cuda-<tag>-<arch>
 # 2. run
-Benchmarks/scripts/run_local.sh tpch /home/misiug/Data/scale-1
-Benchmarks/scripts/run_local.sh tpch /home/misiug/Data/scale-1 --queries q01,q06 --iterations 5
+Benchmarks/scripts/run_local.sh tpch /path/to/tpch-sf1
+Benchmarks/scripts/run_local.sh tpch /path/to/tpch-sf1 --queries q01,q06 --iterations 5
 ```
 
 Same thing without the wrapper: `Benchmarks/run_benchmark.py run tpch --data <dir> [options]`.
@@ -30,7 +30,7 @@ Same thing without the wrapper: `Benchmarks/run_benchmark.py run tpch --data <di
 | `--import-mode native\|foreign` | `COPY FROM` into HeavyDB storage (default) or foreign tables over the Parquet files |
 | `--cpu-only` / `--gpu` | default: GPU if `nvidia-smi` works |
 | `--server-arg X` | extra `heavydb` flag, repeatable (e.g. `--server-arg=--enable-watchdog=false`) |
-| `--output DIR --label L` | results JSON + CSV go to DIR (default `results/`) |
+| `--output DIR --label L` | results JSON + CSV go to DIR (default `results/`), named `<benchmark>-<label>-<dataset>-<time>[-j<jobid>_<task>].json`; an existing report is never overwritten (`-2`, `-3`, ... is appended) |
 | `--dry-run` | print the docker/enroot/heavysql commands only |
 
 Output: per-query rows, server-side execution/total time (min/median/mean/max), a result
@@ -53,8 +53,21 @@ so note that a double-typed dataset benchmarks `DOUBLE` columns rather than `DEC
 If the footer can't be read, a HeavyDB conversion error triggers the same adjustment as a
 fallback. `--strict-schema` disables all of this, and `--schema FILE` / `--var NAME=VALUE`
 (e.g. `DEC_PRECISION`) change the starting schema.
-Datasets checked: `sf001_tpch`, `tpch001`, `sf1-noconv` (decimal), `scale-1` (int32 keys),
-`sf1` (doubles), `gqe-dbgen-100` (decimal(12,2)).
+Tested with int32 and int64 keys, decimal(p,s) and double money columns, and both single-file
+and partitioned tables.
+
+### Import modes
+
+- `native` (default): `COPY FROM` loads the Parquet data into HeavyDB storage. The reported import
+  time is the load, and a rejected row or a load failure fails the run.
+- `foreign`: `CREATE FOREIGN TABLE` over the Parquet files. The reported "import" time covers table
+  creation only (a fraction of a second), row counts are not recorded, and the data is read on the
+  first query, so a cold run includes that read.
+  Column types are not validated at creation either: a mismatch between the schema and the files
+  (for example int32 keys declared `BIGINT`) only fails the queries that read that column, with
+  `Conversion from Parquet type ...`. The footer-based type adaptation above applies in both
+  modes and avoids this; the error-driven fallback only exists for native imports, so with
+  `--strict-schema` (or an unreadable footer) fix such errors with `--schema` / `--var`.
 
 ## Generating datasets
 
@@ -62,8 +75,8 @@ Use velox-testing's generator (`benchmark_data_tools/`), which writes decimal co
 int64 keys, and splits large tables into `<table>-N.parquet` files:
 
 ```bash
-VELOX_TESTING_DIR=~/Code/VeloxPrestoBase/velox-testing \
-  Benchmarks/scripts/generate_data.sh 10 /home/misiug/Data/tpch-sf10-decimal -j 16 -v
+VELOX_TESTING_DIR=/path/to/velox-testing \
+  Benchmarks/scripts/generate_data.sh 10 /path/to/tpch-sf10-decimal -j 16 -v
 ```
 
 The wrapper refuses to write into an existing directory (the generator deletes its output
@@ -94,7 +107,7 @@ Convert the product image yourself. On a cluster where `enroot import` can't wri
 `/var/lib/enroot`, use `slurm/save_image.sh <image> <out.sqsh> [-- srun args]`, which pulls
 via pyxis (`srun --container-image/--container-save`) and needs registry credentials in
 `~/.config/enroot/.credentials` (see the script header). Private Docker Hub images must be
-named with the user, `USER@registry-1.docker.io#heavyai/scantest:<tag>`; a bare name is pulled
+named with the user, `USER@registry-1.docker.io#<org>/<repo>:<tag>`; a bare name is pulled
 anonymously and fails with 401. Elsewhere
 `enroot import -o heavydb.sqsh dockerd://<image>` works too.
 Then:
@@ -113,6 +126,11 @@ writes results to `--output-dir`. `--dry-run` prints the sbatch script
 (e.g. `module load enroot`). Arguments after `--` go to `run_benchmark.py run`.
 
 ## Notes
+
+- **Server logs:** the server's own logs (`heavydb.INFO`, `log4j.log`, ...) are saved before its storage
+  is deleted: to `<work-dir>/logs/`, or, for a temp work dir, to `<output>/heavydb-logs-<time>-<pid>/`.
+  Slurm jobs copy them to `<output-dir>/heavydb-logs-<jobid>_<task>/` next to `heavydb-<jobid>_<task>.log`
+  (the server's stdout/stderr).
 
 - TPC-H Q21 is disabled: HeavyDB cannot plan its correlated `EXISTS`/`NOT EXISTS` with `<>`.
 - Query text is the standard TPC-H text with the spec's validation parameters; columns used

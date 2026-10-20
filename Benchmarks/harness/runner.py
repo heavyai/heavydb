@@ -4,6 +4,7 @@
 """Run benchmark queries: warmup + timed iterations, with summary statistics."""
 
 import statistics
+import subprocess
 
 from .client import SqlError
 
@@ -15,9 +16,10 @@ def summarize(values):
             "mean": statistics.fmean(values), "max": max(values)}
 
 
-def run_queries(bench, client, queries, iterations, warmup, log=print):
-    out = []
-    for name, sql in queries:
+def run_queries(bench, client, queries, iterations, warmup, log=print, out=None):
+    """Run the queries; results are appended to `out` (if given) so they survive an exception."""
+    out = [] if out is None else out
+    for i, (name, sql) in enumerate(queries):
         rec = {"query": name, "status": "ok"}
         try:
             first = None
@@ -38,5 +40,15 @@ def run_queries(bench, client, queries, iterations, warmup, log=print):
         except SqlError as e:
             rec.update(status="error", error=str(e)[:500])
             log("  %-8s FAILED: %s" % (name, str(e).splitlines()[-1][:120]))
+        except (RuntimeError, OSError, subprocess.TimeoutExpired) as e:
+            # not a query error: the server/container is gone, so the rest cannot run
+            rec.update(status="error", error=str(e)[:500])
+            log("  %-8s FAILED (server unavailable): %s" % (name, str(e).splitlines()[-1][:120]))
+            out.append(rec)
+            for n, _ in queries[i + 1:]:
+                out.append({"query": n, "status": "skipped", "error": "server unavailable"})
+            log("  skipping %d remaining quer%s" % (len(queries) - i - 1,
+                                                    "y" if len(queries) - i - 1 == 1 else "ies"))
+            break
         out.append(rec)
     return out

@@ -1,17 +1,20 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
 # Pull a HeavyDB product image from a registry and save it as an enroot .sqsh,
 # using pyxis (srun --container-image/--container-save) so no root-owned enroot
 # directories are needed. Same approach as velox-testing's save_image_locally.sh.
 #
 #   save_image.sh <image> <output.sqsh> [-- extra srun args, e.g. --account=X --partition=Y]
 #
-# Example (Docker Hub, private heavyai/scantest repo):
-#   save_image.sh <user>@registry-1.docker.io#heavyai/scantest:ubuntu22.04-cuda-render-aarch64-10.0.0-20260929-39952e6c25 \
+# Example (a private Docker Hub repo):
+#   save_image.sh <user>@registry-1.docker.io#<org>/<repo>:<tag> \
 #       $HOME/images/heavydb-arm.sqsh -- --partition=interactive
 #
 # NOTE: enroot only uses a credentials entry when the image names the user, so
-# private Docker Hub images need the form  USER@registry-1.docker.io#heavyai/scantest:<tag>
-# (a bare heavyai/scantest:<tag> is pulled anonymously and fails with 401).
+# private Docker Hub images need the form  USER@registry-1.docker.io#<org>/<repo>:<tag>
+# (a bare <org>/<repo>:<tag> is pulled anonymously and fails with 401).
 #
 # Registry credentials go in ~/.config/enroot/.credentials, one line per registry:
 #   machine auth.docker.io login <dockerhub-user> password <access-token>
@@ -21,7 +24,7 @@
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
-  sed -n "2,22p" "$0" | sed 's/^# \{0,1\}//'
+  sed -n "4,24p" "$0" | sed 's/^# \{0,1\}//'
   exit 1
 fi
 image=$1

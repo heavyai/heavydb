@@ -9,7 +9,7 @@ import subprocess
 import shutil
 from pathlib import Path
 
-from .base import Runtime
+from .base import STOP_TIMEOUT, Runtime
 
 
 class LocalRuntime(Runtime):
@@ -42,10 +42,11 @@ class LocalRuntime(Runtime):
         subprocess.run([str(self.bin_dir / "initheavy"), "-f", str(self.storage)],
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        env=self.env)
-        log = open(self.log_path, "wb")
-        self.proc = subprocess.Popen(
-            [str(self.bin_dir / "heavydb")] + self.heavydb_args(str(self.storage), import_root),
-            cwd=self.bin_dir, env=self.env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+        with open(self.log_path, "wb") as log:  # the child keeps its own copy of the descriptor
+            self.proc = subprocess.Popen(
+                [str(self.bin_dir / "heavydb")] + self.heavydb_args(str(self.storage), import_root),
+                cwd=self.bin_dir, env=self.env, stdout=log, stderr=subprocess.STDOUT,
+                start_new_session=True)
 
     def check_alive(self):
         if self.proc and self.proc.poll() is not None:
@@ -62,9 +63,10 @@ class LocalRuntime(Runtime):
         if self.proc and self.proc.poll() is None:
             os.killpg(self.proc.pid, signal.SIGTERM)
             try:
-                self.proc.wait(60)
+                self.proc.wait(STOP_TIMEOUT)
             except subprocess.TimeoutExpired:
                 os.killpg(self.proc.pid, signal.SIGKILL)
+        self.preserve_logs()
         shutil.rmtree(self.storage, ignore_errors=True)
 
     def heavysql_prefix(self):

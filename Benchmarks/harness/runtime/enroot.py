@@ -12,9 +12,8 @@ is run in it with `enroot exec`.
 import os
 import shutil
 import subprocess
-import time
 
-from .base import DATA_MOUNT, Runtime, server_shell_script
+from .base import DATA_MOUNT, STOP_TIMEOUT, Runtime, server_shell_script
 from .docker import CONTAINER_BIN, CONTAINER_STORAGE
 
 
@@ -58,9 +57,9 @@ class EnrootRuntime(Runtime):
         if self.dry_run:
             self.run(start)
             return
-        log = open(self.log_path, "wb")
-        self.proc = subprocess.Popen(start, stdout=log, stderr=subprocess.STDOUT,
-                                     start_new_session=True)
+        with open(self.log_path, "wb") as log:  # the child keeps its own copy of the descriptor
+            self.proc = subprocess.Popen(start, stdout=log, stderr=subprocess.STDOUT,
+                                         start_new_session=True)
 
     def check_alive(self):
         if self.proc and self.proc.poll() is not None:
@@ -91,10 +90,11 @@ class EnrootRuntime(Runtime):
             import signal
             os.killpg(self.proc.pid, signal.SIGTERM)
             try:
-                self.proc.wait(60)
+                self.proc.wait(STOP_TIMEOUT)
             except subprocess.TimeoutExpired:
                 os.killpg(self.proc.pid, signal.SIGKILL)
         self.run(["enroot", "remove", "-f", self.container])
+        self.preserve_logs()
         if not self.dry_run:
             shutil.rmtree(self.storage, ignore_errors=True)
 

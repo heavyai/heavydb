@@ -10,8 +10,8 @@ Runtime and implementing the few abstract methods.
 """
 
 import abc
-import os
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -19,6 +19,9 @@ import time
 from pathlib import Path
 
 DATA_MOUNT = "/data"
+# Grace period (s) before the server is killed on shutdown. Kept below Slurm's default KillWait
+# (30 s from SIGTERM to SIGKILL) so cleanup can finish; the server's storage is discarded anyway.
+STOP_TIMEOUT = 15
 DEFAULT_USER = "admin"
 DEFAULT_PASSWORD = "HyperInteractive"
 DEFAULT_DB = "heavyai"
@@ -89,6 +92,19 @@ class Runtime(abc.ABC):
     @abc.abstractmethod
     def heavysql_prefix(self):
         """argv prefix (list) that runs heavysql; heavysql_args() are appended."""
+
+    def preserve_logs(self):
+        """Copy the server's log directory (<storage>/log: heavydb.INFO etc.) to <work_dir>/logs.
+
+        Called by stop_server() just before the storage directory is deleted.
+        """
+        src = Path(self.storage) / "log"
+        if self.dry_run or not src.is_dir():
+            return
+        try:
+            shutil.copytree(src, self.work_dir / "logs", dirs_exist_ok=True)
+        except OSError as e:
+            print("warning: could not save the server logs: %s" % e, file=sys.stderr)
 
     def describe(self):
         return {"runtime": self.name, "cpu_only": self.cpu_only}
