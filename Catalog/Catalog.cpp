@@ -2463,10 +2463,18 @@ void Catalog::delDictionaryNontransactional(const ColumnDescriptor& cd) {
   const auto refcount = sqliteConnector_.getData<int>(0, 0);
   VLOG(3) << "Dictionary " << dictId << "from dropped table has reference count "
           << refcount;
+  const DictRef dictRef(currentDB_.dbId, dictId);
+  // Keep the in-memory count in step with the stored one. Otherwise, dropping a column
+  // that shares this dictionary leaves it too high, and a later DROP TABLE never sees it
+  // reach zero in removeTableFromMap(), so the dictionary directory is not removed even
+  // though its catalog row is deleted.
+  if (const auto it = dictDescriptorMapByRef_.find(dictRef);
+      it != dictDescriptorMapByRef_.end()) {
+    it->second->refcount = refcount;
+  }
   if (refcount > 0) {
     return;
   }
-  const DictRef dictRef(currentDB_.dbId, dictId);
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_dictionaries WHERE dictid = ?",
                                          std::to_string(dictId));
   File_Namespace::renameForDelete(g_base_path + "/" + shared::kDataDirectoryName +

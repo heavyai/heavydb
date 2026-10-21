@@ -293,6 +293,28 @@ TEST_F(CreateTableCommitFailureTest, ExistingDictionaryDirectoryIsNotAdopted) {
   sqlAndCompareResult(std::string("SELECT a, b FROM ") + kTable + ";", {{"x", "y"}});
 }
 
+// Dropping a column that shares a dictionary and then the table used to leave the
+// dictionary directory behind (its in-memory refcount was never decremented), so the next
+// table to reuse the dictionary id found a non-empty directory (HERC-276).
+TEST_F(CreateTableCommitFailureTest, DropSharedDictionaryColumnThenTableRemovesDirectory) {
+  const auto dirs_before = dictionaryDirectories();
+  const std::string shared_create =
+      std::string("CREATE TABLE ") + kTable + " (a TEXT, b TEXT, SHARED DICTIONARY (b) " +
+      "REFERENCES " + kTable + "(a));";
+
+  sql(shared_create);
+  sql("INSERT INTO " + std::string(kTable) + " VALUES ('x', 'y');");
+  ASSERT_EQ(dictionaryDirectories().size(), dirs_before.size() + 1);
+
+  sql(std::string("ALTER TABLE ") + kTable + " DROP COLUMN b;");
+  sql(std::string("DROP TABLE ") + kTable + ";");
+  ASSERT_EQ(dictionaryDirectories(), dirs_before);
+
+  // The same statement must now succeed instead of hitting the existing-directory guard.
+  sql(shared_create);
+  ASSERT_NE(getCatalog().getMetadataForTable(kTable, false), nullptr);
+}
+
 TEST_F(CreateTableCommitFailureTest, FailedCommitDoesNotBlockOtherDdl) {
   startBlockingReader();
   queryAndAssertPartialException(createQuery(), "database is locked");
