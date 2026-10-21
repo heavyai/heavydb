@@ -3355,12 +3355,16 @@ bool is_notnull_dictionary_string_translated_null(
     const SQLTypeInfo& type_info,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t target_idx,
-    const int32_t string_id) {
+    const int32_t string_id,
+    const bool is_aggregate) {
   if (!type_info.is_dict_encoded_string() || !type_info.get_notnull()) {
     return false;
   }
   if (string_id == inline_int_null_value<int32_t>()) {
     return true;
+  }
+  if (is_aggregate) {
+    return false;
   }
   const auto translated_null_key =
       query_mem_desc.getTranslatedGroupbyNullForTarget(target_idx);
@@ -3522,7 +3526,10 @@ ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::
       return MaterializedSortBuffersBase::DictionaryStringSortPermutation(
           string_dict_proxy,
           entry_ti.get_notnull(),
-          result_set_->query_mem_desc_.getTranslatedGroupbyNullForTarget(target_idx));
+          result_set_->targets_[target_idx].is_agg
+              ? std::nullopt
+              : result_set_->query_mem_desc_.getTranslatedGroupbyNullForTarget(
+                    target_idx));
     }
   }
 
@@ -3545,7 +3552,11 @@ ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::
         [this, &entry_ti, string_dict_proxy, target_idx](
             const int32_t string_id) -> std::optional<std::string> {
       if (is_notnull_dictionary_string_translated_null(
-              entry_ti, result_set_->query_mem_desc_, target_idx, string_id)) {
+              entry_ti,
+              result_set_->query_mem_desc_,
+              target_idx,
+              string_id,
+              result_set_->targets_[target_idx].is_agg)) {
         return std::string{};
       }
       if (string_id == inline_int_null_value<int32_t>() ||

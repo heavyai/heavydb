@@ -41,12 +41,16 @@ bool is_notnull_dictionary_string_translated_null(
     const SQLTypeInfo& type_info,
     const QueryMemoryDescriptor& query_mem_desc,
     const size_t target_idx,
-    const int32_t string_id) {
+    const int32_t string_id,
+    const bool is_aggregate) {
   if (!type_info.is_dict_encoded_string() || !type_info.get_notnull()) {
     return false;
   }
   if (string_id == inline_int_null_value<int32_t>()) {
     return true;
+  }
+  if (is_aggregate) {
+    return false;
   }
   const auto translated_null_key =
       query_mem_desc.getTranslatedGroupbyNullForTarget(target_idx);
@@ -2584,9 +2588,12 @@ ScalarTargetValue ResultSet::makeStringTargetValue(
     std::optional<size_t> target_logical_idx) const {
   if (translate_strings) {
     const auto string_id = static_cast<int32_t>(ival);
-    if (target_logical_idx.has_value() &&
-        is_notnull_dictionary_string_translated_null(
-            chosen_type, query_mem_desc_, *target_logical_idx, string_id)) {
+    if (target_logical_idx.has_value() && is_notnull_dictionary_string_translated_null(
+                                              chosen_type,
+                                              query_mem_desc_,
+                                              *target_logical_idx,
+                                              string_id,
+                                              targets_[*target_logical_idx].is_agg)) {
       return NullableString(std::string{});
     }
     // TODO(alex): this isn't nice, fix it

@@ -14684,6 +14684,99 @@ TEST_F(Select, PipelinedGroupedExtremaPreserveNullableValues) {
   }
 }
 
+TEST_F(Select, PipelinedSampleStringsPreserveDictionaryIds) {
+  SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
+  ResultReductionPipelineTestMode pipeline_mode;
+  ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
+  ScopeGuard restore_columnar = [columnar = g_enable_columnar_output] {
+    g_enable_columnar_output = columnar;
+  };
+  const std::string table{"sample_string_nulls"};
+  ScopeGuard drop_table = [&] {
+    if (!g_keep_test_data) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+    }
+  };
+  using Strings = std::vector<std::optional<std::string>>;
+  for (const bool notnull : {false, true}) {
+    for (const auto fragment_size : {2, 64}) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + table + ";");
+      run_ddl_statement(
+          "CREATE TABLE " + table + " (k INT, s TEXT " + (notnull ? "NOT NULL " : "") +
+          "ENCODING DICT(32)) WITH (FRAGMENT_SIZE=" + std::to_string(fragment_size) +
+          ");");
+      // The NULL key is represented by 2, which is also the valid ID of mango.
+      run_multiple_agg("INSERT INTO " + table +
+                           " VALUES (0,'alpha'),(1,'zulu'),(NULL,'mango'),"
+                           "(0,'alpha'),(1,'zulu'),(NULL,'mango');",
+                       ExecutorDeviceType::CPU);
+      ASSERT_EQ(int64_t(2),
+                v<int64_t>(run_simple_agg("SELECT KEY_FOR_STRING(s) FROM " + table +
+                                              " WHERE k IS NULL LIMIT 1;",
+                                          ExecutorDeviceType::CPU)));
+      run_multiple_agg(
+          "INSERT INTO " + table + " VALUES (-1," + (notnull ? "''" : "NULL") + ");",
+          ExecutorDeviceType::CPU);
+      const std::optional<std::string> empty_value =
+          notnull ? std::make_optional(std::string{}) : std::nullopt;
+      for (const bool pipeline : {false, true}) {
+        g_enable_result_reduction_pipeline = pipeline;
+        for (const bool columnar : {false, true}) {
+          g_enable_columnar_output = columnar;
+          for (const auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+            SKIP_NO_GPU();
+            SCOPED_TRACE(::testing::Message()
+                         << "notnull=" << notnull << " fragment_size=" << fragment_size
+                         << " pipeline=" << pipeline << " columnar=" << columnar
+                         << " device=" << dt);
+            const auto assert_strings =
+                [&](const std::string& query, Strings expected, const bool ordered) {
+                  SCOPED_TRACE(query);
+                  const auto rows = run_multiple_agg(query, dt);
+                  ASSERT_TRUE(rows);
+                  Strings actual;
+                  rows->moveToBegin();
+                  for (auto row = rows->getNextRow(true, true); !row.empty();
+                       row = rows->getNextRow(true, true)) {
+                    const auto value = v<NullableString>(row.back());
+                    const auto* text = boost::get<std::string>(&value);
+                    actual.push_back(text ? std::make_optional(*text) : std::nullopt);
+                  }
+                  if (!ordered) {
+                    std::sort(actual.begin(), actual.end());
+                    std::sort(expected.begin(), expected.end());
+                  }
+                  EXPECT_EQ(actual, expected);
+                };
+            for (const bool project_key : {false, true}) {
+              const auto grouped = std::string("SELECT ") + (project_key ? "k," : "") +
+                                   "SAMPLE(s) AS label FROM " + table + " GROUP BY k";
+              assert_strings(
+                  grouped + ";", {empty_value, "alpha", "mango", "zulu"}, false);
+              assert_strings(grouped + " ORDER BY label NULLS FIRST;",
+                             {empty_value, "alpha", "mango", "zulu"},
+                             true);
+              assert_strings(grouped + " ORDER BY label DESC NULLS LAST LIMIT 2;",
+                             {"zulu", "mango"},
+                             true);
+            }
+            assert_strings("SELECT SAMPLE(s) AS label FROM " + table +
+                               " WHERE k IS NULL OR k>=0 GROUP BY k "
+                               "ORDER BY label LIMIT 1;",
+                           {"alpha"},
+                           true);
+            assert_strings(
+                "SELECT s FROM " + table + " GROUP BY s ORDER BY s NULLS FIRST;",
+                {empty_value, "alpha", "mango", "zulu"},
+                true);
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_F(Select, CorrelatedHavingPreservesNullKeys) {
   SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
