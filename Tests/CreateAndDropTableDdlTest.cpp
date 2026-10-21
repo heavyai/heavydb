@@ -10,6 +10,8 @@
  */
 
 #include <gtest/gtest.h>
+#include <fstream>
+#include <set>
 #include <boost/filesystem.hpp>
 
 #include "Calcite/Calcite.h"
@@ -20,6 +22,7 @@
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
+#include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 #include "Utils/DdlUtils.h"
 
@@ -161,6 +164,168 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
     return table_dir_path;
   }
 };
+
+// A failed catalog commit in CREATE TABLE (HERC-276) must leave no trace: the table must
+// not stay in memory with an open SQLite transaction, and no dictionary directory may be
+// left behind to be adopted by a later table that reuses the table id.
+class CreateTableCommitFailureTest : public CreateAndDropTableDdlTest {
+ protected:
+  static constexpr const char* kTable = "commit_failure_tbl";
+
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql(std::string("DROP TABLE IF EXISTS ") + kTable + ";");
+  }
+
+  void TearDown() override {
+    reader_.reset();
+    sql(std::string("DROP TABLE IF EXISTS ") + kTable + ";");
+    CreateAndDropTableDdlTest::TearDown();
+  }
+
+  std::string createQuery() const {
+    return std::string("CREATE TABLE ") + kTable +
+           " (id INT, a TEXT ENCODING DICT(32), b TEXT ENCODING DICT(32));";
+  }
+
+  // Holding a read transaction on the catalog file makes the writer's COMMIT fail with
+  // SQLITE_BUSY ("database is locked"): the writer cannot take its EXCLUSIVE lock while a
+  // SHARED lock is held.
+  void startBlockingReader() {
+    reader_ = std::make_unique<SqliteConnector>(
+        getCatalog().getCurrentDB().dbName,
+        bf::absolute(shared::kCatalogDirectoryName, BASE_PATH).string());
+    reader_->query("BEGIN TRANSACTION");
+    reader_->query("SELECT count(*) FROM mapd_tables");
+  }
+
+  void stopBlockingReader() {
+    reader_->query("ROLLBACK TRANSACTION");
+    reader_.reset();
+  }
+
+  std::set<std::string> dictionaryDirectories() const {
+    std::set<std::string> dirs;
+    const auto prefix =
+        "DB_" + std::to_string(getCatalog().getDatabaseId()) + "_DICT_";
+    for (bf::directory_iterator it(bf::path(BASE_PATH) / shared::kDataDirectoryName), end;
+         it != end;
+         ++it) {
+      const auto name = it->path().filename().string();
+      // Directories renamed for deletion (DB_<db>_DICT_<id>_<ts>_DELETE_ME) are being
+      // removed in the background and cannot be adopted by a new dictionary.
+      if (name.rfind(prefix, 0) == 0 && name.find("_DELETE_ME") == std::string::npos) {
+        dirs.insert(name);
+      }
+    }
+    return dirs;
+  }
+
+  std::unique_ptr<SqliteConnector> reader_;
+};
+
+TEST_F(CreateTableCommitFailureTest, FailedCommitRollsBackTable) {
+  const auto dirs_before = dictionaryDirectories();
+
+  startBlockingReader();
+  queryAndAssertPartialException(createQuery(), "database is locked");
+
+  // The table must not be visible in memory...
+  ASSERT_EQ(getCatalog().getMetadataForTable(kTable, false), nullptr);
+  // ... and the dictionary directories created for it must be gone.
+  ASSERT_EQ(dictionaryDirectories(), dirs_before);
+
+  stopBlockingReader();
+
+  // The connection must not be stuck in an open transaction: the same statement now
+  // succeeds, and so does further DDL ("cannot start a transaction within a
+  // transaction" otherwise).
+  sql(createQuery());
+  ASSERT_NE(getCatalog().getMetadataForTable(kTable, false), nullptr);
+  sql("INSERT INTO " + std::string(kTable) + " VALUES (1, 'x', 'y');");
+  sqlAndCompareResult(std::string("SELECT a, b FROM ") + kTable + ";",
+                      {{"x", "y"}});
+  sql(std::string("DROP TABLE ") + kTable + ";");
+  ASSERT_EQ(getCatalog().getMetadataForTable(kTable, false), nullptr);
+}
+
+// An orphan dictionary directory (left by a table whose creation never committed) must
+// not be adopted by a new table that reuses the dictionary id (HERC-276).
+TEST_F(CreateTableCommitFailureTest, ExistingDictionaryDirectoryIsNotAdopted) {
+  // Learn the dictionary id the next table will get: ids are not AUTOINCREMENT, so after
+  // dropping the newest dictionary its id is handed out again.
+  sql(createQuery());
+  auto& cat = getCatalog();
+  const auto* td = cat.getMetadataForTable(kTable, false);
+  ASSERT_NE(td, nullptr);
+  int max_dict_id = 0;
+  for (const auto* col : {cat.getMetadataForColumn(td->tableId, "a"),
+                          cat.getMetadataForColumn(td->tableId, "b")}) {
+    ASSERT_NE(col, nullptr);
+    max_dict_id = std::max(max_dict_id, col->columnType.get_comp_param());
+  }
+  sql(std::string("DROP TABLE ") + kTable + ";");
+
+  // Simulate the leftover: a directory with data in it at the id about to be reused.
+  const auto orphan = bf::path(BASE_PATH) / shared::kDataDirectoryName /
+                      ("DB_" + std::to_string(cat.getDatabaseId()) + "_DICT_" +
+                       std::to_string(max_dict_id));
+  ScopeGuard cleanup = [&] { bf::remove_all(orphan); };
+  ASSERT_FALSE(bf::exists(orphan)) << orphan;
+  bf::create_directory(orphan);
+  const auto marker = orphan / "orphan_marker";
+  { std::ofstream(marker.string()) << "stale"; }
+  const auto dirs_before = dictionaryDirectories();
+
+  queryAndAssertPartialException(createQuery(), "already exists");
+
+  // The failed create must not have registered the table, must not have left new
+  // directories, and must not have moved or deleted the pre-existing one.
+  ASSERT_EQ(cat.getMetadataForTable(kTable, false), nullptr);
+  ASSERT_EQ(dictionaryDirectories(), dirs_before);
+  ASSERT_TRUE(bf::exists(marker));
+
+  // Once the orphan is moved aside the same statement succeeds.
+  bf::remove_all(orphan);
+  sql(createQuery());
+  ASSERT_NE(cat.getMetadataForTable(kTable, false), nullptr);
+  sql("INSERT INTO " + std::string(kTable) + " VALUES (1, 'x', 'y');");
+  sqlAndCompareResult(std::string("SELECT a, b FROM ") + kTable + ";", {{"x", "y"}});
+}
+
+// Dropping a column that shares a dictionary and then the table used to leave the
+// dictionary directory behind (its in-memory refcount was never decremented), so the next
+// table to reuse the dictionary id found a non-empty directory (HERC-276).
+TEST_F(CreateTableCommitFailureTest, DropSharedDictionaryColumnThenTableRemovesDirectory) {
+  const auto dirs_before = dictionaryDirectories();
+  const std::string shared_create =
+      std::string("CREATE TABLE ") + kTable + " (a TEXT, b TEXT, SHARED DICTIONARY (b) " +
+      "REFERENCES " + kTable + "(a));";
+
+  sql(shared_create);
+  sql("INSERT INTO " + std::string(kTable) + " VALUES ('x', 'y');");
+  ASSERT_EQ(dictionaryDirectories().size(), dirs_before.size() + 1);
+
+  sql(std::string("ALTER TABLE ") + kTable + " DROP COLUMN b;");
+  sql(std::string("DROP TABLE ") + kTable + ";");
+  ASSERT_EQ(dictionaryDirectories(), dirs_before);
+
+  // The same statement must now succeed instead of hitting the existing-directory guard.
+  sql(shared_create);
+  ASSERT_NE(getCatalog().getMetadataForTable(kTable, false), nullptr);
+}
+
+TEST_F(CreateTableCommitFailureTest, FailedCommitDoesNotBlockOtherDdl) {
+  startBlockingReader();
+  queryAndAssertPartialException(createQuery(), "database is locked");
+  stopBlockingReader();
+
+  // A different table created after the failure must get a clean state.
+  sql("CREATE TABLE commit_failure_other (x INT, t TEXT ENCODING DICT(32));");
+  ScopeGuard drop = [&] { sql("DROP TABLE IF EXISTS commit_failure_other;"); };
+  sql("INSERT INTO commit_failure_other VALUES (1, 'v');");
+  sqlAndCompareResult("SELECT t FROM commit_failure_other;", {{"v"}});
+}
 
 class CreateTableTest : public CreateAndDropTableDdlTest,
                         public testing::WithParamInterface<ddl_utils::TableType> {

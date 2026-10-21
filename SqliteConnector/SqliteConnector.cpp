@@ -64,6 +64,13 @@ void SqliteConnector::throwError() {
   throw runtime_error("Sqlite3 Error: " + errorMsg);
 }
 
+void SqliteConnector::throwError(sqlite3_stmt* stmt) {
+  // Read the message before finalizing: finalize can reset the connection's error state.
+  string errorMsg(sqlite3_errmsg(db_));
+  sqlite3_finalize(stmt);
+  throw runtime_error("Sqlite3 Error: " + errorMsg);
+}
+
 std::string get_column_datum(int column_type, sqlite3_stmt* stmt, size_t column_index) {
   const char* datum_ptr;
   if (column_type == SQLITE_BLOB) {
@@ -91,7 +98,7 @@ void SqliteConnector::query_with_text_params(const std::string& queryString,
   sqlite3_stmt* stmt;
   int returnCode = sqlite3_prepare_v2(db_, queryString.c_str(), -1, &stmt, nullptr);
   if (returnCode != SQLITE_OK) {
-    throwError();
+    throwError(stmt);
   }
 
   int num_params = 1;
@@ -106,14 +113,14 @@ void SqliteConnector::query_with_text_params(const std::string& queryString,
           stmt, num_params++, text_param.c_str(), text_param.size(), SQLITE_TRANSIENT);
     }
     if (returnCode != SQLITE_OK) {
-      throwError();
+      throwError(stmt);
     }
   }
 
   do {
     returnCode = sqlite3_step(stmt);
     if (returnCode != SQLITE_ROW && returnCode != SQLITE_DONE) {
-      throwError();
+      throwError(stmt);
     }
     if (returnCode == SQLITE_DONE) {
       break;
