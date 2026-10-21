@@ -441,6 +441,8 @@ public class HeavyDBPlanner extends PlannerImpl {
                     .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.PROJECT_INSTANCE)
                     .addRuleInstance(HeavyDBLeftJoinAntiSemiJoinRule.INSTANCE)
                     .addRuleInstance(CoreRules.PROJECT_MERGE)
+                    // Pruning needs binary joins and merged projections after lowering.
+                    .addRuleInstance(HeavyDBDistinctAggregateJoinPruneRule.INSTANCE)
                     .addRuleInstance(HeavyDBLeftJoinCountDistributionRule.INSTANCE)
                     .addRuleInstance(HeavyDBSingleCountDistinctToGroupByRule.INSTANCE)
                     .addRuleInstance(HeavyDBAggregateOuterJoinStrengthReductionRule.INSTANCE)

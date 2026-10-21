@@ -814,18 +814,37 @@ TEST_F(PlannerRuleCoverage, DistinctAggregateJoinPruneRequiresNonEmptyUnusedSide
   )sql");
   EXPECT_EQ(std::string::npos, guaranteed_non_empty_plan.find("LogicalJoin("))
       << guaranteed_non_empty_plan;
+  EXPECT_EQ(std::string::npos, guaranteed_non_empty_plan.find("MultiJoin("))
+      << guaranteed_non_empty_plan;
+  EXPECT_EQ(std::string::npos, guaranteed_non_empty_plan.find("planner_orders"))
+      << guaranteed_non_empty_plan;
 
   const std::string possibly_empty_plan = calcite_explain_plan(R"sql(
       SELECT DISTINCT c.c_custkey
       FROM planner_customer_pk c
       JOIN planner_orders o ON TRUE
   )sql");
-  // Calcite may represent this Cartesian input as either LogicalJoin or MultiJoin.
-  // The semantic invariant is that the possibly-empty orders input is not pruned.
+  EXPECT_EQ(std::string::npos, possibly_empty_plan.find("MultiJoin("))
+      << possibly_empty_plan;
+  // An unused but possibly-empty Cartesian input must still empty the result.
   EXPECT_NE(std::string::npos,
             possibly_empty_plan.find("LogicalTableScan(table=[[test_db, "
                                      "planner_orders]])"))
       << possibly_empty_plan;
+}
+
+TEST_F(PlannerRuleCoverage, DistinctAggregateJoinPruneRemovesNestedScalarInputs) {
+  const auto plan = rel_alg_plan(R"sql(
+      SELECT DISTINCT c.c_custkey, c.c_name
+      FROM planner_customer_pk c
+      CROSS JOIN (SELECT COUNT(*) FROM planner_orders) n
+      CROSS JOIN (SELECT COUNT(*) FROM planner_lineitem WHERE l_orderkey < 0) m
+  )sql");
+  EXPECT_EQ(std::string::npos, plan.find(R"("relOp": "LogicalJoin")")) << plan;
+  EXPECT_EQ(std::string::npos, plan.find("MultiJoin")) << plan;
+  EXPECT_EQ(std::string::npos, plan.find("planner_orders")) << plan;
+  EXPECT_EQ(std::string::npos, plan.find("planner_lineitem")) << plan;
+  EXPECT_NE(std::string::npos, plan.find("planner_customer_pk")) << plan;
 }
 
 TEST_F(PlannerRuleCoverage, JoinFilterSplitSeparatesInnerJoinFilters) {
