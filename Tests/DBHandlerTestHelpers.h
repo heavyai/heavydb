@@ -15,6 +15,7 @@
 #include "DataMgr/ForeignStorage/ODBC/odbc_utils.h"
 #endif  // EE_FSI_ODBC
 #include <boost/regex.hpp>
+#include "QueryRunner/TestEnvironment.h"
 #include "QueryRunner/TestProcessSignalHandler.h"
 #include "TestHelpers.h"
 #include "ThriftHandler/DBHandler.h"
@@ -424,7 +425,7 @@ class DBHandlerTestFixture : public TestHelpers::TbbPrivateServerKiller {
       system_parameters_.runtime_udf_registration_policy =
           SystemParameters::RuntimeUdfRegistrationPolicy::DISALLOWED;
       system_parameters_.omnisci_server_port = -1;
-      system_parameters_.calcite_port = 3280;
+      system_parameters_.calcite_port = QueryRunner::db_handler_calcite_port();
 
       File_Namespace::DiskCacheConfig disk_cache_config{
           File_Namespace::DiskCacheConfig::getDefaultPath(std::string(BASE_PATH)),

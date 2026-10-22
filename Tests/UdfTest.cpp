@@ -213,7 +213,7 @@ TEST_F(UDFCompilerTest, CompilerOptionTest) {
 }
 
 TEST_F(UDFCompilerTest, CompilerPathTest) {
-  UdfCompiler compiler(g_device_arch, llvm::sys::findProgramByName("clang++").get());
+  UdfCompiler compiler(g_device_arch, UdfCompiler::findClangPath());
   EXPECT_NO_THROW(compiler.compileUdf(getUdfFileName()));
 }
 
