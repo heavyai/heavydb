@@ -42,6 +42,7 @@ class DeviceMemoryAllocationMap {
                      const bool is_slab);
   Allocation removeAllocation(const DevicePtr device_ptr);
   std::pair<DevicePtr, Allocation> getAllocation(const DevicePtr device_ptr);
+  bool containsAllocation(const DevicePtr device_ptr, const uint64_t size) const;
 
   const MapChangedCBID registerMapChangedCB(MapChangedCB cb);
   void unregisterMapChangedCB(const MapChangedCBID cbid);
