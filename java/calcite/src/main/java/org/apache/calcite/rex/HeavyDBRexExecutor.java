@@ -53,7 +53,7 @@ public class HeavyDBRexExecutor implements RexExecutor {
     }
     if (!delegateExps.isEmpty()) {
       final List<RexNode> delegateReduced = new ArrayList<>(delegateExps.size());
-      if (!reduceDecimalToDoubleLiterals(rexBuilder, delegateExps, delegateReduced)) {
+      if (!reduceDecimalToFloatingPointLiterals(rexBuilder, delegateExps, delegateReduced)) {
         delegate.reduce(rexBuilder, delegateExps, delegateReduced);
       }
       for (int j = 0; j < delegateIndices.size(); j++) {
@@ -65,16 +65,18 @@ public class HeavyDBRexExecutor implements RexExecutor {
     }
   }
 
-  private static boolean reduceDecimalToDoubleLiterals(RexBuilder rexBuilder,
+  private static boolean reduceDecimalToFloatingPointLiterals(RexBuilder rexBuilder,
       List<RexNode> expressions, List<RexNode> reducedValues) {
-    // Filter simplification repeatedly reduces decimal map bounds to DOUBLE.
+    // Filter simplification repeatedly reduces decimal map bounds to FLOAT/DOUBLE.
+    // Calcite evaluates both using Java double; REAL uses float and stays delegated.
     // Match RexExecutorImpl's conversion and literal construction without
     // compiling Java for each bound. Keep mixed batches on the delegate so a
     // failed evaluation still leaves the entire batch unchanged.
     final List<RexNode> literals = new ArrayList<>(expressions.size());
     for (RexNode expression : expressions) {
+      final SqlTypeName target = expression.getType().getSqlTypeName();
       if (!(expression instanceof RexCall) || expression.getKind() != SqlKind.CAST
-          || expression.getType().getSqlTypeName() != SqlTypeName.DOUBLE) {
+          || (target != SqlTypeName.DOUBLE && target != SqlTypeName.FLOAT)) {
         return false;
       }
       final RexCall cast = (RexCall) expression;
