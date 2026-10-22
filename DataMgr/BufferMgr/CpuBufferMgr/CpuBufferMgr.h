@@ -9,6 +9,9 @@
 
 #include "DataMgr/Allocators/ArenaAllocator.h"
 
+#include <memory>
+#include <vector>
+
 namespace CudaMgr_Namespace {
 class CudaMgr;
 }
@@ -36,12 +39,16 @@ class CpuBufferMgr : public BufferMgr {
     initializeMem();
   }
 
-  ~CpuBufferMgr() override {
-    /* the destruction of the allocator automatically frees all memory */
-  }
+  ~CpuBufferMgr() override;
 
   inline MgrType getMgrType() override { return CPU_MGR; }
   inline std::string getStringMgrType() override { return ToString(CPU_MGR); }
+
+  void fetchBuffer(const ChunkKey& key,
+                   AbstractBuffer* dest_buffer,
+                   const size_t num_bytes = 0) override;
+  void fetchBuffers(const std::vector<Data_Namespace::BufferFetchRequest>& requests,
+                    const std::vector<AbstractBuffer*>& dest_buffers) override;
 
   // Used for testing.
   void setAllocator(std::unique_ptr<DramArena> allocator) {
