@@ -6,6 +6,7 @@
 package com.mapd.parser.hint;
 
 import org.apache.calcite.rel.hint.HintPredicates;
+import org.apache.calcite.rel.hint.HintPredicate;
 import org.apache.calcite.rel.hint.HintStrategyTable;
 
 import java.util.ArrayList;
@@ -49,11 +50,16 @@ public class HeavyDBHintStrategyTable {
     supportedHints.add("table_reordering_off");
     supportedHints.add("ndv_groups_estimator_multiplier");
 
+    final HintPredicate heavyDBRelHintPredicate = HintPredicates.or(HintPredicates.TABLE_SCAN,
+            HintPredicates.PROJECT,
+            HintPredicates.JOIN,
+            HintPredicates.AGGREGATE,
+            HintPredicates.CALC);
     for (String hint_name : supportedHints) {
       // add local / global hints, e.., cpu_mode / g_cpu_mode
-      builder = builder.hintStrategy(hint_name, HintPredicates.SET_VAR);
+      builder = builder.hintStrategy(hint_name, heavyDBRelHintPredicate);
       String globalHintName = "g_".concat(hint_name);
-      builder = builder.hintStrategy(globalHintName, HintPredicates.SET_VAR);
+      builder = builder.hintStrategy(globalHintName, heavyDBRelHintPredicate);
     }
     return builder.build();
   }
