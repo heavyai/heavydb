@@ -142,6 +142,17 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
   return Weight();
 }
 
+void collect_or_terms(const Analyzer::Expr* expr,
+                      std::vector<const Analyzer::Expr*>& terms) {
+  const auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
+  if (bin_oper && bin_oper->get_optype() == kOR && bin_oper->get_qualifier() == kONE) {
+    collect_or_terms(bin_oper->get_left_operand(), terms);
+    collect_or_terms(bin_oper->get_right_operand(), terms);
+    return;
+  }
+  terms.push_back(expr);
+}
+
 }  // namespace
 
 bool CodeGenerator::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
@@ -285,11 +296,55 @@ llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* 
   return result_phi;
 }
 
+llvm::Value* CodeGenerator::codegenDictPrefixOr(const Analyzer::BinOper* bin_oper,
+                                                const CompilationOptions& co) {
+  AUTOMATIC_IR_METADATA(cgen_state_);
+  if (bin_oper->get_optype() != kOR || bin_oper->get_qualifier() != kONE) {
+    return nullptr;
+  }
+
+  std::vector<const Analyzer::Expr*> terms;
+  collect_or_terms(bin_oper, terms);
+  if (terms.size() < 2) {
+    return nullptr;
+  }
+
+  std::optional<DictPrefixEqInfo> prefix_info;
+  std::vector<int64_t> matching_ids;
+  for (const auto term : terms) {
+    const auto term_bin_oper = dynamic_cast<const Analyzer::BinOper*>(term);
+    if (!term_bin_oper) {
+      return nullptr;
+    }
+    auto term_prefix_info = getDictPrefixEqInfo(term_bin_oper);
+    if (!term_prefix_info) {
+      return nullptr;
+    }
+    if (!prefix_info) {
+      prefix_info = *term_prefix_info;
+    } else if (prefix_info->source_col_key != term_prefix_info->source_col_key ||
+               prefix_info->source_rte_idx != term_prefix_info->source_rte_idx ||
+               prefix_info->source_ti != term_prefix_info->source_ti) {
+      return nullptr;
+    }
+    matching_ids.insert(matching_ids.end(),
+                        term_prefix_info->matching_ids.begin(),
+                        term_prefix_info->matching_ids.end());
+  }
+
+  CHECK(prefix_info);
+  return codegenDictPrefixInSet(*prefix_info, std::move(matching_ids), co);
+}
+
 llvm::Value* CodeGenerator::codegenLogical(const Analyzer::BinOper* bin_oper,
                                            const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_);
   const auto optype = bin_oper->get_optype();
   CHECK(IS_LOGIC(optype));
+
+  if (llvm::Value* dict_prefix_or = codegenDictPrefixOr(bin_oper, co)) {
+    return dict_prefix_or;
+  }
 
   if (llvm::Value* short_circuit = codegenLogicalShortCircuit(bin_oper, co)) {
     return short_circuit;

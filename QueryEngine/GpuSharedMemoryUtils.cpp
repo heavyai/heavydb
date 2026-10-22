@@ -30,16 +30,13 @@ GpuSharedMemCodeBuilder::GpuSharedMemCodeBuilder(
    * This class currently works only with:
    * 1. row-wise output memory layout
    * 2. GroupByPerfectHash
-   * 3. single-column group by
-   * 4. Keyless hash strategy (no redundant group column in the output buffer)
+   * 3. small output buffers that fit in per-block shared memory
    *
-   * All conditions in 1, 3, and 4 can be easily relaxed if proper code is added to
-   * support them in the future.
+   * All conditions can be relaxed if proper code is added to support them in the future.
    */
   CHECK(!query_mem_desc_.didOutputColumnar());
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
         QueryDescriptionType::GroupByPerfectHash);
-  CHECK(query_mem_desc_.hasKeylessHash());
 }
 
 void GpuSharedMemCodeBuilder::codegen() {
@@ -120,8 +117,6 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
       dest_buffer_ptr, llvm::Type::getInt8PtrTy(context_, 0), "dest_byte_stream");
   // branching out of out of bound:
   const auto entry_count = ll_int(query_mem_desc_.getEntryCount(), context_);
-  const auto entry_count_i32 =
-      ll_int(static_cast<int32_t>(query_mem_desc_.getEntryCount()), context_);
   const auto is_thread_inbound =
       ir_builder.CreateICmpSLT(thread_idx, entry_count, "is_thread_inbound");
   ir_builder.CreateCondBr(is_thread_inbound, bb_preheader, bb_exit);
@@ -139,10 +134,7 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
   // running the result set reduction JIT code to get reduce_one_entry_idx function
   auto fixup_query_mem_desc = ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_);
   auto rs_reduction_jit = std::make_unique<GpuReductionHelperJIT>(
-      fixup_query_mem_desc,
-      targets_,
-      result_set::initialize_target_values_for_storage(targets_),
-      executor_id_);
+      fixup_query_mem_desc, targets_, init_agg_values_, executor_id_);
   auto reduction_code = rs_reduction_jit->codegen();
   CHECK(reduction_code.module);
   reduction_code.module->setDataLayout(
@@ -198,13 +190,11 @@ void GpuSharedMemCodeBuilder::codegenReduction() {
   // disable for current shared memory support.
   const auto null_ptr_ll =
       llvm::ConstantPointerNull::get(llvm::Type::getInt8PtrTy(context_, 0));
-  const auto pos_i32 = ir_builder.CreateCast(
-      llvm::Instruction::CastOps::Trunc, pos, get_int_type(32, context_));
   ir_builder.CreateCall(reduce_one_entry_idx_func,
                         {dest_byte_stream,
                          src_byte_stream,
-                         pos_i32,
-                         entry_count_i32,
+                         pos,
+                         entry_count,
                          null_ptr_ll,
                          null_ptr_ll,
                          null_ptr_ll},
@@ -262,11 +252,15 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
   // it should be removed in the future.
   auto fixup_query_mem_desc = ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_);
   CHECK(!fixup_query_mem_desc.didOutputColumnar());
-  CHECK(fixup_query_mem_desc.hasKeylessHash());
-  CHECK_GE(init_agg_values_.size(), targets_.size());
 
   // .entry defines constant values used throughout the loop
   auto bb_entry = llvm::BasicBlock::Create(context_, ".entry", init_func_);
+  llvm::IRBuilder<> ir_builder(bb_entry);
+  const auto func_thread_index = getFunction("get_thread_index");
+  const auto thread_idx = ir_builder.CreateCall(func_thread_index, {}, "thread_index");
+  const auto func_block_dim = getFunction("get_block_dim");
+  const auto block_dim = ir_builder.CreateCall(func_block_dim, {}, "block_dim");
+
   // .loop.preheader increases each thread's target row index, i.e., pos, by using block
   // dimension i.e., a target row id of a thread at i-th iteration (i > 1) = thread_idx *
   // (i * block_dim)
@@ -277,12 +271,7 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
   // finalize the logic
   auto bb_exit = llvm::BasicBlock::Create(context_, ".exit", init_func_);
 
-  llvm::IRBuilder<> ir_builder(bb_entry);
-  const auto func_thread_index = getFunction("get_thread_index");
-  const auto thread_idx = ir_builder.CreateCall(func_thread_index, {}, "thread_index");
-  const auto func_block_dim = getFunction("get_block_dim");
-  const auto block_dim = ir_builder.CreateCall(func_block_dim, {}, "block_dim");
-  const auto row_size_bytes = ll_int(fixup_query_mem_desc.getRowWidth(), context_);
+  const auto row_size_bytes = ll_int(fixup_query_mem_desc.getRowSize(), context_);
   const auto entry_count = ll_int(fixup_query_mem_desc.getEntryCount(), context_);
 
   // declare dynamic shared memory:
@@ -311,6 +300,34 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
   // compute byte offset of the thread at the current iteration
   auto byte_offset_ll = ir_builder.CreateMul(row_size_bytes, pos, "byte_offset");
 
+  if (!fixup_query_mem_desc.hasKeylessHash()) {
+    const auto key_count = fixup_query_mem_desc.getGroupbyColCount();
+    const auto key_width = fixup_query_mem_desc.getEffectiveKeyWidth();
+    auto key_byte_offset_ll = byte_offset_ll;
+    for (size_t key_idx = 0; key_idx < key_count; ++key_idx) {
+      auto key_address = ir_builder.CreateGEP(
+          dest_byte_stream->getType()->getScalarType()->getPointerElementType(),
+          dest_byte_stream,
+          key_byte_offset_ll);
+      if (key_width == sizeof(int32_t)) {
+        auto key_ptr = ir_builder.CreatePointerCast(
+            key_address, llvm::Type::getInt32PtrTy(context_, 3));
+        ir_builder.CreateStore(ll_int(static_cast<int32_t>(EMPTY_KEY_32), context_),
+                               key_ptr);
+      } else {
+        CHECK_EQ(key_width, sizeof(int64_t));
+        auto key_ptr = ir_builder.CreatePointerCast(
+            key_address, llvm::Type::getInt64PtrTy(context_, 3));
+        ir_builder.CreateStore(ll_int(static_cast<int64_t>(EMPTY_KEY_64), context_),
+                               key_ptr);
+      }
+      key_byte_offset_ll = ir_builder.CreateAdd(
+          key_byte_offset_ll, ll_int(static_cast<size_t>(key_width), context_));
+    }
+    byte_offset_ll = ir_builder.CreateAdd(
+        byte_offset_ll, ll_int(fixup_query_mem_desc.getColOffInBytes(0), context_));
+  }
+
   // each thread will be responsible for one
   const auto& col_slot_context = fixup_query_mem_desc.getColSlotContext();
   size_t init_agg_idx = 0;
@@ -321,6 +338,9 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
     for (size_t slot_idx = slots_for_target.front(); slot_idx <= slots_for_target.back();
          slot_idx++) {
       const auto slot_size = fixup_query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
+      if (slot_size == 0) {
+        continue;
+      }
       auto casted_dest_slot_address = codegen_smem_dest_slot_ptr(context_,
                                                                  fixup_query_mem_desc,
                                                                  ir_builder,
@@ -329,6 +349,7 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
                                                                  dest_byte_stream,
                                                                  byte_offset_ll);
       llvm::Value* init_value_ll = nullptr;
+      CHECK_LT(init_agg_idx, init_agg_values_.size());
       if (slot_size == sizeof(int32_t)) {
         init_value_ll =
             ll_int(static_cast<int32_t>(init_agg_values_[init_agg_idx++]), context_);
@@ -341,11 +362,8 @@ void GpuSharedMemCodeBuilder::codegenInitialization() {
       CHECK(init_value_ll);
       ir_builder.CreateStore(init_value_ll, casted_dest_slot_address);
 
-      // if not the last loop, we compute the next offset:
-      if (slot_idx != (col_slot_context.getSlotCount() - 1)) {
-        byte_offset_ll = ir_builder.CreateAdd(
-            byte_offset_ll, ll_int(static_cast<size_t>(slot_size), context_));
-      }
+      byte_offset_ll = ir_builder.CreateAdd(
+          byte_offset_ll, ll_int(static_cast<size_t>(slot_size), context_));
     }
   }
 

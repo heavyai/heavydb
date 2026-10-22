@@ -15,12 +15,16 @@
 
 // Classes that are involved in needing a cache invalidated
 #include "JoinHashTable/BaselineJoinHashTable.h"
+#include "JoinHashTable/BitmapJoinHashTable.h"
 #include "JoinHashTable/BoundingBoxIntersectJoinHashTable.h"
 #include "JoinHashTable/PerfectJoinHashTable.h"
+#include "JoinHashTable/RankedBitmapJoinHashTable.h"
 #include "ResultSetRecyclerHolder.h"
 
 using UpdateTriggeredCacheInvalidator =
     CacheInvalidator<BoundingBoxIntersectJoinHashTable,
+                     BitmapJoinHashTable,
+                     RankedBitmapJoinHashTable,
                      BaselineJoinHashTable,
                      PerfectJoinHashTable>;
 using DeleteTriggeredCacheInvalidator = UpdateTriggeredCacheInvalidator;
@@ -30,6 +34,8 @@ using DeleteTriggeredCacheInvalidator = UpdateTriggeredCacheInvalidator;
 // The above cache invalidators are specific invalidators called during update/delete and
 // will likely be extended in the future.
 using JoinHashTableCacheInvalidator = CacheInvalidator<BoundingBoxIntersectJoinHashTable,
+                                                       BitmapJoinHashTable,
+                                                       RankedBitmapJoinHashTable,
                                                        BaselineJoinHashTable,
                                                        PerfectJoinHashTable>;
 using ResultSetCacheInvalidator = CacheInvalidator<ResultSetRecyclerHolder>;

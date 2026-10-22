@@ -415,6 +415,37 @@ extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t bit_is_set(const int8_t* bitset,
   return bitset[bitmap_idx >> 3] & (1 << (bitmap_idx & 7)) ? 1 : 0;
 }
 
+extern "C" RUNTIME_EXPORT ALWAYS_INLINE int8_t
+segmented_bit_is_set(const int8_t* bitset_header,
+                     const int64_t val,
+                     const int64_t min_val,
+                     const int64_t max_val,
+                     const int64_t null_val,
+                     const int8_t null_bool_val) {
+  if (val == null_val) {
+    return null_bool_val;
+  }
+  if (val < min_val || val > max_val) {
+    return 0;
+  }
+  if (!bitset_header) {
+    return 0;
+  }
+  const uint64_t* header = reinterpret_cast<const uint64_t*>(bitset_header);
+  const uint64_t* bitmap_chunks = reinterpret_cast<const uint64_t*>(header[0]);
+  const uint64_t bitmap_chunk_word_count = header[1];
+  if (!bitmap_chunks || !bitmap_chunk_word_count) {
+    return 0;
+  }
+  const uint64_t bitmap_idx = val - min_val;
+  const uint64_t byte_idx = bitmap_idx >> 3;
+  const uint64_t bitmap_chunk_byte_count = bitmap_chunk_word_count * sizeof(uint32_t);
+  const uint64_t chunk_idx = byte_idx / bitmap_chunk_byte_count;
+  const uint64_t chunk_offset = byte_idx - chunk_idx * bitmap_chunk_byte_count;
+  const int8_t* chunk = reinterpret_cast<const int8_t*>(bitmap_chunks[chunk_idx]);
+  return chunk && (chunk[chunk_offset] & (1 << (bitmap_idx & 7))) ? 1 : 0;
+}
+
 extern "C" RUNTIME_EXPORT ALWAYS_INLINE int64_t
 compute_int64_t_lower_bound(const int64_t entry_cnt,
                             const int64_t target_value,
@@ -1815,6 +1846,11 @@ extern "C" GPU_RT_STUB void sync_threadblock() {}
 extern "C" GPU_RT_STUB void write_back_non_grouped_agg(int64_t* input_buffer,
                                                        int64_t* output_buffer,
                                                        const int32_t num_agg_cols){};
+extern "C" GPU_RT_STUB void write_back_non_grouped_agg_sum_skip_val(
+    int64_t* input_buffer,
+    int64_t* output_buffer,
+    const int32_t agg_idx,
+    const int64_t skip_val) {}
 // x64 stride functions
 
 extern "C" RUNTIME_EXPORT NEVER_INLINE int32_t
@@ -2384,6 +2420,18 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void linear_probabilistic_count(
   reinterpret_cast<uint32_t*>(bitmap)[word_idx] |= 1 << bit_idx;
 }
 
+extern "C" RUNTIME_EXPORT NEVER_INLINE void hll_probabilistic_count(
+    uint8_t* registers,
+    const uint32_t precision_bits,
+    const uint8_t* key_bytes,
+    const uint32_t key_len) {
+  const uint64_t hash = MurmurHash64A(key_bytes, key_len, 0);
+  const uint32_t index = hash >> (64 - precision_bits);
+  const int32_t rank = get_rank(hash << precision_bits, 64 - precision_bits);
+  auto register_values = reinterpret_cast<int32_t*>(registers);
+  register_values[index] = std::max(register_values[index], rank);
+}
+
 // First 3 parameters are output, the rest are input.
 extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
     int32_t* error_codes,
@@ -2392,6 +2440,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
     const uint32_t frag_idx,
     const uint32_t* row_index_resume,
     const int8_t** col_buffers,
+    const int64_t* selected_rowids,
     const int8_t* literals,
     const int64_t* num_rows,
     const uint64_t* frag_row_offsets,
@@ -2401,8 +2450,8 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub_hoisted_literals(
     const int64_t* join_hash_tables,
     const int8_t* row_func_mgr) {
   assert(error_codes || total_matched || out || frag_idx || row_index_resume ||
-         col_buffers || literals || num_rows || frag_row_offsets || frag_ids ||
-         max_matched || init_agg_value || join_hash_tables || row_func_mgr);
+         col_buffers || selected_rowids || literals || num_rows || frag_row_offsets ||
+         frag_ids || max_matched || init_agg_value || join_hash_tables || row_func_mgr);
 }
 
 // First 3 parameters are output, the rest are input.
@@ -2414,6 +2463,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
     const uint32_t* num_tables_ptr,
     const uint32_t* row_index_resume,  // aka start_rowid
     const int8_t*** col_buffers,
+    const int64_t** selected_rowids,
     const int8_t* literals,
     const int64_t* num_rows,
     const uint64_t* frag_row_offsets,
@@ -2434,6 +2484,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query_hoisted_literals(
                                 frag_idx,
                                 row_index_resume,
                                 col_buffers ? col_buffers[frag_idx] : nullptr,
+                                selected_rowids ? selected_rowids[frag_idx] : nullptr,
                                 literals,
                                 &num_rows[frag_idx * num_tables],
                                 &frag_row_offsets[frag_idx * num_tables],
@@ -2452,6 +2503,7 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(int32_t* error_codes,
                                                        const uint32_t frag_idx,
                                                        const uint32_t* row_index_resume,
                                                        const int8_t** col_buffers,
+                                                       const int64_t* selected_rowids,
                                                        const int64_t* num_rows,
                                                        const uint64_t* frag_row_offsets,
                                                        const int32_t* frag_ids,
@@ -2460,8 +2512,8 @@ extern "C" RUNTIME_EXPORT NEVER_INLINE void query_stub(int32_t* error_codes,
                                                        const int64_t* join_hash_tables,
                                                        const int8_t* row_func_mgr) {
   assert(error_codes || total_matched || out || frag_idx || row_index_resume ||
-         col_buffers || num_rows || frag_row_offsets || frag_ids || max_matched ||
-         init_agg_value || join_hash_tables || row_func_mgr);
+         col_buffers || selected_rowids || num_rows || frag_row_offsets || frag_ids ||
+         max_matched || init_agg_value || join_hash_tables || row_func_mgr);
 }
 
 // First 3 parameters are output, the rest are input.
@@ -2472,6 +2524,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query(int32_t* error_codes,
                                                const uint32_t* num_tables_ptr,
                                                const uint32_t* row_index_resume,
                                                const int8_t*** col_buffers,
+                                               const int64_t** selected_rowids,
                                                const int64_t* num_rows,
                                                const uint64_t* frag_row_offsets,
                                                const int32_t* frag_ids,
@@ -2491,6 +2544,7 @@ extern "C" RUNTIME_EXPORT void multifrag_query(int32_t* error_codes,
                frag_idx,
                row_index_resume,
                col_buffers ? col_buffers[frag_idx] : nullptr,
+               selected_rowids ? selected_rowids[frag_idx] : nullptr,
                &num_rows[frag_idx * num_tables],
                &frag_row_offsets[frag_idx * num_tables],
                &frag_ids[frag_idx * num_tables],
