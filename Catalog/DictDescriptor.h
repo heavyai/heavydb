@@ -6,8 +6,11 @@
 #ifndef DICT_DESCRIPTOR_H
 #define DICT_DESCRIPTOR_H
 
+#include <boost/filesystem.hpp>
 #include <cassert>
+#include <list>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "../Shared/sqltypes.h"
@@ -66,5 +69,19 @@ struct DictDescriptor {
     dictRef.dictId = dict_id;
   }
 };
+
+// Returns the folder path of the first dictionary in `dicts` whose directory already
+// exists on disk. Temporary dictionaries have no directory, and dictId 0 is the dummy
+// entry created for a shard of a logical table. Only reads the filesystem.
+inline std::optional<std::string> find_existing_dictionary_directory(
+    const std::list<DictDescriptor>& dicts) {
+  for (const auto& dd : dicts) {
+    if (dd.dictRef.dictId && !dd.dictIsTemp &&
+        boost::filesystem::exists(dd.dictFolderPath)) {
+      return dd.dictFolderPath;
+    }
+  }
+  return std::nullopt;
+}
 
 #endif  // DICT_DESCRIPTOR

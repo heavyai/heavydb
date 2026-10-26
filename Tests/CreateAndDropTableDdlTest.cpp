@@ -15,6 +15,7 @@
 #include <boost/filesystem.hpp>
 
 #include "Calcite/Calcite.h"
+#include "Catalog/DictDescriptor.h"
 #include "Catalog/ForeignTable.h"
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
@@ -249,48 +250,59 @@ TEST_F(CreateTableCommitFailureTest, FailedCommitRollsBackTable) {
   ASSERT_EQ(getCatalog().getMetadataForTable(kTable, false), nullptr);
 }
 
-// An orphan dictionary directory (left by a table whose creation never committed) must
-// not be adopted by a new table that reuses the dictionary id (HERC-276).
-TEST_F(CreateTableCommitFailureTest, ExistingDictionaryDirectoryIsNotAdopted) {
-  // Learn the dictionary id the next table will get: ids are not AUTOINCREMENT, so after
-  // dropping the newest dictionary its id is handed out again.
-  sql(createQuery());
-  auto& cat = getCatalog();
-  const auto* td = cat.getMetadataForTable(kTable, false);
-  ASSERT_NE(td, nullptr);
-  int max_dict_id = 0;
-  for (const auto* col : {cat.getMetadataForColumn(td->tableId, "a"),
-                          cat.getMetadataForColumn(td->tableId, "b")}) {
-    ASSERT_NE(col, nullptr);
-    max_dict_id = std::max(max_dict_id, col->columnType.get_comp_param());
-  }
-  sql(std::string("DROP TABLE ") + kTable + ";");
+// A new dictionary must not be created over an existing directory: it is an orphan from a
+// table whose creation never committed, and addTableToMap() aborts on it rather than
+// adopt it (HERC-276). The abort itself cannot be tested here (a death test takes down
+// the shared Calcite server), so test the lookup that decides it.
+TEST(DictionaryDirectoryGuardTest, FindsFirstExistingDirectory) {
+  const auto root = bf::temp_directory_path() / bf::unique_path("dict_guard_%%%%-%%%%");
+  bf::create_directories(root);
+  ScopeGuard cleanup = [&] { bf::remove_all(root); };
 
-  // Simulate the leftover: a directory with data in it at the id about to be reused.
-  const auto orphan = bf::path(BASE_PATH) / shared::kDataDirectoryName /
-                      ("DB_" + std::to_string(cat.getDatabaseId()) + "_DICT_" +
-                       std::to_string(max_dict_id));
-  ScopeGuard cleanup = [&] { bf::remove_all(orphan); };
-  ASSERT_FALSE(bf::exists(orphan)) << orphan;
-  bf::create_directory(orphan);
-  const auto marker = orphan / "orphan_marker";
-  { std::ofstream(marker.string()) << "stale"; }
-  const auto dirs_before = dictionaryDirectories();
+  auto make = [&](const int dict_id, const bool temp) {
+    return DictDescriptor(DictRef(1, dict_id),
+                          "dict" + std::to_string(dict_id),
+                          32,
+                          false,
+                          1,
+                          (root / ("DB_1_DICT_" + std::to_string(dict_id))).string(),
+                          temp);
+  };
 
-  queryAndAssertPartialException(createQuery(), "already exists");
+  std::list<DictDescriptor> dicts{make(5, false), make(6, false)};
+  ASSERT_FALSE(find_existing_dictionary_directory(dicts));
 
-  // The failed create must not have registered the table, must not have left new
-  // directories, and must not have moved or deleted the pre-existing one.
-  ASSERT_EQ(cat.getMetadataForTable(kTable, false), nullptr);
-  ASSERT_EQ(dictionaryDirectories(), dirs_before);
-  ASSERT_TRUE(bf::exists(marker));
+  bf::create_directory(root / "DB_1_DICT_6");
+  ASSERT_EQ(find_existing_dictionary_directory(dicts), (root / "DB_1_DICT_6").string());
 
-  // Once the orphan is moved aside the same statement succeeds.
-  bf::remove_all(orphan);
-  sql(createQuery());
-  ASSERT_NE(cat.getMetadataForTable(kTable, false), nullptr);
-  sql("INSERT INTO " + std::string(kTable) + " VALUES (1, 'x', 'y');");
-  sqlAndCompareResult(std::string("SELECT a, b FROM ") + kTable + ";", {{"x", "y"}});
+  // With several conflicts the first one is reported.
+  bf::create_directory(root / "DB_1_DICT_5");
+  ASSERT_EQ(find_existing_dictionary_directory(dicts), (root / "DB_1_DICT_5").string());
+
+  // The lookup only reads: it must not create directories for dictionaries that are
+  // absent, or an abort on a later dictionary would leave earlier ones behind.
+  bf::remove_all(root / "DB_1_DICT_5");
+  bf::remove_all(root / "DB_1_DICT_6");
+  ASSERT_FALSE(find_existing_dictionary_directory(dicts));
+  ASSERT_FALSE(bf::exists(root / "DB_1_DICT_5"));
+  ASSERT_FALSE(bf::exists(root / "DB_1_DICT_6"));
+}
+
+TEST(DictionaryDirectoryGuardTest, IgnoresTemporaryAndShardPlaceholderDictionaries) {
+  const auto root = bf::temp_directory_path() / bf::unique_path("dict_guard_%%%%-%%%%");
+  bf::create_directories(root);
+  ScopeGuard cleanup = [&] { bf::remove_all(root); };
+
+  // Temporary dictionaries have no on-disk directory, and dictId 0 is the dummy entry
+  // created for a shard of a logical table.
+  bf::create_directory(root / "DB_1_DICT_7");
+  bf::create_directory(root / "DB_1_DICT_0");
+  const std::list<DictDescriptor> dicts{
+      DictDescriptor(
+          DictRef(1, 7), "temp", 32, false, 1, (root / "DB_1_DICT_7").string(), true),
+      DictDescriptor(
+          DictRef(1, 0), "dummy", 32, false, 1, (root / "DB_1_DICT_0").string(), false)};
+  ASSERT_FALSE(find_existing_dictionary_directory(dicts));
 }
 
 // Dropping a column that shares a dictionary and then the table used to leave the
@@ -310,7 +322,8 @@ TEST_F(CreateTableCommitFailureTest, DropSharedDictionaryColumnThenTableRemovesD
   sql(std::string("DROP TABLE ") + kTable + ";");
   ASSERT_EQ(dictionaryDirectories(), dirs_before);
 
-  // The same statement must now succeed instead of hitting the existing-directory guard.
+  // The same statement must now succeed instead of aborting on the existing-directory
+  // CHECK.
   sql(shared_create);
   ASSERT_NE(getCatalog().getMetadataForTable(kTable, false), nullptr);
 }

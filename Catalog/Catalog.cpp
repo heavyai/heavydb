@@ -1650,16 +1650,19 @@ std::unique_ptr<CustomExpression> Catalog::getCustomExpressionFromConnector(size
 }
 
 namespace {
-// A new dictionary id must map to an empty location. Dictionary ids are reused (the sqlite
-// ids are not AUTOINCREMENT), so an existing directory is an orphan from an earlier table
-// whose catalog rows were lost. Adopting it would load stale strings under a new schema.
+// A new dictionary id must map to an empty location. Dictionary ids are reused (the
+// sqlite ids are not AUTOINCREMENT), so an existing directory is an orphan from an
+// earlier table whose catalog rows were lost. Adopting it would load stale strings under
+// a new schema, so treat it as an invalid disk state rather than continue.
+void check_dictionary_directory_absent(const boost::filesystem::path& path) {
+  CHECK(!boost::filesystem::exists(path))
+      << "Cannot create string dictionary: directory " << path.string()
+      << " already exists. It is likely left over from a table whose creation was not "
+         "committed; move it aside and restart.";
+}
+
 void create_new_dictionary_directory(const boost::filesystem::path& path) {
-  if (boost::filesystem::exists(path)) {
-    throw std::runtime_error("Cannot create string dictionary: directory " +
-                             path.string() +
-                             " already exists. It is likely left over from a table whose "
-                             "creation was not committed; move it aside and retry.");
-  }
+  check_dictionary_directory_absent(path);
   boost::filesystem::create_directory(path);
 }
 }  // namespace
@@ -1668,6 +1671,11 @@ void Catalog::addTableToMap(const TableDescriptor* td,
                             const list<ColumnDescriptor>& columns,
                             const list<DictDescriptor>& dicts) {
   cat_write_lock write_lock(this);
+  // Check every dictionary directory before creating any: an abort on a later one must
+  // not leave the earlier ones behind as new orphans.
+  if (const auto existing = find_existing_dictionary_directory(dicts)) {
+    check_dictionary_directory_absent(*existing);
+  }
   TableDescriptor* new_td;
 
   auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
@@ -1708,9 +1716,6 @@ void Catalog::addTableToMap(const TableDescriptor* td,
       continue;
     }
     dict_ref.dictId = dd.dictRef.dictId;
-    // Create the directory before registering the dictionary: if it already exists the
-    // throw must leave no map entry, or the error cleanup would rename the pre-existing
-    // (orphan) directory away.
     if (!dd.dictIsTemp) {
       create_new_dictionary_directory(dd.dictFolderPath);
     }
@@ -3333,10 +3338,10 @@ void Catalog::createTable(
 
     addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
-    // The commit must be inside the try: if it fails (e.g. SQLITE_BUSY, no busy timeout
-    // is configured), the table must not stay in the in-memory maps with the SQLite
-    // transaction left open, or later DDL/imports operate on a table that is lost on
-    // restart while its on-disk directories are left behind.
+    // The commit must be inside the try: if it fails (e.g. SQLITE_BUSY, SQLITE_FULL or an
+    // I/O error; no busy timeout is configured), the table must not stay in the in-memory
+    // maps with the SQLite transaction left open, or later DDL/imports operate on a table
+    // that is lost on restart while its on-disk directories are left behind.
     sqliteConnector_.query("END TRANSACTION");
   } catch (std::exception& e) {
     try {
