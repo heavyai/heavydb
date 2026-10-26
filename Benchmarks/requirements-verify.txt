@@ -1,0 +1,6 @@
+# Only needed for `run_benchmark.py run ... --expected DIR` (result verification).
+# Versions follow velox-testing's presto/testing/requirements.txt.
+numpy
+pandas>=2.2
+pyarrow>=21
+sqlglot>=27.7

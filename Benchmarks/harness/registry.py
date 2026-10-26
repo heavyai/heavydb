@@ -36,6 +36,7 @@ class BenchmarkDef:
     iterations: int = 3
     warmup: int = 1
     disabled: dict = field(default_factory=dict)   # query name -> reason
+    verify_xfail: dict = field(default_factory=dict)  # query name -> reason its result check is expected to fail
     setup_sql: list = field(default_factory=list)
     teardown_sql: list = field(default_factory=list)
     vars: dict = field(default_factory=dict)       # ${NAME} substitutions in the schema file and queries
@@ -74,7 +75,7 @@ def load(name):
         tables=tables, schema_file=cfg.get("schema_file", "schema.sql"),
         query_dir=cfg.get("query_dir", "queries"), query_glob=cfg.get("query_glob", "*.sql"),
         iterations=cfg.get("iterations", 3), warmup=cfg.get("warmup", 1),
-        disabled=cfg.get("disabled", {}), setup_sql=cfg.get("setup_sql", []),
+        disabled=cfg.get("disabled", {}), verify_xfail=cfg.get("verify_xfail", {}), setup_sql=cfg.get("setup_sql", []),
         teardown_sql=cfg.get("teardown_sql", []),
         vars={k: str(v) for k, v in cfg.get("vars", {}).items()})
 

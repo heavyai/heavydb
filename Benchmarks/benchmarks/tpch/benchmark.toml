@@ -33,3 +33,9 @@ name = "lineitem"
 # Queries HeavyDB cannot currently run: name = "reason"
 [disabled]
 q21 = "correlated EXISTS/NOT EXISTS with <> predicate: no equijoin (hash join failure)"
+
+# Queries whose result check is expected to fail against the reference (still run and timed):
+# a failure is reported as "expected-failure", a pass as "passed".
+[verify_xfail]
+q04 = "HeavyDB's correlated EXISTS returns wrong, run-to-run varying counts (server bug)"
+q08 = "decimal division truncates instead of rounding: mkt_share is off by up to 1e-4 on decimal data"

@@ -31,6 +31,7 @@ Same thing without the wrapper: `Benchmarks/run_benchmark.py run tpch --data <di
 | `--cpu-only` / `--gpu` | default: GPU if `nvidia-smi` works |
 | `--server-arg X` | extra `heavydb` flag, repeatable (e.g. `--server-arg=--enable-watchdog=false`) |
 | `--output DIR --label L` | results JSON + CSV go to DIR (default `results/`), named `<benchmark>-<label>-<dataset>-<time>[-j<jobid>_<task>].json`; an existing report is never overwritten (`-2`, `-3`, ... is appended) |
+| `--expected DIR` | verify each query's result against reference Parquet files (see below) |
 | `--dry-run` | print the docker/enroot/heavysql commands only |
 
 Output: per-query rows, server-side execution/total time (min/median/mean/max), a result
@@ -100,6 +101,29 @@ Query files may use `${NAME}` placeholders, filled from `[vars]` in `benchmark.t
 always available: it comes from the dataset's `metadata.json` `scale_factor` (override with
 `--var SF=VALUE`), and a query that uses it fails with a clear error if neither is set. TPC-H Q11
 uses it for its scale-dependent threshold (`0.0001 / SF`). Write a literal dollar sign as `$$`.
+
+## Verifying results
+
+`--expected DIR` compares every query's result with a reference file in `DIR`
+(`q01.parquet`, `q1.parquet` or `01.parquet`; one file per query, made for the same dataset and
+scale factor, e.g. by DuckDB or Presto). The comparison is velox-testing's
+(`harness/result_comparison.py`, copied unchanged): float columns use rel 1e-5 / abs 1e-8,
+columns heavysql prints as fixed-point decimals use half a unit of their last digit, other columns
+must be equal; rows are compared in a canonical order, after checking that `ORDER BY` was
+respected, and ties at a `LIMIT` cutoff are compared by their `ORDER BY` values only.
+It needs `pip install -r requirements-verify.txt` (on Slurm, activate it with `--pre-command`).
+
+```bash
+Benchmarks/run_benchmark.py run tpch --data /path/to/tpch-sf1 --expected /path/to/tpch-sf1-expected
+```
+
+Each query gets `verification` in the JSON report (`passed`, `failed`, `expected-failure`,
+`not-validated`) and a column in the CSV; the run exits with 1 if any check `failed`. The rows
+checked are those of the last timed iteration. heavysql prints NULL and an empty string alike, so
+the two cannot be told apart. A query whose check is known to fail is listed with a reason under
+`[verify_xfail]` in `benchmark.toml`: a failure then shows as `expected-failure` (a pass is still
+a pass). For TPC-H these are Q4 (correlated `EXISTS` returns wrong, varying counts) and Q8
+(decimal division truncates instead of rounding, on decimal data).
 
 ## Slurm (enroot)
 

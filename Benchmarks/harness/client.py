@@ -15,6 +15,9 @@ _ROWS = re.compile(r"^(\d+) rows? returned", re.M)
 # only reflects the last statement, so look for them on stderr as well as at the exit code
 # (stdout is not searched: a result row may legitimately start with "Error").
 _ERROR = re.compile(r"^(SQL Error|Thrift error|Exception|Error)\b", re.M)
+# Field separator used when the rows are kept for verification: a control character cannot
+# occur in TPC-H text, unlike the default '|'.
+ROW_DELIM = "\x1f"
 
 
 def split_statements(sql):
@@ -59,14 +62,18 @@ class Result:
     rows: int = 0
     digest: str = ""
     output: str = ""
+    table: list = None  # rows as lists of str (None for NULL); only set with execute(rows=True)
 
 
 class HeavySqlClient:
     def __init__(self, runtime):
         self.runtime = runtime
 
-    def execute(self, sql, timeout=None):
+    def execute(self, sql, timeout=None, rows=False):
         """Run SQL through heavysql and return the Result of the last statement.
+
+        With rows=True the last statement's result rows are also returned in Result.table.
+        heavysql prints NULL and an empty string alike, so both come back as None.
 
         A ';'-separated script is run one statement per heavysql call (heavysql's exit code
         only reflects its last statement), so the first failing statement raises SqlError.
@@ -77,10 +84,12 @@ class HeavySqlClient:
             raise SqlError("empty SQL statement")
         for stmt in stmts[:-1]:
             self._execute_one(stmt, timeout)
-        return self._execute_one(stmts[-1], timeout)
+        return self._execute_one(stmts[-1], timeout, rows)
 
-    def _execute_one(self, sql, timeout):
+    def _execute_one(self, sql, timeout, rows=False):
         cmd = self.runtime.heavysql_prefix() + self.runtime.heavysql_args()
+        if rows:
+            cmd += ["--delimiter", ROW_DELIM]
         if self.runtime.dry_run:
             print("DRY-RUN: heavysql <<< %s" % sql.replace("\n", " ")[:120])
             return Result()
@@ -100,4 +109,6 @@ class HeavySqlClient:
         m = _ROWS.search(out)
         res.rows = int(m.group(1)) if m else len(body)
         res.digest = hashlib.sha256("\n".join(sorted(body)).encode()).hexdigest()[:16]
+        if rows:
+            res.table = [[None if c == "NULL" else c for c in l.split(ROW_DELIM)] for l in body]
         return res

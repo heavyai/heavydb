@@ -53,6 +53,9 @@ def parse_args(argv):
     r.add_argument("--queries", help="comma-separated query names (default: all enabled)")
     r.add_argument("--iterations", type=_positive_int)
     r.add_argument("--warmup", type=int)
+    r.add_argument("--expected", metavar="DIR",
+                   help="verify results against reference Parquet files DIR/q01.parquet, ... "
+                   "(needs pandas, pyarrow, sqlglot: see requirements-verify.txt)")
     r.add_argument("--import-mode", choices=["native", "foreign"], default="native")
     r.add_argument("--output", default=str(Path(__file__).resolve().parent / "results"),
                    help="results directory (default: Benchmarks/results)")
@@ -148,6 +151,14 @@ def _run(a, bench, data, work, queries_arg):
         kw.update(image=a.image, enroot_args=a.runtime_arg)
     else:
         kw.update(build_dir=a.build_dir)
+    verifier = None
+    if a.expected:
+        try:
+            from harness.verify import Verifier
+        except ImportError as e:
+            raise SystemExit("--expected needs pandas, numpy, pyarrow and sqlglot (%s); "
+                             "pip install -r requirements-verify.txt" % e)
+        verifier = Verifier(a.expected, bench.verify_xfail)
     rt = make_runtime(a.runtime, **kw)
     queries = select_queries(bench, queries_arg)
     extra = {}
@@ -173,7 +184,7 @@ def _run(a, bench, data, work, queries_arg):
             for s in bench.setup_sql:
                 client.execute(s)
             print("running queries:")
-            runner.run_queries(bench, client, queries, iters, warm, out=results)
+            runner.run_queries(bench, client, queries, iters, warm, out=results, verifier=verifier)
             for s in bench.teardown_sql:
                 client.execute(s)
             outcome = "complete"
@@ -193,7 +204,8 @@ def _run(a, bench, data, work, queries_arg):
         return 0
     report.print_summary(results, stats)
     print("report: %s" % path)
-    return 0 if all(r["status"] == "ok" for r in results) else 1
+    ok = all(r["status"] == "ok" for r in results) and not report.verification_failed(results)
+    return 0 if ok else 1
 
 
 def main(argv=None):

@@ -58,12 +58,14 @@ def write_report(out_dir, label, bench, data_root, import_mode, import_stats, re
     with open(out_dir / (stem + ".csv"), "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["query", "status", "rows", "exec_min_ms", "exec_median_ms", "total_min_ms",
-                    "total_median_ms", "total_mean_ms", "total_max_ms", "cold_total_ms", "digest"])
+                    "total_median_ms", "total_mean_ms", "total_max_ms", "cold_total_ms", "digest",
+                    "verification"])
         for r in results:
             e, t = r.get("exec_ms", {}), r.get("total_ms", {})
             w.writerow([r["query"], r["status"], r.get("rows"), e.get("min"), e.get("median"),
                         t.get("min"), t.get("median"), t.get("mean"), t.get("max"),
-                        r.get("cold_total_ms"), r.get("digest")])
+                        r.get("cold_total_ms"), r.get("digest"),
+                        r.get("verification", {}).get("status")])
     return out_dir / (stem + ".json")
 
 
@@ -82,3 +84,12 @@ def print_summary(results, import_stats):
     if import_stats:
         print("import: %.1fs total" % sum(s["seconds"] for s in import_stats.values()))
     print("%d/%d queries succeeded" % (len(ok), len(results)))
+    checks = [r["verification"]["status"] for r in results if "verification" in r]
+    if checks:
+        print("verification: " + ", ".join("%d %s" % (checks.count(s), s)
+                                           for s in ("passed", "failed", "expected-failure", "not-validated")
+                                           if s in checks))
+
+
+def verification_failed(results):
+    return any(r.get("verification", {}).get("status") == "failed" for r in results)
