@@ -10,6 +10,7 @@
 
 #include <gtest/gtest.h>
 #include <atomic>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -77,6 +78,60 @@ TEST_F(SysCatalogConcurrencyTest, ConcurrentFirstAccessBuildsOneCatalog) {
     ASSERT_EQ(Catalog::numConstructed() - constructed_before, 1u)
         << "round " << round << ": concurrent first access built duplicate Catalogs";
   }
+}
+
+// Experiment (HERC-276): do duplicate Catalogs cause SQLITE_BUSY for DDL running on the
+// Catalog that won the race? Concurrent first logins each run DDL right after login.
+TEST_F(SysCatalogConcurrencyTest, ConcurrentFirstLoginDdlDoesNotFailWithSqliteBusy) {
+  constexpr size_t kThreads = 8;
+  constexpr size_t kRounds = 10;
+  constexpr size_t kStatements = 6;
+  auto& sys_cat = SysCatalog::instance();
+
+  std::mutex errors_mutex;
+  std::vector<std::string> errors;
+  for (size_t round = 0; round < kRounds; ++round) {
+    sys_cat.removeCatalog(kDb);
+    std::atomic<size_t> ready{0};
+    std::atomic<bool> go{false};
+    std::vector<std::thread> threads;
+    for (size_t t = 0; t < kThreads; ++t) {
+      threads.emplace_back([&, t] {
+        ready++;
+        while (!go.load()) {
+          std::this_thread::yield();
+        }
+        try {
+          TSessionId session;
+          login("admin", "HyperInteractive", kDb, session);
+          for (size_t i = 0; i < kStatements; ++i) {
+            const auto table = "busy_t" + std::to_string(t) + "_" + std::to_string(i);
+            TQueryResult result;
+            sql(result, "CREATE TABLE " + table + " (a TEXT);", session);
+            sql(result, "DROP TABLE " + table + ";", session);
+          }
+          logout(session);
+        } catch (const TDBException& e) {
+          std::lock_guard<std::mutex> lock(errors_mutex);
+          errors.emplace_back(e.error_msg);
+        } catch (const std::exception& e) {
+          std::lock_guard<std::mutex> lock(errors_mutex);
+          errors.emplace_back(e.what());
+        }
+      });
+    }
+    while (ready.load() < kThreads) {
+      std::this_thread::yield();
+    }
+    go = true;
+    for (auto& th : threads) {
+      th.join();
+    }
+  }
+  for (const auto& e : errors) {
+    ADD_FAILURE() << e;
+  }
+  ASSERT_TRUE(errors.empty()) << errors.size() << " failures";
 }
 
 int main(int argc, char** argv) {
