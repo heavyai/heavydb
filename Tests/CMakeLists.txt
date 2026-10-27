@@ -731,11 +731,20 @@ list(APPEND SANITY_TEST_PROGRAMS PkiEncryptorTest)
 ##########
 
 # The in-process main() set g_read_only, g_enable_system_tables = false, g_enable_fsi = false
-# and the disk cache level to none. The first three have flags. FSI cannot be turned off
-# on a server: CommandLineOptions forces it on whenever non-legacy import is used, which
-# is the default, so --enable-fsi=false has no effect and is not passed.
-add_thin_client_test(ReadOnlyTest
-  SERVER_FLAGS --read-only --enable-system-tables=false --disk-cache-level=none)
+# and the disk cache level to none. A server only keeps FSI off if no import path needs it:
+# CommandLineOptions turns FSI back on when legacy parquet import is off, FSI regex import is
+# on, or (in ODBC builds) FSI ODBC import is on, and those are the defaults. A read-only
+# server rejects every import anyway, so they are all switched to the non-FSI side. The
+# parquet and ODBC options only exist when the matching CMake options are on.
+set(_readonly_flags --read-only --enable-system-tables=false --disk-cache-level=none
+  --enable-fsi=false --enable-fsi-regex-import=false)
+if(ENABLE_IMPORT_PARQUET)
+  list(APPEND _readonly_flags --enable-legacy-parquet-import=true)
+endif()
+if(ENABLE_FSI_ODBC)
+  list(APPEND _readonly_flags --enable-fsi-odbc-import=false)
+endif()
+add_thin_client_test(ReadOnlyTest SERVER_FLAGS ${_readonly_flags})
 
 ##########
 
