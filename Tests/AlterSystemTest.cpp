@@ -253,7 +253,8 @@ TEST_F(AlterSystemTest, SET_EXECUTOR_GPU) {
 
 TEST_F(AlterSystemTest, SET_EXECUTOR_GPU_CPUONLY) {
   if (gpusPresent()) {
-    GTEST_SKIP() << "Requires a server started in CPU-only mode (no GPUs or --cpu-only)";
+    GTEST_SKIP() << "Requires a server started in CPU-only mode (the AlterSystemTest_cpu_only "
+                    "ctest entry)";
   }
   TSessionId user_session;
   login("user1", "HyperInteractive", "db1", user_session);

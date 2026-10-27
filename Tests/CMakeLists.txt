@@ -161,7 +161,11 @@ list(LENGTH SANITY_TESTS _P1_START_T)
 
 ##########
 
-add_thin_client_test(AlterSystemTest)
+# SET_EXECUTOR_GPU_CPUONLY needs a server started with --cpu-only (the in-process test forced
+# DBHandler::cpu_mode_only_), on a host with GPUs too, so it has its own entry.
+add_thin_client_test(AlterSystemTest GTEST_FILTER -*SET_EXECUTOR_GPU_CPUONLY)
+add_thin_client_test_variant(AlterSystemTest cpu_only
+  SERVER_FLAGS --cpu-only GTEST_FILTER *SET_EXECUTOR_GPU_CPUONLY)
 
 ##########
 
