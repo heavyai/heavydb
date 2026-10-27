@@ -730,7 +730,12 @@ list(APPEND SANITY_TEST_PROGRAMS PkiEncryptorTest)
 
 ##########
 
-add_thin_client_test(ReadOnlyTest SERVER_FLAGS --read-only)
+# The in-process main() set g_read_only, g_enable_system_tables = false, g_enable_fsi = false
+# and the disk cache level to none. The first three have flags. FSI cannot be turned off
+# on a server: CommandLineOptions forces it on whenever non-legacy import is used, which
+# is the default, so --enable-fsi=false has no effect and is not passed.
+add_thin_client_test(ReadOnlyTest
+  SERVER_FLAGS --read-only --enable-system-tables=false --disk-cache-level=none)
 
 ##########
 
@@ -1036,6 +1041,8 @@ add_test(UtilTest UtilTest ${TEST_ARGS})
 
 ##########
 
+# The in-process main() set g_is_test_env, which has no server flag (it shrinks the
+# result-set arena and lets tests reset the code cache); the server runs without it.
 add_thin_client_test(ValidationQueryTest)
 
 ##########
