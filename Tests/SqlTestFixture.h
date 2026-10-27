@@ -495,6 +495,9 @@ class SqlTestFixture : public ::testing::Test {
     g_sql_test_client = std::make_shared<HeavyClient>(protocol);
     g_sql_test_client->connect(g_sql_test_session_id, user, pwd, db);
     g_sql_admin_session_id = g_sql_test_session_id;
+    // DBHandlerTestFixture ran the admin session on the CPU; a new session on a server
+    // with GPUs would default to the GPU.
+    setExecuteMode(TExecuteMode::CPU);
   }
 
   // -------------------------------------------------------------------------

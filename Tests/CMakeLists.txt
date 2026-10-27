@@ -38,9 +38,13 @@ set(THIN_CLIENT_TEST_LIBS gtest Logger Shared mapd_thrift ThriftClient ${Boost_L
 # Registers a ctest entry that runs scripts/ci/run_server.sh: that starts a heavydb on
 # Tests/tmp, runs Tests/<binary> against it, and stops the server. The binary only needs
 # the build tree's bin/heavydb, so it can run on a different runner than the one that
-# built it. The in-process tests ran with the defaults of the server globals, which differ
-# from heavydb's command-line defaults, so the server is started with the same ones
-# (unless the test's SERVER_FLAGS set them) and the same permissive path whitelist.
+# built it. The in-process tests ran with the defaults of the server globals, and the
+# parameters DBHandlerTestFixture passed to DBHandler, which differ from heavydb's
+# command-line defaults, so the server is started with the same ones (unless the test's
+# SERVER_FLAGS set them) and the same permissive path whitelist:
+#   --enable-watchdog=false        g_enable_watchdog is false in process, true on the CLI
+#   --enable-runtime-udfs=false    the fixture used RuntimeUdfRegistrationPolicy::DISALLOWED
+# The admin session is also set to CPU execution (SqlTestFixture::initConnection).
 macro(_thin_client_ctest ctest_name binary server_flags gtest_filter no_allowed_paths setup_cmd)
   set(_thin_flags "")
   if(NOT "${no_allowed_paths}")
@@ -49,6 +53,10 @@ macro(_thin_client_ctest ctest_name binary server_flags gtest_filter no_allowed_
   string(FIND "${server_flags}" "--enable-watchdog" _thin_watchdog_pos)
   if(_thin_watchdog_pos EQUAL -1)
     string(APPEND _thin_flags " --enable-watchdog=false")
+  endif()
+  string(FIND "${server_flags}" "--enable-runtime-udfs" _thin_udfs_pos)
+  if(_thin_udfs_pos EQUAL -1)
+    string(APPEND _thin_flags " --enable-runtime-udfs=false")
   endif()
   set(_thin_args "")
   if(NOT "${gtest_filter}" STREQUAL "")
@@ -60,6 +68,10 @@ macro(_thin_client_ctest ctest_name binary server_flags gtest_filter no_allowed_
     RESOURCE_LOCK heavydb_server)  # one server on the default port at a time
 endmacro()
 
+# Tests that used QueryRunner::runSQL (SpecialChars, TopK, CorrelatedSubquery) ran Calcite
+# with view optimization off, so they pass --enable-calcite-view-optimize=false.
+# QueryRunner also sets g_serialize_temp_tables, which has no command-line option.
+#
 # add_thin_client_test(<name> [SERVER_FLAGS <flag>...] [LIBS <lib>...] [GTEST_FILTER <f>]
 #                      [NO_ALLOWED_PATHS] [SETUP_CMD <shell command>])
 # NO_ALLOWED_PATHS starts the server with the default import/export whitelist instead of
@@ -260,10 +272,12 @@ list(APPEND SANITY_TEST_PROGRAMS ConcurrencyTest)
 
 ##########
 
-add_thin_client_test(CorrelatedSubqueryTest GTEST_FILTER -*WatchdogEnabled*)
+add_thin_client_test(CorrelatedSubqueryTest GTEST_FILTER -*WatchdogEnabled*
+  SERVER_FLAGS --enable-calcite-view-optimize=false)
 # watchdog on: the query that is accepted with it off must be rejected
 add_thin_client_test_variant(CorrelatedSubqueryTest watchdog
-  SERVER_FLAGS --enable-watchdog=true GTEST_FILTER *WatchdogEnabled*)
+  SERVER_FLAGS --enable-watchdog=true --enable-calcite-view-optimize=false
+  GTEST_FILTER *WatchdogEnabled*)
 
 ##########
 
@@ -769,7 +783,7 @@ list(APPEND SANITY_TEST_PROGRAMS SQLHintTest)
 
 ##########
 
-add_thin_client_test(SpecialCharsTest)
+add_thin_client_test(SpecialCharsTest SERVER_FLAGS --enable-calcite-view-optimize=false)
 
 ##########
 
@@ -857,7 +871,7 @@ list(APPEND SANITY_TEST_PROGRAMS TokenCompletionHintsTest)
 
 ##########
 
-add_thin_client_test(TopKTest LIBS SqliteConnector)
+add_thin_client_test(TopKTest LIBS SqliteConnector SERVER_FLAGS --enable-calcite-view-optimize=false)
 
 ##########
 

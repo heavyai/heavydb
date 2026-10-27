@@ -20,18 +20,22 @@
 # Reported times are the median of N runs (default 3): "wall" is the whole
 # process/ctest run, "gtest" is the sum of gtest's own "(N ms total)".
 #
+# A <TestName> may be written <TestName>=<ctest regex> when the new side is several
+# ctest entries (e.g. a test split into one entry per server configuration): sizes are
+# still those of Tests/<TestName>, and times are summed over everything the regex matches.
+# A test that has no source at the baseline ref (a binary split out of another) gets "-"
+# for the old columns.
+#
 # Optional env vars:
 #   BUILD_DIR    - build tree (default: /workspace/build if it exists, else build)
 #   NPROC        - parallel make jobs (default: 8)
 #   MAPD_DEPS_SH - mapd-deps env file (default: /usr/local/mapd-deps/mapd-deps.sh)
-#   NEW_CTEST_REGEX - ctest -R regex for the new side, for a test that was split into
-#                several ctest entries (default: ^<TestName>$). Sizes are still those of
-#                Tests/<TestName>; times are summed over everything the regex matches.
 #   OUT          - also write the table to this file (default: $BUILD_DIR/test_metrics.md)
 #
 set -uo pipefail
 
 baseline_ref=""
+declare -A new_regex
 runs=3
 tests=()
 while [ $# -gt 0 ]; do
@@ -39,6 +43,7 @@ while [ $# -gt 0 ]; do
     --baseline-ref) baseline_ref="$2"; shift 2 ;;
     --runs) runs="$2"; shift 2 ;;
     -h|--help) sed -n '5,28p' "$0"; exit 0 ;;
+    *=*) tests+=("${1%%=*}"); new_regex["${1%%=*}"]="${1#*=}"; shift ;;
     *) tests+=("$1"); shift ;;
   esac
 done
@@ -73,7 +78,8 @@ find_package(absl REQUIRED)
 get_directory_property(_old_libs DIRECTORY \${CMAKE_SOURCE_DIR}/Tests DEFINITION THRIFT_HANDLER_TEST_LIBRARIES)
 EOF
   for t in "${tests[@]}"; do
-    git -C "$SRC_DIR" show "$baseline_ref:Tests/$t.cpp" > "$BASE_DIR/Old$t.cpp" || exit 1
+    git -C "$SRC_DIR" show "$baseline_ref:Tests/$t.cpp" > "$BASE_DIR/Old$t.cpp" 2>/dev/null || {
+      rm -f "$BASE_DIR/Old$t.cpp"; continue; }  # new file: no old version
     # Created at top level, so repeat what Tests/CMakeLists.txt sets for its targets.
     cat >> "$BASE_DIR/baseline.cmake" <<EOF
 add_executable(Old$t $BASE_DIR/Old$t.cpp)
@@ -123,7 +129,7 @@ run_timed() {
 
 for t in "${tests[@]}"; do
   old_size="-"; old_wall="-"; old_gtest="-"
-  if [ -n "$baseline_ref" ]; then
+  if [ -n "$baseline_ref" ] && [ -f "$BASE_DIR/Old$t.cpp" ]; then
     old_size=$(mb "$(stat -c %s "Tests/Old$t")")
     walls=(); gts=()
     for _ in $(seq "$runs"); do
@@ -137,7 +143,7 @@ for t in "${tests[@]}"; do
   new_size=$(mb "$(stat -c %s "Tests/$t")")
   walls=(); gts=()
   for _ in $(seq "$runs"); do
-    read -r w g rc < <(run_timed "$BUILD_DIR/baseline/new_$t.log" ctest -V -R "${NEW_CTEST_REGEX:-^$t\$}" --timeout 1800)
+    read -r w g rc < <(run_timed "$BUILD_DIR/baseline/new_$t.log" ctest -V -R "${new_regex[$t]:-^$t\$}" --timeout 1800)
     [ "$rc" -ne 0 ] && echo "WARNING: ctest $t exited $rc (see baseline/new_$t.log)" >&2
     walls+=("$w"); gts+=("$g")
   done
