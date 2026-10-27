@@ -67,6 +67,9 @@ using ExpectedResult = std::vector<std::vector<NullableTargetValue>>;
 // Global connection — set up by SqlTestFixture::initConnection() in main().
 inline std::shared_ptr<HeavyClient> g_sql_test_client;
 inline TSessionId g_sql_test_session_id;
+// The admin session opened by initConnection(); switchToAdmin() reuses it because every
+// connect() pays for password hashing.
+inline TSessionId g_sql_admin_session_id;
 
 // ---------------------------------------------------------------------------
 // Visitor helpers (operate on Thrift TDatum / TRowSet only)
@@ -489,6 +492,7 @@ class SqlTestFixture : public ::testing::Test {
     auto protocol = std::make_shared<TBinaryProtocol>(transport);
     g_sql_test_client = std::make_shared<HeavyClient>(protocol);
     g_sql_test_client->connect(g_sql_test_session_id, user, pwd, db);
+    g_sql_admin_session_id = g_sql_test_session_id;
   }
 
   // -------------------------------------------------------------------------
@@ -702,15 +706,8 @@ class SqlTestFixture : public ::testing::Test {
     g_sql_test_client->disconnect(session);
   }
 
-  // Re-login the global session as admin.
-  static void switchToAdmin() {
-    try {
-      g_sql_test_client->disconnect(g_sql_test_session_id);
-    } catch (const std::exception&) {
-      // previous session already gone
-    }
-    login(shared::kRootUsername, shared::kDefaultRootPasswd, shared::kDefaultDbName);
-  }
+  // Make the global session the admin session opened by initConnection().
+  static void switchToAdmin() { g_sql_test_session_id = g_sql_admin_session_id; }
 
   // Alias for switchToAdmin (mirrors DBHandlerTestFixture::loginAdmin).
   static void loginAdmin() { switchToAdmin(); }
