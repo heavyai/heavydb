@@ -72,7 +72,13 @@ eval "$SERVER_CMD &"
 SERVER_PID=$!
 # Always stop the server, even if the test fails or the script is interrupted.
 trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
-sleep "$SERVER_WAIT"
+# Wait for the Thrift port (6274) instead of sleeping the full SERVER_WAIT.
+SERVER_PORT="${SERVER_PORT:-6274}"
+for _ in $(seq 1 "$SERVER_WAIT"); do
+  kill -0 "$SERVER_PID" 2>/dev/null || { echo "ERROR: server exited during startup" >&2; exit 1; }
+  (exec 3<>"/dev/tcp/127.0.0.1/$SERVER_PORT") 2>/dev/null && break
+  sleep 1
+done
 
 rc=0
 if [ -n "${BINARY:-}" ]; then

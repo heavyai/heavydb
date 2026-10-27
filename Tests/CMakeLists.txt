@@ -30,6 +30,30 @@ set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner absl::str_format ${MAPD_LIBR
   ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES}
   ${AwsS3_CURL_SUPPORT})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
+# Thin-client tests only talk to a running heavydb over Thrift (see SqlTestFixture.h)
+# and must not link the query engine.
+set(THIN_CLIENT_TEST_LIBS gtest Logger Shared mapd_thrift ThriftClient ${Boost_LIBRARIES}
+  ${LLVM_LINKER_FLAGS})
+
+# add_thin_client_test(<name> [SERVER_FLAGS <flag>...])
+# Builds <name>.cpp against THIN_CLIENT_TEST_LIBS and registers it as a sanity test that
+# runs scripts/ci/run_server.sh: that starts a heavydb on Tests/tmp (with the given
+# flags), runs the binary against it, and stops the server. The binary only needs the
+# build tree's bin/heavydb, so it can run on a different runner than the one that built it.
+macro(add_thin_client_test name)
+  cmake_parse_arguments(THIN "" "" "SERVER_FLAGS" ${ARGN})
+  add_executable(${name} ${name}.cpp)
+  target_link_libraries(${name} ${THIN_CLIENT_TEST_LIBS})
+  add_dependencies(${name} thrift_gen)
+  add_test(NAME ${name} COMMAND ${CMAKE_SOURCE_DIR}/scripts/ci/run_server.sh)
+  # Same permissive path whitelist the in-process DBHandlerTestFixture used.
+  string(REPLACE ";" " " _thin_server_flags
+    "--allowed-import-paths='[\"/\"]' --allowed-export-paths='[\"/\"]' ${THIN_SERVER_FLAGS}")
+  set_tests_properties(${name} PROPERTIES
+    ENVIRONMENT "BUILD_DIR=${CMAKE_BINARY_DIR};BINARY=Tests/${name};DATA=Tests/tmp;SERVER_FLAGS=${_thin_server_flags};RESULTS_FILE=${name}.xml"
+    RESOURCE_LOCK heavydb_server)  # one server on the default port at a time
+  list(APPEND SANITY_TEST_PROGRAMS ${name})
+endmacro()
 
 set(TF_TEST_LIBS ${EXECUTE_TEST_LIBS})
 if(ENABLE_SYSTEM_TFS AND ENABLE_GFX_TFS AND ENABLE_RENDERING)
@@ -91,10 +115,7 @@ list(LENGTH SANITY_TESTS _P1_START_T)
 
 ##########
 
-add_executable(AlterSystemTest AlterSystemTest.cpp)
-target_link_libraries(AlterSystemTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(AlterSystemTest AlterSystemTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS AlterSystemTest)
+add_thin_client_test(AlterSystemTest)
 
 ##########
 
@@ -219,10 +240,7 @@ list(APPEND SANITY_TEST_PROGRAMS CreateAndDropTableDdlTest)
 
 ##########
 
-add_executable(CrossDatabaseQueryTest CrossDatabaseQueryTest.cpp)
-target_link_libraries(CrossDatabaseQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(CrossDatabaseQueryTest CrossDatabaseQueryTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS CrossDatabaseQueryTest)
+add_thin_client_test(CrossDatabaseQueryTest)
 
 ##########
 
@@ -389,10 +407,7 @@ list(APPEND SANITY_TEST_PROGRAMS ExecutorResourceMgrTest)
 
 ##########
 
-add_executable(ExplainTest ExplainTest.cpp)
-target_link_libraries(ExplainTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(ExplainTest ExplainTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS ExplainTest)
+add_thin_client_test(ExplainTest)
 
 ##########
 
@@ -629,10 +644,7 @@ list(APPEND SANITY_TEST_PROGRAMS PkiEncryptorTest)
 
 ##########
 
-add_executable(ReadOnlyTest ReadOnlyTest.cpp)
-target_link_libraries(ReadOnlyTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(ReadOnlyTest ReadOnlyTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS ReadOnlyTest)
+add_thin_client_test(ReadOnlyTest SERVER_FLAGS --read-only)
 
 ##########
 
@@ -944,10 +956,7 @@ add_test(UtilTest UtilTest ${TEST_ARGS})
 
 ##########
 
-add_executable(ValidationQueryTest ValidationQueryTest.cpp)
-target_link_libraries(ValidationQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(ValidationQueryTest ValidationQueryTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS ValidationQueryTest)
+add_thin_client_test(ValidationQueryTest)
 
 ##########
 
