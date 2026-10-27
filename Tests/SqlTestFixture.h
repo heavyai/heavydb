@@ -369,7 +369,7 @@ class ThinResultSet {
   template <typename T>
   void setGeoReturnType(T /*type*/) {}
 
- private:
+ public:
   // Null sentinel constants matching in-process ResultSet behavior.
   // Tests that use v<int64_t>() or getIntValue() on nullable columns expect
   // these sentinels (not NullableString) for NULL rows — matching the in-process
@@ -384,6 +384,8 @@ class ThinResultSet {
   // Float/double sentinels match inline_fp_null_val() from Shared/InlineNullValues.h.
   static constexpr float kNullFloat = std::numeric_limits<float>::min();
   static constexpr double kNullDouble = std::numeric_limits<double>::min();
+
+ private:
 
   static TargetValue datumToTargetValue(const TDatum& datum,
                                         const TColumnType& col_type) {

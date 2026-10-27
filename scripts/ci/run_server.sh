@@ -26,6 +26,8 @@
 #                  read-only: "../startheavy --read-only".
 #   SERVER_FLAGS - extra flags appended to the default heavydb command
 #   SERVER_WAIT  - seconds to wait for the server to come up (default: 60)
+#   SERVER_STOP_WAIT - seconds to wait for the server to exit after SIGTERM before
+#                  SIGKILL (default: 10)
 #   EXTRA_ARGS   - extra args for BINARY
 #   RESULTS_FILE - gtest XML output filename (BINARY mode), written into BUILD_DIR
 #   MAPD_DEPS_SH - mapd-deps env file (default: /usr/local/mapd-deps/mapd-deps.sh)
@@ -43,6 +45,7 @@ fi
 DATA="${DATA:-tmp}"
 SERVER_FLAGS="${SERVER_FLAGS:-}"
 SERVER_WAIT="${SERVER_WAIT:-60}"
+SERVER_STOP_WAIT="${SERVER_STOP_WAIT:-10}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
 MAPD_DEPS_SH="${MAPD_DEPS_SH:-/usr/local/mapd-deps/mapd-deps.sh}"
 
@@ -70,8 +73,25 @@ echo "Starting server: $SERVER_CMD"
 # --allowed-import-paths='[".."]' JSON value. Inputs are CI-controlled.
 eval "$SERVER_CMD &"
 SERVER_PID=$!
-# Always stop the server, even if the test fails or the script is interrupted.
-trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+# Always stop the server, even if the test fails or the script is interrupted. Wait for
+# it to exit: it holds a lock on the data directory, so the next server (e.g. the next
+# ctest entry) cannot start until it is gone.
+stop_server() {
+  kill "$SERVER_PID" 2>/dev/null || return 0
+  local waited=0
+  while kill -0 "$SERVER_PID" 2>/dev/null; do
+    if [ "$waited" -ge $((SERVER_STOP_WAIT * 2)) ]; then
+      echo "WARNING: server did not exit ${SERVER_STOP_WAIT}s after SIGTERM; sending SIGKILL" >&2
+      kill -9 "$SERVER_PID" 2>/dev/null || true
+      break
+    fi
+    sleep 0.5
+    waited=$((waited + 1))
+  done
+  wait "$SERVER_PID" 2>/dev/null || true
+  echo "Server stopped after $((waited / 2)).$((waited % 2 * 5))s"
+}
+trap stop_server EXIT
 # Wait for the Thrift port (6274) instead of sleeping the full SERVER_WAIT.
 SERVER_PORT="${SERVER_PORT:-6274}"
 for _ in $(seq 1 "$SERVER_WAIT"); do

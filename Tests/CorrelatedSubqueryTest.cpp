@@ -3,55 +3,61 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "../QueryRunner/QueryRunner.h"
-
 #include <gtest/gtest.h>
 
 #include <ctime>
+#include <regex>
 #include <iostream>
-#include "../QueryEngine/ArrowResultSet.h"
-#include "../QueryEngine/Execute.h"
-#include "../QueryEngine/Visitors/SQLOperatorDetector.h"
+#include "SqlTestFixture.h"
 #include "TestHelpers.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
 
-using QR = QueryRunner::QueryRunner;
+using TestHelpers::v;
 
-bool skip_tests_on_gpu(const ExecutorDeviceType device_type) {
-#ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
-#else
-  return device_type == ExecutorDeviceType::GPU;
-#endif
+namespace {
+
+void run_ddl_statement(const std::string& query_str) {
+  SqlTestFixture::sql(query_str);
+}
+
+std::shared_ptr<ThinResultSet> run_multiple_agg(const std::string& query_str,
+                                                const TExecuteMode::type device_type) {
+  return SqlTestFixture::run_multiple_agg(query_str, device_type);
+}
+
+}  // namespace
+
+bool skip_tests_on_gpu(const TExecuteMode::type device_type) {
+  return device_type == TExecuteMode::GPU && !SqlTestFixture::gpusPresent();
 }
 
 void setupTest(std::string valueType, int factsCount, int lookupCount) {
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS test_facts;");
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS test_lookup;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_facts;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_lookup;");
 
-  QR::get()->runDDLStatement("CREATE TABLE test_facts (id int, val " + valueType +
+  run_ddl_statement("CREATE TABLE test_facts (id int, val " + valueType +
                              ", lookup_id int) WITH(fragment_size=3);");
-  QR::get()->runDDLStatement("CREATE TABLE test_lookup (id int, val " + valueType + ");");
+  run_ddl_statement("CREATE TABLE test_lookup (id int, val " + valueType + ");");
 
   // populate facts table
   for (int i = 0; i < factsCount; i++) {
     int id = i;
     int val = i;
-    QR::get()->runSQL("INSERT INTO test_facts VALUES(" + std::to_string(id) + ", " +
+    run_multiple_agg("INSERT INTO test_facts VALUES(" + std::to_string(id) + ", " +
                           std::to_string(val) + ", null); ",
-                      ExecutorDeviceType::CPU);
+                      TExecuteMode::CPU);
   }
 
   // populate lookup table
   for (int i = 0; i < lookupCount; i++) {
     int id = i;
     int val = i;
-    QR::get()->runSQL("INSERT INTO test_lookup VALUES(" + std::to_string(id) + ", " +
+    run_multiple_agg("INSERT INTO test_lookup VALUES(" + std::to_string(id) + ", " +
                           std::to_string(val) + "); ",
-                      ExecutorDeviceType::CPU);
+                      TExecuteMode::CPU);
   }
 }
 
@@ -92,18 +98,27 @@ auto getValue(const TargetValue& mapd_variant) {
   throw std::runtime_error("Unexpected variant");
 };
 
-void checkSingleValueErrorCode(std::string const& query, ExecutorDeviceType dt) {
+void checkSingleValueErrorCode(std::string const& query, TExecuteMode::type dt) {
   std::string expected_exception_msg{"SINGLE_VALUE_FOUND_MULTIPLE_VALUES"};
-  ASSERT_TRUE(QR::get()->runSQLThrowingException(query, expected_exception_msg, dt))
-      << "The test should return std::runtime_error having error code: "
+  bool found_expected_error{false};
+  try {
+    run_multiple_agg(query, dt);
+  } catch (const TDBException& e) {
+    found_expected_error = e.error_msg.find(expected_exception_msg) != std::string::npos;
+  } catch (const std::exception& e) {
+    found_expected_error = std::string(e.what()).find(expected_exception_msg) !=
+                           std::string::npos;
+  }
+  ASSERT_TRUE(found_expected_error)
+      << "The test should return an error containing the code: "
          "SINGLE_VALUE_FOUND_MULTIPLE_VALUES";
 }
 
-void runSingleValueTestValidation(std::string colType, ExecutorDeviceType dt) {
+void runSingleValueTestValidation(std::string colType, TExecuteMode::type dt) {
   checkSingleValueErrorCode("SELECT SINGLE_VALUE(id) FROM test_facts;", dt);
   checkSingleValueErrorCode("SELECT SINGLE_VALUE(id) FROM test_facts group by val;", dt);
   {
-    auto results = QR::get()->runSQL("SELECT SINGLE_VALUE(val) FROM test_facts;", dt);
+    auto results = run_multiple_agg("SELECT SINGLE_VALUE(val) FROM test_facts;", dt);
     ASSERT_EQ(uint64_t(1), results->rowCount());
     const auto select_crt_row = results->getNextRow(true, true);
     auto val = getValue(select_crt_row[0]);
@@ -111,7 +126,7 @@ void runSingleValueTestValidation(std::string colType, ExecutorDeviceType dt) {
   }
 
   {
-    auto results = QR::get()->runSQL(
+    auto results = run_multiple_agg(
         "SELECT id, SINGLE_VALUE(val) FROM test_facts GROUP BY id ORDER BY id;", dt);
     ASSERT_EQ(uint64_t(3), results->rowCount());
     auto select_crt_row = results->getNextRow(true, true);
@@ -126,7 +141,7 @@ void runSingleValueTestValidation(std::string colType, ExecutorDeviceType dt) {
   }
 
   if (colType.find("CHAR") == std::string::npos) {
-    auto results = QR::get()->runSQL(
+    auto results = run_multiple_agg(
         "SELECT id+1, val FROM (SELECT id, SINGLE_VALUE(val) as val FROM test_facts "
         "GROUP BY id) ORDER BY id;",
         dt);
@@ -143,42 +158,42 @@ void runSingleValueTestValidation(std::string colType, ExecutorDeviceType dt) {
   }
 }
 
-void runSingleValueTest(std::string colType, ExecutorDeviceType dt) {
+void runSingleValueTest(std::string colType, TExecuteMode::type dt) {
   if (skip_tests_on_gpu(dt)) {
     return;
   }
 
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS test_facts;");
-  QR::get()->runDDLStatement("CREATE TABLE test_facts (id " + colType + ", val " +
+  run_ddl_statement("DROP TABLE IF EXISTS test_facts;");
+  run_ddl_statement("CREATE TABLE test_facts (id " + colType + ", val " +
                              colType + ") WITH(fragment_size=3);");
 
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(1, 1);", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(2, 1);", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(3, 1);", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(1, 1);", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(2, 1);", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(3, 1);", TExecuteMode::CPU);
 
   runSingleValueTestValidation(colType, dt);
 
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(1, 1);", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(2, 1);", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(3, 1);", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(1, 1);", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(2, 1);", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(3, 1);", TExecuteMode::CPU);
 
   runSingleValueTestValidation(colType, dt);
 
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(1, null); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(2, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(3, 1); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(1, null); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(2, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(3, 1); ", TExecuteMode::CPU);
 
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(1, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(2, null); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(3, 1); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(1, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(2, null); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(3, 1); ", TExecuteMode::CPU);
 
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(1, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(2, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(3, null); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(1, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(2, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(3, null); ", TExecuteMode::CPU);
 
   runSingleValueTestValidation(colType, dt);
 
-  QR::get()->runSQL("INSERT INTO test_facts VALUES(1, 2); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_facts VALUES(1, 2); ", TExecuteMode::CPU);
 
   checkSingleValueErrorCode("SELECT SINGLE_VALUE(id) FROM test_facts;", dt);
   checkSingleValueErrorCode("SELECT SINGLE_VALUE(id) FROM test_facts group by val;", dt);
@@ -188,7 +203,7 @@ void runSingleValueTest(std::string colType, ExecutorDeviceType dt) {
       "SELECT id, SINGLE_VALUE(val) FROM test_facts GROUP BY id ORDER BY id;", dt);
 
   {
-    auto results = QR::get()->runSQL(
+    auto results = run_multiple_agg(
         "SELECT id, SINGLE_VALUE(val) FROM test_facts WHERE id NOT IN (CAST (1 as  " +
             colType +
             " )) GROUP BY id ORDER BY "
@@ -205,7 +220,7 @@ void runSingleValueTest(std::string colType, ExecutorDeviceType dt) {
 }
 
 TEST(Select, SingleValue) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     runSingleValueTest("TINYINT", dt);
     runSingleValueTest("SMALLINT", dt);
     runSingleValueTest("INTEGER", dt);
@@ -224,10 +239,10 @@ TEST(Select, Correlated) {
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -252,10 +267,10 @@ TEST(Select, CorrelatedWithDouble) {
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -278,16 +293,16 @@ TEST(Select, CorrelatedWithInnerDuplicatesFails) {
   int lookupCount = 5;
 
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(6, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(7, 2); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(8, 3); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(9, 4); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(6, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(7, 2); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(8, 3); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(9, 4); ", TExecuteMode::CPU);
 
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = "
       "test_facts.val) as lookup_id FROM test_facts";
-  checkSingleValueErrorCode(sql, ExecutorDeviceType::CPU);
+  checkSingleValueErrorCode(sql, TExecuteMode::CPU);
 }
 
 TEST(Select, CorrelatedWithInnerDuplicatesAndMinId) {
@@ -295,19 +310,19 @@ TEST(Select, CorrelatedWithInnerDuplicatesAndMinId) {
   int lookupCount = 5;
 
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(6, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(7, 2); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(8, 3); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(9, 4); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(6, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(7, 2); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(8, 3); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(9, 4); ", TExecuteMode::CPU);
 
   std::string sql =
       "SELECT id, val, (SELECT MIN(test_lookup.id) FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -331,20 +346,20 @@ TEST(Select, DISABLED_CorrelatedWithInnerDuplicatesDescIdOrder) {
   int lookupCount = 5;
 
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(6, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(7, 2); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(8, 3); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(9, 4); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(6, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(7, 2); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(8, 3); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(9, 4); ", TExecuteMode::CPU);
 
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val ORDER BY test_lookup.id DESC LIMIT 1) as "
       "lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -367,19 +382,19 @@ TEST(Select, CorrelatedWithInnerDuplicatesAndMaxId) {
   int lookupCount = 5;
 
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(6, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(7, 2); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(8, 3); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(9, 4); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(6, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(7, 2); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(8, 3); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(9, 4); ", TExecuteMode::CPU);
 
   std::string sql =
       "SELECT id, val, (SELECT MAX(test_lookup.id) FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -403,21 +418,21 @@ TEST(Select, DISABLED_CorrelatedWithInnerDuplicatesAndAscIdOrder) {
   int lookupCount = 5;
 
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(6, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(7, 2); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(8, 3); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(9, 4); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(6, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(7, 2); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(8, 3); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(9, 4); ", TExecuteMode::CPU);
 
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val ORDER BY test_lookup.id ASC LIMIT 1) as "
       "lookup_id FROM "
       "test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -442,10 +457,10 @@ TEST(Select, CorrelatedWithOuterSortAscending) {
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts ORDER BY id ASC";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -471,10 +486,10 @@ TEST(Select, CorrelatedWithOuterSortDescending) {
   std::string sql =
       "SELECT id, val, (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val) as lookup_id FROM test_facts ORDER BY id DESC";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = factsCount - 1; i >= 0; i--) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -500,49 +515,49 @@ TEST(Select, CorrelatedWithInnerSortDisallowed) {
   std::string sql =
       "SELECT id, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = "
       "test_facts.val LIMIT 1) as lookup_id FROM test_facts;";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "SELECT id, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = "
       "test_facts.val LIMIT 1 OFFSET 1) as lookup_id FROM test_facts;";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "SELECT id, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = "
       "test_facts.val ORDER BY test_lookup.id) as lookup_id FROM test_facts;";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "SELECT id, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = "
       "test_facts.val ORDER BY test_lookup.id LIMIT 1) as lookup_id FROM test_facts;";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 }
 
 TEST(Select, NonCorrelatedWithInnerSortAllowed) {
   int factsCount = 13;
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
 
   std::string sql =
       "SELECT id, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = 0 "
       "LIMIT 1) as lookup_id FROM test_facts;";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "SELECT id, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = 0 "
       "LIMIT 1 OFFSET 1 ) as lookup_id FROM test_facts;";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "SELECT id, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = 1 "
       "ORDER BY test_lookup.id) as lookup_id FROM test_facts;";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "SELECT id, (SELECT test_lookup.id FROM test_lookup WHERE test_lookup.val = 1 "
       "ORDER BY test_lookup.id LIMIT 1) as lookup_id FROM test_facts;";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 }
 
 TEST(Select, CorrelatedWhere) {
@@ -552,10 +567,10 @@ TEST(Select, CorrelatedWhere) {
   std::string sql =
       "SELECT id, val, lookup_id FROM test_facts WHERE (SELECT test_lookup.id "
       "FROM test_lookup WHERE test_lookup.val = test_facts.val) < 100 ORDER BY id ASC";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(lookupCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < 5; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -575,10 +590,10 @@ TEST(Select, CorrelatedWhereNull) {
   std::string sql =
       "SELECT id, val, lookup_id FROM test_facts WHERE (SELECT test_lookup.id "
       "FROM test_lookup WHERE test_lookup.val = test_facts.val) IS NULL ORDER BY id ASC";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount - lookupCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = lookupCount; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -600,13 +615,13 @@ TEST(Update, Correlated) {
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup "
       "WHERE "
       "test_lookup.val = test_facts.val)";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -634,13 +649,13 @@ TEST(Update, CorrelatedTwoColumns) {
       "FROM test_lookup "
       "WHERE "
       "test_lookup.val = test_facts.val)";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -663,19 +678,19 @@ TEST(Update, CorrelatedWithWhere) {
   setupTest("int", factsCount, lookupCount);
 
   std::string sql = "UPDATE test_facts SET lookup_id = 0;";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql =
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup "
       "WHERE "
       "test_lookup.val = test_facts.val) WHERE id < 10";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -701,19 +716,19 @@ TEST(Update, CorrelatedWithTwoJoinConditions) {
   setupTest("int", factsCount, lookupCount);
 
   std::string sql = "UPDATE test_facts SET lookup_id = 0;";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql =
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup "
       "WHERE "
       "val = test_facts.val AND id < 4)";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -736,39 +751,39 @@ TEST(Update, MultipleCorrelatedDisallowed) {
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
 
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS test_lookup_where;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_lookup_where;");
 
-  QR::get()->runDDLStatement("CREATE TABLE test_lookup_where (id int, val int);");
+  run_ddl_statement("CREATE TABLE test_lookup_where (id int, val int);");
 
   // populate lookup table_join
   for (int i = 0; i < lookupCount; i++) {
     int id = i;
     int val = i;
-    QR::get()->runSQL("INSERT INTO test_lookup_where VALUES(" + std::to_string(id) +
+    run_multiple_agg("INSERT INTO test_lookup_where VALUES(" + std::to_string(id) +
                           ", " + std::to_string(val) + "); ",
-                      ExecutorDeviceType::CPU);
+                      TExecuteMode::CPU);
   }
 
   std::string sql = "UPDATE test_facts SET lookup_id = 0;";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql =
       "UPDATE test_facts SET lookup_id = 1 WHERE (SELECT id FROM "
       "test_lookup_where WHERE "
       "val=test_facts.val) > 10";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup "
       "WHERE val = test_facts.val) WHERE (SELECT SAMPLE(id) FROM test_lookup_where WHERE "
       "val=test_facts.val) < 10";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup "
       "WHERE val = test_facts.val), val=(SELECT id FROM test_lookup_where WHERE "
       "val=test_facts.val);";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 }
 
 // until we get UPDATES with multiple correlated sub-queries working
@@ -777,33 +792,33 @@ TEST(Update, DISABLED_CorrelatedWithSingleCorrelatedWhere) {
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
 
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS test_lookup_where;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_lookup_where;");
 
-  QR::get()->runDDLStatement("CREATE TABLE test_lookup_where (id int, val int);");
+  run_ddl_statement("CREATE TABLE test_lookup_where (id int, val int);");
 
   // populate lookup table_join
   for (int i = 0; i < lookupCount; i++) {
     int id = i;
     int val = i;
-    QR::get()->runSQL("INSERT INTO test_lookup_where VALUES(" + std::to_string(id) +
+    run_multiple_agg("INSERT INTO test_lookup_where VALUES(" + std::to_string(id) +
                           ", " + std::to_string(val) + "); ",
-                      ExecutorDeviceType::CPU);
+                      TExecuteMode::CPU);
   }
 
   std::string sql = "UPDATE test_facts SET lookup_id = 0;";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql =
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup "
       "WHERE val = test_facts.val) WHERE (SELECT id FROM test_lookup_where WHERE "
       "val=test_facts.val) < 10";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -828,17 +843,17 @@ TEST(Update, CorrelatedWithJoinInSubquery) {
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
 
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS test_lookup_join;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_lookup_join;");
 
-  QR::get()->runDDLStatement("CREATE TABLE test_lookup_join (id int, val int);");
+  run_ddl_statement("CREATE TABLE test_lookup_join (id int, val int);");
 
   // populate lookup table_join
   for (int i = 0; i < lookupCount; i++) {
     int id = i;
     int val = i;
-    QR::get()->runSQL("INSERT INTO test_lookup_join VALUES(" + std::to_string(id) + ", " +
+    run_multiple_agg("INSERT INTO test_lookup_join VALUES(" + std::to_string(id) + ", " +
                           std::to_string(val) + "); ",
-                      ExecutorDeviceType::CPU);
+                      TExecuteMode::CPU);
   }
 
   std::string sql =
@@ -846,13 +861,13 @@ TEST(Update, CorrelatedWithJoinInSubquery) {
       "test_lookup JOIN test_lookup_join ON test_lookup_join.val=test_lookup.val "
       "WHERE "
       "test_lookup.val = test_facts.val )";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -879,13 +894,13 @@ TEST(Update, CorrelatedWithDouble) {
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup "
       "WHERE "
       "test_lookup.val = test_facts.val)";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -907,18 +922,18 @@ TEST(Update, CorrelatedWithGeo) {
   int factsCount = 13;
   int lookupCount = 5;
 
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS test_facts;");
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS test_lookup;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_facts;");
+  run_ddl_statement("DROP TABLE IF EXISTS test_lookup;");
 
-  QR::get()->runDDLStatement(
+  run_ddl_statement(
       "CREATE TABLE test_facts (id int, pt point, lookup_id int) WITH(fragment_size=3);");
-  QR::get()->runDDLStatement("CREATE TABLE test_lookup (id int, poly POLYGON);");
+  run_ddl_statement("CREATE TABLE test_lookup (id int, poly POLYGON);");
 
   for (int i = 0; i < factsCount; i++) {
     std::string sql = "INSERT INTO test_facts VALUES(" + std::to_string(i) +
                       ", 'POINT (" + std::to_string(double(i) + 0.5) + " " +
                       std::to_string(double(i) + 0.5) + ")', NULL);";
-    QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+    run_multiple_agg(sql, TExecuteMode::CPU);
   }
 
   for (int i = 0; i < lookupCount; i++) {
@@ -927,20 +942,20 @@ TEST(Update, CorrelatedWithGeo) {
                       ", " + std::to_string(i) + " " + std::to_string(i + 1) + ", " +
                       std::to_string(i + 1) + " " + std::to_string(i + 1) + ", " +
                       std::to_string(i + 1) + " " + std::to_string(i) + "))');";
-    QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+    run_multiple_agg(sql, TExecuteMode::CPU);
   }
 
   std::string sql =
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup "
       "WHERE "
       "ST_CONTAINS(poly, pt))";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, lookup_id FROM test_facts ORDER BY id;";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -960,16 +975,16 @@ TEST(Update, CorrelatedWithInnerDuplicatesFails) {
   int lookupCount = 5;
 
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(6, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(7, 2); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(8, 3); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(9, 4); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(6, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(7, 2); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(8, 3); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(9, 4); ", TExecuteMode::CPU);
 
   std::string sql =
       "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = test_facts.val)";
-  checkSingleValueErrorCode(sql, ExecutorDeviceType::CPU);
+  checkSingleValueErrorCode(sql, TExecuteMode::CPU);
 }
 
 TEST(Update, CorrelatedWithInnerDuplicatesAndMinId) {
@@ -977,23 +992,23 @@ TEST(Update, CorrelatedWithInnerDuplicatesAndMinId) {
   int lookupCount = 5;
 
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(6, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(7, 2); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(8, 3); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(9, 4); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(6, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(7, 2); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(8, 3); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(9, 4); ", TExecuteMode::CPU);
 
   std::string sql =
       "UPDATE test_facts SET lookup_id = (SELECT MIN(test_lookup.id) FROM test_lookup "
       "WHERE "
       "test_lookup.val = test_facts.val)";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -1017,23 +1032,23 @@ TEST(Update, DISABLED_CorrelatedWithInnerDuplicatesDescIdOrder) {
   int lookupCount = 5;
 
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(6, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(7, 2); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(8, 3); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(9, 4); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(6, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(7, 2); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(8, 3); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(9, 4); ", TExecuteMode::CPU);
 
   std::string sql =
       "UPDATE test_facts SET lookup_id = (SELECT MIN(test_lookup.id) FROM test_lookup "
       "WHERE "
       "test_lookup.val = test_facts.val ORDER BY test_lookup.id DeSC LIMIT 1)";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -1056,23 +1071,23 @@ TEST(Update, CorrelatedWithInnerDuplicatesAndMaxId) {
   int lookupCount = 5;
 
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(6, 1); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(7, 2); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(8, 3); ", ExecutorDeviceType::CPU);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(9, 4); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(6, 1); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(7, 2); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(8, 3); ", TExecuteMode::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(9, 4); ", TExecuteMode::CPU);
 
   std::string sql =
       "UPDATE test_facts SET lookup_id = (SELECT MAX(test_lookup.id) FROM test_lookup "
       "WHERE "
       "test_lookup.val = test_facts.val)";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 0; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -1094,15 +1109,15 @@ TEST(Update, NonCorrelatedAllowed) {
   int factsCount = 13;
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 1); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 1); ", TExecuteMode::CPU);
 
   {
     std::string sql =
         "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup WHERE "
         "test_lookup.val = 0);";
-    ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+    ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
     sql = "SELECT id, val, lookup_id from test_facts ORDER BY id;";
-    auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+    auto results = run_multiple_agg(sql, TExecuteMode::CPU);
     ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
     for (int i = 0; i < factsCount; i++) {
@@ -1120,9 +1135,9 @@ TEST(Update, NonCorrelatedAllowed) {
         "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup WHERE "
         "test_lookup.val = 1 ORDER BY test_lookup.id ASC "
         "LIMIT 1);";
-    ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+    ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
     sql = "SELECT id, val, lookup_id from test_facts ORDER BY id;";
-    auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+    auto results = run_multiple_agg(sql, TExecuteMode::CPU);
     ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
     for (int i = 0; i < factsCount; i++) {
@@ -1140,9 +1155,9 @@ TEST(Update, NonCorrelatedAllowed) {
         "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup WHERE "
         "test_lookup.val = 1 ORDER BY test_lookup.id DESC "
         "LIMIT 1);";
-    ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+    ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
     sql = "SELECT id, val, lookup_id from test_facts ORDER BY id;";
-    auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+    auto results = run_multiple_agg(sql, TExecuteMode::CPU);
     ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
     for (int i = 0; i < factsCount; i++) {
@@ -1160,16 +1175,16 @@ TEST(Update, DISABLED_NonCorrelatedAllowed2) {
   int factsCount = 13;
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 1); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 1); ", TExecuteMode::CPU);
 
   {
     std::string sql =
         "UPDATE test_facts SET lookup_id = (SELECT test_lookup.id FROM test_lookup WHERE "
         "test_lookup.val = 0 ORDER BY test_lookup.id ASC "
         "LIMIT 1 OFFSET 1 );";
-    ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+    ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
     sql = "SELECT id, val, lookup_id from test_facts ORDER BY id;";
-    auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+    auto results = run_multiple_agg(sql, TExecuteMode::CPU);
     ASSERT_EQ(static_cast<uint32_t>(factsCount), results->rowCount());
 
     for (int i = 0; i < factsCount; i++) {
@@ -1192,27 +1207,27 @@ TEST(Delete, Correlated) {
       "UPDATE test_facts SET lookup_id = (SELECT SAMPLE(test_lookup.id) FROM test_lookup "
       "WHERE "
       "test_lookup.val = test_facts.val );";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "DELETE FROM test_facts WHERE (SELECT test_lookup.id FROM test_lookup "
       "WHERE test_lookup.val = "
       "test_facts.val) < 100 AND (SELECT SAMPLE(test_lookup.val) FROM test_lookup WHERE "
       "test_lookup.id = test_facts.id) < 100;";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "DELETE FROM test_facts WHERE (SELECT SAMPLE(test_lookup.id) FROM test_lookup "
       "WHERE "
       "test_lookup.val = "
       "test_facts.val) < 3;";
-  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  run_multiple_agg(sql, TExecuteMode::CPU);
 
   sql = "SELECT id, val, lookup_id FROM test_facts ORDER BY id";
-  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results = run_multiple_agg(sql, TExecuteMode::CPU);
   ASSERT_EQ(static_cast<uint32_t>(10), results->rowCount());
 
-  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+  auto INT_NULL_SENTINEL = std::numeric_limits<int32_t>::min();
 
   for (int i = 3; i < factsCount; i++) {
     const auto select_crt_row = results->getNextRow(true, false);
@@ -1234,31 +1249,31 @@ TEST(Delete, DISABLED_NonCorrelatedAllowed) {
   int factsCount = 13;
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
-  QR::get()->runSQL("INSERT INTO test_lookup VALUES(5, 0); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO test_lookup VALUES(5, 0); ", TExecuteMode::CPU);
 
   std::string sql =
       "DELETE FROM test_facts WHERE (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = 0 "
       "LIMIT 1) < 100;";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "DELETE FROM test_facts WHERE (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = 0 "
       "LIMIT 1 OFFSET 1 ) < 100;";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "DELETE FROM test_facts WHERE (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = 1 "
       "ORDER BY test_lookup.id) < 100;";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 
   sql =
       "DELETE FROM test_facts WHERE (SELECT test_lookup.id FROM test_lookup WHERE "
       "test_lookup.val = 1 "
       "ORDER BY test_lookup.id LIMIT 1) < 100;";
-  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  ASSERT_NO_THROW(run_multiple_agg(sql, TExecuteMode::CPU));
 }
 
 TEST(Select, Exists_NoJoinCorrelation) {
@@ -1269,28 +1284,28 @@ TEST(Select, Exists_NoJoinCorrelation) {
   std::string sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
       "(SELECT 1 FROM test_lookup l);";
-  auto results1 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results1 = run_multiple_agg(sql, TExecuteMode::CPU);
   uint32_t numResultRows = results1->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(factsCount), numResultRows);
 
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
       "(SELECT 1 FROM test_lookup l);";
-  auto results2 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results2 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results2->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
 
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
       "(SELECT * FROM test_lookup l where l.val > 10000);";
-  auto results3 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results3 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results3->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
 
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
       "(SELECT * FROM test_lookup l where l.val > 10000);";
-  auto results4 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results4 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results4->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(factsCount), numResultRows);
 }
@@ -1304,7 +1319,7 @@ TEST(Select, JoinCorrelation) {
   std::string sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
       "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3);";
-  auto results1 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results1 = run_multiple_agg(sql, TExecuteMode::CPU);
   uint32_t numResultRows = results1->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
   const auto select_crt_row = results1->getNextRow(true, false);
@@ -1316,7 +1331,7 @@ TEST(Select, JoinCorrelation) {
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
       "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3);";
-  auto results2 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results2 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results2->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(12), numResultRows);
   bool correct = true;
@@ -1333,7 +1348,7 @@ TEST(Select, JoinCorrelation) {
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
       "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 3);";
-  auto results3 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results3 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results3->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(12), numResultRows);
   correct = true;
@@ -1351,7 +1366,7 @@ TEST(Select, JoinCorrelation) {
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
       "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3);";
-  auto results5 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results5 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results5->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
   const auto select_crt_row5 = results5->getNextRow(true, false);
@@ -1363,7 +1378,7 @@ TEST(Select, JoinCorrelation) {
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
       "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 3);";
-  auto results6 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results6 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results6->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
   const auto select_crt_row6 = results6->getNextRow(true, false);
@@ -1375,7 +1390,7 @@ TEST(Select, JoinCorrelation) {
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
       "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 3);";
-  auto results4 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results4 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results4->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
   const auto select_crt_row4 = results4->getNextRow(true, false);
@@ -1395,7 +1410,7 @@ TEST(Select, JoinCorrelation_withMultipleExists) {
       "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS"
       "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3) AND EXISTS"
       "(SELECT l2.id FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3);";
-  auto results1 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results1 = run_multiple_agg(sql, TExecuteMode::CPU);
   uint32_t numResultRows = results1->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
   const auto select_crt_row = results1->getNextRow(true, false);
@@ -1408,7 +1423,7 @@ TEST(Select, JoinCorrelation_withMultipleExists) {
       "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS"
       "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3) AND NOT EXISTS"
       "(SELECT l2.id FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 5);";
-  auto results2 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results2 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results2->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
   const auto select_crt_row2 = results2->getNextRow(true, false);
@@ -1423,7 +1438,7 @@ TEST(Select, JoinCorrelation_withMultipleExists) {
       "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 5) AND EXISTS"
       "(SELECT l2.id FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3) AND EXISTS"
       "(SELECT l3.id FROM test_lookup l3 WHERE l3.id = fact.id AND l3.val > 3);";
-  auto results3 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results3 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results3->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
   const auto select_crt_row3 = results3->getNextRow(true, false);
@@ -1437,7 +1452,7 @@ TEST(Select, JoinCorrelation_withMultipleExists) {
       "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 5) AND EXISTS"
       "(SELECT l2.id FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3) AND NOT "
       "EXISTS (SELECT l3.id FROM test_lookup l3 WHERE l3.id = fact.id AND l3.val > 3);";
-  auto results4 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results4 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results4->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
 
@@ -1447,7 +1462,7 @@ TEST(Select, JoinCorrelation_withMultipleExists) {
       "(SELECT * FROM test_lookup l WHERE l.id <> fact.id AND l.val > 5) AND EXISTS"
       "(SELECT * FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3) AND EXISTS"
       "(SELECT * FROM test_lookup l3 WHERE l3.id = fact.id AND l3.val > 3);";
-  auto results5 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results5 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results5->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
   const auto select_crt_row5 = results5->getNextRow(true, false);
@@ -1461,7 +1476,7 @@ TEST(Select, JoinCorrelation_withMultipleExists) {
       "(SELECT * FROM test_lookup l WHERE l.id <> fact.id AND l.val > 5) AND EXISTS"
       "(SELECT * FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3) AND NOT "
       "EXISTS (SELECT * FROM test_lookup l3 WHERE l3.id = fact.id AND l3.val > 3);";
-  auto results6 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results6 = run_multiple_agg(sql, TExecuteMode::CPU);
   numResultRows = results6->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
 }
@@ -1474,7 +1489,7 @@ TEST(Select, JoinCorrelation_InClause) {
   std::string sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
       "FROM test_lookup l WHERE fact.id = l.id) AND fact.val > 3;";
-  auto results1 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results1 = run_multiple_agg(sql, TExecuteMode::CPU);
   uint32_t numResultRows = results1->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
   const auto select_crt_row = results1->getNextRow(true, false);
@@ -1486,14 +1501,14 @@ TEST(Select, JoinCorrelation_InClause) {
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
       "FROM test_lookup l WHERE fact.id = l.id);";
-  auto results2 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results2 = run_multiple_agg(sql, TExecuteMode::CPU);
   uint32_t numResultRows2 = results2->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(lookupCount), numResultRows2);
 
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
       "FROM test_lookup l WHERE fact.id <> l.id);";
-  auto results3 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results3 = run_multiple_agg(sql, TExecuteMode::CPU);
   uint32_t numResultRows3 = results3->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(0), numResultRows3);
 
@@ -1502,7 +1517,7 @@ TEST(Select, JoinCorrelation_InClause) {
       "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
       "FROM test_lookup l WHERE fact.id = l.id) AND fact.val > 1 AND fact.val IN (SELECT "
       "l2.val FROM test_lookup l2 WHERE fact.id = l2.id);";
-  auto results4 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results4 = run_multiple_agg(sql, TExecuteMode::CPU);
   uint32_t numResultRows4 = results4->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(3), numResultRows4);
 
@@ -1510,7 +1525,7 @@ TEST(Select, JoinCorrelation_InClause) {
       "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
       "FROM test_lookup l WHERE fact.id = l.id) AND fact.val > 1 AND fact.val IN (SELECT "
       "l2.val FROM test_lookup l2 WHERE fact.id = l2.id) AND fact.id > 3;";
-  auto results5 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  auto results5 = run_multiple_agg(sql, TExecuteMode::CPU);
   uint32_t numResultRows5 = results5->rowCount();
   ASSERT_EQ(static_cast<uint32_t>(1), numResultRows5);
   const auto select_crt_row5 = results5->getNextRow(true, false);
@@ -1535,17 +1550,17 @@ TEST(Select, Very_Large_In) {
     }
   }
   file_out.close();
-  auto drop_table = []() { QR::get()->runDDLStatement("DROP TABLE IF EXISTS T_100K;"); };
+  auto drop_table = []() { run_ddl_statement("DROP TABLE IF EXISTS T_100K;"); };
   auto create_table = []() {
-    QR::get()->runDDLStatement(
+    run_ddl_statement(
         "CREATE TABLE T_100K (x int not null, y text encoding dict);");
   };
-  auto import_table = []() {
-    std::string import_stmt{
-        "COPY T_100K FROM "
-        "'../../Tests/Import/datafiles/very_large_in.csv' WITH "
-        "(header='false')"};
-    QR::get()->runDDLStatement(import_stmt);
+  auto import_table = [&file_path]() {
+    // the server resolves paths against its own working directory, so pass an absolute one
+    std::string import_stmt{"COPY T_100K FROM '" +
+                            boost::filesystem::canonical(file_path).string() +
+                            "' WITH (header='false')"};
+    run_ddl_statement(import_stmt);
   };
 
   drop_table();
@@ -1555,7 +1570,7 @@ TEST(Select, Very_Large_In) {
   std::string q1 =
       "SELECT COUNT(1) FROM T_100K WHERE rowid IN (SELECT MAX(F.rowid) FROM T_100K F "
       "INNER JOIN (SELECT x FROM T_100K) F1 ON F.x = F1.x GROUP BY F.x);";
-  auto result = QR::get()->runSQL(q1, ExecutorDeviceType::CPU);
+  auto result = run_multiple_agg(q1, TExecuteMode::CPU);
   const auto crt_row = result->getNextRow(true, false);
   auto res_val = getIntValue(crt_row[0]);
   EXPECT_EQ(100000, res_val);
@@ -1565,9 +1580,9 @@ TEST(Select, Very_Large_In) {
       "F INNER JOIN (SELECT x FROM T_100K) F1 ON F.x = F1.x GROUP BY F.x);";
   // since IN-clause is decorrelated and evaluated as our hash-join,
   // so we should not get the exception regarding IN-clause
-  EXPECT_NO_THROW(QR::get()->runSQL(update_q1, ExecutorDeviceType::CPU));
+  EXPECT_NO_THROW(run_multiple_agg(update_q1, TExecuteMode::CPU));
   std::string query2 = "SELECT COUNT(1) FROM T_100K WHERE x = 100001;";
-  auto result2 = QR::get()->runSQL(query2, ExecutorDeviceType::CPU);
+  auto result2 = run_multiple_agg(query2, TExecuteMode::CPU);
   const auto crt_row2 = result2->getNextRow(true, false);
   auto res_val2 = getIntValue(crt_row2[0]);
   EXPECT_EQ(100000, res_val2);
@@ -1579,9 +1594,9 @@ TEST(Select, Very_Large_In) {
   std::string update_q2 =
       "UPDATE T_100K SET y = '100001' WHERE rowid IN (SELECT MAX(F.rowid) FROM T_100K "
       "F INNER JOIN (SELECT x FROM T_100K) F1 ON F.x = F1.x GROUP BY F.x);";
-  EXPECT_NO_THROW(QR::get()->runSQL(update_q2, ExecutorDeviceType::CPU));
+  EXPECT_NO_THROW(run_multiple_agg(update_q2, TExecuteMode::CPU));
   std::string query3 = "SELECT COUNT(1) FROM T_100K WHERE y = '100001';";
-  auto result3 = QR::get()->runSQL(query3, ExecutorDeviceType::CPU);
+  auto result3 = run_multiple_agg(query3, TExecuteMode::CPU);
   const auto crt_row3 = result3->getNextRow(true, false);
   auto res_val3 = getIntValue(crt_row3[0]);
   EXPECT_EQ(100000, res_val3);
@@ -1594,14 +1609,14 @@ TEST(Select, Very_Large_In) {
       "UPDATE T_100K SET x = 200000, y = '2000000' WHERE rowid IN (SELECT MAX(F.rowid) "
       "FROM T_100K "
       "F INNER JOIN (SELECT x FROM T_100K) F1 ON F.x = F1.x GROUP BY F.x);";
-  EXPECT_NO_THROW(QR::get()->runSQL(update_q3, ExecutorDeviceType::CPU));
+  EXPECT_NO_THROW(run_multiple_agg(update_q3, TExecuteMode::CPU));
   std::string query4 = "SELECT COUNT(1) FROM T_100K WHERE y = '2000000';";
-  auto result4 = QR::get()->runSQL(query4, ExecutorDeviceType::CPU);
+  auto result4 = run_multiple_agg(query4, TExecuteMode::CPU);
   const auto crt_row4 = result4->getNextRow(true, false);
   auto res_val4 = getIntValue(crt_row4[0]);
   EXPECT_EQ(100000, res_val4);
 
-  QR::get()->runDDLStatement("DROP TABLE IF EXISTS INT_100K;");
+  run_ddl_statement("DROP TABLE IF EXISTS INT_100K;");
   boost::filesystem::remove(file_path);
 }
 
@@ -1611,8 +1626,23 @@ TEST(Select, InExpr_As_Child_Operand_Of_OR_Operator) {
   setupTest("int", factsCount, lookupCount);
 
   auto check_query = [](const std::string& query, bool expected) {
-    auto root_node = QR::get()->getRootNodeFromParsedQuery(query);
-    auto has_in_expr = SQLOperatorDetector::detect(root_node.get(), SQLOps::kIN);
+    // The in-process version looked for a kIN operator in the parsed RelAlg tree; the
+    // Calcite plan shows the same thing: IN(...) is kept only when it is an operand of
+    // OR, otherwise the subquery has been rewritten into a join.
+    TQueryResult plan;
+    SqlTestFixture::sql(plan, "EXPLAIN CALCITE " + query);
+    std::string plan_text;
+    for (const auto& row : plan.row_set.rows) {
+      for (const auto& col : row.cols) {
+        plan_text += col.val.str_val;
+      }
+    }
+    for (const auto& col : plan.row_set.columns) {
+      for (const auto& str : col.data.str_col) {
+        plan_text += str;
+      }
+    }
+    const auto has_in_expr = std::regex_search(plan_text, std::regex{R"(\bIN\()"});
     EXPECT_EQ(has_in_expr, expected);
   };
 
@@ -1638,43 +1668,54 @@ TEST(Select, InExpr_As_Child_Operand_Of_OR_Operator) {
   check_query(q4, true);
 }
 
+const std::string kNestedCorrelatedInWatchdogQuery =
+    "select COUNT(c) from test_decor1 where b > 0 and a in (select d AS dd from "
+    "test_decor2 where c in (select i from test_decor3));";
+
 TEST(Select, NestedCorrelatedInWithOuterLevelReference) {
   auto drop_table = []() {
     for (std::string tbl : {"test_decor1", "test_decor2", "test_decor3"}) {
-      QR::get()->runDDLStatement("DROP TABLE IF EXISTS " + tbl + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + tbl + ";");
     }
   };
   ScopeGuard drop_tbls = [drop_table] { drop_table(); };
   drop_table();
-  QR::get()->runDDLStatement("CREATE TABLE test_decor1 (a int, b int, c int);");
-  QR::get()->runDDLStatement("CREATE TABLE test_decor2 (d int, e int, f int);");
-  QR::get()->runDDLStatement("CREATE TABLE test_decor3 (g int, h int, i int);");
+  run_ddl_statement("CREATE TABLE test_decor1 (a int, b int, c int);");
+  run_ddl_statement("CREATE TABLE test_decor2 (d int, e int, f int);");
+  run_ddl_statement("CREATE TABLE test_decor3 (g int, h int, i int);");
 
   // Previously we could not decorrelate this nested correlated IN (the
   // innermost subquery references test_decor1.c two levels out), so the
   // planner left a $cor in the plan and threw "Unable to decorrelate one of
   // the correlated subqueries". A more recent version of the Calcite
   // decorrelater handles this.
-  EXPECT_NO_THROW(QR::get()->runSQL(
+  EXPECT_NO_THROW(run_multiple_agg(
       "select COUNT(c) from test_decor1 where b > 0 and a in (select d from test_decor2 "
       "where e > 0 and c in (select i from test_decor3));",
-      ExecutorDeviceType::CPU));
+      TExecuteMode::CPU));
   EXPECT_NO_THROW(
-      QR::get()->runSQL("select COUNT(c) from test_decor1 where b > 0 and a in (select d "
+      run_multiple_agg("select COUNT(c) from test_decor1 where b > 0 and a in (select d "
                         "from test_decor2 where c in (select i from test_decor3));",
-                        ExecutorDeviceType::CPU));
-  ScopeGuard reset_flag = [orig = g_enable_watchdog]() { g_enable_watchdog = orig; };
-  std::string const q3 =
-      "select COUNT(c) from test_decor1 where b > 0 and a in (select d AS dd from "
-      "test_decor2 where c in (select i from test_decor3));";
-  for (bool watchdog : {false, true}) {
-    g_enable_watchdog = watchdog;
-    if (watchdog) {
-      EXPECT_ANY_THROW(QR::get()->runSQL(q3, ExecutorDeviceType::CPU));
-    } else {
-      EXPECT_NO_THROW(QR::get()->runSQL(q3, ExecutorDeviceType::CPU));
+                        TExecuteMode::CPU));
+  // This one is only decorrelated when the watchdog is off (the server default for these
+  // tests); see NestedCorrelatedInWithOuterLevelReferenceWatchdogEnabled.
+  EXPECT_NO_THROW(run_multiple_agg(kNestedCorrelatedInWatchdogQuery, TExecuteMode::CPU));
+}
+
+// Needs a server started with --enable-watchdog (the CorrelatedSubqueryTest_watchdog
+// ctest entry); the default entry excludes it.
+TEST(Select, NestedCorrelatedInWithOuterLevelReferenceWatchdogEnabled) {
+  auto drop_table = []() {
+    for (std::string tbl : {"test_decor1", "test_decor2", "test_decor3"}) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + tbl + ";");
     }
-  }
+  };
+  ScopeGuard drop_tbls = [drop_table] { drop_table(); };
+  drop_table();
+  run_ddl_statement("CREATE TABLE test_decor1 (a int, b int, c int);");
+  run_ddl_statement("CREATE TABLE test_decor2 (d int, e int, f int);");
+  run_ddl_statement("CREATE TABLE test_decor3 (g int, h int, i int);");
+  EXPECT_ANY_THROW(run_multiple_agg(kNestedCorrelatedInWatchdogQuery, TExecuteMode::CPU));
 }
 
 // Verifies correctness of the nested correlated IN that the Calcite
@@ -1688,17 +1729,17 @@ TEST(Select, NestedCorrelatedInWithOuterLevelReference) {
 TEST(Select, NestedCorrelatedInDecorrelation) {
   auto drop_table = []() {
     for (std::string tbl : {"test_decor1", "test_decor2", "test_decor3"}) {
-      QR::get()->runDDLStatement("DROP TABLE IF EXISTS " + tbl + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + tbl + ";");
     }
   };
   ScopeGuard drop_tbls = [drop_table] { drop_table(); };
   drop_table();
-  QR::get()->runDDLStatement("CREATE TABLE test_decor1 (a int, b int, c int);");
-  QR::get()->runDDLStatement("CREATE TABLE test_decor2 (d int, e int, f int);");
-  QR::get()->runDDLStatement("CREATE TABLE test_decor3 (g int, h int, i int);");
+  run_ddl_statement("CREATE TABLE test_decor1 (a int, b int, c int);");
+  run_ddl_statement("CREATE TABLE test_decor2 (d int, e int, f int);");
+  run_ddl_statement("CREATE TABLE test_decor3 (g int, h int, i int);");
 
   auto insert = [](std::string const& sql) {
-    QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+    run_multiple_agg(sql, TExecuteMode::CPU);
   };
   // test_decor3.i = {100, 200}
   insert("INSERT INTO test_decor3 VALUES(0, 0, 100);");
@@ -1722,8 +1763,8 @@ TEST(Select, NestedCorrelatedInDecorrelation) {
       "select COUNT(c) from test_decor1 where b > 0 and c in (select i from test_decor3) "
       "and a in (select d from test_decor2 where e > 0);";
 
-  auto corr = QR::get()->runSQL(correlated, ExecutorDeviceType::CPU);
-  auto ref = QR::get()->runSQL(reference, ExecutorDeviceType::CPU);
+  auto corr = run_multiple_agg(correlated, TExecuteMode::CPU);
+  auto ref = run_multiple_agg(reference, TExecuteMode::CPU);
   auto corr_count = getIntValue(corr->getNextRow(true, true)[0]);
   auto ref_count = getIntValue(ref->getNextRow(true, true)[0]);
   EXPECT_EQ(ref_count, int64_t(3)) << "flattened reference query should qualify 3 rows";
@@ -1733,24 +1774,24 @@ TEST(Select, NestedCorrelatedInDecorrelation) {
 TEST(Select, InClauseHavingInvalidInnerCol) {
   auto drop_table = []() {
     for (std::string tbl : {"qe_1333_1", "qe_1333_2"}) {
-      QR::get()->runDDLStatement("DROP TABLE IF EXISTS " + tbl + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + tbl + ";");
     }
   };
   ScopeGuard drop_tbls = [drop_table] { drop_table(); };
   drop_table();
-  QR::get()->runDDLStatement("CREATE TABLE qe_1333_1 (a text encoding dict(32));");
-  QR::get()->runDDLStatement("CREATE TABLE qe_1333_2 (s text encoding dict(32));");
+  run_ddl_statement("CREATE TABLE qe_1333_1 (a text encoding dict(32));");
+  run_ddl_statement("CREATE TABLE qe_1333_2 (s text encoding dict(32));");
 
   try {
-    QR::get()->runSQL(
+    run_multiple_agg(
         "SELECT MAX(c) AS max_c FROM (SELECT COUNT(*) AS c FROM qe_1333_1 WHERE a IN "
         "(SELECT a FROM qe_1333_2 WHERE s = 'yes') GROUP BY a) LIMIT 5;",
-        ExecutorDeviceType::CPU);
-  } catch (std::exception const& e) {
+        TExecuteMode::CPU);
+  } catch (TDBException const& e) {
     std::string const expected_err_msg{
         "Detected an invalid IN clause: table \"qe_1333_2\" does not have a column named "
         "\"a\""};
-    EXPECT_TRUE(expected_err_msg.compare(e.what()) == 0);
+    EXPECT_EQ(expected_err_msg, e.error_msg);
   }
 }
 
@@ -1758,14 +1799,13 @@ int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
 
-  QR::init(BASE_PATH);
-
   int err{0};
   try {
+    SqlTestFixture::initConnection(argc, argv);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+    err = 1;
   }
-  QR::reset();
   return err;
 }

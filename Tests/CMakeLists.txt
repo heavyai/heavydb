@@ -35,24 +35,49 @@ set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 set(THIN_CLIENT_TEST_LIBS gtest Logger Shared mapd_thrift ThriftClient ${Boost_LIBRARIES}
   ${LLVM_LINKER_FLAGS})
 
-# add_thin_client_test(<name> [SERVER_FLAGS <flag>...] [LIBS <lib>...])
-# Builds <name>.cpp against THIN_CLIENT_TEST_LIBS and registers it as a sanity test that
-# runs scripts/ci/run_server.sh: that starts a heavydb on Tests/tmp (with the given
-# flags), runs the binary against it, and stops the server. The binary only needs the
-# build tree's bin/heavydb, so it can run on a different runner than the one that built it.
+# Registers a ctest entry that runs scripts/ci/run_server.sh: that starts a heavydb on
+# Tests/tmp, runs Tests/<binary> against it, and stops the server. The binary only needs
+# the build tree's bin/heavydb, so it can run on a different runner than the one that
+# built it. The in-process tests ran with the defaults of the server globals, which differ
+# from heavydb's command-line defaults, so the server is started with the same ones
+# (unless the test's SERVER_FLAGS set them) and the same permissive path whitelist.
+macro(_thin_client_ctest ctest_name binary server_flags gtest_filter)
+  set(_thin_flags "--allowed-import-paths='[\"/\"]' --allowed-export-paths='[\"/\"]'")
+  string(FIND "${server_flags}" "--enable-watchdog" _thin_watchdog_pos)
+  if(_thin_watchdog_pos EQUAL -1)
+    string(APPEND _thin_flags " --enable-watchdog=false")
+  endif()
+  set(_thin_args "")
+  if(NOT "${gtest_filter}" STREQUAL "")
+    set(_thin_args "--gtest_filter=${gtest_filter}")
+  endif()
+  add_test(NAME ${ctest_name} COMMAND ${CMAKE_SOURCE_DIR}/scripts/ci/run_server.sh)
+  set_tests_properties(${ctest_name} PROPERTIES
+    ENVIRONMENT "BUILD_DIR=${CMAKE_BINARY_DIR};BINARY=Tests/${binary};DATA=Tests/tmp;SERVER_FLAGS=${_thin_flags} ${server_flags};EXTRA_ARGS=${_thin_args};RESULTS_FILE=${ctest_name}.xml"
+    RESOURCE_LOCK heavydb_server)  # one server on the default port at a time
+endmacro()
+
+# add_thin_client_test(<name> [SERVER_FLAGS <flag>...] [LIBS <lib>...] [GTEST_FILTER <f>])
+# Builds <name>.cpp against THIN_CLIENT_TEST_LIBS and registers it as a sanity test.
 macro(add_thin_client_test name)
-  cmake_parse_arguments(THIN "" "" "SERVER_FLAGS;LIBS" ${ARGN})
+  cmake_parse_arguments(THIN "" "GTEST_FILTER" "SERVER_FLAGS;LIBS" ${ARGN})
   add_executable(${name} ${name}.cpp)
   target_link_libraries(${name} ${THIN_CLIENT_TEST_LIBS} ${THIN_LIBS})
   add_dependencies(${name} thrift_gen)
-  add_test(NAME ${name} COMMAND ${CMAKE_SOURCE_DIR}/scripts/ci/run_server.sh)
-  # Same permissive path whitelist the in-process DBHandlerTestFixture used.
-  string(REPLACE ";" " " _thin_server_flags
-    "--allowed-import-paths='[\"/\"]' --allowed-export-paths='[\"/\"]' ${THIN_SERVER_FLAGS}")
-  set_tests_properties(${name} PROPERTIES
-    ENVIRONMENT "BUILD_DIR=${CMAKE_BINARY_DIR};BINARY=Tests/${name};DATA=Tests/tmp;SERVER_FLAGS=${_thin_server_flags};RESULTS_FILE=${name}.xml"
-    RESOURCE_LOCK heavydb_server)  # one server on the default port at a time
+  string(REPLACE ";" " " _thin_server_flags "${THIN_SERVER_FLAGS}")
+  _thin_client_ctest(${name} ${name} "${_thin_server_flags}" "${THIN_GTEST_FILTER}")
   list(APPEND SANITY_TEST_PROGRAMS ${name})
+endmacro()
+
+# add_thin_client_test_variant(<name> <suffix> [SERVER_FLAGS <flag>...] [GTEST_FILTER <f>])
+# Runs the already added thin test <name> again, as sanity test <name>_<suffix>, against
+# a server started with different flags; for tests that need a server global that the
+# in-process tests flipped mid-run.
+macro(add_thin_client_test_variant name suffix)
+  cmake_parse_arguments(THINV "" "GTEST_FILTER" "SERVER_FLAGS" ${ARGN})
+  string(REPLACE ";" " " _thin_server_flags "${THINV_SERVER_FLAGS}")
+  _thin_client_ctest(${name}_${suffix} ${name} "${_thin_server_flags}" "${THINV_GTEST_FILTER}")
+  list(APPEND SANITY_TESTS ${name}_${suffix})
 endmacro()
 
 set(TF_TEST_LIBS ${EXECUTE_TEST_LIBS})
@@ -226,10 +251,10 @@ list(APPEND SANITY_TEST_PROGRAMS ConcurrencyTest)
 
 ##########
 
-add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
-target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
-add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS CorrelatedSubqueryTest)
+add_thin_client_test(CorrelatedSubqueryTest GTEST_FILTER -*WatchdogEnabled*)
+# watchdog on: the query that is accepted with it off must be rejected
+add_thin_client_test_variant(CorrelatedSubqueryTest watchdog
+  SERVER_FLAGS --enable-watchdog=true GTEST_FILTER *WatchdogEnabled*)
 
 ##########
 
@@ -708,10 +733,7 @@ list(APPEND SANITY_TEST_PROGRAMS SQLHintTest)
 
 ##########
 
-add_executable(SpecialCharsTest SpecialCharsTest.cpp)
-target_link_libraries(SpecialCharsTest ${EXECUTE_TEST_LIBS})
-add_test(SpecialCharsTest SpecialCharsTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS SpecialCharsTest)
+add_thin_client_test(SpecialCharsTest)
 
 ##########
 
@@ -799,10 +821,7 @@ list(APPEND SANITY_TEST_PROGRAMS TokenCompletionHintsTest)
 
 ##########
 
-add_executable(TopKTest TopKTest.cpp)
-target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
-add_test(TopKTest TopKTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS TopKTest)
+add_thin_client_test(TopKTest LIBS SqliteConnector)
 
 ##########
 
