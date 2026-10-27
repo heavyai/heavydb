@@ -35,15 +35,15 @@ set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
 set(THIN_CLIENT_TEST_LIBS gtest Logger Shared mapd_thrift ThriftClient ${Boost_LIBRARIES}
   ${LLVM_LINKER_FLAGS})
 
-# add_thin_client_test(<name> [SERVER_FLAGS <flag>...])
+# add_thin_client_test(<name> [SERVER_FLAGS <flag>...] [LIBS <lib>...])
 # Builds <name>.cpp against THIN_CLIENT_TEST_LIBS and registers it as a sanity test that
 # runs scripts/ci/run_server.sh: that starts a heavydb on Tests/tmp (with the given
 # flags), runs the binary against it, and stops the server. The binary only needs the
 # build tree's bin/heavydb, so it can run on a different runner than the one that built it.
 macro(add_thin_client_test name)
-  cmake_parse_arguments(THIN "" "" "SERVER_FLAGS" ${ARGN})
+  cmake_parse_arguments(THIN "" "" "SERVER_FLAGS;LIBS" ${ARGN})
   add_executable(${name} ${name}.cpp)
-  target_link_libraries(${name} ${THIN_CLIENT_TEST_LIBS})
+  target_link_libraries(${name} ${THIN_CLIENT_TEST_LIBS} ${THIN_LIBS})
   add_dependencies(${name} thrift_gen)
   add_test(NAME ${name} COMMAND ${CMAKE_SOURCE_DIR}/scripts/ci/run_server.sh)
   # Same permissive path whitelist the in-process DBHandlerTestFixture used.
@@ -543,10 +543,17 @@ target_link_libraries(LlmTransformIntegrationTest gtest Logger Shared mapd_thrif
 
 ##########
 
-add_executable(LoadTableTest LoadTableTest.cpp)
-target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS LoadTableTest)
+# LoadTableTest builds Arrow IPC payloads client-side, so it also links Arrow.
+add_thin_client_test(LoadTableTest LIBS absl::str_format ${Arrow_LIBRARIES} ${URIPARSER_LIBRARY})
+
+##########
+
+# Split out of LoadTableTest: steers the in-process DBHandler through the test process's
+# AWS environment, so it cannot be a thin client.
+add_executable(ThriftDetectServerPrivilegeTest ThriftDetectServerPrivilegeTest.cpp)
+target_link_libraries(ThriftDetectServerPrivilegeTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(ThriftDetectServerPrivilegeTest ThriftDetectServerPrivilegeTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS ThriftDetectServerPrivilegeTest)
 
 ##########
 

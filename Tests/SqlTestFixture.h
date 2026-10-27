@@ -566,7 +566,9 @@ class SqlTestFixture : public ::testing::Test {
       FAIL() << "Expected exception with message: " << error_message;
     } catch (const TDBException& e) {
       assertExceptionMessage(e, error_message, i_case);
-    } catch (const std::runtime_error& e) {
+    } catch (const std::exception& e) {
+      // e.g. runtime errors, or the TApplicationException a thrift client throws for an
+      // exception the server did not declare in its `throws` clause
       assertExceptionMessage(e, error_message, i_case);
     }
   }
@@ -583,7 +585,7 @@ class SqlTestFixture : public ::testing::Test {
     ASSERT_EQ(exp, actual);
   }
 
-  static void assertExceptionMessage(const std::runtime_error& e,
+  static void assertExceptionMessage(const std::exception& e,
                                      const std::string& expected,
                                      bool i_case = false) {
     std::string actual = e.what();
@@ -643,7 +645,7 @@ class SqlTestFixture : public ::testing::Test {
       FAIL() << "An exception should have been thrown for this test case.";
     } catch (const TDBException& e) {
       assertPartialExceptionMessage(e, error_message);
-    } catch (const std::runtime_error& e) {
+    } catch (const std::exception& e) {
       assertPartialExceptionMessage(e, error_message);
     }
   }
@@ -654,7 +656,7 @@ class SqlTestFixture : public ::testing::Test {
         << "Found:\n  " << e.error_msg << "\nExpected:\n  " << error_message;
   }
 
-  static void assertPartialExceptionMessage(const std::runtime_error& e,
+  static void assertPartialExceptionMessage(const std::exception& e,
                                             const std::string& error_message) {
     ASSERT_TRUE(std::string(e.what()).find(error_message) != std::string::npos)
         << "Found:\n  " << e.what() << "\nExpected:\n  " << error_message;
@@ -763,10 +765,10 @@ class SqlTestFixture : public ::testing::Test {
 
   // -------------------------------------------------------------------------
   // Direct Thrift client access (mirrors DBHandlerTestFixture::getDbHandlerAndSessionId)
-  // Returns (HeavyClient*, TSessionId) — caller can invoke any Thrift API directly.
+  // Returns (HeavyClient*, TSessionId&) — caller can invoke any Thrift API directly.
   // -------------------------------------------------------------------------
 
-  static std::pair<HeavyClient*, TSessionId> getDbHandlerAndSessionId() {
+  static std::pair<HeavyClient*, TSessionId&> getDbHandlerAndSessionId() {
     return {g_sql_test_client.get(), g_sql_test_session_id};
   }
 
