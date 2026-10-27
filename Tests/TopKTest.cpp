@@ -3,13 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "../ImportExport/Importer.h"
-#include "../QueryEngine/ArrowResultSet.h"
-#include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
-#include "../QueryEngine/Execute.h"
-#include "../QueryRunner/QueryRunner.h"
 #include "../Shared/DateTimeParser.h"
 #include "../SqliteConnector/SqliteConnector.h"
+#include "SqlTestFixture.h"
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>
@@ -23,22 +19,15 @@
 
 using namespace std;
 
-using QR = QueryRunner::QueryRunner;
 namespace {
 
-inline void run_ddl_statement(const std::string query_str) {
-  QR::get()->runDDLStatement(query_str);
+inline void run_ddl_statement(const std::string& query_str) {
+  SqlTestFixture::sql(query_str);
 }
 
-std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
-                                            const ExecutorDeviceType device_type,
-                                            const bool allow_loop_joins) {
-  return QR::get()->runSQL(query_str, device_type, true, allow_loop_joins);
-}
-
-std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
-                                            const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, device_type, true);
+std::shared_ptr<ThinResultSet> run_multiple_agg(const string& query_str,
+                                                const TExecuteMode::type device_type) {
+  return SqlTestFixture::run_multiple_agg(query_str, device_type);
 }
 
 template <class T>
@@ -50,18 +39,30 @@ T v(const TargetValue& r) {
   return *p;
 }
 
-bool skip_tests(const ExecutorDeviceType device_type) {
-#ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU && !QR::get()->gpusPresent();
-#else
-  return device_type == ExecutorDeviceType::GPU;
-#endif
+bool skip_tests(const TExecuteMode::type device_type) {
+  return device_type == TExecuteMode::GPU && !SqlTestFixture::gpusPresent();
 }
 
 bool approx_eq(const double v, const double target, const double eps = 0.01) {
-  const auto v_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&v));
-  const auto target_u64 = *reinterpret_cast<const uint64_t*>(may_alias_ptr(&target));
+  uint64_t v_u64, target_u64;
+  std::memcpy(&v_u64, &v, sizeof(v));
+  std::memcpy(&target_u64, &target, sizeof(target));
   return v_u64 == target_u64 || (target - eps < v && v < target + eps);
+}
+
+// The value ThinResultSet reports for a NULL of the given integer-backed type.
+int64_t int_null_val(const TDatumType::type type) {
+  switch (type) {
+    case TDatumType::TINYINT:
+    case TDatumType::BOOL:
+      return ThinResultSet::kNullTinyint;
+    case TDatumType::SMALLINT:
+      return ThinResultSet::kNullSmallint;
+    case TDatumType::INT:
+      return ThinResultSet::kNullInt;
+    default:  // BIGINT, TIME, TIMESTAMP, DATE
+      return ThinResultSet::kNullBigint;
+  }
 }
 
 class SQLiteComparator {
@@ -70,42 +71,31 @@ class SQLiteComparator {
 
   void query(const std::string& query_string) { connector_.query(query_string); }
 
-  void compare(const std::string& query_string, const ExecutorDeviceType device_type) {
+  void compare(const std::string& query_string, const TExecuteMode::type device_type) {
     const auto omnisci_results = run_multiple_agg(query_string, device_type);
     compare_impl(omnisci_results.get(), query_string, device_type, false);
   }
 
-  void compare_arrow_output(const std::string& query_string,
-                            const std::string& sqlite_query_string,
-                            const ExecutorDeviceType device_type) {
-    const auto results = QR::get()->runSQL(query_string, device_type, true, true);
-    const auto arrow_omnisci_results = result_set_arrow_loopback(nullptr, results);
-    compare_impl(
-        arrow_omnisci_results.get(), sqlite_query_string, device_type, false, true);
-  }
-
   void compare(const std::string& query_string,
                const std::string& sqlite_query_string,
-               const ExecutorDeviceType device_type) {
+               const TExecuteMode::type device_type) {
     const auto omnisci_results = run_multiple_agg(query_string, device_type);
     compare_impl(omnisci_results.get(), sqlite_query_string, device_type, false);
   }
 
   // added to deal with time shift for now testing
   void compare_timstamp_approx(const std::string& query_string,
-                               const ExecutorDeviceType device_type) {
+                               const TExecuteMode::type device_type) {
     const auto omnisci_results = run_multiple_agg(query_string, device_type);
     compare_impl(omnisci_results.get(), query_string, device_type, true);
   }
 
  private:
-  template <class RESULT_SET>
-  void compare_impl(const RESULT_SET* omnisci_results,
+  void compare_impl(ThinResultSet* omnisci_results,
                     const std::string& sqlite_query_string,
-                    const ExecutorDeviceType device_type,
-                    const bool timestamp_approx,
-                    const bool is_arrow = false) {
-    auto const errmsg = ExecutorDeviceType::CPU == device_type
+                    const TExecuteMode::type device_type,
+                    const bool timestamp_approx) {
+    auto const errmsg = TExecuteMode::CPU == device_type
                             ? "CPU: " + sqlite_query_string
                             : "GPU: " + sqlite_query_string;
     connector_.query(sqlite_query_string);
@@ -130,29 +120,27 @@ class SQLiteComparator {
         const auto scalar_omnisci_variant =
             boost::get<ScalarTargetValue>(&omnisci_variant);
         CHECK(scalar_omnisci_variant) << errmsg;
-        auto omnisci_ti = omnisci_results->getColType(col_idx);
-        const auto omnisci_type = omnisci_ti.get_type();
-        checkTypeConsistency(ref_col_type, omnisci_ti);
+        const auto& omnisci_ti = omnisci_results->getColType(col_idx).col_type;
+        const auto omnisci_type = omnisci_ti.type;
+        checkTypeConsistency(ref_col_type, omnisci_type);
         const bool ref_is_null = connector_.isNull(row_idx, col_idx);
         switch (omnisci_type) {
-          case kTINYINT:
-          case kSMALLINT:
-          case kINT:
-          case kBIGINT: {
+          case TDatumType::TINYINT:
+          case TDatumType::SMALLINT:
+          case TDatumType::INT:
+          case TDatumType::BIGINT: {
             const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
             ASSERT_NE(nullptr, omnisci_as_int_p);
             const auto omnisci_val = *omnisci_as_int_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
+              ASSERT_EQ(int_null_val(omnisci_type), omnisci_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
               ASSERT_EQ(ref_val, omnisci_val) << errmsg;
             }
             break;
           }
-          case kTEXT:
-          case kCHAR:
-          case kVARCHAR: {
+          case TDatumType::STR: {
             const auto omnisci_as_str_p =
                 boost::get<NullableString>(scalar_omnisci_variant);
             ASSERT_NE(nullptr, omnisci_as_str_p) << errmsg;
@@ -168,45 +156,42 @@ class SQLiteComparator {
             }
             break;
           }
-          case kNUMERIC:
-          case kDECIMAL:
-          case kDOUBLE: {
+          case TDatumType::DECIMAL:
+          case TDatumType::DOUBLE: {
             const auto omnisci_as_double_p = boost::get<double>(scalar_omnisci_variant);
             ASSERT_NE(nullptr, omnisci_as_double_p) << errmsg;
             const auto omnisci_val = *omnisci_as_double_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kDOUBLE, false)), omnisci_val)
-                  << errmsg;
+              ASSERT_EQ(ThinResultSet::kNullDouble, omnisci_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<double>(row_idx, col_idx);
               ASSERT_TRUE(approx_eq(ref_val, omnisci_val)) << errmsg;
             }
             break;
           }
-          case kFLOAT: {
+          case TDatumType::FLOAT: {
             const auto omnisci_as_float_p = boost::get<float>(scalar_omnisci_variant);
             ASSERT_NE(nullptr, omnisci_as_float_p) << errmsg;
             const auto omnisci_val = *omnisci_as_float_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kFLOAT, false)), omnisci_val)
-                  << errmsg;
+              ASSERT_EQ(ThinResultSet::kNullFloat, omnisci_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<float>(row_idx, col_idx);
               ASSERT_TRUE(approx_eq(ref_val, omnisci_val)) << errmsg;
             }
             break;
           }
-          case kTIMESTAMP:
-          case kDATE: {
+          case TDatumType::TIMESTAMP:
+          case TDatumType::DATE: {
             const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
             const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
             CHECK(omnisci_as_int_p);
             const auto omnisci_val = *omnisci_as_int_p;
             time_t nsec = 0;
-            const int dimen = omnisci_ti.get_dimension();
+            const int dimen = omnisci_ti.precision;
 
             if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
+              CHECK_EQ(int_null_val(omnisci_type), omnisci_val) << errmsg;
             } else {
               auto temp_ref_value = dateTimeParseOptional<kTIMESTAMP>(ref_val, dimen);
               if (!temp_ref_value) {
@@ -223,23 +208,18 @@ class SQLiteComparator {
                   0
                 };
                 gmtime_r(&nsec, &tm_struct);
-                if (is_arrow && omnisci_type == kDATE) {
-                  ASSERT_EQ(*omnisci_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
-                      << errmsg;
-                } else {
-                  ASSERT_EQ(*omnisci_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct))
-                      << errmsg;
-                }
+                ASSERT_EQ(*omnisci_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct))
+                    << errmsg;
               }
             }
             break;
           }
-          case kBOOLEAN: {
+          case TDatumType::BOOL: {
             const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
             CHECK(omnisci_as_int_p) << errmsg;
             const auto omnisci_val = *omnisci_as_int_p;
             if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
+              CHECK_EQ(int_null_val(omnisci_type), omnisci_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
               if (ref_val == "t") {
@@ -251,12 +231,12 @@ class SQLiteComparator {
             }
             break;
           }
-          case kTIME: {
+          case TDatumType::TIME: {
             const auto omnisci_as_int_p = boost::get<int64_t>(scalar_omnisci_variant);
             CHECK(omnisci_as_int_p) << errmsg;
             const auto omnisci_val = *omnisci_as_int_p;
             if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(omnisci_ti), omnisci_val) << errmsg;
+              CHECK_EQ(int_null_val(omnisci_type), omnisci_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
               std::vector<std::string> time_tokens;
@@ -277,17 +257,18 @@ class SQLiteComparator {
     }
   }
 
- private:
   static void checkTypeConsistency(const int ref_col_type,
-                                   const SQLTypeInfo& omnisci_ti) {
+                                   const TDatumType::type omnisci_type) {
     if (ref_col_type == SQLITE_NULL) {
       // TODO(alex): re-enable the check that omnisci_ti is nullable,
       //             got invalidated because of outer joins
       return;
     }
-    if (omnisci_ti.is_integer()) {
+    if (omnisci_type == TDatumType::TINYINT || omnisci_type == TDatumType::SMALLINT ||
+        omnisci_type == TDatumType::INT || omnisci_type == TDatumType::BIGINT) {
       CHECK_EQ(SQLITE_INTEGER, ref_col_type);
-    } else if (omnisci_ti.is_fp() || omnisci_ti.is_decimal()) {
+    } else if (omnisci_type == TDatumType::FLOAT || omnisci_type == TDatumType::DOUBLE ||
+               omnisci_type == TDatumType::DECIMAL) {
       CHECK(ref_col_type == SQLITE_FLOAT || ref_col_type == SQLITE_INTEGER);
     } else {
       CHECK_EQ(SQLITE_TEXT, ref_col_type);
@@ -301,14 +282,14 @@ SQLiteComparator g_sqlite_comparator;
 
 void c(const std::string& query_string,
        const std::string& sqlite_query_string,
-       const ExecutorDeviceType device_type) {
+       const TExecuteMode::type device_type) {
   g_sqlite_comparator.compare(query_string, sqlite_query_string, device_type);
 }
 }  // namespace
 
 #define SKIP_NO_GPU()                                        \
   if (skip_tests(dt)) {                                      \
-    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    CHECK(dt == TExecuteMode::GPU);                          \
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
     continue;                                                \
   }
@@ -365,7 +346,7 @@ int create_and_populate_tables() {
 
     for (const auto& data_col_values : data_col_value_list) {
       std::string insert_query = "INSERT INTO tdata VALUES(" + data_col_values + ");";
-      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      run_multiple_agg(insert_query, TExecuteMode::CPU);
       g_sqlite_comparator.query(insert_query);
     }
   } catch (...) {
@@ -384,7 +365,7 @@ void drop_tables() {
 }  // namespace
 
 TEST(Select, TopK_LIMIT_AscendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i FROM tdata ORDER BY i NULLS FIRST LIMIT 5;",
       "SELECT i FROM tdata ORDER BY i ASC LIMIT 5;",
@@ -414,7 +395,7 @@ TEST(Select, TopK_LIMIT_AscendSort) {
 }
 
 TEST(Select, TopK_LIMIT_DescendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i FROM tdata ORDER BY i DESC NULLS LAST LIMIT 5;",
       "SELECT i FROM tdata ORDER BY i DESC LIMIT 5;",
@@ -444,7 +425,7 @@ TEST(Select, TopK_LIMIT_DescendSort) {
 }
 
 TEST(Select, TopK_LIMIT_GreaterThan_TotalOfDataRows_AscendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT b FROM tdata ORDER BY b NULLS FIRST LIMIT 11;",
       "SELECT b FROM tdata ORDER BY b LIMIT 11;",
@@ -471,7 +452,7 @@ TEST(Select, TopK_LIMIT_GreaterThan_TotalOfDataRows_AscendSort) {
 }
 
 TEST(Select, TopK_LIMIT_GreaterThan_TotalOfDataRows_DescendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i FROM tdata ORDER BY i DESC NULLS LAST LIMIT 11;",
       "SELECT i FROM tdata ORDER BY i DESC LIMIT 11;",
@@ -501,7 +482,7 @@ TEST(Select, TopK_LIMIT_GreaterThan_TotalOfDataRows_DescendSort) {
 }
 
 TEST(Select, TopK_LIMIT_OFFSET_TopHalf_AscendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i FROM tdata ORDER BY i NULLS FIRST LIMIT 5 OFFSET 0;",
       "SELECT i FROM tdata ORDER BY i LIMIT 5 OFFSET 0;",
@@ -531,7 +512,7 @@ TEST(Select, TopK_LIMIT_OFFSET_TopHalf_AscendSort) {
 }
 
 TEST(Select, TopK_LIMIT_OFFSET_TopHalf_DescendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i FROM tdata ORDER BY i DESC NULLS LAST LIMIT 5 OFFSET 0;",
       "SELECT i FROM tdata ORDER BY i DESC LIMIT 5 OFFSET 0;",
@@ -561,7 +542,7 @@ TEST(Select, TopK_LIMIT_OFFSET_TopHalf_DescendSort) {
 }
 
 TEST(Select, DISABLED_TopK_LIMIT_OFFSET_BottomHalf_AscendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i FROM tdata ORDER BY i NULLS FIRST LIMIT 5 OFFSET 5;",
       "SELECT i FROM tdata ORDER BY i LIMIT 5 OFFSET 5;",
@@ -591,7 +572,7 @@ TEST(Select, DISABLED_TopK_LIMIT_OFFSET_BottomHalf_AscendSort) {
 }
 
 TEST(Select, DISABLED_TopK_LIMIT_OFFSET_BottomHalf_DescendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i FROM tdata ORDER BY i DESC NULLS LAST LIMIT 5 OFFSET 5;",
       "SELECT i FROM tdata ORDER BY i DESC LIMIT 5 OFFSET 5;",
@@ -621,7 +602,7 @@ TEST(Select, DISABLED_TopK_LIMIT_OFFSET_BottomHalf_DescendSort) {
 }
 
 TEST(Select, DISABLED_TopK_LIMIT_OFFSET_GreaterThan_TotalOfDataRows_AscendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i FROM tdata ORDER BY i NULLS FIRST LIMIT 5 OFFSET 11;",
       "SELECT i FROM tdata ORDER BY i LIMIT 5 OFFSET 11;",
@@ -651,7 +632,7 @@ TEST(Select, DISABLED_TopK_LIMIT_OFFSET_GreaterThan_TotalOfDataRows_AscendSort) 
 }
 
 TEST(Select, DISABLED_TopK_LIMIT_OFFSET_GreaterThan_TotalOfDataRows_DescendSort) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i FROM tdata ORDER BY i DESC NULLS LAST LIMIT 5 OFFSET 11;",
       "SELECT i FROM tdata ORDER BY i DESC LIMIT 5 OFFSET 11;",
@@ -681,7 +662,7 @@ TEST(Select, DISABLED_TopK_LIMIT_OFFSET_GreaterThan_TotalOfDataRows_DescendSort)
 }
 
 TEST(Select, DISABLED_TopK_LIMIT_OFFSET_DifferentOrders) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
     SKIP_NO_GPU();
     c("SELECT i,d FROM tdata ORDER BY d DESC NULLS LAST LIMIT 5 OFFSET 11;",
       "SELECT i,d FROM tdata ORDER BY d DESC LIMIT 5 OFFSET 11;",
@@ -721,21 +702,18 @@ int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
 
-  QR::init(BASE_PATH);
-
   int err{0};
-  err = create_and_populate_tables();
-  if (err) {
-    return err;
-  }
-
   try {
+    SqlTestFixture::initConnection(argc, argv);
+    err = create_and_populate_tables();
+    if (err) {
+      return err;
+    }
     err = RUN_ALL_TESTS();
+    drop_tables();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+    err = 1;
   }
-
-  drop_tables();
-  QR::reset();
   return err;
 }

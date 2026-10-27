@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 
-#include "DBHandlerTestHelpers.h"
+#include "SqlTestFixture.h"
 #include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
@@ -18,9 +18,9 @@
 #define BASE_PATH "./tmp"
 #endif
 
-class AlterSystemTest : public DBHandlerTestFixture {
+class AlterSystemTest : public SqlTestFixture {
  public:
-  void SetUp() override { DBHandlerTestFixture::SetUp(); }
+  void SetUp() override { SqlTestFixture::SetUp(); }
 
   static void SetUpTestSuite() {
     createDBHandler();
@@ -43,7 +43,7 @@ class AlterSystemTest : public DBHandlerTestFixture {
     dropDBs();
   }
 
-  void TearDown() override { DBHandlerTestFixture::TearDown(); }
+  void TearDown() override { SqlTestFixture::TearDown(); }
 
   // Return the amount of memory caches used in the system
   int64_t getMemoryData(const TSessionId& session, const std::string& memory_level) {
@@ -226,44 +226,42 @@ TEST_F(AlterSystemTest, CLEAR_MEMORY_NOSUPER) {
   logout(user_session);
 }
 
+// NOTE: the in-process versions of the SET_EXECUTOR_* tests also asserted the session's
+// device via DBHandler::getExecutionMode() and forced DBHandler::cpu_mode_only_. Neither
+// is observable over Thrift, so these check that the ALTER SESSION statements are
+// accepted or rejected according to whether the server has GPUs.
 TEST_F(AlterSystemTest, SET_EXECUTOR_CPU) {
   TSessionId user_session;
   TQueryResult result;
   login("user1", "HyperInteractive", "db1", user_session);
-  auto* handler = getDbHandlerAndSessionId().first;
-  if (handler->cpu_mode_only_ == false) {
-    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='GPU'", user_session);
-    ASSERT_EQ(TExecuteMode::GPU, handler->getExecutionMode(user_session));
+  if (gpusPresent()) {
+    EXPECT_NO_THROW(sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='GPU'", user_session));
   }
-  sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='CPU'", user_session);
-  ASSERT_EQ(TExecuteMode::CPU, handler->getExecutionMode(user_session));
+  EXPECT_NO_THROW(sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='CPU'", user_session));
 }
 
 TEST_F(AlterSystemTest, SET_EXECUTOR_GPU) {
-  TSessionId user_session;
-  TQueryResult result;
-  auto* handler = getDbHandlerAndSessionId().first;
-  if (handler->cpu_mode_only_ == false) {
-    login("user1", "HyperInteractive", "db1", user_session);
-    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='CPU'", user_session);
-    ASSERT_EQ(TExecuteMode::CPU, handler->getExecutionMode(user_session));
-    sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='GPU'", user_session);
-    ASSERT_EQ(TExecuteMode::GPU, handler->getExecutionMode(user_session));
+  if (!gpusPresent()) {
+    GTEST_SKIP() << "Requires a server with GPUs";
   }
-}
-
-TEST_F(AlterSystemTest, SET_EXECUTOR_GPU_CPUONLY) {
   TSessionId user_session;
   TQueryResult result;
   login("user1", "HyperInteractive", "db1", user_session);
-  auto* handler = getDbHandlerAndSessionId().first;
-  auto actual_cpu_mode = handler->cpu_mode_only_;
-  handler->cpu_mode_only_ = true;
+  EXPECT_NO_THROW(sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='CPU'", user_session));
+  EXPECT_NO_THROW(sql(result, "ALTER SESSION SET EXECUTOR_DEVICE='GPU'", user_session));
+}
+
+TEST_F(AlterSystemTest, SET_EXECUTOR_GPU_CPUONLY) {
+  if (gpusPresent()) {
+    GTEST_SKIP() << "Requires a server started in CPU-only mode (the AlterSystemTest_cpu_only "
+                    "ctest entry)";
+  }
+  TSessionId user_session;
+  login("user1", "HyperInteractive", "db1", user_session);
   queryAndAssertException(
       "ALTER SESSION SET EXECUTOR_DEVICE='GPU'",
       "TException - service has thrown: TDBException(error_msg=Cannot switch to "
       "GPU mode in a server started in CPU-only mode.)");
-  handler->cpu_mode_only_ = actual_cpu_mode;
 }
 
 TEST_F(AlterSystemTest, SET_EXECUTOR_CASE_INSENSITIVE) {
@@ -306,18 +304,16 @@ TEST_F(AlterSystemTest, SET_CURRENT_DATABASE_PERMISSION) {
 }
 
 int main(int argc, char** argv) {
-  g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  DBHandlerTestFixture::initTestArgs(argc, argv);
 
   int err{0};
   try {
-    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
+    SqlTestFixture::initConnection(argc, argv);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+    err = 1;
   }
-  g_enable_fsi = false;
   return err;
 }

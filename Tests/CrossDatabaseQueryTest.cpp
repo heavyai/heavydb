@@ -8,7 +8,7 @@
 
 #include <gtest/gtest.h>
 
-#include "DBHandlerTestHelpers.h"
+#include "SqlTestFixture.h"
 #include "Shared/SysDefinitions.h"
 #include "TestHelpers.h"
 
@@ -16,7 +16,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
-class CrossDatabaseQueryTest : public DBHandlerTestFixture {
+class CrossDatabaseQueryTest : public SqlTestFixture {
  public:
   static void SetUpTestSuite() {
     createDBHandler();
@@ -91,7 +91,7 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
   }
 
   void SetUp() override {
-    DBHandlerTestFixture::SetUp();
+    SqlTestFixture::SetUp();
     switchToAdmin();
   }
 
@@ -99,7 +99,7 @@ class CrossDatabaseQueryTest : public DBHandlerTestFixture {
     switchToAdmin();
     sql("REVOKE ALL ON DATABASE db_2 FROM test_user;");
     sql("DROP TABLE IF EXISTS ctas_test_table;");
-    DBHandlerTestFixture::TearDown();
+    SqlTestFixture::TearDown();
   }
 
   void assertExportedFileContent(const std::vector<std::string>& expected_rows) {
@@ -334,17 +334,10 @@ TEST_F(CrossDatabaseQueryTest, CtasTableWithTextEncodedColumnFromAnotherDbDefaul
                        {900.0, "cc", "a"}});
   // clang-format on
 
-  // Assert that the string dictionary is not shared
-  const auto& catalog = getCatalog();
-  auto table_id = catalog.getTableId("ctas_test_table");
-  ASSERT_TRUE(table_id.has_value());
-  const auto cd = catalog.getMetadataForColumn(table_id.value(), "c2");
-  ASSERT_TRUE(cd != nullptr);
-  const auto& dict_key = cd->columnType.getStringDictKey();
-  ASSERT_EQ(catalog.getDatabaseId(), dict_key.db_id);
-  const auto dd = catalog.getMetadataForDict(dict_key.dict_id, false);
-  ASSERT_TRUE(dd != nullptr);
-  ASSERT_EQ(dd->refcount, 1);
+  // NOTE: the in-process version also asserted via the catalog that the new column's
+  // string dictionary is unshared (refcount == 1, same db_id). The server does not
+  // expose dictionary keys over Thrift, so that assertion needs a catalog-level unit
+  // test rather than a thin-client one.
 }
 
 TEST_F(CrossDatabaseQueryTest,
@@ -633,15 +626,14 @@ TEST_F(CrossDatabaseWriteQueryTest, OptimizeTableInAnotherDb) {
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  DBHandlerTestFixture::initTestArgs(argc, argv);
 
   int err{0};
   try {
-    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
+    SqlTestFixture::initConnection(argc, argv);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+    err = 1;
   }
-  g_enable_fsi = false;
   return err;
 }

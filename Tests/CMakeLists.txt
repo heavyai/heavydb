@@ -30,6 +30,76 @@ set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner absl::str_format ${MAPD_LIBR
   ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${Boost_LIBRARIES} ${ZLIB_LIBRARIES}
   ${AwsS3_CURL_SUPPORT})
 set(THRIFT_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
+# Thin-client tests only talk to a running heavydb over Thrift (see SqlTestFixture.h)
+# and must not link the query engine.
+set(THIN_CLIENT_TEST_LIBS gtest Logger Shared mapd_thrift ThriftClient ${Boost_LIBRARIES}
+  ${LLVM_LINKER_FLAGS})
+
+# Registers a ctest entry that runs scripts/ci/run_server.sh: that starts a heavydb on
+# Tests/tmp, runs Tests/<binary> against it, and stops the server. The binary only needs
+# the build tree's bin/heavydb, so it can run on a different runner than the one that
+# built it. The in-process tests ran with the defaults of the server globals, and the
+# parameters DBHandlerTestFixture passed to DBHandler, which differ from heavydb's
+# command-line defaults, so the server is started with the same ones (unless the test's
+# SERVER_FLAGS set them) and the same permissive path whitelist:
+#   --enable-watchdog=false        g_enable_watchdog is false in process, true on the CLI
+#   --enable-runtime-udfs=false    the fixture used RuntimeUdfRegistrationPolicy::DISALLOWED
+# The admin session is also set to CPU execution (SqlTestFixture::initConnection).
+macro(_thin_client_ctest ctest_name binary server_flags gtest_filter no_allowed_paths setup_cmd)
+  set(_thin_flags "")
+  if(NOT "${no_allowed_paths}")
+    set(_thin_flags "--allowed-import-paths='[\"/\"]' --allowed-export-paths='[\"/\"]'")
+  endif()
+  string(FIND "${server_flags}" "--enable-watchdog" _thin_watchdog_pos)
+  if(_thin_watchdog_pos EQUAL -1)
+    string(APPEND _thin_flags " --enable-watchdog=false")
+  endif()
+  string(FIND "${server_flags}" "--enable-runtime-udfs" _thin_udfs_pos)
+  if(_thin_udfs_pos EQUAL -1)
+    string(APPEND _thin_flags " --enable-runtime-udfs=false")
+  endif()
+  set(_thin_args "")
+  if(NOT "${gtest_filter}" STREQUAL "")
+    set(_thin_args "--gtest_filter=${gtest_filter}")
+  endif()
+  add_test(NAME ${ctest_name} COMMAND ${CMAKE_SOURCE_DIR}/scripts/ci/run_server.sh)
+  set_tests_properties(${ctest_name} PROPERTIES
+    ENVIRONMENT "BUILD_DIR=${CMAKE_BINARY_DIR};BINARY=Tests/${binary};DATA=Tests/tmp;SERVER_FLAGS=${_thin_flags} ${server_flags};EXTRA_ARGS=${_thin_args};SERVER_SETUP_CMD=${setup_cmd};RESULTS_FILE=${ctest_name}.xml"
+    RESOURCE_LOCK heavydb_server)  # one server on the default port at a time
+endmacro()
+
+# Tests that used QueryRunner::runSQL (SpecialChars, TopK, CorrelatedSubquery) ran Calcite
+# with view optimization off, so they pass --enable-calcite-view-optimize=false.
+# QueryRunner also sets g_serialize_temp_tables, which has no command-line option.
+#
+# add_thin_client_test(<name> [SERVER_FLAGS <flag>...] [LIBS <lib>...] [GTEST_FILTER <f>]
+#                      [NO_ALLOWED_PATHS] [SETUP_CMD <shell command>])
+# NO_ALLOWED_PATHS starts the server with the default import/export whitelist instead of
+# the permissive one; SETUP_CMD runs before the server starts.
+# Builds <name>.cpp against THIN_CLIENT_TEST_LIBS and registers it as a sanity test.
+macro(add_thin_client_test name)
+  cmake_parse_arguments(THIN "NO_ALLOWED_PATHS" "GTEST_FILTER;SETUP_CMD" "SERVER_FLAGS;LIBS" ${ARGN})
+  add_executable(${name} ${name}.cpp)
+  target_link_libraries(${name} ${THIN_CLIENT_TEST_LIBS} ${THIN_LIBS})
+  add_dependencies(${name} thrift_gen)
+  string(REPLACE ";" " " _thin_server_flags "${THIN_SERVER_FLAGS}")
+  _thin_client_ctest(${name} ${name} "${_thin_server_flags}" "${THIN_GTEST_FILTER}"
+    "${THIN_NO_ALLOWED_PATHS}" "${THIN_SETUP_CMD}")
+  list(APPEND SANITY_TEST_PROGRAMS ${name})
+endmacro()
+
+# add_thin_client_test_variant(<name> <suffix> [SERVER_FLAGS <flag>...] [GTEST_FILTER <f>]
+#                              [NO_ALLOWED_PATHS] [SETUP_CMD <shell command>])
+# Runs the already added thin test <name> again, as sanity test <name>_<suffix>, against
+# a server started with different flags; for tests that need a server global that the
+# in-process tests flipped mid-run.
+macro(add_thin_client_test_variant name suffix)
+  cmake_parse_arguments(THINV "NO_ALLOWED_PATHS" "GTEST_FILTER;SETUP_CMD" "SERVER_FLAGS" ${ARGN})
+  string(REPLACE ";" " " _thin_server_flags "${THINV_SERVER_FLAGS}")
+  _thin_client_ctest(${name}_${suffix} ${name} "${_thin_server_flags}" "${THINV_GTEST_FILTER}"
+    "${THINV_NO_ALLOWED_PATHS}" "${THINV_SETUP_CMD}")
+  list(APPEND SANITY_TESTS ${name}_${suffix})
+endmacro()
 
 set(TF_TEST_LIBS ${EXECUTE_TEST_LIBS})
 if(ENABLE_SYSTEM_TFS AND ENABLE_GFX_TFS AND ENABLE_RENDERING)
@@ -91,10 +161,11 @@ list(LENGTH SANITY_TESTS _P1_START_T)
 
 ##########
 
-add_executable(AlterSystemTest AlterSystemTest.cpp)
-target_link_libraries(AlterSystemTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(AlterSystemTest AlterSystemTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS AlterSystemTest)
+# SET_EXECUTOR_GPU_CPUONLY needs a server started with --cpu-only (the in-process test forced
+# DBHandler::cpu_mode_only_), on a host with GPUs too, so it has its own entry.
+add_thin_client_test(AlterSystemTest GTEST_FILTER -*SET_EXECUTOR_GPU_CPUONLY)
+add_thin_client_test_variant(AlterSystemTest cpu_only
+  SERVER_FLAGS --cpu-only GTEST_FILTER *SET_EXECUTOR_GPU_CPUONLY)
 
 ##########
 
@@ -205,10 +276,12 @@ list(APPEND SANITY_TEST_PROGRAMS ConcurrencyTest)
 
 ##########
 
-add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
-target_link_libraries(CorrelatedSubqueryTest ${EXECUTE_TEST_LIBS})
-add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS CorrelatedSubqueryTest)
+add_thin_client_test(CorrelatedSubqueryTest GTEST_FILTER -*WatchdogEnabled*
+  SERVER_FLAGS --enable-calcite-view-optimize=false)
+# watchdog on: the query that is accepted with it off must be rejected
+add_thin_client_test_variant(CorrelatedSubqueryTest watchdog
+  SERVER_FLAGS --enable-watchdog=true --enable-calcite-view-optimize=false
+  GTEST_FILTER *WatchdogEnabled*)
 
 ##########
 
@@ -219,10 +292,7 @@ list(APPEND SANITY_TEST_PROGRAMS CreateAndDropTableDdlTest)
 
 ##########
 
-add_executable(CrossDatabaseQueryTest CrossDatabaseQueryTest.cpp)
-target_link_libraries(CrossDatabaseQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(CrossDatabaseQueryTest CrossDatabaseQueryTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS CrossDatabaseQueryTest)
+add_thin_client_test(CrossDatabaseQueryTest)
 
 ##########
 
@@ -389,10 +459,7 @@ list(APPEND SANITY_TEST_PROGRAMS ExecutorResourceMgrTest)
 
 ##########
 
-add_executable(ExplainTest ExplainTest.cpp)
-target_link_libraries(ExplainTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(ExplainTest ExplainTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS ExplainTest)
+add_thin_client_test(ExplainTest)
 
 ##########
 
@@ -403,10 +470,37 @@ list(APPEND SANITY_TEST_PROGRAMS FileMgrTest)
 
 ##########
 
-add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
-target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(FilePathWhitelistTest FilePathWhitelistTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS FilePathWhitelistTest)
+# The whitelist is fixed when heavydb starts, so the tests that need different ones run
+# against separate servers, selected by gtest filter. The groups must cover every test.
+set(_fpw_dir ${CMAKE_SOURCE_DIR}/Tests/FilePathWhitelist)
+set(_fpw_export_dir /tmp/heavyai_whitelist_export_test)  # must exist when the server starts
+add_thin_client_test(FilePathWhitelistTest
+  NO_ALLOWED_PATHS
+  SETUP_CMD "mkdir -p ${_fpw_export_dir}"
+  SERVER_FLAGS "--allowed-import-paths='[\"${_fpw_dir}\"]'"
+               "--allowed-export-paths='[\"${_fpw_export_dir}\"]'"
+  GTEST_FILTER
+    "*FilePathWhitelistTest.WhitelistedPath/*:*FilePathWhitelistTest.NonWhitelistedPath/*:*FilePathWhitelistTest.WhitelistedSymlinkToUnlistedPath/*:*FilePathWhitelistTest.UnlistedSymlinkToWhitelistedPath/*:*FilePathWhitelistTest.UnlistedSymlinkToUnlistedPath/*")
+# root path whitelisted (the default for thin tests); the blacklist is checked first
+add_thin_client_test_variant(FilePathWhitelistTest blacklist
+  GTEST_FILTER
+    "*FilePathWhitelistTest.RootPathWhitelisted/*:*FilePathWhitelistTest.BlacklistedPath/*:*FilePathWhitelistTest.UnlistedSymlinkToBlacklistedPath/*:FilePathWhitelistTest.*Blacklist")
+# only the default import/export directories under the data directory
+add_thin_client_test_variant(FilePathWhitelistTest default_paths
+  NO_ALLOWED_PATHS
+  GTEST_FILTER
+    "*FilePathWhitelistTest.NonExistentFilePath/*:*FilePathWhitelistTest.DefaultImportAndExportPaths/*:FilePathWhitelistTest.ExportRelativePath:DBHandlerFilePathTest/*")
+
+# Unit tests of ddl_utils (whitelist config parsing, path validation); no server needed.
+add_executable(FilePathValidationTest FilePathValidationTest.cpp)
+target_link_libraries(FilePathValidationTest Utils Geospatial gtest Logger Shared ${Boost_LIBRARIES}
+  ${OPENSSL_LIBRARIES})
+if (NOT USE_ALTERNATE_LINKER STREQUAL "mold")
+  # Libraries are just out-of-order in the link.txt file which mold can handle.
+  target_link_libraries(FilePathValidationTest ${GDAL_LIBRARIES})
+endif()
+add_test(FilePathValidationTest FilePathValidationTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS FilePathValidationTest)
 
 ##########
 
@@ -528,10 +622,17 @@ target_link_libraries(LlmTransformIntegrationTest gtest Logger Shared mapd_thrif
 
 ##########
 
-add_executable(LoadTableTest LoadTableTest.cpp)
-target_link_libraries(LoadTableTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(LoadTableTest LoadTableTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS LoadTableTest)
+# LoadTableTest builds Arrow IPC payloads client-side, so it also links Arrow.
+add_thin_client_test(LoadTableTest LIBS absl::str_format ${Arrow_LIBRARIES} ${URIPARSER_LIBRARY})
+
+##########
+
+# Split out of LoadTableTest: steers the in-process DBHandler through the test process's
+# AWS environment, so it cannot be a thin client.
+add_executable(ThriftDetectServerPrivilegeTest ThriftDetectServerPrivilegeTest.cpp)
+target_link_libraries(ThriftDetectServerPrivilegeTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(ThriftDetectServerPrivilegeTest ThriftDetectServerPrivilegeTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS ThriftDetectServerPrivilegeTest)
 
 ##########
 
@@ -629,10 +730,21 @@ list(APPEND SANITY_TEST_PROGRAMS PkiEncryptorTest)
 
 ##########
 
-add_executable(ReadOnlyTest ReadOnlyTest.cpp)
-target_link_libraries(ReadOnlyTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(ReadOnlyTest ReadOnlyTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS ReadOnlyTest)
+# The in-process main() set g_read_only, g_enable_system_tables = false, g_enable_fsi = false
+# and the disk cache level to none. A server only keeps FSI off if no import path needs it:
+# CommandLineOptions turns FSI back on when legacy parquet import is off, FSI regex import is
+# on, or (in ODBC builds) FSI ODBC import is on, and those are the defaults. A read-only
+# server rejects every import anyway, so they are all switched to the non-FSI side. The
+# parquet and ODBC options only exist when the matching CMake options are on.
+set(_readonly_flags --read-only --enable-system-tables=false --disk-cache-level=none
+  --enable-fsi=false --enable-fsi-regex-import=false)
+if(ENABLE_IMPORT_PARQUET)
+  list(APPEND _readonly_flags --enable-legacy-parquet-import=true)
+endif()
+if(ENABLE_FSI_ODBC)
+  list(APPEND _readonly_flags --enable-fsi-odbc-import=false)
+endif()
+add_thin_client_test(ReadOnlyTest SERVER_FLAGS ${_readonly_flags})
 
 ##########
 
@@ -710,10 +822,7 @@ list(APPEND SANITY_TEST_PROGRAMS SQLHintTest)
 
 ##########
 
-add_executable(SpecialCharsTest SpecialCharsTest.cpp)
-target_link_libraries(SpecialCharsTest ${EXECUTE_TEST_LIBS})
-add_test(SpecialCharsTest SpecialCharsTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS SpecialCharsTest)
+add_thin_client_test(SpecialCharsTest SERVER_FLAGS --enable-calcite-view-optimize=false)
 
 ##########
 
@@ -801,10 +910,7 @@ list(APPEND SANITY_TEST_PROGRAMS TokenCompletionHintsTest)
 
 ##########
 
-add_executable(TopKTest TopKTest.cpp)
-target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
-add_test(TopKTest TopKTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS TopKTest)
+add_thin_client_test(TopKTest LIBS SqliteConnector SERVER_FLAGS --enable-calcite-view-optimize=false)
 
 ##########
 
@@ -965,10 +1071,9 @@ add_test(UtilTest UtilTest ${TEST_ARGS})
 
 ##########
 
-add_executable(ValidationQueryTest ValidationQueryTest.cpp)
-target_link_libraries(ValidationQueryTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(ValidationQueryTest ValidationQueryTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS ValidationQueryTest)
+# The in-process main() set g_is_test_env, which has no server flag (it shrinks the
+# result-set arena and lets tests reset the code cache); the server runs without it.
+add_thin_client_test(ValidationQueryTest)
 
 ##########
 
