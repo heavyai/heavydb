@@ -41,8 +41,11 @@ set(THIN_CLIENT_TEST_LIBS gtest Logger Shared mapd_thrift ThriftClient ${Boost_L
 # built it. The in-process tests ran with the defaults of the server globals, which differ
 # from heavydb's command-line defaults, so the server is started with the same ones
 # (unless the test's SERVER_FLAGS set them) and the same permissive path whitelist.
-macro(_thin_client_ctest ctest_name binary server_flags gtest_filter)
-  set(_thin_flags "--allowed-import-paths='[\"/\"]' --allowed-export-paths='[\"/\"]'")
+macro(_thin_client_ctest ctest_name binary server_flags gtest_filter no_allowed_paths setup_cmd)
+  set(_thin_flags "")
+  if(NOT "${no_allowed_paths}")
+    set(_thin_flags "--allowed-import-paths='[\"/\"]' --allowed-export-paths='[\"/\"]'")
+  endif()
   string(FIND "${server_flags}" "--enable-watchdog" _thin_watchdog_pos)
   if(_thin_watchdog_pos EQUAL -1)
     string(APPEND _thin_flags " --enable-watchdog=false")
@@ -53,30 +56,36 @@ macro(_thin_client_ctest ctest_name binary server_flags gtest_filter)
   endif()
   add_test(NAME ${ctest_name} COMMAND ${CMAKE_SOURCE_DIR}/scripts/ci/run_server.sh)
   set_tests_properties(${ctest_name} PROPERTIES
-    ENVIRONMENT "BUILD_DIR=${CMAKE_BINARY_DIR};BINARY=Tests/${binary};DATA=Tests/tmp;SERVER_FLAGS=${_thin_flags} ${server_flags};EXTRA_ARGS=${_thin_args};RESULTS_FILE=${ctest_name}.xml"
+    ENVIRONMENT "BUILD_DIR=${CMAKE_BINARY_DIR};BINARY=Tests/${binary};DATA=Tests/tmp;SERVER_FLAGS=${_thin_flags} ${server_flags};EXTRA_ARGS=${_thin_args};SERVER_SETUP_CMD=${setup_cmd};RESULTS_FILE=${ctest_name}.xml"
     RESOURCE_LOCK heavydb_server)  # one server on the default port at a time
 endmacro()
 
-# add_thin_client_test(<name> [SERVER_FLAGS <flag>...] [LIBS <lib>...] [GTEST_FILTER <f>])
+# add_thin_client_test(<name> [SERVER_FLAGS <flag>...] [LIBS <lib>...] [GTEST_FILTER <f>]
+#                      [NO_ALLOWED_PATHS] [SETUP_CMD <shell command>])
+# NO_ALLOWED_PATHS starts the server with the default import/export whitelist instead of
+# the permissive one; SETUP_CMD runs before the server starts.
 # Builds <name>.cpp against THIN_CLIENT_TEST_LIBS and registers it as a sanity test.
 macro(add_thin_client_test name)
-  cmake_parse_arguments(THIN "" "GTEST_FILTER" "SERVER_FLAGS;LIBS" ${ARGN})
+  cmake_parse_arguments(THIN "NO_ALLOWED_PATHS" "GTEST_FILTER;SETUP_CMD" "SERVER_FLAGS;LIBS" ${ARGN})
   add_executable(${name} ${name}.cpp)
   target_link_libraries(${name} ${THIN_CLIENT_TEST_LIBS} ${THIN_LIBS})
   add_dependencies(${name} thrift_gen)
   string(REPLACE ";" " " _thin_server_flags "${THIN_SERVER_FLAGS}")
-  _thin_client_ctest(${name} ${name} "${_thin_server_flags}" "${THIN_GTEST_FILTER}")
+  _thin_client_ctest(${name} ${name} "${_thin_server_flags}" "${THIN_GTEST_FILTER}"
+    "${THIN_NO_ALLOWED_PATHS}" "${THIN_SETUP_CMD}")
   list(APPEND SANITY_TEST_PROGRAMS ${name})
 endmacro()
 
-# add_thin_client_test_variant(<name> <suffix> [SERVER_FLAGS <flag>...] [GTEST_FILTER <f>])
+# add_thin_client_test_variant(<name> <suffix> [SERVER_FLAGS <flag>...] [GTEST_FILTER <f>]
+#                              [NO_ALLOWED_PATHS] [SETUP_CMD <shell command>])
 # Runs the already added thin test <name> again, as sanity test <name>_<suffix>, against
 # a server started with different flags; for tests that need a server global that the
 # in-process tests flipped mid-run.
 macro(add_thin_client_test_variant name suffix)
-  cmake_parse_arguments(THINV "" "GTEST_FILTER" "SERVER_FLAGS" ${ARGN})
+  cmake_parse_arguments(THINV "NO_ALLOWED_PATHS" "GTEST_FILTER;SETUP_CMD" "SERVER_FLAGS" ${ARGN})
   string(REPLACE ";" " " _thin_server_flags "${THINV_SERVER_FLAGS}")
-  _thin_client_ctest(${name}_${suffix} ${name} "${_thin_server_flags}" "${THINV_GTEST_FILTER}")
+  _thin_client_ctest(${name}_${suffix} ${name} "${_thin_server_flags}" "${THINV_GTEST_FILTER}"
+    "${THINV_NO_ALLOWED_PATHS}" "${THINV_SETUP_CMD}")
   list(APPEND SANITY_TESTS ${name}_${suffix})
 endmacro()
 
@@ -443,10 +452,37 @@ list(APPEND SANITY_TEST_PROGRAMS FileMgrTest)
 
 ##########
 
-add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)
-target_link_libraries(FilePathWhitelistTest ${THRIFT_HANDLER_TEST_LIBRARIES})
-add_test(FilePathWhitelistTest FilePathWhitelistTest ${TEST_ARGS})
-list(APPEND SANITY_TEST_PROGRAMS FilePathWhitelistTest)
+# The whitelist is fixed when heavydb starts, so the tests that need different ones run
+# against separate servers, selected by gtest filter. The groups must cover every test.
+set(_fpw_dir ${CMAKE_SOURCE_DIR}/Tests/FilePathWhitelist)
+set(_fpw_export_dir /tmp/heavyai_whitelist_export_test)  # must exist when the server starts
+add_thin_client_test(FilePathWhitelistTest
+  NO_ALLOWED_PATHS
+  SETUP_CMD "mkdir -p ${_fpw_export_dir}"
+  SERVER_FLAGS "--allowed-import-paths='[\"${_fpw_dir}\"]'"
+               "--allowed-export-paths='[\"${_fpw_export_dir}\"]'"
+  GTEST_FILTER
+    "*FilePathWhitelistTest.WhitelistedPath/*:*FilePathWhitelistTest.NonWhitelistedPath/*:*FilePathWhitelistTest.WhitelistedSymlinkToUnlistedPath/*:*FilePathWhitelistTest.UnlistedSymlinkToWhitelistedPath/*:*FilePathWhitelistTest.UnlistedSymlinkToUnlistedPath/*")
+# root path whitelisted (the default for thin tests); the blacklist is checked first
+add_thin_client_test_variant(FilePathWhitelistTest blacklist
+  GTEST_FILTER
+    "*FilePathWhitelistTest.RootPathWhitelisted/*:*FilePathWhitelistTest.BlacklistedPath/*:*FilePathWhitelistTest.UnlistedSymlinkToBlacklistedPath/*:FilePathWhitelistTest.*Blacklist")
+# only the default import/export directories under the data directory
+add_thin_client_test_variant(FilePathWhitelistTest default_paths
+  NO_ALLOWED_PATHS
+  GTEST_FILTER
+    "*FilePathWhitelistTest.NonExistentFilePath/*:*FilePathWhitelistTest.DefaultImportAndExportPaths/*:FilePathWhitelistTest.ExportRelativePath:DBHandlerFilePathTest/*")
+
+# Unit tests of ddl_utils (whitelist config parsing, path validation); no server needed.
+add_executable(FilePathValidationTest FilePathValidationTest.cpp)
+target_link_libraries(FilePathValidationTest Utils Geospatial gtest Logger Shared ${Boost_LIBRARIES}
+  ${OPENSSL_LIBRARIES})
+if (NOT USE_ALTERNATE_LINKER STREQUAL "mold")
+  # Libraries are just out-of-order in the link.txt file which mold can handle.
+  target_link_libraries(FilePathValidationTest ${GDAL_LIBRARIES})
+endif()
+add_test(FilePathValidationTest FilePathValidationTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS FilePathValidationTest)
 
 ##########
 

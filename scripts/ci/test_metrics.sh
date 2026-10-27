@@ -24,6 +24,9 @@
 #   BUILD_DIR    - build tree (default: /workspace/build if it exists, else build)
 #   NPROC        - parallel make jobs (default: 8)
 #   MAPD_DEPS_SH - mapd-deps env file (default: /usr/local/mapd-deps/mapd-deps.sh)
+#   NEW_CTEST_REGEX - ctest -R regex for the new side, for a test that was split into
+#                several ctest entries (default: ^<TestName>$). Sizes are still those of
+#                Tests/<TestName>; times are summed over everything the regex matches.
 #   OUT          - also write the table to this file (default: $BUILD_DIR/test_metrics.md)
 #
 set -uo pipefail
@@ -134,7 +137,7 @@ for t in "${tests[@]}"; do
   new_size=$(mb "$(stat -c %s "Tests/$t")")
   walls=(); gts=()
   for _ in $(seq "$runs"); do
-    read -r w g rc < <(run_timed "$BUILD_DIR/baseline/new_$t.log" ctest -V -R "^$t\$" --timeout 1800)
+    read -r w g rc < <(run_timed "$BUILD_DIR/baseline/new_$t.log" ctest -V -R "${NEW_CTEST_REGEX:-^$t\$}" --timeout 1800)
     [ "$rc" -ne 0 ] && echo "WARNING: ctest $t exited $rc (see baseline/new_$t.log)" >&2
     walls+=("$w"); gts+=("$g")
   done

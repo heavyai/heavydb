@@ -26,6 +26,8 @@
 #                  read-only: "../startheavy --read-only".
 #   SERVER_FLAGS - extra flags appended to the default heavydb command
 #   SERVER_WAIT  - seconds to wait for the server to come up (default: 60)
+#   SERVER_SETUP_CMD - shell command run before the server starts (e.g. to create a
+#                  directory the server's flags refer to)
 #   SERVER_STOP_WAIT - seconds to wait for the server to exit after SIGTERM before
 #                  SIGKILL (default: 10)
 #   EXTRA_ARGS   - extra args for BINARY
@@ -66,6 +68,10 @@ if [ "${NO_ASLR:-false}" = "true" ]; then
   # TSAN-instrumented server FATALs on randomized address space; pin
   # ADDR_NO_RANDOMIZE for it (and its children) via setarch -R.
   SERVER_CMD="setarch $(uname -m) -R $SERVER_CMD"
+fi
+
+if [ -n "${SERVER_SETUP_CMD:-}" ]; then
+  eval "$SERVER_SETUP_CMD"
 fi
 
 echo "Starting server: $SERVER_CMD"
