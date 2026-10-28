@@ -1651,19 +1651,21 @@ std::unique_ptr<CustomExpression> Catalog::getCustomExpressionFromConnector(size
 
 namespace {
 // A new dictionary id must map to an empty location. Dictionary ids are reused (the
-// sqlite ids are not AUTOINCREMENT), so an existing directory is an orphan from an
+// sqlite ids are not AUTOINCREMENT), so a directory with content is an orphan from an
 // earlier table whose catalog rows were lost. Adopting it would load stale strings under
-// a new schema, so treat it as an invalid disk state rather than continue.
-void check_dictionary_directory_absent(const boost::filesystem::path& path) {
-  CHECK(!boost::filesystem::exists(path))
+// a new schema, so treat it as an invalid disk state rather than continue. An empty
+// directory holds nothing to adopt: a crash between creating it and committing the table
+// leaves one, and aborting on it would fail every retry of the statement.
+void check_dictionary_directory_unoccupied(const boost::filesystem::path& path) {
+  CHECK(!dictionary_directory_is_occupied(path))
       << "Cannot create string dictionary: directory " << path.string()
-      << " already exists. It is likely left over from a table whose creation was not "
-         "committed; move it aside and restart.";
+      << " already exists and is not empty. It is likely left over from a table whose "
+         "creation was not committed; move it aside and restart.";
 }
 
 void create_new_dictionary_directory(const boost::filesystem::path& path) {
-  check_dictionary_directory_absent(path);
-  boost::filesystem::create_directory(path);
+  check_dictionary_directory_unoccupied(path);
+  boost::filesystem::create_directory(path);  // no-op if the empty directory exists
 }
 }  // namespace
 
@@ -1673,8 +1675,8 @@ void Catalog::addTableToMap(const TableDescriptor* td,
   cat_write_lock write_lock(this);
   // Check every dictionary directory before creating any: an abort on a later one must
   // not leave the earlier ones behind as new orphans.
-  if (const auto existing = find_existing_dictionary_directory(dicts)) {
-    check_dictionary_directory_absent(*existing);
+  if (const auto occupied = find_occupied_dictionary_directory(dicts)) {
+    check_dictionary_directory_unoccupied(*occupied);
   }
   TableDescriptor* new_td;
 
@@ -2441,9 +2443,23 @@ void Catalog::delDictionaryTransactional(const ColumnDescriptor& cd) {
     delDictionaryNontransactional(cd);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
+    pendingRefcountDecrements_.clear();
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
+  applyPendingDictionaryRefcounts();
+}
+
+void Catalog::applyPendingDictionaryRefcounts() {
+  cat_write_lock write_lock(this);
+  for (const auto& dict_ref : pendingRefcountDecrements_) {
+    // The descriptor is gone if the count reached zero and the dictionary was removed.
+    if (const auto it = dictDescriptorMapByRef_.find(dict_ref);
+        it != dictDescriptorMapByRef_.end() && it->second->refcount > 0) {
+      --it->second->refcount;
+    }
+  }
+  pendingRefcountDecrements_.clear();
 }
 
 void Catalog::delDictionaryNontransactional(const ColumnDescriptor& cd) {
@@ -2469,14 +2485,11 @@ void Catalog::delDictionaryNontransactional(const ColumnDescriptor& cd) {
   VLOG(3) << "Dictionary " << dictId << "from dropped table has reference count "
           << refcount;
   const DictRef dictRef(currentDB_.dbId, dictId);
-  // Keep the in-memory count in step with the stored one. Otherwise, dropping a column
-  // that shares this dictionary leaves it too high, and a later DROP TABLE never sees it
-  // reach zero in removeTableFromMap(), so the dictionary directory is not removed even
-  // though its catalog row is deleted.
-  if (const auto it = dictDescriptorMapByRef_.find(dictRef);
-      it != dictDescriptorMapByRef_.end()) {
-    it->second->refcount = refcount;
-  }
+  // Keep the in-memory count in step with the stored one once the transaction commits.
+  // Otherwise, dropping a column that shares this dictionary leaves it too high, and a
+  // later DROP TABLE never sees it reach zero in removeTableFromMap(), so the dictionary
+  // directory is not removed even though its catalog row is deleted.
+  pendingRefcountDecrements_.push_back(dictRef);
   if (refcount > 0) {
     return;
   }
@@ -2950,6 +2963,9 @@ void Catalog::rollLegacy(const bool forward) {
     }
   }
   columnDescriptorsForRoll.clear();
+  if (!forward) {
+    pendingRefcountDecrements_.clear();
+  }
 
   if (forward) {
     for (const auto td : tds) {
@@ -3338,21 +3354,18 @@ void Catalog::createTable(
 
     addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
-    // The commit must be inside the try: if it fails (e.g. SQLITE_BUSY, SQLITE_FULL or an
-    // I/O error; no busy timeout is configured), the table must not stay in the in-memory
-    // maps with the SQLite transaction left open, or later DDL/imports operate on a table
-    // that is lost on restart while its on-disk directories are left behind.
-    sqliteConnector_.query("END TRANSACTION");
   } catch (std::exception& e) {
-    try {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
-    } catch (std::exception& rollback_error) {
-      LOG(ERROR) << "Rollback after failed CREATE TABLE of " << td.tableName
-                 << " failed: " << rollback_error.what();
-    }
+    end_transaction_or_abort(
+        sqliteConnector_, "ROLLBACK TRANSACTION", "CREATE TABLE " + td.tableName);
     removeTableFromMap(td.tableName, td.tableId, true);
     throw;
   }
+  // Catalog access is serialized by the catalog locks, so a transaction can only fail to
+  // end through a bug or an outside actor (e.g. SQLITE_BUSY from another connection to
+  // the catalog file, SQLITE_FULL, an I/O error). The in-memory catalog may then differ
+  // from the stored one, and restarting reloads it from disk.
+  end_transaction_or_abort(
+      sqliteConnector_, "END TRANSACTION", "CREATE TABLE " + td.tableName);
 
   if (td.storageType != StorageType::FOREIGN_TABLE) {
     write_lock.unlock();

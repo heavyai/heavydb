@@ -45,7 +45,7 @@ SqliteConnector::SqliteConnector(const string& dbName, const string& dir)
   connectString += dbName;
   int returnCode = sqlite3_open(connectString.c_str(), &db_);
   if (returnCode != SQLITE_OK) {
-    throwError();
+    throwError(nullptr);
   }
 }
 
@@ -57,11 +57,6 @@ SqliteConnector::~SqliteConnector() {
   if (!dbName_.empty()) {
     sqlite3_close(db_);
   }
-}
-
-void SqliteConnector::throwError() {
-  string errorMsg(sqlite3_errmsg(db_));
-  throw runtime_error("Sqlite3 Error: " + errorMsg);
 }
 
 void SqliteConnector::throwError(sqlite3_stmt* stmt) {
@@ -186,7 +181,7 @@ void SqliteConnector::batch_insert(const std::string& table_name,
   int returnCode =
       sqlite3_prepare_v2(db_, paramertized_query.c_str(), -1, &stmt, nullptr);
   if (returnCode != SQLITE_OK) {
-    throwError();
+    throwError(stmt);
   }
 
   for (size_t r = 0; r < num_rows; ++r) {
@@ -199,15 +194,27 @@ void SqliteConnector::batch_insert(const std::string& table_name,
                                      insert_field.size(),
                                      SQLITE_TRANSIENT);
       if (returnCode != SQLITE_OK) {
-        throwError();
+        throwError(stmt);
       }
     }
     returnCode = sqlite3_step(stmt);
     if (returnCode != SQLITE_DONE) {
-      throwError();
+      throwError(stmt);
     }
     sqlite3_reset(stmt);
   }
   sqlite3_finalize(stmt);
   query("END TRANSACTION");
+}
+
+void end_transaction_or_abort(SqliteConnector& connector,
+                              const std::string& query,
+                              const std::string& context) {
+  try {
+    connector.query(query);
+  } catch (const std::exception& e) {
+    LOG(FATAL) << query << " failed during " << context << ": " << e.what()
+               << ". The catalog may differ from the in-memory state; restart to reload "
+                  "it from disk.";
+  }
 }

@@ -406,6 +406,11 @@ target_link_libraries(FileMgrTest DataMgr ${EXECUTE_TEST_LIBS})
 add_test(FileMgrTest FileMgrTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS FileMgrTest)
 
+add_executable(SqliteConnectorTest SqliteConnectorTest.cpp)
+target_link_libraries(SqliteConnectorTest ${EXECUTE_TEST_LIBS})
+add_test(SqliteConnectorTest SqliteConnectorTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS SqliteConnectorTest)
+
 ##########
 
 add_executable(FilePathWhitelistTest FilePathWhitelistTest.cpp)

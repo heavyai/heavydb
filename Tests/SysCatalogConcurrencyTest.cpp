@@ -5,11 +5,15 @@
 
 /**
  * @file SysCatalogConcurrencyTest.cpp
- * @brief Concurrent access to SysCatalog::getCatalog (HERC-276)
+ * @brief Concurrent access to SysCatalog::getCatalog
  */
 
 #include <gtest/gtest.h>
 #include <atomic>
+#include <chrono>
+#include <cstdlib>
+#include <future>
+#include <iostream>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -17,6 +21,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
 #include "DBHandlerTestHelpers.h"
+#include "Shared/scope.h"
 #include "TestHelpers.h"
 
 using Catalog_Namespace::Catalog;
@@ -40,7 +45,7 @@ class SysCatalogConcurrencyTest : public DBHandlerTestFixture {
 
 // Concurrent first accesses to a database that has no cached Catalog must build exactly
 // one Catalog. Each extra Catalog opens another SQLite connection on the same catalog
-// file, a candidate source of "database is locked" (HERC-276).
+// file, a candidate source of "database is locked".
 TEST_F(SysCatalogConcurrencyTest, ConcurrentFirstAccessBuildsOneCatalog) {
   constexpr size_t kThreads = 16;
   constexpr size_t kRounds = 20;
@@ -80,7 +85,7 @@ TEST_F(SysCatalogConcurrencyTest, ConcurrentFirstAccessBuildsOneCatalog) {
   }
 }
 
-// Experiment (HERC-276): do duplicate Catalogs cause SQLITE_BUSY for DDL running on the
+// Do duplicate Catalogs cause SQLITE_BUSY for DDL running on the
 // Catalog that won the race? Concurrent first logins each run DDL right after login.
 TEST_F(SysCatalogConcurrencyTest, ConcurrentFirstLoginDdlDoesNotFailWithSqliteBusy) {
   constexpr size_t kThreads = 8;
@@ -132,6 +137,64 @@ TEST_F(SysCatalogConcurrencyTest, ConcurrentFirstLoginDdlDoesNotFailWithSqliteBu
     ADD_FAILURE() << e;
   }
   ASSERT_TRUE(errors.empty()) << errors.size() << " failures";
+}
+
+// DROP USER holds the sys write lock and loads the Catalog of every database
+// (getCatalogsForAllDbs), so it can reach getCatalog() for a database whose Catalog is
+// being built by another thread. That must not deadlock: the builder needs the sys lock
+// to finish. Building a small database's Catalog takes about a millisecond, so
+// keep rebuilding it on background threads while DROP USERs run. A deadlock would hang
+// the test, so a watchdog aborts it.
+TEST_F(SysCatalogConcurrencyTest, ConcurrentCatalogBuildAndDropUserDoNotDeadlock) {
+  constexpr size_t kRounds = 30;
+  constexpr size_t kBuilders = 2;
+  auto& sys_cat = SysCatalog::instance();
+
+  std::atomic<bool> stop{false};
+  std::vector<std::thread> builders;
+  ScopeGuard stop_builders = [&] {
+    stop = true;
+    for (auto& th : builders) {
+      th.join();
+    }
+  };
+  for (size_t t = 0; t < kBuilders; ++t) {
+    builders.emplace_back([&] {
+      while (!stop.load()) {
+        sys_cat.removeCatalog(kDb);  // the next getCatalog builds a new Catalog
+        try {
+          sys_cat.getCatalog(kDb);
+        } catch (const std::exception&) {
+          // Only the deadlock matters here; a failed build (e.g. SQLITE_BUSY from
+          // duplicate Catalogs) is covered by the other tests.
+        }
+      }
+    });
+  }
+
+  std::vector<std::string> users;
+  ScopeGuard drop_users = [&] {
+    for (const auto& user : users) {
+      sql("DROP USER IF EXISTS " + user + ";");
+    }
+  };
+  for (size_t round = 0; round < kRounds; ++round) {
+    const auto user = "deadlock_user_" + std::to_string(round);
+    users.push_back(user);
+    sql("CREATE USER " + user + " (password = 'pw');");
+
+    auto drop_done =
+        std::async(std::launch::async, [&, user] { sql("DROP USER " + user + ";"); });
+    if (drop_done.wait_for(std::chrono::seconds(60)) != std::future_status::ready) {
+      // The stuck threads hold the sys lock, so neither joining nor tearing down can
+      // work.
+      std::cerr << "DEADLOCK: DROP USER did not finish within 60s while Catalogs were "
+                   "being built (round "
+                << round << ")" << std::endl;
+      std::_Exit(1);
+    }
+    drop_done.get();
+  }
 }
 
 int main(int argc, char** argv) {

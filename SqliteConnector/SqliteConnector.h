@@ -84,10 +84,10 @@ class SqliteConnector {
     const bool is_null;
   };
 
-  void throwError();
-  // Like throwError(), but finalizes `stmt` first. A statement that failed in
-  // sqlite3_step() (e.g. a COMMIT that got SQLITE_BUSY) otherwise stays active on the
-  // connection after the exception is thrown.
+  // Throws with the connection's current error message, finalizing `stmt` first (pass
+  // nullptr when there is no statement). A statement that failed in sqlite3_step() (e.g.
+  // a COMMIT that got SQLITE_BUSY) otherwise stays active on the connection after the
+  // exception is thrown.
   void throwError(sqlite3_stmt* stmt);
 
   sqlite3* db_;
@@ -97,5 +97,12 @@ class SqliteConnector {
   size_t numCols_;
   size_t numRows_;
 };
+
+// Runs a query that ends a transaction (END/COMMIT/ROLLBACK TRANSACTION). If it fails
+// the connection's state is unknown (e.g. SQLITE_BUSY leaves the transaction open) and
+// the in-memory state built on it cannot be trusted, so abort rather than continue.
+void end_transaction_or_abort(SqliteConnector& connector,
+                              const std::string& query,
+                              const std::string& context);
 
 #endif  // SQLITE_CONNECTOR

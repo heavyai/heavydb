@@ -19,7 +19,6 @@
 
 #include <atomic>
 #include <cstdint>
-#include <future>
 #include <ctime>
 #include <limits>
 #include <list>
@@ -580,15 +579,12 @@ class SysCatalog : private CommonFileOperations {
   // contains a map of all the catalog within this system
   // it is lazy loaded
   std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
-  // Catalogs currently being built by getCatalog(), keyed like cat_map_. Concurrent
-  // callers for the same database wait on the builder's result instead of building a
-  // duplicate Catalog: each Catalog opens its own SqliteConnector on the database's
-  // catalog file, and two connections to one file can fail with SQLITE_BUSY (no busy
-  // timeout is set). Only ever held briefly, never while building or waiting.
-  std::mutex cat_inflight_mutex_;
-  std::map<std::string, std::shared_future<std::shared_ptr<Catalog>>> cat_inflight_;
-  // Constructs the Catalog for `curDB`. Does not register it in cat_map_.
-  std::shared_ptr<Catalog> buildCatalog(const DBMetadata& curDB, bool is_new_db);
+  // Catalogs built by getCatalog(), keyed like cat_map_ and guarded by cat_init_lock.
+  // Concurrent first callers for the same database find the Catalog built by the first
+  // one instead of building a duplicate: each Catalog opens its own SqliteConnector on
+  // the database's catalog file, and two connections to one file can fail with
+  // SQLITE_BUSY (no busy timeout is set). Entries are removed with cat_map_ entries.
+  std::map<std::string, std::shared_ptr<Catalog>> init_cat_map_;
 
   static std::mutex instance_mutex_;
   static std::unique_ptr<SysCatalog> instance_;
