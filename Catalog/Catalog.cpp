@@ -158,12 +158,6 @@ inline auto table_json_filepath(const std::string& base_path,
 std::map<int32_t, std::string> get_user_id_to_user_name_map();
 }  // namespace
 
-std::atomic<uint64_t> Catalog::num_constructed_{0};
-
-uint64_t Catalog::numConstructed() {
-  return num_constructed_.load();
-}
-
 Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
@@ -178,7 +172,6 @@ Catalog::Catalog(const string& basePath,
     , calciteMgr_(calcite)
     , nextTempTableId_(MAPD_TEMP_TABLE_START_ID)
     , nextTempDictId_(MAPD_TEMP_DICT_START_ID) {
-  num_constructed_++;
   mutex_desc_.dist_mutex = std::make_unique<heavyai::DistributedSharedMutex>(
       std::filesystem::path(basePath_) / shared::kLockfilesDirectoryName /
           shared::kCatalogDirectoryName / (currentDB_.dbName + ".lockfile"),

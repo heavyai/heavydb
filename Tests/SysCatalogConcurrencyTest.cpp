@@ -12,6 +12,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <future>
 #include <iostream>
 #include <mutex>
@@ -21,11 +22,48 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
 #include "DBHandlerTestHelpers.h"
+#include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
+#include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 
 using Catalog_Namespace::Catalog;
 using Catalog_Namespace::SysCatalog;
+
+namespace {
+
+std::atomic<size_t> g_catalog_file_opens{0};
+const char* g_counted_catalog_file = nullptr;
+
+// SQLite calls this for every connection opened in the process.
+int count_catalog_file_open(sqlite3* db, char**, const sqlite3_api_routines*) {
+  const std::filesystem::path file(sqlite3_db_filename(db, "main"));
+  if (file.filename() == g_counted_catalog_file &&
+      file.parent_path().filename() == shared::kCatalogDirectoryName) {
+    g_catalog_file_opens++;
+  }
+  return SQLITE_OK;
+}
+
+// Counts the SQLite connections opened to the catalog file of `db_name` while it is in
+// scope. Each extra Catalog opens one more, the source of "database is locked".
+class CatalogFileOpenCounter {
+ public:
+  explicit CatalogFileOpenCounter(const char* db_name) {
+    g_counted_catalog_file = db_name;
+    g_catalog_file_opens = 0;
+    CHECK_EQ(sqlite3_auto_extension(reinterpret_cast<void (*)()>(count_catalog_file_open)),
+             SQLITE_OK);
+  }
+  ~CatalogFileOpenCounter() {
+    sqlite3_cancel_auto_extension(
+        reinterpret_cast<void (*)()>(count_catalog_file_open));
+  }
+  size_t opens() const { return g_catalog_file_opens.load(); }
+  void reset() { g_catalog_file_opens = 0; }
+};
+
+}  // namespace
 
 class SysCatalogConcurrencyTest : public DBHandlerTestFixture {
  protected:
@@ -44,17 +82,20 @@ class SysCatalogConcurrencyTest : public DBHandlerTestFixture {
 };
 
 // Concurrent first accesses to a database that has no cached Catalog must build exactly
-// one Catalog. Each extra Catalog opens another SQLite connection on the same catalog
-// file, a candidate source of "database is locked".
+// one Catalog, so open exactly one SQLite connection on the catalog file. Each extra
+// Catalog opens another one, a candidate source of "database is locked". Callers can
+// still receive the same Catalog when duplicates were built and discarded, so count the
+// connections instead of comparing the results.
 TEST_F(SysCatalogConcurrencyTest, ConcurrentFirstAccessBuildsOneCatalog) {
   constexpr size_t kThreads = 16;
   constexpr size_t kRounds = 20;
   auto& sys_cat = SysCatalog::instance();
+  CatalogFileOpenCounter file_opens(kDb);
 
   for (size_t round = 0; round < kRounds; ++round) {
     sys_cat.removeCatalog(kDb);  // forget the cached Catalog: next getCatalog rebuilds it
 
-    const auto constructed_before = Catalog::numConstructed();
+    file_opens.reset();
     std::atomic<size_t> ready{0};
     std::atomic<bool> go{false};
     std::vector<std::shared_ptr<Catalog>> results(kThreads);
@@ -80,7 +121,7 @@ TEST_F(SysCatalogConcurrencyTest, ConcurrentFirstAccessBuildsOneCatalog) {
       ASSERT_NE(results[t], nullptr) << "round " << round;
       ASSERT_EQ(results[t].get(), results[0].get()) << "round " << round;
     }
-    ASSERT_EQ(Catalog::numConstructed() - constructed_before, 1u)
+    ASSERT_EQ(file_opens.opens(), 1u)
         << "round " << round << ": concurrent first access built duplicate Catalogs";
   }
 }
