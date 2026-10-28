@@ -579,6 +579,12 @@ class SysCatalog : private CommonFileOperations {
   // contains a map of all the catalog within this system
   // it is lazy loaded
   std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
+  // Catalogs built by getCatalog(), keyed like cat_map_ and guarded by cat_init_lock.
+  // Concurrent first callers for the same database find the Catalog built by the first
+  // one instead of building a duplicate: each Catalog opens its own SqliteConnector on
+  // the database's catalog file, and two connections to one file can fail with
+  // SQLITE_BUSY (no busy timeout is set). Entries are removed with cat_map_ entries.
+  std::map<std::string, std::shared_ptr<Catalog>> init_cat_map_;
 
   static std::mutex instance_mutex_;
   static std::unique_ptr<SysCatalog> instance_;

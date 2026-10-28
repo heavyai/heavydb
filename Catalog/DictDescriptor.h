@@ -6,8 +6,11 @@
 #ifndef DICT_DESCRIPTOR_H
 #define DICT_DESCRIPTOR_H
 
+#include <boost/filesystem.hpp>
 #include <cassert>
+#include <list>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "../Shared/sqltypes.h"
@@ -66,5 +69,28 @@ struct DictDescriptor {
     dictRef.dictId = dict_id;
   }
 };
+
+// A new dictionary may reuse an empty directory (what a crash between creating the
+// directory and committing the table leaves behind) but not anything that could hold
+// stale strings.
+inline bool dictionary_directory_is_occupied(const boost::filesystem::path& path) {
+  return boost::filesystem::exists(path) &&
+         !(boost::filesystem::is_directory(path) && boost::filesystem::is_empty(path));
+}
+
+// Returns the folder path of the first dictionary in `dicts` whose directory is
+// occupied (see dictionary_directory_is_occupied). Temporary dictionaries have no
+// directory, and dictId 0 is the dummy entry created for a shard of a logical table.
+// Only reads the filesystem.
+inline std::optional<std::string> find_occupied_dictionary_directory(
+    const std::list<DictDescriptor>& dicts) {
+  for (const auto& dd : dicts) {
+    if (dd.dictRef.dictId && !dd.dictIsTemp &&
+        dictionary_directory_is_occupied(dd.dictFolderPath)) {
+      return dd.dictFolderPath;
+    }
+  }
+  return std::nullopt;
+}
 
 #endif  // DICT_DESCRIPTOR

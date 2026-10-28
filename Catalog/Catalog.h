@@ -308,6 +308,11 @@ class Catalog final {
 
   DictRef addDictionaryTransactional(ColumnDescriptor& cd);
   void delDictionaryTransactional(const ColumnDescriptor& cd);
+  // delDictionaryNontransactional() only records the in-memory refcount decrement.
+  // Callers apply it once the transaction has committed; rollLegacy(false) discards it.
+  // A missed call therefore leaves the count too high (a leaked dictionary directory),
+  // never too low (a directory removed while another column still uses it).
+  void applyPendingDictionaryRefcounts();
 
   std::list<const DictDescriptor*> getAllDictionariesWithColumnInName(
       const ColumnDescriptor* cd);
@@ -829,6 +834,9 @@ class Catalog final {
   void addColumnDescriptor(const ColumnDescriptor* cd);
   void removeColumnDescriptor(const ColumnDescriptor* cd);
   void delDictionaryNontransactional(const ColumnDescriptor& cd);
+  // Dictionaries whose in-memory refcount is to be decremented once the transaction that
+  // lowered the stored refcount commits. Guarded by the catalog write lock.
+  std::vector<DictRef> pendingRefcountDecrements_;
   void addColumnNontransactional(const TableDescriptor& td, ColumnDescriptor& cd);
   DictRef addDictionaryNontransactional(ColumnDescriptor& cd);
   void buildDictionaryMapUnlocked();

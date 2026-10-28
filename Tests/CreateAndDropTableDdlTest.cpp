@@ -10,9 +10,12 @@
  */
 
 #include <gtest/gtest.h>
+#include <fstream>
+#include <set>
 #include <boost/filesystem.hpp>
 
 #include "Calcite/Calcite.h"
+#include "Catalog/DictDescriptor.h"
 #include "Catalog/ForeignTable.h"
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
@@ -161,6 +164,158 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
     return table_dir_path;
   }
 };
+
+// Dictionary directories created by CREATE TABLE and removed by DROP TABLE/COLUMN.
+class DictionaryDirectoryTest : public CreateAndDropTableDdlTest {
+ protected:
+  static constexpr const char* kTable = "dict_dir_tbl";
+
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql(std::string("DROP TABLE IF EXISTS ") + kTable + ";");
+  }
+
+  void TearDown() override {
+    sql(std::string("DROP TABLE IF EXISTS ") + kTable + ";");
+    CreateAndDropTableDdlTest::TearDown();
+  }
+
+  std::string createQuery() const {
+    return std::string("CREATE TABLE ") + kTable +
+           " (id INT, a TEXT ENCODING DICT(32), b TEXT ENCODING DICT(32));";
+  }
+
+  std::set<std::string> dictionaryDirectories() const {
+    std::set<std::string> dirs;
+    const auto prefix =
+        "DB_" + std::to_string(getCatalog().getDatabaseId()) + "_DICT_";
+    for (bf::directory_iterator it(bf::path(BASE_PATH) / shared::kDataDirectoryName), end;
+         it != end;
+         ++it) {
+      const auto name = it->path().filename().string();
+      // Directories renamed for deletion (DB_<db>_DICT_<id>_<ts>_DELETE_ME) are being
+      // removed in the background and cannot be adopted by a new dictionary.
+      if (name.rfind(prefix, 0) == 0 && name.find("_DELETE_ME") == std::string::npos) {
+        dirs.insert(name);
+      }
+    }
+    return dirs;
+  }
+};
+
+// A new dictionary must not be created over a directory with content: it is an orphan
+// from a table whose creation never committed, and addTableToMap() aborts on it rather
+// than adopt it. The abort itself cannot be tested here (a death test takes down
+// the shared Calcite server), so test the lookup that decides it.
+TEST(DictionaryDirectoryGuardTest, FindsFirstExistingDirectory) {
+  const auto root = bf::temp_directory_path() / bf::unique_path("dict_guard_%%%%-%%%%");
+  bf::create_directories(root);
+  ScopeGuard cleanup = [&] { bf::remove_all(root); };
+
+  auto make = [&](const int dict_id, const bool temp) {
+    return DictDescriptor(DictRef(1, dict_id),
+                          "dict" + std::to_string(dict_id),
+                          32,
+                          false,
+                          1,
+                          (root / ("DB_1_DICT_" + std::to_string(dict_id))).string(),
+                          temp);
+  };
+
+  std::list<DictDescriptor> dicts{make(5, false), make(6, false)};
+  ASSERT_FALSE(find_occupied_dictionary_directory(dicts));
+
+  // An empty directory is what a crash before the commit leaves behind. It holds
+  // nothing to adopt and must not be reported.
+  bf::create_directory(root / "DB_1_DICT_6");
+  ASSERT_FALSE(find_occupied_dictionary_directory(dicts));
+
+  std::ofstream(root / "DB_1_DICT_6" / "DictOffsets").put('x');
+  ASSERT_EQ(find_occupied_dictionary_directory(dicts), (root / "DB_1_DICT_6").string());
+
+  // With several conflicts the first one is reported.
+  bf::create_directory(root / "DB_1_DICT_5");
+  std::ofstream(root / "DB_1_DICT_5" / "DictOffsets").put('x');
+  ASSERT_EQ(find_occupied_dictionary_directory(dicts), (root / "DB_1_DICT_5").string());
+
+  // A file in the place of the directory is not an empty directory either.
+  bf::remove_all(root / "DB_1_DICT_5");
+  std::ofstream(root / "DB_1_DICT_5").put('x');
+  ASSERT_EQ(find_occupied_dictionary_directory(dicts), (root / "DB_1_DICT_5").string());
+
+  // The lookup only reads: it must not create directories for dictionaries that are
+  // absent, or an abort on a later dictionary would leave earlier ones behind.
+  bf::remove_all(root / "DB_1_DICT_5");
+  bf::remove_all(root / "DB_1_DICT_6");
+  ASSERT_FALSE(find_occupied_dictionary_directory(dicts));
+  ASSERT_FALSE(bf::exists(root / "DB_1_DICT_5"));
+  ASSERT_FALSE(bf::exists(root / "DB_1_DICT_6"));
+}
+
+TEST(DictionaryDirectoryGuardTest, IgnoresTemporaryAndShardPlaceholderDictionaries) {
+  const auto root = bf::temp_directory_path() / bf::unique_path("dict_guard_%%%%-%%%%");
+  bf::create_directories(root);
+  ScopeGuard cleanup = [&] { bf::remove_all(root); };
+
+  // Temporary dictionaries have no on-disk directory, and dictId 0 is the dummy entry
+  // created for a shard of a logical table.
+  bf::create_directory(root / "DB_1_DICT_7");
+  bf::create_directory(root / "DB_1_DICT_0");
+  const std::list<DictDescriptor> dicts{
+      DictDescriptor(
+          DictRef(1, 7), "temp", 32, false, 1, (root / "DB_1_DICT_7").string(), true),
+      DictDescriptor(
+          DictRef(1, 0), "dummy", 32, false, 1, (root / "DB_1_DICT_0").string(), false)};
+  ASSERT_FALSE(find_occupied_dictionary_directory(dicts));
+}
+
+// Dropping a column that shares a dictionary and then the table used to leave the
+// dictionary directory behind (its in-memory refcount was never decremented), so the next
+// table to reuse the dictionary id found a non-empty directory.
+TEST_F(DictionaryDirectoryTest, DropSharedDictionaryColumnThenTableRemovesDirectory) {
+  const auto dirs_before = dictionaryDirectories();
+  const std::string shared_create =
+      std::string("CREATE TABLE ") + kTable + " (a TEXT, b TEXT, SHARED DICTIONARY (b) " +
+      "REFERENCES " + kTable + "(a));";
+
+  sql(shared_create);
+  sql("INSERT INTO " + std::string(kTable) + " VALUES ('x', 'y');");
+  ASSERT_EQ(dictionaryDirectories().size(), dirs_before.size() + 1);
+
+  sql(std::string("ALTER TABLE ") + kTable + " DROP COLUMN b;");
+  sql(std::string("DROP TABLE ") + kTable + ";");
+  ASSERT_EQ(dictionaryDirectories(), dirs_before);
+
+  // The same statement must now succeed instead of aborting on the existing-directory
+  // CHECK.
+  sql(shared_create);
+  ASSERT_NE(getCatalog().getMetadataForTable(kTable, false), nullptr);
+}
+
+// A crash between creating a dictionary directory and committing the table leaves an
+// empty directory and no catalog rows. Dictionary ids are reused, so the next CREATE TABLE
+// finds it; it must reuse the directory, not abort on every retry.
+TEST_F(DictionaryDirectoryTest, EmptyDictionaryDirectoryLeftByCrashIsReused) {
+  const auto dirs_before = dictionaryDirectories();
+  sql(createQuery());
+  auto created = dictionaryDirectories();
+  for (const auto& dir : dirs_before) {
+    created.erase(dir);
+  }
+  ASSERT_EQ(created.size(), 2u);  // one dictionary for each of the two TEXT columns
+  sql(std::string("DROP TABLE ") + kTable + ";");
+  ASSERT_EQ(dictionaryDirectories(), dirs_before);
+
+  // Recreate the leftovers of the interrupted CREATE TABLE.
+  for (const auto& dir : created) {
+    bf::create_directory(bf::path(BASE_PATH) / shared::kDataDirectoryName / dir);
+  }
+
+  sql(createQuery());
+  ASSERT_NE(getCatalog().getMetadataForTable(kTable, false), nullptr);
+  sql("INSERT INTO " + std::string(kTable) + " VALUES (1, 'x', 'y');");
+  sqlAndCompareResult(std::string("SELECT a, b FROM ") + kTable + ";", {{"x", "y"}});
+}
 
 class CreateTableTest : public CreateAndDropTableDdlTest,
                         public testing::WithParamInterface<ddl_utils::TableType> {

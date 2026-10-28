@@ -5419,6 +5419,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
     catalog.resetTableEpochFloor(td->tableId);
     loader->checkpoint();
     catalog.getSqliteConnector().query("END TRANSACTION");
+    catalog.applyPendingDictionaryRefcounts();
   } catch (...) {
     catalog.rollLegacy(false);
     catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
@@ -5497,6 +5498,7 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
       catalog.checkpoint(td->tableId);
     }
     catalog.getSqliteConnector().query("END TRANSACTION");
+    catalog.applyPendingDictionaryRefcounts();
   } catch (...) {
     catalog.setForReload(td->tableId);
     catalog.rollLegacy(false);
