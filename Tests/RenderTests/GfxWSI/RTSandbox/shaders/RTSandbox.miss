@@ -1,0 +1,19 @@
+//<extensions>
+#extension GL_EXT_ray_tracing : require
+//</extensions>
+//<includes>
+#include "RTSandbox/RTSandbox_payload.glsl"
+//</includes>
+
+layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
+
+layout(scalar) uniform RTSANDBOX_MISS_UBO_TYPE {
+  vec3 gradientStart;
+  vec3 gradientEnd;
+};
+
+void main() {
+  // Write required outputs to payload
+  rayPayload.color = mix(gradientStart, gradientEnd, (gl_WorldRayDirectionEXT.y + 1.0) * 0.5);
+  rayPayload.reflectivity = vec3(0.0);
+}

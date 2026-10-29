@@ -1,0 +1,29 @@
+/* 
+sphere.isect
+Intersection shader for spheres
+*/
+//<extensions>
+#extension GL_EXT_ray_tracing : enable
+#extension GL_EXT_scalar_block_layout : enable
+#extension GL_EXT_buffer_reference2 : require
+//</extensions>
+//<includes>
+#include "Shading/rtIntersection.glsl"
+//</includes>
+
+layout (buffer_reference, scalar) buffer Spheres { Sphere s[]; };
+
+layout(push_constant) uniform CLOSEST_HIT_PUSH_CONSTANTS {
+  uint64_t obj_descs_address;
+  uint64_t colors_address;
+  uint64_t spheres_address;
+} pushConstants;
+
+void main() {
+  Spheres spheres = Spheres(pushConstants.spheres_address);
+  Sphere s = spheres.s[gl_PrimitiveID];
+  float t = intersect_sphere(s, gl_ObjectRayOriginEXT, gl_ObjectRayDirectionEXT);
+  if (t > 0) {
+    reportIntersectionEXT(t, 0);
+  }
+}

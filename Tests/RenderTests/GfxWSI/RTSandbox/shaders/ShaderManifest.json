@@ -1,0 +1,53 @@
+{
+  "sources": [
+    {
+      "filename": "RTSandbox_payload.glsl",
+      "file_path": ".",
+      "internal_path": "RTSandbox/",
+      "language": "glsl",
+      "class": "glsl"
+    },
+    {
+      "filename": "RTSandbox.raygen",
+      "file_path": ".",
+      "internal_path": "RTSandbox/",
+      "language": "glsl",
+      "class": "ray_gen"
+    },
+    {
+      "filename": "shadeTriangles.closest",
+      "file_path": ".",
+      "internal_path": "RTSandbox/",
+      "language": "glsl",
+      "class": "ray_closest_hit"
+    },
+    {
+      "filename": "shadeProcedural.closest",
+      "file_path": ".",
+      "internal_path": "RTSandbox/",
+      "language": "glsl",
+      "class": "ray_closest_hit"
+    },
+    {
+      "filename": "sphere.isect",
+      "file_path": ".",
+      "internal_path": "RTSandbox/",
+      "language": "glsl",
+      "class": "ray_intersection"
+    },
+    {
+      "filename": "RTSandbox.miss",
+      "file_path": ".",
+      "internal_path": "RTSandbox/",
+      "language": "glsl",
+      "class": "ray_miss"
+    },
+    {
+      "filename": "showTriangles.closest",
+      "file_path": ".",
+      "internal_path": "RTSandbox/",
+      "language": "glsl",
+      "class": "ray_closest_hit"
+    }
+  ]
+}

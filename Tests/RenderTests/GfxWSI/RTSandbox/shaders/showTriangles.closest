@@ -1,0 +1,20 @@
+//<extensions>
+#extension GL_EXT_ray_tracing : enable
+//</extensions>
+//<includes>
+#include "RTSandbox/RTSandbox_payload.glsl"
+//</includes>
+
+layout(location = 0) rayPayloadInEXT RayPayload rayPayload;
+
+// Barycentric weights passed to any-hit and closest-hit shaders when a
+// triangle intersection is found
+hitAttributeEXT vec2 attribs;
+
+void main()
+{
+  // Compute a color from the barycentric weights and write to ray payload
+  const vec3 barycentric_coords = vec3(1.0f - attribs.x - attribs.y, attribs.x, attribs.y);
+  rayPayload.color = barycentric_coords;
+  rayPayload.reflectivity = vec3(0);
+}
