@@ -333,18 +333,25 @@ size_t ExecutorResourcePool::calc_chunk_headroom_for_request(
 
 size_t ExecutorResourcePool::get_max_cpu_result_mem_grant_per_request(
     const size_t chunk_headroom_bytes) const {
-  size_t max_grant =
+  const size_t max_grant =
       get_max_resource_grant_per_request(cpu_result_mem_resource_type_.resource_subtype);
   if (cpu_result_mem_resource_type_.resource_type != ResourceType::CPU_BUFFER_POOL_MEM) {
     // Result memory has its own pool, so input chunks do not draw against it
     return max_grant;
   }
-  // A request whose result memory plus input chunks exceeds the pool can never be
-  // satisfied, no matter how empty the pool gets. Clamping to the pool total (which an
-  // oversubscribing per-request ratio could otherwise exceed) keeps such a request a
-  // clean rejection rather than one that waits in the queue indefinitely.
-  max_grant = std::min(max_grant, get_total_resource(ResourceType::CPU_BUFFER_POOL_MEM));
-  return max_grant > chunk_headroom_bytes ? max_grant - chunk_headroom_bytes : size_t(0);
+  // The per-query result memory cap and the shared pool total are separate limits: the
+  // cap bounds result memory alone, while result memory plus input chunks must fit the
+  // pool. Bounding by the pool total also keeps a request that can never fit, no matter
+  // how empty the pool gets, a clean rejection rather than one that waits in the queue
+  // indefinitely.
+  // The headroom is the request's full chunk working set rather than only the chunks
+  // not yet in the pool. Resident chunks are already counted as allocated, so this is
+  // never stricter than the pool itself, and it keeps the limit independent of pool
+  // state so that admission and the queue thread compute the same value.
+  const size_t pool_total = get_total_resource(ResourceType::CPU_BUFFER_POOL_MEM);
+  const size_t available_for_results =
+      pool_total > chunk_headroom_bytes ? pool_total - chunk_headroom_bytes : size_t(0);
+  return std::min(max_grant, available_for_results);
 }
 
 size_t ExecutorResourcePool::get_max_cpu_result_mem_grant_for_request(

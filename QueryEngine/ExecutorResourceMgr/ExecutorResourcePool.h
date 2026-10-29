@@ -443,8 +443,9 @@ class ExecutorResourcePool {
                                          const size_t min_cpu_slots) const;
 
   /**
-   * @brief The per-request max CPU result memory grant, less the buffer pool memory
-   * that must be left available for the request's input chunks.
+   * @brief The per-request max CPU result memory grant, further limited (when result
+   * memory is drawn from the CPU buffer pool) to the pool total less the buffer pool
+   * memory that must be left available for the request's input chunks.
    */
   size_t get_max_cpu_result_mem_grant_per_request(
       const size_t chunk_headroom_bytes) const;
