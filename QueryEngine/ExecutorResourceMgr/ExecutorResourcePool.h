@@ -484,8 +484,21 @@ class ExecutorResourcePool {
       const ResourceGrant& min_resource_grant,
       const ChunkRequestInfo& chunk_request_info) const;
   size_t get_chunk_bytes_not_in_pool(const ChunkRequestInfo& chunk_request_info) const;
+  /**
+   * @brief Allocates zero-initialized chunk map entries for the requested chunks not yet
+   * in the pool, without changing pool state. Performing every allocation a commit needs
+   * up front lets `allocate_resources` leave the pool untouched if one fails.
+   */
+  BufferPoolChunkMap allocate_new_chunk_entries(
+      const ResourceGrant& resource_grant,
+      const ChunkRequestInfo& chunk_request_info) const;
+  /**
+   * @brief Commits a request's chunks to the pool. `new_chunk_entries` must come from
+   * `allocate_new_chunk_entries` for the same request, under the same lock.
+   */
   void add_chunk_requests_to_allocated_pool(const ResourceGrant& resource_grant,
-                                            const ChunkRequestInfo& chunk_request_info);
+                                            const ChunkRequestInfo& chunk_request_info,
+                                            BufferPoolChunkMap new_chunk_entries);
   void remove_chunk_requests_from_allocated_pool(
       const ResourceGrant& resource_grant,
       const ChunkRequestInfo& chunk_request_info);

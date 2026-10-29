@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "ExecutorResourcePool.h"
+#include "Shared/DebugTestHook.h"
 
 namespace ExecutorResourceMgr_Namespace {
 
@@ -725,12 +726,42 @@ bool ExecutorResourcePool::can_currently_satisfy_chunk_request(
          total_buffer_mem_for_memory_level;
 }
 
+BufferPoolChunkMap ExecutorResourcePool::allocate_new_chunk_entries(
+    const ResourceGrant& resource_grant,
+    const ChunkRequestInfo& chunk_request_info) const {
+  // Expects lock on resource_mutex_ already taken
+  BufferPoolChunkMap new_chunk_entries;
+  if (resource_grant.buffer_mem_gated_per_slot) {
+    // Gated chunk memory is accounted as a single pageable quantity, not per chunk
+    return new_chunk_entries;
+  }
+  const BufferPoolChunkMap& chunk_map_for_memory_level =
+      chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU
+          ? allocated_cpu_buffer_pool_chunks_
+          : allocated_gpu_buffer_pool_chunks_;
+  for (const auto& requested_chunk : chunk_request_info.chunks_with_byte_sizes) {
+    if (chunk_map_for_memory_level.count(requested_chunk.first) ||
+        new_chunk_entries.count(requested_chunk.first)) {
+      continue;
+    }
+    HEAVYDB_DEBUG_TEST_HOOK("ExecutorResourcePool::before_chunk_insert",
+                            const_cast<ExecutorResourcePool*>(this));
+    // Zero reference count and size, so that add_chunk_requests_to_allocated_pool
+    // accounts for these entries exactly as it does for chunks already in the pool
+    new_chunk_entries.emplace(requested_chunk.first,
+                              std::make_pair(size_t(0), size_t(0)));
+  }
+  return new_chunk_entries;
+}
+
 void ExecutorResourcePool::add_chunk_requests_to_allocated_pool(
     const ResourceGrant& resource_grant,
-    const ChunkRequestInfo& chunk_request_info) {
+    const ChunkRequestInfo& chunk_request_info,
+    BufferPoolChunkMap new_chunk_entries) {
   // Expects lock on resource_mutex_ already taken
 
   if (resource_grant.buffer_mem_gated_per_slot) {
+    CHECK(new_chunk_entries.empty());
     CHECK(chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU);
     CHECK_LE(get_total_allocated_buffer_pool_mem_for_level(
                  chunk_request_info.device_memory_pool_type) +
@@ -776,22 +807,20 @@ void ExecutorResourcePool::add_chunk_requests_to_allocated_pool(
   const size_t pre_pinned_buffer_mem_for_memory_level =
       pinned_buffer_mem_for_memory_level;
 
+  // Splicing in the entries allocated by allocate_new_chunk_entries does not allocate,
+  // so nothing below can fail partway through and leave the pool partially updated
+  chunk_map_for_memory_level.merge(new_chunk_entries);
+  CHECK(new_chunk_entries.empty());
+
   for (const auto& requested_chunk : chunk_request_info.chunks_with_byte_sizes) {
     auto chunk_itr = chunk_map_for_memory_level.find(requested_chunk.first);
-    if (chunk_itr == chunk_map_for_memory_level.end()) {
-      pinned_buffer_mem_for_memory_level += requested_chunk.second;
-      chunk_map_for_memory_level.insert(
-          std::make_pair(requested_chunk.first,
-                         std::make_pair(size_t(1) /* initial reference count */,
-                                        requested_chunk.second)));
-    } else {
-      if (requested_chunk.second > chunk_itr->second.second) {
-        pinned_buffer_mem_for_memory_level +=
-            requested_chunk.second - chunk_itr->second.second;
-        chunk_itr->second.second = requested_chunk.second;
-      }
-      chunk_itr->second.first += 1;  // Add reference count
+    CHECK(chunk_itr != chunk_map_for_memory_level.end());
+    if (requested_chunk.second > chunk_itr->second.second) {
+      pinned_buffer_mem_for_memory_level +=
+          requested_chunk.second - chunk_itr->second.second;
+      chunk_itr->second.second = requested_chunk.second;
     }
+    chunk_itr->second.first += 1;  // Add reference count
   }
   const size_t post_pinned_chunks_for_memory_level = chunk_map_for_memory_level.size();
   const size_t net_new_allocated_chunks =
@@ -1066,6 +1095,10 @@ void ExecutorResourcePool::allocate_resources(
         "Executor resource pool could not satisfy an already-granted request: " +
             resource_grant.to_string());
   }
+  // The only step that can fail after the check above is allocating chunk map entries,
+  // so do it before any accounting is changed
+  BufferPoolChunkMap new_chunk_entries =
+      allocate_new_chunk_entries(resource_grant, chunk_request_info);
 
   allocated_resources_[static_cast<size_t>(ResourceSubtype::CPU_SLOTS)] +=
       resource_grant.cpu_slots;
@@ -1119,7 +1152,8 @@ void ExecutorResourcePool::allocate_resources(
                 << " of "
                 << format_num_bytes(
                        get_total_resource(cpu_result_mem_resource_type_.resource_type));
-  add_chunk_requests_to_allocated_pool(resource_grant, chunk_request_info);
+  add_chunk_requests_to_allocated_pool(
+      resource_grant, chunk_request_info, std::move(new_chunk_entries));
 }
 
 void ExecutorResourcePool::deallocate_resources(

@@ -4,10 +4,12 @@
  */
 
 #include <algorithm>
+#include <atomic>
 #include <future>
 #include <thread>
 
 #include "../QueryEngine/ExecutorResourceMgr/ExecutorResourceMgr.h"
+#include "../Shared/DebugTestHook.h"
 #include "../Shared/scope.h"
 #include "TestHelpers.h"
 
@@ -1556,6 +1558,71 @@ TEST(ExecutorResourceMgr, OversizedScanReportsBufferPoolError) {
   EXPECT_EQ(pool_info.allocated_cpu_buffer_pool_mem, size_t(0));
   EXPECT_EQ(pool_info.outstanding_requests, size_t(0));
 }
+
+#if HEAVYDB_DEBUG_TEST_HOOKS_ENABLED
+// A failure while committing a grant on the resource manager's queue thread must leave
+// the pool exactly as it was, since the requester receives an error rather than a
+// handle and so has nothing to release
+TEST(ExecutorResourceMgr, ChunkInsertFailureRollsBackAllocation) {
+  auto executor_resource_mgr = gen_pool_backed_resource_mgr(1000000);
+  const auto chunk_request_info = gen_cpu_chunk_request_info(2, 100000, false);
+
+  const RequestInfo request_info(ExecutorDeviceType::CPU,
+                                 default_priority_level_request,
+                                 1,
+                                 1,
+                                 0,
+                                 0,
+                                 100000,
+                                 100000,
+                                 chunk_request_info,
+                                 false);
+
+  const auto expect_empty_pool = [&]() {
+    const auto info = executor_resource_mgr->get_resource_info();
+    EXPECT_EQ(info.allocated_cpu_slots, size_t(0));
+    EXPECT_EQ(info.allocated_cpu_result_mem, size_t(0));
+    EXPECT_EQ(info.allocated_cpu_buffer_pool_mem, size_t(0));
+    EXPECT_EQ(info.allocated_cpu_buffers, size_t(0));
+    EXPECT_EQ(info.outstanding_requests, size_t(0));
+    EXPECT_EQ(info.outstanding_cpu_slots_requests, size_t(0));
+    EXPECT_EQ(info.outstanding_cpu_buffer_pool_mem_requests, size_t(0));
+  };
+
+  std::atomic<size_t> insert_attempts{0};
+  {
+    heavyai::test::ScopedDebugTestHook<ExecutorResourcePool> hook{
+        "ExecutorResourcePool::before_chunk_insert", [&](ExecutorResourcePool*) {
+          if (++insert_attempts == size_t(2)) {
+            throw std::bad_alloc{};
+          }
+        }};
+
+    // The manager forwards the queue thread's error as std::runtime_error
+    ASSERT_THROW(executor_resource_mgr->request_resources(request_info),
+                 std::runtime_error);
+    EXPECT_EQ(insert_attempts.load(), size_t(2));
+  }
+
+  expect_empty_pool();
+
+  {
+    std::unique_ptr<ExecutorResourceHandle> request_handle;
+    ASSERT_NO_THROW(request_handle =
+                        executor_resource_mgr->request_resources(request_info));
+    ASSERT_TRUE(request_handle != nullptr);
+
+    const auto info = executor_resource_mgr->get_resource_info();
+    EXPECT_EQ(info.allocated_cpu_slots, size_t(1));
+    EXPECT_EQ(info.allocated_cpu_result_mem, size_t(100000));
+    EXPECT_EQ(info.allocated_cpu_buffer_pool_mem, size_t(300000));
+    EXPECT_EQ(info.allocated_cpu_buffers, size_t(2));
+    EXPECT_EQ(info.outstanding_requests, size_t(1));
+  }
+
+  expect_empty_pool();
+}
+#endif
 
 // The same competition, but down the path where chunk memory is gated per CPU slot,
 // which commits chunk bytes through a second code path
