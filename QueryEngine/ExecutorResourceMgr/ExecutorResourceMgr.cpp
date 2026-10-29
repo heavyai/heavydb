@@ -167,6 +167,19 @@ std::unique_ptr<ExecutorResourceHandle> ExecutorResourceMgr::request_resources(
       updated_request.cpu_result_mem =
           cpu_result_mem_bytes_per_kernel * adjusted_cpu_slots;
 
+      // The retried request keeps the original minimums, which must not exceed what
+      // it requests, so a shrink below them cannot be retried. The request cannot be
+      // satisfied in that case, so report the original error.
+      if (updated_request.cpu_slots < updated_request.min_cpu_slots ||
+          updated_request.cpu_result_mem < updated_request.min_cpu_result_mem) {
+        VLOG(1) << e.getErrorMsg() << ", cannot retry with reduced number of CPU slots ("
+                << request_info.cpu_slots << " -> " << adjusted_cpu_slots
+                << ") as it is below the request's minimum CPU slots ("
+                << request_info.min_cpu_slots << ") or minimum CPU result memory ("
+                << format_num_bytes(request_info.min_cpu_result_mem) << ")";
+        throw std::runtime_error(e.getErrorMsg());
+      }
+
       // Log the adjustment details
       VLOG(1) << e.getErrorMsg()
               << ", retry resource request with reduced number of CPU slots ("

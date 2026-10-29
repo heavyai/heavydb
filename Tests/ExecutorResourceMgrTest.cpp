@@ -1747,6 +1747,63 @@ TEST(ExecutorResourceMgr, AdjustNumCPUSlotReservesChunkHeadroom) {
   EXPECT_LE(cpu_buffer_mem_info.first, cpu_buffer_mem_info.second);
 }
 
+// When the auto-shrink retry computes fewer CPU slots than the request's minimum, the
+// request must fail with its original error rather than being retried with minimums
+// that exceed what it requests, which would fail a CHECK and abort the server
+TEST(ExecutorResourceMgr, AutoShrinkBelowMinimumFailsCleanly) {
+  // A separate 1000000 byte result memory pool, with a 0.8 per-query cap of 800000
+  auto executor_resource_mgr = generate_executor_resource_mgr(
+      default_cpu_slots,
+      default_gpu_slots,
+      1000000,
+      false,
+      default_cpu_buffer_pool_mem,
+      default_gpu_buffer_pool_mem,
+      default_per_query_max_cpu_slots_ratio,
+      default_per_query_max_cpu_result_mem_ratio,
+      default_per_query_max_pinned_cpu_buffer_pool_mem_ratio,
+      default_per_query_max_pageable_cpu_buffer_pool_mem_ratio,
+      default_allow_cpu_kernel_concurrency,
+      default_allow_cpu_gpu_kernel_concurrency,
+      default_allow_cpu_slot_oversubscription_concurrency,
+      default_allow_gpu_slot_oversubscription,
+      default_allow_cpu_result_mem_oversubscription_concurrency,
+      default_max_available_resource_use_ratio);
+
+  ScopeGuard reset_flag =
+      [orig =
+           g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query]() {
+        g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = orig;
+      };
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = true;
+
+  // 4 slots (minimum 3) at 300000 bytes per slot. The retry fits 2 page-rounded slots
+  // into the 800000 byte cap, below the minimum of 3.
+  const RequestInfo resource_request_info(ExecutorDeviceType::CPU,
+                                          default_priority_level_request,
+                                          4,
+                                          3,
+                                          0,
+                                          0,
+                                          1200000,
+                                          900000,
+                                          default_chunk_request_info,
+                                          true);
+  try {
+    executor_resource_mgr->request_resources(resource_request_info);
+    ASSERT_TRUE(false) << "Expected the request to be rejected.";
+  } catch (std::runtime_error const& e) {
+    EXPECT_TRUE(std::string(e.what()).find(QUERY_NEEDS_TOO_MUCH_CPU_RESULT_MEM_ERR_MSG) !=
+                std::string::npos)
+        << e.what();
+  }
+
+  const auto pool_info = executor_resource_mgr->get_resource_info();
+  EXPECT_EQ(pool_info.allocated_cpu_slots, size_t(0));
+  EXPECT_EQ(pool_info.allocated_cpu_result_mem, size_t(0));
+  EXPECT_EQ(pool_info.outstanding_requests, size_t(0));
+}
+
 TEST(ExecutorResourceMgr, ResourceSubtypeMapping) {
   EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::CPU_SLOTS), "cpu_slots");
   EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::GPU_SLOTS), "gpu_slots");
