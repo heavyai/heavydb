@@ -47,15 +47,11 @@ ExecutorResourceMgr::request_resources_with_timeout(const RequestInfo& request_i
   try {
     min_max_resource_grants =
         executor_resource_pool_.calc_min_max_resource_grants_for_request(request_info);
-  } catch (QueryNeedsTooMuchCpuResultMem const& e) {
-    std::ostringstream oss;
-    oss << REQUEST_STATS_ERROR_MSG_PREFIX << e.what();
-    throw ExecutorResourceMgrError(
-        std::nullopt, oss.str(), ExecutorResourceMgrErrorKind::CPU_RESULT_MEM_TOO_LARGE);
   } catch (std::runtime_error const& e) {
     std::ostringstream oss;
     oss << REQUEST_STATS_ERROR_MSG_PREFIX << e.what();
-    throw ExecutorResourceMgrError(std::nullopt, oss.str());
+    throw ExecutorResourceMgrError(
+        std::nullopt, oss.str(), get_executor_resource_mgr_error_kind(e));
   }
 
   const auto request_id = enqueue_request(request_info,
@@ -251,11 +247,9 @@ RequestId ExecutorResourceMgr::choose_next_request() {
         }
         return request_id;
       }
-    } catch (QueryNeedsTooMuchCpuResultMem const& e) {
-      throw ExecutorResourceMgrError(
-          request_id, e.what(), ExecutorResourceMgrErrorKind::CPU_RESULT_MEM_TOO_LARGE);
     } catch (std::runtime_error const& e) {
-      throw ExecutorResourceMgrError(request_id, e.what());
+      throw ExecutorResourceMgrError(
+          request_id, e.what(), get_executor_resource_mgr_error_kind(e));
     }
   }
   return INVALID_REQUEST_ID;

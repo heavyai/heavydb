@@ -1804,6 +1804,20 @@ TEST(ExecutorResourceMgr, AutoShrinkBelowMinimumFailsCleanly) {
   EXPECT_EQ(pool_info.outstanding_requests, size_t(0));
 }
 
+TEST(ExecutorResourceMgr, ErrorKindClassification) {
+  EXPECT_EQ(get_executor_resource_mgr_error_kind(QueryNeedsTooMuchCpuResultMem(1, 2)),
+            ExecutorResourceMgrErrorKind::CPU_RESULT_MEM_TOO_LARGE);
+  EXPECT_EQ(get_executor_resource_mgr_error_kind(QueryNeedsTooManyCpuSlots(1, 2)),
+            ExecutorResourceMgrErrorKind::OTHER);
+  EXPECT_EQ(get_executor_resource_mgr_error_kind(QueryNeedsTooManyGpuSlots(1, 2)),
+            ExecutorResourceMgrErrorKind::OTHER);
+  EXPECT_EQ(get_executor_resource_mgr_error_kind(
+                QueryNeedsTooMuchBufferPoolMem(1, 2, ExecutorDeviceType::CPU)),
+            ExecutorResourceMgrErrorKind::OTHER);
+  EXPECT_EQ(get_executor_resource_mgr_error_kind(std::runtime_error("other")),
+            ExecutorResourceMgrErrorKind::OTHER);
+}
+
 TEST(ExecutorResourceMgr, ResourceSubtypeMapping) {
   EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::CPU_SLOTS), "cpu_slots");
   EXPECT_EQ(resource_subtype_to_string(ResourceSubtype::GPU_SLOTS), "gpu_slots");

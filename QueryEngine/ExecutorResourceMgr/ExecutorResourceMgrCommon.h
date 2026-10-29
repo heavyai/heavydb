@@ -23,6 +23,9 @@ using RequestId = size_t;
  * specific failure mode without pattern-matching on the error message, which is
  * stringified as it is carried between the requesting thread and the resource
  * manager's queue thread.
+ *
+ * Kinds are assigned by `get_executor_resource_mgr_error_kind`, which must be updated
+ * when a kind is added.
  */
 enum class ExecutorResourceMgrErrorKind {
   OTHER = 0,
@@ -107,6 +110,20 @@ class QueryNeedsTooMuchCpuResultMem : public std::runtime_error {
             format_num_bytes(requested_cpu_result_mem) + ") than available per query (" +
             format_num_bytes(max_cpu_result_mem) + ") in executor resource pool") {}
 };
+
+/**
+ * @brief The `ExecutorResourceMgrErrorKind` for an exception thrown by
+ * `ExecutorResourcePool`. All classification happens here, so that adding a kind only
+ * requires a case here rather than a new catch clause at every site that wraps pool
+ * errors into an `ExecutorResourceMgrError`.
+ */
+inline ExecutorResourceMgrErrorKind get_executor_resource_mgr_error_kind(
+    std::runtime_error const& e) {
+  if (dynamic_cast<QueryNeedsTooMuchCpuResultMem const*>(&e)) {
+    return ExecutorResourceMgrErrorKind::CPU_RESULT_MEM_TOO_LARGE;
+  }
+  return ExecutorResourceMgrErrorKind::OTHER;
+}
 
 /**
  * @type ResourceType

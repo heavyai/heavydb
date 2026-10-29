@@ -429,6 +429,10 @@ class ExecutorResourcePool {
       const size_t max_grantable_independent_resource_quantity,
       const size_t dependent_to_independent_resource_ratio) const;
 
+  // Unlocked internal version of get_max_cpu_result_mem_grant_for_request
+  size_t get_max_cpu_result_mem_grant_for_request_impl(
+      const RequestInfo& request_info) const;
+
   size_t get_max_pinned_buffer_pool_grant_for_memory_level(
       const ExecutorDeviceType memory_pool_type) const;
 

@@ -367,6 +367,12 @@ size_t ExecutorResourcePool::get_max_cpu_result_mem_grant_per_request(
 
 size_t ExecutorResourcePool::get_max_cpu_result_mem_grant_for_request(
     const RequestInfo& request_info) const {
+  std::shared_lock<std::shared_mutex> resource_read_lock(resource_mutex_);
+  return get_max_cpu_result_mem_grant_for_request_impl(request_info);
+}
+
+size_t ExecutorResourcePool::get_max_cpu_result_mem_grant_for_request_impl(
+    const RequestInfo& request_info) const {
   return get_max_cpu_result_mem_grant_per_request(calc_chunk_headroom_for_request(
       request_info.chunk_request_info, request_info.min_cpu_slots));
 }
@@ -486,7 +492,7 @@ ExecutorResourcePool::calc_min_max_resource_grants_for_request(
   // Todo (todd): Modulate number of CPU threads launched to ensure that
   // query can fit in max grantable CPU result memory (if possible)
   const size_t max_cpu_result_mem_grant =
-      get_max_cpu_result_mem_grant_for_request(request_info);
+      get_max_cpu_result_mem_grant_for_request_impl(request_info);
   max_resource_grant.cpu_result_mem =
       calc_max_resource_grant_for_request(request_info.cpu_result_mem,
                                           request_info.min_cpu_result_mem,
