@@ -615,28 +615,9 @@ void ExecutorResourceMgr::mark_request_timed_out(const RequestId request_id) {
 }
 
 void ExecutorResourceMgr::handle_resource_stat_error(const RequestId request_id) {
-  const std::chrono::steady_clock::time_point execution_finished_time =
-      std::chrono::steady_clock::now();
-  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
-  const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
-  CHECK_LT(request_id, current_request_count);
-  RequestStats& request_stats = requests_stats_[request_id];
-  request_stats.execution_finished_time = execution_finished_time;
-  request_stats.finished_executing = true;
-  request_stats.execution_time_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          request_stats.execution_finished_time - request_stats.deque_time)
-          .count();
-  request_stats.total_time_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          request_stats.execution_finished_time - request_stats.enqueue_time)
-          .count();
-  remove_request_from_stage(request_id, ExecutionRequestStage::EXECUTING);
-
-  executor_stats_.requests_executing--;
-  executor_stats_.requests_executed++;
-  executor_stats_.total_execution_time_ms += request_stats.execution_time_ms;
-  executor_stats_.total_time_ms += request_stats.total_time_ms;
+  // A failed request was dequeued into the EXECUTING stage exactly as a granted one is,
+  // including the per-device counts, so it must be retired with the same bookkeeping
+  mark_request_finished(request_id);
 }
 
 void ExecutorResourceMgr::mark_request_finished(const RequestId request_id) {

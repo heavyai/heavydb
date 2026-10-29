@@ -1126,8 +1126,11 @@ TEST(ExecutorResourceMgr, HandleFailedResourceRequest) {
     }
     // `requests_executing` should be zero, otherwise we cannot pause the ERM queue
     // which is the main source of hanging when calling `clear cpu/gpu memory`
-    EXPECT_EQ(executor_resource_mgr->get_executor_stats().requests_executing,
-              static_cast<size_t>(0));
+    const auto executor_stats = executor_resource_mgr->get_executor_stats();
+    EXPECT_EQ(executor_stats.requests_executing, static_cast<size_t>(0));
+    // The per-device count must be retired along with the overall one
+    EXPECT_EQ(executor_stats.cpu_requests_executing, static_cast<size_t>(0));
+    EXPECT_EQ(executor_stats.cpu_requests_executed, executor_stats.requests_executed);
   }
   EXPECT_TRUE(detect_exception);
 }
@@ -1245,6 +1248,15 @@ TEST(ExecutorResourceMgr, AdjustNumCPUSlotForCPUGroupbyQuery) {
 
   g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = true;
   ASSERT_NO_THROW(executor_resource_mgr->request_resources(resource_request_info));
+
+  // Both the rejected request above and the rejected first attempt of the auto-shrink
+  // retry fail on the queue thread after being counted as executing, so both must be
+  // retired from the per-device count as well as the overall one
+  const auto executor_stats = executor_resource_mgr->get_executor_stats();
+  EXPECT_EQ(executor_stats.requests_executing, size_t(0));
+  EXPECT_EQ(executor_stats.cpu_requests_executing, size_t(0));
+  EXPECT_EQ(executor_stats.requests_executed, size_t(3));
+  EXPECT_EQ(executor_stats.cpu_requests_executed, size_t(3));
 }
 
 TEST(ExecutorResourceMgr, AdjustedNumCPUSlotBecomeZero) {
