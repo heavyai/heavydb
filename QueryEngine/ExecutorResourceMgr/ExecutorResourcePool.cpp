@@ -313,6 +313,22 @@ ExecutorResourcePool::calc_max_dependent_resource_grant_for_request(
                         adjusted_max_independent_resource_quantity);
 }
 
+size_t ExecutorResourcePool::get_max_pinned_buffer_pool_grant_for_memory_level(
+    const ExecutorDeviceType memory_pool_type) const {
+  return get_max_resource_grant_per_request(
+      memory_pool_type == ExecutorDeviceType::CPU
+          ? ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM
+          : ResourceSubtype::PINNED_GPU_BUFFER_POOL_MEM);
+}
+
+bool ExecutorResourcePool::is_chunk_request_gated_per_slot(
+    const ChunkRequestInfo& chunk_request_info) const {
+  return chunk_request_info.bytes_scales_per_kernel &&
+         chunk_request_info.total_bytes >
+             get_max_pinned_buffer_pool_grant_for_memory_level(
+                 chunk_request_info.device_memory_pool_type);
+}
+
 size_t ExecutorResourcePool::calc_chunk_headroom_for_request(
     const ChunkRequestInfo& chunk_request_info,
     const size_t min_cpu_slots) const {
@@ -320,15 +336,9 @@ size_t ExecutorResourcePool::calc_chunk_headroom_for_request(
     // GPU buffer pool memory never backs CPU result memory, so the two do not compete
     return size_t(0);
   }
-  // Mirrors the gating decision made for chunk memory in
-  // calc_min_max_resource_grants_for_request below
-  const bool gated_per_slot =
-      chunk_request_info.bytes_scales_per_kernel &&
-      chunk_request_info.total_bytes >
-          get_max_resource_grant_per_request(
-              ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM);
-  return gated_per_slot ? chunk_request_info.max_bytes_per_kernel * min_cpu_slots
-                        : chunk_request_info.total_bytes;
+  return is_chunk_request_gated_per_slot(chunk_request_info)
+             ? chunk_request_info.max_bytes_per_kernel * min_cpu_slots
+             : chunk_request_info.total_bytes;
 }
 
 size_t ExecutorResourcePool::get_max_cpu_result_mem_grant_per_request(
@@ -389,33 +399,24 @@ ExecutorResourcePool::calc_min_max_resource_grants_for_request(
         request_info.min_gpu_slots);
   }
 
-  // Todo (todd): Modulate number of CPU threads launched to ensure that
-  // query can fit in max grantable CPU result memory (if possible)
-  const size_t max_cpu_result_mem_grant =
-      get_max_cpu_result_mem_grant_for_request(request_info);
-  max_resource_grant.cpu_result_mem =
-      calc_max_resource_grant_for_request(request_info.cpu_result_mem,
-                                          request_info.min_cpu_result_mem,
-                                          max_cpu_result_mem_grant);
-  if (max_resource_grant.cpu_result_mem == 0 && request_info.min_cpu_result_mem > 0) {
-    throw QueryNeedsTooMuchCpuResultMem(max_cpu_result_mem_grant,
-                                        request_info.min_cpu_result_mem);
-  }
-
+  // Chunk limits are checked before the result memory limit. When result memory is
+  // drawn from the CPU buffer pool, the result memory limit reserves headroom for the
+  // request's chunks, so a scan too large for the pool would otherwise be misreported
+  // as needing too much result memory (and would trigger the CPU slot auto-shrink
+  // retry, which cannot help).
   const auto& chunk_request_info = request_info.chunk_request_info;
 
   const size_t max_pinned_buffer_pool_grant_for_memory_level =
-      get_max_resource_grant_per_request(
-          chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU
-              ? ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM
-              : ResourceSubtype::PINNED_GPU_BUFFER_POOL_MEM);
+      get_max_pinned_buffer_pool_grant_for_memory_level(
+          chunk_request_info.device_memory_pool_type);
 
-  if (chunk_request_info.total_bytes > max_pinned_buffer_pool_grant_for_memory_level) {
-    if (!chunk_request_info.bytes_scales_per_kernel) {
-      throw QueryNeedsTooMuchBufferPoolMem(max_pinned_buffer_pool_grant_for_memory_level,
-                                           chunk_request_info.total_bytes,
-                                           chunk_request_info.device_memory_pool_type);
-    }
+  if (chunk_request_info.total_bytes > max_pinned_buffer_pool_grant_for_memory_level &&
+      !chunk_request_info.bytes_scales_per_kernel) {
+    throw QueryNeedsTooMuchBufferPoolMem(max_pinned_buffer_pool_grant_for_memory_level,
+                                         chunk_request_info.total_bytes,
+                                         chunk_request_info.device_memory_pool_type);
+  }
+  if (is_chunk_request_gated_per_slot(chunk_request_info)) {
     // If here we have bytes_needed_scales_per_kernel
     // For now, this can only be for a CPU request, but that may be relaxed down the
     // road
@@ -479,6 +480,19 @@ ExecutorResourcePool::calc_min_max_resource_grants_for_request(
         chunk_request_info.max_bytes_per_kernel * max_resource_grant.cpu_slots;
     min_resource_grant.buffer_mem_for_given_slots =
         chunk_request_info.max_bytes_per_kernel * request_info.min_cpu_slots;
+  }
+
+  // Todo (todd): Modulate number of CPU threads launched to ensure that
+  // query can fit in max grantable CPU result memory (if possible)
+  const size_t max_cpu_result_mem_grant =
+      get_max_cpu_result_mem_grant_for_request(request_info);
+  max_resource_grant.cpu_result_mem =
+      calc_max_resource_grant_for_request(request_info.cpu_result_mem,
+                                          request_info.min_cpu_result_mem,
+                                          max_cpu_result_mem_grant);
+  if (max_resource_grant.cpu_result_mem == 0 && request_info.min_cpu_result_mem > 0) {
+    throw QueryNeedsTooMuchCpuResultMem(max_cpu_result_mem_grant,
+                                        request_info.min_cpu_result_mem);
   }
 
   min_resource_grant.cpu_slots = request_info.min_cpu_slots;

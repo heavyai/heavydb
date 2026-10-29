@@ -429,6 +429,19 @@ class ExecutorResourcePool {
       const size_t max_grantable_independent_resource_quantity,
       const size_t dependent_to_independent_resource_ratio) const;
 
+  size_t get_max_pinned_buffer_pool_grant_for_memory_level(
+      const ExecutorDeviceType memory_pool_type) const;
+
+  /**
+   * @brief Whether a request's chunk memory exceeds the per-request pinned buffer pool
+   * limit for its memory level but can be gated per slot, i.e. whether chunk memory will
+   * be granted a slot's worth at a time rather than as one working set.
+   *
+   * This is the single source of the gating decision: the min/max grant calculation
+   * and the result memory headroom both depend on it and must agree.
+   */
+  bool is_chunk_request_gated_per_slot(const ChunkRequestInfo& chunk_request_info) const;
+
   /**
    * @brief Bytes of buffer pool memory a request's input chunks will occupy, and which
    * therefore cannot also be granted to that request as result memory when result

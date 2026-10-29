@@ -1501,6 +1501,62 @@ TEST(ExecutorResourceMgr, CpuResultMemCapExcludesInputChunks) {
   EXPECT_EQ(released.outstanding_requests, size_t(0));
 }
 
+// A scan too large for the pool must be reported as such, rather than as needing too
+// much result memory because its chunks leave no room for results. For a group by
+// query, it must also not be routed into the CPU slot auto-shrink retry, which cannot
+// make the scan any smaller.
+TEST(ExecutorResourceMgr, OversizedScanReportsBufferPoolError) {
+  constexpr size_t cpu_buffer_pool_mem{1000000};
+  auto executor_resource_mgr = gen_pool_backed_resource_mgr(cpu_buffer_pool_mem);
+  // 900000 bytes of non-scaling chunks exceeds the 750000 byte pinned limit, and leaves
+  // only 100000 bytes of the pool for the 200000 bytes of result memory requested
+  const auto chunk_request_info = gen_cpu_chunk_request_info(9, 100000, false);
+
+  ScopeGuard reset_flag =
+      [orig =
+           g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query]() {
+        g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = orig;
+      };
+  g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query = true;
+
+  const auto expect_buffer_pool_error = [&](const RequestInfo& resource_request_info) {
+    try {
+      executor_resource_mgr->request_resources(resource_request_info);
+      ASSERT_TRUE(false) << "Expected the request to be rejected.";
+    } catch (std::runtime_error const& e) {
+      EXPECT_TRUE(
+          std::string(e.what()).find(QUERY_NEEDS_TOO_MUCH_CPU_BUFFER_POOP_MEM_ERR_MSG) !=
+          std::string::npos)
+          << e.what();
+    }
+  };
+
+  expect_buffer_pool_error(RequestInfo(ExecutorDeviceType::CPU,
+                                       default_priority_level_request,
+                                       1,
+                                       1,
+                                       0,
+                                       0,
+                                       200000,
+                                       200000,
+                                       chunk_request_info,
+                                       false));
+  expect_buffer_pool_error(RequestInfo(ExecutorDeviceType::CPU,
+                                       default_priority_level_request,
+                                       4,
+                                       1,
+                                       0,
+                                       0,
+                                       200000,
+                                       50000,
+                                       chunk_request_info,
+                                       true));
+
+  const auto pool_info = executor_resource_mgr->get_resource_info();
+  EXPECT_EQ(pool_info.allocated_cpu_buffer_pool_mem, size_t(0));
+  EXPECT_EQ(pool_info.outstanding_requests, size_t(0));
+}
+
 // The same competition, but down the path where chunk memory is gated per CPU slot,
 // which commits chunk bytes through a second code path
 TEST(ExecutorResourceMgr, CpuResultMemAndGatedChunksCompeteForPool) {
