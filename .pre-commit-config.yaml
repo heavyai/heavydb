@@ -102,7 +102,7 @@ repos:
     rev: v1.5.1
     hooks:
       - id: verify-copyright
-        args: [--fix, --spdx]
+        args: [--fix, --spdx, --main-branch=master]
         files: |
           (?x)
             [.](call|closest|cmake|comp|cpp|cu|cuh|frag|geom|glsl|h|hpp|in|isect|java|mesh|miss|pl|py|raygen|rb|sh|sql|thrift|vert|yaml|yml)$|
