@@ -12314,7 +12314,6 @@ void assertInt64RowSetEqual(const std::shared_ptr<ResultSet>& rows,
                             std::vector<std::vector<int64_t>> expected);
 
 TEST_F(Select, SegmentedTemporaryColumnsRespectFetchPlan) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   const std::string table_name{"segmented_column_fetch_plan_test"};
   ResultReductionPipelineTestMode pipeline_mode;
@@ -12498,10 +12497,8 @@ void assertInt64RowSetEqual(const std::shared_ptr<ResultSet>& rows,
   EXPECT_EQ(actual, expected);
 }
 
-
 }  // namespace
 TEST_F(Select, ExistenceCountPreservesDuplicatesNullsAndEmptyInputs) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
 
   const std::string probe_table{"existence_count_probe"};
@@ -12585,7 +12582,6 @@ TEST_F(Select, ExistenceCountPreservesDuplicatesNullsAndEmptyInputs) {
 }
 
 TEST_F(Select, CorrelatedExistsPreservesEmptyInputs) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
 
   const std::string probe_table{"empty_exists_probe"};
@@ -12665,7 +12661,6 @@ TEST_F(Select, CorrelatedExistsPreservesEmptyInputs) {
 }
 
 TEST_F(Select, NullSafePerfectJoinPreservesNullOnlyKeys) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   BitmapHashJoinTestMode bitmap_mode;
   RankedBitmapHashJoinTestMode ranked_bitmap_mode;
@@ -12725,7 +12720,6 @@ TEST_F(Select, NullSafePerfectJoinPreservesNullOnlyKeys) {
 }
 
 TEST_F(Select, PipelinedGroupedExtremaPreserveNullableValues) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   ResultReductionPipelineTestMode pipeline_mode;
   ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
@@ -12804,7 +12798,6 @@ TEST_F(Select, PipelinedGroupedExtremaPreserveNullableValues) {
 }
 
 TEST_F(Select, PipelinedSampleStringsPreserveDictionaryIds) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   ResultReductionPipelineTestMode pipeline_mode;
   ExperimentalConstraintTrustTestMode rewrite_mode(false, false);
@@ -12897,7 +12890,6 @@ TEST_F(Select, PipelinedSampleStringsPreserveDictionaryIds) {
 }
 
 TEST_F(Select, CorrelatedHavingPreservesNullKeys) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
 
   ResultReductionPipelineTestMode pipeline_mode;
@@ -12963,7 +12955,6 @@ TEST_F(Select, CorrelatedHavingPreservesNullKeys) {
 }
 
 TEST_F(Select, InSubqueryPreservesEmptySetNullSemantics) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
 
   ResultReductionPipelineTestMode pipeline_mode;
@@ -24640,7 +24631,6 @@ TEST_F(Select, WindowFunctionAggregateNoOrder) {
 }
 
 TEST_F(Select, WindowFunctionPartitionExtremaGpuEligibility) {
-  SKIP_ALL_ON_AGGREGATOR();
   const auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
 
