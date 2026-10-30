@@ -352,6 +352,13 @@ static fs::path g_log_dir_path;
 
 void init(LogOptions const& log_opts) {
   boost::shared_ptr<boost::log::core> core = boost::log::core::get();
+  // Boost.Log initializes global loggers lazily. Construct them before subsystems
+  // start worker threads so their first log records cannot race during startup.
+  static_cast<void>(gSeverityLogger::get());
+  static_cast<void>(gChannelLogger_IR::get());
+  static_cast<void>(gChannelLogger_PTX::get());
+  static_cast<void>(gChannelLogger_ASM::get());
+  static_cast<void>(gChannelLogger_EXECUTOR::get());
   // boost::log::add_common_attributes(); // LineID TimeStamp ProcessID ThreadID
   core->add_global_attribute("TimeStamp", attr::local_clock());
   core->add_global_attribute("ProcessID", attr::current_process_id());

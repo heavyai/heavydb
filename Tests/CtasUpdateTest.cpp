@@ -10,6 +10,7 @@
 #include "DBHandlerTestHelpers.h"
 #include "LockMgr/LockMgr.h"
 #include "QueryEngine/ErrorHandling.h"
+#include "Shared/scope.h"
 #include "TestHelpers.h"
 
 // uncomment to run full test suite
@@ -1962,6 +1963,33 @@ TEST_F(Itas, ItasOrderLimitOffset) {
   sql("DELETE FROM ITAS_TARGET;");
 }
 
+TEST_F(Itas, FilteredProjectionAcrossSourceFragments) {
+  const std::array<std::string, 2> table_names{"ITAS_FRAGMENT_SOURCE",
+                                               "ITAS_FRAGMENT_TARGET"};
+  ScopeGuard drop_tables = [&table_names] {
+    for (const auto& table_name : table_names) {
+      sql("DROP TABLE IF EXISTS " + table_name + ";");
+    }
+  };
+  for (const auto& table_name : table_names) {
+    sql("DROP TABLE IF EXISTS " + table_name + ";");
+  }
+
+  sql("CREATE TABLE ITAS_FRAGMENT_SOURCE (id INT, keep_row BOOLEAN) "
+      "WITH (FRAGMENT_SIZE=4);");
+  sql("CREATE TABLE ITAS_FRAGMENT_TARGET (id INT, SHARD KEY(id)) "
+      "WITH (SHARD_COUNT=2);");
+  sql("INSERT INTO ITAS_FRAGMENT_SOURCE VALUES "
+      "(0, TRUE), (1, FALSE), (2, FALSE), (3, FALSE), "
+      "(4, TRUE), (5, TRUE), (6, TRUE), (7, TRUE), "
+      "(8, TRUE), (9, TRUE), (10, FALSE), (11, FALSE);");
+
+  sql("INSERT INTO ITAS_FRAGMENT_TARGET "
+      "SELECT id FROM ITAS_FRAGMENT_SOURCE WHERE keep_row = TRUE;");
+  sqlAndCompareResult("SELECT id FROM ITAS_FRAGMENT_TARGET ORDER BY id;",
+                      {{i(0)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}, {i(9)}});
+}
+
 class Export : public DBHandlerTestFixture {
  public:
   void SetUp() override {
@@ -2535,6 +2563,46 @@ class Select : public DBHandlerTestFixture {
 
   void TearDown() override { DBHandlerTestFixture::TearDown(); }
 };
+
+TEST_F(Select, RowWiseThriftPreservesNumericNullability) {
+  constexpr auto table_name = "rowwise_thrift_numeric_nullability";
+  sql("DROP TABLE IF EXISTS " + std::string(table_name) + ";");
+  ScopeGuard cleanup = [table_name]() {
+    sql("DROP TABLE IF EXISTS " + std::string(table_name) + ";");
+  };
+
+  sql("CREATE TABLE " + std::string(table_name) +
+      " (i INTEGER NOT NULL, f FLOAT NOT NULL, d DOUBLE NOT NULL, "
+      "nullable_i INTEGER, nullable_f FLOAT, nullable_d DOUBLE, "
+      "nullable_decimal DECIMAL(10, 2));");
+  sql("INSERT INTO " + std::string(table_name) +
+      " VALUES (-2147483648, 1.1754943508222875e-38, "
+      "2.2250738585072014e-308, NULL, NULL, NULL, NULL);");
+
+  TQueryResult result;
+  const auto [handler, session_id] = getDbHandlerAndSessionId();
+  handler->sql_execute(result,
+                       session_id,
+                       "SELECT * FROM " + std::string(table_name) + ";",
+                       false,
+                       "",
+                       -1,
+                       -1);
+
+  ASSERT_EQ(size_t{1}, result.row_set.rows.size());
+  const auto& columns = result.row_set.rows.front().cols;
+  ASSERT_EQ(size_t{7}, columns.size());
+  EXPECT_FALSE(columns[0].is_null);
+  EXPECT_EQ(int64_t{NULL_INT}, columns[0].val.int_val);
+  EXPECT_FALSE(columns[1].is_null);
+  EXPECT_FLOAT_EQ(NULL_FLOAT, static_cast<float>(columns[1].val.real_val));
+  EXPECT_FALSE(columns[2].is_null);
+  EXPECT_DOUBLE_EQ(NULL_DOUBLE, columns[2].val.real_val);
+  EXPECT_TRUE(columns[3].is_null);
+  EXPECT_TRUE(columns[4].is_null);
+  EXPECT_TRUE(columns[5].is_null);
+  EXPECT_TRUE(columns[6].is_null);
+}
 
 TEST_F(Select, CtasItasValidation) {
   auto drop_table = []() {

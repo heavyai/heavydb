@@ -1252,6 +1252,8 @@ class OptimizeTableStmt : public DDLStmt {
     return false;
   }
 
+  std::string storageCompressionRewriteOption() const;
+
   void execute(const Catalog_Namespace::SessionInfo& session,
                bool read_only_mode) override;
 
