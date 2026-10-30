@@ -643,10 +643,6 @@ void c_arrow_dict_check(
     return;                                                       \
   }
 
-#define SKIP_ALL_ON_AGGREGATOR() \
-  do {                           \
-  } while (false)
-
 #define SKIP_IF_SHARDED()                                       \
   if (g_shard_count) {                                          \
     LOG(ERROR) << "Tests not valid when using sharded tables."; \
@@ -1472,7 +1468,6 @@ class RelAlgDagOptimizationTest : public TestHelpers::TbbPrivateServerKiller {
 };
 
 TEST_F(RelAlgDagOptimizationTest, AggregateScanCoalescesWithoutMaterialization) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   run_ddl_statement("DROP TABLE IF EXISTS aggregate_scan_input;");
   run_ddl_statement("CREATE TABLE aggregate_scan_input (k INT, unused INT, v BIGINT);");
@@ -1530,7 +1525,6 @@ TEST_F(RelAlgDagOptimizationTest, AggregateScanCoalescesWithoutMaterialization) 
 }
 
 TEST_F(RelAlgDagOptimizationTest, ScalarCountScanPreservesColumnFreePlan) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   auto dag = RelAlgDagBuilder::buildDag(R"({"rels":[
     {"id":"0","relOp":"LogicalTableScan","fieldNames":["t1"],
