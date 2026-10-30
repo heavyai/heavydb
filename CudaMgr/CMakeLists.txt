@@ -10,3 +10,13 @@ else()
 endif()
 
 target_link_libraries(CudaMgr ${CUDA_LIBRARIES})
+
+if(ENABLE_CUDA AND TARGET benchmark::benchmark)
+    add_executable(
+        DeviceToDeviceBenchmark
+        ../Tests/DeviceToDeviceBenchmark/DeviceToDeviceBenchmark.cpp)
+
+    # CudaMgr constructor requires QueryEngine.
+    add_dependencies(DeviceToDeviceBenchmark QueryEngineCudaTargets)
+    target_link_libraries(DeviceToDeviceBenchmark benchmark::benchmark CudaMgr QueryEngine)
+endif()
