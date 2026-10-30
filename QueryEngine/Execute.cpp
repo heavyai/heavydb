@@ -2450,6 +2450,7 @@ void Executor::executeWorkUnitPerFragment(
                              ExecutorDispatchMode::KernelPerFragment,
                              /*render_info=*/nullptr,
                              /*rowid_lookup_key=*/-1);
+      kernel.prepareForLaunch(this, kernel_context);
       kernel.run(this, 0, kernel_context);
     }
   }

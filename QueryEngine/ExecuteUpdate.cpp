@@ -164,6 +164,7 @@ TableUpdateMetadata Executor::executeUpdate(
       std::lock_guard<std::mutex> kernel_lock(kernel_mutex_);
       kernel_queue_time_ms_ += timer_stop(clock_begin);
 
+      current_fragment_kernel.prepareForLaunch(this, shared_context);
       current_fragment_kernel.run(this, 0, shared_context);
     }
     const auto& proj_fragment_results = shared_context.getFragmentResults();
