@@ -13764,14 +13764,13 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
       "where b > 1 and c < 7 order by a,b,c,d,e,f;",
       dt);
 
-    //    d) expect to throw an error due to unsupported full outer join
-    //    --> we need a filter predicate in probe-side (i.e., outer) table
-    EXPECT_THROW(
-        run_multiple_agg(
-            "select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a "
-            "= d where d is not null and c < 2 order by a,b,c,d,e,f;",
-            dt),
-        std::runtime_error);
+    //    d) probe-side filters used to leave some full outer join reductions
+    //    unsupported. Keep the result invariant explicit now that these shapes execute.
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
+      "where d is not null and c < 2 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo, outer_join_bar where a = d and d is "
+      "not null and c < 2 order by a,b,c,d,e,f;",
+      dt);
     EXPECT_THROW(run_multiple_agg(
                      "select a,b,c,d,e,f from outer_join_foo full outer join "
                      "outer_join_bar on a = d where e is not null order by a,b,c,d,e,f;",
@@ -13783,11 +13782,11 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
             "= d where f is not null and e < 2 order by a,b,c,d,e,f;",
             dt),
         std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("select a,b,c,d,e,f from outer_join_foo full outer join "
-                         "outer_join_bar on a = d where c < 2 order by a,b,c,d,e,f;",
-                         dt),
-        std::runtime_error);
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
+      "where c < 2 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
+      "where c < 2 order by a,b,c,d,e,f;",
+      dt);
     EXPECT_THROW(
         run_multiple_agg("select a,b,c,d,e,f from outer_join_foo full outer join "
                          "outer_join_bar on a = d where d < 5 order by a,b,c,d,e,f;",
@@ -13985,12 +13984,11 @@ TEST_F(Select, Joins_OuterJoin_OptBy_NullRejection) {
             "= d and c = f where d is not null and f < 2 order by a,b,c,d,e,f;",
             dt),
         std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg(
-            "select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a "
-            "= d and c = f where a < 2 order by a,b,c,d,e,f;",
-            dt),
-        std::runtime_error);
+    c("select a,b,c,d,e,f from outer_join_foo full outer join outer_join_bar on a = d "
+      "and c = f where a < 2 order by a,b,c,d,e,f;",
+      "select a,b,c,d,e,f from outer_join_foo left outer join outer_join_bar on a = d "
+      "and c = f where a < 2 order by a,b,c,d,e,f;",
+      dt);
 
     // 2. execute full outer join via inner join
     //    a) return zero matching row
