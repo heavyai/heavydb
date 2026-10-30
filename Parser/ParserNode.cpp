@@ -3933,6 +3933,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          g_from_table_reordering,
                          false,
                          std::numeric_limits<size_t>::max(),
+                         0,
                          ExecutorType::Native,
                          outer_fragment_indices};
 

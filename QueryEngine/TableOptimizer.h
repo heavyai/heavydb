@@ -7,6 +7,10 @@
 
 #include "Catalog/Catalog.h"
 
+namespace File_Namespace {
+struct NativeStorageCompressionConfig;
+}
+
 class Executor;
 struct TableUpdateMetadata;
 
@@ -53,6 +57,10 @@ class TableOptimizer {
    * current epoch has decreased.
    */
   void vacuumDeletedRows() const;
+
+  /** Rewrites native storage payloads with the requested immutable format. */
+  void rewriteStoragePayloads(
+      const File_Namespace::NativeStorageCompressionConfig& compression_config) const;
 
   /**
    * Vacuums fragments with a deleted rows percentage that exceeds the configured minimum

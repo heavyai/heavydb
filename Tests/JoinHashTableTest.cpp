@@ -55,7 +55,7 @@ TEST_F(Build, PerfectOneToOneNullSlotBoundary) {
     const std::array<int32_t, 4> keys{{min_key, min_key + 1, null_value, null_value}};
     for (const bool duplicate_null : {false, true}) {
       const size_t count = duplicate_null ? 4 : 3;
-      const JoinChunk chunk{reinterpret_cast<const int8_t*>(keys.data()), count};
+      const JoinChunk chunk{reinterpret_cast<const int8_t*>(keys.data()), count, 0};
       const JoinColumn column{reinterpret_cast<const int8_t*>(&chunk),
                               sizeof(chunk),
                               1,
@@ -77,7 +77,7 @@ TEST_F(Build, PerfectOneToOneNullSlotBoundary) {
                        << " semi=" << semi << " guard=" << guard);
           std::array<int32_t, 5> buffer{{guard, -1, -1, -1, guard}};
           const OneToOnePerfectJoinHashTableFillFuncArgs args{
-              buffer.data() + 1, nullptr, -1, semi, column, type_info, nullptr, 0, 1};
+              buffer.data() + 1, nullptr, -1, semi, column, type_info, nullptr, 0, 0, 1};
           EXPECT_EQ(duplicate_null && !semi ? -1 : 0,
                     fill_hash_join_buff_bitwise_eq(args, 0, 1));
           EXPECT_EQ((std::array<int32_t, 5>{{guard, 0, 1, 2, guard}}), buffer);

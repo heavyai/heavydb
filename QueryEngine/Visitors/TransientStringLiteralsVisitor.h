@@ -20,9 +20,17 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
   void* visitConstant(const Analyzer::Constant* constant) const override {
     if (constant->get_type_info().is_string() && !constant->get_is_null()) {
       CHECK(constant->get_constval().stringval);
-      sdp_->getOrAddTransient(*constant->get_constval().stringval);
+      pending_string_literals_.push_back(*constant->get_constval().stringval);
     }
     return defaultResult();
+  }
+
+  void flushStringLiterals() const {
+    if (pending_string_literals_.empty()) {
+      return;
+    }
+    sdp_->getOrAddTransientBulk(pending_string_literals_);
+    pending_string_literals_.clear();
   }
 
   // visitUOper is for handling casts between dictionary encoded text
@@ -57,6 +65,7 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
 
     if (operand_ti.is_dict_encoded_string() &&
         uoper_ti.getStringDictKey() != operand_ti.getStringDictKey()) {
+      flushStringLiterals();
       executor_->getStringProxyTranslationMap(
           operand_ti.getStringDictKey(),
           uoper_ti.getStringDictKey(),
@@ -108,6 +117,7 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
         string_op_infos.emplace_back(string_op_info);
       }
 
+      flushStringLiterals();
       executor_->getStringProxyTranslationMap(
           str_operand_ti.getStringDictKey(),
           string_oper_ti.getStringDictKey(),
@@ -131,7 +141,7 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
           !str_result_and_null_status.first
                .empty()) {  // Todo(todd): Is there a central/non-magic function/constant
                             // to determine if a none-encoded string is null
-        sdp_->getOrAddTransient(str_result_and_null_status.first);
+        pending_string_literals_.push_back(str_result_and_null_status.first);
       }
     }
     return defaultResult();
@@ -144,6 +154,7 @@ class TransientStringLiteralsVisitor : public ScalarExprVisitor<void*> {
   mutable StringDictionaryProxy* sdp_;
   mutable Executor* executor_;
   mutable bool parent_feeds_sdp_{false};
+  mutable std::vector<std::string> pending_string_literals_;
 };
 
 class TransientDictIdVisitor : public ScalarExprVisitor<shared::StringDictKey> {

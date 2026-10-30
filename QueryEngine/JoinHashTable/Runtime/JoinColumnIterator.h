@@ -56,7 +56,8 @@ struct JoinColumnIterator {
   };  // struct IndexedElement
 
   DEVICE FORCE_INLINE IndexedElement operator*() const {
-    return {index, getElementSwitch()};
+    return {join_chunk_array[index_of_chunk].rowid_offset + index_inside_chunk,
+            getElementSwitch()};
   }
 
   DEVICE FORCE_INLINE JoinColumnIterator& operator++() {

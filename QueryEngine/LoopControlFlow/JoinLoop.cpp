@@ -32,7 +32,8 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
     , is_deleted_(is_deleted)
     , nested_loop_join_(nested_loop_join)
     , name_(name) {
-  CHECK(outer_condition_match == nullptr || type == JoinType::LEFT);
+  CHECK(outer_condition_match == nullptr || type == JoinType::LEFT ||
+        type == JoinType::INNER);
   CHECK_EQ(static_cast<bool>(found_outer_matches), (type == JoinType::LEFT));
 }
 
@@ -55,7 +56,11 @@ llvm::BasicBlock* JoinLoop::codegen(
   std::vector<llvm::Value*> iterators;
   iterators.push_back(outer_iter);
   JoinType prev_join_type{JoinType::INVALID};
+  // For inner nested-loop joins, a false join predicate advances the current
+  // inner loop. Exhausting the inner loop is wired directly to prev_exit_bb.
+  bool prev_condition_false_advances_iter{false};
   for (const auto& join_loop : join_loops) {
+    bool current_condition_false_advances_iter{false};
     switch (join_loop.kind_) {
       case JoinLoopKind::UpperBound:
       case JoinLoopKind::Set:
@@ -77,7 +82,9 @@ llvm::BasicBlock* JoinLoop::codegen(
           builder.CreateCondBr(
               prev_comparison_result,
               filter_bb ? filter_bb : preheader_bb,
-              prev_join_type == JoinType::LEFT ? prev_iter_advance_bb : prev_exit_bb);
+              (prev_join_type == JoinType::LEFT || prev_condition_false_advances_iter)
+                  ? prev_iter_advance_bb
+                  : prev_exit_bb);
         }
         prev_exit_bb = prev_iter_advance_bb ? prev_iter_advance_bb : exit_bb;
         builder.SetInsertPoint(preheader_bb);
@@ -174,6 +181,11 @@ llvm::BasicBlock* JoinLoop::codegen(
                                          found_an_outer_match_ptr,
                                          current_condition_match_ptr,
                                          cgen_state);
+        } else if (join_loop.outer_condition_match_) {
+          std::tie(last_head_bb, prev_comparison_result) = evaluateInnerJoinCondition(
+              join_loop, iterators, have_more_inner_rows, prev_exit_bb, cgen_state);
+          // A predicate miss should keep scanning the current join domain.
+          current_condition_false_advances_iter = true;
         } else {
           prev_comparison_result = have_more_inner_rows;
           last_head_bb = row_not_deleted_bb ? row_not_deleted_bb : head_bb;
@@ -215,7 +227,9 @@ llvm::BasicBlock* JoinLoop::codegen(
           builder.CreateCondBr(
               prev_comparison_result,
               filter_bb ? filter_bb : true_bb,
-              prev_join_type == JoinType::LEFT ? prev_iter_advance_bb : prev_exit_bb);
+              (prev_join_type == JoinType::LEFT || prev_condition_false_advances_iter)
+                  ? prev_iter_advance_bb
+                  : prev_exit_bb);
         }
         prev_exit_bb = prev_iter_advance_bb ? prev_iter_advance_bb : exit_bb;
 
@@ -287,6 +301,7 @@ llvm::BasicBlock* JoinLoop::codegen(
         CHECK(false);
     }
     prev_join_type = join_loop.type_;
+    prev_condition_false_advances_iter = current_condition_false_advances_iter;
   }
 
   const auto body_bb = body_codegen(iterators);
@@ -295,7 +310,9 @@ llvm::BasicBlock* JoinLoop::codegen(
   builder.CreateCondBr(
       prev_comparison_result,
       body_bb,
-      prev_join_type == JoinType::LEFT ? prev_iter_advance_bb : prev_exit_bb);
+      (prev_join_type == JoinType::LEFT || prev_condition_false_advances_iter)
+          ? prev_iter_advance_bb
+          : prev_exit_bb);
   return entry;
 }
 
@@ -349,4 +366,26 @@ std::pair<llvm::BasicBlock*, llvm::Value*> JoinLoop::evaluateOuterJoinCondition(
       builder.CreateLoad(current_condition_match_ptr->getType()->getPointerElementType(),
                          current_condition_match_ptr));
   return {after_evaluate_outer_condition_bb, do_iteration};
+}
+
+std::pair<llvm::BasicBlock*, llvm::Value*> JoinLoop::evaluateInnerJoinCondition(
+    const JoinLoop& join_loop,
+    const std::vector<llvm::Value*>& iterators,
+    llvm::Value* have_more_inner_rows,
+    llvm::BasicBlock* no_more_inner_rows_bb,
+    CgenState* cgen_state) {
+  AUTOMATIC_IR_METADATA(cgen_state);
+  CHECK(join_loop.outer_condition_match_);
+  llvm::IRBuilder<>& builder = cgen_state->ir_builder_;
+  auto& context = builder.getContext();
+  const auto parent_func = builder.GetInsertBlock()->getParent();
+  const auto evaluate_condition_bb = llvm::BasicBlock::Create(
+      context, "eval_inner_loop_join_cond_" + join_loop.name_, parent_func);
+
+  // No more rows is not a predicate miss; it exits to the enclosing loop or row.
+  builder.CreateCondBr(
+      have_more_inner_rows, evaluate_condition_bb, no_more_inner_rows_bb);
+  builder.SetInsertPoint(evaluate_condition_bb);
+  const auto current_condition_match = join_loop.outer_condition_match_(iterators);
+  return {builder.GetInsertBlock(), current_condition_match};
 }

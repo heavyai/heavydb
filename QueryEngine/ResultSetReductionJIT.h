@@ -21,9 +21,9 @@ struct ReductionCode {
   // [start_entry_index, end_entry_index).
   using FuncPtr = int32_t (*)(int8_t* this_buff,
                               const int8_t* that_buff,
-                              const int32_t start_entry_index,
-                              const int32_t end_entry_index,
-                              const int32_t that_entry_count,
+                              const int64_t start_entry_index,
+                              const int64_t end_entry_index,
+                              const int64_t that_entry_count,
                               const void* this_qmd,
                               const void* that_qmd,
                               const void* serialized_varlen_buffer);
@@ -138,6 +138,10 @@ class ResultSetReductionJIT {
  */
 class GpuReductionHelperJIT : public ResultSetReductionJIT {
  public:
+  // Used by GPU shared-memory group by writeback. The source and destination
+  // buffers are both perfect-hash row-wise buffers with matching slot layout; the
+  // generated reducer can therefore merge either keyless rows or rows with
+  // explicit key columns by slot index.
   GpuReductionHelperJIT(const QueryMemoryDescriptor& query_mem_desc,
                         const std::vector<TargetInfo>& targets,
                         const std::vector<int64_t>& target_init_vals,
@@ -147,7 +151,6 @@ class GpuReductionHelperJIT : public ResultSetReductionJIT {
     CHECK(query_mem_desc_.getQueryDescriptionType() ==
           QueryDescriptionType::GroupByPerfectHash);
     CHECK(!query_mem_desc_.didOutputColumnar());
-    CHECK(query_mem_desc_.hasKeylessHash());
   }
   /**
    * generates code for perfect hash group by reduction: the following functions are

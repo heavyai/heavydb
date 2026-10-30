@@ -9,6 +9,7 @@
 #include "CardinalityEstimator.h"
 #include "CodeGenerator.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
+#include "ErrorHandling.h"
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
 #include "GpuInitGroups.h"
@@ -32,6 +33,7 @@
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
+#include <algorithm>
 #include <cstring>  // strcat()
 #include <limits>
 #include <numeric>
@@ -49,6 +51,102 @@ extern size_t g_approx_quantile_centroids;
 extern int64_t g_bitmap_memory_limit;
 extern size_t g_default_max_groups_buffer_entry_guess;
 extern size_t g_baseline_groupby_threshold;
+extern bool g_enable_result_reduction_pipeline;
+
+namespace {
+
+constexpr size_t kGroupByWatchdogMemoryHeadroomDivisor{5};
+
+bool use_resource_aware_groupby_limits(const ExecutorDeviceType device_type) {
+  return g_enable_result_reduction_pipeline && device_type == ExecutorDeviceType::GPU;
+}
+
+bool use_resource_aware_groupby_watchdog() {
+  return g_enable_result_reduction_pipeline;
+}
+
+size_t available_buffer_memory_bytes(const Buffer_Namespace::MemoryInfo& memory_info) {
+  return Buffer_Namespace::get_reclaimable_size_bytes(memory_info);
+}
+
+size_t min_available_buffer_memory_bytes(Executor* executor,
+                                         const ExecutorDeviceType device_type) {
+  CHECK(executor);
+  const auto memory_level = device_type == ExecutorDeviceType::GPU
+                                ? Data_Namespace::MemoryLevel::GPU_LEVEL
+                                : Data_Namespace::MemoryLevel::CPU_LEVEL;
+  const auto memory_info = executor->getDataMgr()->getMemoryInfo(memory_level);
+  if (memory_info.empty()) {
+    return std::numeric_limits<size_t>::max();
+  }
+
+  size_t min_available_bytes = std::numeric_limits<size_t>::max();
+  for (const auto& info : memory_info) {
+    min_available_bytes =
+        std::min(min_available_bytes, available_buffer_memory_bytes(info));
+  }
+  return min_available_bytes;
+}
+
+size_t count_distinct_bitmap_memory_budget_bytes(Executor* executor,
+                                                 const ExecutorDeviceType device_type) {
+  if (!use_resource_aware_groupby_limits(device_type)) {
+    return static_cast<size_t>(g_bitmap_memory_limit);
+  }
+  const auto available_bytes = min_available_buffer_memory_bytes(executor, device_type);
+  return available_bytes - (available_bytes / kGroupByWatchdogMemoryHeadroomDivisor);
+}
+
+size_t count_distinct_single_bitmap_limit_bits(Executor* executor,
+                                               const ExecutorDeviceType device_type) {
+  if (!use_resource_aware_groupby_limits(device_type)) {
+    return static_cast<size_t>(g_bitmap_memory_limit);
+  }
+  const auto budget_bytes =
+      count_distinct_bitmap_memory_budget_bytes(executor, device_type);
+  if (budget_bytes > std::numeric_limits<size_t>::max() / 8) {
+    return std::numeric_limits<size_t>::max();
+  }
+  return budget_bytes * 8;
+}
+
+void check_resource_aware_groupby_watchdog(
+    Executor* executor,
+    const ExecutorDeviceType device_type,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const bool allow_multifrag,
+    const bool watchdog_condition_for_baseline,
+    const bool watchdog_condition_for_perfect_hash) {
+  if (!watchdog_condition_for_baseline && !watchdog_condition_for_perfect_hash) {
+    return;
+  }
+
+  const auto required_output_buffer_bytes =
+      query_mem_desc.getBufferSizeBytes(device_type);
+  const auto available_bytes = min_available_buffer_memory_bytes(executor, device_type);
+  const auto watchdog_budget_bytes =
+      available_bytes - (available_bytes / kGroupByWatchdogMemoryHeadroomDivisor);
+
+  if (required_output_buffer_bytes <= watchdog_budget_bytes) {
+    return;
+  }
+
+  if (device_type == ExecutorDeviceType::GPU && allow_multifrag) {
+    throw QueryExecutionError(
+        ErrorCode::OUT_OF_GPU_MEM,
+        "GPU group-by output buffer estimate exceeds available buffer memory",
+        QueryExecutionProperties{query_mem_desc.getQueryDescriptionType(),
+                                 /*was_multifrag_kernel_launch=*/true});
+  }
+
+  if (device_type == ExecutorDeviceType::GPU) {
+    throw QueryMustRunOnCpu(
+        "Query output buffer estimate exceeds available GPU buffer memory.");
+  }
+  throw WatchdogException("Query would use too much memory");
+}
+
+}  // namespace
 
 bool ColRangeInfo::isEmpty() const {
   return min == 0 && max == -1;
@@ -216,6 +314,50 @@ size_t GroupByAndAggregate::getBaselineThreshold(const RelAlgExecutionUnit& ra_e
   return g_baseline_groupby_threshold;
 }
 
+namespace {
+bool single_base_table_input(const RelAlgExecutionUnit& ra_exe_unit) {
+  return ra_exe_unit.input_descs.size() == size_t(1) &&
+         ra_exe_unit.input_descs.front().getSourceType() == InputSourceType::TABLE;
+}
+
+int64_t fixed_perfect_hash_entry_count(const RelAlgExecutionUnit& ra_exe_unit) {
+  const checked_int64_t col_count = static_cast<int64_t>(std::max(
+      ra_exe_unit.groupby_exprs.size() + ra_exe_unit.target_exprs.size(), size_t(1)));
+  const auto estimated_row_width =
+      static_cast<int64_t>(col_count * checked_int64_t(sizeof(int64_t)));
+  return kMaxBufferSize / estimated_row_width;
+}
+
+bool can_expand_perfect_hash_for_gpu_resources(const RelAlgExecutionUnit& ra_exe_unit,
+                                               const ExecutorDeviceType device_type) {
+  if (!use_resource_aware_groupby_limits(device_type)) {
+    return false;
+  }
+  return single_base_table_input(ra_exe_unit);
+}
+
+int64_t max_perfect_hash_entry_count(const RelAlgExecutionUnit& ra_exe_unit,
+                                     const ExecutorDeviceType device_type,
+                                     Executor* executor) {
+  CHECK(executor);
+  const int64_t max_entry_count = fixed_perfect_hash_entry_count(ra_exe_unit);
+  if (!can_expand_perfect_hash_for_gpu_resources(ra_exe_unit, device_type)) {
+    return max_entry_count;
+  }
+
+  const checked_int64_t col_count = static_cast<int64_t>(std::max(
+      ra_exe_unit.groupby_exprs.size() + ra_exe_unit.target_exprs.size(), size_t(1)));
+  const auto estimated_row_width =
+      static_cast<int64_t>(col_count * checked_int64_t(sizeof(int64_t)));
+  const auto available_bytes = min_available_buffer_memory_bytes(executor, device_type);
+  const auto budget_bytes =
+      available_bytes - (available_bytes / kGroupByWatchdogMemoryHeadroomDivisor);
+  const auto resource_aware_entry_count =
+      static_cast<int64_t>(budget_bytes / static_cast<size_t>(estimated_row_width));
+  return std::max(max_entry_count, resource_aware_entry_count);
+}
+}  // namespace
+
 ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   // Use baseline layout more eagerly on the GPU if the query uses count distinct,
   // because our HyperLogLog implementation is 4x less memory efficient on GPU.
@@ -288,14 +430,31 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   if (!ra_exe_unit_.groupby_exprs.front()) {
     return col_range_info;
   }
-  const int64_t col_count =
-      ra_exe_unit_.groupby_exprs.size() + ra_exe_unit_.target_exprs.size();
-  int64_t max_entry_count = kMaxBufferSize / (col_count * sizeof(int64_t));
+  int64_t fixed_max_entry_count = fixed_perfect_hash_entry_count(ra_exe_unit_);
+  int64_t max_entry_count =
+      max_perfect_hash_entry_count(ra_exe_unit_, device_type_, executor_);
   if (any<IsCountDistinct, IsMode>(ra_exe_unit_.target_exprs)) {
+    fixed_max_entry_count = std::min(fixed_max_entry_count, baseline_threshold);
     max_entry_count = std::min(max_entry_count, baseline_threshold);
   }
   auto const is_baseline_candidate =
       is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count);
+  auto const is_fixed_baseline_candidate =
+      is_column_range_too_big_for_perfect_hash(col_range_info, fixed_max_entry_count);
+  const bool resource_expanded_perfect_hash_candidate =
+      !col_range_info.bucket &&
+      can_expand_perfect_hash_for_gpu_resources(ra_exe_unit_, device_type_) &&
+      is_fixed_baseline_candidate && !is_baseline_candidate;
+  if (resource_expanded_perfect_hash_candidate &&
+      (!group_cardinality_estimation_ ||
+       cardinality_estimate_less_than_column_range(*group_cardinality_estimation_,
+                                                   col_range_info))) {
+    return {QueryDescriptionType::GroupByBaselineHash,
+            col_range_info.min,
+            col_range_info.max,
+            0,
+            col_range_info.has_nulls};
+  }
   const auto& groupby_expr_ti = ra_exe_unit_.groupby_exprs.front()->get_type_info();
   if (groupby_expr_ti.is_string() && !col_range_info.bucket) {
     CHECK(groupby_expr_ti.get_compression() == kENCODING_DICT);
@@ -395,13 +554,15 @@ GroupByAndAggregate::GroupByAndAggregate(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    const std::optional<int64_t>& group_cardinality_estimation)
+    const std::optional<int64_t>& group_cardinality_estimation,
+    const bool with_watchdog)
     : executor_(executor)
     , ra_exe_unit_(ra_exe_unit)
     , query_infos_(query_infos)
     , row_set_mem_owner_(row_set_mem_owner)
     , device_type_(device_type)
-    , group_cardinality_estimation_(group_cardinality_estimation) {
+    , group_cardinality_estimation_(group_cardinality_estimation)
+    , with_watchdog_(with_watchdog) {
   for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
     if (!groupby_expr) {
       continue;
@@ -720,6 +881,10 @@ CountDistinctDescriptors init_count_distinct_descriptors(
       }
       const auto sub_bitmap_count =
           get_count_distinct_sub_bitmap_count(bitmap_sz_bits, ra_exe_unit, device_type);
+      const auto bitmap_memory_budget_bytes =
+          count_distinct_bitmap_memory_budget_bytes(executor, device_type);
+      const auto single_bitmap_limit_bits =
+          count_distinct_single_bitmap_limit_bits(executor, device_type);
       size_t worst_case_num_groups{1};
       if (arg_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
           !(arg_ti.is_buffer() || arg_ti.is_geometry())) {  // TODO(alex): allow bitmap
@@ -727,7 +892,8 @@ CountDistinctDescriptors init_count_distinct_descriptors(
         count_distinct_impl_type = CountDistinctImplType::Bitmap;
         if (shared::is_any<kCOUNT, kCOUNT_IF>(agg_info.agg_kind)) {
           bitmap_sz_bits = get_bucketed_cardinality_without_nulls(arg_range_info);
-          if (bitmap_sz_bits <= 0 || g_bitmap_memory_limit <= bitmap_sz_bits) {
+          if (bitmap_sz_bits <= 0 ||
+              single_bitmap_limit_bits <= static_cast<size_t>(bitmap_sz_bits)) {
             count_distinct_impl_type = CountDistinctImplType::UnorderedSet;
           }
           // check a potential OOM when using bitmap-based approach
@@ -740,8 +906,7 @@ CountDistinctDescriptors init_count_distinct_descriptors(
               total_bytes_per_entry * maximum_num_groups;
           // we can estimate a potential OOM of bitmap-based count-distinct operator
           // by using the logic "check_total_bitmap_memory"
-          if (total_bitmap_bytes_for_groups >=
-              static_cast<size_t>(g_bitmap_memory_limit)) {
+          if (total_bitmap_bytes_for_groups >= bitmap_memory_budget_bytes) {
             const auto agg_expr_max_entry_count =
                 arg_range_info.max - arg_range_info.min + 1;
             int64_t max_agg_expr_table_cardinality{1};
@@ -936,7 +1101,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
       col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
       ra_exe_unit_.groupby_exprs.size() == 1 &&
       bucketized_col_range > kMaxNumElemsForBucketizedRange;
-  if (g_enable_watchdog &&
+  if (with_watchdog_ && !use_resource_aware_groupby_watchdog() &&
       (watchdog_condition_for_baseline || watchdog_condition_for_perfect_hash)) {
     throw WatchdogException("Query would use too much memory");
   }
@@ -944,7 +1109,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
   const auto count_distinct_descriptors = init_count_distinct_descriptors(
       ra_exe_unit_, query_infos_, col_range_info, device_type_, executor_);
   auto approx_quantile_descriptors = initApproxQuantileDescriptors();
-  try {
+  auto init_query_mem_desc = [&](const bool streaming_top_n_hint) {
     return QueryMemoryDescriptor::init(executor_,
                                        ra_exe_unit_,
                                        query_infos_,
@@ -962,30 +1127,29 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                        count_distinct_descriptors,
                                        must_use_baseline_sort,
                                        output_columnar_hint,
-                                       /*streaming_top_n_hint=*/true,
+                                       streaming_top_n_hint,
                                        threads_can_reuse_group_by_buffers);
+  };
+
+  std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
+  try {
+    query_mem_desc = init_query_mem_desc(/*streaming_top_n_hint=*/true);
   } catch (const StreamingTopNOOM& e) {
     LOG(WARNING) << e.what() << " Disabling Streaming Top N.";
-    return QueryMemoryDescriptor::init(executor_,
-                                       ra_exe_unit_,
-                                       query_infos_,
-                                       col_range_info,
-                                       keyless_info,
-                                       allow_multifrag,
-                                       device_type_,
-                                       crt_min_byte_width,
-                                       sort_on_gpu_hint,
-                                       shard_count,
-                                       max_groups_buffer_entry_count,
-                                       render_info,
-                                       approx_quantile_descriptors,
-                                       nmode_targets,
-                                       count_distinct_descriptors,
-                                       must_use_baseline_sort,
-                                       output_columnar_hint,
-                                       /*streaming_top_n_hint=*/false,
-                                       threads_can_reuse_group_by_buffers);
+    query_mem_desc = init_query_mem_desc(/*streaming_top_n_hint=*/false);
   }
+
+  CHECK(query_mem_desc);
+  if (with_watchdog_ && use_resource_aware_groupby_watchdog() &&
+      (watchdog_condition_for_baseline || watchdog_condition_for_perfect_hash)) {
+    check_resource_aware_groupby_watchdog(executor_,
+                                          device_type_,
+                                          *query_mem_desc,
+                                          allow_multifrag,
+                                          watchdog_condition_for_baseline,
+                                          watchdog_condition_for_perfect_hash);
+  }
+  return query_mem_desc;
 }
 
 bool GroupByAndAggregate::gpuCanHandleOrderEntries(
@@ -1187,8 +1351,10 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
     const size_t target_idx = only_order_entry.tle_no - 1;
     CHECK_LT(target_idx, ra_exe_unit_.target_exprs.size());
     const auto order_entry_expr = ra_exe_unit_.target_exprs[target_idx];
+    const auto key_slot_idx =
+        get_heap_key_slot_index(query_mem_desc, ra_exe_unit_.target_exprs, target_idx);
     const auto chosen_bytes =
-        static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(target_idx));
+        static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(key_slot_idx));
     auto order_entry_lv = executor_->cgen_state_->castToTypeIn(
         code_generator.codegen(order_entry_expr, true, co).front(), chosen_bytes * 8);
     const uint32_t n =
@@ -1218,8 +1384,6 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
       }
       fname += order_entry_lv->getType()->isDoubleTy() ? "_double" : "_float";
     }
-    const auto key_slot_idx =
-        get_heap_key_slot_index(ra_exe_unit_.target_exprs, target_idx);
     return emitCall(
         fname,
         {groups_buffer,
@@ -1829,10 +1993,10 @@ void GroupByAndAggregate::codegenEstimator(std::stack<llvm::BasicBlock*>& array_
   const auto key_bytes = LL_BUILDER.CreateBitCast(estimator_key_lv, int8_ptr_ty);
   const auto estimator_comp_bytes_lv =
       LL_INT(static_cast<int32_t>(estimator_arg.size() * sizeof(int64_t)));
-  const auto bitmap_size_lv =
-      LL_INT(static_cast<uint32_t>(ra_exe_unit_.estimator->getBufferSize()));
+  const auto estimator_parameter_lv =
+      LL_INT(ra_exe_unit_.estimator->getRuntimeFunctionParameter());
   emitCall(ra_exe_unit_.estimator->getRuntimeFunctionName(),
-           {bitmap, &*bitmap_size_lv, key_bytes, &*estimator_comp_bytes_lv});
+           {bitmap, &*estimator_parameter_lv, key_bytes, &*estimator_comp_bytes_lv});
 }
 
 extern "C" RUNTIME_EXPORT void agg_count_distinct(int64_t* agg, const int64_t val) {
@@ -1896,11 +2060,7 @@ void GroupByAndAggregate::codegenCountDistinct(
     agg_args.push_back(LL_INT(count_distinct_descriptor.bucket_size));
   }
   if (agg_info.skip_null_val) {
-    auto null_lv = executor_->cgen_state_->castToTypeIn(
-        (arg_ti.is_fp()
-             ? static_cast<llvm::Value*>(executor_->cgen_state_->inlineFpNull(arg_ti))
-             : static_cast<llvm::Value*>(executor_->cgen_state_->inlineIntNull(arg_ti))),
-        64);
+    llvm::Value* null_lv{nullptr};
     if (auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       auto agg_arg_expr = agg_expr->get_arg();
       if (agg_expr->get_is_distinct() && agg_expr->get_aggtype() == SQLAgg::kCOUNT &&
@@ -1910,6 +2070,17 @@ void GroupByAndAggregate::codegenCountDistinct(
         null_lv = executor_->cgen_state_->castToTypeIn(
             executor_->cgen_state_->inlineIntNull(encoded_arg_ti), 64);
       }
+    }
+    if (!null_lv) {
+      llvm::Value* null_input_lv{nullptr};
+      if (arg_ti.is_fp()) {
+        null_input_lv = executor_->cgen_state_->inlineFpNull(arg_ti);
+      } else {
+        null_input_lv = executor_->cgen_state_->inlineIntNull(
+            is_agg_domain_range_equivalent(agg_info.agg_kind) ? arg_ti
+                                                              : agg_info.sql_type);
+      }
+      null_lv = executor_->cgen_state_->castToTypeIn(null_input_lv, 64);
     }
     null_lv = executor_->cgen_state_->ir_builder_.CreateBitCast(
         null_lv, get_int_type(64, executor_->cgen_state_->context_));
@@ -2077,7 +2248,8 @@ llvm::Value* GroupByAndAggregate::getAdditionalLiteral(const int32_t off) {
 
 std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     const Analyzer::Expr* target_expr,
-    const CompilationOptions& co) {
+    const CompilationOptions& co,
+    const bool force_fetch_column) {
   AUTOMATIC_IR_METADATA(executor_->cgen_state_.get());
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   const auto func_expr = dynamic_cast<const Analyzer::FunctionOper*>(target_expr);
@@ -2086,13 +2258,26 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
   // TODO(alex): handle arrays uniformly?
   CodeGenerator code_generator(executor_);
   if (target_expr) {
+    if (!force_fetch_column && !agg_expr && !ra_exe_unit_.groupby_exprs.empty()) {
+      size_t groupby_idx = 0;
+      for (const auto& groupby_expr : ra_exe_unit_.groupby_exprs) {
+        if (groupby_expr && *groupby_expr == *target_expr) {
+          CHECK_LT(groupby_idx, executor_->cgen_state_->group_by_expr_cache_.size());
+          return {executor_->cgen_state_->group_by_expr_cache_[groupby_idx]};
+        }
+        ++groupby_idx;
+      }
+    }
+
     const auto& target_ti = target_expr->get_type_info();
     if (target_ti.is_buffer() &&
         !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
       const auto target_lvs =
           agg_expr ? code_generator.codegen(agg_expr->get_arg(), true, co)
                    : code_generator.codegen(
-                         target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
+                         target_expr,
+                         force_fetch_column || !executor_->plan_state_->allow_lazy_fetch_,
+                         co);
       if (!func_expr && !arr_expr) {
         // Something with the chunk transport is code that was generated from a source
         // other than an ARRAY[] expression
@@ -2250,12 +2435,13 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
       if (agg_expr) {
         return generate_coord_lvs(agg_expr->get_arg(), true);
       } else {
-        return generate_coord_lvs(target_expr,
-                                  !executor_->plan_state_->allow_lazy_fetch_);
+        return generate_coord_lvs(
+            target_expr,
+            force_fetch_column || !executor_->plan_state_->allow_lazy_fetch_);
       }
     }
   }
-  bool fetch_column = !executor_->plan_state_->allow_lazy_fetch_;
+  bool fetch_column = force_fetch_column || !executor_->plan_state_->allow_lazy_fetch_;
   return agg_expr ? code_generator.codegen(agg_expr->get_arg(), true, co)
                   : code_generator.codegen(target_expr, fetch_column, co);
 }
