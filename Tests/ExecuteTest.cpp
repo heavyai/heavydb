@@ -5308,7 +5308,6 @@ TEST_F(Select, MultiStepQueries) {
 }
 
 TEST_F(Select, TemporaryJoinColumnPreservesPayloadRowOrder) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
 
   constexpr auto dt = ExecutorDeviceType::CPU;
@@ -13321,7 +13320,6 @@ bool hasAtLeastGpuDeviceCount(const size_t min_device_count) {
 }  // namespace
 
 TEST_F(Select, DeferredGpuIntermediateResultSetRepeatedExecution) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13348,7 +13346,6 @@ TEST_F(Select, DeferredGpuIntermediateResultSetRepeatedExecution) {
 }
 
 TEST_F(Select, DeferredGpuIntermediateResultSetIndependentQueries) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13373,7 +13370,6 @@ TEST_F(Select, DeferredGpuIntermediateResultSetIndependentQueries) {
 }
 
 TEST_F(Select, SelectedRowwiseProjectionColumnsFeedGpuJoin) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13397,7 +13393,6 @@ TEST_F(Select, SelectedRowwiseProjectionColumnsFeedGpuJoin) {
 }
 
 TEST_F(Select, SelectedFixedColumnsFromVarlenRowwiseProjectionFeedGpuJoin) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13435,7 +13430,6 @@ TEST_F(Select, SelectedFixedColumnsFromVarlenRowwiseProjectionFeedGpuJoin) {
 
 #ifdef HAVE_CUDA
 TEST_F(Select, SelectedDeferredPayloadRowsUseAvailableDecompressionPath) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13563,7 +13557,6 @@ TEST_F(Select, SelectedDeferredPayloadRowsUseAvailableDecompressionPath) {
 #endif
 
 TEST_F(Select, DeferredGpuIntermediateResultSetLazyFetchConsumer) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13585,7 +13578,6 @@ TEST_F(Select, DeferredGpuIntermediateResultSetLazyFetchConsumer) {
 }
 
 TEST_F(Select, DeferredGpuIntermediateResultSetLimitedAggregateConsumer) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13605,7 +13597,6 @@ TEST_F(Select, DeferredGpuIntermediateResultSetLimitedAggregateConsumer) {
 }
 
 TEST_F(Select, DeferredGpuMixedAggregateTopKMaterializesSelectedPayloadRows) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13635,7 +13626,6 @@ TEST_F(Select, DeferredGpuMixedAggregateTopKMaterializesSelectedPayloadRows) {
 }
 
 TEST_F(Select, DeferredGpuMultiStorageAggregateConsumerMaterializesColumns) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13707,7 +13697,6 @@ TEST_F(Select, DeferredGpuMultiStorageAggregateConsumerMaterializesColumns) {
 }
 
 TEST_F(Select, DeferredGpuIntermediateResultSetTopKHostConsumer) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13732,7 +13721,6 @@ TEST_F(Select, DeferredGpuIntermediateResultSetTopKHostConsumer) {
 }
 
 TEST_F(Select, DisabledResultReductionPipelineDoesNotExposeDeviceFragments) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13773,7 +13761,6 @@ TEST_F(Select, DisabledResultReductionPipelineDoesNotExposeDeviceFragments) {
 }
 
 TEST_F(Select, PipelinedGpuNonGroupedDecimalSumUsesSharedReduction) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13835,7 +13822,6 @@ TEST_F(Select, PipelinedGpuNonGroupedDecimalSumUsesSharedReduction) {
 }
 
 TEST_F(Select, PipelinedGpuNonGroupedIntegerSumUsesSharedReduction) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13900,7 +13886,6 @@ TEST_F(Select, PipelinedGpuNonGroupedIntegerSumUsesSharedReduction) {
 }
 
 TEST_F(Select, PipelinedGpuReductionMergesKeylessPerfectHashAggregates) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -13956,7 +13941,6 @@ TEST_F(Select, PipelinedGpuReductionMergesKeylessPerfectHashAggregates) {
 }
 
 TEST_F(Select, PipelinedGpuReductionPreservesBaselineHashAverageSlots) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14043,7 +14027,6 @@ TEST_F(Select, PipelinedGpuReductionPreservesBaselineHashAverageSlots) {
 }
 
 TEST_F(Select, PipelinedGpuReductionMergesLargePerfectHashInputsAsPeerTree) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14104,7 +14087,6 @@ TEST_F(Select, PipelinedGpuReductionMergesLargePerfectHashInputsAsPeerTree) {
 }
 
 TEST_F(Select, PipelinedGpuReductionCompactsSingleKeylessPerfectHashResult) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14151,7 +14133,6 @@ TEST_F(Select, PipelinedGpuReductionCompactsSingleKeylessPerfectHashResult) {
 }
 
 TEST_F(Select, PipelinedGpuReductionMergesNonKeylessPerfectHashGroupKeys) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14210,7 +14191,6 @@ TEST_F(Select, PipelinedGpuReductionMergesNonKeylessPerfectHashGroupKeys) {
 }
 
 TEST_F(Select, PipelinedGpuReductionRejectsUnsupportedNumericTargets) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14229,7 +14209,6 @@ TEST_F(Select, PipelinedGpuReductionRejectsUnsupportedNumericTargets) {
 }
 
 TEST_F(Select, PipelinedGpuReductionRejectsVarlenAggregateOutput) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14248,7 +14227,6 @@ TEST_F(Select, PipelinedGpuReductionRejectsVarlenAggregateOutput) {
 }
 
 TEST_F(Select, PipelinedGpuReductionPreservesNullSafeAggregateFilter) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14287,7 +14265,6 @@ TEST_F(Select, PipelinedGpuReductionPreservesNullSafeAggregateFilter) {
 }
 
 TEST_F(Select, PipelinedGpuReductionCpuFallbackMaterializesDeferredDestination) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14307,7 +14284,6 @@ TEST_F(Select, PipelinedGpuReductionCpuFallbackMaterializesDeferredDestination) 
 }
 
 TEST_F(Select, PipelinedGpuTemporaryResultSupportsCpuStepFallback) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14348,7 +14324,6 @@ TEST_F(Select, PipelinedGpuTemporaryResultSupportsCpuStepFallback) {
 }
 
 TEST_F(Select, PipelinedGpuTemporaryResultPreservesTransientDictionaryKeys) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -14939,7 +14914,6 @@ TEST_F(Select, InSubqueryPreservesEmptySetNullSemantics) {
 }
 
 TEST_F(Select, MembershipJoinPreservesNullableSemiAntiSemantics) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
 
   const std::string build_table{"bitmap_membership_nullable_build"};
@@ -14979,7 +14953,6 @@ TEST_F(Select, MembershipJoinPreservesNullableSemiAntiSemantics) {
 }
 
 TEST_F(Select, BitmapMembershipExecutesForNonNullAntiJoin) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15021,7 +14994,6 @@ TEST_F(Select, BitmapMembershipExecutesForNonNullAntiJoin) {
 }
 
 TEST_F(Select, RankedBitmapJoinPreservesDuplicateAndFilteredBuildRows) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15079,7 +15051,6 @@ TEST_F(Select, RankedBitmapJoinPreservesDuplicateAndFilteredBuildRows) {
 }
 
 TEST_F(Select, RankedBitmapJoinPreservesGlobalRowIdsAcrossSparseBuildFragments) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15120,7 +15091,6 @@ TEST_F(Select, RankedBitmapJoinPreservesGlobalRowIdsAcrossSparseBuildFragments) 
 }
 
 TEST_F(Select, RankedBitmapJoinDoesNotTrustUnenforcedUniqueConstraint) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15158,7 +15128,6 @@ TEST_F(Select, RankedBitmapJoinDoesNotTrustUnenforcedUniqueConstraint) {
 
 #ifdef HAVE_CUDA
 TEST_F(Select, PayloadFreeRankedBitmapAllreducePreservesGlobalMembership) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15255,7 +15224,6 @@ TEST_F(Select, PayloadFreeRankedBitmapAllreducePreservesGlobalMembership) {
 #endif
 
 TEST_F(Select, RangePrunedRankedBitmapCacheTracksProbeTableChanges) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15299,7 +15267,6 @@ TEST_F(Select, RangePrunedRankedBitmapCacheTracksProbeTableChanges) {
 }
 
 TEST_F(Select, RangePrunedPhysicalRankedBitmapPreservesGlobalBuildRowIds) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15353,7 +15320,6 @@ TEST_F(Select, RangePrunedPhysicalRankedBitmapPreservesGlobalBuildRowIds) {
 }
 
 TEST_F(Select, PipelinedGpuReductionExactBitmapCountDistinct) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15380,7 +15346,6 @@ TEST_F(Select, PipelinedGpuReductionExactBitmapCountDistinct) {
 }
 
 TEST_F(Select, PipelinedGpuReductionApproxCountDistinct) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15399,7 +15364,6 @@ TEST_F(Select, PipelinedGpuReductionApproxCountDistinct) {
 }
 
 TEST_F(Select, PipelinedGpuReductionCountDistinctMixedAggregates) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15418,7 +15382,6 @@ TEST_F(Select, PipelinedGpuReductionCountDistinctMixedAggregates) {
 }
 
 TEST_F(Select, PipelinedGpuReductionRejectsSparseCountDistinctCpuFallback) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15445,7 +15408,6 @@ TEST_F(Select, PipelinedGpuReductionRejectsSparseCountDistinctCpuFallback) {
 }
 
 TEST_F(Select, PipelinedGpuReductionGroupedExactBitmapCountDistinctMaterialization) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15465,7 +15427,6 @@ TEST_F(Select, PipelinedGpuReductionGroupedExactBitmapCountDistinctMaterializati
 }
 
 TEST_F(Select, PipelinedGpuReductionCountDistinctOrderByMaterialization) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15485,7 +15446,6 @@ TEST_F(Select, PipelinedGpuReductionCountDistinctOrderByMaterialization) {
 }
 
 TEST_F(Select, PipelinedGpuReductionRuntimeErrorCleanup) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15508,7 +15468,6 @@ TEST_F(Select, PipelinedGpuReductionRuntimeErrorCleanup) {
 }
 
 TEST_F(Select, PipelinedGpuReductionDynamicWatchdogCleanup) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15533,7 +15492,6 @@ TEST_F(Select, PipelinedGpuReductionDynamicWatchdogCleanup) {
 }
 
 TEST_F(Select, BaselineBoundaryAppendReducesSplitFragmentKeys) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15567,7 +15525,6 @@ TEST_F(Select, BaselineBoundaryAppendReducesSplitFragmentKeys) {
 }
 
 TEST_F(Select, ExperimentalGpuInputFetchModesPreserveAggregateResults) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15701,7 +15658,6 @@ TEST_F(Select, ExperimentalGpuInputFetchModesPreserveAggregateResults) {
 
 #ifdef HAVE_CUDA
 TEST_F(Select, CompressedNativeGpuInputReleasesDecodeWorkspace) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -15876,7 +15832,6 @@ TEST_F(Select, CompressedNativeGpuInputReleasesDecodeWorkspace) {
 
 #ifdef HAVE_NVCOMP_BITCOMP
 TEST_F(Select, CompressedNativeBitcompCodecsDecodeOnCpuAndDirectlyToGpuInput) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
@@ -16159,7 +16114,6 @@ TEST_F(Select, CompressedNativeBitcompCodecsDecodeOnCpuAndDirectlyToGpuInput) {
 
 #ifdef HAVE_NVCOMP_GDEFLATE
 TEST_F(Select, CompressedNativeGdeflateDecodesDirectlyToGpuInput) {
-  SKIP_ALL_ON_AGGREGATOR();
   SKIP_WITH_TEMP_TABLES();
   constexpr auto dt = ExecutorDeviceType::GPU;
   SKIP_NO_GPU_P(dt);
