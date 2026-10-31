@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include "ExecutorResourcePool.h"
+#include "Shared/DebugTestHook.h"
 
 namespace ExecutorResourceMgr_Namespace {
 
@@ -68,6 +69,7 @@ void ExecutorResourcePool::init(
         concurrent_resource_grant_policy;
   }
 
+  std::array<bool, ResourceSubtypeSize> subtype_policy_supplied{};
   for (const auto& max_resource_grant_per_request_policy :
        max_resource_grants_per_request_policies) {
     const ResourceSubtype resource_subtype =
@@ -75,7 +77,14 @@ void ExecutorResourcePool::init(
     if (resource_subtype == ResourceSubtype::INVALID_SUBTYPE) {
       continue;
     }
-    max_resource_grants_per_request_policies_[static_cast<size_t>(resource_subtype)] =
+    const size_t subtype_idx = static_cast<size_t>(resource_subtype);
+    // Two policies targeting one subtype would mean the later silently overwrites the
+    // earlier, so the effective limit would depend on vector order
+    CHECK(!subtype_policy_supplied[subtype_idx])
+        << "Duplicate per-request resource grant policy for resource subtype "
+        << resource_subtype_to_string(resource_subtype);
+    subtype_policy_supplied[subtype_idx] = true;
+    max_resource_grants_per_request_policies_[subtype_idx] =
         max_resource_grant_per_request_policy;
   }
 
@@ -184,7 +193,9 @@ ResourcePoolInfo ExecutorResourcePool::get_resource_info() const {
       get_total_resource(ResourceType::GPU_BUFFER_POOL_MEM),
       get_allocated_resource_of_type(ResourceType::CPU_SLOTS),
       get_allocated_resource_of_type(ResourceType::GPU_SLOTS),
-      get_allocated_resource_of_type(cpu_result_mem_resource_type_.resource_type),
+      // Report the result memory subtype rather than its parent type, which when
+      // pool-backed would also include pinned and pageable chunk memory
+      get_allocated_resource_of_subtype(cpu_result_mem_resource_type_.resource_subtype),
       get_allocated_resource_of_type(ResourceType::CPU_BUFFER_POOL_MEM),
       get_allocated_resource_of_type(ResourceType::GPU_BUFFER_POOL_MEM),
       allocated_cpu_buffer_pool_chunks_.size(),
@@ -303,6 +314,69 @@ ExecutorResourcePool::calc_max_dependent_resource_grant_for_request(
                         adjusted_max_independent_resource_quantity);
 }
 
+size_t ExecutorResourcePool::get_max_pinned_buffer_pool_grant_for_memory_level(
+    const ExecutorDeviceType memory_pool_type) const {
+  return get_max_resource_grant_per_request(
+      memory_pool_type == ExecutorDeviceType::CPU
+          ? ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM
+          : ResourceSubtype::PINNED_GPU_BUFFER_POOL_MEM);
+}
+
+bool ExecutorResourcePool::is_chunk_request_gated_per_slot(
+    const ChunkRequestInfo& chunk_request_info) const {
+  return chunk_request_info.bytes_scales_per_kernel &&
+         chunk_request_info.total_bytes >
+             get_max_pinned_buffer_pool_grant_for_memory_level(
+                 chunk_request_info.device_memory_pool_type);
+}
+
+size_t ExecutorResourcePool::calc_chunk_headroom_for_request(
+    const ChunkRequestInfo& chunk_request_info,
+    const size_t min_cpu_slots) const {
+  if (chunk_request_info.device_memory_pool_type != ExecutorDeviceType::CPU) {
+    // GPU buffer pool memory never backs CPU result memory, so the two do not compete
+    return size_t(0);
+  }
+  return is_chunk_request_gated_per_slot(chunk_request_info)
+             ? chunk_request_info.max_bytes_per_kernel * min_cpu_slots
+             : chunk_request_info.total_bytes;
+}
+
+size_t ExecutorResourcePool::get_max_cpu_result_mem_grant_per_request(
+    const size_t chunk_headroom_bytes) const {
+  const size_t max_grant =
+      get_max_resource_grant_per_request(cpu_result_mem_resource_type_.resource_subtype);
+  if (cpu_result_mem_resource_type_.resource_type != ResourceType::CPU_BUFFER_POOL_MEM) {
+    // Result memory has its own pool, so input chunks do not draw against it
+    return max_grant;
+  }
+  // The per-query result memory cap and the shared pool total are separate limits: the
+  // cap bounds result memory alone, while result memory plus input chunks must fit the
+  // pool. Bounding by the pool total also keeps a request that can never fit, no matter
+  // how empty the pool gets, a clean rejection rather than one that waits in the queue
+  // indefinitely.
+  // The headroom is the request's full chunk working set rather than only the chunks
+  // not yet in the pool. Resident chunks are already counted as allocated, so this is
+  // never stricter than the pool itself, and it keeps the limit independent of pool
+  // state so that admission and the queue thread compute the same value.
+  const size_t pool_total = get_total_resource(ResourceType::CPU_BUFFER_POOL_MEM);
+  const size_t available_for_results =
+      pool_total > chunk_headroom_bytes ? pool_total - chunk_headroom_bytes : size_t(0);
+  return std::min(max_grant, available_for_results);
+}
+
+size_t ExecutorResourcePool::get_max_cpu_result_mem_grant_for_request(
+    const RequestInfo& request_info) const {
+  std::shared_lock<std::shared_mutex> resource_read_lock(resource_mutex_);
+  return get_max_cpu_result_mem_grant_for_request_impl(request_info);
+}
+
+size_t ExecutorResourcePool::get_max_cpu_result_mem_grant_for_request_impl(
+    const RequestInfo& request_info) const {
+  return get_max_cpu_result_mem_grant_per_request(calc_chunk_headroom_for_request(
+      request_info.chunk_request_info, request_info.min_cpu_slots));
+}
+
 std::pair<ResourceGrant, ResourceGrant>
 ExecutorResourcePool::calc_min_max_resource_grants_for_request(
     const RequestInfo& request_info) const {
@@ -332,33 +406,24 @@ ExecutorResourcePool::calc_min_max_resource_grants_for_request(
         request_info.min_gpu_slots);
   }
 
-  // Todo (todd): Modulate number of CPU threads launched to ensure that
-  // query can fit in max grantable CPU result memory (if possible)
-  max_resource_grant.cpu_result_mem = calc_max_resource_grant_for_request(
-      request_info.cpu_result_mem,
-      request_info.min_cpu_result_mem,
-      get_max_resource_grant_per_request(cpu_result_mem_resource_type_.resource_subtype));
-  if (max_resource_grant.cpu_result_mem == 0 && request_info.min_cpu_result_mem > 0) {
-    throw QueryNeedsTooMuchCpuResultMem(
-        get_max_resource_grant_per_request(
-            cpu_result_mem_resource_type_.resource_subtype),
-        request_info.min_cpu_result_mem);
-  }
-
+  // Chunk limits are checked before the result memory limit. When result memory is
+  // drawn from the CPU buffer pool, the result memory limit reserves headroom for the
+  // request's chunks, so a scan too large for the pool would otherwise be misreported
+  // as needing too much result memory (and would trigger the CPU slot auto-shrink
+  // retry, which cannot help).
   const auto& chunk_request_info = request_info.chunk_request_info;
 
   const size_t max_pinned_buffer_pool_grant_for_memory_level =
-      get_max_resource_grant_per_request(
-          chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU
-              ? ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM
-              : ResourceSubtype::PINNED_GPU_BUFFER_POOL_MEM);
+      get_max_pinned_buffer_pool_grant_for_memory_level(
+          chunk_request_info.device_memory_pool_type);
 
-  if (chunk_request_info.total_bytes > max_pinned_buffer_pool_grant_for_memory_level) {
-    if (!chunk_request_info.bytes_scales_per_kernel) {
-      throw QueryNeedsTooMuchBufferPoolMem(max_pinned_buffer_pool_grant_for_memory_level,
-                                           chunk_request_info.total_bytes,
-                                           chunk_request_info.device_memory_pool_type);
-    }
+  if (chunk_request_info.total_bytes > max_pinned_buffer_pool_grant_for_memory_level &&
+      !chunk_request_info.bytes_scales_per_kernel) {
+    throw QueryNeedsTooMuchBufferPoolMem(max_pinned_buffer_pool_grant_for_memory_level,
+                                         chunk_request_info.total_bytes,
+                                         chunk_request_info.device_memory_pool_type);
+  }
+  if (is_chunk_request_gated_per_slot(chunk_request_info)) {
     // If here we have bytes_needed_scales_per_kernel
     // For now, this can only be for a CPU request, but that may be relaxed down the
     // road
@@ -422,6 +487,19 @@ ExecutorResourcePool::calc_min_max_resource_grants_for_request(
         chunk_request_info.max_bytes_per_kernel * max_resource_grant.cpu_slots;
     min_resource_grant.buffer_mem_for_given_slots =
         chunk_request_info.max_bytes_per_kernel * request_info.min_cpu_slots;
+  }
+
+  // Todo (todd): Modulate number of CPU threads launched to ensure that
+  // query can fit in max grantable CPU result memory (if possible)
+  const size_t max_cpu_result_mem_grant =
+      get_max_cpu_result_mem_grant_for_request_impl(request_info);
+  max_resource_grant.cpu_result_mem =
+      calc_max_resource_grant_for_request(request_info.cpu_result_mem,
+                                          request_info.min_cpu_result_mem,
+                                          max_cpu_result_mem_grant);
+  if (max_resource_grant.cpu_result_mem == 0 && request_info.min_cpu_result_mem > 0) {
+    throw QueryNeedsTooMuchCpuResultMem(max_cpu_result_mem_grant,
+                                        request_info.min_cpu_result_mem);
   }
 
   min_resource_grant.cpu_slots = request_info.min_cpu_slots;
@@ -519,13 +597,17 @@ bool ExecutorResourcePool::can_currently_satisfy_request_impl(
         get_max_resource_grant_per_request(ResourceSubtype::GPU_SLOTS),
         min_resource_grant.gpu_slots);
   }
-  if (min_resource_grant.cpu_result_mem >
-      get_max_resource_grant_per_request(
-          cpu_result_mem_resource_type_.resource_subtype)) {
-    throw QueryNeedsTooMuchCpuResultMem(
-        get_max_resource_grant_per_request(
-            cpu_result_mem_resource_type_.resource_subtype),
-        min_resource_grant.cpu_result_mem);
+  // When result memory is drawn from the CPU buffer pool it competes with this same
+  // request's input chunks, so the limit must leave room for them
+  const size_t max_cpu_result_mem_grant = get_max_cpu_result_mem_grant_per_request(
+      min_resource_grant.buffer_mem_gated_per_slot
+          ? min_resource_grant.buffer_mem_for_given_slots
+          : (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU
+                 ? chunk_request_info.total_bytes
+                 : size_t(0)));
+  if (min_resource_grant.cpu_result_mem > max_cpu_result_mem_grant) {
+    throw QueryNeedsTooMuchCpuResultMem(max_cpu_result_mem_grant,
+                                        min_resource_grant.cpu_result_mem);
   }
 
   // First check if request is in violation of any global
@@ -581,26 +663,6 @@ bool ExecutorResourcePool::can_currently_satisfy_request_impl(
   return can_currently_satisfy_chunk_request(min_resource_grant, chunk_request_info);
 }
 
-ChunkRequestInfo ExecutorResourcePool::get_requested_chunks_not_in_pool(
-    const ChunkRequestInfo& chunk_request_info) const {
-  const BufferPoolChunkMap& chunk_map_for_memory_level =
-      chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU
-          ? allocated_cpu_buffer_pool_chunks_
-          : allocated_gpu_buffer_pool_chunks_;
-  ChunkRequestInfo missing_chunk_info;
-  missing_chunk_info.device_memory_pool_type = chunk_request_info.device_memory_pool_type;
-  std::vector<std::pair<ChunkKey, size_t>> missing_chunks_with_byte_sizes;
-  for (const auto& requested_chunk : chunk_request_info.chunks_with_byte_sizes) {
-    if (chunk_map_for_memory_level.find(requested_chunk.first) ==
-        chunk_map_for_memory_level.end()) {
-      missing_chunk_info.chunks_with_byte_sizes.emplace_back(requested_chunk);
-      missing_chunk_info.total_bytes += requested_chunk.second;
-    }
-  }
-  missing_chunk_info.num_chunks = missing_chunk_info.chunks_with_byte_sizes.size();
-  return missing_chunk_info;
-}
-
 size_t ExecutorResourcePool::get_chunk_bytes_not_in_pool(
     const ChunkRequestInfo& chunk_request_info) const {
   const BufferPoolChunkMap& chunk_map_for_memory_level =
@@ -632,6 +694,17 @@ bool ExecutorResourcePool::can_currently_satisfy_chunk_request(
       get_total_allocated_buffer_pool_mem_for_level(
           chunk_request_info.device_memory_pool_type);
 
+  // Result memory for this same grant is committed into this memory level's buffer pool
+  // accounting (by allocate_resources) alongside the chunk memory accounted for below,
+  // so it must be included here. Validating the two independently against the pool total
+  // would let their sum overcommit the pool.
+  const size_t result_mem_from_pool =
+      (cpu_result_mem_resource_type_.resource_type ==
+           ResourceType::CPU_BUFFER_POOL_MEM &&
+       chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU)
+          ? min_resource_grant.cpu_result_mem
+          : size_t(0);
+
   if (min_resource_grant.buffer_mem_gated_per_slot) {
     CHECK_GT(min_resource_grant.buffer_mem_per_slot, size_t(0));
     // We only allow scaling back slots to cap buffer pool memory required on CPU
@@ -642,7 +715,8 @@ bool ExecutorResourcePool::can_currently_satisfy_chunk_request(
     // Below is a sanity check... we'll never be able to run the query if minimum pool
     // memory required is not <= the total buffer pool memory
     CHECK_LE(min_buffer_pool_mem_required, total_buffer_mem_for_memory_level);
-    return allocated_buffer_mem_for_memory_level + min_buffer_pool_mem_required <=
+    return allocated_buffer_mem_for_memory_level + result_mem_from_pool +
+               min_buffer_pool_mem_required <=
            total_buffer_mem_for_memory_level;
   }
 
@@ -653,16 +727,47 @@ bool ExecutorResourcePool::can_currently_satisfy_chunk_request(
   if (ENABLE_DEBUG_PRINTING) {
     debug_print("Chunk bytes not in pool: ", format_num_bytes(chunk_bytes_not_in_pool));
   }
-  return chunk_bytes_not_in_pool + allocated_buffer_mem_for_memory_level <=
+  return chunk_bytes_not_in_pool + result_mem_from_pool +
+             allocated_buffer_mem_for_memory_level <=
          total_buffer_mem_for_memory_level;
+}
+
+BufferPoolChunkMap ExecutorResourcePool::allocate_new_chunk_entries(
+    const ResourceGrant& resource_grant,
+    const ChunkRequestInfo& chunk_request_info) const {
+  // Expects lock on resource_mutex_ already taken
+  BufferPoolChunkMap new_chunk_entries;
+  if (resource_grant.buffer_mem_gated_per_slot) {
+    // Gated chunk memory is accounted as a single pageable quantity, not per chunk
+    return new_chunk_entries;
+  }
+  const BufferPoolChunkMap& chunk_map_for_memory_level =
+      chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU
+          ? allocated_cpu_buffer_pool_chunks_
+          : allocated_gpu_buffer_pool_chunks_;
+  for (const auto& requested_chunk : chunk_request_info.chunks_with_byte_sizes) {
+    if (chunk_map_for_memory_level.count(requested_chunk.first) ||
+        new_chunk_entries.count(requested_chunk.first)) {
+      continue;
+    }
+    HEAVYDB_DEBUG_TEST_HOOK("ExecutorResourcePool::before_chunk_insert",
+                            const_cast<ExecutorResourcePool*>(this));
+    // Zero reference count and size, so that add_chunk_requests_to_allocated_pool
+    // accounts for these entries exactly as it does for chunks already in the pool
+    new_chunk_entries.emplace(requested_chunk.first,
+                              std::make_pair(size_t(0), size_t(0)));
+  }
+  return new_chunk_entries;
 }
 
 void ExecutorResourcePool::add_chunk_requests_to_allocated_pool(
     const ResourceGrant& resource_grant,
-    const ChunkRequestInfo& chunk_request_info) {
+    const ChunkRequestInfo& chunk_request_info,
+    BufferPoolChunkMap new_chunk_entries) {
   // Expects lock on resource_mutex_ already taken
 
   if (resource_grant.buffer_mem_gated_per_slot) {
+    CHECK(new_chunk_entries.empty());
     CHECK(chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU);
     CHECK_LE(get_total_allocated_buffer_pool_mem_for_level(
                  chunk_request_info.device_memory_pool_type) +
@@ -708,22 +813,20 @@ void ExecutorResourcePool::add_chunk_requests_to_allocated_pool(
   const size_t pre_pinned_buffer_mem_for_memory_level =
       pinned_buffer_mem_for_memory_level;
 
+  // Splicing in the entries allocated by allocate_new_chunk_entries does not allocate,
+  // so nothing below can fail partway through and leave the pool partially updated
+  chunk_map_for_memory_level.merge(new_chunk_entries);
+  CHECK(new_chunk_entries.empty());
+
   for (const auto& requested_chunk : chunk_request_info.chunks_with_byte_sizes) {
     auto chunk_itr = chunk_map_for_memory_level.find(requested_chunk.first);
-    if (chunk_itr == chunk_map_for_memory_level.end()) {
-      pinned_buffer_mem_for_memory_level += requested_chunk.second;
-      chunk_map_for_memory_level.insert(
-          std::make_pair(requested_chunk.first,
-                         std::make_pair(size_t(1) /* initial reference count */,
-                                        requested_chunk.second)));
-    } else {
-      if (requested_chunk.second > chunk_itr->second.second) {
-        pinned_buffer_mem_for_memory_level +=
-            requested_chunk.second - chunk_itr->second.second;
-        chunk_itr->second.second = requested_chunk.second;
-      }
-      chunk_itr->second.first += 1;  // Add reference count
+    CHECK(chunk_itr != chunk_map_for_memory_level.end());
+    if (requested_chunk.second > chunk_itr->second.second) {
+      pinned_buffer_mem_for_memory_level +=
+          requested_chunk.second - chunk_itr->second.second;
+      chunk_itr->second.second = requested_chunk.second;
     }
+    chunk_itr->second.first += 1;  // Add reference count
   }
   const size_t post_pinned_chunks_for_memory_level = chunk_map_for_memory_level.size();
   const size_t net_new_allocated_chunks =
@@ -754,7 +857,13 @@ void ExecutorResourcePool::add_chunk_requests_to_allocated_pool(
                 chunk_map_for_memory_level.size(),
                 " chunks.");
   }
-  CHECK_LE(pinned_buffer_mem_for_memory_level, total_buffer_mem_for_memory_level);
+  // The real invariant is on the memory level as a whole, not the pinned subtype
+  // alone, since result memory and pageable chunk memory draw on the same pool.
+  // allocate_resources validates this sum before committing anything, so this is a
+  // post-condition rather than a runtime condition.
+  CHECK_LE(get_total_allocated_buffer_pool_mem_for_level(
+               chunk_request_info.device_memory_pool_type),
+           total_buffer_mem_for_memory_level);
 }
 
 void ExecutorResourcePool::remove_chunk_requests_from_allocated_pool(
@@ -931,8 +1040,18 @@ std::pair<bool, ResourceGrant> ExecutorResourcePool::determine_dynamic_resource_
 
     CHECK_LE(allocated_buffer_mem_for_memory_level, total_buffer_mem_for_memory_level);
 
+    // This same grant's result memory is committed into the CPU buffer pool accounting,
+    // so it is not available to back chunk memory for the slots granted below
+    const size_t result_mem_from_pool =
+        cpu_result_mem_resource_type_.resource_type == ResourceType::CPU_BUFFER_POOL_MEM
+            ? actual_resource_grant.cpu_result_mem
+            : size_t(0);
+    const size_t committed_buffer_mem_for_memory_level =
+        allocated_buffer_mem_for_memory_level + result_mem_from_pool;
+    CHECK_LE(committed_buffer_mem_for_memory_level, total_buffer_mem_for_memory_level);
+
     const size_t remaining_buffer_mem_for_memory_level =
-        total_buffer_mem_for_memory_level - allocated_buffer_mem_for_memory_level;
+        total_buffer_mem_for_memory_level - committed_buffer_mem_for_memory_level;
 
     CHECK_LE(min_resource_grant.buffer_mem_for_given_slots,
              remaining_buffer_mem_for_memory_level);
@@ -972,17 +1091,27 @@ void ExecutorResourcePool::allocate_resources(
 
   // Caller (ExecutorResourceMgr) should never request resource allocation for a request
   // it knows cannot be granted, however use below as a sanity check Use unlocked
-  // internal method as we already hold lock above
-  const bool can_satisfy_request =
-      can_currently_satisfy_request_impl(resource_grant, chunk_request_info);
-  CHECK(can_satisfy_request);
+  // internal method as we already hold lock above.
+  // This must stay ahead of every mutation below: it is what makes this method
+  // check-then-commit, so that a rejected grant leaves the pool untouched and the
+  // caller, which never receives a grant, has nothing to release.
+  if (!can_currently_satisfy_request_impl(resource_grant, chunk_request_info)) {
+    throw ExecutorResourceMgrError(
+        std::nullopt,
+        "Executor resource pool could not satisfy an already-granted request: " +
+            resource_grant.to_string());
+  }
+  // The only step that can fail after the check above is allocating chunk map entries,
+  // so do it before any accounting is changed
+  BufferPoolChunkMap new_chunk_entries =
+      allocate_new_chunk_entries(resource_grant, chunk_request_info);
 
   allocated_resources_[static_cast<size_t>(ResourceSubtype::CPU_SLOTS)] +=
       resource_grant.cpu_slots;
   allocated_resources_[static_cast<size_t>(ResourceSubtype::GPU_SLOTS)] +=
       resource_grant.gpu_slots;
   allocated_resources_[static_cast<size_t>(
-      cpu_result_mem_resource_type_.resource_type)] += resource_grant.cpu_result_mem;
+      cpu_result_mem_resource_type_.resource_subtype)] += resource_grant.cpu_result_mem;
 
   total_num_requests_++;
   outstanding_num_requests_++;
@@ -1001,8 +1130,7 @@ void ExecutorResourcePool::allocate_resources(
         cpu_result_mem_resource_type_.resource_type);
   }
   if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU) {
-    if (resource_grant.buffer_mem_gated_per_slot ||
-        (chunk_request_info.num_chunks > 0 && chunk_request_info.total_bytes > 0)) {
+    if (counts_as_cpu_buffer_pool_chunk_request(resource_grant, chunk_request_info)) {
       increment_outstanding_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM);
       increment_total_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM);
     }
@@ -1030,7 +1158,8 @@ void ExecutorResourcePool::allocate_resources(
                 << " of "
                 << format_num_bytes(
                        get_total_resource(cpu_result_mem_resource_type_.resource_type));
-  add_chunk_requests_to_allocated_pool(resource_grant, chunk_request_info);
+  add_chunk_requests_to_allocated_pool(
+      resource_grant, chunk_request_info, std::move(new_chunk_entries));
 }
 
 void ExecutorResourcePool::deallocate_resources(
@@ -1045,15 +1174,19 @@ void ExecutorResourcePool::deallocate_resources(
            get_allocated_resource_of_type(ResourceType::CPU_SLOTS));
   CHECK_LE(resource_grant.gpu_slots,
            get_allocated_resource_of_type(ResourceType::GPU_SLOTS));
+  // Check the result memory subtype rather than its parent type: when pool-backed, the
+  // type-level sum also covers chunk memory, so it could mask an underflow of the
+  // subtype counter decremented below
   CHECK_LE(resource_grant.cpu_result_mem,
-           get_allocated_resource_of_type(cpu_result_mem_resource_type_.resource_type));
+           get_allocated_resource_of_subtype(
+               cpu_result_mem_resource_type_.resource_subtype));
 
   allocated_resources_[static_cast<size_t>(ResourceSubtype::CPU_SLOTS)] -=
       resource_grant.cpu_slots;
   allocated_resources_[static_cast<size_t>(ResourceSubtype::GPU_SLOTS)] -=
       resource_grant.gpu_slots;
   allocated_resources_[static_cast<size_t>(
-      cpu_result_mem_resource_type_.resource_type)] -= resource_grant.cpu_result_mem;
+      cpu_result_mem_resource_type_.resource_subtype)] -= resource_grant.cpu_result_mem;
 
   outstanding_num_requests_--;
   if (resource_grant.cpu_slots > 0) {
@@ -1067,8 +1200,7 @@ void ExecutorResourcePool::deallocate_resources(
         cpu_result_mem_resource_type_.resource_type);
   }
   if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::CPU) {
-    if (resource_grant.buffer_mem_gated_per_slot ||
-        (chunk_request_info.num_chunks > 0 && chunk_request_info.total_bytes > 0)) {
+    if (counts_as_cpu_buffer_pool_chunk_request(resource_grant, chunk_request_info)) {
       decrement_outstanding_per_resource_num_requests(ResourceType::CPU_BUFFER_POOL_MEM);
     }
   } else if (chunk_request_info.device_memory_pool_type == ExecutorDeviceType::GPU) {
