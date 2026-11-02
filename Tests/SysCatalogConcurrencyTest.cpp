@@ -206,8 +206,8 @@ TEST_F(SysCatalogConcurrencyTest, ConcurrentCatalogBuildAndDropUserDoNotDeadlock
         try {
           sys_cat.getCatalog(kDb);
         } catch (const std::exception&) {
-          // Only the deadlock matters here; a failed build (e.g. SQLITE_BUSY from
-          // duplicate Catalogs) is covered by the other tests.
+          // Only the deadlock matters here. Another builder's removeCatalog() can drop
+          // the Catalog being registered, which getCatalog() reports as an error.
         }
       }
     });
