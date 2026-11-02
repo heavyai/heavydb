@@ -312,6 +312,13 @@ TEST_F(DictionaryDirectoryTest, EmptyDictionaryDirectoryLeftByCrashIsReused) {
   }
 
   sql(createQuery());
+  // The new dictionaries must have reused the recreated directories. Otherwise this test
+  // no longer exercises the reuse path and leaves the empty directories behind.
+  auto reused = dictionaryDirectories();
+  for (const auto& dir : dirs_before) {
+    reused.erase(dir);
+  }
+  ASSERT_EQ(reused, created);
   ASSERT_NE(getCatalog().getMetadataForTable(kTable, false), nullptr);
   sql("INSERT INTO " + std::string(kTable) + " VALUES (1, 'x', 'y');");
   sqlAndCompareResult(std::string("SELECT a, b FROM ") + kTable + ";", {{"x", "y"}});
