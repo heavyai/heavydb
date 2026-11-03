@@ -328,7 +328,7 @@ bool MigrationMgr::dropRenderGroupColumns(
         }
       }
       catalog.getSqliteConnector().query("END TRANSACTION");
-      catalog.applyPendingDictionaryRefcounts();
+      catalog.applyPendingDictionaryRefcountDecrements();
     } catch (std::exception& e) {
       if (!td->isForeignTable()) {
         catalog.setForReload(td->tableId);

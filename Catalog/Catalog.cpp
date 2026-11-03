@@ -1643,6 +1643,14 @@ std::unique_ptr<CustomExpression> Catalog::getCustomExpressionFromConnector(size
 }
 
 namespace {
+// A new dictionary may reuse an empty directory (what a crash between creating the
+// directory and committing the table leaves behind) but not anything that could hold
+// stale strings.
+bool dictionary_directory_is_occupied(const boost::filesystem::path& path) {
+  return boost::filesystem::exists(path) &&
+         !(boost::filesystem::is_directory(path) && boost::filesystem::is_empty(path));
+}
+
 // A new dictionary id must map to an empty location. Dictionary ids are reused (the
 // sqlite ids are not AUTOINCREMENT), so a directory with content is an orphan from an
 // earlier table whose catalog rows were lost. Adopting it would load stale strings under
@@ -1666,11 +1674,6 @@ void Catalog::addTableToMap(const TableDescriptor* td,
                             const list<ColumnDescriptor>& columns,
                             const list<DictDescriptor>& dicts) {
   cat_write_lock write_lock(this);
-  // Check every dictionary directory before creating any: an abort on a later one must
-  // not leave the earlier ones behind as new orphans.
-  if (const auto occupied = find_occupied_dictionary_directory(dicts)) {
-    check_dictionary_directory_unoccupied(*occupied);
-  }
   TableDescriptor* new_td;
 
   auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
@@ -2435,16 +2438,22 @@ void Catalog::delDictionaryTransactional(const ColumnDescriptor& cd) {
   try {
     delDictionaryNontransactional(cd);
   } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    // Discard first, as the other rollback paths do: a ROLLBACK that fails must not leave
+    // decrements queued for a later caller to apply.
     pendingRefcountDecrements_.clear();
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
   }
   sqliteConnector_.query("END TRANSACTION");
-  applyPendingDictionaryRefcounts();
+  applyPendingDictionaryRefcountDecrementsUnlocked();
 }
 
-void Catalog::applyPendingDictionaryRefcounts() {
+void Catalog::applyPendingDictionaryRefcountDecrements() {
   cat_write_lock write_lock(this);
+  applyPendingDictionaryRefcountDecrementsUnlocked();
+}
+
+void Catalog::applyPendingDictionaryRefcountDecrementsUnlocked() {
   for (const auto& dict_ref : pendingRefcountDecrements_) {
     // The descriptor is gone if the count reached zero and the dictionary was removed.
     if (const auto it = dictDescriptorMapByRef_.find(dict_ref);

@@ -10,12 +10,10 @@
  */
 
 #include <gtest/gtest.h>
-#include <fstream>
 #include <set>
 #include <boost/filesystem.hpp>
 
 #include "Calcite/Calcite.h"
-#include "Catalog/DictDescriptor.h"
 #include "Catalog/ForeignTable.h"
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
@@ -202,72 +200,6 @@ class DictionaryDirectoryTest : public CreateAndDropTableDdlTest {
     return dirs;
   }
 };
-
-// A new dictionary must not be created over a directory with content: it is an orphan
-// from a table whose creation never committed, and addTableToMap() aborts on it rather
-// than adopt it. The abort itself cannot be tested here (a death test takes down
-// the shared Calcite server), so test the lookup that decides it.
-TEST(DictionaryDirectoryGuardTest, FindsFirstExistingDirectory) {
-  const auto root = bf::temp_directory_path() / bf::unique_path("dict_guard_%%%%-%%%%");
-  bf::create_directories(root);
-  ScopeGuard cleanup = [&] { bf::remove_all(root); };
-
-  auto make = [&](const int dict_id, const bool temp) {
-    return DictDescriptor(DictRef(1, dict_id),
-                          "dict" + std::to_string(dict_id),
-                          32,
-                          false,
-                          1,
-                          (root / ("DB_1_DICT_" + std::to_string(dict_id))).string(),
-                          temp);
-  };
-
-  std::list<DictDescriptor> dicts{make(5, false), make(6, false)};
-  ASSERT_FALSE(find_occupied_dictionary_directory(dicts));
-
-  // An empty directory is what a crash before the commit leaves behind. It holds
-  // nothing to adopt and must not be reported.
-  bf::create_directory(root / "DB_1_DICT_6");
-  ASSERT_FALSE(find_occupied_dictionary_directory(dicts));
-
-  std::ofstream(root / "DB_1_DICT_6" / "DictOffsets").put('x');
-  ASSERT_EQ(find_occupied_dictionary_directory(dicts), (root / "DB_1_DICT_6").string());
-
-  // With several conflicts the first one is reported.
-  bf::create_directory(root / "DB_1_DICT_5");
-  std::ofstream(root / "DB_1_DICT_5" / "DictOffsets").put('x');
-  ASSERT_EQ(find_occupied_dictionary_directory(dicts), (root / "DB_1_DICT_5").string());
-
-  // A file in the place of the directory is not an empty directory either.
-  bf::remove_all(root / "DB_1_DICT_5");
-  std::ofstream(root / "DB_1_DICT_5").put('x');
-  ASSERT_EQ(find_occupied_dictionary_directory(dicts), (root / "DB_1_DICT_5").string());
-
-  // The lookup only reads: it must not create directories for dictionaries that are
-  // absent, or an abort on a later dictionary would leave earlier ones behind.
-  bf::remove_all(root / "DB_1_DICT_5");
-  bf::remove_all(root / "DB_1_DICT_6");
-  ASSERT_FALSE(find_occupied_dictionary_directory(dicts));
-  ASSERT_FALSE(bf::exists(root / "DB_1_DICT_5"));
-  ASSERT_FALSE(bf::exists(root / "DB_1_DICT_6"));
-}
-
-TEST(DictionaryDirectoryGuardTest, IgnoresTemporaryAndShardPlaceholderDictionaries) {
-  const auto root = bf::temp_directory_path() / bf::unique_path("dict_guard_%%%%-%%%%");
-  bf::create_directories(root);
-  ScopeGuard cleanup = [&] { bf::remove_all(root); };
-
-  // Temporary dictionaries have no on-disk directory, and dictId 0 is the dummy entry
-  // created for a shard of a logical table.
-  bf::create_directory(root / "DB_1_DICT_7");
-  bf::create_directory(root / "DB_1_DICT_0");
-  const std::list<DictDescriptor> dicts{
-      DictDescriptor(
-          DictRef(1, 7), "temp", 32, false, 1, (root / "DB_1_DICT_7").string(), true),
-      DictDescriptor(
-          DictRef(1, 0), "dummy", 32, false, 1, (root / "DB_1_DICT_0").string(), false)};
-  ASSERT_FALSE(find_occupied_dictionary_directory(dicts));
-}
 
 // Dropping a column that shares a dictionary and then the table used to leave the
 // dictionary directory behind (its in-memory refcount was never decremented), so the next

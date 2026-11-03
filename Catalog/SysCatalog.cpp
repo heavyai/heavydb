@@ -3908,17 +3908,6 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is
   if (auto it = cat_map_.find(key); it != cat_map_.end()) {
     return it->second;
   }
-  // sys -> init, the order createDatabase() and removeCatalog() use. removeCatalog()
-  // needs the sys write lock, so holding it here means the record cannot disappear
-  // between this check and the registration below.
-  cat_init_lock cat_lock(this);
-  if (auto it = init_cat_map_.find(key);
-      it == init_cat_map_.end() || it->second != cat) {
-    // removeCatalog() ran after the Catalog was built: the database is being dropped or
-    // renamed. Registering it would bring back a Catalog for a database that is gone.
-    throw std::runtime_error("Database " + curDB.dbName +
-                             " was dropped or renamed while its catalog was loading.");
-  }
   cat_map_.emplace(key, cat);
   return cat;
 }

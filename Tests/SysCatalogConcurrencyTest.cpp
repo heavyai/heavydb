@@ -184,34 +184,34 @@ TEST_F(SysCatalogConcurrencyTest, ConcurrentFirstLoginDdlDoesNotFailWithSqliteBu
 // (getCatalogsForAllDbs), so it can reach getCatalog() for a database whose Catalog is
 // being built by another thread. That must not deadlock: the builder needs the sys lock
 // to finish. Building a small database's Catalog takes about a millisecond, so
-// keep rebuilding it on background threads while DROP USERs run. A deadlock would hang
+// keep rebuilding it on a background thread while DROP USERs run. A deadlock would hang
 // the test, so a watchdog aborts it.
 TEST_F(SysCatalogConcurrencyTest, ConcurrentCatalogBuildAndDropUserDoNotDeadlock) {
   constexpr size_t kRounds = 30;
-  constexpr size_t kBuilders = 2;
   auto& sys_cat = SysCatalog::instance();
 
+  // A single builder: removeCatalog() is only called by DROP/RENAME/CREATE DATABASE, which
+  // never run alongside each other, so it must not race with another thread's build.
   std::atomic<bool> stop{false};
-  std::vector<std::thread> builders;
-  ScopeGuard stop_builders = [&] {
+  std::mutex error_mutex;
+  std::vector<std::string> errors;
+  std::thread builder([&] {
+    while (!stop.load()) {
+      sys_cat.removeCatalog(kDb);  // the next getCatalog builds a new Catalog
+      try {
+        sys_cat.getCatalog(kDb);
+      } catch (const std::exception& e) {
+        std::lock_guard<std::mutex> lock(error_mutex);
+        errors.emplace_back(e.what());
+      }
+    }
+  });
+  ScopeGuard stop_builder = [&] {
     stop = true;
-    for (auto& th : builders) {
-      th.join();
+    if (builder.joinable()) {
+      builder.join();
     }
   };
-  for (size_t t = 0; t < kBuilders; ++t) {
-    builders.emplace_back([&] {
-      while (!stop.load()) {
-        sys_cat.removeCatalog(kDb);  // the next getCatalog builds a new Catalog
-        try {
-          sys_cat.getCatalog(kDb);
-        } catch (const std::exception&) {
-          // Only the deadlock matters here. Another builder's removeCatalog() can drop
-          // the Catalog being registered, which getCatalog() reports as an error.
-        }
-      }
-    });
-  }
 
   std::vector<std::string> users;
   ScopeGuard drop_users = [&] {
@@ -236,6 +236,13 @@ TEST_F(SysCatalogConcurrencyTest, ConcurrentCatalogBuildAndDropUserDoNotDeadlock
     }
     drop_done.get();
   }
+
+  stop = true;
+  builder.join();
+  for (const auto& e : errors) {
+    ADD_FAILURE() << e;
+  }
+  ASSERT_TRUE(errors.empty()) << errors.size() << " failures";
 }
 
 int main(int argc, char** argv) {
