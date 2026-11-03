@@ -142,3 +142,6 @@ NVIDIA takes security seriously. If you discover a vulnerability in heavydb, **D
 Join the [HeavyAI GitHub Discussions](https://github.com/orgs/heavyai/discussions) to ask questions, share feedback, and report issues. HeavyAI maintainers review issues, discussions, and pull requests on a best effort basis without guaranteed response timelines.
   
 
+# Ignore This Section
+
+simoneves2 was here
