@@ -579,6 +579,10 @@ class SysCatalog : private CommonFileOperations {
   // contains a map of all the catalog within this system
   // it is lazy loaded
   std::map<std::string, std::shared_ptr<Catalog>> cat_map_;
+  // Catalogs that getCatalog() has built, keyed like cat_map_ and guarded by
+  // cat_init_lock. Lets concurrent first callers for a database share one Catalog
+  // instead of each building their own. Entries are removed together with cat_map_.
+  std::map<std::string, std::shared_ptr<Catalog>> init_cat_map_;
 
   static std::mutex instance_mutex_;
   static std::unique_ptr<SysCatalog> instance_;
