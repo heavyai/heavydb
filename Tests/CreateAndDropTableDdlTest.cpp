@@ -10,6 +10,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <set>
 #include <boost/filesystem.hpp>
 
 #include "Calcite/Calcite.h"
@@ -161,6 +162,99 @@ class CreateAndDropTableDdlTest : public DBHandlerTestFixture {
     return table_dir_path;
   }
 };
+
+// Dictionary directories created by CREATE TABLE and removed by DROP TABLE/COLUMN.
+class DictionaryDirectoryTest : public CreateAndDropTableDdlTest {
+ protected:
+  static constexpr const char* kTable = "dict_dir_tbl";
+
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    sql(std::string("DROP TABLE IF EXISTS ") + kTable + ";");
+  }
+
+  void TearDown() override {
+    sql(std::string("DROP TABLE IF EXISTS ") + kTable + ";");
+    CreateAndDropTableDdlTest::TearDown();
+  }
+
+  std::string createQuery() const {
+    return std::string("CREATE TABLE ") + kTable +
+           " (id INT, a TEXT ENCODING DICT(32), b TEXT ENCODING DICT(32));";
+  }
+
+  std::set<std::string> dictionaryDirectories() const {
+    std::set<std::string> dirs;
+    const auto prefix =
+        "DB_" + std::to_string(getCatalog().getDatabaseId()) + "_DICT_";
+    for (bf::directory_iterator it(bf::path(BASE_PATH) / shared::kDataDirectoryName), end;
+         it != end;
+         ++it) {
+      const auto name = it->path().filename().string();
+      // Directories renamed for deletion (DB_<db>_DICT_<id>_<ts>_DELETE_ME) are being
+      // removed in the background and cannot be adopted by a new dictionary.
+      if (name.rfind(prefix, 0) == 0 && name.find("_DELETE_ME") == std::string::npos) {
+        dirs.insert(name);
+      }
+    }
+    return dirs;
+  }
+};
+
+// Dropping a column that shares a dictionary and then the table used to leave the
+// dictionary directory behind (its in-memory refcount was never decremented), so the next
+// table to reuse the dictionary id found a non-empty directory.
+TEST_F(DictionaryDirectoryTest, DropSharedDictionaryColumnThenTableRemovesDirectory) {
+  const auto dirs_before = dictionaryDirectories();
+  const std::string shared_create =
+      std::string("CREATE TABLE ") + kTable + " (a TEXT, b TEXT, SHARED DICTIONARY (b) " +
+      "REFERENCES " + kTable + "(a));";
+
+  sql(shared_create);
+  sql("INSERT INTO " + std::string(kTable) + " VALUES ('x', 'y');");
+  ASSERT_EQ(dictionaryDirectories().size(), dirs_before.size() + 1);
+
+  sql(std::string("ALTER TABLE ") + kTable + " DROP COLUMN b;");
+  sql(std::string("DROP TABLE ") + kTable + ";");
+  ASSERT_EQ(dictionaryDirectories(), dirs_before);
+
+  // The same statement must now succeed instead of aborting on the existing-directory
+  // CHECK.
+  sql(shared_create);
+  ASSERT_NE(getCatalog().getMetadataForTable(kTable, false), nullptr);
+}
+
+// A crash between creating a dictionary directory and committing the table leaves an
+// empty directory and no catalog rows. Dictionary ids are reused, so the next CREATE TABLE
+// finds it; it must reuse the directory, not abort on every retry.
+TEST_F(DictionaryDirectoryTest, EmptyDictionaryDirectoryLeftByCrashIsReused) {
+  const auto dirs_before = dictionaryDirectories();
+  sql(createQuery());
+  auto created = dictionaryDirectories();
+  for (const auto& dir : dirs_before) {
+    created.erase(dir);
+  }
+  ASSERT_EQ(created.size(), 2u);  // one dictionary for each of the two TEXT columns
+  sql(std::string("DROP TABLE ") + kTable + ";");
+  ASSERT_EQ(dictionaryDirectories(), dirs_before);
+
+  // Recreate the leftovers of the interrupted CREATE TABLE.
+  for (const auto& dir : created) {
+    bf::create_directory(bf::path(BASE_PATH) / shared::kDataDirectoryName / dir);
+  }
+
+  sql(createQuery());
+  // The new dictionaries must have reused the recreated directories. Otherwise this test
+  // no longer exercises the reuse path and leaves the empty directories behind.
+  auto reused = dictionaryDirectories();
+  for (const auto& dir : dirs_before) {
+    reused.erase(dir);
+  }
+  ASSERT_EQ(reused, created);
+  ASSERT_NE(getCatalog().getMetadataForTable(kTable, false), nullptr);
+  sql("INSERT INTO " + std::string(kTable) + " VALUES (1, 'x', 'y');");
+  sqlAndCompareResult(std::string("SELECT a, b FROM ") + kTable + ";", {{"x", "y"}});
+}
 
 class CreateTableTest : public CreateAndDropTableDdlTest,
                         public testing::WithParamInterface<ddl_utils::TableType> {

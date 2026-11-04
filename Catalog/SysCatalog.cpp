@@ -311,6 +311,7 @@ SysCatalog::~SysCatalog() {
   granteeMap_.clear();
   objectDescriptorMap_.clear();
   cat_map_.clear();
+  init_cat_map_.clear();
 }
 
 void SysCatalog::initDB() {
@@ -3867,12 +3868,11 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is
     }
   }
 
-  // No cat found and we have the init lock, so we know no other thread is initializing
-  // a catalog.  Initialize a new catalog and add it to the map.
-  std::shared_ptr<Catalog> cat;
   // There are some syscat values (root_user & user_name_by_user_id) that are needed for
   // catalog initialization.  We would rather acquire them here and pass them in so that
-  // the Catalog does not need to reach back and lock the SysCatalog.
+  // the Catalog does not need to reach back and lock the SysCatalog. They are gathered
+  // before taking the init lock: building a Catalog must never need the sys lock while
+  // other threads hold it and wait for the init lock.
   auto users = getAllUserMetadata();
   std::map<int32_t, std::string> user_name_by_user_id;
   for (const auto& user : users) {
@@ -3881,22 +3881,29 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is
   UserMetadata root_user;
   CHECK(getMetadataForUserById(shared::kRootUserId, root_user));
 
+  std::shared_ptr<Catalog> cat;
   {
     // Hold a lock here to prevent concurrent initialization of catalogs.
     // Note: cat_init_lock is not (and does not need to be) a distributed mutex.  See
     // RWLocks.cpp for details.
     cat_init_lock cat_lock(this);
-    cat = std::make_shared<Catalog>(basePath_,
-                                    curDB,
-                                    dataMgr_,
-                                    calciteMgr_,
-                                    is_new_db,
-                                    user_name_by_user_id,
-                                    root_user);
+    if (auto it = init_cat_map_.find(key); it != init_cat_map_.end()) {
+      cat = it->second;
+    } else {
+      cat = std::make_shared<Catalog>(basePath_,
+                                      curDB,
+                                      dataMgr_,
+                                      calciteMgr_,
+                                      is_new_db,
+                                      user_name_by_user_id,
+                                      root_user);
+      init_cat_map_.emplace(key, cat);
+    }
   }
 
-  // Check again for the catalog, as another thread may have added it while we were
-  // waiting for the initialization lock.
+  // The sys lock must not be taken while holding the init lock (createDatabase holds the
+  // sys lock while waiting for the init lock). The map may already hold an entry if
+  // another thread registered the same Catalog first.
   sys_write_lock write_lock(this);
   if (auto it = cat_map_.find(key); it != cat_map_.end()) {
     return it->second;
@@ -3907,7 +3914,10 @@ std::shared_ptr<Catalog> SysCatalog::getCatalog(const DBMetadata& curDB, bool is
 
 void SysCatalog::removeCatalog(const std::string& dbName) {
   sys_write_lock write_lock(this);
-  cat_map_.erase(to_upper(dbName));
+  const auto key = to_upper(dbName);
+  cat_map_.erase(key);
+  cat_init_lock cat_lock(this);
+  init_cat_map_.erase(key);
 }
 
 void SysCatalog::reassignObjectOwners(
