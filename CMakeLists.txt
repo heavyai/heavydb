@@ -1088,6 +1088,23 @@ target_link_libraries(initheavy mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${B
     ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
     ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT})
 
+# The CUDA benchmarks need dependencies not propagated by the current target
+# interfaces in static mold builds. Supply the server dependency list directly;
+# archive group markers do not repair missing link inputs.
+if(PREFER_STATIC_LIBS AND "${USE_ALTERNATE_LINKER}" STREQUAL "mold")
+  foreach(HEAVYDB_CUDA_BENCHMARK_TARGET IN ITEMS
+      DeviceToDeviceBenchmark
+      JumpBufferBenchmark)
+    if(TARGET ${HEAVYDB_CUDA_BENCHMARK_TARGET})
+      target_link_libraries(${HEAVYDB_CUDA_BENCHMARK_TARGET}
+          mapd_thrift thrift_handler ${MAPD_LIBRARIES}
+          ${Boost_LIBRARIES} ${CMAKE_DL_LIBS}
+          ${CUDA_LIBRARIES} ${PROFILER_LIBS} ${ZLIB_LIBRARIES} ${BLOSC_LIBRARIES}
+          ${LOCALE_LINK_FLAG} ${AwsS3_CURL_SUPPORT})
+    endif()
+  endforeach()
+endif()
+
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")
     set(${arch_out} "amd64")
