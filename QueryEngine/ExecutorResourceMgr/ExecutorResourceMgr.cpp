@@ -50,7 +50,8 @@ ExecutorResourceMgr::request_resources_with_timeout(const RequestInfo& request_i
   } catch (std::runtime_error const& e) {
     std::ostringstream oss;
     oss << REQUEST_STATS_ERROR_MSG_PREFIX << e.what();
-    throw ExecutorResourceMgrError(std::nullopt, oss.str());
+    throw ExecutorResourceMgrError(
+        std::nullopt, oss.str(), get_executor_resource_mgr_error_kind(e));
   }
 
   const auto request_id = enqueue_request(request_info,
@@ -92,7 +93,8 @@ ExecutorResourceMgr::request_resources_with_timeout(const RequestInfo& request_i
     // instead of std::runtime_error to revert ERM's status outside from this function
     // after releasing `queue_stats_mutex_` lock
     throw ExecutorResourceMgrError(request_id,
-                                   REQUEST_STATS_ERROR_MSG_PREFIX + *request_stats.error);
+                                   REQUEST_STATS_ERROR_MSG_PREFIX + *request_stats.error,
+                                   request_stats.error_kind);
   }
   const ResourceGrant& actual_resource_grant = request_stats.actual_resource_grant;
   // Ensure each resource granted was at least the minimum requested
@@ -115,25 +117,29 @@ std::unique_ptr<ExecutorResourceHandle> ExecutorResourceMgr::request_resources(
         e.getRequestId().has_value()) {
       handle_resource_stat_error(e.getRequestId().value());
     }
-    auto result_memory_error =
-        e.getErrorMsg().find("CPU result memory") != std::string::npos;
+    const auto result_memory_error =
+        e.getErrorKind() == ExecutorResourceMgrErrorKind::CPU_RESULT_MEM_TOO_LARGE;
     if (g_executor_resource_mgr_allow_auto_shrink_num_cpu_slot_for_groupby_query &&
         request_info.output_buffers_reusable_intra_thread && result_memory_error &&
         request_info.cpu_slots > 1) {
       // Calculate memory requirements and limits
       const auto current_per_slot_res_buf_mem_bytes =
           request_info.cpu_result_mem / request_info.cpu_slots;
-      const auto cpu_buffer_pool_size_bytes =
-          get_resource_info(ResourceType::CPU_BUFFER_POOL_MEM).second;
+      // Ask the pool for the same limit it will enforce, rather than sizing against the
+      // whole CPU buffer pool. The pool's limit applies the per-query result memory
+      // ratio and, when result memory is drawn from the buffer pool, reserves room for
+      // this request's input chunks. Sizing against the whole pool left nothing for the
+      // chunks, so the retried request could still overcommit the pool.
+      const auto max_result_mem_bytes =
+          executor_resource_pool_.get_max_cpu_result_mem_grant_for_request(request_info);
       const auto page_size = heavyai::get_page_size();
       const auto num_pages =
           (current_per_slot_res_buf_mem_bytes + page_size - 1) / page_size;
       const auto actual_buf_size_per_slot = page_size * num_pages;
       CHECK_GT(actual_buf_size_per_slot, 0u);
 
-      // Adjust cpu slots to fit into an available cpu buffer pool memory
-      const auto adjusted_cpu_slots =
-          cpu_buffer_pool_size_bytes / actual_buf_size_per_slot;
+      // Adjust cpu slots to fit into the grantable cpu result memory
+      const auto adjusted_cpu_slots = max_result_mem_bytes / actual_buf_size_per_slot;
 
       // Check if a valid number of CPU slots was found
       if (adjusted_cpu_slots <= 0u) {
@@ -156,6 +162,19 @@ std::unique_ptr<ExecutorResourceHandle> ExecutorResourceMgr::request_resources(
           request_info.cpu_result_mem / request_info.cpu_slots;
       updated_request.cpu_result_mem =
           cpu_result_mem_bytes_per_kernel * adjusted_cpu_slots;
+
+      // The retried request keeps the original minimums, which must not exceed what
+      // it requests, so a shrink below them cannot be retried. The request cannot be
+      // satisfied in that case, so report the original error.
+      if (updated_request.cpu_slots < updated_request.min_cpu_slots ||
+          updated_request.cpu_result_mem < updated_request.min_cpu_result_mem) {
+        VLOG(1) << e.getErrorMsg() << ", cannot retry with reduced number of CPU slots ("
+                << request_info.cpu_slots << " -> " << adjusted_cpu_slots
+                << ") as it is below the request's minimum CPU slots ("
+                << request_info.min_cpu_slots << ") or minimum CPU result memory ("
+                << format_num_bytes(request_info.min_cpu_result_mem) << ")";
+        throw std::runtime_error(e.getErrorMsg());
+      }
 
       // Log the adjustment details
       VLOG(1) << e.getErrorMsg()
@@ -190,11 +209,14 @@ RequestStats ExecutorResourceMgr::get_request_for_id(const RequestId request_id)
   return requests_stats_[request_id];
 }
 
-void ExecutorResourceMgr::mark_request_error(const RequestId request_id,
-                                             std::string error_msg) {
+void ExecutorResourceMgr::mark_request_error(
+    const RequestId request_id,
+    std::string error_msg,
+    const ExecutorResourceMgrErrorKind error_kind) {
   std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
   CHECK_LT(request_id, requests_stats_.size());
   requests_stats_[request_id].error = std::move(error_msg);
+  requests_stats_[request_id].error_kind = error_kind;
 }
 
 RequestId ExecutorResourceMgr::choose_next_request() {
@@ -226,7 +248,8 @@ RequestId ExecutorResourceMgr::choose_next_request() {
         return request_id;
       }
     } catch (std::runtime_error const& e) {
-      throw ExecutorResourceMgrError(request_id, e.what());
+      throw ExecutorResourceMgrError(
+          request_id, e.what(), get_executor_resource_mgr_error_kind(e));
     }
   }
   return INVALID_REQUEST_ID;
@@ -423,7 +446,7 @@ void ExecutorResourceMgr::process_queue_loop() {
     } catch (ExecutorResourceMgrError const& e) {
       CHECK(e.getRequestId().has_value());
       chosen_request_id = e.getRequestId().value();
-      mark_request_error(chosen_request_id, e.getErrorMsg());
+      mark_request_error(chosen_request_id, e.getErrorMsg(), e.getErrorKind());
     }
     if (enable_debug_printing_) {
       std::unique_lock<std::mutex> print_lock(print_mutex_);
@@ -440,9 +463,20 @@ void ExecutorResourceMgr::process_queue_loop() {
     mark_request_dequed(chosen_request_id);
     const auto request_stats = get_request_for_id(chosen_request_id);
     if (!request_stats.error) {
-      executor_resource_pool_.allocate_resources(
-          request_stats.actual_resource_grant,
-          request_stats.request_info.chunk_request_info);
+      // This runs on the resource manager's own thread, which has no handler above it,
+      // so an escaping exception would reach std::terminate. Route it to the waiting
+      // requester instead, and wake that requester either way so it cannot block
+      // forever.
+      try {
+        executor_resource_pool_.allocate_resources(
+            request_stats.actual_resource_grant,
+            request_stats.request_info.chunk_request_info);
+      } catch (ExecutorResourceMgrError const& e) {
+        mark_request_error(chosen_request_id, e.getErrorMsg(), e.getErrorKind());
+      } catch (std::exception const& e) {
+        mark_request_error(
+            chosen_request_id, e.what(), ExecutorResourceMgrErrorKind::OTHER);
+      }
     }
     outstanding_queue_requests_.wake_request_by_id(chosen_request_id);
 
@@ -588,28 +622,9 @@ void ExecutorResourceMgr::mark_request_timed_out(const RequestId request_id) {
 }
 
 void ExecutorResourceMgr::handle_resource_stat_error(const RequestId request_id) {
-  const std::chrono::steady_clock::time_point execution_finished_time =
-      std::chrono::steady_clock::now();
-  std::unique_lock<std::shared_mutex> queue_stats_write_lock(queue_stats_mutex_);
-  const size_t current_request_count = requests_count_.load(std::memory_order_relaxed);
-  CHECK_LT(request_id, current_request_count);
-  RequestStats& request_stats = requests_stats_[request_id];
-  request_stats.execution_finished_time = execution_finished_time;
-  request_stats.finished_executing = true;
-  request_stats.execution_time_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          request_stats.execution_finished_time - request_stats.deque_time)
-          .count();
-  request_stats.total_time_ms =
-      std::chrono::duration_cast<std::chrono::milliseconds>(
-          request_stats.execution_finished_time - request_stats.enqueue_time)
-          .count();
-  remove_request_from_stage(request_id, ExecutionRequestStage::EXECUTING);
-
-  executor_stats_.requests_executing--;
-  executor_stats_.requests_executed++;
-  executor_stats_.total_execution_time_ms += request_stats.execution_time_ms;
-  executor_stats_.total_time_ms += request_stats.total_time_ms;
+  // A failed request was dequeued into the EXECUTING stage exactly as a granted one is,
+  // including the per-device counts, so it must be retired with the same bookkeeping
+  mark_request_finished(request_id);
 }
 
 void ExecutorResourceMgr::mark_request_finished(const RequestId request_id) {
@@ -722,10 +737,15 @@ std::shared_ptr<ExecutorResourceMgr> generate_executor_resource_mgr(
     const bool allow_cpu_result_mem_oversubscription_concurrency,
     const double max_available_resource_use_ratio) {
   CHECK_GT(num_cpu_slots, size_t(0));
+  // Note that pool-backed result memory gets its own subtype rather than sharing
+  // PINNED_CPU_BUFFER_POOL_MEM with input chunks. Sharing it would collapse the two
+  // per-request grant policies generated below into one array slot, and would make the
+  // two quantities indistinguishable in the pool's accounting even though they are
+  // requested independently.
   const auto cpu_result_mem_resource_type =
       use_cpu_mem_pool_for_output_buffers
           ? CPUResultMemResourceType{ResourceType::CPU_BUFFER_POOL_MEM,
-                                     ResourceSubtype::PINNED_CPU_BUFFER_POOL_MEM}
+                                     ResourceSubtype::CPU_RESULT_MEM_IN_POOL}
           : CPUResultMemResourceType{ResourceType::CPU_RESULT_MEM,
                                      ResourceSubtype::CPU_RESULT_MEM};
   const size_t cpu_result_mem_bytes =

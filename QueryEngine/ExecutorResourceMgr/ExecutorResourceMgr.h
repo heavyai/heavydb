@@ -90,6 +90,9 @@ struct RequestStats {
   // this variable will be filled w/ a corresponding msg when an error is occurred
   // when processing the resource allocation request by ERM
   std::optional<std::string> error;
+  // Categorizes `error` so the requesting thread can react to a specific failure mode
+  // without re-parsing the message
+  ExecutorResourceMgrErrorKind error_kind{ExecutorResourceMgrErrorKind::OTHER};
 
   RequestStats(const RequestId request_id,
                const RequestInfo& request_info,
@@ -305,7 +308,12 @@ class ExecutorResourceMgr : public std::enable_shared_from_this<ExecutorResource
    */
   RequestStats get_request_for_id(const RequestId request_id) const;
 
-  void mark_request_error(const RequestId request_id, std::string error_msg);
+  // `error_kind` is deliberately not defaulted: every caller holding an
+  // `ExecutorResourceMgrError` must forward its kind, as `request_resources` dispatches
+  // the CPU slot retry on the kind recorded here
+  void mark_request_error(const RequestId request_id,
+                          std::string error_msg,
+                          const ExecutorResourceMgrErrorKind error_kind);
 
   /**
    * @brief Internal method: Invoked from `process_queue_loop`, chooses the next
