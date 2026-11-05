@@ -33,7 +33,6 @@ enum class TableConstraintType { PrimaryKey, Unique, ForeignKey };
 struct ForeignKeyReference {
   std::string table_name;
   std::vector<std::string> column_names;
-  std::vector<int32_t> column_ordinals;
 };
 
 struct TableConstraint {

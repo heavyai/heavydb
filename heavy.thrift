@@ -363,6 +363,7 @@ struct TTableDetails {
   12: string sharded_column_name;
   13: optional string comment;
   14: optional i64 num_rows;
+  15: optional map<string, list<i32>> foreign_key_column_ordinals;
 }
 
 struct TDatabasePermissions {
