@@ -430,6 +430,17 @@ TEST_F(TableConstraintTest, AlterKeyColumnTypeIsRejectedBeforeMutation) {
   }
 }
 
+TEST_F(TableConstraintTest, InternalMarkerNamesAreOrdinaryConstraintNames) {
+  sql("CREATE TABLE constraint_review_parent (id INT, code INT, "
+      "CONSTRAINT SHARD_KEY PRIMARY KEY (id), CONSTRAINT SHARED_DICT UNIQUE (code));");
+  const auto td = getCatalog().getMetadataForTable("constraint_review_parent", false);
+  EXPECT_EQ(0, td->nShards);
+  const auto constraints = getCatalog().getTableConstraints(td);
+  ASSERT_EQ(size_t(2), constraints.size());
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::PrimaryKey, constraints[0].type);
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::Unique, constraints[1].type);
+}
+
 TEST_F(TableConstraintTest, ShardConstraintsFollowLogicalAddAndDrop) {
   sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
   sql("CREATE TABLE constraint_review_child (id INT NOT NULL, SHARD KEY(id)) WITH "
@@ -452,6 +463,18 @@ TEST_F(TableConstraintTest, ShardConstraintsFollowLogicalAddAndDrop) {
   sql("ALTER TABLE constraint_review_child DROP CONSTRAINT child_fk;");
   check_metadata(0);
   EXPECT_NO_THROW(sql("DROP TABLE constraint_review_parent;"));
+}
+
+TEST_F(TableConstraintTest, PersistentForeignKeyRejectsTemporaryTarget) {
+  sql("CREATE TEMPORARY TABLE constraint_review_parent (id INT NOT NULL, PRIMARY "
+      "KEY(id));");
+  EXPECT_ANY_THROW(
+      sql("CREATE TABLE constraint_review_child (id INT, FOREIGN KEY(id) "
+          "REFERENCES constraint_review_parent(id));"));
+  sql("CREATE TABLE constraint_review_child (id INT);");
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE constraint_review_child ADD CONSTRAINT child_fk "
+          "FOREIGN KEY(id) REFERENCES constraint_review_parent(id);"));
 }
 
 TEST_F(TableConstraintTest, ShardUpdateFailureRollsBackEveryDescriptor) {
@@ -483,6 +506,47 @@ TEST_F(TableConstraintTest, ShardedSelfReferenceAllowsDrop) {
       "PRIMARY KEY(id), FOREIGN KEY(parent_id) REFERENCES constraint_review_parent(id), "
       "SHARD KEY(id)) WITH (SHARD_COUNT=4);");
   EXPECT_NO_THROW(sql("DROP TABLE constraint_review_parent;"));
+}
+
+TEST_F(TableConstraintTest, AlterConstraintRejectsInvalidDefinitions) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, code INT NOT NULL, "
+      "PRIMARY KEY(id));");
+  sql("CREATE TABLE constraint_review_child (a INT, b INT);");
+  queryAndAssertPartialException(
+      "ALTER TABLE constraint_review_child ADD FOREIGN KEY(a) REFERENCES "
+      "constraint_review_missing(id);",
+      "Referenced table constraint_review_missing does not exist.");
+  queryAndAssertPartialException(
+      "ALTER TABLE constraint_review_child ADD UNIQUE(absent);",
+      "Column absent does not exist for table constraint_review_child.");
+  queryAndAssertPartialException(
+      "ALTER TABLE constraint_review_child ADD FOREIGN KEY(a,b) REFERENCES "
+      "constraint_review_parent(id);",
+      "Foreign key column count does not match referenced key column count.");
+  queryAndAssertPartialException(
+      "ALTER TABLE constraint_review_child ADD FOREIGN KEY(a) REFERENCES "
+      "constraint_review_parent(code);",
+      "references non-unique columns");
+  queryAndAssertPartialException(
+      "ALTER TABLE constraint_review_parent ADD PRIMARY KEY(code);",
+      "already has a primary key");
+  sql("ALTER TABLE constraint_review_child ADD CONSTRAINT child_uq UNIQUE(a);");
+  for (const auto name : {"child_uq", "CHILD_UQ"}) {
+    queryAndAssertPartialException(
+        std::string("ALTER TABLE constraint_review_child ADD CONSTRAINT ") + name +
+            " UNIQUE(b);",
+        "already exists on table constraint_review_child");
+  }
+  queryAndAssertPartialException("ALTER TABLE constraint_review_child ADD UNIQUE(a);",
+                                 "Equivalent UNIQUE constraint already exists");
+  queryAndAssertPartialException(
+      "ALTER TABLE constraint_review_child DROP CONSTRAINT absent;",
+      "Constraint absent does not exist on table constraint_review_child");
+  sql("ALTER TABLE constraint_review_child DROP CONSTRAINT CHILD_UQ;");
+  EXPECT_TRUE(getCatalog()
+                  .getTableConstraints(
+                      getCatalog().getMetadataForTable("constraint_review_child", false))
+                  .empty());
 }
 
 TEST_F(TableConstraintTest, ConstraintChangesPersistInCatalog) {
@@ -531,6 +595,51 @@ TEST_F(TableConstraintTest, ShowCreateRoundTripsConstraints) {
   const auto recreated = catalog.getMetadataForTable("constraint_review_child", false);
   EXPECT_EQ(child_metadata, recreated->keyMetainfo);
   EXPECT_EQ(ordinals, catalog.getForeignKeyColumnOrdinals(recreated));
+}
+
+TEST_F(TableConstraintTest, ForeignKeyRequiresReferencedTablePrivileges) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
+  createTestUser();
+  ScopeGuard cleanup = [&] {
+    loginAdmin();
+    dropTestUser();
+  };
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  login("test_user", "test_pass");
+  EXPECT_ANY_THROW(
+      sql("CREATE TABLE constraint_review_child (id INT, FOREIGN KEY(id) "
+          "REFERENCES constraint_review_parent(id));"));
+  sql("CREATE TABLE constraint_review_child (id INT);");
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE constraint_review_child ADD CONSTRAINT child_fk "
+          "FOREIGN KEY(id) REFERENCES constraint_review_parent(id);"));
+  loginAdmin();
+  sql("GRANT SELECT ON TABLE constraint_review_parent TO test_user;");
+  login("test_user", "test_pass");
+  EXPECT_NO_THROW(
+      sql("ALTER TABLE constraint_review_child ADD CONSTRAINT child_fk "
+          "FOREIGN KEY(id) REFERENCES constraint_review_parent(id);"));
+}
+
+TEST_F(TableConstraintTest, ForeignTablesRejectAlterConstraints) {
+  sql(getCreateTableQuery(
+      ddl_utils::TableType::FOREIGN_TABLE, "constraint_review_parent", "(id INT)"));
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE constraint_review_parent ADD CONSTRAINT key_unique UNIQUE(id);"));
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE constraint_review_parent DROP CONSTRAINT key_unique;"));
+}
+
+TEST_F(TableConstraintTest, PrimaryKeyNullability) {
+  sql("CREATE TABLE constraint_review_parent (id INT, PRIMARY KEY(id));");
+  const auto td = getCatalog().getMetadataForTable("constraint_review_parent", false);
+  EXPECT_TRUE(
+      getCatalog().getMetadataForColumn(td->tableId, "id")->columnType.get_notnull());
+  EXPECT_ANY_THROW(sql("INSERT INTO constraint_review_parent VALUES(NULL);"));
+  sql("CREATE TABLE constraint_review_child (id TEXT);");
+  EXPECT_ANY_THROW(sql("ALTER TABLE constraint_review_child ADD PRIMARY KEY(id);"));
+  sql("ALTER TABLE constraint_review_child ALTER COLUMN id TYPE INT NOT NULL;");
+  EXPECT_NO_THROW(sql("ALTER TABLE constraint_review_child ADD PRIMARY KEY(id);"));
 }
 
 TEST_F(TableConstraintTest, MalformedMetadataIncludesTableName) {

@@ -5050,6 +5050,14 @@ TableConstraint Catalog::normalizeTableConstraint(
   normalized_constraint.enforced = false;
   normalized_constraint.column_names =
       normalize_constraint_columns(*this, td, constraint.column_names);
+  if (normalized_constraint.type == TableConstraintType::PrimaryKey) {
+    for (const auto& column : normalized_constraint.column_names) {
+      if (!getMetadataForColumn(td->tableId, column)->columnType.get_notnull()) {
+        throw std::runtime_error("Primary key column " + td->tableName + "." + column +
+                                 " must be NOT NULL before adding a primary key.");
+      }
+    }
+  }
 
   const auto existing_constraints = getTableConstraints(td);
   if (!normalized_constraint.name || normalized_constraint.name->empty()) {
@@ -5074,6 +5082,10 @@ TableConstraint Catalog::normalizeTableConstraint(
                              " does not exist.");
   }
   reference.table_name = foreign_td->tableName;
+  if (table_is_temporary(foreign_td) && !table_is_temporary(td)) {
+    throw std::runtime_error("Persistent tables cannot reference temporary table " +
+                             reference.table_name + ".");
+  }
   reference.column_names =
       normalize_constraint_columns(*this, foreign_td, reference.column_names);
   if (reference.column_names.size() != normalized_constraint.column_names.size()) {
@@ -5103,7 +5115,7 @@ TableConstraint Catalog::normalizeTableConstraint(
 
 std::vector<TableConstraint> Catalog::normalizeTableConstraintsForCreate(
     const TableDescriptor* td,
-    const std::list<ColumnDescriptor>& columns,
+    std::list<ColumnDescriptor>& columns,
     const std::vector<TableConstraint>& constraints) const {
   CHECK(td);
   if (td->isView) {
@@ -5130,6 +5142,16 @@ std::vector<TableConstraint> Catalog::normalizeTableConstraintsForCreate(
     normalized_constraints.emplace_back(std::move(normalized_constraint));
   }
 
+  for (const auto& constraint : normalized_constraints) {
+    if (constraint.type == TableConstraintType::PrimaryKey) {
+      for (auto& cd : columns) {
+        if (constraint_uses_source_column(constraint, cd.columnName)) {
+          cd.columnType.set_notnull(true);
+        }
+      }
+    }
+  }
+
   for (auto& normalized_constraint : normalized_constraints) {
     if (normalized_constraint.type != TableConstraintType::ForeignKey) {
       continue;
@@ -5150,6 +5172,10 @@ std::vector<TableConstraint> Catalog::normalizeTableConstraintsForCreate(
     }
 
     reference.table_name = self_reference ? td->tableName : foreign_td->tableName;
+    if (!self_reference && table_is_temporary(foreign_td) && !table_is_temporary(td)) {
+      throw std::runtime_error("Persistent tables cannot reference temporary table " +
+                               reference.table_name + ".");
+    }
     reference.column_names =
         self_reference
             ? normalize_constraint_columns(td->tableName, columns, reference.column_names)

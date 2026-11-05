@@ -189,7 +189,7 @@ class Catalog final {
                                            const TableConstraint& constraint) const;
   std::vector<TableConstraint> normalizeTableConstraintsForCreate(
       const TableDescriptor* td,
-      const std::list<ColumnDescriptor>& columns,
+      std::list<ColumnDescriptor>& columns,
       const std::vector<TableConstraint>& constraints) const;
   void addTableConstraint(const TableDescriptor* td, const TableConstraint& constraint);
   void dropTableConstraint(const TableDescriptor* td, const std::string& constraint_name);
