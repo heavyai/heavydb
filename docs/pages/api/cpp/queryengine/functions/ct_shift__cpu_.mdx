@@ -1,0 +1,16 @@
+---
+title: ct_shift__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t ct_shift__cpu_(
+    TableFunctionManager &mgr,
+    const Column<GeoPoint> &points,
+    const double x,
+    const double y,
+    Column<GeoPoint> &shifted_points
+)
+```
+</CodeBlock>

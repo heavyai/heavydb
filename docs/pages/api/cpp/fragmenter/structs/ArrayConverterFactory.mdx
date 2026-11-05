@@ -1,0 +1,48 @@
+---
+title: ArrayConverterFactory
+description: ""
+---
+
+<CodeBlock id="ArrayConverterFactory" links={{"ArrayConverterFactory": "arrayconverterfactory"}}>
+```cpp showLineNumbers={false}
+template <typename ELEMENT_FACTORY>
+struct ArrayConverterFactory
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="ELEMENT_FACTORY" type="typename">
+</ParamField>
+
+---
+
+## Methods
+
+### create [#create]
+
+<CodeBlock links={{"ArrayConverterFactory": "arrayconverterfactory", "ConverterCreateParameter": "convertercreateparameter", "ArrayValueConverter": "arrayvalueconverter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ArrayValueConverter<typename ELEMENT_FACTORY::ConverterType>> ArrayConverterFactory<ELEMENT_FACTORY>::create(
+    ConverterCreateParameter param
+)
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"ArrayConverterFactory": "arrayconverterfactory", "ConverterCreateParameter": "convertercreateparameter", "TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<TargetValueConverter> ArrayConverterFactory<ELEMENT_FACTORY>::operator()(
+    ConverterCreateParameter param
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `element_factory_` | `ELEMENT_FACTORY` | |

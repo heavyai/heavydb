@@ -1,0 +1,61 @@
+---
+title: logger::ThreadLocalIds
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <logger/Logger.h>
+```
+
+---
+
+## Constructors
+
+### ThreadLocalIds [#threadlocalids]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ThreadLocalIds": "threadlocalids"}}>
+```cpp showLineNumbers={false}
+logger::ThreadLocalIds::ThreadLocalIds() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ThreadLocalIds": "threadlocalids"}}>
+```cpp showLineNumbers={false}
+logger::ThreadLocalIds::ThreadLocalIds(
+    RequestId const request_id,
+    ThreadId const thread_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### setNewThreadId [#setnewthreadid]
+
+<CodeBlock links={{"ThreadLocalIds": "threadlocalids", "LocalIdsScopeGuard": "../classes/localidsscopeguard"}}>
+```cpp showLineNumbers={false}
+LocalIdsScopeGuard logger::ThreadLocalIds::setNewThreadId() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `request_id_` | `RequestId` | |
+| `thread_id_` | `ThreadId` | |

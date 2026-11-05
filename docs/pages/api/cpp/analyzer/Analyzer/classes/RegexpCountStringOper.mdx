@@ -1,0 +1,441 @@
+---
+title: Analyzer::RegexpCountStringOper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::StringOper` (public)
+
+---
+
+## Constructors
+
+### RegexpCountStringOper [#regexpcountstringoper]
+
+<Tabs>
+<Tab title="Copy (with operand and regex pattern and start pos and regex params)">
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::RegexpCountStringOper::RegexpCountStringOper(
+    const std::shared_ptr<Analyzer::Expr> &operand,
+    const std::shared_ptr<Analyzer::Expr> &regex_pattern,
+    const std::shared_ptr<Analyzer::Expr> &start_pos,
+    const std::shared_ptr<Analyzer::Expr> &regex_params
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with operands)">
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::RegexpCountStringOper::RegexpCountStringOper(
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &operands
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with string oper)">
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+Analyzer::RegexpCountStringOper::RegexpCountStringOper(
+    const std::shared_ptr<Analyzer::StringOper> &string_oper
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::RegexpCountStringOper::deep_copy() const override
+```
+</CodeBlock>
+
+### getMinArgs [#getminargs]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::RegexpCountStringOper::getMinArgs() const override
+```
+</CodeBlock>
+
+### getExpectedTypeFamilies [#getexpectedtypefamilies]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<OperandTypeFamily> Analyzer::RegexpCountStringOper::getExpectedTypeFamilies() const override
+```
+</CodeBlock>
+
+### getArgNames [#getargnames]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> Analyzer::RegexpCountStringOper::getArgNames() const override
+```
+</CodeBlock>
+
+### get_kind [#getkind]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+SqlStringOpKind Analyzer::RegexpCountStringOper::get_kind() const
+```
+</CodeBlock>
+
+### getArity [#getarity]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::RegexpCountStringOper::getArity() const
+```
+</CodeBlock>
+
+### getLiteralsArity [#getliteralsarity]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::RegexpCountStringOper::getLiteralsArity() const
+```
+</CodeBlock>
+
+### getNonLiteralsArity [#getnonliteralsarity]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::RegexpCountStringOper::getNonLiteralsArity() const
+```
+</CodeBlock>
+
+### getArg [#getarg]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::RegexpCountStringOper::getArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getOwnArg [#getownarg]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::RegexpCountStringOper::getOwnArg(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### getOwnArgs [#getownargs]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> Analyzer::RegexpCountStringOper::getOwnArgs() const
+```
+</CodeBlock>
+
+### getChainedStringOpExprs [#getchainedstringopexprs]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> Analyzer::RegexpCountStringOper::getChainedStringOpExprs() const
+```
+</CodeBlock>
+
+### requiresPerRowTranslation [#requiresperrowtranslation]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::RegexpCountStringOper::requiresPerRowTranslation() const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RegexpCountStringOper::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "ColumnVar": "columnvar", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RegexpCountStringOper::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### hasNoneEncodedTextArg [#hasnoneencodedtextarg]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::RegexpCountStringOper::hasNoneEncodedTextArg() const
+```
+</CodeBlock>
+
+### hasSingleDictEncodedColInput [#hassingledictencodedcolinput]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::RegexpCountStringOper::hasSingleDictEncodedColInput() const
+```
+</CodeBlock>
+
+returns whether we have one and only one column involved in this [StringOper](stringoper) and all its descendents, and that that column is a dictionary-encoded text type
+
+**Returns:** std::vector&lt;SqlTypeInfo&gt;
+
+### getLiteralArgIndexes [#getliteralargindexes]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::vector<size_t> Analyzer::RegexpCountStringOper::getLiteralArgIndexes() const
+```
+</CodeBlock>
+
+### getLiteralArgs [#getliteralargs]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+LiteralArgMap Analyzer::RegexpCountStringOper::getLiteralArgs() const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::RegexpCountStringOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::RegexpCountStringOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "TargetEntry": "targetentry", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::RegexpCountStringOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RegexpCountStringOper::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::RegexpCountStringOper::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::RegexpCountStringOper::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RegexpCountStringOper::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::Expr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Expr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::Expr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "Expr": "expr", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"RegexpCountStringOper": "regexpcountstringoper", "StringOper": "stringoper"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `LiteralArgMap` | `std::map< size_t, std::pair< SQLTypes, Datum > >` |
+
+### OperandTypeFamily
+
+| Name | Value | Description |
+|---|---|---|
+| `STRING_FAMILY` | | |
+| `INT_FAMILY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

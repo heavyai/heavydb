@@ -1,0 +1,91 @@
+---
+title: Parser::StringLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Literal` (public)
+
+---
+
+## Constructors
+
+### StringLiteral [#stringliteral]
+
+<CodeBlock links={{"StringLiteral": "stringliteral"}}>
+```cpp showLineNumbers={false}
+Parser::StringLiteral::StringLiteral(
+    std::string *s
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_stringval [#getstringval]
+
+<CodeBlock links={{"StringLiteral": "stringliteral"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::StringLiteral::get_stringval() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"StringLiteral": "stringliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::StringLiteral::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"StringLiteral": "stringliteral"}}>
+```cpp showLineNumbers={false}
+std::string Parser::StringLiteral::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### analyzeValue [#analyzevalue]
+
+<CodeBlock links={{"StringLiteral": "stringliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::StringLiteral::analyzeValue(
+    const std::string &stringval,
+    const bool is_null
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `stringval_` | `std::unique_ptr< std::string >` | |

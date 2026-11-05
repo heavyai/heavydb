@@ -1,0 +1,32 @@
+---
+title: File_Namespace::appendPage
+description: "Appends a page from buf to the file."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+size_t File_Namespace::appendPage(
+    FILE *f,
+    const size_t pageSize,
+    int8_t *buf
+)
+```
+</CodeBlock>
+
+Appends a page from buf to the file.
+
+**Returns:** size_t The number of bytes appended (should be equal to pageSize).
+
+**Parameters**
+
+<ParamField path="f" type="FILE *">
+Pointer to the FILE.
+</ParamField>
+
+<ParamField path="pageSize" type="const size_t">
+The logical page size of the file.
+</ParamField>
+
+<ParamField path="buf" type="int8_t *">
+The source buffer from where data is being read.
+</ParamField>

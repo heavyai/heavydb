@@ -1,0 +1,17 @@
+---
+title: tf_export_ov_buildings_texture__cpu_template
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename TA>
+NEVER_INLINE HOST int32_t tf_export_ov_buildings_texture__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &rowid,
+    const ColumnList<TA> &attrs,
+    Column<int32_t> &num_patches_xy,
+    Column<Array<int8_t>> &png_bytes
+)
+```
+</CodeBlock>

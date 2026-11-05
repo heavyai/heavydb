@@ -1,0 +1,104 @@
+---
+title: Parser::ExportQueryStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### ExportQueryStmt [#exportquerystmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ExportQueryStmt": "exportquerystmt", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::ExportQueryStmt::ExportQueryStmt(
+    std::string *q,
+    std::string *p,
+    std::list<NameValueAssign *> *o
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"ExportQueryStmt": "exportquerystmt"}}>
+```cpp showLineNumbers={false}
+Parser::ExportQueryStmt::ExportQueryStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"ExportQueryStmt": "exportquerystmt"}}>
+```cpp showLineNumbers={false}
+void Parser::ExportQueryStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### get_select_stmt [#getselectstmt]
+
+<CodeBlock links={{"ExportQueryStmt": "exportquerystmt"}}>
+```cpp showLineNumbers={false}
+const std::string Parser::ExportQueryStmt::get_select_stmt() const
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"ExportQueryStmt": "exportquerystmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::ExportQueryStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+### parseOptions [#parseoptions]
+
+<CodeBlock links={{"ExportQueryStmt": "exportquerystmt"}}>
+```cpp showLineNumbers={false}
+void Parser::ExportQueryStmt::parseOptions(
+    import_export::CopyParams &copy_params,
+    import_export::QueryExporter::FileType &file_type,
+    std::string &layer_name,
+    import_export::QueryExporter::FileCompression &file_compression,
+    import_export::QueryExporter::ArrayNullHandling &array_null_handling
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `insert_connector_` | `std::unique_ptr< QueryConnector >` | |
+| `select_stmt_` | `std::unique_ptr< std::string >` | |
+| `file_path_` | `std::unique_ptr< std::string >` | |
+| `options_` | `std::list< std::unique_ptr< NameValueAssign > >` | |

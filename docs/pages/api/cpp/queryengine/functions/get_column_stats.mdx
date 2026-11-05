@@ -1,0 +1,225 @@
+---
+title: get_column_stats
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST ColumnStats<T> get_column_stats(
+    const T *data,
+    const int64_t num_rows,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<int8_t> get_column_stats(
+    const int8_t *data,
+    const int64_t num_rows,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<int16_t> get_column_stats(
+    const int16_t *data,
+    const int64_t num_rows,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock links={{"StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<int32_t> get_column_stats(
+    const int32_t *data,
+    const int64_t num_rows,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock links={{"StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<int64_t> get_column_stats(
+    const int64_t *data,
+    const int64_t num_rows,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (6)">
+
+<CodeBlock links={{"StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<float> get_column_stats(
+    const float *data,
+    const int64_t num_rows,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (7)">
+
+<CodeBlock links={{"StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<double> get_column_stats(
+    const double *data,
+    const int64_t num_rows,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"Column": "../structs/column", "StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST ColumnStats<T> get_column_stats(
+    const Column<T> &col,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"Column": "../structs/column", "StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<int8_t> get_column_stats(
+    const Column<int8_t> &col,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"Column": "../structs/column", "StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<int16_t> get_column_stats(
+    const Column<int16_t> &col,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock links={{"Column": "../structs/column", "StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<int32_t> get_column_stats(
+    const Column<int32_t> &col,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock links={{"Column": "../structs/column", "StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<int64_t> get_column_stats(
+    const Column<int64_t> &col,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<CodeBlock links={{"Column": "../structs/column", "StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<float> get_column_stats(
+    const Column<float> &col,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<CodeBlock links={{"Column": "../structs/column", "StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST ColumnStats<double> get_column_stats(
+    const Column<double> &col,
+    const StatsRequestPredicate &predicate
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<CodeBlock links={{"ColumnList": "../structs/columnlist", "StatsRequest": "../structs/statsrequest", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template <typename TA>
+ColumnStats<TA> get_column_stats(
+    const ColumnList<TA> &attrs,
+    StatsRequest &stats_request,
+    std::unordered_map<std::string, ColumnStats<TA>> &stats_map
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (8)">
+
+<CodeBlock links={{"StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST ColumnStats<T> get_column_stats(
+    const T *data,
+    const int64_t num_rows,
+    const StatsRequestPredicate &predicate = StatsRequestPredicate()
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 17">
+
+<CodeBlock links={{"Column": "../structs/column", "StatsRequestPredicate": "../structs/statsrequestpredicate", "ColumnStats": "../structs/columnstats"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST ColumnStats<T> get_column_stats(
+    const Column<T> &col,
+    const StatsRequestPredicate &predicate = StatsRequestPredicate()
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

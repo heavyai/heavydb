@@ -1,0 +1,118 @@
+---
+title: For
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### For [#for]
+
+<CodeBlock links={{"For": "for", "Value": "value"}}>
+```cpp showLineNumbers={false}
+For::For(
+    const Value *start,
+    const Value *end,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### body [#body]
+
+<CodeBlock links={{"For": "for", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::unique_ptr<Instruction>> & For::body() const
+```
+</CodeBlock>
+
+### start [#start]
+
+<CodeBlock links={{"For": "for", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * For::start() const
+```
+</CodeBlock>
+
+### end [#end]
+
+<CodeBlock links={{"For": "for", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * For::end() const
+```
+</CodeBlock>
+
+### iter [#iter]
+
+<CodeBlock links={{"For": "for", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * For::iter() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"For": "for", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void For::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### add [#add]
+
+<CodeBlock links={{"For": "for", "Value": "value"}}>
+```cpp showLineNumbers={false}
+template <typename Tp, typename... Args>
+Value * For::add(
+    Args &&... args
+)
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"For": "for", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"For": "for", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"For": "for", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `body_` | `std::vector< std::unique_ptr< Instruction > >` | |
+| `start_` | `const Value *` | |
+| `end_` | `const Value *` | |
+| `iter_` | `const Value` | |

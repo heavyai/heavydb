@@ -1,0 +1,21 @@
+---
+title: result_set::get_group_value_reduction
+description: ""
+---
+
+<CodeBlock links={{"QueryMemoryDescriptor": "../../classes/querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+GroupValueInfo result_set::get_group_value_reduction(
+    int64_t *groups_buffer,
+    const uint32_t groups_buffer_entry_count,
+    const int64_t *key,
+    const uint32_t key_count,
+    const size_t key_width,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const int64_t *that_buff_i64,
+    const size_t that_entry_idx,
+    const size_t that_entry_count,
+    const uint32_t row_size_quad
+)
+```
+</CodeBlock>

@@ -1,0 +1,94 @@
+---
+title: DictionaryCache
+description: ""
+---
+
+<CodeBlock id="DictionaryCache" links={{"DictionaryCache": "dictionarycache"}}>
+```cpp showLineNumbers={false}
+template <typename key_t, typename value_t>
+class DictionaryCache
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <DictionaryCache.hpp>
+```
+
+**Template parameters**
+
+<ParamField path="key_t" type="typename">
+</ParamField>
+
+<ParamField path="value_t" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### DictionaryCache [#dictionarycache]
+
+<CodeBlock links={{"DictionaryCache": "dictionarycache"}}>
+```cpp showLineNumbers={false}
+DictionaryCache<key_t, value_t>::DictionaryCache()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### put [#put]
+
+<CodeBlock links={{"DictionaryCache": "dictionarycache"}}>
+```cpp showLineNumbers={false}
+void DictionaryCache<key_t, value_t>::put(
+    const key_t &key,
+    const std::shared_ptr<value_t> value
+)
+```
+</CodeBlock>
+
+### get [#get]
+
+<CodeBlock links={{"DictionaryCache": "dictionarycache"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<value_t> DictionaryCache<key_t, value_t>::get(
+    const key_t &key
+)
+```
+</CodeBlock>
+
+### remove [#remove]
+
+<CodeBlock links={{"DictionaryCache": "dictionarycache"}}>
+```cpp showLineNumbers={false}
+void DictionaryCache<key_t, value_t>::remove(
+    const key_t &key
+)
+```
+</CodeBlock>
+
+### is_empty [#isempty]
+
+<CodeBlock links={{"DictionaryCache": "dictionarycache"}}>
+```cpp showLineNumbers={false}
+bool DictionaryCache<key_t, value_t>::is_empty()
+```
+</CodeBlock>
+
+### invalidateInvertedIndex [#invalidateinvertedindex]
+
+<CodeBlock links={{"DictionaryCache": "dictionarycache"}}>
+```cpp showLineNumbers={false}
+void DictionaryCache<key_t, value_t>::invalidateInvertedIndex() noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cache_items` | `std::unordered_map< key_t, std::shared_ptr< value_t > >` | |

@@ -1,0 +1,194 @@
+---
+title: RexAgg
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `Rex` (public)
+
+---
+
+## Constructors
+
+### RexAgg [#rexagg]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+RexAgg::RexAgg()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+RexAgg::RexAgg(
+    const SQLAgg agg,
+    const bool distinct,
+    const SQLTypeInfo &type,
+    const std::vector<size_t> &operands
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexAgg": "rexagg", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexAgg::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexAgg": "rexagg", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexAgg::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexAgg": "rexagg", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexAgg::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### getKind [#getkind]
+
+<CodeBlock links={{"RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+SQLAgg RexAgg::getKind() const
+```
+</CodeBlock>
+
+### isDistinct [#isdistinct]
+
+<CodeBlock links={{"RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+bool RexAgg::isDistinct() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+size_t RexAgg::size() const
+```
+</CodeBlock>
+
+### getOperand [#getoperand]
+
+<CodeBlock links={{"RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+size_t RexAgg::getOperand(
+    size_t idx
+) const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & RexAgg::getType() const
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RexAgg> RexAgg::deepCopy() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexAgg": "rexagg", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+virtual size_t RexAgg::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexAgg": "rexagg", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+size_t RexAgg::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexAgg": "rexagg", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexAgg": "rexagg", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexAgg": "rexagg", "Rex": "rex"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+size_t RexAgg::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `agg_` | `SQLAgg` | |
+| `distinct_` | `bool` | |
+| `type_` | `SQLTypeInfo` | |
+| `operands_` | `std::vector< size_t >` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

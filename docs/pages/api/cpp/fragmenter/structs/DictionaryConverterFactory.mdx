@@ -1,0 +1,50 @@
+---
+title: DictionaryConverterFactory
+description: ""
+---
+
+<CodeBlock id="DictionaryConverterFactory" links={{"DictionaryConverterFactory": "dictionaryconverterfactory"}}>
+```cpp showLineNumbers={false}
+template <typename TARGET_TYPE>
+struct DictionaryConverterFactory
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="TARGET_TYPE" type="typename">
+</ParamField>
+
+---
+
+## Methods
+
+### create [#create]
+
+<CodeBlock links={{"DictionaryConverterFactory": "dictionaryconverterfactory", "ConverterCreateParameter": "convertercreateparameter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ConverterType> DictionaryConverterFactory<TARGET_TYPE>::create(
+    ConverterCreateParameter param
+)
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"DictionaryConverterFactory": "dictionaryconverterfactory", "ConverterCreateParameter": "convertercreateparameter", "TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<TargetValueConverter> DictionaryConverterFactory<TARGET_TYPE>::operator()(
+    ConverterCreateParameter param
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ConverterType` | `DictionaryValueConverter< TARGET_TYPE >` |

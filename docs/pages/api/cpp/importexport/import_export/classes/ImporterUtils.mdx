@@ -1,0 +1,33 @@
+---
+title: import_export::ImporterUtils
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/Importer.h>
+```
+
+---
+
+## Static methods
+
+### composeNullArray [#composenullarray]
+
+<CodeBlock links={{"ImporterUtils": "importerutils"}}>
+```cpp showLineNumbers={false}
+ArrayDatum import_export::ImporterUtils::composeNullArray(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### composeNullPointCoords [#composenullpointcoords]
+
+<CodeBlock links={{"ImporterUtils": "importerutils"}}>
+```cpp showLineNumbers={false}
+ArrayDatum import_export::ImporterUtils::composeNullPointCoords(
+    const SQLTypeInfo &coords_ti,
+    const SQLTypeInfo &geo_ti
+)
+```
+</CodeBlock>

@@ -1,0 +1,453 @@
+---
+title: JoinCoveredQualVisitor
+description: "JoinCoveredQualVisitor returns true if the visited qual is true if and only if a corresponding equijoin qual is true."
+---
+
+`JoinCoveredQualVisitor` returns true if the visited qual is true if and only if a corresponding equijoin qual is true.
+
+During the pre-filtered count we can elide the visited qual decreasing query run time while upper bounding the number of rows passing the filter. Currently only used for expressions of the form `a OVERLAPS b AND Expr<a, b>`. Strips `Expr<a,b>` if the expression has been pre-determined to be expensive to compute twice.
+
+**Inherits from:** `ScalarExprVisitor< bool >` (public)
+
+---
+
+## Constructors
+
+### JoinCoveredQualVisitor [#joincoveredqualvisitor]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor"}}>
+```cpp showLineNumbers={false}
+JoinCoveredQualVisitor::JoinCoveredQualVisitor(
+    const JoinQualsPerNestingLevel &join_quals
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor"}}>
+```cpp showLineNumbers={false}
+bool JoinCoveredQualVisitor::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const override
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor"}}>
+```cpp showLineNumbers={false}
+bool JoinCoveredQualVisitor::defaultResult() const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+bool ScalarExprVisitor<bool>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitColumnVar(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *
+) const
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitConstant(
+    const Analyzer::Constant *
+) const
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitUOper(
+    const Analyzer::UOper *uoper
+) const
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual bool ScalarExprVisitor<bool>::aggregateResult(
+    const bool &aggregate,
+    const bool &next_result
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"JoinCoveredQualVisitor": "joincoveredqualvisitor", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<bool>::visitBegin() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `join_qual_pairs` | `std::vector< std::pair< const Analyzer::Expr *, const Analyzer::Expr * > >` | |

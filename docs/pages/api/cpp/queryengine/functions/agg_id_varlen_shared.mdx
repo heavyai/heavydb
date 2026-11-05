@@ -1,0 +1,35 @@
+---
+title: agg_id_varlen_shared
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ int8_t * agg_id_varlen_shared(
+    int8_t *varlen_buffer,
+    const int64_t offset,
+    const int8_t *value,
+    const int64_t size_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+NEVER_INLINE int8_t * agg_id_varlen_shared(
+    int8_t *varlen_buffer,
+    const int64_t offset,
+    const int8_t *value,
+    const int64_t size_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

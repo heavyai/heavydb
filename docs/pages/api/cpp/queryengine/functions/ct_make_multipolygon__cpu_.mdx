@@ -1,0 +1,14 @@
+---
+title: ct_make_multipolygon__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t ct_make_multipolygon__cpu_(
+    TableFunctionManager &mgr,
+    const Column<GeoPolygon> &polygons,
+    Column<GeoMultiPolygon> &mpolygons
+)
+```
+</CodeBlock>

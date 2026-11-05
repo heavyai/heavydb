@@ -1,0 +1,13 @@
+---
+title: time_wrap
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename Fn, Fn fn, typename... Args>
+std::invoke_result<Fn, Args...>::type time_wrap(
+    Args... args
+)
+```
+</CodeBlock>

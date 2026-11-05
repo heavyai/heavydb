@@ -1,0 +1,18 @@
+---
+title: kafka_insert
+description: ""
+---
+
+<CodeBlock links={{"RowToColumnLoader": "../classes/rowtocolumnloader", "CopyParams": "../importexport/structs/copyparams"}}>
+```cpp showLineNumbers={false}
+void kafka_insert(
+    RowToColumnLoader &row_loader,
+    const std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>> &transformations,
+    const import_export::CopyParams &copy_params,
+    const bool remove_quotes,
+    std::string group_id,
+    std::string topic,
+    std::string brokers
+)
+```
+</CodeBlock>

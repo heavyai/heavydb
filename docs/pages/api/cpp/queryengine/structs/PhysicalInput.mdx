@@ -1,0 +1,40 @@
+---
+title: PhysicalInput
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryPhysicalInputsCollector.h>
+```
+
+---
+
+## Methods
+
+### hash [#hash]
+
+<CodeBlock links={{"PhysicalInput": "physicalinput"}}>
+```cpp showLineNumbers={false}
+size_t PhysicalInput::hash() const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"PhysicalInput": "physicalinput"}}>
+```cpp showLineNumbers={false}
+bool PhysicalInput::operator==(
+    const PhysicalInput &that
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `col_id` | `int32_t` | |
+| `table_id` | `int32_t` | |
+| `db_id` | `int32_t` | |

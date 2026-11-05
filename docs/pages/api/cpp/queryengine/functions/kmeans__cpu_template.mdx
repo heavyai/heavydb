@@ -1,0 +1,21 @@
+---
+title: kmeans__cpu_template
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename K, typename T>
+NEVER_INLINE HOST int32_t kmeans__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<K> &input_ids,
+    const ColumnList<T> &input_features,
+    const int num_clusters,
+    const int num_iterations,
+    const TextEncodingNone &init_type_str,
+    const TextEncodingNone &preferred_ml_framework_str,
+    Column<K> &output_ids,
+    Column<int32_t> &output_clusters
+)
+```
+</CodeBlock>

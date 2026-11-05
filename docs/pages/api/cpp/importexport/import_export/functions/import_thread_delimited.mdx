@@ -1,0 +1,20 @@
+---
+title: import_export::import_thread_delimited
+description: ""
+---
+
+<CodeBlock links={{"Importer": "../classes/importer", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+static ImportStatus import_export::import_thread_delimited(
+    int thread_id,
+    Importer *importer,
+    std::unique_ptr<char[]> scratch_buffer,
+    size_t begin_pos,
+    size_t end_pos,
+    size_t total_size,
+    size_t first_row_index_this_buffer,
+    const Catalog_Namespace::SessionInfo *session_info,
+    Executor *executor
+)
+```
+</CodeBlock>

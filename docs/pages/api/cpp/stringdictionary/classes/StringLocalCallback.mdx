@@ -1,0 +1,63 @@
+---
+title: StringLocalCallback
+description: ""
+---
+
+**Inherits from:** `StringDictionary::StringCallback` (public)
+
+---
+
+## Constructors
+
+### StringLocalCallback [#stringlocalcallback]
+
+<CodeBlock links={{"StringLocalCallback": "stringlocalcallback", "StringDictionaryProxy": "stringdictionaryproxy"}}>
+```cpp showLineNumbers={false}
+StringLocalCallback::StringLocalCallback(
+    StringDictionaryProxy *sdp,
+    StringDictionaryProxy::IdMap &id_map
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"StringLocalCallback": "stringlocalcallback"}}>
+```cpp showLineNumbers={false}
+void StringLocalCallback::operator()(
+    std::string const &str,
+    int32_t const string_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"StringLocalCallback": "stringlocalcallback"}}>
+```cpp showLineNumbers={false}
+void StringLocalCallback::operator()(
+    std::string_view const sv,
+    int32_t const old_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `sdp_` | `StringDictionaryProxy *` | |
+| `id_map_` | `StringDictionaryProxy::IdMap &` | |

@@ -1,0 +1,54 @@
+---
+title: Parser::ExprPair
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public)
+
+---
+
+## Constructors
+
+### ExprPair [#exprpair]
+
+<CodeBlock links={{"ExprPair": "exprpair", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::ExprPair::ExprPair(
+    Expr *e1,
+    Expr *e2
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_expr1 [#getexpr1]
+
+<CodeBlock links={{"ExprPair": "exprpair", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::ExprPair::get_expr1() const
+```
+</CodeBlock>
+
+### get_expr2 [#getexpr2]
+
+<CodeBlock links={{"ExprPair": "exprpair", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::ExprPair::get_expr2() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `expr1_` | `std::unique_ptr< Expr >` | |
+| `expr2_` | `std::unique_ptr< Expr >` | |

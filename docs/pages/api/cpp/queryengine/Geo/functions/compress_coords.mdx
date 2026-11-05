@@ -1,0 +1,53 @@
+---
+title: Geo::compress_coords
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<int32_t> Geo::compress_coords(
+    const int8_t *data,
+    const int64_t size,
+    const bool is_geoint
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<int32_t> Geo::compress_coords(
+    const std::vector<double> &coords
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<std::vector<int32_t>> Geo::compress_coords(
+    const std::vector<std::vector<double>> &coords
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<std::vector<std::vector<int32_t>>> Geo::compress_coords(
+    const std::vector<std::vector<std::vector<double>>> &coords
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

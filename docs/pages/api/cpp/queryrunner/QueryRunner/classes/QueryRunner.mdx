@@ -1,0 +1,597 @@
+---
+title: QueryRunner::QueryRunner
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryRunner/QueryRunner.h>
+```
+
+---
+
+## Constructors
+
+### QueryRunner [#queryrunner]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+QueryRunner::QueryRunner::QueryRunner(
+    std::unique_ptr<Catalog_Namespace::SessionInfo> session
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+QueryRunner::QueryRunner::QueryRunner(
+    const char *db_path,
+    const std::string &user,
+    const std::string &pass,
+    const std::string &db_name,
+    const std::string &udf_filename,
+    bool uses_gpus,
+    const size_t max_gpu_mem,
+    const int reserved_gpu_mem,
+    const bool create_user,
+    const bool create_db,
+    const File_Namespace::DiskCacheConfig *disk_cache_config = nullptr
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~QueryRunner
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+virtual QueryRunner::QueryRunner::~QueryRunner() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getSession [#getsession]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog_Namespace::SessionInfo> QueryRunner::QueryRunner::getSession() const
+```
+</CodeBlock>
+
+### addSessionId [#addsessionid]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::addSessionId(
+    const std::string &session_id,
+    ExecutorDeviceType device_type = ExecutorDeviceType::GPU
+)
+```
+</CodeBlock>
+
+### clearSessionId [#clearsessionid]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::clearSessionId()
+```
+</CodeBlock>
+
+### getCatalog [#getcatalog]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog_Namespace::Catalog> QueryRunner::QueryRunner::getCatalog() const
+```
+</CodeBlock>
+
+### getCalcite [#getcalcite]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Calcite> QueryRunner::QueryRunner::getCalcite() const
+```
+</CodeBlock>
+
+### getExecutor [#getexecutor]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Executor> QueryRunner::QueryRunner::getExecutor() const
+```
+</CodeBlock>
+
+### getUserMetadata [#getusermetadata]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::UserMetadata & QueryRunner::QueryRunner::getUserMetadata() const
+```
+</CodeBlock>
+
+### gpusPresent [#gpuspresent]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+bool QueryRunner::QueryRunner::gpusPresent() const
+```
+</CodeBlock>
+
+### clearGpuMemory [#cleargpumemory]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::clearGpuMemory() const
+```
+</CodeBlock>
+
+### clearCpuMemory [#clearcpumemory]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::clearCpuMemory() const
+```
+</CodeBlock>
+
+### getMemoryInfo [#getmemoryinfo]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::vector<Buffer_Namespace::MemoryInfo> QueryRunner::QueryRunner::getMemoryInfo(
+    const Data_Namespace::MemoryLevel memory_level
+) const
+```
+</CodeBlock>
+
+### getBufferPoolStats [#getbufferpoolstats]
+
+<CodeBlock links={{"QueryRunner": "queryrunner", "BufferPoolStats": "../structs/bufferpoolstats"}}>
+```cpp showLineNumbers={false}
+BufferPoolStats QueryRunner::QueryRunner::getBufferPoolStats(
+    const Data_Namespace::MemoryLevel memory_level,
+    const bool current_db_only
+) const
+```
+</CodeBlock>
+
+### createStatement [#createstatement]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<Parser::Stmt> QueryRunner::QueryRunner::createStatement(
+    const std::string &
+)
+```
+</CodeBlock>
+
+### runDDLStatement [#runddlstatement]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::runDDLStatement(
+    const std::string &
+)
+```
+</CodeBlock>
+
+### validateDDLStatement [#validateddlstatement]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::validateDDLStatement(
+    const std::string &
+)
+```
+</CodeBlock>
+
+### runSQL [#runsql]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ResultSet> QueryRunner::QueryRunner::runSQL(
+    const std::string &query_str,
+    CompilationOptions co,
+    ExecutionOptions eo
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ResultSet> QueryRunner::QueryRunner::runSQL(
+    const std::string &query_str,
+    const ExecutorDeviceType device_type,
+    const bool hoist_literals = true,
+    const bool allow_loop_joins = true
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### runSelectQuery [#runselectquery]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ExecutionResult> QueryRunner::QueryRunner::runSelectQuery(
+    const std::string &query_str,
+    CompilationOptions co,
+    ExecutionOptions eo
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ExecutionResult> QueryRunner::QueryRunner::runSelectQuery(
+    const std::string &query_str,
+    const ExecutorDeviceType device_type,
+    const bool hoist_literals,
+    const bool allow_loop_joins,
+    const bool just_explain = false
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### runSQLThrowingException [#runsqlthrowingexception]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+bool QueryRunner::QueryRunner::runSQLThrowingException(
+    const std::string &query_str,
+    const std::string &expected_exception_msg,
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+### runSQLWithAllowingInterrupt [#runsqlwithallowinginterrupt]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ResultSet> QueryRunner::QueryRunner::runSQLWithAllowingInterrupt(
+    const std::string &query_str,
+    const std::string &session_id,
+    const ExecutorDeviceType device_type,
+    const double running_query_check_freq = 0.9,
+    const unsigned pending_query_check_freq = 1000
+)
+```
+</CodeBlock>
+
+### runMultipleStatements [#runmultiplestatements]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<ResultSet>> QueryRunner::QueryRunner::runMultipleStatements(
+    const std::string &,
+    const ExecutorDeviceType
+)
+```
+</CodeBlock>
+
+### runImport [#runimport]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::runImport(
+    Parser::CopyTableStmt *import_stmt
+)
+```
+</CodeBlock>
+
+### getLoader [#getloader]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<import_export::Loader> QueryRunner::QueryRunner::getLoader(
+    const TableDescriptor *td
+) const
+```
+</CodeBlock>
+
+### getParsedQueryHint [#getparsedqueryhint]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+RegisteredQueryHint QueryRunner::QueryRunner::getParsedQueryHint(
+    const std::string &
+)
+```
+</CodeBlock>
+
+### getParsedQueryHints [#getparsedqueryhints]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::optional<std::unordered_map<const RelAlgNode *, std::unordered_map<unsigned, RegisteredQueryHint>>> QueryRunner::QueryRunner::getParsedQueryHints(
+    const std::string &query_str
+)
+```
+</CodeBlock>
+
+### getRootNodeFromParsedQuery [#getrootnodefromparsedquery]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> QueryRunner::QueryRunner::getRootNodeFromParsedQuery(
+    const std::string &query_str
+)
+```
+</CodeBlock>
+
+### getParsedGlobalQueryHints [#getparsedglobalqueryhints]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::optional<RegisteredQueryHint> QueryRunner::QueryRunner::getParsedGlobalQueryHints(
+    const std::string &query_str
+)
+```
+</CodeBlock>
+
+### getRaExecutionSequence [#getraexecutionsequence]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+RaExecutionSequence QueryRunner::QueryRunner::getRaExecutionSequence(
+    const std::string &query_str
+)
+```
+</CodeBlock>
+
+### getCalcitePlan [#getcalciteplan]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ResultSet> QueryRunner::QueryRunner::getCalcitePlan(
+    const std::string &query_str,
+    bool enable_watchdog,
+    bool is_explain_as_json_str,
+    bool is_explain_detailed
+) const
+```
+</CodeBlock>
+
+### getCachedHashtableWithoutCacheKey [#getcachedhashtablewithoutcachekey]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::tuple<QueryPlanHash, std::shared_ptr<HashTable>, std::optional<HashtableCacheMetaInfo>> QueryRunner::QueryRunner::getCachedHashtableWithoutCacheKey(
+    std::set<size_t> &visited,
+    CacheItemType hash_table_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### getCacheItemMetric [#getcacheitemmetric]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CacheItemMetric> QueryRunner::QueryRunner::getCacheItemMetric(
+    QueryPlanHash cache_key,
+    CacheItemType hash_table_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### getNumberOfCachedItem [#getnumberofcacheditem]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+size_t QueryRunner::QueryRunner::getNumberOfCachedItem(
+    CacheItemStatus item_status,
+    CacheItemType hash_table_type,
+    bool with_bbox_intersect_tuning_param = false
+) const
+```
+</CodeBlock>
+
+### resizeDispatchQueue [#resizedispatchqueue]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::resizeDispatchQueue(
+    const size_t num_executors
+)
+```
+</CodeBlock>
+
+### getQueryInfoForDataRecyclerTest [#getqueryinfofordatarecyclertest]
+
+<CodeBlock links={{"QueryRunner": "queryrunner", "QueryPlanDagInfo": "../structs/queryplandaginfo"}}>
+```cpp showLineNumbers={false}
+QueryPlanDagInfo QueryRunner::QueryRunner::getQueryInfoForDataRecyclerTest(
+    const std::string &
+)
+```
+</CodeBlock>
+
+### getRelAlgTranslator [#getrelalgtranslator]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgTranslator> QueryRunner::QueryRunner::getRelAlgTranslator(
+    const std::string &,
+    Executor *
+)
+```
+</CodeBlock>
+
+### extractQueryPlanDag [#extractqueryplandag]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+ExtractedQueryPlanDag QueryRunner::QueryRunner::extractQueryPlanDag(
+    const std::string &
+)
+```
+</CodeBlock>
+
+### getRelAlgDag [#getrelalgdag]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RelAlgDag> QueryRunner::QueryRunner::getRelAlgDag(
+    const std::string &
+)
+```
+</CodeBlock>
+
+### setExplainType [#setexplaintype]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::setExplainType(
+    const ExecutorExplainType explain_type
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### init [#init]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+QueryRunner * QueryRunner::QueryRunner::init(
+    const char *db_path,
+    const std::string &udf_filename = "",
+    const size_t max_gpu_mem = 0,
+    const int reserved_gpu_mem = 256<< 20
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+QueryRunner * QueryRunner::QueryRunner::init(
+    const File_Namespace::DiskCacheConfig *disk_cache_config,
+    const char *db_path
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+QueryRunner * QueryRunner::QueryRunner::init(
+    const char *db_path,
+    const std::string &user,
+    const std::string &pass,
+    const std::string &db_name,
+    const std::string &udf_filename = "",
+    bool uses_gpus = true,
+    const size_t max_gpu_mem = 0,
+    const int reserved_gpu_mem = 256<< 20, const bool create_user = false, const bool create_db = false, const File_Namespace::DiskCacheConfig *config = nullptr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+static QueryRunner * QueryRunner::QueryRunner::init(
+    std::unique_ptr<Catalog_Namespace::SessionInfo> &session
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get [#get]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+static QueryRunner * QueryRunner::QueryRunner::get()
+```
+</CodeBlock>
+
+### reset [#reset]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+void QueryRunner::QueryRunner::reset()
+```
+</CodeBlock>
+
+### defaultExecutionOptionsForRunSQL [#defaultexecutionoptionsforrunsql]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+ExecutionOptions QueryRunner::QueryRunner::defaultExecutionOptionsForRunSQL(
+    bool allow_loop_joins = true,
+    bool just_explain = false
+)
+```
+</CodeBlock>
+
+### create_query_state [#createquerystate]
+
+<CodeBlock links={{"QueryRunner": "queryrunner"}}>
+```cpp showLineNumbers={false}
+template <typename... Ts>
+static std::shared_ptr<query_state::QueryState> QueryRunner::QueryRunner::create_query_state(
+    Ts &&... args
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_states_` <Badge intent="note" minimal>static</Badge> | `query_state::QueryStates` | |
+| `qr_instance_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< QueryRunner >` | |
+| `explain_type_` | `ExecutorExplainType` | |
+| `db_metadata_` | `Catalog_Namespace::DBMetadata` | |
+| `session_info_` | `std::shared_ptr< Catalog_Namespace::SessionInfo >` | |
+| `dispatch_queue_` | `std::unique_ptr< QueryDispatchQueue >` | |
+| `query_engine_` | `std::shared_ptr< QueryEngine >` | |

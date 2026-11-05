@@ -1,0 +1,87 @@
+---
+title: logger::DurationTree
+description: ""
+---
+
+---
+
+## Constructors
+
+### DurationTree [#durationtree]
+
+<CodeBlock links={{"DurationTree": "durationtree"}}>
+```cpp showLineNumbers={false}
+logger::DurationTree::DurationTree(
+    ThreadId thread_id,
+    int start_depth
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### pushDurationTree [#pushdurationtree]
+
+<CodeBlock links={{"DurationTree": "durationtree"}}>
+```cpp showLineNumbers={false}
+void logger::DurationTree::pushDurationTree(
+    DurationTree &duration_tree
+)
+```
+</CodeBlock>
+
+### rootDuration [#rootduration]
+
+<CodeBlock links={{"DurationTree": "durationtree", "Duration": "duration"}}>
+```cpp showLineNumbers={false}
+const Duration & logger::DurationTree::rootDuration() const
+```
+</CodeBlock>
+
+### currentDepth [#currentdepth]
+
+<CodeBlock links={{"DurationTree": "durationtree"}}>
+```cpp showLineNumbers={false}
+int logger::DurationTree::currentDepth() const
+```
+</CodeBlock>
+
+### decrementDepth [#decrementdepth]
+
+<CodeBlock links={{"DurationTree": "durationtree"}}>
+```cpp showLineNumbers={false}
+void logger::DurationTree::decrementDepth()
+```
+</CodeBlock>
+
+### durations [#durations]
+
+<CodeBlock links={{"DurationTree": "durationtree"}}>
+```cpp showLineNumbers={false}
+DurationTreeNodes const  & logger::DurationTree::durations() const
+```
+</CodeBlock>
+
+### newDuration [#newduration]
+
+<CodeBlock links={{"DurationTree": "durationtree", "DebugTimerParams": "../structs/debugtimerparams", "Duration": "duration"}}>
+```cpp showLineNumbers={false}
+Duration * logger::DurationTree::newDuration(
+    DebugTimerParams const debug_timer_params
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `durations_` | `DurationTreeNodes` | |
+| `current_depth_` | `int` | |
+| `depth_` | `int const` | |
+| `start_` | `Clock::time_point const` | |
+| `thread_id_` | `ThreadId const` | |

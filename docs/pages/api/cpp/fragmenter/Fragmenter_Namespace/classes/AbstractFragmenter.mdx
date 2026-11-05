@@ -1,0 +1,356 @@
+---
+title: Fragmenter_Namespace::AbstractFragmenter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Fragmenter_Namespace/AbstractFragmenter.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~AbstractFragmenter
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual Fragmenter_Namespace::AbstractFragmenter::~AbstractFragmenter()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getNumFragments [#getnumfragments]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual size_t Fragmenter_Namespace::AbstractFragmenter::getNumFragments()
+```
+</CodeBlock>
+
+Should get the partitions(fragments) where at least one tuple could satisfy the (optional) provided predicate, given any statistics on data distribution the partitioner keeps.
+
+May also prune the predicate.
+
+returns the number of fragments in a table
+
+### getFragmentsForQuery [#getfragmentsforquery]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter", "TableInfo": "tableinfo"}}>
+```cpp showLineNumbers={false}
+virtual TableInfo Fragmenter_Namespace::AbstractFragmenter::getFragmentsForQuery()
+```
+</CodeBlock>
+
+Get all fragments for the current table.
+
+### insertData [#insertdata]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter", "InsertData": "../structs/insertdata"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::insertData(
+    InsertData &insert_data_struct
+)
+```
+</CodeBlock>
+
+Given data wrapped in an [InsertData](../structs/insertdata) struct, inserts it into the correct partitions with locks and checkpoints.
+
+### insertChunks [#insertchunks]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter", "InsertChunks": "../structs/insertchunks"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::insertChunks(
+    const InsertChunks &insert_chunk
+)
+```
+</CodeBlock>
+
+Insert chunks into minimal number of fragments.
+
+**Parameters**
+
+<ParamField path="insert_chunk" type="const InsertChunks &">
+- The chunks to insert
+</ParamField>
+
+### insertDataNoCheckpoint [#insertdatanocheckpoint]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter", "InsertData": "../structs/insertdata"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::insertDataNoCheckpoint(
+    InsertData &insert_data_struct
+)
+```
+</CodeBlock>
+
+Given data wrapped in an [InsertData](../structs/insertdata) struct, inserts it into the correct partitions No locks and checkpoints taken needs to be managed externally.
+
+### insertChunksNoCheckpoint [#insertchunksnocheckpoint]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter", "InsertChunks": "../structs/insertchunks"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::insertChunksNoCheckpoint(
+    const InsertChunks &insert_chunk
+)
+```
+</CodeBlock>
+
+Insert chunks into minimal number of fragments; no locks or checkpoints taken.
+
+### dropFragmentsToSize [#dropfragmentstosize]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::dropFragmentsToSize(
+    const size_t maxRows
+)
+```
+</CodeBlock>
+
+Will truncate table to less than maxRows by dropping fragments.
+
+### updateChunkStats [#updatechunkstats]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::updateChunkStats(
+    const ColumnDescriptor *cd,
+    std::unordered_map<int, ChunkStats> &stats_map,
+    std::optional<Data_Namespace::MemoryLevel> memory_level
+)
+```
+</CodeBlock>
+
+Update chunk stats.
+
+### getFragmentInfo [#getfragmentinfo]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter", "FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+virtual FragmentInfo * Fragmenter_Namespace::AbstractFragmenter::getFragmentInfo(
+    const int fragment_id
+) const
+```
+</CodeBlock>
+
+Retrieve the fragment info object for an individual fragment for editing.
+
+### getFragmenterId [#getfragmenterid]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual int Fragmenter_Namespace::AbstractFragmenter::getFragmenterId()
+```
+</CodeBlock>
+
+Gets the id of the partitioner.
+
+### getFragmenterType [#getfragmentertype]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual std::string Fragmenter_Namespace::AbstractFragmenter::getFragmenterType()
+```
+</CodeBlock>
+
+Gets the string type of the partitioner.
+
+### getNumRows [#getnumrows]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual size_t Fragmenter_Namespace::AbstractFragmenter::getNumRows()
+```
+</CodeBlock>
+
+### setNumRows [#setnumrows]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::setNumRows(
+    const size_t numTuples
+)
+```
+</CodeBlock>
+
+### updateColumn [#updatecolumn]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter", "ChunkUpdateStats": "../structs/chunkupdatestats"}}>
+```cpp showLineNumbers={false}
+virtual std::optional<ChunkUpdateStats> Fragmenter_Namespace::AbstractFragmenter::updateColumn(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd,
+    const int fragment_id,
+    const std::vector<uint64_t> &frag_offsets,
+    const std::vector<ScalarTargetValue> &rhs_values,
+    const SQLTypeInfo &rhs_type,
+    const Data_Namespace::MemoryLevel memory_level,
+    UpdelRoll &updel_roll
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::updateColumn(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd,
+    const int fragment_id,
+    const std::vector<uint64_t> &frag_offsets,
+    const ScalarTargetValue &rhs_value,
+    const SQLTypeInfo &rhs_type,
+    const Data_Namespace::MemoryLevel memory_level,
+    UpdelRoll &updel_roll
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### updateColumns [#updatecolumns]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter", "RowDataProvider": "rowdataprovider"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::updateColumns(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const int fragmentId,
+    const std::vector<TargetMetaInfo> sourceMetaInfo,
+    const std::vector<const ColumnDescriptor *> columnDescriptors,
+    const RowDataProvider &sourceDataProvider,
+    const size_t indexOffFragmentOffsetColumn,
+    const Data_Namespace::MemoryLevel memoryLevel,
+    UpdelRoll &updelRoll,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### updateColumnMetadata [#updatecolumnmetadata]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter", "FragmentInfo": "fragmentinfo", "UpdateValuesStats": "../structs/updatevaluesstats"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::updateColumnMetadata(
+    const ColumnDescriptor *cd,
+    FragmentInfo &fragment,
+    std::shared_ptr<Chunk_NS::Chunk> chunk,
+    const UpdateValuesStats &update_values_stats,
+    const SQLTypeInfo &rhs_type,
+    UpdelRoll &updel_roll
+)
+```
+</CodeBlock>
+
+### updateMetadata [#updatemetadata]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::updateMetadata(
+    const Catalog_Namespace::Catalog *catalog,
+    const MetaDataKey &key,
+    UpdelRoll &updel_roll
+)
+```
+</CodeBlock>
+
+### compactRows [#compactrows]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::compactRows(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const int fragmentId,
+    const std::vector<uint64_t> &fragOffsets,
+    const Data_Namespace::MemoryLevel memoryLevel,
+    UpdelRoll &updelRoll
+)
+```
+</CodeBlock>
+
+### getVacuumOffsets [#getvacuumoffsets]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual const std::vector<uint64_t> Fragmenter_Namespace::AbstractFragmenter::getVacuumOffsets(
+    const std::shared_ptr<Chunk_NS::Chunk> &chunk
+)
+```
+</CodeBlock>
+
+### dropColumns [#dropcolumns]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::dropColumns(
+    const std::vector<int> &columnIds
+)
+```
+</CodeBlock>
+
+### hasDeletedRows [#hasdeletedrows]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual bool Fragmenter_Namespace::AbstractFragmenter::hasDeletedRows(
+    const int delete_column_id
+)
+```
+</CodeBlock>
+
+Iterates through chunk metadata to return whether any rows have been deleted.
+
+### updateColumnChunkMetadata [#updatecolumnchunkmetadata]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::updateColumnChunkMetadata(
+    const ColumnDescriptor *cd,
+    const int fragment_id,
+    const std::shared_ptr<ChunkMetadata> metadata
+)
+```
+</CodeBlock>
+
+Updates the metadata for a column chunk.
+
+**Parameters**
+
+<ParamField path="cd" type="const ColumnDescriptor *">
+- ColumnDescriptor for the column
+</ParamField>
+
+<ParamField path="fragment_id" type="const int">
+- Fragment id of the chunk within the column
+</ParamField>
+
+<ParamField path="metadata" type="const std::shared_ptr<ChunkMetadata>">
+- Shared_ptr of the metadata to update column chunk with
+</ParamField>
+
+### resetSizesFromFragments [#resetsizesfromfragments]
+
+<CodeBlock links={{"AbstractFragmenter": "abstractfragmenter"}}>
+```cpp showLineNumbers={false}
+virtual void Fragmenter_Namespace::AbstractFragmenter::resetSizesFromFragments()
+```
+</CodeBlock>
+
+Resets the fragmenter's size related metadata using the internal fragment info vector.
+
+This is typically done after operations, such as vacuuming, which can change fragment sizes.

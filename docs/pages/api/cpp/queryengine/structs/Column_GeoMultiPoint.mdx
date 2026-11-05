@@ -1,0 +1,163 @@
+---
+title: "Column< GeoMultiPoint >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+**Inherits from:** `flatbuffer::Column< Geo::MultiPoint, GeoMultiPoint >` (public)
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint", "Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoMultiPoint> & Column<GeoMultiPoint>::operator=(
+    const Column<GeoMultiPoint> &other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### isNull [#isnull]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Column<Timestamp>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+### setNull [#setnull]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<Timestamp>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+### Column [#column]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoMultiPoint>::Column(
+    GeoMultiPoint *ptr,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoMultiPoint & Column<GeoMultiPoint>::operator[](
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### getPtr [#getptr]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoMultiPoint * Column<GeoMultiPoint>::getPtr() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t Column<GeoMultiPoint>::size() const
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<GeoMultiPoint>::setSize(
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint", "MultiPoint": "../geo/structs/multipoint", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE Geo::MultiPoint flatbuffer::Column<Geo::MultiPoint, GeoMultiPoint>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoMultiPoint flatbuffer::Column<Geo::MultiPoint, GeoMultiPoint>::operator()(
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### setItem [#setitem]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint", "MultiPoint": "../geo/structs/multipoint", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<Geo::MultiPoint, GeoMultiPoint>::setItem(
+    int64_t index,
+    const Geo::MultiPoint &item
+)
+```
+</CodeBlock>
+
+### getNofValues [#getnofvalues]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+int64_t flatbuffer::Column<Geo::MultiPoint, GeoMultiPoint>::getNofValues() const
+```
+</CodeBlock>
+
+### concatItem [#concatitem]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint", "MultiPoint": "../geo/structs/multipoint", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<Geo::MultiPoint, GeoMultiPoint>::concatItem(
+    int64_t index,
+    const Geo::MultiPoint &item
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"Column< GeoMultiPoint >": "columngeomultipoint", "Column": "../flatbuffer/structs/column"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::Column<Geo::MultiPoint, GeoMultiPoint>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr_` | `GeoMultiPoint *` | |
+| `num_rows_` | `int64_t` | |
+| `flatbuffer_` | `int8_t *` | |

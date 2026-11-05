@@ -1,0 +1,98 @@
+---
+title: logger::Logger
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <logger/Logger.h>
+```
+
+---
+
+## Constructors
+
+### Logger [#logger]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"Logger": "logger"}}>
+```cpp showLineNumbers={false}
+logger::Logger::Logger(
+    Channel
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"Logger": "logger"}}>
+```cpp showLineNumbers={false}
+logger::Logger::Logger(
+    Severity
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"Logger": "logger"}}>
+```cpp showLineNumbers={false}
+logger::Logger::Logger(
+    Logger &&
+) = default
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~Logger
+
+<CodeBlock links={{"Logger": "logger"}}>
+```cpp showLineNumbers={false}
+logger::Logger::~Logger()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator bool [#operatorbool]
+
+<CodeBlock links={{"Logger": "logger"}}>
+```cpp showLineNumbers={false}
+logger::Logger::operator bool() const
+```
+</CodeBlock>
+
+### stream [#stream]
+
+<CodeBlock links={{"Logger": "logger"}}>
+```cpp showLineNumbers={false}
+boost::log::record_ostream & logger::Logger::stream(
+    char const *file,
+    int line
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_channel_` | `bool const` | |
+| `enum_value_` | `int const` | |
+| `record_` | `std::unique_ptr< boost::log::record >` | |
+| `stream_` | `std::unique_ptr< boost::log::record_ostream >` | |

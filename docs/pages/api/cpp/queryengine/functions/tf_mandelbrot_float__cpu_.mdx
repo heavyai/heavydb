@@ -1,0 +1,22 @@
+---
+title: tf_mandelbrot_float__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+EXTENSION_NOINLINE int32_t tf_mandelbrot_float__cpu_(
+    TableFunctionManager &mgr,
+    const int32_t x_pixels,
+    const int32_t y_pixels,
+    const float x_min,
+    const float x_max,
+    const float y_min,
+    const float y_max,
+    const int32_t max_iterations,
+    Column<float> &output_x,
+    Column<float> &output_y,
+    Column<int32_t> &output_num_iterations
+)
+```
+</CodeBlock>

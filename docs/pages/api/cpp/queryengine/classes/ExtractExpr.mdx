@@ -1,0 +1,141 @@
+---
+title: ExtractExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DateTimeTranslator.h>
+```
+
+**Inherits from:** `DateTimeTranslator` (protected)
+
+---
+
+## Constructors
+
+### ExtractExpr [#extractexpr]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExtractExpr": "extractexpr"}}>
+```cpp showLineNumbers={false}
+ExtractExpr::ExtractExpr(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    const ExtractField &field
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExtractExpr": "extractexpr"}}>
+```cpp showLineNumbers={false}
+ExtractExpr::ExtractExpr(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    const std::string &field
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### generate [#generate]
+
+<CodeBlock links={{"ExtractExpr": "extractexpr"}}>
+```cpp showLineNumbers={false}
+const std::shared_ptr<Analyzer::Expr> ExtractExpr::generate() const
+```
+</CodeBlock>
+
+### to_extract_field [#toextractfield]
+
+<CodeBlock links={{"ExtractExpr": "extractexpr"}}>
+```cpp showLineNumbers={false}
+ExtractField ExtractExpr::to_extract_field(
+    const std::string &field
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generate [#generate]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExtractExpr": "extractexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
+    const std::shared_ptr<Analyzer::Expr>,
+    const std::string &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExtractExpr": "extractexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
+    const std::shared_ptr<Analyzer::Expr>,
+    const ExtractField &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getExtractFromTimeConstantValue [#getextractfromtimeconstantvalue]
+
+<CodeBlock links={{"ExtractExpr": "extractexpr", "DateTimeTranslator": "datetimetranslator"}}>
+```cpp showLineNumbers={false}
+static int64_t ExtractExpr::getExtractFromTimeConstantValue(
+    const int64_t &timeval,
+    const ExtractField &field,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### getDateTruncConstantValue [#getdatetruncconstantvalue]
+
+<CodeBlock links={{"ExtractExpr": "extractexpr", "DateTimeTranslator": "datetimetranslator"}}>
+```cpp showLineNumbers={false}
+static int64_t ExtractExpr::getDateTruncConstantValue(
+    const int64_t &timeval,
+    const DatetruncField &field,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### getNumericConstant [#getnumericconstant]
+
+<CodeBlock links={{"ExtractExpr": "extractexpr", "DateTimeTranslator": "datetimetranslator"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<Analyzer::Constant> ExtractExpr::getNumericConstant(
+    const int64_t scale
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `from_expr_` | `std::shared_ptr< Analyzer::Expr >` | |
+| `field_` | `ExtractField` | |

@@ -1,0 +1,125 @@
+---
+title: array_copier__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t array_copier__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<T>> &input,
+    Column<Array<T>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_copier__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<float>> &input,
+    Column<Array<float>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_copier__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<double>> &input,
+    Column<Array<double>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_copier__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<int8_t>> &input,
+    Column<Array<int8_t>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_copier__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<int16_t>> &input,
+    Column<Array<int16_t>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (6)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_copier__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<int32_t>> &input,
+    Column<Array<int32_t>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (7)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_copier__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<int64_t>> &input,
+    Column<Array<int64_t>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (8)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_copier__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<bool>> &input,
+    Column<Array<bool>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (9)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_copier__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<Array<TextEncodingDict>> &input,
+    Column<Array<TextEncodingDict>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

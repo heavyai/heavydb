@@ -1,0 +1,59 @@
+---
+title: SpeculativeTopNFailed
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <SpeculativeTopN.h>
+```
+
+**Inherits from:** `std::runtime_error` (public)
+
+---
+
+## Constructors
+
+### SpeculativeTopNFailed [#speculativetopnfailed]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"SpeculativeTopNFailed": "speculativetopnfailed"}}>
+```cpp showLineNumbers={false}
+SpeculativeTopNFailed::SpeculativeTopNFailed(
+    const std::string &msg
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"SpeculativeTopNFailed": "speculativetopnfailed"}}>
+```cpp showLineNumbers={false}
+SpeculativeTopNFailed::SpeculativeTopNFailed()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### failedDuringIteration [#failedduringiteration]
+
+<CodeBlock links={{"SpeculativeTopNFailed": "speculativetopnfailed"}}>
+```cpp showLineNumbers={false}
+bool SpeculativeTopNFailed::failedDuringIteration() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `failed_during_iteration_` | `bool` | |

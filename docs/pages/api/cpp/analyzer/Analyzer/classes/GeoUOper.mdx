@@ -1,0 +1,287 @@
+---
+title: Analyzer::GeoUOper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### GeoUOper [#geouoper]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::GeoUOper::GeoUOper(
+    const Geospatial::GeoBase::GeoOp op,
+    const SQLTypeInfo &ti,
+    const SQLTypeInfo &ti0,
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &args
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoUOper::deep_copy() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"GeoUOper": "geouoper"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::GeoUOper::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"GeoUOper": "geouoper"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::GeoUOper::toString() const override
+```
+</CodeBlock>
+
+### getOp [#getop]
+
+<CodeBlock links={{"GeoUOper": "geouoper"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoBase::GeoOp Analyzer::GeoUOper::getOp() const
+```
+</CodeBlock>
+
+### getTypeInfo0 [#gettypeinfo0]
+
+<CodeBlock links={{"GeoUOper": "geouoper"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo Analyzer::GeoUOper::getTypeInfo0() const
+```
+</CodeBlock>
+
+### getArgs0 [#getargs0]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<Analyzer::Expr>> & Analyzer::GeoUOper::getArgs0() const
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoUOper::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::GeoUOper::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoUOper::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::GeoUOper::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoUOper::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoUOper::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoUOper::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::GeoUOper::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoUOper::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoUOper::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "ColumnVar": "columnvar", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoUOper::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::GeoUOper::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::GeoUOper::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::GeoUOper::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::GeoUOper::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoUOper::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoUOper::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoUOper::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoUOper::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"GeoUOper": "geouoper", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::GeoUOper::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `op_` | `const Geospatial::GeoBase::GeoOp` | |
+| `ti0_` | `SQLTypeInfo` | |
+| `args0_` | `const std::vector< std::shared_ptr< Analyzer::Expr > >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

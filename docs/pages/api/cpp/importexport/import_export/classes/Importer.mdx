@@ -1,0 +1,449 @@
+---
+title: import_export::Importer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/Importer.h>
+```
+
+**Inherits from:** `import_export::DataStreamSink` (public), `import_export::AbstractImporter` (public)
+
+---
+
+## Constructors
+
+### Importer [#importer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+import_export::Importer::Importer(
+    Catalog_Namespace::Catalog &c,
+    const TableDescriptor *t,
+    const std::string &f,
+    const CopyParams &p
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Importer": "importer", "Loader": "loader", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+import_export::Importer::Importer(
+    Loader *providedLoader,
+    const std::string &f,
+    const CopyParams &p
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~Importer
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+import_export::Importer::~Importer() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### import [#import]
+
+<CodeBlock links={{"Importer": "importer", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::Importer::import(
+    const Catalog_Namespace::SessionInfo *session_info
+) override
+```
+</CodeBlock>
+
+### importDelimited [#importdelimited]
+
+<CodeBlock links={{"Importer": "importer", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::Importer::importDelimited(
+    const std::string &file_path,
+    const bool decompressed,
+    const Catalog_Namespace::SessionInfo *session_info
+) override
+```
+</CodeBlock>
+
+### importGDAL [#importgdal]
+
+<CodeBlock links={{"Importer": "importer", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::Importer::importGDAL(
+    const std::map<std::string, std::string> &colname_to_src,
+    const Catalog_Namespace::SessionInfo *session_info,
+    const bool is_raster
+)
+```
+</CodeBlock>
+
+### get_copy_params [#getcopyparams]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+const CopyParams & import_export::Importer::get_copy_params() const
+```
+</CodeBlock>
+
+### get_column_descs [#getcolumndescs]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+const std::list<const ColumnDescriptor *> & import_export::Importer::get_column_descs() const
+```
+</CodeBlock>
+
+### load [#load]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+void import_export::Importer::load(
+    const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers,
+    size_t row_count,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### get_import_buffers_vec [#getimportbuffersvec]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+std::vector<std::vector<std::unique_ptr<TypedImportBuffer>>> & import_export::Importer::get_import_buffers_vec()
+```
+</CodeBlock>
+
+### get_import_buffers [#getimportbuffers]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+std::vector<std::unique_ptr<TypedImportBuffer>> & import_export::Importer::get_import_buffers(
+    int i
+)
+```
+</CodeBlock>
+
+### get_is_array [#getisarray]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+const bool * import_export::Importer::get_is_array() const
+```
+</CodeBlock>
+
+### getCatalog [#getcatalog]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::Catalog & import_export::Importer::getCatalog()
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+void import_export::Importer::checkpoint(
+    const std::vector<Catalog_Namespace::TableEpochInfo> &table_epochs
+)
+```
+</CodeBlock>
+
+### getLoader [#getloader]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+auto import_export::Importer::getLoader() const
+```
+</CodeBlock>
+
+### import_compressed [#importcompressed]
+
+<CodeBlock links={{"Importer": "importer", "DataStreamSink": "datastreamsink", "AbstractImporter": "abstractimporter"}}>
+```cpp showLineNumbers={false}
+void import_export::Importer::import_compressed(
+    std::vector<std::string> &file_paths,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### gdalStatInternal [#gdalstatinternal]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+bool import_export::Importer::gdalStatInternal(
+    const std::string &path,
+    const CopyParams &copy_params,
+    bool also_dir
+)
+```
+</CodeBlock>
+
+### openGDALDataSource [#opengdaldatasource]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+Geospatial::GDAL::DataSourceUqPtr import_export::Importer::openGDALDataSource(
+    const std::string &fileName,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### gdalToColumnDescriptorsGeo [#gdaltocolumndescriptorsgeo]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+const std::list<ColumnDescriptor> import_export::Importer::gdalToColumnDescriptorsGeo(
+    const std::string &fileName,
+    const std::string &geoColumnName,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### gdalToColumnDescriptorsRaster [#gdaltocolumndescriptorsraster]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+const std::list<ColumnDescriptor> import_export::Importer::gdalToColumnDescriptorsRaster(
+    const std::string &fileName,
+    const std::string &geoColumnName,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### importGDALGeo [#importgdalgeo]
+
+<CodeBlock links={{"Importer": "importer", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::Importer::importGDALGeo(
+    const std::map<std::string, std::string> &colname_to_src,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### importGDALRaster [#importgdalraster]
+
+<CodeBlock links={{"Importer": "importer", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::Importer::importGDALRaster(
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### archivePlumber [#archiveplumber]
+
+<CodeBlock links={{"Importer": "importer", "ImportStatus": "../structs/importstatus", "DataStreamSink": "datastreamsink", "AbstractImporter": "abstractimporter"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::Importer::archivePlumber(
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### get_import_status [#getimportstatus]
+
+<CodeBlock links={{"Importer": "importer", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::Importer::get_import_status(
+    const std::string &id
+)
+```
+</CodeBlock>
+
+### set_import_status [#setimportstatus]
+
+<CodeBlock links={{"Importer": "importer", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+void import_export::Importer::set_import_status(
+    const std::string &id,
+    const ImportStatus is
+)
+```
+</CodeBlock>
+
+### gdalToColumnDescriptors [#gdaltocolumndescriptors]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+const std::list<ColumnDescriptor> import_export::Importer::gdalToColumnDescriptors(
+    const std::string &fileName,
+    const bool is_raster,
+    const std::string &geoColumnName,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### readMetadataSampleGDAL [#readmetadatasamplegdal]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+void import_export::Importer::readMetadataSampleGDAL(
+    const std::string &fileName,
+    const std::string &geoColumnName,
+    std::map<std::string, std::vector<std::string>> &metadata,
+    int rowLimit,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### gdalFileExists [#gdalfileexists]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+bool import_export::Importer::gdalFileExists(
+    const std::string &path,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### gdalFileOrDirectoryExists [#gdalfileordirectoryexists]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+bool import_export::Importer::gdalFileOrDirectoryExists(
+    const std::string &path,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### gdalGetAllFilesInArchive [#gdalgetallfilesinarchive]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> import_export::Importer::gdalGetAllFilesInArchive(
+    const std::string &archive_path,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### gdalGetLayersInGeoFile [#gdalgetlayersingeofile]
+
+<CodeBlock links={{"Importer": "importer", "CopyParams": "../structs/copyparams", "GeoFileLayerInfo": "#geofilelayerinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<Importer::GeoFileLayerInfo> import_export::Importer::gdalGetLayersInGeoFile(
+    const std::string &file_name,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### set_geo_physical_import_buffer [#setgeophysicalimportbuffer]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+template <typename TypedImportBufferType>
+template void import_export::Importer::set_geo_physical_import_buffer(
+    const Catalog_Namespace::Catalog &catalog,
+    const ColumnDescriptor *cd,
+    std::vector<std::unique_ptr<TypedImportBufferType>> &import_buffers,
+    size_t &col_idx,
+    std::vector<double> &coords,
+    std::vector<double> &bounds,
+    std::vector<int> &ring_sizes,
+    std::vector<int> &poly_rings,
+    const bool force_null = false
+)
+```
+</CodeBlock>
+
+### set_geo_physical_import_buffer_columnar [#setgeophysicalimportbuffercolumnar]
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+template <typename TypedImportBufferType>
+template void import_export::Importer::set_geo_physical_import_buffer_columnar(
+    const Catalog_Namespace::Catalog &catalog,
+    const ColumnDescriptor *cd,
+    std::vector<std::unique_ptr<TypedImportBufferType>> &import_buffers,
+    size_t &col_idx,
+    std::vector<std::vector<double>> &coords_column,
+    std::vector<std::vector<double>> &bounds_column,
+    std::vector<std::vector<int>> &ring_sizes_column,
+    std::vector<std::vector<int>> &poly_rings_column
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### GeoFileLayerContents
+
+| Name | Value | Description |
+|---|---|---|
+| `EMPTY` | | |
+| `GEO` | | |
+| `NON_GEO` | | |
+| `UNSUPPORTED_GEO` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `import_id` | `std::string` | |
+| `file_size` | `size_t` | |
+| `max_threads` | `size_t` | |
+| `buffer` | `char *` | |
+| `import_buffers_vec` | `std::vector< std::vector< std::unique_ptr< TypedImportBuffer > > >` | |
+| `loader` | `std::unique_ptr< Loader >` | |
+| `is_array_a` | `std::unique_ptr< bool[]>` | |
+| `init_gdal_mutex` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `copy_params` | `CopyParams` | |
+| `file_path` | `const std::string` | |
+| `p_file` | `FILE *` | |
+| `import_status_` | `ImportStatus` | |
+| `import_mutex_` | `heavyai::shared_mutex` | |
+| `total_file_size` | `size_t` | |
+| `file_offsets` | `std::vector< size_t >` | |
+| `file_offsets_mutex` | `std::mutex` | |
+
+---
+
+## Inner classes
+
+### GeoFileLayerInfo
+
+<CodeBlock links={{"Importer": "importer"}}>
+```cpp showLineNumbers={false}
+struct import_export::Importer::GeoFileLayerInfo
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `name` | `std::string` | |
+| `contents` | `GeoFileLayerContents` | |

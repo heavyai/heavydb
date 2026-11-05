@@ -1,0 +1,45 @@
+---
+title: Interval
+description: ""
+---
+
+<CodeBlock id="Interval" links={{"Interval": "interval"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename U = typename std::make_unsigned<T>::type>
+struct Interval
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <Intervals.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+<ParamField path="U" type="typename" default="typename std::make_unsigned<T>::type">
+</ParamField>
+
+---
+
+## Methods
+
+### size [#size]
+
+<CodeBlock links={{"Interval": "interval"}}>
+```cpp showLineNumbers={false}
+U Interval<T, U>::size() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `begin` | `T const` | |
+| `end` | `T const` | |
+| `index` | `U const` | |

@@ -1,0 +1,190 @@
+---
+title: query_state::QueryState
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <query_state/QueryState.h>
+```
+
+**Inherits from:** `std::enable_shared_from_this< QueryState >` (public)
+
+---
+
+## Constructors
+
+### QueryState [#querystate]
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+query_state::QueryState::QueryState(
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> const &,
+    std::string query_str
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### logCallStack [#logcallstack]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+void query_state::QueryState::logCallStack(
+    std::stringstream &,
+    unsigned const depth,
+    Events::iterator parent
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+void query_state::QueryState::logCallStack(
+    std::stringstream &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### createQueryStateProxy [#createquerystateproxy]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryState": "querystate", "QueryStateProxy": "../../classes/querystateproxy"}}>
+```cpp showLineNumbers={false}
+QueryStateProxy query_state::QueryState::createQueryStateProxy()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryState": "querystate", "QueryStateProxy": "../../classes/querystateproxy"}}>
+```cpp showLineNumbers={false}
+QueryStateProxy query_state::QueryState::createQueryStateProxy(
+    Events::iterator parent
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### createTimer [#createtimer]
+
+<CodeBlock links={{"QueryState": "querystate", "Timer": "timer"}}>
+```cpp showLineNumbers={false}
+Timer query_state::QueryState::createTimer(
+    char const *event_name,
+    Events::iterator parent
+)
+```
+</CodeBlock>
+
+### emptyLog [#emptylog]
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+bool query_state::QueryState::emptyLog() const
+```
+</CodeBlock>
+
+### getQueryStr [#getquerystr]
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+std::string const  & query_state::QueryState::getQueryStr() const
+```
+</CodeBlock>
+
+### getConstSessionInfo [#getconstsessioninfo]
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog_Namespace::SessionInfo const> query_state::QueryState::getConstSessionInfo() const
+```
+</CodeBlock>
+
+### getSessionData [#getsessiondata]
+
+<CodeBlock links={{"QueryState": "querystate", "SessionData": "../structs/sessiondata"}}>
+```cpp showLineNumbers={false}
+boost::optional<SessionData> const  & query_state::QueryState::getSessionData() const
+```
+</CodeBlock>
+
+### isLogged [#islogged]
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+bool query_state::QueryState::isLogged() const
+```
+</CodeBlock>
+
+### setQuerySubmittedTime [#setquerysubmittedtime]
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+void query_state::QueryState::setQuerySubmittedTime(
+    const std::string &t
+)
+```
+</CodeBlock>
+
+### getQuerySubmittedTime [#getquerysubmittedtime]
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+const std::string query_state::QueryState::getQuerySubmittedTime() const
+```
+</CodeBlock>
+
+### setLogged [#setlogged]
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+void query_state::QueryState::setLogged(
+    bool logged
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### create [#create]
+
+<CodeBlock links={{"QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+template <typename... ARGS>
+static std::shared_ptr<QueryState> query_state::QueryState::create(
+    ARGS &&... args
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `session_data_` | `boost::optional< SessionData >` | |
+| `query_str_` | `std::string const` | |
+| `events_` | `Events` | |
+| `events_mutex_` | `std::mutex` | |
+| `logged_` | `std::atomic< bool >` | |
+| `submitted_` | `std::string` | |

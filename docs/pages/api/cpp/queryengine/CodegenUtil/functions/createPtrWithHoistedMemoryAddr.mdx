@@ -1,0 +1,17 @@
+---
+title: CodegenUtil::createPtrWithHoistedMemoryAddr
+description: ""
+---
+
+<CodeBlock links={{"CgenState": "../../structs/cgenstate", "CodeGenerator": "../../classes/codegenerator", "CompilationOptions": "../../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<int, llvm::Value *> CodegenUtil::createPtrWithHoistedMemoryAddr(
+    CgenState *cgen_state,
+    CodeGenerator *code_generator,
+    CompilationOptions const &co,
+    llvm::ConstantInt *ptr_int_val,
+    llvm::Type *type,
+    std::set<int> const &target_device_ids
+)
+```
+</CodeBlock>

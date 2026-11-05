@@ -1,0 +1,169 @@
+---
+title: import_export::QueryExporter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/QueryExporter.h>
+```
+
+---
+
+## Constructors
+
+### QueryExporter [#queryexporter]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+import_export::QueryExporter::QueryExporter(
+    const FileType file_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Deleted overload 2">
+
+<CodeBlock links={{"QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+import_export::QueryExporter::QueryExporter() = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~QueryExporter
+
+<CodeBlock links={{"QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+virtual import_export::QueryExporter::~QueryExporter()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### beginExport [#beginexport]
+
+<CodeBlock links={{"QueryExporter": "queryexporter", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+virtual void import_export::QueryExporter::beginExport(
+    const std::string &file_path,
+    const std::string &layer_name,
+    const CopyParams &copy_params,
+    const std::vector<TargetMetaInfo> &column_info,
+    const FileCompression file_compression,
+    const ArrayNullHandling array_null_handling
+)
+```
+</CodeBlock>
+
+### exportResults [#exportresults]
+
+<CodeBlock links={{"QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+virtual void import_export::QueryExporter::exportResults(
+    const std::vector<AggregatedResult> &query_results
+)
+```
+</CodeBlock>
+
+### endExport [#endexport]
+
+<CodeBlock links={{"QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+virtual void import_export::QueryExporter::endExport()
+```
+</CodeBlock>
+
+### validateFileExtensions [#validatefileextensions]
+
+<CodeBlock links={{"QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+void import_export::QueryExporter::validateFileExtensions(
+    const std::string &file_path,
+    const std::string &file_type,
+    const std::unordered_set<std::string> &valid_extensions
+) const
+```
+</CodeBlock>
+
+### safeColumnName [#safecolumnname]
+
+<CodeBlock links={{"QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+std::string import_export::QueryExporter::safeColumnName(
+    const std::string &resname,
+    const int column_index
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### create [#create]
+
+<CodeBlock links={{"QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<QueryExporter> import_export::QueryExporter::create(
+    const FileType file_type
+)
+```
+</CodeBlock>
+
+### formatTemporal [#formattemporal]
+
+<CodeBlock links={{"QueryExporter": "queryexporter"}}>
+```cpp showLineNumbers={false}
+std::string import_export::QueryExporter::formatTemporal(
+    const SQLTypeInfo &type_info,
+    int64_t unix_time
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### FileType
+
+| Name | Value | Description |
+|---|---|---|
+| `kCSV` | | |
+| `kGeoJSON` | | |
+| `kGeoJSONL` | | |
+| `kShapefile` | | |
+| `kFlatGeobuf` | | |
+### FileCompression
+
+| Name | Value | Description |
+|---|---|---|
+| `kNone` | | |
+| `kGZip` | | |
+| `kZip` | | |
+### ArrayNullHandling
+
+| Name | Value | Description |
+|---|---|---|
+| `kAbortWithWarning` | | |
+| `kExportSentinels` | | |
+| `kExportZeros` | | |
+| `kNullEntireField` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `file_type_` | `const FileType` | |

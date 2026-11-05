@@ -1,0 +1,92 @@
+---
+title: Parser::FixedPtLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Literal` (public)
+
+---
+
+## Constructors
+
+### FixedPtLiteral [#fixedptliteral]
+
+<CodeBlock links={{"FixedPtLiteral": "fixedptliteral"}}>
+```cpp showLineNumbers={false}
+Parser::FixedPtLiteral::FixedPtLiteral(
+    std::string *n
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_fixedptval [#getfixedptval]
+
+<CodeBlock links={{"FixedPtLiteral": "fixedptliteral"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::FixedPtLiteral::get_fixedptval() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"FixedPtLiteral": "fixedptliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::FixedPtLiteral::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"FixedPtLiteral": "fixedptliteral"}}>
+```cpp showLineNumbers={false}
+std::string Parser::FixedPtLiteral::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### analyzeValue [#analyzevalue]
+
+<CodeBlock links={{"FixedPtLiteral": "fixedptliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::FixedPtLiteral::analyzeValue(
+    const int64_t numericval,
+    const int scale,
+    const int precision
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `fixedptval_` | `std::unique_ptr< std::string >` | |

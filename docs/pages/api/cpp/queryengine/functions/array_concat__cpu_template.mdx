@@ -1,0 +1,125 @@
+---
+title: array_concat__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Array": "../structs/array", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t array_concat__cpu_template(
+    TableFunctionManager &mgr,
+    const ColumnList<Array<T>> &inputs,
+    Column<Array<T>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Array": "../structs/array", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_concat__cpu_template(
+    TableFunctionManager &mgr,
+    const ColumnList<Array<float>> &inputs,
+    Column<Array<float>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Array": "../structs/array", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_concat__cpu_template(
+    TableFunctionManager &mgr,
+    const ColumnList<Array<double>> &inputs,
+    Column<Array<double>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Array": "../structs/array", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_concat__cpu_template(
+    TableFunctionManager &mgr,
+    const ColumnList<Array<int8_t>> &inputs,
+    Column<Array<int8_t>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Array": "../structs/array", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_concat__cpu_template(
+    TableFunctionManager &mgr,
+    const ColumnList<Array<int16_t>> &inputs,
+    Column<Array<int16_t>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Array": "../structs/array", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_concat__cpu_template(
+    TableFunctionManager &mgr,
+    const ColumnList<Array<int32_t>> &inputs,
+    Column<Array<int32_t>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Array": "../structs/array", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_concat__cpu_template(
+    TableFunctionManager &mgr,
+    const ColumnList<Array<int64_t>> &inputs,
+    Column<Array<int64_t>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Array": "../structs/array", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_concat__cpu_template(
+    TableFunctionManager &mgr,
+    const ColumnList<Array<bool>> &inputs,
+    Column<Array<bool>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Array": "../structs/array", "TextEncodingDict": "../structs/textencodingdict", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t array_concat__cpu_template(
+    TableFunctionManager &mgr,
+    const ColumnList<Array<TextEncodingDict>> &inputs,
+    Column<Array<TextEncodingDict>> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

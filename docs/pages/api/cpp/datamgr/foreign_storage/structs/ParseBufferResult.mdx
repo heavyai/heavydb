@@ -1,0 +1,19 @@
+---
+title: foreign_storage::ParseBufferResult
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/TextFileBufferParser.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_id_to_data_blocks_map` | `std::map< int, DataBlockPtr >` | |
+| `row_count` | `size_t` | |
+| `row_offsets` | `std::vector< size_t >` | |
+| `rejected_rows` | `std::set< size_t >` | |

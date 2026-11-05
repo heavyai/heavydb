@@ -1,0 +1,59 @@
+---
+title: result_set_arrow_loopback
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ExecutionResult": "../classes/executionresult", "ArrowResultSet": "../classes/arrowresultset"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult &results
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExecutionResult": "../classes/executionresult", "ResultSet": "../classes/resultset", "ArrowResultSet": "../classes/arrowresultset"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult *results,
+    const std::shared_ptr<ResultSet> &rows,
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ExecutionResult": "../classes/executionresult", "ResultSet": "../classes/resultset", "ArrowResultSet": "../classes/arrowresultset"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult *results,
+    const std::shared_ptr<ResultSet> &rows,
+    const ExecutorDeviceType device_type,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"ExecutionResult": "../classes/executionresult", "ResultSet": "../classes/resultset", "ArrowResultSet": "../classes/arrowresultset"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult *results,
+    const std::shared_ptr<ResultSet> &rows,
+    const ExecutorDeviceType device_type = ExecutorDeviceType::CPU
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,56 @@
+---
+title: query_state::Event
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <query_state/QueryState.h>
+```
+
+---
+
+## Constructors
+
+### Event [#event]
+
+<CodeBlock links={{"Event": "event"}}>
+```cpp showLineNumbers={false}
+query_state::Event::Event(
+    char const *const name,
+    Events::iterator parent
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### duration [#duration]
+
+<CodeBlock links={{"Event": "event"}}>
+```cpp showLineNumbers={false}
+template <typename Units = std::chrono::milliseconds>
+boost::optional<typename Units::rep> query_state::Event::duration() const
+```
+</CodeBlock>
+
+### stop [#stop]
+
+<CodeBlock links={{"Event": "event"}}>
+```cpp showLineNumbers={false}
+void query_state::Event::stop()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name` | `char const  *const` | |
+| `parent` | `Events::iterator const` | |
+| `thread_id` | `std::thread::id const` | |
+| `started` | `Clock::duration const` | |
+| `stopped` | `std::atomic< Clock::duration >` | |

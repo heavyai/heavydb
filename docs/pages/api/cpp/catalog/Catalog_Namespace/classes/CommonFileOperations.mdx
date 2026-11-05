@@ -1,0 +1,75 @@
+---
+title: Catalog_Namespace::CommonFileOperations
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/SysCatalog.h>
+```
+
+---
+
+## Constructors
+
+### CommonFileOperations [#commonfileoperations]
+
+<CodeBlock links={{"CommonFileOperations": "commonfileoperations"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::CommonFileOperations::CommonFileOperations(
+    std::string const &base_path
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### removeCatalogByFullPath [#removecatalogbyfullpath]
+
+<CodeBlock links={{"CommonFileOperations": "commonfileoperations"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::CommonFileOperations::removeCatalogByFullPath(
+    std::string const &full_path
+)
+```
+</CodeBlock>
+
+### removeCatalogByName [#removecatalogbyname]
+
+<CodeBlock links={{"CommonFileOperations": "commonfileoperations"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::CommonFileOperations::removeCatalogByName(
+    std::string const &name
+)
+```
+</CodeBlock>
+
+### duplicateAndRenameCatalog [#duplicateandrenamecatalog]
+
+<CodeBlock links={{"CommonFileOperations": "commonfileoperations"}}>
+```cpp showLineNumbers={false}
+auto Catalog_Namespace::CommonFileOperations::duplicateAndRenameCatalog(
+    std::string const &current_name,
+    std::string const &new_name
+)
+```
+</CodeBlock>
+
+### assembleCatalogName [#assemblecatalogname]
+
+<CodeBlock links={{"CommonFileOperations": "commonfileoperations"}}>
+```cpp showLineNumbers={false}
+auto Catalog_Namespace::CommonFileOperations::assembleCatalogName(
+    std::string const &name
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `base_path_` | `std::string const  &` | |

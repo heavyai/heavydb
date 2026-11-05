@@ -1,0 +1,96 @@
+---
+title: gbt_reg_fit__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t gbt_reg_fit__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<T> &input_labels,
+    const ColumnList<T> &input_features,
+    const int64_t max_iterations,
+    const int64_t max_tree_depth,
+    const double shrinkage,
+    const double min_split_loss,
+    const double lambda,
+    const double obs_per_tree_fraction,
+    const int64_t features_per_node,
+    const int64_t min_observations_per_leaf_node,
+    const int64_t max_bins,
+    const int64_t min_bin_size,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t gbt_reg_fit__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<T> &input_labels,
+    const ColumnList<TextEncodingDict> &input_cat_features,
+    const ColumnList<T> &input_numeric_features,
+    const int64_t max_iterations,
+    const int64_t max_tree_depth,
+    const double shrinkage,
+    const double min_split_loss,
+    const double lambda,
+    const double obs_per_tree_fraction,
+    const int64_t features_per_node,
+    const int64_t min_observations_per_leaf_node,
+    const int64_t max_bins,
+    const int64_t min_bin_size,
+    const int32_t cat_top_k,
+    const float cat_min_fraction,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t gbt_reg_fit__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<T> &input_labels,
+    const ColumnList<TextEncodingDict> &input_cat_features,
+    const int64_t max_iterations,
+    const int64_t max_tree_depth,
+    const double shrinkage,
+    const double min_split_loss,
+    const double lambda,
+    const double obs_per_tree_fraction,
+    const int64_t features_per_node,
+    const int64_t min_observations_per_leaf_node,
+    const int64_t max_bins,
+    const int64_t min_bin_size,
+    const int32_t cat_top_k,
+    const float cat_min_fraction,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

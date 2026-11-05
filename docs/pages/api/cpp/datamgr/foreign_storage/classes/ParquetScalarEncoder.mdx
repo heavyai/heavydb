@@ -1,0 +1,325 @@
+---
+title: foreign_storage::ParquetScalarEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetEncoder.h>
+```
+
+**Inherits from:** `foreign_storage::ParquetEncoder` (public), `foreign_storage::ParquetImportEncoder` (public)
+
+---
+
+## Constructors
+
+### ParquetScalarEncoder [#parquetscalarencoder]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetScalarEncoder::ParquetScalarEncoder(
+    Data_Namespace::AbstractBuffer *buffer
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setNull [#setnull]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::setNull(
+    int8_t *omnisci_data_bytes
+)
+```
+</CodeBlock>
+
+### copy [#copy]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::copy(
+    const int8_t *omnisci_data_bytes_source,
+    int8_t *omnisci_data_bytes_destination
+)
+```
+</CodeBlock>
+
+### encodeAndCopy [#encodeandcopy]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::encodeAndCopy(
+    const int8_t *parquet_data_bytes,
+    int8_t *omnisci_data_bytes
+)
+```
+</CodeBlock>
+
+### encodeAndCopyContiguous [#encodeandcopycontiguous]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::encodeAndCopyContiguous(
+    const int8_t *parquet_data_bytes,
+    int8_t *omnisci_data_bytes,
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+### validate [#validate]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::validate(
+    const int8_t *parquet_data,
+    const int64_t j,
+    const SQLTypeInfo &column_type
+) const
+```
+</CodeBlock>
+
+### validateUsingEncodersColumnType [#validateusingencoderscolumntype]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::validateUsingEncodersColumnType(
+    const int8_t *parquet_data,
+    const int64_t j
+) const
+```
+</CodeBlock>
+
+### encodedDataToString [#encodeddatatostring]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder"}}>
+```cpp showLineNumbers={false}
+virtual std::string foreign_storage::ParquetScalarEncoder::encodedDataToString(
+    const int8_t *bytes
+) const
+```
+</CodeBlock>
+
+### appendDataTrackErrors [#appenddatatrackerrors]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::appendDataTrackErrors(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::appendDataTrackErrors(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### appendData [#appenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::appendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::appendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getRowGroupMetadata [#getrowgroupmetadata]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ChunkMetadata": "../../structs/chunkmetadata", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<ChunkMetadata> foreign_storage::ParquetScalarEncoder::getRowGroupMetadata(
+    const parquet::RowGroupMetaData *group_metadata,
+    const int parquet_column_index,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### getRejectedRowIndices [#getrejectedrowindices]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+RejectedRowIndices foreign_storage::ParquetScalarEncoder::getRejectedRowIndices() const
+```
+</CodeBlock>
+
+### disableMetadataStatsValidation [#disablemetadatastatsvalidation]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::disableMetadataStatsValidation()
+```
+</CodeBlock>
+
+### initializeErrorTracking [#initializeerrortracking]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::initializeErrorTracking()
+```
+</CodeBlock>
+
+### initializeColumnType [#initializecolumntype]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::initializeColumnType(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### eraseInvalidIndicesInBuffer [#eraseinvalidindicesinbuffer]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::eraseInvalidIndicesInBuffer(
+    const InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+### validateAndAppendData [#validateandappenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::validateAndAppendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetScalarEncoder::validateAndAppendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Static methods
+
+### createMetadata [#createmetadata]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ChunkMetadata": "../../structs/chunkmetadata", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<ChunkMetadata> foreign_storage::ParquetScalarEncoder::createMetadata(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### throwNotNullViolation [#thrownotnullviolation]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetScalarEncoder::throwNotNullViolation(
+    const std::string &parquet_column_name
+)
+```
+</CodeBlock>
+
+### validateNullCount [#validatenullcount]
+
+<CodeBlock links={{"ParquetScalarEncoder": "parquetscalarencoder", "ParquetEncoder": "parquetencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetScalarEncoder::validateNullCount(
+    const std::string &parquet_column_name,
+    int64_t null_count,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buffer_` | `Data_Namespace::AbstractBuffer *` | |
+| `is_error_tracking_enabled_` | `bool` | |
+| `invalid_indices_` | `RejectedRowIndices` | |
+| `current_chunk_offset_` | `size_t` | |
+| `column_type_` | `SQLTypeInfo` | |
+| `validate_metadata_stats_` | `bool` | |

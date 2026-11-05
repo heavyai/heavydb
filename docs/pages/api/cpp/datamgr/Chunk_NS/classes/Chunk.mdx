@@ -1,0 +1,395 @@
+---
+title: Chunk_NS::Chunk
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Chunk_NS/Chunk.h>
+```
+
+---
+
+## Constructors
+
+### Chunk [#chunk]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+Chunk_NS::Chunk::Chunk(
+    bool pinnable = true
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+Chunk_NS::Chunk::Chunk(
+    const ColumnDescriptor *td
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+Chunk_NS::Chunk::Chunk(
+    const ColumnDescriptor *td,
+    bool pinnable
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Chunk": "chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+Chunk_NS::Chunk::Chunk(
+    AbstractBuffer *b,
+    AbstractBuffer *ib,
+    const ColumnDescriptor *td,
+    bool pinnable = true
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~Chunk
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+Chunk_NS::Chunk::~Chunk()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setPinnable [#setpinnable]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::setPinnable(
+    bool pinnable
+)
+```
+</CodeBlock>
+
+### getColumnDesc [#getcolumndesc]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Chunk_NS::Chunk::getColumnDesc() const
+```
+</CodeBlock>
+
+### setColumnDesc [#setcolumndesc]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::setColumnDesc(
+    const ColumnDescriptor *cd
+)
+```
+</CodeBlock>
+
+### begin_iterator [#beginiterator]
+
+<CodeBlock links={{"Chunk": "chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+ChunkIter Chunk_NS::Chunk::begin_iterator(
+    const std::shared_ptr<ChunkMetadata> &,
+    int start_idx = 0,
+    int skip = 1
+) const
+```
+</CodeBlock>
+
+### getNumElemsForBytesEncodedDataAtIndices [#getnumelemsforbytesencodeddataatindices]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+size_t Chunk_NS::Chunk::getNumElemsForBytesEncodedDataAtIndices(
+    const int8_t *index_data,
+    const std::vector<size_t> &selected_idx,
+    const size_t byte_limit
+)
+```
+</CodeBlock>
+
+### getNumElemsForBytesInsertData [#getnumelemsforbytesinsertdata]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+size_t Chunk_NS::Chunk::getNumElemsForBytesInsertData(
+    const DataBlockPtr &src_data,
+    const size_t num_elems,
+    const size_t start_idx,
+    const size_t byte_limit,
+    const bool replicating = false
+)
+```
+</CodeBlock>
+
+### appendData [#appenddata]
+
+<CodeBlock links={{"Chunk": "chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> Chunk_NS::Chunk::appendData(
+    DataBlockPtr &srcData,
+    const size_t numAppendElems,
+    const size_t startIdx,
+    const bool replicating = false
+)
+```
+</CodeBlock>
+
+### appendEncodedDataAtIndices [#appendencodeddataatindices]
+
+<CodeBlock links={{"Chunk": "chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> Chunk_NS::Chunk::appendEncodedDataAtIndices(
+    const Chunk &src_chunk,
+    const std::vector<size_t> &selected_idx
+)
+```
+</CodeBlock>
+
+### appendEncodedData [#appendencodeddata]
+
+<CodeBlock links={{"Chunk": "chunk", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> Chunk_NS::Chunk::appendEncodedData(
+    const Chunk &src_chunk,
+    const size_t num_elements,
+    const size_t start_idx
+)
+```
+</CodeBlock>
+
+### createChunkBuffer [#createchunkbuffer]
+
+<CodeBlock links={{"Chunk": "chunk", "DataMgr": "../../classes/datamgr"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::createChunkBuffer(
+    DataMgr *data_mgr,
+    const ChunkKey &key,
+    const MemoryLevel mem_level,
+    const int deviceId = 0,
+    const size_t page_size = 0
+)
+```
+</CodeBlock>
+
+### getChunkBuffer [#getchunkbuffer]
+
+<CodeBlock links={{"Chunk": "chunk", "DataMgr": "../../classes/datamgr"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::getChunkBuffer(
+    DataMgr *data_mgr,
+    const ChunkKey &key,
+    const MemoryLevel mem_level,
+    const int deviceId = 0,
+    const size_t num_bytes = 0,
+    const size_t num_elems = 0
+)
+```
+</CodeBlock>
+
+### isChunkOnDevice [#ischunkondevice]
+
+<CodeBlock links={{"Chunk": "chunk", "DataMgr": "../../classes/datamgr"}}>
+```cpp showLineNumbers={false}
+bool Chunk_NS::Chunk::isChunkOnDevice(
+    DataMgr *data_mgr,
+    const ChunkKey &key,
+    const MemoryLevel mem_level,
+    const int device_id
+)
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"Chunk": "chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * Chunk_NS::Chunk::getBuffer() const
+```
+</CodeBlock>
+
+### getIndexBuf [#getindexbuf]
+
+<CodeBlock links={{"Chunk": "chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * Chunk_NS::Chunk::getIndexBuf() const
+```
+</CodeBlock>
+
+### setBuffer [#setbuffer]
+
+<CodeBlock links={{"Chunk": "chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::setBuffer(
+    AbstractBuffer *b
+)
+```
+</CodeBlock>
+
+### setIndexBuffer [#setindexbuffer]
+
+<CodeBlock links={{"Chunk": "chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::setIndexBuffer(
+    AbstractBuffer *ib
+)
+```
+</CodeBlock>
+
+### initEncoder [#initencoder]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::initEncoder()
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::decompress(
+    int8_t *compressed,
+    VarlenDatum *result,
+    Datum *datum
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+std::string Chunk_NS::Chunk::toString() const
+```
+</CodeBlock>
+
+### setChunkBuffer [#setchunkbuffer]
+
+<CodeBlock links={{"Chunk": "chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::setChunkBuffer(
+    AbstractBuffer *buffer,
+    AbstractBuffer *index_buffer
+)
+```
+</CodeBlock>
+
+### unpinBuffer [#unpinbuffer]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::unpinBuffer()
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### translateColumnDescriptorsToChunkVec [#translatecolumndescriptorstochunkvec]
+
+<CodeBlock links={{"Chunk": "chunk"}}>
+```cpp showLineNumbers={false}
+void Chunk_NS::Chunk::translateColumnDescriptorsToChunkVec(
+    const std::list<const ColumnDescriptor *> &colDescs,
+    std::vector<Chunk> &chunkVec
+)
+```
+</CodeBlock>
+
+### getChunk [#getchunk]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Chunk": "chunk", "DataMgr": "../../classes/datamgr"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<Chunk> Chunk_NS::Chunk::getChunk(
+    const ColumnDescriptor *cd,
+    DataMgr *data_mgr,
+    const ChunkKey &key,
+    const MemoryLevel mem_level,
+    const int deviceId,
+    const size_t num_bytes,
+    const size_t num_elems,
+    const bool pinnable = true
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Compose a chunk from components and return it">
+
+<CodeBlock links={{"Chunk": "chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Chunk> Chunk_NS::Chunk::getChunk(
+    const ColumnDescriptor *cd,
+    AbstractBuffer *data_buffer,
+    AbstractBuffer *index_buffer,
+    const bool pinnable = true
+)
+```
+</CodeBlock>
+
+Compose a chunk from components and return it.
+
+Note, the `index_buffer` is only applicable if the column is a variable length column. If the column type is not variable length, this parameter is ignored.
+
+**Returns:** a chunk composed of supplied components
+
+**Parameters**
+
+<ParamField path="cd" type="const ColumnDescriptor *">
+- The column descriptor for the chunk
+</ParamField>
+
+<ParamField path="data_buffer" type="AbstractBuffer *">
+- The data buffer for the chunk
+</ParamField>
+
+<ParamField path="index_buffer" type="AbstractBuffer *">
+- The (optional) index buffer for the chunk
+</ParamField>
+
+<ParamField path="pinnable" type="const bool" default="true">
+- Sets the chunk as pinnable (or not)
+</ParamField>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buffer_` | `AbstractBuffer *` | |
+| `index_buf_` | `AbstractBuffer *` | |
+| `column_desc_` | `const ColumnDescriptor *` | |
+| `pinnable_` | `bool` | |

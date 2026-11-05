@@ -1,0 +1,50 @@
+---
+title: CreatePolicyCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### CreatePolicyCommand [#createpolicycommand]
+
+<CodeBlock links={{"CreatePolicyCommand": "createpolicycommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+CreatePolicyCommand::CreatePolicyCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"CreatePolicyCommand": "createpolicycommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult CreatePolicyCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

@@ -1,0 +1,221 @@
+---
+title: flatbuffer::TextEncodingNone
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <flatbuffer/heavydbTypes.h>
+```
+
+**Inherits from:** `flatbuffer::NestedArray< char >` (public)
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<Tabs>
+<Tab title="Copy assign (with other)">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE TextEncodingNone & flatbuffer::TextEncodingNone::operator=(
+    const ::TextEncodingNone &other
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy assign (with s)">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE TextEncodingNone & flatbuffer::TextEncodingNone::operator=(
+    const std::string &s
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator[] [#operator_subscript]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+char & flatbuffer::TextEncodingNone::operator[](
+    const int64_t index
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+const char flatbuffer::NestedArray<char>::operator[](
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator+= [#operator_plus_assign]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE TextEncodingNone & flatbuffer::TextEncodingNone::operator+=(
+    const ::TextEncodingNone &other
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE TextEncodingNone & flatbuffer::TextEncodingNone::operator+=(
+    const std::string &s
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+NestedArray<char> & flatbuffer::NestedArray<char>::operator+=(
+    const NestedArray<char> &other
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### str [#str]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+std::string flatbuffer::TextEncodingNone::str() const
+```
+</CodeBlock>
+
+### getString [#getstring]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+std::string flatbuffer::TextEncodingNone::getString() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+size_t flatbuffer::NestedArray<char>::size() const
+```
+</CodeBlock>
+
+### getValuesBuffer [#getvaluesbuffer]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<char>::getValuesBuffer(
+    char *&values,
+    int64_t &nof_values,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+### getRawBuffer [#getrawbuffer]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<char>::getRawBuffer(
+    int8_t *&values,
+    int64_t &nof_values,
+    size_t &value_size,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+### getValue [#getvalue]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+char & flatbuffer::NestedArray<char>::getValue(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+const char flatbuffer::NestedArray<char>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+bool flatbuffer::NestedArray<char>::isNull() const
+```
+</CodeBlock>
+
+### extend [#extend]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::NestedArray<char>::extend(
+    const int8_t *data,
+    const int32_t size,
+    bool assign = false
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone", "NestedArray": "nestedarray"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::NestedArray<char>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `flatbuffer_` | `int8_t *` | |
+| `index_` | `int64_t` | |
+| `n_` | `size_t` | |

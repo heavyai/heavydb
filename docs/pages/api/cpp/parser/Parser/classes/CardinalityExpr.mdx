@@ -1,0 +1,76 @@
+---
+title: Parser::CardinalityExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### CardinalityExpr [#cardinalityexpr]
+
+<CodeBlock links={{"CardinalityExpr": "cardinalityexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::CardinalityExpr::CardinalityExpr(
+    Expr *a
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"CardinalityExpr": "cardinalityexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::CardinalityExpr::get_arg() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"CardinalityExpr": "cardinalityexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::CardinalityExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"CardinalityExpr": "cardinalityexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::CardinalityExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `arg_` | `std::unique_ptr< Expr >` | |

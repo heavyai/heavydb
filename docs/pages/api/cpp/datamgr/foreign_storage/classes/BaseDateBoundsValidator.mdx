@@ -1,0 +1,93 @@
+---
+title: foreign_storage::BaseDateBoundsValidator
+description: ""
+---
+
+<CodeBlock id="BaseDateBoundsValidator" links={{"BaseDateBoundsValidator": "basedateboundsvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename T, bool is_in_seconds = true>
+class BaseDateBoundsValidator
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetMetadataValidator.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+<ParamField path="is_in_seconds" type="bool" default="true">
+</ParamField>
+
+---
+
+## Methods
+
+### valueWithinBounds [#valuewithinbounds]
+
+<CodeBlock links={{"BaseDateBoundsValidator": "basedateboundsvalidator"}}>
+```cpp showLineNumbers={false}
+static bool foreign_storage::BaseDateBoundsValidator<T, is_in_seconds>::valueWithinBounds(
+    const T &value,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### getMinMaxBoundsAsStrings [#getminmaxboundsasstrings]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"BaseDateBoundsValidator": "basedateboundsvalidator"}}>
+```cpp showLineNumbers={false}
+static std::pair<std::string, std::string> foreign_storage::BaseDateBoundsValidator<T, is_in_seconds>::getMinMaxBoundsAsStrings(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"BaseDateBoundsValidator": "basedateboundsvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename D>
+static std::pair<std::string, std::string> foreign_storage::BaseDateBoundsValidator<T, is_in_seconds>::getMinMaxBoundsAsStrings(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### checkBounds [#checkbounds]
+
+<CodeBlock links={{"BaseDateBoundsValidator": "basedateboundsvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename D>
+static bool foreign_storage::BaseDateBoundsValidator<T, is_in_seconds>::checkBounds(
+    const T &value
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### validateValue [#validatevalue]
+
+<CodeBlock links={{"BaseDateBoundsValidator": "basedateboundsvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename D>
+static void foreign_storage::BaseDateBoundsValidator<T, is_in_seconds>::validateValue(
+    const D &data_value,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>

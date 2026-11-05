@@ -1,0 +1,667 @@
+---
+title: Fragmenter_Namespace::SortedOrderFragmenter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Fragmenter_Namespace/SortedOrderFragmenter.h>
+```
+
+**Inherits from:** `Fragmenter_Namespace::InsertOrderFragmenter` (public)
+
+---
+
+## Constructors
+
+### SortedOrderFragmenter [#sortedorderfragmenter]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::SortedOrderFragmenter::SortedOrderFragmenter(
+    const std::vector<int> chunkKeyPrefix,
+    std::vector<Chunk_NS::Chunk> &chunkVec,
+    Data_Namespace::DataMgr *dataMgr,
+    Catalog_Namespace::Catalog *catalog,
+    const int physicalTableId,
+    const int shard,
+    const size_t maxFragmentRows = 32000000ULL,
+    const size_t maxChunkSize = 2147483648ULL,
+    const size_t pageSize = 2097152ULL,
+    const size_t maxRows = ((1LL)<< 62), const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::SortedOrderFragmenter::SortedOrderFragmenter(
+    SortedOrderFragmenter &&
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::SortedOrderFragmenter::SortedOrderFragmenter(
+    const SortedOrderFragmenter &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~SortedOrderFragmenter
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::SortedOrderFragmenter::~SortedOrderFragmenter() override
+```
+</CodeBlock>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter"}}>
+```cpp showLineNumbers={false}
+SortedOrderFragmenter & Fragmenter_Namespace::SortedOrderFragmenter::operator=(
+    const SortedOrderFragmenter &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### insertData [#insertdata]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertData": "../structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::insertData(
+    InsertData &insert_data_struct
+) override
+```
+</CodeBlock>
+
+appends data onto the most recently occuring fragment, creating a new one if necessary
+
+### insertDataNoCheckpoint [#insertdatanocheckpoint]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertData": "../structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::insertDataNoCheckpoint(
+    InsertData &insert_data_struct
+) override
+```
+</CodeBlock>
+
+Given data wrapped in an [InsertData](../structs/insertdata) struct, inserts it into the correct partitions No locks and checkpoints taken needs to be managed externally.
+
+### getNumFragments [#getnumfragments]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::SortedOrderFragmenter::getNumFragments() override
+```
+</CodeBlock>
+
+returns the number of fragments in a table
+
+### getFragmentsForQuery [#getfragmentsforquery]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "TableInfo": "tableinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+TableInfo Fragmenter_Namespace::SortedOrderFragmenter::getFragmentsForQuery() override
+```
+</CodeBlock>
+
+returns (inside `QueryInfo`) object all ids and row sizes of fragments
+
+### insertChunks [#insertchunks]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertChunks": "../structs/insertchunks", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::insertChunks(
+    const InsertChunks &insert_chunk
+) override
+```
+</CodeBlock>
+
+Insert chunks into minimal number of fragments.
+
+**Parameters**
+
+<ParamField path="insert_chunk" type="const InsertChunks &">
+- The chunks to insert
+</ParamField>
+
+### insertChunksNoCheckpoint [#insertchunksnocheckpoint]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertChunks": "../structs/insertchunks", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::insertChunksNoCheckpoint(
+    const InsertChunks &insert_chunk
+) override
+```
+</CodeBlock>
+
+Insert chunks into minimal number of fragments; no locks or checkpoints taken.
+
+### dropFragmentsToSize [#dropfragmentstosize]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::dropFragmentsToSize(
+    const size_t maxRows
+) override
+```
+</CodeBlock>
+
+Will truncate table to less than maxRows by dropping fragments.
+
+### updateColumnChunkMetadata [#updatecolumnchunkmetadata]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::updateColumnChunkMetadata(
+    const ColumnDescriptor *cd,
+    const int fragment_id,
+    const std::shared_ptr<ChunkMetadata> metadata
+) override
+```
+</CodeBlock>
+
+Updates the metadata for a column chunk.
+
+**Parameters**
+
+<ParamField path="cd" type="const ColumnDescriptor *">
+- ColumnDescriptor for the column
+</ParamField>
+
+<ParamField path="fragment_id" type="const int">
+- Fragment id of the chunk within the column
+</ParamField>
+
+<ParamField path="metadata" type="const std::shared_ptr<ChunkMetadata>">
+- Shared_ptr of the metadata to update column chunk with
+</ParamField>
+
+### updateChunkStats [#updatechunkstats]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::updateChunkStats(
+    const ColumnDescriptor *cd,
+    std::unordered_map<int, ChunkStats> &stats_map,
+    std::optional<Data_Namespace::MemoryLevel> memory_level
+) override
+```
+</CodeBlock>
+
+Update chunk stats.
+
+### getFragmentInfo [#getfragmentinfo]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+FragmentInfo * Fragmenter_Namespace::SortedOrderFragmenter::getFragmentInfo(
+    const int fragment_id
+) const override
+```
+</CodeBlock>
+
+Retrieve the fragment info object for an individual fragment for editing.
+
+### getFragmenterId [#getfragmenterid]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+int Fragmenter_Namespace::SortedOrderFragmenter::getFragmenterId() override
+```
+</CodeBlock>
+
+get fragmenter's id
+
+### getChunkKeyPrefix [#getchunkkeyprefix]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::vector<int> Fragmenter_Namespace::SortedOrderFragmenter::getChunkKeyPrefix() const
+```
+</CodeBlock>
+
+### getFragmenterType [#getfragmentertype]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::string Fragmenter_Namespace::SortedOrderFragmenter::getFragmenterType() override
+```
+</CodeBlock>
+
+get fragmenter's type (as string
+
+### getNumRows [#getnumrows]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::SortedOrderFragmenter::getNumRows() override
+```
+</CodeBlock>
+
+### setNumRows [#setnumrows]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::setNumRows(
+    const size_t numTuples
+) override
+```
+</CodeBlock>
+
+### updateColumn [#updatecolumn]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "ChunkUpdateStats": "../structs/chunkupdatestats", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::optional<ChunkUpdateStats> Fragmenter_Namespace::SortedOrderFragmenter::updateColumn(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd,
+    const int fragment_id,
+    const std::vector<uint64_t> &frag_offsets,
+    const std::vector<ScalarTargetValue> &rhs_values,
+    const SQLTypeInfo &rhs_type,
+    const Data_Namespace::MemoryLevel memory_level,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::updateColumn(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd,
+    const int fragment_id,
+    const std::vector<uint64_t> &frag_offsets,
+    const ScalarTargetValue &rhs_value,
+    const SQLTypeInfo &rhs_type,
+    const Data_Namespace::MemoryLevel memory_level,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### updateColumns [#updatecolumns]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "RowDataProvider": "rowdataprovider", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::updateColumns(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const int fragmentId,
+    const std::vector<TargetMetaInfo> sourceMetaInfo,
+    const std::vector<const ColumnDescriptor *> columnDescriptors,
+    const RowDataProvider &sourceDataProvider,
+    const size_t indexOffFragmentOffsetColumn,
+    const Data_Namespace::MemoryLevel memoryLevel,
+    UpdelRoll &updelRoll,
+    Executor *executor
+) override
+```
+</CodeBlock>
+
+### updateColumnMetadata [#updatecolumnmetadata]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "FragmentInfo": "fragmentinfo", "UpdateValuesStats": "../structs/updatevaluesstats", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::updateColumnMetadata(
+    const ColumnDescriptor *cd,
+    FragmentInfo &fragment,
+    std::shared_ptr<Chunk_NS::Chunk> chunk,
+    const UpdateValuesStats &update_values_stats,
+    const SQLTypeInfo &rhs_type,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+### updateMetadata [#updatemetadata]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::updateMetadata(
+    const Catalog_Namespace::Catalog *catalog,
+    const MetaDataKey &key,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+### compactRows [#compactrows]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::compactRows(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const int fragment_id,
+    const std::vector<uint64_t> &frag_offsets,
+    const Data_Namespace::MemoryLevel memory_level,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+### getVacuumOffsets [#getvacuumoffsets]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+const std::vector<uint64_t> Fragmenter_Namespace::SortedOrderFragmenter::getVacuumOffsets(
+    const std::shared_ptr<Chunk_NS::Chunk> &chunk
+) override
+```
+</CodeBlock>
+
+### getChunksForAllColumns [#getchunksforallcolumns]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+auto Fragmenter_Namespace::SortedOrderFragmenter::getChunksForAllColumns(
+    const TableDescriptor *td,
+    const FragmentInfo &fragment,
+    const Data_Namespace::MemoryLevel memory_level
+)
+```
+</CodeBlock>
+
+### dropColumns [#dropcolumns]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::dropColumns(
+    const std::vector<int> &columnIds
+) override
+```
+</CodeBlock>
+
+### hasDeletedRows [#hasdeletedrows]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+bool Fragmenter_Namespace::SortedOrderFragmenter::hasDeletedRows(
+    const int delete_column_id
+) override
+```
+</CodeBlock>
+
+Iterates through chunk metadata to return whether any rows have been deleted.
+
+### resetSizesFromFragments [#resetsizesfromfragments]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::resetSizesFromFragments() override
+```
+</CodeBlock>
+
+Resets the fragmenter's size related metadata using the internal fragment info vector.
+
+This is typically done after operations, such as vacuuming, which can change fragment sizes.
+
+### alterNonGeoColumnType [#alternongeocolumntype]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::alterNonGeoColumnType(
+    const std::list<const ColumnDescriptor *> &columns
+)
+```
+</CodeBlock>
+
+### alterColumnGeoType [#altercolumngeotype]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::alterColumnGeoType(
+    const std::list<std::pair<const ColumnDescriptor *, std::list<const ColumnDescriptor *>>> &src_dst_column_pairs
+)
+```
+</CodeBlock>
+
+### sortData [#sortdata]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertData": "../structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::sortData(
+    InsertData &insertDataStruct
+)
+```
+</CodeBlock>
+
+### createNewFragment [#createnewfragment]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+FragmentInfo * Fragmenter_Namespace::SortedOrderFragmenter::createNewFragment(
+    const Data_Namespace::MemoryLevel memory_level = Data_Namespace::DISK_LEVEL
+)
+```
+</CodeBlock>
+
+creates new fragment, calling createChunk() method of BufferMgr to make a new chunk for each column of the table.
+
+Also unpins the chunks of the previous insert buffer
+
+### deleteFragments [#deletefragments]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::deleteFragments(
+    const std::vector<int> &dropFragIds
+)
+```
+</CodeBlock>
+
+### conditionallyInstantiateFileMgrWithParams [#conditionallyinstantiatefilemgrwithparams]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::conditionallyInstantiateFileMgrWithParams()
+```
+</CodeBlock>
+
+### getChunkMetadata [#getchunkmetadata]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::getChunkMetadata()
+```
+</CodeBlock>
+
+### lockInsertCheckpointData [#lockinsertcheckpointdata]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertData": "../structs/insertdata", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::lockInsertCheckpointData(
+    const InsertData &insertDataStruct
+)
+```
+</CodeBlock>
+
+### insertDataImpl [#insertdataimpl]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertData": "../structs/insertdata", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::insertDataImpl(
+    InsertData &insert_data
+)
+```
+</CodeBlock>
+
+### insertChunksImpl [#insertchunksimpl]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertChunks": "../structs/insertchunks", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::insertChunksImpl(
+    const InsertChunks &insert_chunk
+)
+```
+</CodeBlock>
+
+### addColumns [#addcolumns]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertData": "../structs/insertdata", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::addColumns(
+    const InsertData &insertDataStruct
+)
+```
+</CodeBlock>
+
+### getFragmentInfoFromId [#getfragmentinfofromid]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+FragmentInfo & Fragmenter_Namespace::SortedOrderFragmenter::getFragmentInfoFromId(
+    const int fragment_id
+)
+```
+</CodeBlock>
+
+### vacuum_fixlen_rows [#vacuumfixlenrows]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+auto Fragmenter_Namespace::SortedOrderFragmenter::vacuum_fixlen_rows(
+    const FragmentInfo &fragment,
+    const std::shared_ptr<Chunk_NS::Chunk> &chunk,
+    const std::vector<uint64_t> &frag_offsets
+)
+```
+</CodeBlock>
+
+### vacuum_varlen_rows [#vacuumvarlenrows]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+auto Fragmenter_Namespace::SortedOrderFragmenter::vacuum_varlen_rows(
+    const FragmentInfo &fragment,
+    const std::shared_ptr<Chunk_NS::Chunk> &chunk,
+    const std::vector<uint64_t> &frag_offsets
+)
+```
+</CodeBlock>
+
+### dropFragmentsToSizeNoInsertLock [#dropfragmentstosizenoinsertlock]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::dropFragmentsToSizeNoInsertLock(
+    const size_t max_rows
+)
+```
+</CodeBlock>
+
+### insertChunksIntoFragment [#insertchunksintofragment]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertChunks": "../structs/insertchunks", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::SortedOrderFragmenter::insertChunksIntoFragment(
+    const InsertChunks &insert_chunks,
+    const std::optional<int> delete_column_id,
+    FragmentInfo *current_fragment,
+    const size_t num_rows_to_insert,
+    size_t &num_rows_inserted,
+    size_t &num_rows_left,
+    std::vector<size_t> &valid_row_indices,
+    const size_t start_fragment
+)
+```
+</CodeBlock>
+
+### findDeleteColumnId [#finddeletecolumnid]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::optional<int> Fragmenter_Namespace::SortedOrderFragmenter::findDeleteColumnId() const
+```
+</CodeBlock>
+
+### validateSameNumRows [#validatesamenumrows]
+
+<CodeBlock links={{"SortedOrderFragmenter": "sortedorderfragmenter", "InsertChunks": "../structs/insertchunks", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> Fragmenter_Namespace::SortedOrderFragmenter::validateSameNumRows(
+    const InsertChunks &insert_chunks
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ModifyTransactionTracker` | `UpdelRoll` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `chunkKeyPrefix_` | `std::vector< int >` | |
+| `columnMap_` | `std::map< int, Chunk_NS::Chunk >` | stores a map of column id to metadata about that column |
+| `tracked_in_memory_chunks_` | `std::vector< std::unique_ptr< Chunk_NS::Chunk > >` | |
+| `fragmentInfoVec_` | `std::deque< std::unique_ptr< FragmentInfo > >` | data about each fragment stored - id and number of rows |
+| `dataMgr_` | `Data_Namespace::DataMgr *` | |
+| `catalog_` | `Catalog_Namespace::Catalog *` | |
+| `physicalTableId_` | `const int` | |
+| `shard_` | `const int` | |
+| `maxFragmentRows_` | `size_t` | |
+| `pageSize_` | `size_t` | |
+| `numTuples_` | `size_t` | |
+| `maxFragmentId_` | `int` | |
+| `maxChunkSize_` | `size_t` | |
+| `maxRows_` | `size_t` | |
+| `fragmenterType_` | `std::string` | |
+| `fragmentInfoMutex_` | `heavyai::shared_mutex` | |
+| `insertMutex_` | `heavyai::shared_mutex` | |
+| `defaultInsertLevel_` | `Data_Namespace::MemoryLevel` | |
+| `uses_foreign_storage_` | `const bool` | |
+| `hasMaterializedRowId_` | `bool` | |
+| `rowIdColId_` | `int` | |
+| `varLenColInfo_` | `std::unordered_map< int, size_t >` | |
+| `mutex_access_inmem_states` | `std::shared_ptr< std::mutex >` | |
+| `temp_mutex_` | `std::mutex` | |

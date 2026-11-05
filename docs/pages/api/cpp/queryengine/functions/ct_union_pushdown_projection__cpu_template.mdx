@@ -1,0 +1,233 @@
+---
+title: ct_union_pushdown_projection__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename K, typename T, typename Z>
+NEVER_INLINE HOST int32_t ct_union_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<K> &input1_id,
+    const Column<T> &input1_x,
+    const Column<T> &input1_y,
+    const Column<Z> &input1_z,
+    const Column<K> &input2_id,
+    const Column<T> &input2_x,
+    const Column<T> &input2_y,
+    const Column<Z> &input2_z,
+    const Column<T> &input2_w,
+    Column<K> &output_id,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Z> &output_z,
+    Column<T> &output_w
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_union_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input1_id,
+    const Column<int64_t> &input1_x,
+    const Column<int64_t> &input1_y,
+    const Column<int64_t> &input1_z,
+    const Column<int64_t> &input2_id,
+    const Column<int64_t> &input2_x,
+    const Column<int64_t> &input2_y,
+    const Column<int64_t> &input2_z,
+    const Column<int64_t> &input2_w,
+    Column<int64_t> &output_id,
+    Column<int64_t> &output_x,
+    Column<int64_t> &output_y,
+    Column<int64_t> &output_z,
+    Column<int64_t> &output_w
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_union_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input1_id,
+    const Column<int64_t> &input1_x,
+    const Column<int64_t> &input1_y,
+    const Column<double> &input1_z,
+    const Column<int64_t> &input2_id,
+    const Column<int64_t> &input2_x,
+    const Column<int64_t> &input2_y,
+    const Column<double> &input2_z,
+    const Column<int64_t> &input2_w,
+    Column<int64_t> &output_id,
+    Column<int64_t> &output_x,
+    Column<int64_t> &output_y,
+    Column<double> &output_z,
+    Column<int64_t> &output_w
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_union_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input1_id,
+    const Column<int64_t> &input1_x,
+    const Column<int64_t> &input1_y,
+    const Column<int64_t> &input1_z,
+    const Column<TextEncodingDict> &input2_id,
+    const Column<int64_t> &input2_x,
+    const Column<int64_t> &input2_y,
+    const Column<int64_t> &input2_z,
+    const Column<int64_t> &input2_w,
+    Column<TextEncodingDict> &output_id,
+    Column<int64_t> &output_x,
+    Column<int64_t> &output_y,
+    Column<int64_t> &output_z,
+    Column<int64_t> &output_w
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_union_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input1_id,
+    const Column<int64_t> &input1_x,
+    const Column<int64_t> &input1_y,
+    const Column<double> &input1_z,
+    const Column<TextEncodingDict> &input2_id,
+    const Column<int64_t> &input2_x,
+    const Column<int64_t> &input2_y,
+    const Column<double> &input2_z,
+    const Column<int64_t> &input2_w,
+    Column<TextEncodingDict> &output_id,
+    Column<int64_t> &output_x,
+    Column<int64_t> &output_y,
+    Column<double> &output_z,
+    Column<int64_t> &output_w
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_union_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input1_id,
+    const Column<double> &input1_x,
+    const Column<double> &input1_y,
+    const Column<int64_t> &input1_z,
+    const Column<int64_t> &input2_id,
+    const Column<double> &input2_x,
+    const Column<double> &input2_y,
+    const Column<int64_t> &input2_z,
+    const Column<double> &input2_w,
+    Column<int64_t> &output_id,
+    Column<double> &output_x,
+    Column<double> &output_y,
+    Column<int64_t> &output_z,
+    Column<double> &output_w
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_union_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input1_id,
+    const Column<double> &input1_x,
+    const Column<double> &input1_y,
+    const Column<double> &input1_z,
+    const Column<int64_t> &input2_id,
+    const Column<double> &input2_x,
+    const Column<double> &input2_y,
+    const Column<double> &input2_z,
+    const Column<double> &input2_w,
+    Column<int64_t> &output_id,
+    Column<double> &output_x,
+    Column<double> &output_y,
+    Column<double> &output_z,
+    Column<double> &output_w
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_union_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input1_id,
+    const Column<double> &input1_x,
+    const Column<double> &input1_y,
+    const Column<int64_t> &input1_z,
+    const Column<TextEncodingDict> &input2_id,
+    const Column<double> &input2_x,
+    const Column<double> &input2_y,
+    const Column<int64_t> &input2_z,
+    const Column<double> &input2_w,
+    Column<TextEncodingDict> &output_id,
+    Column<double> &output_x,
+    Column<double> &output_y,
+    Column<int64_t> &output_z,
+    Column<double> &output_w
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_union_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input1_id,
+    const Column<double> &input1_x,
+    const Column<double> &input1_y,
+    const Column<double> &input1_z,
+    const Column<TextEncodingDict> &input2_id,
+    const Column<double> &input2_x,
+    const Column<double> &input2_y,
+    const Column<double> &input2_z,
+    const Column<double> &input2_w,
+    Column<TextEncodingDict> &output_id,
+    Column<double> &output_x,
+    Column<double> &output_y,
+    Column<double> &output_z,
+    Column<double> &output_w
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,140 @@
+---
+title: PerfectHashTableEntryInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <PerfectHashTable.h>
+```
+
+**Inherits from:** `HashTableEntryInfo` (public)
+
+---
+
+## Constructors
+
+### PerfectHashTableEntryInfo [#perfecthashtableentryinfo]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+PerfectHashTableEntryInfo::PerfectHashTableEntryInfo(
+    size_t num_hash_entries,
+    size_t num_keys,
+    size_t rowid_size_in_bytes,
+    HashType layout,
+    bool for_window_framing = false
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### computeTotalNumSlots [#computetotalnumslots]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTableEntryInfo::computeTotalNumSlots() const override
+```
+</CodeBlock>
+
+### computeHashTableSize [#computehashtablesize]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTableEntryInfo::computeHashTableSize() const override
+```
+</CodeBlock>
+
+### getNumHashEntries [#getnumhashentries]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTableEntryInfo::getNumHashEntries() const
+```
+</CodeBlock>
+
+### getNumKeys [#getnumkeys]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTableEntryInfo::getNumKeys() const
+```
+</CodeBlock>
+
+### getRowIdSizeInBytes [#getrowidsizeinbytes]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t PerfectHashTableEntryInfo::getRowIdSizeInBytes() const
+```
+</CodeBlock>
+
+### getHashTableLayout [#gethashtablelayout]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+HashType PerfectHashTableEntryInfo::getHashTableLayout() const
+```
+</CodeBlock>
+
+### setNumHashEntries [#setnumhashentries]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void PerfectHashTableEntryInfo::setNumHashEntries(
+    size_t num_hash_entries
+)
+```
+</CodeBlock>
+
+### setNumKeys [#setnumkeys]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void PerfectHashTableEntryInfo::setNumKeys(
+    size_t num_keys
+)
+```
+</CodeBlock>
+
+### setRowIdSizeInBytes [#setrowidsizeinbytes]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void PerfectHashTableEntryInfo::setRowIdSizeInBytes(
+    size_t rowid_size_in_bytes
+)
+```
+</CodeBlock>
+
+### setHashTableLayout [#sethashtablelayout]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void PerfectHashTableEntryInfo::setHashTableLayout(
+    HashType layout
+)
+```
+</CodeBlock>
+
+### forWindowFraming [#forwindowframing]
+
+<CodeBlock links={{"PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+bool PerfectHashTableEntryInfo::forWindowFraming() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `num_hash_entries_` | `size_t` | |
+| `num_keys_` | `size_t` | |
+| `rowid_size_in_bytes_` | `size_t` | |
+| `layout_` | `HashType` | |
+| `for_window_framing_` | `bool` | |

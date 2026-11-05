@@ -1,0 +1,14 @@
+---
+title: create_device_kernel
+description: ""
+---
+
+<CodeBlock links={{"CompilationContext": "../classes/compilationcontext", "DeviceKernel": "../classes/devicekernel"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<DeviceKernel> create_device_kernel(
+    const CompilationContext *ctx,
+    int device_id,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>

@@ -1,0 +1,95 @@
+---
+title: Parser::OptimizeTableStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### OptimizeTableStmt [#optimizetablestmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"OptimizeTableStmt": "optimizetablestmt", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::OptimizeTableStmt::OptimizeTableStmt(
+    std::string *table,
+    std::list<NameValueAssign *> *o
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"OptimizeTableStmt": "optimizetablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::OptimizeTableStmt::OptimizeTableStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getTableName [#gettablename]
+
+<CodeBlock links={{"OptimizeTableStmt": "optimizetablestmt"}}>
+```cpp showLineNumbers={false}
+const std::string Parser::OptimizeTableStmt::getTableName() const
+```
+</CodeBlock>
+
+### shouldVacuumDeletedRows [#shouldvacuumdeletedrows]
+
+<CodeBlock links={{"OptimizeTableStmt": "optimizetablestmt"}}>
+```cpp showLineNumbers={false}
+bool Parser::OptimizeTableStmt::shouldVacuumDeletedRows() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"OptimizeTableStmt": "optimizetablestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::OptimizeTableStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"OptimizeTableStmt": "optimizetablestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::OptimizeTableStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `options_` | `std::list< std::unique_ptr< NameValueAssign > >` | |

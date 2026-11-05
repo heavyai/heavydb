@@ -1,0 +1,131 @@
+---
+title: foreign_storage::ParseBufferRequest
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/TextFileBufferParser.h>
+```
+
+---
+
+## Constructors
+
+### ParseBufferRequest [#parsebufferrequest]
+
+<Tabs>
+<Tab title="Move">
+
+<CodeBlock links={{"ParseBufferRequest": "parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParseBufferRequest::ParseBufferRequest(
+    ParseBufferRequest &&request
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ParseBufferRequest": "parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParseBufferRequest::ParseBufferRequest(
+    size_t buffer_size,
+    const import_export::CopyParams &copy_params,
+    int db_id,
+    const ForeignTable *foreign_table,
+    const std::set<int> column_filter_set,
+    const std::string &full_path,
+    const bool track_rejected_rows = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"ParseBufferRequest": "parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParseBufferRequest::ParseBufferRequest(
+    const ParseBufferRequest &request
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getCatalog [#getcatalog]
+
+<CodeBlock links={{"ParseBufferRequest": "parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog_Namespace::Catalog> foreign_storage::ParseBufferRequest::getCatalog() const
+```
+</CodeBlock>
+
+### getColumns [#getcolumns]
+
+<CodeBlock links={{"ParseBufferRequest": "parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+std::list<const ColumnDescriptor *> foreign_storage::ParseBufferRequest::getColumns() const
+```
+</CodeBlock>
+
+### getTableId [#gettableid]
+
+<CodeBlock links={{"ParseBufferRequest": "parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+int32_t foreign_storage::ParseBufferRequest::getTableId() const
+```
+</CodeBlock>
+
+### getTableName [#gettablename]
+
+<CodeBlock links={{"ParseBufferRequest": "parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ParseBufferRequest::getTableName() const
+```
+</CodeBlock>
+
+### getMaxFragRows [#getmaxfragrows]
+
+<CodeBlock links={{"ParseBufferRequest": "parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ParseBufferRequest::getMaxFragRows() const
+```
+</CodeBlock>
+
+### getFilePath [#getfilepath]
+
+<CodeBlock links={{"ParseBufferRequest": "parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ParseBufferRequest::getFilePath() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buffer` | `std::unique_ptr< char[]>` | |
+| `buffer_size` | `size_t` | |
+| `buffer_alloc_size` | `size_t` | |
+| `copy_params` | `const import_export::CopyParams` | |
+| `db_id` | `const int` | |
+| `foreign_table_schema` | `std::unique_ptr< ForeignTableSchema >` | |
+| `import_buffers` | `std::vector< std::unique_ptr< import_export::UnmanagedTypedImportBuffer > >` | |
+| `buffer_row_count` | `size_t` | |
+| `begin_pos` | `size_t` | |
+| `end_pos` | `size_t` | |
+| `first_row_index` | `size_t` | |
+| `file_offset` | `size_t` | |
+| `process_row_count` | `size_t` | |
+| `full_path` | `std::string` | |
+| `track_rejected_rows` | `const bool` | |
+| `processed_row_count` | `size_t` | |

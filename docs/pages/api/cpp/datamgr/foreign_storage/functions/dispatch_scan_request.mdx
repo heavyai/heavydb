@@ -1,0 +1,15 @@
+---
+title: foreign_storage::dispatch_scan_request
+description: "Dispatches a new metadata scan request by adding the request to the pending requests queue to be consumed by a worker thread."
+---
+
+<CodeBlock links={{"MetadataScanMultiThreadingParams": "../structs/metadatascanmultithreadingparams", "ParseBufferRequest": "../structs/parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::dispatch_scan_request(
+    MetadataScanMultiThreadingParams &multi_threading_params,
+    ParseBufferRequest &request
+)
+```
+</CodeBlock>
+
+Dispatches a new metadata scan request by adding the request to the pending requests queue to be consumed by a worker thread.

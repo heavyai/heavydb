@@ -1,0 +1,33 @@
+---
+title: foreign_storage::partition_for_threads
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+auto foreign_storage::partition_for_threads(
+    const std::set<T> &items,
+    size_t max_threads
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+auto foreign_storage::partition_for_threads(
+    const std::vector<T> &items,
+    size_t max_threads
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

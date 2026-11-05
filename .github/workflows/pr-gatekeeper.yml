@@ -11,13 +11,14 @@ name: PR Gatekeeper
 #   core      → pr-required-checks   → /test
 #   deps      → deps-image-builder   → /test deps  (rebuilds deps + runs core)
 #   dev-tools → dev-tools tests      → /test dev-tools
+#   docs      → docs tests           → /test docs
 #
 # If a category's files are not touched the check is immediately set to
 # success ("No changes in this category"). If they are touched it is set
 # to pending with a description telling the developer which command to run.
 #
-# No catch-all: files outside every category (docs, README, etc.) require
-# no tests.
+# No catch-all: files outside every category (README, etc.) require no
+# tests.
 # ---------------------------------------------------------------------------
 
 on:
@@ -158,6 +159,20 @@ jobs:
                 excludePatterns: [],
                 pendingDesc: 'Run /test dev-tools when ready',
                 successDesc: 'No dev-tools changes',
+              },
+              {
+                name: 'docs',
+                // docs tests is its own required branch-protection context
+                // (unlike deps, docs changes can't affect the core build).
+                context: 'docs tests',
+                patterns: [
+                  /^fern\//,
+                  /^docs\/pages\//,
+                  /^docs\/images\//,
+                ],
+                excludePatterns: [],
+                pendingDesc: 'Run /test docs when ready',
+                successDesc: 'No docs changes',
               },
             ];
 

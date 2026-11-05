@@ -1,0 +1,61 @@
+---
+title: lockmgr::LockContainerImpl
+description: ""
+---
+
+<CodeBlock id="LockContainerImpl" links={{"LockContainerImpl": "lockcontainerimpl"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename LOCK>
+class LockContainerImpl
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgrImpl.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+<ParamField path="LOCK" type="typename">
+</ParamField>
+
+**Inherits from:** `lockmgr::AbstractLockContainer< T >` (public)
+
+---
+
+## Constructors
+
+### LockContainerImpl [#lockcontainerimpl]
+
+<CodeBlock links={{"LockContainerImpl": "lockcontainerimpl"}}>
+```cpp showLineNumbers={false}
+lockmgr::LockContainerImpl<T, LOCK>::LockContainerImpl(
+    T obj,
+    LOCK &&lock
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"LockContainerImpl": "lockcontainerimpl"}}>
+```cpp showLineNumbers={false}
+T lockmgr::LockContainerImpl<T, LOCK>::operator()() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `obj_` | `T` | |
+| `lock_` | `LOCK` | |

@@ -1,0 +1,286 @@
+---
+title: Analyzer::DatetruncExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### DatetruncExpr [#datetruncexpr]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::DatetruncExpr::DatetruncExpr(
+    const SQLTypeInfo &ti,
+    bool has_agg,
+    DatetruncField f,
+    std::shared_ptr<Analyzer::Expr> e
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_field [#getfield]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+DatetruncField Analyzer::DatetruncExpr::get_field() const
+```
+</CodeBlock>
+
+### get_from_expr [#getfromexpr]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::DatetruncExpr::get_from_expr() const
+```
+</CodeBlock>
+
+### get_own_from_expr [#getownfromexpr]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::shared_ptr<Analyzer::Expr> Analyzer::DatetruncExpr::get_own_from_expr() const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DatetruncExpr::deep_copy() const override
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DatetruncExpr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DatetruncExpr::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DatetruncExpr::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DatetruncExpr::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DatetruncExpr::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DatetruncExpr::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DatetruncExpr::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::DatetruncExpr::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::DatetruncExpr::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DatetruncExpr::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DatetruncExpr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::DatetruncExpr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DatetruncExpr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::DatetruncExpr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DatetruncExpr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DatetruncExpr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::DatetruncExpr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::DatetruncExpr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::DatetruncExpr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DatetruncExpr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DatetruncExpr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"DatetruncExpr": "datetruncexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::DatetruncExpr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `field_` | `DatetruncField` | |
+| `from_expr_` | `std::shared_ptr< Analyzer::Expr >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

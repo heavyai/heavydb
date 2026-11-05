@@ -1,0 +1,151 @@
+---
+title: TableOptimizer
+description: "Driver for running cleanup processes on a table."
+---
+
+Driver for running cleanup processes on a table.
+
+`TableOptimizer` provides functions for various cleanup processes that improve performance on a table. Only tables that have been modified using updates or deletes are candidates for cleanup. If the table descriptor corresponds to a sharded table, table optimizer processes each physical shard.
+
+```cpp showLineNumbers={false}
+#include <TableOptimizer.h>
+```
+
+---
+
+## Constructors
+
+### TableOptimizer [#tableoptimizer]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+TableOptimizer::TableOptimizer(
+    const TableDescriptor *td,
+    Executor *executor,
+    const Catalog_Namespace::Catalog &cat
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### recomputeMetadata [#recomputemetadata]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer"}}>
+```cpp showLineNumbers={false}
+void TableOptimizer::recomputeMetadata() const
+```
+</CodeBlock>
+
+Recomputes per-chunk metadata for each fragment in the table.
+
+Updates and deletes can cause chunk metadata to become wider than the values in the chunk. Recomputing the metadata narrows the range to fit the chunk, as well as setting or unsetting the nulls flag as appropriate.
+
+### recomputeMetadataUnlocked [#recomputemetadataunlocked]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer", "TableUpdateMetadata": "../structs/tableupdatemetadata"}}>
+```cpp showLineNumbers={false}
+void TableOptimizer::recomputeMetadataUnlocked(
+    const TableUpdateMetadata &table_update_metadata
+) const
+```
+</CodeBlock>
+
+Recomputes column chunk metadata for the given set of fragments.
+
+The caller of this method is expected to have already acquired the executor lock.
+
+### vacuumDeletedRows [#vacuumdeletedrows]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer"}}>
+```cpp showLineNumbers={false}
+void TableOptimizer::vacuumDeletedRows() const
+```
+</CodeBlock>
+
+Compacts fragments to remove deleted rows.
+
+When a row is deleted, a boolean deleted system column is set to true. Vacuuming removes all deleted rows from a fragment. Note that vacuuming is a checkpointing operation, so data on disk will increase even though the number of rows for the current epoch has decreased.
+
+### vacuumFragmentsAboveMinSelectivity [#vacuumfragmentsaboveminselectivity]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer", "TableUpdateMetadata": "../structs/tableupdatemetadata"}}>
+```cpp showLineNumbers={false}
+void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
+    const TableUpdateMetadata &table_update_metadata
+) const
+```
+</CodeBlock>
+
+Vacuums fragments with a deleted rows percentage that exceeds the configured minimum vacuum selectivity threshold.
+
+### recomputeDeletedColumnMetadata [#recomputedeletedcolumnmetadata]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer", "DeletedColumnStats": "../structs/deletedcolumnstats"}}>
+```cpp showLineNumbers={false}
+DeletedColumnStats TableOptimizer::recomputeDeletedColumnMetadata(
+    const TableDescriptor *td,
+    const std::set<size_t> &fragment_indexes = {}
+) const
+```
+</CodeBlock>
+
+### recomputeColumnMetadata [#recomputecolumnmetadata]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer"}}>
+```cpp showLineNumbers={false}
+void TableOptimizer::recomputeColumnMetadata(
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd,
+    const std::unordered_map<int, size_t> &tuple_count_map,
+    std::optional<Data_Namespace::MemoryLevel> memory_level,
+    const std::set<size_t> &fragment_indexes
+) const
+```
+</CodeBlock>
+
+### getFragmentIndexes [#getfragmentindexes]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer"}}>
+```cpp showLineNumbers={false}
+std::set<size_t> TableOptimizer::getFragmentIndexes(
+    const TableDescriptor *td,
+    const std::set<int> &fragment_ids
+) const
+```
+</CodeBlock>
+
+### vacuumFragments [#vacuumfragments]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer"}}>
+```cpp showLineNumbers={false}
+void TableOptimizer::vacuumFragments(
+    const TableDescriptor *td,
+    const std::set<int> &fragment_ids = {}
+) const
+```
+</CodeBlock>
+
+### getDeletedColumnStats [#getdeletedcolumnstats]
+
+<CodeBlock links={{"TableOptimizer": "tableoptimizer", "DeletedColumnStats": "../structs/deletedcolumnstats"}}>
+```cpp showLineNumbers={false}
+DeletedColumnStats TableOptimizer::getDeletedColumnStats(
+    const TableDescriptor *td,
+    const std::set<size_t> &fragment_indexes
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `td_` | `const TableDescriptor *` | |
+| `executor_` | `Executor *` | |
+| `cat_` | `const Catalog_Namespace::Catalog &` | |
+| `ROW_SET_SIZE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |

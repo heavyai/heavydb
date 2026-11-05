@@ -1,0 +1,59 @@
+---
+title: KeyComparator
+description: ""
+---
+
+<CodeBlock id="KeyComparator" links={{"KeyComparator": "keycomparator"}}>
+```cpp showLineNumbers={false}
+template <typename KeyT = int64_t>
+struct KeyComparator
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="KeyT" type="typename" default="int64_t">
+</ParamField>
+
+---
+
+## Constructors
+
+### KeyComparator [#keycomparator]
+
+<CodeBlock links={{"KeyComparator": "keycomparator"}}>
+```cpp showLineNumbers={false}
+DEVICE KeyComparator<KeyT>::KeyComparator(
+    const HeapOrdering hp_order,
+    const bool nullable,
+    const KeyT null_val,
+    const NullsOrdering null_order
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"KeyComparator": "keycomparator"}}>
+```cpp showLineNumbers={false}
+ALWAYS_INLINE DEVICE bool KeyComparator<KeyT>::operator()(
+    const KeyT lhs,
+    const KeyT rhs
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `heap_ordering` | `const HeapOrdering` | |
+| `has_nulls` | `const bool` | |
+| `null_key` | `const KeyT` | |
+| `nulls_ordering` | `const NullsOrdering` | |

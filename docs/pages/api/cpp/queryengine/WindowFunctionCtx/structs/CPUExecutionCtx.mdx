@@ -1,0 +1,42 @@
+---
+title: WindowFunctionCtx::CPUExecutionCtx
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <WindowFunctionCtx/WindowContext.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~CPUExecutionCtx
+
+<CodeBlock links={{"CPUExecutionCtx": "cpuexecutionctx"}}>
+```cpp showLineNumbers={false}
+WindowFunctionCtx::CPUExecutionCtx::~CPUExecutionCtx()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `output_` | `int8_t *` | |
+| `dummy_count_` | `int32_t` | |
+| `dummy_offset_` | `int32_t` | |
+| `dummy_payload_` | `int32_t *` | |
+| `partition_start_` | `int8_t *` | |
+| `partition_end_` | `int8_t *` | |
+| `partition_start_sz_` | `size_t` | |
+| `partition_end_sz_` | `size_t` | |
+| `sorted_partition_buf_` | `int8_t *` | |
+| `ordered_partition_null_start_pos_` | `std::vector< int64_t >` | |
+| `ordered_partition_null_end_pos_` | `std::vector< int64_t >` | |
+| `partition_start_offset_` | `std::vector< int64_t >` | |
+| `intermediate_output_buffer_` | `int64_t *` | |

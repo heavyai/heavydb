@@ -1,0 +1,397 @@
+---
+title: SegmentTree
+description: ""
+---
+
+<CodeBlock id="SegmentTree" links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+template <typename INPUT_TYPE, typename AGG_TYPE>
+class SegmentTree
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <SegmentTree.h>
+```
+
+**Template parameters**
+
+<ParamField path="INPUT_TYPE" type="typename">
+</ParamField>
+
+<ParamField path="AGG_TYPE" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### SegmentTree [#segmenttree]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+SegmentTree<INPUT_TYPE, AGG_TYPE>::SegmentTree(
+    std::vector<const int8_t *> const &input_col_bufs,
+    SQLTypeInfo const &input_col_ti,
+    int32_t const *original_input_col_idx_buf,
+    int64_t const *ordered_input_col_idx_buf,
+    int64_t num_elems,
+    std::pair<size_t, IndexPair> const tree_info,
+    size_t tree_size_in_bytes,
+    size_t aggregate_tree_buf_start_offset,
+    int8_t *aggregate_tree_buf,
+    SqlWindowFunctionKind agg_type,
+    size_t fan_out
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### buildAggregateTree [#buildaggregatetree]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+void SegmentTree<INPUT_TYPE, AGG_TYPE>::buildAggregateTree()
+```
+</CodeBlock>
+
+### query [#query]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::query(
+    const IndexPair &query_range
+) const
+```
+</CodeBlock>
+
+### getAggregatedValues [#getaggregatedvalues]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE * SegmentTree<INPUT_TYPE, AGG_TYPE>::getAggregatedValues() const
+```
+</CodeBlock>
+
+### getDerivedAggregatedValues [#getderivedaggregatedvalues]
+
+<CodeBlock links={{"SegmentTree": "segmenttree", "SumAndCountPair": "../structs/sumandcountpair"}}>
+```cpp showLineNumbers={false}
+SumAndCountPair<AGG_TYPE> * SegmentTree<INPUT_TYPE, AGG_TYPE>::getDerivedAggregatedValues() const
+```
+</CodeBlock>
+
+### getLeafNodeCount [#getleafnodecount]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+size_t SegmentTree<INPUT_TYPE, AGG_TYPE>::getLeafNodeCount() const
+```
+</CodeBlock>
+
+### getTreeNodeCount [#gettreenodecount]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+size_t SegmentTree<INPUT_TYPE, AGG_TYPE>::getTreeNodeCount() const
+```
+</CodeBlock>
+
+### getTreeSizeInBytes [#gettreesizeinbytes]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+size_t SegmentTree<INPUT_TYPE, AGG_TYPE>::getTreeSizeInBytes() const
+```
+</CodeBlock>
+
+### getNumElems [#getnumelems]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+size_t SegmentTree<INPUT_TYPE, AGG_TYPE>::getNumElems() const
+```
+</CodeBlock>
+
+### getLeafDepth [#getleafdepth]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+size_t SegmentTree<INPUT_TYPE, AGG_TYPE>::getLeafDepth() const
+```
+</CodeBlock>
+
+### getTreeFanout [#gettreefanout]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+size_t SegmentTree<INPUT_TYPE, AGG_TYPE>::getTreeFanout() const
+```
+</CodeBlock>
+
+### getLeafRange [#getleafrange]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+IndexPair SegmentTree<INPUT_TYPE, AGG_TYPE>::getLeafRange() const
+```
+</CodeBlock>
+
+### computeLeafStartOffset [#computeleafstartoffset]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+size_t SegmentTree<INPUT_TYPE, AGG_TYPE>::computeLeafStartOffset()
+```
+</CodeBlock>
+
+### fetch_col_for_count [#fetchcolforcount]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::fetch_col_for_count(
+    size_t const idx
+)
+```
+</CodeBlock>
+
+### fetch_col_for_non_cond_agg [#fetchcolfornoncondagg]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::fetch_col_for_non_cond_agg(
+    size_t const idx
+)
+```
+</CodeBlock>
+
+### fetch_col_for_cond_agg [#fetchcolforcondagg]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::fetch_col_for_cond_agg(
+    size_t const idx
+)
+```
+</CodeBlock>
+
+### build [#build]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::build(
+    int64_t cur_node_idx,
+    size_t cur_node_depth
+)
+```
+</CodeBlock>
+
+### buildForCondAgg [#buildforcondagg]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::buildForCondAgg(
+    int64_t cur_node_idx,
+    size_t cur_node_depth
+)
+```
+</CodeBlock>
+
+### buildForCount [#buildforcount]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::buildForCount(
+    int64_t cur_node_idx,
+    size_t cur_node_depth
+)
+```
+</CodeBlock>
+
+### buildForConditionalChangeEvent [#buildforconditionalchangeevent]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::buildForConditionalChangeEvent(
+    int64_t cur_node_idx,
+    size_t cur_node_depth
+)
+```
+</CodeBlock>
+
+### buildForDerivedAggregate [#buildforderivedaggregate]
+
+<CodeBlock links={{"SegmentTree": "segmenttree", "SumAndCountPair": "../structs/sumandcountpair"}}>
+```cpp showLineNumbers={false}
+SumAndCountPair<AGG_TYPE> SegmentTree<INPUT_TYPE, AGG_TYPE>::buildForDerivedAggregate(
+    int64_t cur_node_idx,
+    size_t cur_node_depth
+)
+```
+</CodeBlock>
+
+### prepareChildValuesforAggregation [#preparechildvaluesforaggregation]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+std::vector<AGG_TYPE> SegmentTree<INPUT_TYPE, AGG_TYPE>::prepareChildValuesforAggregation(
+    int64_t parent_idx,
+    size_t cur_node_depth
+)
+```
+</CodeBlock>
+
+### prepareChildValuesforConditionalAggregation [#preparechildvaluesforconditionalaggregation]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+std::vector<AGG_TYPE> SegmentTree<INPUT_TYPE, AGG_TYPE>::prepareChildValuesforConditionalAggregation(
+    int64_t parent_idx,
+    size_t cur_node_depth
+)
+```
+</CodeBlock>
+
+### prepareChildValuesforAggregationForCount [#preparechildvaluesforaggregationforcount]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+std::vector<AGG_TYPE> SegmentTree<INPUT_TYPE, AGG_TYPE>::prepareChildValuesforAggregationForCount(
+    int64_t parent_idx,
+    size_t cur_node_depth
+)
+```
+</CodeBlock>
+
+### prepareChildValuesforAggregationForConditionalChangeEvent [#preparechildvaluesforaggregationforconditionalchangeevent]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+std::vector<AGG_TYPE> SegmentTree<INPUT_TYPE, AGG_TYPE>::prepareChildValuesforAggregationForConditionalChangeEvent(
+    int64_t const parent_idx,
+    size_t const cur_node_depth
+)
+```
+</CodeBlock>
+
+### prepareChildValuesforDerivedAggregate [#preparechildvaluesforderivedaggregate]
+
+<CodeBlock links={{"SegmentTree": "segmenttree", "SumAndCountPair": "../structs/sumandcountpair"}}>
+```cpp showLineNumbers={false}
+std::vector<SumAndCountPair<AGG_TYPE>> SegmentTree<INPUT_TYPE, AGG_TYPE>::prepareChildValuesforDerivedAggregate(
+    int64_t parent_idx,
+    size_t cur_node_depth
+)
+```
+</CodeBlock>
+
+### aggregateValue [#aggregatevalue]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::aggregateValue(
+    const std::vector<AGG_TYPE> &vals
+) const
+```
+</CodeBlock>
+
+### aggregateValueViaColumnAccess [#aggregatevalueviacolumnaccess]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::aggregateValueViaColumnAccess(
+    int64_t cur_col_idx,
+    size_t num_visits
+) const
+```
+</CodeBlock>
+
+### aggregateValueForDerivedAggregate [#aggregatevalueforderivedaggregate]
+
+<CodeBlock links={{"SegmentTree": "segmenttree", "SumAndCountPair": "../structs/sumandcountpair"}}>
+```cpp showLineNumbers={false}
+SumAndCountPair<AGG_TYPE> SegmentTree<INPUT_TYPE, AGG_TYPE>::aggregateValueForDerivedAggregate(
+    const std::vector<SumAndCountPair<AGG_TYPE>> &vals
+) const
+```
+</CodeBlock>
+
+### aggregateValueForDerivedAggregateViaColumnAccess [#aggregatevalueforderivedaggregateviacolumnaccess]
+
+<CodeBlock links={{"SegmentTree": "segmenttree", "SumAndCountPair": "../structs/sumandcountpair"}}>
+```cpp showLineNumbers={false}
+SumAndCountPair<AGG_TYPE> SegmentTree<INPUT_TYPE, AGG_TYPE>::aggregateValueForDerivedAggregateViaColumnAccess(
+    int64_t cur_col_idx,
+    size_t num_visits
+) const
+```
+</CodeBlock>
+
+### search [#search]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+AGG_TYPE SegmentTree<INPUT_TYPE, AGG_TYPE>::search(
+    const IndexPair &query_range,
+    int64_t cur_node_idx,
+    size_t cur_node_depth,
+    int64_t search_range_start_idx,
+    int64_t search_range_end_idx
+) const
+```
+</CodeBlock>
+
+### searchForDerivedAggregate [#searchforderivedaggregate]
+
+<CodeBlock links={{"SegmentTree": "segmenttree", "SumAndCountPair": "../structs/sumandcountpair"}}>
+```cpp showLineNumbers={false}
+SumAndCountPair<AGG_TYPE> SegmentTree<INPUT_TYPE, AGG_TYPE>::searchForDerivedAggregate(
+    const IndexPair &query_range,
+    int64_t cur_node_idx,
+    size_t cur_node_depth,
+    int64_t search_range_start_idx,
+    int64_t search_range_end_idx
+) const
+```
+</CodeBlock>
+
+### computeChildIndexes [#computechildindexes]
+
+<CodeBlock links={{"SegmentTree": "segmenttree"}}>
+```cpp showLineNumbers={false}
+std::vector<int64_t> SegmentTree<INPUT_TYPE, AGG_TYPE>::computeChildIndexes(
+    std::vector<int64_t> &child_indexes,
+    int64_t parent_idx,
+    size_t parent_tree_depth
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `input_col_buf_` | `const INPUT_TYPE *const` | |
+| `cond_col_buf_` | `const int8_t *const` | |
+| `input_col_ti_` | `SQLTypeInfo const` | |
+| `original_input_col_idx_buf_` | `const int32_t *const` | |
+| `ordered_input_col_idx_buf_` | `const int64_t *const` | |
+| `num_elems_` | `int64_t const` | |
+| `fan_out_` | `size_t const` | |
+| `agg_type_` | `SqlWindowFunctionKind const` | |
+| `is_conditional_agg_` | `bool const` | |
+| `input_type_null_val_` | `INPUT_TYPE const` | |
+| `null_val_` | `AGG_TYPE const` | |
+| `invalid_val_` | `INPUT_TYPE const` | |
+| `leaf_depth_` | `size_t` | |
+| `leaf_range_` | `IndexPair` | |
+| `leaf_node_count_` | `size_t` | |
+| `tree_node_count_` | `size_t` | |
+| `tree_size_in_bytes_` | `size_t` | |
+| `derived_aggregated_` | `SumAndCountPair< AGG_TYPE > *` | |
+| `aggregated_values_` | `AGG_TYPE *` | |

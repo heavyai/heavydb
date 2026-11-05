@@ -1,0 +1,346 @@
+---
+title: Analyzer::AggExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### AggExpr [#aggexpr]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::AggExpr::AggExpr(
+    const SQLTypeInfo &ti,
+    SQLAgg a,
+    std::shared_ptr<Analyzer::Expr> g,
+    bool d,
+    std::shared_ptr<Analyzer::Expr> e
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::AggExpr::AggExpr(
+    SQLTypes t,
+    SQLAgg a,
+    Expr *g,
+    bool d,
+    std::shared_ptr<Analyzer::Expr> e,
+    int idx
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_aggtype [#getaggtype]
+
+<CodeBlock links={{"AggExpr": "aggexpr"}}>
+```cpp showLineNumbers={false}
+SQLAgg Analyzer::AggExpr::get_aggtype() const
+```
+</CodeBlock>
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"AggExpr": "aggexpr"}}>
+```cpp showLineNumbers={false}
+Expr * Analyzer::AggExpr::get_arg() const
+```
+</CodeBlock>
+
+### get_own_arg [#getownarg]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::get_own_arg() const
+```
+</CodeBlock>
+
+### get_is_distinct [#getisdistinct]
+
+<CodeBlock links={{"AggExpr": "aggexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::AggExpr::get_is_distinct() const
+```
+</CodeBlock>
+
+### get_arg1 [#getarg1]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::get_arg1() const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::deep_copy() const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"AggExpr": "aggexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::AggExpr::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"AggExpr": "aggexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::AggExpr::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::AggExpr::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"AggExpr": "aggexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::AggExpr::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"AggExpr": "aggexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::AggExpr::operator==(
+    const AggExpr &rhs
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### toString [#tostring]
+
+<CodeBlock links={{"AggExpr": "aggexpr"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::AggExpr::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"AggExpr": "aggexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::AggExpr::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::AggExpr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::AggExpr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::AggExpr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::AggExpr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::AggExpr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::AggExpr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::AggExpr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::AggExpr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::AggExpr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"AggExpr": "aggexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::AggExpr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `aggtype` | `SQLAgg` | |
+| `arg` | `std::shared_ptr< Analyzer::Expr >` | |
+| `is_distinct` | `bool` | |
+| `arg1` | `std::shared_ptr< Analyzer::Expr >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

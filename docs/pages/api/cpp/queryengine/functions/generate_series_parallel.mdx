@@ -1,0 +1,64 @@
+---
+title: generate_series_parallel
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+int32_t generate_series_parallel(
+    const T start,
+    const T stop,
+    const K step,
+    Column<T> &series_output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template int32_t generate_series_parallel(
+    int64_t,
+    int64_t,
+    int64_t,
+    Column<int64_t> &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Timestamp": "../structs/timestamp", "DayTimeInterval": "../structs/daytimeinterval", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template int32_t generate_series_parallel(
+    Timestamp,
+    Timestamp,
+    DayTimeInterval,
+    Column<Timestamp> &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Timestamp": "../structs/timestamp", "YearMonthTimeInterval": "../structs/yearmonthtimeinterval", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template int32_t generate_series_parallel(
+    Timestamp,
+    Timestamp,
+    YearMonthTimeInterval,
+    Column<Timestamp> &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

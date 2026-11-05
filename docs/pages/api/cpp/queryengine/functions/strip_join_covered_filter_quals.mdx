@@ -1,0 +1,13 @@
+---
+title: strip_join_covered_filter_quals
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &quals,
+    const JoinQualsPerNestingLevel &join_quals
+)
+```
+</CodeBlock>

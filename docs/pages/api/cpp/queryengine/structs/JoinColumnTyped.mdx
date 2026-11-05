@@ -1,0 +1,68 @@
+---
+title: JoinColumnTyped
+description: "Helper class for viewing a JoinColumn and it's matching JoinColumnTypeInfo as a single object."
+---
+
+Helper class for viewing a [JoinColumn](joincolumn) and it's matching [JoinColumnTypeInfo](joincolumntypeinfo) as a single object.
+
+```cpp showLineNumbers={false}
+#include <JoinColumnIterator.h>
+```
+
+---
+
+## Methods
+
+### begin [#begin]
+
+<CodeBlock links={{"JoinColumnTyped": "joincolumntyped", "JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+DEVICE JoinColumnIterator JoinColumnTyped::begin()
+```
+</CodeBlock>
+
+### end [#end]
+
+<CodeBlock links={{"JoinColumnTyped": "joincolumntyped", "JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+DEVICE JoinColumnIterator JoinColumnTyped::end()
+```
+</CodeBlock>
+
+### slice [#slice]
+
+<CodeBlock links={{"JoinColumnTyped": "joincolumntyped", "Slice": "#slice"}}>
+```cpp showLineNumbers={false}
+DEVICE Slice JoinColumnTyped::slice(
+    size_t start,
+    size_t step
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `join_column` | `const struct JoinColumn *` | |
+| `type_info` | `const struct JoinColumnTypeInfo *` | |
+
+---
+
+## Inner classes
+
+### Slice
+
+<CodeBlock links={{"JoinColumnTyped": "joincolumntyped"}}>
+```cpp showLineNumbers={false}
+struct JoinColumnTyped::Slice
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `join_column_typed` | `JoinColumnTyped *` | |
+| `start` | `size_t` | |
+| `step` | `size_t` | |

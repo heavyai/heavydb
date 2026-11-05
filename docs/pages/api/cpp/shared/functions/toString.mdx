@@ -1,0 +1,219 @@
+---
+title: toString
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>constexpr</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+char const  * toString(
+    SqlWindowFunctionKind const kind
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>constexpr</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+char const  * toString(
+    SqlWindowFrameBoundType const kind
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const JoinType &join_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const SQLQualifier &qualifier
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const SQLAgg &kind
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const SQLOps &op
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const SQLTypes &type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const EncodingType &type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::string toString(
+    const T &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T1, typename T2>
+std::string toString(
+    const std::pair<T1, T2> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::string toString(
+    const std::vector<T> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T1, typename T2>
+std::string toString(
+    const std::unordered_map<T1, T2> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T1, typename T2>
+std::string toString(
+    const std::map<T1, T2> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::string toString(
+    const std::list<T> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::string toString(
+    const std::unordered_set<T> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 16">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::string toString(
+    const std::set<T> &v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 17">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename... Ts>
+std::string toString(
+    const std::tuple<Ts...> &t
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

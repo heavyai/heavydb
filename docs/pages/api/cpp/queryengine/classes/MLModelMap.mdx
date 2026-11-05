@@ -1,0 +1,95 @@
+---
+title: MLModelMap
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <MLModel.h>
+```
+
+---
+
+## Methods
+
+### addModel [#addmodel]
+
+<CodeBlock links={{"MLModelMap": "mlmodelmap", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+void MLModelMap::addModel(
+    const std::string &model_name,
+    std::shared_ptr<AbstractMLModel> model
+)
+```
+</CodeBlock>
+
+### modelExists [#modelexists]
+
+<CodeBlock links={{"MLModelMap": "mlmodelmap"}}>
+```cpp showLineNumbers={false}
+bool MLModelMap::modelExists(
+    const std::string &model_name
+) const
+```
+</CodeBlock>
+
+### getModel [#getmodel]
+
+<CodeBlock links={{"MLModelMap": "mlmodelmap", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<AbstractMLModel> MLModelMap::getModel(
+    const std::string &model_name
+) const
+```
+</CodeBlock>
+
+### deleteModel [#deletemodel]
+
+<CodeBlock links={{"MLModelMap": "mlmodelmap"}}>
+```cpp showLineNumbers={false}
+void MLModelMap::deleteModel(
+    const std::string &model_name
+)
+```
+</CodeBlock>
+
+### getModelNames [#getmodelnames]
+
+<CodeBlock links={{"MLModelMap": "mlmodelmap"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> MLModelMap::getModelNames() const
+```
+</CodeBlock>
+
+### getModelMetadata [#getmodelmetadata]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"MLModelMap": "mlmodelmap", "MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+std::vector<MLModelMetadata> MLModelMap::getModelMetadata() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with model name)">
+
+<CodeBlock links={{"MLModelMap": "mlmodelmap", "MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+MLModelMetadata MLModelMap::getModelMetadata(
+    const std::string &model_name
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `model_map_` | `std::map< std::string, std::shared_ptr< AbstractMLModel > >` | |
+| `model_map_mutex_` | `std::shared_mutex` | |

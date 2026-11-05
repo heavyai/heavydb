@@ -1,0 +1,34 @@
+---
+title: TableFunctions_Namespace::OneHotEncoder_Namespace::get_top_k_keys
+description: "This function calculates the top k most frequent keys (categories) in the provided column based on a given minimum percentage of the column total per key."
+---
+
+<CodeBlock links={{"Column": "../../../../structs/column", "TextEncodingDict": "../../../../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+NEVER_INLINE HOST std::pair<std::vector<int32_t>, bool> TableFunctions_Namespace::OneHotEncoder_Namespace::get_top_k_keys(
+    const Column<TextEncodingDict> &text_col,
+    const int32_t top_k,
+    const double min_perc_col_total_per_key
+)
+```
+</CodeBlock>
+
+This function calculates the top k most frequent keys (categories) in the provided column based on a given minimum percentage of the column total per key.
+
+It returns the top k keys along with a boolean value indicating whether there are other keys beyond the top k keys.
+
+**Returns:** std::pair&lt;std::vector&lt;int32_t&gt;, bool&gt; - A vector of the top k keys and a boolean indicating whether there are other keys beyond the top k keys
+
+**Parameters**
+
+<ParamField path="text_col" type="const Column<TextEncodingDict> &">
+- Dictionary-encoded text column to extract top-k keys from
+</ParamField>
+
+<ParamField path="top_k" type="const int32_t">
+- Integer representing the top-k most common keys to return
+</ParamField>
+
+<ParamField path="min_perc_col_total_per_key" type="const double">
+- Enforces that any top-k key must represent at least this minimum percentage of the total number of values in the column
+</ParamField>

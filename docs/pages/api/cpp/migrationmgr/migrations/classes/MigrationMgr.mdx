@@ -1,0 +1,89 @@
+---
+title: migrations::MigrationMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <migrations/MigrationMgr.h>
+```
+
+---
+
+## Static methods
+
+### migrateDateInDaysMetadata [#migratedateindaysmetadata]
+
+<CodeBlock links={{"MigrationMgr": "migrationmgr"}}>
+```cpp showLineNumbers={false}
+void migrations::MigrationMgr::migrateDateInDaysMetadata(
+    const Catalog_Namespace::TableDescriptorMapById &table_descriptors_by_id,
+    const int database_id,
+    Catalog_Namespace::Catalog *cat,
+    SqliteConnector &sqlite
+)
+```
+</CodeBlock>
+
+### dropRenderGroupColumns [#droprendergroupcolumns]
+
+<CodeBlock links={{"MigrationMgr": "migrationmgr"}}>
+```cpp showLineNumbers={false}
+bool migrations::MigrationMgr::dropRenderGroupColumns(
+    const Catalog_Namespace::TableDescriptorMapById &table_descriptors_by_id,
+    Catalog_Namespace::Catalog *cat
+)
+```
+</CodeBlock>
+
+### executeRebrandMigration [#executerebrandmigration]
+
+<CodeBlock links={{"MigrationMgr": "migrationmgr"}}>
+```cpp showLineNumbers={false}
+void migrations::MigrationMgr::executeRebrandMigration(
+    const std::string &base_path
+)
+```
+</CodeBlock>
+
+### takeMigrationLock [#takemigrationlock]
+
+<CodeBlock links={{"MigrationMgr": "migrationmgr"}}>
+```cpp showLineNumbers={false}
+void migrations::MigrationMgr::takeMigrationLock(
+    const std::string &base_path
+)
+```
+</CodeBlock>
+
+### relaxMigrationLock [#relaxmigrationlock]
+
+<CodeBlock links={{"MigrationMgr": "migrationmgr"}}>
+```cpp showLineNumbers={false}
+void migrations::MigrationMgr::relaxMigrationLock()
+```
+</CodeBlock>
+
+### migrationEnabled [#migrationenabled]
+
+<CodeBlock links={{"MigrationMgr": "migrationmgr"}}>
+```cpp showLineNumbers={false}
+static bool migrations::MigrationMgr::migrationEnabled()
+```
+</CodeBlock>
+
+### destroy [#destroy]
+
+<CodeBlock links={{"MigrationMgr": "migrationmgr"}}>
+```cpp showLineNumbers={false}
+static void migrations::MigrationMgr::destroy()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `migration_mutex_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< heavyai::DistributedSharedMutex >` | |
+| `migration_enabled_` <Badge intent="note" minimal>static</Badge> | `bool` | |

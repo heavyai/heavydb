@@ -1,0 +1,47 @@
+---
+title: ct_throw_if_gt_100__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_throw_if_gt_100__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<T> &input,
+    Column<T> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_throw_if_gt_100__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<float> &input,
+    Column<float> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_throw_if_gt_100__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<double> &input,
+    Column<double> &output
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

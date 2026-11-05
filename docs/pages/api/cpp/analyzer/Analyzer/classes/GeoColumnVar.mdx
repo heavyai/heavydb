@@ -1,0 +1,380 @@
+---
+title: Analyzer::GeoColumnVar
+description: "An umbrella column var holding all information required to generate code for subcolumns."
+---
+
+An umbrella column var holding all information required to generate code for subcolumns.
+
+Note that this currently inherits from [ColumnVar](columnvar), not the [GeoExpr](geoexpr) umbrella type, because we use the same codegen paths regardless of columnvar type.
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::ColumnVar` (public)
+
+---
+
+## Constructors
+
+### GeoColumnVar [#geocolumnvar]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar"}}>
+```cpp showLineNumbers={false}
+Analyzer::GeoColumnVar::GeoColumnVar(
+    const SQLTypeInfo &ti,
+    const shared::ColumnKey &column_key,
+    const int32_t range_table_index,
+    const bool with_bounds
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+Analyzer::GeoColumnVar::GeoColumnVar(
+    const Analyzer::ColumnVar *column_var,
+    const bool with_bounds
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getColumnKey [#getcolumnkey]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+const shared::ColumnKey & Analyzer::GeoColumnVar::getColumnKey() const
+```
+</CodeBlock>
+
+### getTableKey [#gettablekey]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+shared::TableKey Analyzer::GeoColumnVar::getTableKey() const
+```
+</CodeBlock>
+
+### get_rte_idx [#getrteidx]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+int32_t Analyzer::GeoColumnVar::get_rte_idx() const
+```
+</CodeBlock>
+
+### set_rte_idx [#setrteidx]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoColumnVar::set_rte_idx(
+    int32_t new_rte_idx
+)
+```
+</CodeBlock>
+
+### get_compression [#getcompression]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+EncodingType Analyzer::GeoColumnVar::get_compression() const
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoColumnVar::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const override
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoColumnVar::deep_copy() const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoColumnVar::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoColumnVar::collect_rte_idx(
+    std::set<int32_t> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::GeoColumnVar::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "TargetEntry": "targetentry", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoColumnVar::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "TargetEntry": "targetentry", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoColumnVar::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "TargetEntry": "targetentry", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::GeoColumnVar::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::GeoColumnVar::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::GeoColumnVar::operator==(
+    const ColumnVar &rhs
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### toString [#tostring]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::GeoColumnVar::toString() const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::Expr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Expr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::Expr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### colvar_comp [#colvarcomp]
+
+<CodeBlock links={{"GeoColumnVar": "geocolumnvar", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+static bool Analyzer::GeoColumnVar::colvar_comp(
+    const ColumnVar *l,
+    const ColumnVar *r
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `with_bounds_` | `bool` | |
+| `column_key_` | `shared::ColumnKey` | |
+| `rte_idx_` | `int32_t` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

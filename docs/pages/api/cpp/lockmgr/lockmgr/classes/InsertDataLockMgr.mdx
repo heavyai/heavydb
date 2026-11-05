@@ -1,0 +1,90 @@
+---
+title: lockmgr::InsertDataLockMgr
+description: "Prevents simultaneous inserts into the same table."
+---
+
+Prevents simultaneous inserts into the same table.
+
+To allow concurrent Insert/Select queries, Insert queries only obtain a write lock on table data when checkpointing (flushing chunks to disk). Inserts/Data load will take an exclusive (write) lock to ensure only one insert proceeds on each table at a time.
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgr.h>
+```
+
+**Inherits from:** `lockmgr::TableLockMgrImpl< InsertDataLockMgr >` (public)
+
+---
+
+## Methods
+
+### getTableMutex [#gettablemutex]
+
+<CodeBlock links={{"InsertDataLockMgr": "insertdatalockmgr", "MutexTracker": "mutextracker", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+MutexTracker * lockmgr::TableLockMgrImpl<InsertDataLockMgr>::getTableMutex(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### getLockedTables [#getlockedtables]
+
+<CodeBlock links={{"InsertDataLockMgr": "insertdatalockmgr", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+std::set<ChunkKey> lockmgr::TableLockMgrImpl<InsertDataLockMgr>::getLockedTables() const
+```
+</CodeBlock>
+
+### getClusterTableMutex [#getclustertablemutex]
+
+<CodeBlock links={{"InsertDataLockMgr": "insertdatalockmgr", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<heavyai::DistributedSharedMutex> lockmgr::TableLockMgrImpl<InsertDataLockMgr>::getClusterTableMutex(
+    const ChunkKey &table_key
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### instance [#instance]
+
+<CodeBlock links={{"InsertDataLockMgr": "insertdatalockmgr"}}>
+```cpp showLineNumbers={false}
+static InsertDataLockMgr & lockmgr::InsertDataLockMgr::instance()
+```
+</CodeBlock>
+
+### getWriteLockForTable [#getwritelockfortable]
+
+<CodeBlock links={{"InsertDataLockMgr": "insertdatalockmgr", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+WriteLock lockmgr::TableLockMgrImpl<InsertDataLockMgr>::getWriteLockForTable(
+    const Catalog_Namespace::Catalog &cat,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+### getReadLockForTable [#getreadlockfortable]
+
+<CodeBlock links={{"InsertDataLockMgr": "insertdatalockmgr", "TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+ReadLock lockmgr::TableLockMgrImpl<InsertDataLockMgr>::getReadLockForTable(
+    Catalog_Namespace::Catalog &cat,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `kind` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::string_view` | |
+| `map_mutex_` | `std::mutex` | |
+| `table_mutex_map_` | `std::map< ChunkKey, std::unique_ptr< MutexTracker > >` | |

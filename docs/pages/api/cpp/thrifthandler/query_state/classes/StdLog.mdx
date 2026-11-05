@@ -1,0 +1,231 @@
+---
+title: query_state::StdLog
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <query_state/QueryState.h>
+```
+
+**Inherits from:** `query_state::StdLogData` (public)
+
+---
+
+## Constructors
+
+### StdLog [#stdlog]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+template <typename... Pairs>
+query_state::StdLog::StdLog(
+    char const *file,
+    unsigned line,
+    char const *func,
+    std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
+    Pairs &&... pairs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StdLog": "stdlog", "QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+template <typename... Pairs>
+query_state::StdLog::StdLog(
+    char const *file,
+    unsigned line,
+    char const *func,
+    std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
+    std::shared_ptr<QueryState> query_state,
+    Pairs &&... pairs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StdLog": "stdlog", "QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+template <typename... Pairs>
+query_state::StdLog::StdLog(
+    char const *file,
+    unsigned line,
+    char const *func,
+    std::shared_ptr<QueryState> query_state,
+    Pairs &&... pairs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+template <typename... Pairs>
+query_state::StdLog::StdLog(
+    char const *file,
+    unsigned line,
+    char const *func,
+    Pairs &&... pairs
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+query_state::StdLog::StdLog(
+    StdLog &&
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+query_state::StdLog::StdLog(
+    StdLog const &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~StdLog
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+query_state::StdLog::~StdLog()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### log [#log]
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+void query_state::StdLog::log(
+    logger::Severity,
+    char const *label
+)
+```
+</CodeBlock>
+
+### logCallStack [#logcallstack]
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+void query_state::StdLog::logCallStack(
+    logger::Severity,
+    char const *label
+)
+```
+</CodeBlock>
+
+### stdlogBeginSeverity [#stdlogbeginseverity]
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+logger::Severity query_state::StdLog::stdlogBeginSeverity(
+    char const *func
+)
+```
+</CodeBlock>
+
+### appendNameValuePairs [#appendnamevaluepairs]
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+template <typename... Pairs>
+void query_state::StdLog::appendNameValuePairs(
+    Pairs &&... pairs
+)
+```
+</CodeBlock>
+
+### duration [#duration]
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+template <typename Units = std::chrono::milliseconds>
+Units::rep query_state::StdLog::duration() const
+```
+</CodeBlock>
+
+### getConstSessionInfo [#getconstsessioninfo]
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog_Namespace::SessionInfo const> query_state::StdLog::getConstSessionInfo() const
+```
+</CodeBlock>
+
+### getSessionInfo [#getsessioninfo]
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog_Namespace::SessionInfo> query_state::StdLog::getSessionInfo() const
+```
+</CodeBlock>
+
+### setQueryState [#setquerystate]
+
+<CodeBlock links={{"StdLog": "stdlog", "QueryState": "querystate"}}>
+```cpp showLineNumbers={false}
+void query_state::StdLog::setQueryState(
+    std::shared_ptr<QueryState>
+)
+```
+</CodeBlock>
+
+### setSessionInfo [#setsessioninfo]
+
+<CodeBlock links={{"StdLog": "stdlog"}}>
+```cpp showLineNumbers={false}
+void query_state::StdLog::setSessionInfo(
+    std::shared_ptr<Catalog_Namespace::SessionInfo>
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `session_info_` | `std::shared_ptr< Catalog_Namespace::SessionInfo >` | |
+| `query_state_` | `std::shared_ptr< QueryState >` | |
+| `s_match` <Badge intent="note" minimal>static</Badge> | `std::atomic< int64_t >` | |
+| `file_` | `std::string const` | |
+| `line_` | `unsigned const` | |
+| `func_` | `char const  *const` | |
+| `start_` | `Clock::time_point const` | |
+| `match_` | `int64_t const` | |
+| `name_value_pairs_` | `std::list< std::string >` | |

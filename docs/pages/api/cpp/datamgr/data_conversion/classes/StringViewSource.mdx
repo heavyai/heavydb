@@ -1,0 +1,45 @@
+---
+title: data_conversion::StringViewSource
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <data_conversion/StringViewSource.h>
+```
+
+**Inherits from:** `data_conversion::BaseSource` (public)
+
+---
+
+## Constructors
+
+### StringViewSource [#stringviewsource]
+
+<CodeBlock links={{"StringViewSource": "stringviewsource", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+data_conversion::StringViewSource::StringViewSource(
+    const Chunk_NS::Chunk &input
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getSourceData [#getsourcedata]
+
+<CodeBlock links={{"StringViewSource": "stringviewsource"}}>
+```cpp showLineNumbers={false}
+std::pair<const int8_t *, size_t> data_conversion::StringViewSource::getSourceData() override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `src_string_views_` | `std::vector< std::string_view >` | |
+| `input_` | `const Chunk_NS::Chunk &` | |

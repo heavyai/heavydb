@@ -1,0 +1,102 @@
+---
+title: logger::DebugTimer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <logger/Logger.h>
+```
+
+---
+
+## Constructors
+
+### DebugTimer [#debugtimer]
+
+<Tabs>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"DebugTimer": "debugtimer"}}>
+```cpp showLineNumbers={false}
+logger::DebugTimer::DebugTimer(
+    Severity,
+    char const *file,
+    int line,
+    char const *name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Deleted overloads">
+
+The following overloads are deleted to prevent misuse:
+
+<CodeBlock links={{"DebugTimer": "debugtimer"}}>
+```cpp showLineNumbers={false}
+logger::DebugTimer::DebugTimer(DebugTimer const &) = delete;
+logger::DebugTimer::DebugTimer(DebugTimer &&) = delete;
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~DebugTimer
+
+<CodeBlock links={{"DebugTimer": "debugtimer"}}>
+```cpp showLineNumbers={false}
+logger::DebugTimer::~DebugTimer()
+```
+</CodeBlock>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<Tabs>
+<Tab title="Deleted overloads">
+
+The following overloads are deleted to prevent misuse:
+
+<CodeBlock links={{"DebugTimer": "debugtimer"}}>
+```cpp showLineNumbers={false}
+DebugTimer & logger::DebugTimer::operator=(DebugTimer const &) = delete;
+DebugTimer & logger::DebugTimer::operator=(DebugTimer &&) = delete;
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### stop [#stop]
+
+<CodeBlock links={{"DebugTimer": "debugtimer"}}>
+```cpp showLineNumbers={false}
+void logger::DebugTimer::stop()
+```
+</CodeBlock>
+
+### stopAndGetJson [#stopandgetjson]
+
+<CodeBlock links={{"DebugTimer": "debugtimer"}}>
+```cpp showLineNumbers={false}
+std::string logger::DebugTimer::stopAndGetJson()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `duration_` | `Duration *` | |

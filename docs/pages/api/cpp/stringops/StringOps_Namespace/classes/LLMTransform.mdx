@@ -1,0 +1,219 @@
+---
+title: StringOps_Namespace::LLMTransform
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+**Inherits from:** `StringOps_Namespace::StringOp` (public)
+
+---
+
+## Constructors
+
+### LLMTransform [#llmtransform]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOpInfo": "../structs/stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::LLMTransform::LLMTransform(
+    const std::optional<std::string> &var_str_optional_literal,
+    std::string const &prompt,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with constraint)">
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOpInfo": "../structs/stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::LLMTransform::LLMTransform(
+    const std::optional<std::string> &var_str_optional_literal,
+    std::string const &prompt,
+    std::string const &constraint,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "NullableStrType": "../structs/nullablestrtype"}}>
+```cpp showLineNumbers={false}
+NullableStrType StringOps_Namespace::LLMTransform::operator()(
+    const std::string &str
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "NullableStrType": "../structs/nullablestrtype", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::LLMTransform::operator()(
+    const std::string &str1,
+    const std::string &str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "NullableStrType": "../structs/nullablestrtype", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::LLMTransform::operator()() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### numericEval [#numericeval]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::LLMTransform::numericEval(
+    const std::string_view str
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::LLMTransform::numericEval(
+    const std::string_view str1,
+    const std::string_view str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::LLMTransform::numericEval() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getReturnType [#getreturntype]
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+virtual const SQLTypeInfo & StringOps_Namespace::LLMTransform::getReturnType() const
+```
+</CodeBlock>
+
+### getVarStringLiteral [#getvarstringliteral]
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+const std::string & StringOps_Namespace::LLMTransform::getVarStringLiteral() const
+```
+</CodeBlock>
+
+### hasVarStringLiteral [#hasvarstringliteral]
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::LLMTransform::hasVarStringLiteral() const
+```
+</CodeBlock>
+
+### getOpInfo [#getopinfo]
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOpInfo": "../structs/stringopinfo", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+const StringOpInfo & StringOps_Namespace::LLMTransform::getOpInfo() const
+```
+</CodeBlock>
+
+### splitConstraint [#splitconstraint]
+
+<CodeBlock links={{"LLMTransform": "llmtransform"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> StringOps_Namespace::LLMTransform::splitConstraint(
+    const std::string &constraint,
+    const char delimiter,
+    const char regex_signifier
+) const
+```
+</CodeBlock>
+
+### extractRegex [#extractregex]
+
+<CodeBlock links={{"LLMTransform": "llmtransform"}}>
+```cpp showLineNumbers={false}
+std::string StringOps_Namespace::LLMTransform::extractRegex(
+    const std::string &constraint,
+    const char regex_signifier
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generateRegex [#generateregex]
+
+<CodeBlock links={{"LLMTransform": "llmtransform", "StringOp": "../structs/stringop"}}>
+```cpp showLineNumbers={false}
+boost::regex StringOps_Namespace::LLMTransform::generateRegex(
+    const std::string &op_name,
+    const std::string &regex_pattern,
+    const std::string &regex_params,
+    const bool supports_sub_matches
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `prompt_` | `const std::string` | |
+| `constraint_values_` | `std::vector< std::string >` | |
+| `constraint_regex_` | `std::string` | |
+| `translation_cache_` | `robin_hood::unordered_map< std::string, std::string >` | |
+| `translation_cache_lock_` | `std::shared_mutex` | |
+| `delimiter_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char` | |
+| `regex_signifier_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `char` | |
+| `op_kind_` | `const SqlStringOpKind` | |
+| `return_ti_` | `const SQLTypeInfo` | |
+| `has_var_str_literal_` | `const bool` | |
+| `var_str_literal_` | `const NullableStrType` | |
+| `string_op_info_` | `const StringOpInfo` | |

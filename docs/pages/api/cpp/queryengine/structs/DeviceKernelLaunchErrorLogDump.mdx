@@ -1,0 +1,28 @@
+---
+title: DeviceKernelLaunchErrorLogDump
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DeviceKernel.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cu_result` | `CUresult const` | |
+| `device_kernel` | `DeviceKernel *const` | |
+| `grid_dim_x` | `unsigned int const` | |
+| `grid_dim_y` | `unsigned int const` | |
+| `grid_dim_z` | `unsigned int const` | |
+| `block_dim_x` | `unsigned int const` | |
+| `block_dim_y` | `unsigned int const` | |
+| `block_dim_z` | `unsigned int const` | |
+| `compilation_result` | `CompilationResult const  &` | |
+| `qe_cuda_stream` | `CUstream const` | |
+| `kernel_params` | `void **const` | |
+| `kernel_params_log` | `KernelParamsLog const  &` | |
+| `optimize_block_and_grid_sizes` | `bool const` | |

@@ -1,0 +1,35 @@
+---
+title: get_group_value_columnar
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t * get_group_value_columnar(
+    int64_t *groups_buffer,
+    const uint32_t groups_buffer_entry_count,
+    const int64_t *key,
+    const uint32_t key_qw_count
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT int64_t * get_group_value_columnar(
+    int64_t *groups_buffer,
+    const uint32_t groups_buffer_entry_count,
+    const int64_t *key,
+    const uint32_t key_qw_count
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

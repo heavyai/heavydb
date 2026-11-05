@@ -1,0 +1,65 @@
+---
+title: Parser::DeleteStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DMLStmt` (public)
+
+---
+
+## Constructors
+
+### DeleteStmt [#deletestmt]
+
+<CodeBlock links={{"DeleteStmt": "deletestmt", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::DeleteStmt::DeleteStmt(
+    std::string *t,
+    Expr *w
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_table [#gettable]
+
+<CodeBlock links={{"DeleteStmt": "deletestmt"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::DeleteStmt::get_table() const
+```
+</CodeBlock>
+
+### get_where_clause [#getwhereclause]
+
+<CodeBlock links={{"DeleteStmt": "deletestmt", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::DeleteStmt::get_where_clause() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"DeleteStmt": "deletestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DeleteStmt::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `where_clause_` | `std::unique_ptr< Expr >` | |

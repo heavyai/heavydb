@@ -1,0 +1,39 @@
+---
+title: use_speculative_top_n
+description: "SpeculativeTopN sort is used when there are multiple already sorted results (when GPU sort is used on multiple devices, refer to GroupByAndAggregate::gpuCanHandleOrderEntries), and we want to pick top n elements (LIMIT caluse exists), and we have already chosen this algorithm when creating the proper work unit (refer to RelAlgExecutor::createSortInputWorkUnit)."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RelAlgExecutionUnit": "../structs/relalgexecutionunit", "QueryMemoryDescriptor": "../classes/querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool use_speculative_top_n(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const QueryMemoryDescriptor &query_mem_desc
+)
+```
+</CodeBlock>
+
+SpeculativeTopN sort is used when there are multiple already sorted results (when GPU sort is used on multiple devices, refer to GroupByAndAggregate::gpuCanHandleOrderEntries), and we want to pick top n elements (LIMIT caluse exists), and we have already chosen this algorithm when creating the proper work unit (refer to RelAlgExecutor::createSortInputWorkUnit).
+
+Besides, we currently only support cases with 2 target expressions and only with COUNT aggregate (similar limitations exists in whether or not we support GPU sort).
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelAlgExecutionUnit": "../structs/relalgexecutionunit", "QueryMemoryDescriptor": "../classes/querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+bool use_speculative_top_n(
+    const RelAlgExecutionUnit &,
+    const QueryMemoryDescriptor &
+)
+```
+</CodeBlock>
+
+SpeculativeTopN sort is used when there are multiple already sorted results (when GPU sort is used on multiple devices, refer to GroupByAndAggregate::gpuCanHandleOrderEntries), and we want to pick top n elements (LIMIT caluse exists), and we have already chosen this algorithm when creating the proper work unit (refer to RelAlgExecutor::createSortInputWorkUnit).
+
+Besides, we currently only support cases with 2 target expressions and only with COUNT aggregate (similar limitations exists in whether or not we support GPU sort).
+
+</Tab>
+</Tabs>

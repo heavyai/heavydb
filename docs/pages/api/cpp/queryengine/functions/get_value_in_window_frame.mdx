@@ -1,0 +1,20 @@
+---
+title: get_value_in_window_frame
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename COL_TYPE, typename LOGICAL_TYPE>
+LOGICAL_TYPE get_value_in_window_frame(
+    const int64_t target_row_idx_in_frame,
+    const int64_t frame_start_offset,
+    const int64_t frame_end_offset,
+    const COL_TYPE *col_buf,
+    const int32_t *partition_rowid_buf,
+    const int64_t *ordered_index_buf,
+    const LOGICAL_TYPE logical_null_val,
+    const LOGICAL_TYPE col_null_val
+)
+```
+</CodeBlock>

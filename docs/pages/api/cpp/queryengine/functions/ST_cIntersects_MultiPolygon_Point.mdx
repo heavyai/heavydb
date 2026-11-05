@@ -1,0 +1,26 @@
+---
+title: ST_cIntersects_MultiPolygon_Point
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+EXTENSION_INLINE bool ST_cIntersects_MultiPolygon_Point(
+    int8_t *mpoly_coords,
+    int64_t mpoly_coords_size,
+    int32_t *mpoly_ring_sizes,
+    int64_t mpoly_num_rings,
+    int32_t *mpoly_poly_sizes,
+    int64_t mpoly_num_polys,
+    double *mpoly_bounds,
+    int64_t mpoly_bounds_size,
+    int8_t *p,
+    int64_t psize,
+    int32_t ic1,
+    int32_t isr1,
+    int32_t ic2,
+    int32_t isr2,
+    int32_t osr
+)
+```
+</CodeBlock>

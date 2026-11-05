@@ -1,0 +1,60 @@
+---
+title: Parser::AlterTableParamStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### AlterTableParamStmt [#altertableparamstmt]
+
+<CodeBlock links={{"AlterTableParamStmt": "altertableparamstmt", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::AlterTableParamStmt::AlterTableParamStmt(
+    std::string *tab,
+    NameValueAssign *p
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"AlterTableParamStmt": "altertableparamstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::AlterTableParamStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"AlterTableParamStmt": "altertableparamstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::AlterTableParamStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `param_` | `std::unique_ptr< NameValueAssign >` | |

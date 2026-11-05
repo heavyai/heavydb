@@ -1,0 +1,31 @@
+---
+title: to_array_datum
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename ELEM_TYPE>
+ArrayDatum to_array_datum(
+    const std::vector<ELEM_TYPE> &vector
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename ELEM_TYPE>
+ArrayDatum to_array_datum(
+    const std::shared_ptr<std::vector<ELEM_TYPE>> &vector
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

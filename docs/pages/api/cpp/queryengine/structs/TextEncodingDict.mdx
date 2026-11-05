@@ -1,0 +1,193 @@
+---
+title: TextEncodingDict
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Constructors
+
+### TextEncodingDict [#textencodingdict]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+TextEncodingDict::TextEncodingDict(
+    const int32_t other
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+TextEncodingDict::TextEncodingDict()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+TextEncodingDict TextEncodingDict::operator=(
+    const int32_t other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator int32_t [#operatorint32t]
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+TextEncodingDict::operator int32_t() const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::isNull() const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::operator==(
+    const TextEncodingDict &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::operator==(
+    const int32_t &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (3)">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::operator==(
+    const int64_t &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator!= [#operator_ne]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::operator!=(
+    const TextEncodingDict &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::operator!=(
+    const int32_t &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (3)">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::operator!=(
+    const int64_t &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator&lt; [#operator_lt]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::operator<(
+    const TextEncodingDict &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::operator<(
+    const int32_t &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (3)">
+
+<CodeBlock links={{"TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingDict::operator<(
+    const int64_t &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `value` | `int32_t` | |

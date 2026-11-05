@@ -1,0 +1,57 @@
+---
+title: is_taken_entry
+description: ""
+---
+
+<CodeBlock id="is_taken_entry" links={{"is_taken_entry": "istakenentry"}}>
+```cpp showLineNumbers={false}
+template <class K, class I = int32_t>
+struct is_taken_entry
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="K" type="class">
+</ParamField>
+
+<ParamField path="I" type="class" default="int32_t">
+</ParamField>
+
+---
+
+## Constructors
+
+### is_taken_entry [#istakenentry]
+
+<CodeBlock links={{"is_taken_entry": "istakenentry"}}>
+```cpp showLineNumbers={false}
+is_taken_entry<K, I>::is_taken_entry(
+    const int8_t *buff,
+    const size_t stride
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"is_taken_entry": "istakenentry"}}>
+```cpp showLineNumbers={false}
+__host__ __device__ bool is_taken_entry<K, I>::operator()(
+    const I index
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buff_ptr` | `const int8_t *` | |
+| `key_stride` | `const size_t` | |

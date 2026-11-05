@@ -1,0 +1,18 @@
+---
+title: reset_keys_in_row_buffer
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename DerivedPolicy>
+void reset_keys_in_row_buffer(
+    const thrust::detail::execution_policy_base<DerivedPolicy> &exec,
+    int8_t *row_buffer,
+    const size_t key_width,
+    const size_t row_size,
+    const size_t first,
+    const size_t last
+)
+```
+</CodeBlock>

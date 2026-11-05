@@ -1,0 +1,14 @@
+---
+title: ct_test_calcite_casting_timestamp__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t ct_test_calcite_casting_timestamp__cpu_(
+    TableFunctionManager &mgr,
+    const Column<Timestamp> &input1,
+    Column<Timestamp> &out
+)
+```
+</CodeBlock>

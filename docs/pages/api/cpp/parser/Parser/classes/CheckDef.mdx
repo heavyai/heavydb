@@ -1,0 +1,44 @@
+---
+title: Parser::CheckDef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::TableConstraintDef` (public)
+
+---
+
+## Constructors
+
+### CheckDef [#checkdef]
+
+<CodeBlock links={{"CheckDef": "checkdef", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::CheckDef::CheckDef(
+    Expr *c
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_check_condition [#getcheckcondition]
+
+<CodeBlock links={{"CheckDef": "checkdef", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::CheckDef::get_check_condition() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `check_condition_` | `std::unique_ptr< Expr >` | |

@@ -1,0 +1,95 @@
+---
+title: Parser::RenameDBStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### RenameDBStmt [#renamedbstmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"RenameDBStmt": "renamedbstmt"}}>
+```cpp showLineNumbers={false}
+Parser::RenameDBStmt::RenameDBStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RenameDBStmt": "renamedbstmt"}}>
+```cpp showLineNumbers={false}
+Parser::RenameDBStmt::RenameDBStmt(
+    std::string *database_name,
+    std::string *new_database_name
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getPreviousDatabaseName [#getpreviousdatabasename]
+
+<CodeBlock links={{"RenameDBStmt": "renamedbstmt"}}>
+```cpp showLineNumbers={false}
+auto const  & Parser::RenameDBStmt::getPreviousDatabaseName()
+```
+</CodeBlock>
+
+### getNewDatabaseName [#getnewdatabasename]
+
+<CodeBlock links={{"RenameDBStmt": "renamedbstmt"}}>
+```cpp showLineNumbers={false}
+auto const  & Parser::RenameDBStmt::getNewDatabaseName()
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"RenameDBStmt": "renamedbstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RenameDBStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"RenameDBStmt": "renamedbstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RenameDBStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `database_name_` | `std::unique_ptr< std::string >` | |
+| `new_database_name_` | `std::unique_ptr< std::string >` | |

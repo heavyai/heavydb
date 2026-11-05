@@ -1,0 +1,33 @@
+---
+title: TableFunctions_Namespace::MaskedData
+description: ""
+---
+
+<CodeBlock id="MaskedData" links={{"MaskedData": "maskeddata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct MaskedData
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TableFunctions_Namespace/NullRowsRemoval.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `data` | `std::vector< T * >` | |
+| `unmasked_num_rows` | `int32_t` | |
+| `masked_num_rows` | `int32_t` | |
+| `index_map` | `std::vector< int32_t >` | |
+| `reverse_index_map` | `std::vector< int32_t >` | |
+| `data_allocations` | `std::vector< std::vector< T > >` | |

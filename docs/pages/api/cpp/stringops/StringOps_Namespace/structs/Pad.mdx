@@ -1,0 +1,217 @@
+---
+title: StringOps_Namespace::Pad
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+**Inherits from:** `StringOps_Namespace::StringOp` (public)
+
+---
+
+## Constructors
+
+### Pad [#pad]
+
+<CodeBlock links={{"Pad": "pad", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::Pad::Pad(
+    const std::optional<std::string> &var_str_optional_literal,
+    const SqlStringOpKind op_kind,
+    const int64_t padded_length,
+    const std::string &padding_string,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"Pad": "pad", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+NullableStrType StringOps_Namespace::Pad::operator()(
+    const std::string &str
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"Pad": "pad", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::Pad::operator()(
+    const std::string &str1,
+    const std::string &str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"Pad": "pad", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::Pad::operator()() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### numericEval [#numericeval]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"Pad": "pad", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::Pad::numericEval(
+    const std::string_view str
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<CodeBlock links={{"Pad": "pad", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::Pad::numericEval(
+    const std::string_view str1,
+    const std::string_view str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"Pad": "pad", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::Pad::numericEval() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getReturnType [#getreturntype]
+
+<CodeBlock links={{"Pad": "pad", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual const SQLTypeInfo & StringOps_Namespace::Pad::getReturnType() const
+```
+</CodeBlock>
+
+### getVarStringLiteral [#getvarstringliteral]
+
+<CodeBlock links={{"Pad": "pad", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const std::string & StringOps_Namespace::Pad::getVarStringLiteral() const
+```
+</CodeBlock>
+
+### hasVarStringLiteral [#hasvarstringliteral]
+
+<CodeBlock links={{"Pad": "pad", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::Pad::hasVarStringLiteral() const
+```
+</CodeBlock>
+
+### getOpInfo [#getopinfo]
+
+<CodeBlock links={{"Pad": "pad", "StringOpInfo": "stringopinfo", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const StringOpInfo & StringOps_Namespace::Pad::getOpInfo() const
+```
+</CodeBlock>
+
+### lpad [#lpad]
+
+<CodeBlock links={{"Pad": "pad"}}>
+```cpp showLineNumbers={false}
+std::string StringOps_Namespace::Pad::lpad(
+    const std::string &str
+) const
+```
+</CodeBlock>
+
+### rpad [#rpad]
+
+<CodeBlock links={{"Pad": "pad"}}>
+```cpp showLineNumbers={false}
+std::string StringOps_Namespace::Pad::rpad(
+    const std::string &str
+) const
+```
+</CodeBlock>
+
+### op_kind_to_pad_mode [#opkindtopadmode]
+
+<CodeBlock links={{"Pad": "pad"}}>
+```cpp showLineNumbers={false}
+Pad::PadMode StringOps_Namespace::Pad::op_kind_to_pad_mode(
+    const SqlStringOpKind op_kind
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generateRegex [#generateregex]
+
+<CodeBlock links={{"Pad": "pad", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+boost::regex StringOps_Namespace::Pad::generateRegex(
+    const std::string &op_name,
+    const std::string &regex_pattern,
+    const std::string &regex_params,
+    const bool supports_sub_matches
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### PadMode
+
+| Name | Value | Description |
+|---|---|---|
+| `LEFT` | | |
+| `RIGHT` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `pad_mode_` | `const PadMode` | |
+| `padded_length_` | `const size_t` | |
+| `padding_string_` | `const std::string` | |
+| `padding_string_length_` | `const size_t` | |
+| `padding_char_` | `const char` | |
+| `op_kind_` | `const SqlStringOpKind` | |
+| `return_ti_` | `const SQLTypeInfo` | |
+| `has_var_str_literal_` | `const bool` | |
+| `var_str_literal_` | `const NullableStrType` | |
+| `string_op_info_` | `const StringOpInfo` | |

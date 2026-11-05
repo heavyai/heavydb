@@ -1,0 +1,34 @@
+---
+title: get_candidate_rows
+description: "Getting overlapping candidates for the bounding box intersection algorithm works as follows:"
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t get_candidate_rows(
+    int32_t *out_arr,
+    int32_t *error_code,
+    const uint32_t max_arr_size,
+    const int8_t *range_bytes,
+    const int32_t range_component_index,
+    const double bucket_size_x,
+    const double bucket_size_y,
+    const int32_t keys_count,
+    const int64_t key_component_count,
+    int64_t *hash_table_ptr,
+    const int64_t entry_count,
+    const int64_t offset_buffer_ptr_offset,
+    const int64_t sub_buff_size,
+    const int32_t max_bbox_overlaps_error_code
+)
+```
+</CodeBlock>
+
+Getting overlapping candidates for the bounding box intersection algorithm works as follows:
+
+1. Take the bounds of the Polygon and use the bucket sizes to split the bounding box into the hash keys it falls into.
+2. Iterate over the keys and look them up in the hash table.
+3. When looking up the values of each key, we use a series of offsets to get to the array of row ids.
+4. Since it is possible (likely) we encounter the same row id in several buckets, we need to ensure we remove the duplicates we encounter. A simple ordered insertion is used which ignores duplicate values. Since the N elements we insert can be considered relatively small (N &lt; 200) this exhibits a good tradeoff to conserve space since we are constrained by the stack size on the GPU.
+
+RETURNS: Unique Row IDs are placed on the fixed size stack array that is passed in as out_arr. The number of row ids in this array is returned.

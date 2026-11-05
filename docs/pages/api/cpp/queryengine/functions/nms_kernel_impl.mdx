@@ -1,0 +1,15 @@
+---
+title: nms_kernel_impl
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename scalar_t>
+at::Tensor nms_kernel_impl(
+    const at::Tensor &dets,
+    const at::Tensor &scores,
+    double iou_threshold
+)
+```
+</CodeBlock>

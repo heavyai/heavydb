@@ -1,0 +1,84 @@
+---
+title: import_export::GCPTransformer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/RasterImporter.h>
+```
+
+---
+
+## Constructors
+
+### GCPTransformer [#gcptransformer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GCPTransformer": "gcptransformer"}}>
+```cpp showLineNumbers={false}
+import_export::GCPTransformer::GCPTransformer(
+    OGRDataSource *datasource,
+    const Mode mode = Mode::kPolynomial
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Deleted overload 2">
+
+<CodeBlock links={{"GCPTransformer": "gcptransformer"}}>
+```cpp showLineNumbers={false}
+import_export::GCPTransformer::GCPTransformer() = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~GCPTransformer
+
+<CodeBlock links={{"GCPTransformer": "gcptransformer"}}>
+```cpp showLineNumbers={false}
+import_export::GCPTransformer::~GCPTransformer()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### transform [#transform]
+
+<CodeBlock links={{"GCPTransformer": "gcptransformer"}}>
+```cpp showLineNumbers={false}
+void import_export::GCPTransformer::transform(
+    size_t num_elems,
+    double *x,
+    double *y
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Mode
+
+| Name | Value | Description |
+|---|---|---|
+| `kPolynomial` | | |
+| `kThinPlateSpline` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `transform_arg_` | `void *` | |
+| `mode_` | `const Mode` | |

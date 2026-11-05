@@ -1,0 +1,83 @@
+---
+title: BoundingBoxIntersectKeyHandler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashJoinKeyHandlers.h>
+```
+
+---
+
+## Constructors
+
+### BoundingBoxIntersectKeyHandler [#boundingboxintersectkeyhandler]
+
+<CodeBlock links={{"BoundingBoxIntersectKeyHandler": "boundingboxintersectkeyhandler", "JoinColumn": "joincolumn"}}>
+```cpp showLineNumbers={false}
+BoundingBoxIntersectKeyHandler::BoundingBoxIntersectKeyHandler(
+    const size_t key_dims_count,
+    const JoinColumn *join_column,
+    const double *bucket_sizes_for_dimension
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"BoundingBoxIntersectKeyHandler": "boundingboxintersectkeyhandler", "JoinColumnIterator": "joincolumniterator"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename KEY_BUFF_HANDLER>
+DEVICE int BoundingBoxIntersectKeyHandler::operator()(
+    JoinColumnIterator *join_column_iterators,
+    T *key_scratch_buff,
+    KEY_BUFF_HANDLER f
+) const
+```
+</CodeBlock>
+
+### get_number_of_columns [#getnumberofcolumns]
+
+<CodeBlock links={{"BoundingBoxIntersectKeyHandler": "boundingboxintersectkeyhandler"}}>
+```cpp showLineNumbers={false}
+DEVICE size_t BoundingBoxIntersectKeyHandler::get_number_of_columns() const
+```
+</CodeBlock>
+
+### get_key_component_count [#getkeycomponentcount]
+
+<CodeBlock links={{"BoundingBoxIntersectKeyHandler": "boundingboxintersectkeyhandler"}}>
+```cpp showLineNumbers={false}
+DEVICE size_t BoundingBoxIntersectKeyHandler::get_key_component_count() const
+```
+</CodeBlock>
+
+### get_join_columns [#getjoincolumns]
+
+<CodeBlock links={{"BoundingBoxIntersectKeyHandler": "boundingboxintersectkeyhandler", "JoinColumn": "joincolumn"}}>
+```cpp showLineNumbers={false}
+DEVICE const JoinColumn * BoundingBoxIntersectKeyHandler::get_join_columns() const
+```
+</CodeBlock>
+
+### get_join_column_type_infos [#getjoincolumntypeinfos]
+
+<CodeBlock links={{"BoundingBoxIntersectKeyHandler": "boundingboxintersectkeyhandler", "JoinColumnTypeInfo": "joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+DEVICE const JoinColumnTypeInfo * BoundingBoxIntersectKeyHandler::get_join_column_type_infos() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `key_dims_count_` | `const size_t` | |
+| `join_column_` | `const JoinColumn *` | |
+| `bucket_sizes_for_dimension_` | `const double *` | |

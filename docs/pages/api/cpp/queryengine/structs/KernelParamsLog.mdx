@@ -1,0 +1,58 @@
+---
+title: KernelParamsLog
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryExecutionContext.h>
+```
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Value` | `std::variant< std::nullptr_t, ColBuffer, NamedSize, std::vector< void const  * >, std::vector< std::vector< int64_t > >, std::vector< std::vector< uint64_t > >, std::vector< std::vector< int32_t > > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptrs` | `std::array< void const  *, size_t(heavyai::KernelParam::N_)>` | |
+| `values` | `std::array< ValueValue, size_t(heavyai::KernelParam::N_)>` | |
+| `hoist_literals` | `bool` | |
+
+---
+
+## Inner classes
+
+### ColBuffer
+
+<CodeBlock links={{"KernelParamsLog": "kernelparamslog"}}>
+```cpp showLineNumbers={false}
+struct KernelParamsLog::ColBuffer
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `size` | `size_t` | |
+| `ptrs` | `std::vector< void const  * >` | |
+
+### NamedSize
+
+<CodeBlock links={{"KernelParamsLog": "kernelparamslog"}}>
+```cpp showLineNumbers={false}
+struct KernelParamsLog::NamedSize
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `name` | `char const  *` | |
+| `size` | `size_t` | |

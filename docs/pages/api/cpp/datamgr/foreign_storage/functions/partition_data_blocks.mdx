@@ -1,0 +1,17 @@
+---
+title: foreign_storage::partition_data_blocks
+description: "Partition data blocks such that dictionary encoded columns are disjoint of other columns."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::pair<std::map<int, DataBlockPtr>, std::map<int, DataBlockPtr>> foreign_storage::partition_data_blocks(
+    const std::map<int, const ColumnDescriptor *> &column_by_id,
+    const std::map<int, DataBlockPtr> &data_blocks
+)
+```
+</CodeBlock>
+
+Partition data blocks such that dictionary encoded columns are disjoint of other columns.
+
+**Returns:** a pair of DataBlockPtr maps with the first being columns that are string dictionary encoded and the second being the complement

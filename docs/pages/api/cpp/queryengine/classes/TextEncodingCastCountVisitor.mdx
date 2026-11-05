@@ -1,0 +1,450 @@
+---
+title: TextEncodingCastCountVisitor
+description: ""
+---
+
+**Inherits from:** `ScalarExprVisitor< TextEncodingCastCounts >` (public)
+
+---
+
+## Constructors
+
+### TextEncodingCastCountVisitor [#textencodingcastcountvisitor]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor"}}>
+```cpp showLineNumbers={false}
+TextEncodingCastCountVisitor::TextEncodingCastCountVisitor(
+    const bool default_disregard_casts_to_none_encoding
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### visit [#visit]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts"}}>
+```cpp showLineNumbers={false}
+TextEncodingCastCounts TextEncodingCastCountVisitor::visitUOper(
+    const Analyzer::UOper *u_oper
+) const override
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts"}}>
+```cpp showLineNumbers={false}
+TextEncodingCastCounts TextEncodingCastCountVisitor::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const override
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts"}}>
+```cpp showLineNumbers={false}
+TextEncodingCastCounts TextEncodingCastCountVisitor::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const override
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts"}}>
+```cpp showLineNumbers={false}
+TextEncodingCastCounts TextEncodingCastCountVisitor::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const override
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts"}}>
+```cpp showLineNumbers={false}
+TextEncodingCastCounts TextEncodingCastCountVisitor::aggregateResult(
+    const TextEncodingCastCounts &aggregate,
+    const TextEncodingCastCounts &next_result
+) const override
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor"}}>
+```cpp showLineNumbers={false}
+void TextEncodingCastCountVisitor::visitBegin() const override
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts"}}>
+```cpp showLineNumbers={false}
+TextEncodingCastCounts TextEncodingCastCountVisitor::defaultResult() const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitColumnVar(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *
+) const
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitConstant(
+    const Analyzer::Constant *
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"TextEncodingCastCountVisitor": "textencodingcastcountvisitor", "TextEncodingCastCounts": "../structs/textencodingcastcounts", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual TextEncodingCastCounts ScalarExprVisitor<TextEncodingCastCounts>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `disregard_casts_to_none_encoding_` | `bool` | |
+| `default_disregard_casts_to_none_encoding_` | `const bool` | |

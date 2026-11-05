@@ -1,0 +1,157 @@
+---
+title: boost::serialization::serialize
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RegisteredQueryHint": "../../../../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::serialize(
+    Archive &ar,
+    RegisteredQueryHint &query_hint,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ExplainedQueryHint": "../../../../classes/explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::serialize(
+    Archive &ar,
+    ExplainedQueryHint &query_hint,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class RelAlgType>
+void boost::serialization::serialize(
+    boost::archive::text_iarchive &ar,
+    RelAlgType &obj,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+[boost::serialization::serialize](serialize) overload for all RelAlgDag-related classes that require serialization.
+
+NOTE: for proper overload resolution of [boost::serialization::serialize](serialize) while maintaining templatization on the RelAlgDag-related class type, this function is specialized on the Archive type. If other archive types are to be used, they need to be specialized here.
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class RelAlgType>
+void boost::serialization::serialize(
+    boost::archive::text_oarchive &ar,
+    RelAlgType &obj,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Needed for boost::variant with a boost::blank item">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::serialize(
+    Archive &ar,
+    boost::blank &blank,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+Needed for boost::variant with a boost::blank item.
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"RexWindowBound": "../../../../classes/rexwindowfunctionoperator#rexwindowbound"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::serialize(
+    Archive &ar,
+    RexWindowFunctionOperator::RexWindowBound &window_bound,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"SortField": "../../../../classes/sortfield"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::serialize(
+    Archive &,
+    SortField &,
+    const unsigned int
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::serialize(
+    Archive &ar,
+    SQLTypeInfo &type_info,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Prior to boost 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class Archive, class T>
+void boost::serialization::serialize(
+    Archive &ar,
+    std::optional<T> &in_opt,
+    const unsigned int version
+)
+```
+</CodeBlock>
+
+Prior to boost 1.84, boost did not have native support for serializing std::optional values from STL.
+
+This is a workaround for that by converting a std::optional to a boost::optional for serialization. With boost 1.84 std::optional serialization is supported but there is a compilation issue with using the standard boost::serialization::split_free to handle different pathways for load/store of a std::optional. This compilation issue requires a workaround. The commented out code below is what would be used if the split_free route compiles, so keeping it around in case one day it does work as it would be preferred. More on the compilation issue in comments below.
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"TargetMetaInfo": "../../../../classes/targetmetainfo"}}>
+```cpp showLineNumbers={false}
+template <class Archive>
+void boost::serialization::serialize(
+    Archive &,
+    TargetMetaInfo &,
+    const unsigned int
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

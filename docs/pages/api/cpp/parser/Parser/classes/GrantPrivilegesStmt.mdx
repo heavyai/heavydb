@@ -1,0 +1,85 @@
+---
+title: Parser::GrantPrivilegesStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### GrantPrivilegesStmt [#grantprivilegesstmt]
+
+<CodeBlock links={{"GrantPrivilegesStmt": "grantprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+Parser::GrantPrivilegesStmt::GrantPrivilegesStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_object_type [#getobjecttype]
+
+<CodeBlock links={{"GrantPrivilegesStmt": "grantprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::GrantPrivilegesStmt::get_object_type() const
+```
+</CodeBlock>
+
+### get_object [#getobject]
+
+<CodeBlock links={{"GrantPrivilegesStmt": "grantprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::GrantPrivilegesStmt::get_object() const
+```
+</CodeBlock>
+
+### get_grantees [#getgrantees]
+
+<CodeBlock links={{"GrantPrivilegesStmt": "grantprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & Parser::GrantPrivilegesStmt::get_grantees() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"GrantPrivilegesStmt": "grantprivilegesstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::GrantPrivilegesStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"GrantPrivilegesStmt": "grantprivilegesstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::GrantPrivilegesStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_` | `std::unique_ptr< std::string >` | |
+| `target_` | `std::unique_ptr< std::string >` | |
+| `grantees_` | `std::vector< std::string >` | |
+| `privileges_` | `std::vector< Privilege >` | |

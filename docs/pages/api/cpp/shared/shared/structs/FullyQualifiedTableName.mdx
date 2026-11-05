@@ -1,0 +1,82 @@
+---
+title: shared::FullyQualifiedTableName
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <shared/FullyQualifiedTableName.h>
+```
+
+---
+
+## Constructors
+
+### FullyQualifiedTableName [#fullyqualifiedtablename]
+
+<CodeBlock links={{"FullyQualifiedTableName": "fullyqualifiedtablename"}}>
+```cpp showLineNumbers={false}
+shared::FullyQualifiedTableName::FullyQualifiedTableName(
+    const std::string &db_name,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"FullyQualifiedTableName": "fullyqualifiedtablename"}}>
+```cpp showLineNumbers={false}
+bool shared::FullyQualifiedTableName::operator==(
+    const FullyQualifiedTableName &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"FullyQualifiedTableName": "fullyqualifiedtablename"}}>
+```cpp showLineNumbers={false}
+bool shared::FullyQualifiedTableName::operator!=(
+    const FullyQualifiedTableName &other
+) const
+```
+</CodeBlock>
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"FullyQualifiedTableName": "fullyqualifiedtablename"}}>
+```cpp showLineNumbers={false}
+bool shared::FullyQualifiedTableName::operator<(
+    const FullyQualifiedTableName &other
+) const
+```
+</CodeBlock>
+
+### hash [#hash]
+
+<CodeBlock links={{"FullyQualifiedTableName": "fullyqualifiedtablename"}}>
+```cpp showLineNumbers={false}
+size_t shared::FullyQualifiedTableName::hash() const
+```
+</CodeBlock>
+
+### getSqlReference [#getsqlreference]
+
+<CodeBlock links={{"FullyQualifiedTableName": "fullyqualifiedtablename"}}>
+```cpp showLineNumbers={false}
+std::string shared::FullyQualifiedTableName::getSqlReference() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `db_name` | `std::string` | |
+| `table_name` | `std::string` | |

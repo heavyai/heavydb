@@ -1,0 +1,277 @@
+---
+title: import_export::Loader
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/Importer.h>
+```
+
+---
+
+## Constructors
+
+### Loader [#loader]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+import_export::Loader::Loader(
+    Catalog_Namespace::Catalog &c,
+    const TableDescriptor *t,
+    LoadCallbackType load_callback = nullptr
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~Loader
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+virtual import_export::Loader::~Loader()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getCatalog [#getcatalog]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::Catalog & import_export::Loader::getCatalog() const
+```
+</CodeBlock>
+
+### getTableDesc [#gettabledesc]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * import_export::Loader::getTableDesc() const
+```
+</CodeBlock>
+
+### get_column_descs [#getcolumndescs]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+const std::list<const ColumnDescriptor *> & import_export::Loader::get_column_descs() const
+```
+</CodeBlock>
+
+### getStringDict [#getstringdict]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+StringDictionary * import_export::Loader::getStringDict(
+    const ColumnDescriptor *cd
+) const
+```
+</CodeBlock>
+
+### load [#load]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+bool import_export::Loader::load(
+    const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers,
+    const size_t row_count,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### loadNoCheckpoint [#loadnocheckpoint]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+bool import_export::Loader::loadNoCheckpoint(
+    const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers,
+    const size_t row_count,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+void import_export::Loader::checkpoint()
+```
+</CodeBlock>
+
+### getTableEpochs [#gettableepochs]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+std::vector<Catalog_Namespace::TableEpochInfo> import_export::Loader::getTableEpochs() const
+```
+</CodeBlock>
+
+### setTableEpochs [#settableepochs]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+void import_export::Loader::setTableEpochs(
+    const std::vector<Catalog_Namespace::TableEpochInfo> &table_epochs
+)
+```
+</CodeBlock>
+
+### setAddingColumns [#setaddingcolumns]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+void import_export::Loader::setAddingColumns(
+    const bool adding_columns
+)
+```
+</CodeBlock>
+
+### isAddingColumns [#isaddingcolumns]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+bool import_export::Loader::isAddingColumns() const
+```
+</CodeBlock>
+
+### dropColumns [#dropcolumns]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+void import_export::Loader::dropColumns(
+    const std::vector<int> &columns
+)
+```
+</CodeBlock>
+
+### getErrorMessage [#geterrormessage]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+std::string import_export::Loader::getErrorMessage()
+```
+</CodeBlock>
+
+### init [#init]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+void import_export::Loader::init()
+```
+</CodeBlock>
+
+### loadImpl [#loadimpl]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+bool import_export::Loader::loadImpl(
+    const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers,
+    size_t row_count,
+    bool checkpoint,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### distributeToShards [#distributetoshards]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+void import_export::Loader::distributeToShards(
+    std::vector<OneShardBuffers> &all_shard_import_buffers,
+    std::vector<size_t> &all_shard_row_counts,
+    const OneShardBuffers &import_buffers,
+    const size_t row_count,
+    const size_t shard_count,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### loadToShard [#loadtoshard]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+bool import_export::Loader::loadToShard(
+    const std::vector<std::unique_ptr<TypedImportBuffer>> &import_buffers,
+    size_t row_count,
+    const TableDescriptor *shard_table,
+    bool checkpoint,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### distributeToShardsNewColumns [#distributetoshardsnewcolumns]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+void import_export::Loader::distributeToShardsNewColumns(
+    std::vector<OneShardBuffers> &all_shard_import_buffers,
+    std::vector<size_t> &all_shard_row_counts,
+    const OneShardBuffers &import_buffers,
+    const size_t row_count,
+    const size_t shard_count,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### distributeToShardsExistingColumns [#distributetoshardsexistingcolumns]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+void import_export::Loader::distributeToShardsExistingColumns(
+    std::vector<OneShardBuffers> &all_shard_import_buffers,
+    std::vector<size_t> &all_shard_row_counts,
+    const OneShardBuffers &import_buffers,
+    const size_t row_count,
+    const size_t shard_count,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### fillShardRow [#fillshardrow]
+
+<CodeBlock links={{"Loader": "loader"}}>
+```cpp showLineNumbers={false}
+void import_export::Loader::fillShardRow(
+    const size_t row_index,
+    OneShardBuffers &shard_output_buffers,
+    const OneShardBuffers &import_buffers
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `LoadCallbackType` | `std::function< bool(const std::vector< std::unique_ptr< TypedImportBuffer > > &, std::vector< DataBlockPtr > &, size_t)>` |
+| `OneShardBuffers` | `std::vector< std::unique_ptr< TypedImportBuffer > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `catalog_` | `Catalog_Namespace::Catalog &` | |
+| `table_desc_` | `const TableDescriptor *` | |
+| `column_descs_` | `std::list< const ColumnDescriptor * >` | |
+| `load_callback_` | `LoadCallbackType` | |
+| `insert_data_` | `Fragmenter_Namespace::InsertData` | |
+| `dict_map_` | `std::map< int, StringDictionary * >` | |
+| `adding_columns_` | `bool` | |
+| `loader_mutex_` | `std::mutex` | |
+| `error_msg_` | `std::string` | |

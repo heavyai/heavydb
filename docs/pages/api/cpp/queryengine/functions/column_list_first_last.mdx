@@ -1,0 +1,15 @@
+---
+title: column_list_first_last
+description: ""
+---
+
+<CodeBlock links={{"ColumnList": "../structs/columnlist", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t column_list_first_last(
+    const ColumnList<double> &col_list,
+    const int m,
+    Column<double> &col1,
+    Column<double> &col2
+)
+```
+</CodeBlock>

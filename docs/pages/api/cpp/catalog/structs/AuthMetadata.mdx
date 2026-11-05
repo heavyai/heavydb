@@ -1,0 +1,35 @@
+---
+title: AuthMetadata
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <AuthMetadata.h>
+```
+
+---
+
+## Constructors
+
+### AuthMetadata [#authmetadata]
+
+<CodeBlock links={{"AuthMetadata": "authmetadata"}}>
+```cpp showLineNumbers={false}
+AuthMetadata::AuthMetadata()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `port` | `int32_t` | |
+| `uri` | `std::string` | |
+| `distinguishedName` | `std::string` | |
+| `ldapQueryUrl` | `std::string` | |
+| `ldapRoleRegex` | `std::string` | |
+| `ldapSuperUserRole` | `std::string` | |
+| `domainComp` | `std::string` | |
+| `allowLocalAuthFallback` | `bool` | |

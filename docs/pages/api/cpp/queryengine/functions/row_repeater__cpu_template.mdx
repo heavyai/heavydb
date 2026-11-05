@@ -1,0 +1,120 @@
+---
+title: row_repeater__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE DEVICE int32_t row_repeater__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<T> &input_col,
+    const int reps,
+    Column<T> &output_col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t row_repeater__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int8_t> &input_col,
+    const int reps,
+    Column<int8_t> &output_col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t row_repeater__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int16_t> &input_col,
+    const int reps,
+    Column<int16_t> &output_col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t row_repeater__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int32_t> &input_col,
+    const int reps,
+    Column<int32_t> &output_col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t row_repeater__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input_col,
+    const int reps,
+    Column<int64_t> &output_col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t row_repeater__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<float> &input_col,
+    const int reps,
+    Column<float> &output_col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t row_repeater__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<double> &input_col,
+    const int reps,
+    Column<double> &output_col
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t row_repeater__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<bool> &input_col,
+    const int reps,
+    Column<bool> &output_col
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

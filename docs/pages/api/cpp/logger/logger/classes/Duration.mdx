@@ -1,0 +1,74 @@
+---
+title: logger::Duration
+description: ""
+---
+
+---
+
+## Constructors
+
+### Duration [#duration]
+
+<CodeBlock links={{"Duration": "duration", "DurationTree": "durationtree", "DebugTimerParams": "../structs/debugtimerparams"}}>
+```cpp showLineNumbers={false}
+logger::Duration::Duration(
+    DurationTree *const duration_tree,
+    int const depth,
+    DebugTimerParams const debug_timer_params
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### stop [#stop]
+
+<CodeBlock links={{"Duration": "duration"}}>
+```cpp showLineNumbers={false}
+bool logger::Duration::stop()
+```
+</CodeBlock>
+
+Set stop_, decrement DurationTree::current_depth_.
+
+Return true iff this `Duration` represents the root timer (see docs).
+
+### relative_start_time [#relativestarttime]
+
+<CodeBlock links={{"Duration": "duration"}}>
+```cpp showLineNumbers={false}
+template <typename Units = std::chrono::milliseconds>
+Units::rep logger::Duration::relative_start_time() const
+```
+</CodeBlock>
+
+### value [#value]
+
+<CodeBlock links={{"Duration": "duration"}}>
+```cpp showLineNumbers={false}
+template <typename Units = std::chrono::milliseconds>
+Units::rep logger::Duration::value() const
+```
+</CodeBlock>
+
+### operator-&gt; [#operator_arrow]
+
+<CodeBlock links={{"Duration": "duration", "DebugTimerParams": "../structs/debugtimerparams"}}>
+```cpp showLineNumbers={false}
+DebugTimerParams const  * logger::Duration::operator->() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `duration_tree_` | `DurationTree *const` | |
+| `start_` | `Clock::time_point const` | |
+| `stop_` | `Clock::time_point` | |
+| `depth_` | `int const` | |
+| `debug_timer_params_` | `DebugTimerParams const` | |

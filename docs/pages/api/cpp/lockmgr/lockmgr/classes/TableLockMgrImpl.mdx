@@ -1,0 +1,184 @@
+---
+title: lockmgr::TableLockMgrImpl
+description: ""
+---
+
+<CodeBlock id="TableLockMgrImpl" links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+template <class T>
+class TableLockMgrImpl
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgrImpl.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="class">
+</ParamField>
+
+---
+
+## Constructors
+
+### TableLockMgrImpl [#tablelockmgrimpl]
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+lockmgr::TableLockMgrImpl<T>::TableLockMgrImpl()
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~TableLockMgrImpl
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+virtual lockmgr::TableLockMgrImpl<T>::~TableLockMgrImpl() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getTableMutex [#gettablemutex]
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl", "MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+MutexTracker * lockmgr::TableLockMgrImpl<T>::getTableMutex(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### getLockedTables [#getlockedtables]
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+std::set<ChunkKey> lockmgr::TableLockMgrImpl<T>::getLockedTables() const
+```
+</CodeBlock>
+
+### getClusterTableMutex [#getclustertablemutex]
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<heavyai::DistributedSharedMutex> lockmgr::TableLockMgrImpl<T>::getClusterTableMutex(
+    const ChunkKey &table_key
+) const
+```
+</CodeBlock>
+
+### getMutexTracker [#getmutextracker]
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl", "MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+MutexTracker * lockmgr::TableLockMgrImpl<T>::getMutexTracker(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+### validateExistingTable [#validateexistingtable]
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+void lockmgr::TableLockMgrImpl<T>::validateExistingTable(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+### validateAndGetExistingTableId [#validateandgetexistingtableid]
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+int32_t lockmgr::TableLockMgrImpl<T>::validateAndGetExistingTableId(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### instance [#instance]
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+static T & lockmgr::TableLockMgrImpl<T>::instance()
+```
+</CodeBlock>
+
+### getWriteLockForTable [#getwritelockfortable]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+WriteLock lockmgr::TableLockMgrImpl<T>::getWriteLockForTable(
+    const Catalog_Namespace::Catalog &cat,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+WriteLock lockmgr::TableLockMgrImpl<T>::getWriteLockForTable(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getReadLockForTable [#getreadlockfortable]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+ReadLock lockmgr::TableLockMgrImpl<T>::getReadLockForTable(
+    Catalog_Namespace::Catalog &cat,
+    const std::string &table_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableLockMgrImpl": "tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+ReadLock lockmgr::TableLockMgrImpl<T>::getReadLockForTable(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `map_mutex_` | `std::mutex` | |
+| `table_mutex_map_` | `std::map< ChunkKey, std::unique_ptr< MutexTracker > >` | |

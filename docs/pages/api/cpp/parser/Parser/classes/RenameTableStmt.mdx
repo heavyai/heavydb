@@ -1,0 +1,97 @@
+---
+title: Parser::RenameTableStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### RenameTableStmt [#renametablestmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"RenameTableStmt": "renametablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::RenameTableStmt::RenameTableStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RenameTableStmt": "renametablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::RenameTableStmt::RenameTableStmt(
+    std::string *tab_name,
+    std::string *new_tab_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RenameTableStmt": "renametablestmt"}}>
+```cpp showLineNumbers={false}
+Parser::RenameTableStmt::RenameTableStmt(
+    std::list<std::pair<std::string, std::string>> tableNames
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"RenameTableStmt": "renametablestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RenameTableStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"RenameTableStmt": "renametablestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RenameTableStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `TableNamePair` | `std::pair< std::unique_ptr< std::string >, std::unique_ptr< std::string > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `tablesToRename_` | `std::list< TableNamePair >` | |

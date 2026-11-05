@@ -1,0 +1,33 @@
+---
+title: toStringImpl
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename... Ts, size_t... Is>
+std::string toStringImpl(
+    const std::tuple<Ts...> &t,
+    const std::index_sequence<0, Is...>
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename... T>
+std::string toStringImpl(
+    const std::tuple<> &t,
+    const std::index_sequence<>
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

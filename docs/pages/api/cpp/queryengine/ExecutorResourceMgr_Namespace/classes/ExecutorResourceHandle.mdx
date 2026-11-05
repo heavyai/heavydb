@@ -1,0 +1,68 @@
+---
+title: ExecutorResourceMgr_Namespace::ExecutorResourceHandle
+description: "A wrapper returned by ExecutorResourceMgr to the requestee, containing the ResourceGrant that was granted."
+---
+
+A wrapper returned by [`ExecutorResourceMgr`](executorresourcemgr) to the requestee, containing the [ResourceGrant](../structs/resourcegrant) that was granted.
+
+When this class goes out of scope (i.e. the executing thread finishes its query step, the destructor will automatically instruct [`ExecutorResourceMgr`](executorresourcemgr) to release the granted resources back to the [`ExecutorResourcePool`](executorresourcepool).
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ExecutorResourceMgr.h>
+```
+
+---
+
+## Constructors
+
+### ExecutorResourceHandle [#executorresourcehandle]
+
+<CodeBlock links={{"ExecutorResourceHandle": "executorresourcehandle", "ExecutorResourceMgr": "executorresourcemgr", "ResourceGrant": "../structs/resourcegrant"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ExecutorResourceHandle::ExecutorResourceHandle(
+    std::shared_ptr<ExecutorResourceMgr> resource_mgr,
+    const RequestId request_id,
+    const ResourceGrant &resource_grant
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~ExecutorResourceHandle
+
+<CodeBlock links={{"ExecutorResourceHandle": "executorresourcehandle"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ExecutorResourceHandle::~ExecutorResourceHandle()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_request_id [#getrequestid]
+
+<CodeBlock links={{"ExecutorResourceHandle": "executorresourcehandle"}}>
+```cpp showLineNumbers={false}
+RequestId ExecutorResourceMgr_Namespace::ExecutorResourceHandle::get_request_id() const
+```
+</CodeBlock>
+
+### get_resource_grant [#getresourcegrant]
+
+<CodeBlock links={{"ExecutorResourceHandle": "executorresourcehandle", "ResourceGrant": "../structs/resourcegrant"}}>
+```cpp showLineNumbers={false}
+ResourceGrant ExecutorResourceMgr_Namespace::ExecutorResourceHandle::get_resource_grant() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `resource_mgr_` | `std::shared_ptr< ExecutorResourceMgr >` | |
+| `request_id_` | `const RequestId` | |
+| `resource_grant_` | `const ResourceGrant` | |

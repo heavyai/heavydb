@@ -1,0 +1,32 @@
+---
+title: ddl_utils::validate_allowed_file_path
+description: "Validates that the given file path is allowed."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void ddl_utils::validate_allowed_file_path(
+    const std::string &file_path,
+    const DataTransferType data_transfer_type,
+    const bool allow_wildcards = false
+)
+```
+</CodeBlock>
+
+Validates that the given file path is allowed.
+
+Validation entails ensuring that given path is not under a blacklisted root path and path is under a whitelisted path, if whitelisted paths have been configured. Also excludes the use of spaces and punctuation other than: . / _ + - = :
+
+**Parameters**
+
+<ParamField path="file_path" type="const std::string &">
+- File path to validate
+</ParamField>
+
+<ParamField path="data_transfer_type" type="const DataTransferType">
+- Enum indicating whether validation is for an import or export use case
+</ParamField>
+
+<ParamField path="allow_wildcards" type="const bool" default="false">
+- Bool indicating if wildcards are allowed
+</ParamField>

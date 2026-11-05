@@ -1,0 +1,26 @@
+---
+title: TARGET_RUNTIME_FUNCTIONS_FOR_MODULE_CLONING
+description: ""
+---
+
+```cpp showLineNumbers={false}
+constexpr std::array<std::string_view, 18> TARGET_RUNTIME_FUNCTIONS_FOR_MODULE_CLONING = {
+    {"query_stub_hoisted_literals",
+     "multifrag_query_hoisted_literals",
+     "query_stub",
+     "multifrag_query",
+     "fixed_width_int_decode",
+     "fixed_width_unsigned_decode",
+     "diff_fixed_width_int_decode",
+     "fixed_width_double_decode",
+     "fixed_width_float_decode",
+     "fixed_width_small_date_decode",
+     "record_error_code",
+     "get_error_code",
+     "pos_start_impl",
+     "pos_step_impl",
+     "group_buff_idx_impl",
+     "init_shared_mem",
+     "init_shared_mem_nop",
+     "write_back_nop"}}
+```

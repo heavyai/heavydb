@@ -1,0 +1,218 @@
+---
+title: RexFunctionOperator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RexOperator` (public)
+
+---
+
+## Constructors
+
+### RexFunctionOperator [#rexfunctionoperator]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+RexFunctionOperator::RexFunctionOperator() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+RexFunctionOperator::RexFunctionOperator(
+    const std::string &name,
+    ConstRexScalarPtrVector &operands,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getDisambiguated [#getdisambiguated]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexScalar": "rexscalar", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<const RexOperator> RexFunctionOperator::getDisambiguated(
+    std::vector<std::unique_ptr<const RexScalar>> &operands
+) const override
+```
+</CodeBlock>
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexFunctionOperator::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexFunctionOperator::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### getName [#getname]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+const std::string & RexFunctionOperator::getName() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexFunctionOperator::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+size_t RexFunctionOperator::size() const
+```
+</CodeBlock>
+
+### getOperand [#getoperand]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexScalar": "rexscalar", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RexFunctionOperator::getOperand(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getOperandAndRelease [#getoperandandrelease]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexScalar": "rexscalar", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RexFunctionOperator::getOperandAndRelease(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getOperator [#getoperator]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+SQLOps RexFunctionOperator::getOperator() const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & RexFunctionOperator::getType() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+virtual size_t Rex::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+size_t Rex::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+size_t RexFunctionOperator::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ConstRexScalarPtr` | `std::unique_ptr< const RexScalar >` |
+| `ConstRexScalarPtrVector` | `std::vector< ConstRexScalarPtr >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name_` | `std::string` | |
+| `op_` | `SQLOps` | |
+| `operands_` | `std::vector< std::unique_ptr< const RexScalar > >` | |
+| `type_` | `SQLTypeInfo` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

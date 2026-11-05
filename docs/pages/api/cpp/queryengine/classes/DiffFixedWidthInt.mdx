@@ -1,0 +1,50 @@
+---
+title: DiffFixedWidthInt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Codec.h>
+```
+
+**Inherits from:** `Decoder` (public)
+
+---
+
+## Constructors
+
+### DiffFixedWidthInt [#difffixedwidthint]
+
+<CodeBlock links={{"DiffFixedWidthInt": "difffixedwidthint"}}>
+```cpp showLineNumbers={false}
+DiffFixedWidthInt::DiffFixedWidthInt(
+    const size_t byte_width,
+    const int64_t baseline
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegenDecode [#codegendecode]
+
+<CodeBlock links={{"DiffFixedWidthInt": "difffixedwidthint"}}>
+```cpp showLineNumbers={false}
+llvm::Instruction * DiffFixedWidthInt::codegenDecode(
+    llvm::Value *byte_stream,
+    llvm::Value *pos,
+    llvm::Module *llvm_module
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `byte_width_` | `const size_t` | |
+| `baseline_` | `const int64_t` | |

@@ -1,0 +1,638 @@
+---
+title: Fragmenter_Namespace::RasterFragmenter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Fragmenter_Namespace/RasterFragmenter.h>
+```
+
+**Inherits from:** `Fragmenter_Namespace::InsertOrderFragmenter` (public)
+
+---
+
+## Constructors
+
+### RasterFragmenter [#rasterfragmenter]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::RasterFragmenter::RasterFragmenter(
+    const std::vector<int> chunk_key_prefix,
+    std::vector<Chunk_NS::Chunk> &chunk_vec,
+    Data_Namespace::DataMgr *data_mgr,
+    Catalog_Namespace::Catalog *catalog,
+    const int physical_table_id,
+    const int shard,
+    const size_t max_fragment_rows = 32000000ULL,
+    const size_t max_chunk_size = 2147483648ULL,
+    const size_t page_size = 2097152ULL,
+    const size_t max_rows = ((1LL)<< 62), const Data_Namespace::MemoryLevel default_insert_level = Data_Namespace::DISK_LEVEL, const bool uses_foreign_storage = false
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~RasterFragmenter
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::RasterFragmenter::~RasterFragmenter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### computeRasterMeshRenderingMetadata [#computerastermeshrenderingmetadata]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "RasterMeshRenderingMetadata": "../structs/rastermeshrenderingmetadata"}}>
+```cpp showLineNumbers={false}
+std::vector<RasterMeshRenderingMetadata> Fragmenter_Namespace::RasterFragmenter::computeRasterMeshRenderingMetadata() const
+```
+</CodeBlock>
+
+### getLastFragmentFileId [#getlastfragmentfileid]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter"}}>
+```cpp showLineNumbers={false}
+int32_t Fragmenter_Namespace::RasterFragmenter::getLastFragmentFileId() const
+```
+</CodeBlock>
+
+### getNumFragments [#getnumfragments]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::RasterFragmenter::getNumFragments() override
+```
+</CodeBlock>
+
+returns the number of fragments in a table
+
+### getFragmentsForQuery [#getfragmentsforquery]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "TableInfo": "tableinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+TableInfo Fragmenter_Namespace::RasterFragmenter::getFragmentsForQuery() override
+```
+</CodeBlock>
+
+returns (inside `QueryInfo`) object all ids and row sizes of fragments
+
+### insertData [#insertdata]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertData": "../structs/insertdata", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::insertData(
+    InsertData &insert_data_struct
+) override
+```
+</CodeBlock>
+
+appends data onto the most recently occuring fragment, creating a new one if necessary
+
+### insertChunks [#insertchunks]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertChunks": "../structs/insertchunks", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::insertChunks(
+    const InsertChunks &insert_chunk
+) override
+```
+</CodeBlock>
+
+Insert chunks into minimal number of fragments.
+
+**Parameters**
+
+<ParamField path="insert_chunk" type="const InsertChunks &">
+- The chunks to insert
+</ParamField>
+
+### insertDataNoCheckpoint [#insertdatanocheckpoint]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertData": "../structs/insertdata", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::insertDataNoCheckpoint(
+    InsertData &insert_data_struct
+) override
+```
+</CodeBlock>
+
+Given data wrapped in an [InsertData](../structs/insertdata) struct, inserts it into the correct partitions No locks and checkpoints taken needs to be managed externally.
+
+### insertChunksNoCheckpoint [#insertchunksnocheckpoint]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertChunks": "../structs/insertchunks", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::insertChunksNoCheckpoint(
+    const InsertChunks &insert_chunk
+) override
+```
+</CodeBlock>
+
+Insert chunks into minimal number of fragments; no locks or checkpoints taken.
+
+### dropFragmentsToSize [#dropfragmentstosize]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::dropFragmentsToSize(
+    const size_t maxRows
+) override
+```
+</CodeBlock>
+
+Will truncate table to less than maxRows by dropping fragments.
+
+### updateColumnChunkMetadata [#updatecolumnchunkmetadata]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::updateColumnChunkMetadata(
+    const ColumnDescriptor *cd,
+    const int fragment_id,
+    const std::shared_ptr<ChunkMetadata> metadata
+) override
+```
+</CodeBlock>
+
+Updates the metadata for a column chunk.
+
+**Parameters**
+
+<ParamField path="cd" type="const ColumnDescriptor *">
+- ColumnDescriptor for the column
+</ParamField>
+
+<ParamField path="fragment_id" type="const int">
+- Fragment id of the chunk within the column
+</ParamField>
+
+<ParamField path="metadata" type="const std::shared_ptr<ChunkMetadata>">
+- Shared_ptr of the metadata to update column chunk with
+</ParamField>
+
+### updateChunkStats [#updatechunkstats]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::updateChunkStats(
+    const ColumnDescriptor *cd,
+    std::unordered_map<int, ChunkStats> &stats_map,
+    std::optional<Data_Namespace::MemoryLevel> memory_level
+) override
+```
+</CodeBlock>
+
+Update chunk stats.
+
+### getFragmentInfo [#getfragmentinfo]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+FragmentInfo * Fragmenter_Namespace::RasterFragmenter::getFragmentInfo(
+    const int fragment_id
+) const override
+```
+</CodeBlock>
+
+Retrieve the fragment info object for an individual fragment for editing.
+
+### getFragmenterId [#getfragmenterid]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+int Fragmenter_Namespace::RasterFragmenter::getFragmenterId() override
+```
+</CodeBlock>
+
+get fragmenter's id
+
+### getChunkKeyPrefix [#getchunkkeyprefix]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::vector<int> Fragmenter_Namespace::RasterFragmenter::getChunkKeyPrefix() const
+```
+</CodeBlock>
+
+### getFragmenterType [#getfragmentertype]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::string Fragmenter_Namespace::RasterFragmenter::getFragmenterType() override
+```
+</CodeBlock>
+
+get fragmenter's type (as string
+
+### getNumRows [#getnumrows]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::RasterFragmenter::getNumRows() override
+```
+</CodeBlock>
+
+### setNumRows [#setnumrows]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::setNumRows(
+    const size_t numTuples
+) override
+```
+</CodeBlock>
+
+### updateColumn [#updatecolumn]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "ChunkUpdateStats": "../structs/chunkupdatestats", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::optional<ChunkUpdateStats> Fragmenter_Namespace::RasterFragmenter::updateColumn(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd,
+    const int fragment_id,
+    const std::vector<uint64_t> &frag_offsets,
+    const std::vector<ScalarTargetValue> &rhs_values,
+    const SQLTypeInfo &rhs_type,
+    const Data_Namespace::MemoryLevel memory_level,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::updateColumn(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const ColumnDescriptor *cd,
+    const int fragment_id,
+    const std::vector<uint64_t> &frag_offsets,
+    const ScalarTargetValue &rhs_value,
+    const SQLTypeInfo &rhs_type,
+    const Data_Namespace::MemoryLevel memory_level,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### updateColumns [#updatecolumns]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "RowDataProvider": "rowdataprovider", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::updateColumns(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const int fragmentId,
+    const std::vector<TargetMetaInfo> sourceMetaInfo,
+    const std::vector<const ColumnDescriptor *> columnDescriptors,
+    const RowDataProvider &sourceDataProvider,
+    const size_t indexOffFragmentOffsetColumn,
+    const Data_Namespace::MemoryLevel memoryLevel,
+    UpdelRoll &updelRoll,
+    Executor *executor
+) override
+```
+</CodeBlock>
+
+### updateColumnMetadata [#updatecolumnmetadata]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "FragmentInfo": "fragmentinfo", "UpdateValuesStats": "../structs/updatevaluesstats", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::updateColumnMetadata(
+    const ColumnDescriptor *cd,
+    FragmentInfo &fragment,
+    std::shared_ptr<Chunk_NS::Chunk> chunk,
+    const UpdateValuesStats &update_values_stats,
+    const SQLTypeInfo &rhs_type,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+### updateMetadata [#updatemetadata]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::updateMetadata(
+    const Catalog_Namespace::Catalog *catalog,
+    const MetaDataKey &key,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+### compactRows [#compactrows]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::compactRows(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const int fragment_id,
+    const std::vector<uint64_t> &frag_offsets,
+    const Data_Namespace::MemoryLevel memory_level,
+    UpdelRoll &updel_roll
+) override
+```
+</CodeBlock>
+
+### getVacuumOffsets [#getvacuumoffsets]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+const std::vector<uint64_t> Fragmenter_Namespace::RasterFragmenter::getVacuumOffsets(
+    const std::shared_ptr<Chunk_NS::Chunk> &chunk
+) override
+```
+</CodeBlock>
+
+### getChunksForAllColumns [#getchunksforallcolumns]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+auto Fragmenter_Namespace::RasterFragmenter::getChunksForAllColumns(
+    const TableDescriptor *td,
+    const FragmentInfo &fragment,
+    const Data_Namespace::MemoryLevel memory_level
+)
+```
+</CodeBlock>
+
+### dropColumns [#dropcolumns]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::dropColumns(
+    const std::vector<int> &columnIds
+) override
+```
+</CodeBlock>
+
+### hasDeletedRows [#hasdeletedrows]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+bool Fragmenter_Namespace::RasterFragmenter::hasDeletedRows(
+    const int delete_column_id
+) override
+```
+</CodeBlock>
+
+Iterates through chunk metadata to return whether any rows have been deleted.
+
+### resetSizesFromFragments [#resetsizesfromfragments]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::resetSizesFromFragments() override
+```
+</CodeBlock>
+
+Resets the fragmenter's size related metadata using the internal fragment info vector.
+
+This is typically done after operations, such as vacuuming, which can change fragment sizes.
+
+### alterNonGeoColumnType [#alternongeocolumntype]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::alterNonGeoColumnType(
+    const std::list<const ColumnDescriptor *> &columns
+)
+```
+</CodeBlock>
+
+### alterColumnGeoType [#altercolumngeotype]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::alterColumnGeoType(
+    const std::list<std::pair<const ColumnDescriptor *, std::list<const ColumnDescriptor *>>> &src_dst_column_pairs
+)
+```
+</CodeBlock>
+
+### insertChunksImpl [#insertchunksimpl]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertChunks": "../structs/insertchunks"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::insertChunksImpl(
+    const InsertChunks &insert_chunk
+) override
+```
+</CodeBlock>
+
+### insertDataImpl [#insertdataimpl]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertData": "../structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::insertDataImpl(
+    InsertData &insert_data
+) override
+```
+</CodeBlock>
+
+### dropFragmentsToSizeNoInsertLock [#dropfragmentstosizenoinsertlock]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::dropFragmentsToSizeNoInsertLock(
+    const size_t max_rows
+) override
+```
+</CodeBlock>
+
+### populateFileToLocalCoordsMap [#populatefiletolocalcoordsmap]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::populateFileToLocalCoordsMap()
+```
+</CodeBlock>
+
+### createNewFragment [#createnewfragment]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+FragmentInfo * Fragmenter_Namespace::RasterFragmenter::createNewFragment(
+    const Data_Namespace::MemoryLevel memory_level = Data_Namespace::DISK_LEVEL
+)
+```
+</CodeBlock>
+
+creates new fragment, calling createChunk() method of BufferMgr to make a new chunk for each column of the table.
+
+Also unpins the chunks of the previous insert buffer
+
+### deleteFragments [#deletefragments]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::deleteFragments(
+    const std::vector<int> &dropFragIds
+)
+```
+</CodeBlock>
+
+### conditionallyInstantiateFileMgrWithParams [#conditionallyinstantiatefilemgrwithparams]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::conditionallyInstantiateFileMgrWithParams()
+```
+</CodeBlock>
+
+### getChunkMetadata [#getchunkmetadata]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::getChunkMetadata()
+```
+</CodeBlock>
+
+### lockInsertCheckpointData [#lockinsertcheckpointdata]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertData": "../structs/insertdata", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::lockInsertCheckpointData(
+    const InsertData &insertDataStruct
+)
+```
+</CodeBlock>
+
+### addColumns [#addcolumns]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertData": "../structs/insertdata", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::addColumns(
+    const InsertData &insertDataStruct
+)
+```
+</CodeBlock>
+
+### getFragmentInfoFromId [#getfragmentinfofromid]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+FragmentInfo & Fragmenter_Namespace::RasterFragmenter::getFragmentInfoFromId(
+    const int fragment_id
+)
+```
+</CodeBlock>
+
+### vacuum_fixlen_rows [#vacuumfixlenrows]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+auto Fragmenter_Namespace::RasterFragmenter::vacuum_fixlen_rows(
+    const FragmentInfo &fragment,
+    const std::shared_ptr<Chunk_NS::Chunk> &chunk,
+    const std::vector<uint64_t> &frag_offsets
+)
+```
+</CodeBlock>
+
+### vacuum_varlen_rows [#vacuumvarlenrows]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+auto Fragmenter_Namespace::RasterFragmenter::vacuum_varlen_rows(
+    const FragmentInfo &fragment,
+    const std::shared_ptr<Chunk_NS::Chunk> &chunk,
+    const std::vector<uint64_t> &frag_offsets
+)
+```
+</CodeBlock>
+
+### insertChunksIntoFragment [#insertchunksintofragment]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertChunks": "../structs/insertchunks", "FragmentInfo": "fragmentinfo", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::RasterFragmenter::insertChunksIntoFragment(
+    const InsertChunks &insert_chunks,
+    const std::optional<int> delete_column_id,
+    FragmentInfo *current_fragment,
+    const size_t num_rows_to_insert,
+    size_t &num_rows_inserted,
+    size_t &num_rows_left,
+    std::vector<size_t> &valid_row_indices,
+    const size_t start_fragment
+)
+```
+</CodeBlock>
+
+### findDeleteColumnId [#finddeletecolumnid]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::optional<int> Fragmenter_Namespace::RasterFragmenter::findDeleteColumnId() const
+```
+</CodeBlock>
+
+### validateSameNumRows [#validatesamenumrows]
+
+<CodeBlock links={{"RasterFragmenter": "rasterfragmenter", "InsertChunks": "../structs/insertchunks", "InsertOrderFragmenter": "insertorderfragmenter"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> Fragmenter_Namespace::RasterFragmenter::validateSameNumRows(
+    const InsertChunks &insert_chunks
+) const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ModifyTransactionTracker` | `UpdelRoll` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `file_to_local_coords_map_` | `std::map< int32_t, std::vector< std::vector< int32_t > > >` | |
+| `chunkKeyPrefix_` | `std::vector< int >` | |
+| `columnMap_` | `std::map< int, Chunk_NS::Chunk >` | stores a map of column id to metadata about that column |
+| `tracked_in_memory_chunks_` | `std::vector< std::unique_ptr< Chunk_NS::Chunk > >` | |
+| `fragmentInfoVec_` | `std::deque< std::unique_ptr< FragmentInfo > >` | data about each fragment stored - id and number of rows |
+| `dataMgr_` | `Data_Namespace::DataMgr *` | |
+| `catalog_` | `Catalog_Namespace::Catalog *` | |
+| `physicalTableId_` | `const int` | |
+| `shard_` | `const int` | |
+| `maxFragmentRows_` | `size_t` | |
+| `pageSize_` | `size_t` | |
+| `numTuples_` | `size_t` | |
+| `maxFragmentId_` | `int` | |
+| `maxChunkSize_` | `size_t` | |
+| `maxRows_` | `size_t` | |
+| `fragmenterType_` | `std::string` | |
+| `fragmentInfoMutex_` | `heavyai::shared_mutex` | |
+| `insertMutex_` | `heavyai::shared_mutex` | |
+| `defaultInsertLevel_` | `Data_Namespace::MemoryLevel` | |
+| `uses_foreign_storage_` | `const bool` | |
+| `hasMaterializedRowId_` | `bool` | |
+| `rowIdColId_` | `int` | |
+| `varLenColInfo_` | `std::unordered_map< int, size_t >` | |
+| `mutex_access_inmem_states` | `std::shared_ptr< std::mutex >` | |
+| `temp_mutex_` | `std::mutex` | |

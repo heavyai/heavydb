@@ -1,0 +1,88 @@
+---
+title: TargetValueConverter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetValueConverters.h>
+```
+
+---
+
+## Constructors
+
+### TargetValueConverter [#targetvalueconverter]
+
+<CodeBlock links={{"TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+TargetValueConverter::TargetValueConverter(
+    const ColumnDescriptor *cd
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~TargetValueConverter
+
+<CodeBlock links={{"TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+virtual TargetValueConverter::~TargetValueConverter()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateColumnarData [#allocatecolumnardata]
+
+<CodeBlock links={{"TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+virtual void TargetValueConverter::allocateColumnarData(
+    size_t num_rows
+)
+```
+</CodeBlock>
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+virtual void TargetValueConverter::convertToColumnarFormat(
+    size_t row,
+    const TargetValue *value
+)
+```
+</CodeBlock>
+
+### finalizeDataBlocksForInsertData [#finalizedatablocksforinsertdata]
+
+<CodeBlock links={{"TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+virtual void TargetValueConverter::finalizeDataBlocksForInsertData()
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"TargetValueConverter": "targetvalueconverter", "InsertData": "../fragmenternamespace/structs/insertdata"}}>
+```cpp showLineNumbers={false}
+virtual void TargetValueConverter::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `SCALAR_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ScalarTargetValue >` | |
+| `ARRAY_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ArrayTargetValue >` | |
+| `GEO_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `NULLABLE_STRING_ACCESSOR` | `boost_variant_accessor< NullableString >` | |
+| `STRING_ACCESSOR` | `boost_variant_accessor< std::string >` | |

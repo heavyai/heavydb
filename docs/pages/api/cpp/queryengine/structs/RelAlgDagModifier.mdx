@@ -1,0 +1,57 @@
+---
+title: RelAlgDagModifier
+description: "A middle-layer class that can be inherited from to gain modify rights to a RelAlgDag class."
+---
+
+A middle-layer class that can be inherited from to gain modify rights to a [RelAlgDag](../classes/relalgdag) class.
+
+This provides a way to access private members of the [RelAlgDag](../classes/relalgdag) class without dirtying its public interface with non-const accessors that may only apply for very specific classes. Only classes/structs that inherit from this middle-layer class will have modify rights.
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+---
+
+## Static methods
+
+### getNodes [#getnodes]
+
+<CodeBlock links={{"RelAlgDagModifier": "relalgdagmodifier", "RelAlgDag": "../classes/relalgdag", "RelAlgNode": "../classes/relalgnode"}}>
+```cpp showLineNumbers={false}
+static std::vector<std::shared_ptr<RelAlgNode>> & RelAlgDagModifier::getNodes(
+    RelAlgDag &rel_alg_dag
+)
+```
+</CodeBlock>
+
+### getSubqueries [#getsubqueries]
+
+<CodeBlock links={{"RelAlgDagModifier": "relalgdagmodifier", "RelAlgDag": "../classes/relalgdag", "RexSubQuery": "../classes/rexsubquery"}}>
+```cpp showLineNumbers={false}
+static std::vector<std::shared_ptr<RexSubQuery>> & RelAlgDagModifier::getSubqueries(
+    RelAlgDag &rel_alg_dag
+)
+```
+</CodeBlock>
+
+### getQueryHints [#getqueryhints]
+
+<CodeBlock links={{"RelAlgDagModifier": "relalgdagmodifier", "RelAlgDag": "../classes/relalgdag", "RelAlgNode": "../classes/relalgnode", "RegisteredQueryHint": "registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+static std::unordered_map<const RelAlgNode *, std::unordered_map<unsigned, RegisteredQueryHint>> & RelAlgDagModifier::getQueryHints(
+    RelAlgDag &rel_alg_dag
+)
+```
+</CodeBlock>
+
+### setBuildState [#setbuildstate]
+
+<CodeBlock links={{"RelAlgDagModifier": "relalgdagmodifier", "RelAlgDag": "../classes/relalgdag"}}>
+```cpp showLineNumbers={false}
+static void RelAlgDagModifier::setBuildState(
+    RelAlgDag &rel_alg_dag,
+    const RelAlgDag::BuildState build_state
+)
+```
+</CodeBlock>

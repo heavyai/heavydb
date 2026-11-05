@@ -1,0 +1,54 @@
+---
+title: tf_raster_contour_polygons__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename TLL, typename TV>
+TEMPLATE_NOINLINE int32_t tf_raster_contour_polygons__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TLL> &lon,
+    const Column<TLL> &lat,
+    const Column<TV> &values,
+    const TextEncodingNone &agg_type,
+    const float bin_dim_meters,
+    const int32_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    const TextEncodingNone &fill_agg_type,
+    const bool flip_latitude,
+    const TV contour_interval,
+    const TV contour_offset,
+    Column<GeoPolygon> &contour_polygons,
+    Column<TV> &contour_values
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename TLL, typename TV>
+TEMPLATE_NOINLINE int32_t tf_raster_contour_polygons__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TLL> &lon,
+    const Column<TLL> &lat,
+    const Column<TV> &values,
+    const int32_t raster_width,
+    const int32_t raster_height,
+    const bool flip_latitude,
+    const TV contour_interval,
+    const TV contour_offset,
+    Column<GeoPolygon> &contour_polygons,
+    Column<TV> &contour_values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

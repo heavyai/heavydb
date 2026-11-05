@@ -1,0 +1,182 @@
+---
+title: Geospatial::GeoTypesFactory
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Geospatial/Types.h>
+```
+
+---
+
+## Methods
+
+### createGeoTypeImpl [#creategeotypeimpl]
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoTypesFactory::createGeoTypeImpl(
+    OGRGeometry *geom,
+    const bool owns_geom_obj = true
+)
+```
+</CodeBlock>
+
+### getGeoColumnsImpl [#getgeocolumnsimpl]
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+void Geospatial::GeoTypesFactory::getGeoColumnsImpl(
+    const std::unique_ptr<GeoBase> &geospatial_base,
+    SQLTypeInfo &ti,
+    std::vector<double> &coords,
+    std::vector<double> &bounds,
+    std::vector<int> &ring_sizes,
+    std::vector<int> &poly_rings
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### createOGRGeometry [#createogrgeometry]
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory"}}>
+```cpp showLineNumbers={false}
+OGRGeometry * Geospatial::GeoTypesFactory::createOGRGeometry(
+    const std::string &wkt_or_wkb_hex,
+    const bool validate_with_geos_if_available
+)
+```
+</CodeBlock>
+
+### createGeoType [#creategeotype]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoTypesFactory::createGeoType(
+    const std::string &wkt_or_wkb_hex,
+    const bool validate_with_geos_if_available
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory", "WkbView": "../structs/wkbview", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoTypesFactory::createGeoType(
+    const WkbView,
+    const bool validate_with_geos_if_available
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoTypesFactory::createGeoType(
+    OGRGeometry *geom,
+    const bool validate_with_geos_if_available
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getGeoColumns [#getgeocolumns]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoTypesFactory::getGeoColumns(
+    const std::string &wkt_or_wkb_hex,
+    SQLTypeInfo &ti,
+    std::vector<double> &coords,
+    std::vector<double> &bounds,
+    std::vector<int> &ring_sizes,
+    std::vector<int> &poly_rings,
+    const bool validate_with_geos_if_available
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoTypesFactory::getGeoColumns(
+    const std::vector<uint8_t> &wkb,
+    SQLTypeInfo &ti,
+    std::vector<double> &coords,
+    std::vector<double> &bounds,
+    std::vector<int> &ring_sizes,
+    std::vector<int> &poly_rings,
+    const bool validate_with_geos_if_available
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoTypesFactory::getGeoColumns(
+    OGRGeometry *geom,
+    SQLTypeInfo &ti,
+    std::vector<double> &coords,
+    std::vector<double> &bounds,
+    std::vector<int> &ring_sizes,
+    std::vector<int> &poly_rings,
+    const bool validate_with_geos_if_available
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory"}}>
+```cpp showLineNumbers={false}
+template <typename VectorType>
+bool Geospatial::GeoTypesFactory::getGeoColumns(
+    const VectorType *wkt_or_wkb_hex_column,
+    SQLTypeInfo &ti,
+    std::vector<std::vector<double>> &coords_column,
+    std::vector<std::vector<double>> &bounds_column,
+    std::vector<std::vector<int>> &ring_sizes_column,
+    std::vector<std::vector<int>> &poly_rings_column,
+    const bool validate_with_geos_if_available
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNullGeoColumns [#getnullgeocolumns]
+
+<CodeBlock links={{"GeoTypesFactory": "geotypesfactory"}}>
+```cpp showLineNumbers={false}
+void Geospatial::GeoTypesFactory::getNullGeoColumns(
+    SQLTypeInfo &ti,
+    std::vector<double> &coords,
+    std::vector<double> &bounds,
+    std::vector<int> &ring_sizes,
+    std::vector<int> &poly_rings
+)
+```
+</CodeBlock>

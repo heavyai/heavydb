@@ -1,0 +1,502 @@
+---
+title: GeoRaster
+description: ""
+---
+
+<CodeBlock id="GeoRaster" links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename Z>
+struct GeoRaster
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <GeoRasterTableFunctions.hpp>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+<ParamField path="Z" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### GeoRaster [#georaster]
+
+<Tabs>
+<Tab title="Copy (with input z and raster agg type)">
+
+<CodeBlock links={{"GeoRaster": "georaster", "Column": "column"}}>
+```cpp showLineNumbers={false}
+template <typename T2, typename Z2>
+GeoRaster<T, Z>::GeoRaster(
+    const Column<T2> &input_x,
+    const Column<T2> &input_y,
+    const Column<Z2> &input_z,
+    const RasterAggType raster_agg_type,
+    const double bin_dim_meters,
+    const bool geographic_coords,
+    const bool align_bins_to_zero_based_grid
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with input z cols and raster agg types)">
+
+<CodeBlock links={{"GeoRaster": "georaster", "Column": "column", "ColumnList": "columnlist"}}>
+```cpp showLineNumbers={false}
+template <typename T2, typename Z2>
+GeoRaster<T, Z>::GeoRaster(
+    const Column<T2> &input_x,
+    const Column<T2> &input_y,
+    const ColumnList<Z2> &input_z_cols,
+    const std::vector<RasterAggType> &raster_agg_types,
+    const double bin_dim_meters,
+    const bool geographic_coords,
+    const bool align_bins_to_zero_based_grid
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with input z and raster agg type and x min and x max and y min and y max)">
+
+<CodeBlock links={{"GeoRaster": "georaster", "Column": "column"}}>
+```cpp showLineNumbers={false}
+template <typename T2, typename Z2>
+GeoRaster<T, Z>::GeoRaster(
+    const Column<T2> &input_x,
+    const Column<T2> &input_y,
+    const Column<Z2> &input_z,
+    const RasterAggType raster_agg_type,
+    const double bin_dim_meters,
+    const bool geographic_coords,
+    const bool align_bins_to_zero_based_grid,
+    const T x_min,
+    const T x_max,
+    const T y_min,
+    const T y_max
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_x_bin [#getxbin]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+T GeoRaster<T, Z>::get_x_bin(
+    const T input
+) const
+```
+</CodeBlock>
+
+### get_y_bin [#getybin]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+T GeoRaster<T, Z>::get_y_bin(
+    const T input
+) const
+```
+</CodeBlock>
+
+### is_null [#isnull]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+bool GeoRaster<T, Z>::is_null(
+    const Z value
+) const
+```
+</CodeBlock>
+
+### is_bin_out_of_bounds [#isbinoutofbounds]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+bool GeoRaster<T, Z>::is_bin_out_of_bounds(
+    const int64_t x_bin,
+    const int64_t y_bin
+) const
+```
+</CodeBlock>
+
+### get_bin_idx_and_z_val_for_xy_bin [#getbinidxandzvalforxybin]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+std::pair<int64_t, Z> GeoRaster<T, Z>::get_bin_idx_and_z_val_for_xy_bin(
+    const int64_t x_bin,
+    const int64_t y_bin
+) const
+```
+</CodeBlock>
+
+### get_bin_idx_for_xy_coords [#getbinidxforxycoords]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+int64_t GeoRaster<T, Z>::get_bin_idx_for_xy_coords(
+    const T x,
+    const T y
+) const
+```
+</CodeBlock>
+
+### get_xy_coords_for_bin_idx [#getxycoordsforbinidx]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+std::pair<T, T> GeoRaster<T, Z>::get_xy_coords_for_bin_idx(
+    const int64_t bin_idx
+) const
+```
+</CodeBlock>
+
+### offset_source_z_from_raster_z [#offsetsourcezfromrasterz]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+Z GeoRaster<T, Z>::offset_source_z_from_raster_z(
+    const int64_t source_x_bin,
+    const int64_t source_y_bin,
+    const Z source_z_offset
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with z col idx)">
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+Z GeoRaster<T, Z>::offset_source_z_from_raster_z(
+    const int64_t source_x_bin,
+    const int64_t source_y_bin,
+    const Z source_z_offset,
+    const int64_t z_col_idx
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### align_bins_max_inclusive [#alignbinsmaxinclusive]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+void GeoRaster<T, Z>::align_bins_max_inclusive()
+```
+</CodeBlock>
+
+### align_bins_max_exclusive [#alignbinsmaxexclusive]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+void GeoRaster<T, Z>::align_bins_max_exclusive()
+```
+</CodeBlock>
+
+### calculate_bins_and_scales [#calculatebinsandscales]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+void GeoRaster<T, Z>::calculate_bins_and_scales()
+```
+</CodeBlock>
+
+### compute [#compute]
+
+<CodeBlock links={{"GeoRaster": "georaster", "Column": "column"}}>
+```cpp showLineNumbers={false}
+template <typename T2, typename Z2>
+void GeoRaster<T, Z>::compute(
+    const Column<T2> &input_x,
+    const Column<T2> &input_y,
+    const Column<Z2> &input_z,
+    std::vector<Z> &output_z,
+    const RasterAggType raster_agg_type,
+    const size_t max_inputs_per_thread
+)
+```
+</CodeBlock>
+
+### fill_bins_from_neighbors [#fillbinsfromneighbors]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+void GeoRaster<T, Z>::fill_bins_from_neighbors(
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    const RasterAggType raster_agg_type = RasterAggType::GAUSS_AVG
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+void GeoRaster<T, Z>::fill_bins_from_neighbors(
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    const RasterAggType raster_agg_type,
+    std::vector<Z> &z
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_nxn_neighbors_if_not_null [#getnxnneighborsifnotnull]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+bool GeoRaster<T, Z>::get_nxn_neighbors_if_not_null(
+    const int64_t x_bin,
+    const int64_t y_bin,
+    const int64_t num_bins_radius,
+    std::vector<Z> &neighboring_bins
+) const
+```
+</CodeBlock>
+
+### calculate_slope_and_aspect_of_cell [#calculateslopeandaspectofcell]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+std::pair<Z, Z> GeoRaster<T, Z>::calculate_slope_and_aspect_of_cell(
+    const std::vector<Z> &neighboring_cells,
+    const bool compute_slope_in_degrees
+) const
+```
+</CodeBlock>
+
+### calculate_slope_and_aspect [#calculateslopeandaspect]
+
+<CodeBlock links={{"GeoRaster": "georaster", "Column": "column"}}>
+```cpp showLineNumbers={false}
+void GeoRaster<T, Z>::calculate_slope_and_aspect(
+    Column<Z> &slope,
+    Column<Z> &aspect,
+    const bool compute_slope_in_degrees
+) const
+```
+</CodeBlock>
+
+### outputDenseColumns [#outputdensecolumns]
+
+<Tabs>
+<Tab title="Const (with band idx)">
+
+<CodeBlock links={{"GeoRaster": "georaster", "TableFunctionManager": "tablefunctionmanager", "Column": "column"}}>
+```cpp showLineNumbers={false}
+int64_t GeoRaster<T, Z>::outputDenseColumns(
+    TableFunctionManager &mgr,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Z> &output_z,
+    const int64_t band_idx = 0
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoRaster": "georaster", "TableFunctionManager": "tablefunctionmanager", "Column": "column", "Array": "array"}}>
+```cpp showLineNumbers={false}
+int64_t GeoRaster<T, Z>::outputDenseColumns(
+    TableFunctionManager &mgr,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Array<Z>> &output_z
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### outputDenseColumn [#outputdensecolumn]
+
+<CodeBlock links={{"GeoRaster": "georaster", "TableFunctionManager": "tablefunctionmanager", "Column": "column"}}>
+```cpp showLineNumbers={false}
+int64_t GeoRaster<T, Z>::outputDenseColumn(
+    TableFunctionManager &mgr,
+    Column<Z> &output_z,
+    const int64_t band_idx
+) const
+```
+</CodeBlock>
+
+### outputDenseColumnsAndFill [#outputdensecolumnsandfill]
+
+<CodeBlock links={{"GeoRaster": "georaster", "TableFunctionManager": "tablefunctionmanager", "Column": "column"}}>
+```cpp showLineNumbers={false}
+int64_t GeoRaster<T, Z>::outputDenseColumnsAndFill(
+    TableFunctionManager &mgr,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Z> &output_z,
+    const int64_t neighborhood_null_fill_radius
+) const
+```
+</CodeBlock>
+
+### setMetadata [#setmetadata]
+
+<CodeBlock links={{"GeoRaster": "georaster", "TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void GeoRaster<T, Z>::setMetadata(
+    TableFunctionManager &mgr
+) const
+```
+</CodeBlock>
+
+### computeSerialImpl [#computeserialimpl]
+
+<CodeBlock links={{"GeoRaster": "georaster", "Column": "column"}}>
+```cpp showLineNumbers={false}
+template <RasterAggType AggType, typename T2, typename Z2>
+void GeoRaster<T, Z>::computeSerialImpl(
+    const Column<T2> &input_x,
+    const Column<T2> &input_y,
+    const Column<Z2> &input_z,
+    std::vector<Z> &output_z
+)
+```
+</CodeBlock>
+
+### computeParallelReductionAggImpl [#computeparallelreductionaggimpl]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+template <RasterAggType AggType>
+void GeoRaster<T, Z>::computeParallelReductionAggImpl(
+    const std::vector<std::vector<Z>> &z_inputs,
+    std::vector<Z> &output_z,
+    const Z agg_sentinel
+)
+```
+</CodeBlock>
+
+### computeParallelImpl [#computeparallelimpl]
+
+<CodeBlock links={{"GeoRaster": "georaster", "Column": "column"}}>
+```cpp showLineNumbers={false}
+template <RasterAggType AggType, typename T2, typename Z2>
+void GeoRaster<T, Z>::computeParallelImpl(
+    const Column<T2> &input_x,
+    const Column<T2> &input_y,
+    const Column<Z2> &input_z,
+    std::vector<Z> &output_z,
+    const size_t max_inputs_per_thread
+)
+```
+</CodeBlock>
+
+### fill_bin_from_avg_box_neighborhood [#fillbinfromavgboxneighborhood]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+Z GeoRaster<T, Z>::fill_bin_from_avg_box_neighborhood(
+    const int64_t x_centroid_bin,
+    const int64_t y_centroid_bin,
+    const int64_t bins_radius,
+    std::vector<Z> &z
+) const
+```
+</CodeBlock>
+
+### fill_bin_from_box_neighborhood [#fillbinfromboxneighborhood]
+
+<CodeBlock links={{"GeoRaster": "georaster", "ComputeAgg": "computeagg"}}>
+```cpp showLineNumbers={false}
+template <RasterAggType AggType>
+Z GeoRaster<T, Z>::fill_bin_from_box_neighborhood(
+    const int64_t x_centroid_bin,
+    const int64_t y_centroid_bin,
+    const int64_t bins_radius,
+    const ComputeAgg<AggType> &compute_agg,
+    std::vector<Z> &z
+) const
+```
+</CodeBlock>
+
+### fill_bins_from_box_neighborhood [#fillbinsfromboxneighborhood]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+template <RasterAggType AggType>
+void GeoRaster<T, Z>::fill_bins_from_box_neighborhood(
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    std::vector<Z> &z
+)
+```
+</CodeBlock>
+
+### fill_bins_from_gaussian_neighborhood [#fillbinsfromgaussianneighborhood]
+
+<CodeBlock links={{"GeoRaster": "georaster"}}>
+```cpp showLineNumbers={false}
+void GeoRaster<T, Z>::fill_bins_from_gaussian_neighborhood(
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    std::vector<Z> &z
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `bin_dim_meters_` | `const T` | |
+| `geographic_coords_` | `const bool` | |
+| `null_sentinel_` | `const Z` | |
+| `is_multi_z_` | `const bool` | |
+| `z_` | `std::vector< Z >` | |
+| `z_cols_` | `std::vector< std::vector< Z > >` | |
+| `counts_` | `std::vector< Z >` | |
+| `x_min_` | `T` | |
+| `x_max_` | `T` | |
+| `y_min_` | `T` | |
+| `y_max_` | `T` | |
+| `x_range_` | `T` | |
+| `y_range_` | `T` | |
+| `x_meters_per_degree_` | `T` | |
+| `y_meters_per_degree_` | `T` | |
+| `num_x_bins_` | `int64_t` | |
+| `num_y_bins_` | `int64_t` | |
+| `num_bins_` | `int64_t` | |
+| `x_scale_input_to_bin_` | `T` | |
+| `y_scale_input_to_bin_` | `T` | |
+| `x_scale_bin_to_input_` | `T` | |
+| `y_scale_bin_to_input_` | `T` | |
+| `BIN_OUT_OF_BOUNDS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int64_t` | |

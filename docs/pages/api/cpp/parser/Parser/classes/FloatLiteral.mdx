@@ -1,0 +1,76 @@
+---
+title: Parser::FloatLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Literal` (public)
+
+---
+
+## Constructors
+
+### FloatLiteral [#floatliteral]
+
+<CodeBlock links={{"FloatLiteral": "floatliteral"}}>
+```cpp showLineNumbers={false}
+Parser::FloatLiteral::FloatLiteral(
+    float f
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_floatval [#getfloatval]
+
+<CodeBlock links={{"FloatLiteral": "floatliteral"}}>
+```cpp showLineNumbers={false}
+float Parser::FloatLiteral::get_floatval() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"FloatLiteral": "floatliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::FloatLiteral::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"FloatLiteral": "floatliteral"}}>
+```cpp showLineNumbers={false}
+std::string Parser::FloatLiteral::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `floatval_` | `float` | |

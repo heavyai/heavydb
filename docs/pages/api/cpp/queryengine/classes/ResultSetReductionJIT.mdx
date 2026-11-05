@@ -1,0 +1,229 @@
+---
+title: ResultSetReductionJIT
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionJIT.h>
+```
+
+---
+
+## Constructors
+
+### ResultSetReductionJIT [#resultsetreductionjit]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+ResultSetReductionJIT::ResultSetReductionJIT(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::vector<TargetInfo> &targets,
+    const std::vector<int64_t> &target_init_vals,
+    const size_t executor_id
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~ResultSetReductionJIT
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit"}}>
+```cpp showLineNumbers={false}
+virtual ResultSetReductionJIT::~ResultSetReductionJIT() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegen [#codegen]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+ReductionCode ResultSetReductionJIT::codegen() const
+```
+</CodeBlock>
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::isEmpty(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+### reduceOneEntryNoCollisions [#reduceoneentrynocollisions]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneEntryNoCollisions(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+### reduceOneEntryNoCollisionsIdx [#reduceoneentrynocollisionsidx]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+### reduceLoop [#reduceloop]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceLoop(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+### reduceOneEntryTargetsNoCollisions [#reduceoneentrytargetsnocollisions]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "Function": "function", "Value": "value"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneEntryTargetsNoCollisions(
+    Function *ir_reduce_one_entry,
+    Value *this_targets_start_ptr,
+    Value *that_targets_start_ptr
+) const
+```
+</CodeBlock>
+
+### reduceOneEntryBaseline [#reduceoneentrybaseline]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneEntryBaseline(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+### reduceOneEntryBaselineIdx [#reduceoneentrybaselineidx]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+### reduceOneSlot [#reduceoneslot]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "Value": "value", "Function": "function"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneSlot(
+    Value *this_ptr1,
+    Value *this_ptr2,
+    Value *that_ptr1,
+    Value *that_ptr2,
+    const TargetInfo &target_info,
+    const size_t target_logical_idx,
+    const size_t target_slot_idx,
+    const size_t init_agg_val_idx,
+    const size_t first_slot_idx_for_target,
+    Function *ir_reduce_one_entry
+) const
+```
+</CodeBlock>
+
+### reduceOneAggregateSlot [#reduceoneaggregateslot]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "Value": "value", "Function": "function"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneAggregateSlot(
+    Value *this_ptr1,
+    Value *this_ptr2,
+    Value *that_ptr1,
+    Value *that_ptr2,
+    const TargetInfo &target_info,
+    const size_t target_logical_idx,
+    const size_t target_slot_idx,
+    const int64_t init_val,
+    const int8_t chosen_bytes,
+    Function *ir_reduce_one_entry
+) const
+```
+</CodeBlock>
+
+### reduceOneCountDistinctSlot [#reduceonecountdistinctslot]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "Value": "value", "Function": "function"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneCountDistinctSlot(
+    Value *this_ptr1,
+    Value *that_ptr1,
+    const size_t target_logical_idx,
+    Function *ir_reduce_one_entry
+) const
+```
+</CodeBlock>
+
+### reduceOneApproxQuantileSlot [#reduceoneapproxquantileslot]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "Value": "value", "Function": "function"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneApproxQuantileSlot(
+    Value *this_ptr1,
+    Value *that_ptr1,
+    const size_t target_logical_idx,
+    Function *ir_reduce_one_entry
+) const
+```
+</CodeBlock>
+
+### reduceOneModeSlot [#reduceonemodeslot]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "Value": "value", "Function": "function"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::reduceOneModeSlot(
+    Value *this_ptr1,
+    Value *that_ptr1,
+    const size_t target_logical_idx,
+    Function *ir_reduce_one_entry
+) const
+```
+</CodeBlock>
+
+### finalizeReductionCode [#finalizereductioncode]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+void ResultSetReductionJIT::finalizeReductionCode(
+    ReductionCode &reduction_code,
+    const llvm::Function *ir_is_empty,
+    const llvm::Function *ir_reduce_one_entry,
+    const llvm::Function *ir_reduce_one_entry_idx,
+    const CodeCacheKey &key
+) const
+```
+</CodeBlock>
+
+### cacheKey [#cachekey]
+
+<CodeBlock links={{"ResultSetReductionJIT": "resultsetreductionjit"}}>
+```cpp showLineNumbers={false}
+std::string ResultSetReductionJIT::cacheKey() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_id_` | `size_t` | |
+| `query_mem_desc_` | `const QueryMemoryDescriptor` | |
+| `targets_` | `const std::vector< TargetInfo >` | |
+| `target_init_vals_` | `const std::vector< int64_t >` | |

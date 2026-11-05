@@ -1,0 +1,85 @@
+---
+title: Parser::CreateRoleStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### CreateRoleStmt [#createrolestmt]
+
+<Tabs>
+<Tab title="From raw pointer">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CreateRoleStmt": "createrolestmt"}}>
+```cpp showLineNumbers={false}
+Parser::CreateRoleStmt::CreateRoleStmt(
+    std::string *r
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"CreateRoleStmt": "createrolestmt"}}>
+```cpp showLineNumbers={false}
+Parser::CreateRoleStmt::CreateRoleStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_role [#getrole]
+
+<CodeBlock links={{"CreateRoleStmt": "createrolestmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::CreateRoleStmt::get_role() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"CreateRoleStmt": "createrolestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateRoleStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"CreateRoleStmt": "createrolestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateRoleStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `role_` | `std::unique_ptr< std::string >` | |

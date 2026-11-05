@@ -1,0 +1,56 @@
+---
+title: Data_Namespace::ProcBuddyinfoParser
+description: "Parse /proc/buddyinfo into a few fragmentation-related data."
+---
+
+Parse /proc/buddyinfo into a few fragmentation-related data.
+
+```cpp showLineNumbers={false}
+#include <Data_Namespace/DataMgr.h>
+```
+
+---
+
+## Methods
+
+### parseBuddyinfo [#parsebuddyinfo]
+
+<CodeBlock links={{"ProcBuddyinfoParser": "procbuddyinfoparser"}}>
+```cpp showLineNumbers={false}
+void Data_Namespace::ProcBuddyinfoParser::parseBuddyinfo()
+```
+</CodeBlock>
+
+### getFragmentationPercent [#getfragmentationpercent]
+
+<CodeBlock links={{"ProcBuddyinfoParser": "procbuddyinfoparser"}}>
+```cpp showLineNumbers={false}
+double Data_Namespace::ProcBuddyinfoParser::getFragmentationPercent() const
+```
+</CodeBlock>
+
+### getSumAvailPages [#getsumavailpages]
+
+<CodeBlock links={{"ProcBuddyinfoParser": "procbuddyinfoparser"}}>
+```cpp showLineNumbers={false}
+size_t Data_Namespace::ProcBuddyinfoParser::getSumAvailPages() const
+```
+</CodeBlock>
+
+### getSumHighestBlocks [#getsumhighestblocks]
+
+<CodeBlock links={{"ProcBuddyinfoParser": "procbuddyinfoparser"}}>
+```cpp showLineNumbers={false}
+size_t Data_Namespace::ProcBuddyinfoParser::getSumHighestBlocks() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `frag_percent_` | `double` | |
+| `sum_avail_pages_` | `size_t` | |
+| `sum_highest_blocks_` | `size_t` | |

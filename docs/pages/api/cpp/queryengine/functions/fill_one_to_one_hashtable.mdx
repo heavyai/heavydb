@@ -1,0 +1,33 @@
+---
+title: fill_one_to_one_hashtable
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+ALWAYS_INLINE DEVICE int SUFFIX fill_one_to_one_hashtable(
+    size_t idx,
+    int32_t *entry_ptr,
+    const int32_t invalid_slot_val
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT int fill_one_to_one_hashtable(
+    size_t idx,
+    int32_t *entry_ptr,
+    const int32_t invalid_slot_val
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

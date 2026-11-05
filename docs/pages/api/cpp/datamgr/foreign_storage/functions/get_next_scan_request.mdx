@@ -1,0 +1,16 @@
+---
+title: foreign_storage::get_next_scan_request
+description: "Gets the next metadata scan request object from the pending requests queue."
+---
+
+<CodeBlock links={{"MetadataScanMultiThreadingParams": "../structs/metadatascanmultithreadingparams", "ParseBufferRequest": "../structs/parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+std::optional<ParseBufferRequest> foreign_storage::get_next_scan_request(
+    MetadataScanMultiThreadingParams &multi_threading_params
+)
+```
+</CodeBlock>
+
+Gets the next metadata scan request object from the pending requests queue.
+
+A null optional is returned if there are no further requests to be processed.

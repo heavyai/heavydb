@@ -1,0 +1,47 @@
+---
+title: ct_require_templating__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename K>
+NEVER_INLINE HOST int32_t ct_require_templating__cpu_template(
+    const Column<T> &input1,
+    const int32_t i,
+    Column<K> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_require_templating__cpu_template(
+    const Column<int> &input1,
+    const int32_t i,
+    Column<int> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_require_templating__cpu_template(
+    const Column<double> &input1,
+    const int32_t i,
+    Column<int> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

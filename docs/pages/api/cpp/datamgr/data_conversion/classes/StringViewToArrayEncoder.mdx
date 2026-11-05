@@ -1,0 +1,200 @@
+---
+title: data_conversion::StringViewToArrayEncoder
+description: ""
+---
+
+<CodeBlock id="StringViewToArrayEncoder" links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder"}}>
+```cpp showLineNumbers={false}
+template <typename ScalarEncoderType>
+class StringViewToArrayEncoder
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <data_conversion/StringViewToArrayEncoder.h>
+```
+
+**Template parameters**
+
+<ParamField path="ScalarEncoderType" type="typename">
+</ParamField>
+
+**Inherits from:** `data_conversion::TypedBaseConvertEncoder< ScalarEncoderType::DataType, ScalarEncoderType::MetadataType >` (public)
+
+---
+
+## Constructors
+
+### StringViewToArrayEncoder [#stringviewtoarrayencoder]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+data_conversion::StringViewToArrayEncoder<ScalarEncoderType>::StringViewToArrayEncoder(
+    const Chunk_NS::Chunk &scalar_temp_chunk,
+    const Chunk_NS::Chunk &dst_chunk,
+    const bool error_tracking_enabled
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### encodeAndAppendData [#encodeandappenddata]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToArrayEncoder<ScalarEncoderType>::encodeAndAppendData(
+    const int8_t *data,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+### appendArrayDatums [#appendarraydatums]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToArrayEncoder<ScalarEncoderType>::appendArrayDatums(
+    const size_t num_elements,
+    std::optional<std::vector<bool>> &error_occurred,
+    int8_t *current_data,
+    size_t current_scalar_offset
+)
+```
+</CodeBlock>
+
+### clearLocalState [#clearlocalstate]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToArrayEncoder<ScalarEncoderType>::clearLocalState(
+    const size_t num_elements
+)
+```
+</CodeBlock>
+
+### encodeScalarData [#encodescalardata]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToArrayEncoder<ScalarEncoderType>::encodeScalarData(
+    const size_t num_elements,
+    const std::string_view *typed_data,
+    const import_export::CopyParams &default_copy_params,
+    std::optional<std::vector<bool>> &error_occurred
+)
+```
+</CodeBlock>
+
+### getMetadata [#getmetadata]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> data_conversion::TypedBaseConvertEncoder<ScalarEncoderType::DataType, ScalarEncoderType::MetadataType>::getMetadata(
+    const Chunk_NS::Chunk &chunk
+) const override
+```
+</CodeBlock>
+
+### initializeDeleteBuffer [#initializedeletebuffer]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::BaseConvertEncoder::initializeDeleteBuffer(
+    const size_t size_hint
+)
+```
+</CodeBlock>
+
+### finalize [#finalize]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::BaseConvertEncoder::finalize(
+    const size_t rows_appended
+)
+```
+</CodeBlock>
+
+### initialize [#initialize]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToArrayEncoder<ScalarEncoderType>::initialize()
+```
+</CodeBlock>
+
+### getNull [#getnull]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+DataType data_conversion::TypedBaseConvertEncoder<ScalarEncoderType::DataType, ScalarEncoderType::MetadataType>::getNull() const
+```
+</CodeBlock>
+
+### updateMetadataStats [#updatemetadatastats]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::TypedBaseConvertEncoder<ScalarEncoderType::DataType, ScalarEncoderType::MetadataType>::updateMetadataStats(
+    const DataType &typed_value,
+    const bool is_date_in_days = false
+)
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::BaseConvertEncoder::clear()
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"StringViewToArrayEncoder": "stringviewtoarrayencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+template <typename DataType>
+bool data_conversion::BaseConvertEncoder::isNull(
+    const DataType &typed_value
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DstDataType` | `typename ScalarEncoderType::DataType` |
+| `DataType` | `ScalarEncoderType::DataType` |
+| `MetadataType` | `ScalarEncoderType::MetadataType` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dst_type_info_` | `SQLTypeInfo` | |
+| `dst_chunk_` | `const Chunk_NS::Chunk &` | |
+| `scalar_temp_chunk_` | `const Chunk_NS::Chunk &` | |
+| `buffer_` | `AbstractBuffer *` | |
+| `scalar_encoder_` | `ScalarEncoderType` | |
+| `array_` | `std::vector< std::string >` | |
+| `array_views_` | `std::vector< std::string_view >` | |
+| `array_datums_` | `std::vector< ArrayDatum >` | |
+| `array_sizes_` | `std::vector< size_t >` | |
+| `is_null_` | `std::vector< bool >` | |
+| `min_` | `MetadataType` | |
+| `max_` | `MetadataType` | |
+| `delete_buffer_` | `std::optional< std::vector< bool > >` | |
+| `error_tracking_enabled_` | `const bool` | |
+| `has_nulls_` | `bool` | |
+| `num_elements_` | `size_t` | |

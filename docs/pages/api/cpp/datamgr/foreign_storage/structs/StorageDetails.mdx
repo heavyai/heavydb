@@ -1,0 +1,39 @@
+---
+title: foreign_storage::StorageDetails
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/InternalStorageStatsDataWrapper.h>
+```
+
+---
+
+## Constructors
+
+### StorageDetails [#storagedetails]
+
+<CodeBlock links={{"StorageDetails": "storagedetails", "StorageStats": "../../filenamespace/structs/storagestats"}}>
+```cpp showLineNumbers={false}
+foreign_storage::StorageDetails::StorageDetails(
+    int32_t database_id,
+    int32_t table_id,
+    int32_t shard_id,
+    int64_t total_dictionary_data_file_size,
+    File_Namespace::StorageStats storage_stats
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `node` | `std::string` | |
+| `database_id` | `int32_t` | |
+| `table_id` | `int32_t` | |
+| `shard_id` | `int32_t` | |
+| `total_dictionary_data_file_size` | `uint64_t` | |
+| `storage_stats` | `File_Namespace::StorageStats` | |

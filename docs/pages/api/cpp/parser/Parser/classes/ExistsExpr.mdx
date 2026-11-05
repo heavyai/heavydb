@@ -1,0 +1,76 @@
+---
+title: Parser::ExistsExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### ExistsExpr [#existsexpr]
+
+<CodeBlock links={{"ExistsExpr": "existsexpr", "QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+Parser::ExistsExpr::ExistsExpr(
+    QuerySpec *q
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_query [#getquery]
+
+<CodeBlock links={{"ExistsExpr": "existsexpr", "QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+const QuerySpec * Parser::ExistsExpr::get_query() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"ExistsExpr": "existsexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::ExistsExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"ExistsExpr": "existsexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::ExistsExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_` | `std::unique_ptr< QuerySpec >` | |

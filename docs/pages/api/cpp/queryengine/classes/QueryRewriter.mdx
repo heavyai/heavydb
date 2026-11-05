@@ -1,0 +1,131 @@
+---
+title: QueryRewriter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryRewrite.h>
+```
+
+---
+
+## Constructors
+
+### QueryRewriter [#queryrewriter]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter", "InputTableInfo": "../structs/inputtableinfo", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+QueryRewriter::QueryRewriter(
+    const std::vector<InputTableInfo> &query_infos,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### rewrite [#rewrite]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutionUnit QueryRewriter::rewrite(
+    const RelAlgExecutionUnit &ra_exe_unit_in
+) const
+```
+</CodeBlock>
+
+### rewriteColumnarUpdate [#rewritecolumnarupdate]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
+    const RelAlgExecutionUnit &ra_exe_unit_in,
+    std::shared_ptr<Analyzer::ColumnVar> column_to_update
+) const
+```
+</CodeBlock>
+
+### rewriteColumnarDelete [#rewritecolumnardelete]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
+    const RelAlgExecutionUnit &ra_exe_unit_in,
+    std::shared_ptr<Analyzer::ColumnVar> delete_column
+) const
+```
+</CodeBlock>
+
+### rewriteAggregateOnGroupByColumn [#rewriteaggregateongroupbycolumn]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutionUnit QueryRewriter::rewriteAggregateOnGroupByColumn(
+    const RelAlgExecutionUnit &ra_exe_unit_in
+) const
+```
+</CodeBlock>
+
+### rewriteConstrainedByIn [#rewriteconstrainedbyin]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByIn(
+    const RelAlgExecutionUnit &ra_exe_unit_in
+) const
+```
+</CodeBlock>
+
+### rewriteConstrainedByInImpl [#rewriteconstrainedbyinimpl]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+RelAlgExecutionUnit QueryRewriter::rewriteConstrainedByInImpl(
+    const RelAlgExecutionUnit &ra_exe_unit_in,
+    const std::shared_ptr<Analyzer::CaseExpr>,
+    const Analyzer::InValues *
+) const
+```
+</CodeBlock>
+
+### is_all_groupby_exprs_are_col_var [#isallgroupbyexprsarecolvar]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter"}}>
+```cpp showLineNumbers={false}
+std::pair<bool, std::set<size_t>> QueryRewriter::is_all_groupby_exprs_are_col_var(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby_exprs
+) const
+```
+</CodeBlock>
+
+### generateCaseExprForCountDistinctOnGroupByCol [#generatecaseexprforcountdistinctongroupbycol]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseExprForCountDistinctOnGroupByCol(
+    std::shared_ptr<Analyzer::Expr> expr
+) const
+```
+</CodeBlock>
+
+### generateCaseForDomainValues [#generatecasefordomainvalues]
+
+<CodeBlock links={{"QueryRewriter": "queryrewriter"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(
+    const Analyzer::InValues *
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_infos_` | `const std::vector< InputTableInfo > &` | |
+| `executor_` | `Executor *` | |
+| `target_exprs_owned_` | `std::vector< std::shared_ptr< Analyzer::Expr > >` | |

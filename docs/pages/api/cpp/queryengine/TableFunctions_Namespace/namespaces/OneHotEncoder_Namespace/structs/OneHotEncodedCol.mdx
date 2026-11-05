@@ -1,0 +1,29 @@
+---
+title: TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodedCol
+description: ""
+---
+
+<CodeBlock id="OneHotEncodedCol" links={{"OneHotEncodedCol": "onehotencodedcol"}}>
+```cpp showLineNumbers={false}
+template <typename F>
+struct OneHotEncodedCol
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TableFunctions_Namespace/OneHotEncoder_Namespace/OneHotEncoder.h>
+```
+
+**Template parameters**
+
+<ParamField path="F" type="typename">
+</ParamField>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `encoded_buffers` | `std::vector< std::vector< F > >` | |
+| `cat_features` | `std::vector< std::string >` | |

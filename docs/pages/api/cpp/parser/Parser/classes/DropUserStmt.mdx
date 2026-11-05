@@ -1,0 +1,87 @@
+---
+title: Parser::DropUserStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### DropUserStmt [#dropuserstmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"DropUserStmt": "dropuserstmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropUserStmt::DropUserStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"DropUserStmt": "dropuserstmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropUserStmt::DropUserStmt(
+    std::string *n,
+    bool e
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getUserName [#getusername]
+
+<CodeBlock links={{"DropUserStmt": "dropuserstmt"}}>
+```cpp showLineNumbers={false}
+auto const  & Parser::DropUserStmt::getUserName()
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"DropUserStmt": "dropuserstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropUserStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"DropUserStmt": "dropuserstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropUserStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `user_name_` | `std::unique_ptr< std::string >` | |
+| `if_exists_` | `bool` | |

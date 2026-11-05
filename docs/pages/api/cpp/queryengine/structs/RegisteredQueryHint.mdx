@@ -1,0 +1,118 @@
+---
+title: RegisteredQueryHint
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryHint.h>
+```
+
+---
+
+## Constructors
+
+### RegisteredQueryHint [#registeredqueryhint]
+
+<CodeBlock links={{"RegisteredQueryHint": "registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+RegisteredQueryHint::RegisteredQueryHint()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator|| [#operator_logical_or]
+
+<CodeBlock links={{"RegisteredQueryHint": "registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+RegisteredQueryHint RegisteredQueryHint::operator||(
+    const RegisteredQueryHint &global_hints
+) const
+```
+</CodeBlock>
+
+### isAnyQueryHintDelivered [#isanyqueryhintdelivered]
+
+<CodeBlock links={{"RegisteredQueryHint": "registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+bool RegisteredQueryHint::isAnyQueryHintDelivered() const
+```
+</CodeBlock>
+
+### registerHint [#registerhint]
+
+<CodeBlock links={{"RegisteredQueryHint": "registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+void RegisteredQueryHint::registerHint(
+    const QueryHint hint
+)
+```
+</CodeBlock>
+
+### isHintRegistered [#ishintregistered]
+
+<CodeBlock links={{"RegisteredQueryHint": "registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+bool RegisteredQueryHint::isHintRegistered(
+    const QueryHint hint
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### defaults [#defaults]
+
+<CodeBlock links={{"RegisteredQueryHint": "registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+static RegisteredQueryHint RegisteredQueryHint::defaults()
+```
+</CodeBlock>
+
+### translateQueryHint [#translatequeryhint]
+
+<CodeBlock links={{"RegisteredQueryHint": "registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+static QueryHint RegisteredQueryHint::translateQueryHint(
+    const std::string &hint_name
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cpu_mode` | `bool` | |
+| `columnar_output` | `bool` | |
+| `rowwise_output` | `bool` | |
+| `keep_result` | `bool` | |
+| `keep_table_function_result` | `bool` | |
+| `watchdog` | `std::optional< bool >` | |
+| `dynamic_watchdog` | `std::optional< bool >` | |
+| `query_time_limit` | `size_t` | |
+| `watchdog_max_projected_rows_per_device` | `size_t` | |
+| `preflight_count_query_threshold` | `size_t` | |
+| `table_reordering_off` | `bool` | |
+| `ndv_groups_estimator_multiplier` | `double` | |
+| `cuda_block_size` | `size_t` | |
+| `cuda_grid_size_multiplier` | `double` | |
+| `opt_cuda_grid_and_block_size` | `bool` | |
+| `aggregate_tree_fanout` | `size_t` | |
+| `bbox_intersect_bucket_threshold` | `double` | |
+| `bbox_intersect_max_size` | `size_t` | |
+| `bbox_intersect_allow_gpu_build` | `bool` | |
+| `bbox_intersect_no_cache` | `bool` | |
+| `bbox_intersect_keys_per_bin` | `double` | |
+| `use_loop_join` | `std::optional< bool >` | |
+| `loop_join_inner_table_max_num_rows` | `size_t` | |
+| `max_join_hash_table_size` | `size_t` | |
+| `force_baseline_hash_join` | `bool` | |
+| `force_one_to_many_hash_join` | `bool` | |
+| `registered_hint` | `std::vector< bool >` | |

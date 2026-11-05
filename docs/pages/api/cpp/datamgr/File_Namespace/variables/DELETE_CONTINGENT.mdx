@@ -1,0 +1,18 @@
+---
+title: File_Namespace::DELETE_CONTINGENT
+description: "@type FileInfo"
+---
+
+@type [FileInfo](../structs/fileinfo)
+
+```cpp showLineNumbers={false}
+constexpr int32_t File_Namespace::DELETE_CONTINGENT = -1
+```
+
+A [FileInfo](../structs/fileinfo) type has a file pointer and metadata about a file.
+
+A file info structure wraps around a file pointer in order to contain additional information/metadata about the file that is pertinent to the file manager.
+
+The free pages (freePages) within a file must be tracked, and this is implemented using a basic STL set. The set ensures that no duplicate pages are included, and that the pages are sorted, faciliating the obtaining of consecutive free pages by a constant time pop operation, which may reduce the cost of DBMS disk accesses.
+
+Helper functions are provided: size(), available(), and used().

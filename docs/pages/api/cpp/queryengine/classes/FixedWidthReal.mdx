@@ -1,0 +1,48 @@
+---
+title: FixedWidthReal
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Codec.h>
+```
+
+**Inherits from:** `Decoder` (public)
+
+---
+
+## Constructors
+
+### FixedWidthReal [#fixedwidthreal]
+
+<CodeBlock links={{"FixedWidthReal": "fixedwidthreal"}}>
+```cpp showLineNumbers={false}
+FixedWidthReal::FixedWidthReal(
+    const bool is_double
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegenDecode [#codegendecode]
+
+<CodeBlock links={{"FixedWidthReal": "fixedwidthreal"}}>
+```cpp showLineNumbers={false}
+llvm::Instruction * FixedWidthReal::codegenDecode(
+    llvm::Value *byte_stream,
+    llvm::Value *pos,
+    llvm::Module *llvm_module
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_double_` | `const bool` | |

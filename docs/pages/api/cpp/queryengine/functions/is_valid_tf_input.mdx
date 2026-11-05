@@ -1,0 +1,78 @@
+---
+title: is_valid_tf_input
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST bool is_valid_tf_input(
+    const T input,
+    const T bounds_val,
+    const BoundsType bounds_type,
+    const IntervalType interval_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST bool is_valid_tf_input(
+    const int32_t input,
+    const int32_t bounds_val,
+    const BoundsType bounds_type,
+    const IntervalType interval_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST bool is_valid_tf_input(
+    const int64_t input,
+    const int64_t bounds_val,
+    const BoundsType bounds_type,
+    const IntervalType interval_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST bool is_valid_tf_input(
+    const float input,
+    const float bounds_val,
+    const BoundsType bounds_type,
+    const IntervalType interval_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST bool is_valid_tf_input(
+    const double input,
+    const double bounds_val,
+    const BoundsType bounds_type,
+    const IntervalType interval_type
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

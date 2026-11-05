@@ -1,0 +1,37 @@
+---
+title: query_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GpuSharedMemoryContext": "../classes/gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+std::tuple<llvm::Function *, llvm::CallInst *> query_template(
+    llvm::Module *mod,
+    const size_t aggr_col_count,
+    const bool hoist_literals,
+    const bool is_estimate_query,
+    const GpuSharedMemoryContext &gpu_smem_context
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GpuSharedMemoryContext": "../classes/gpusharedmemorycontext"}}>
+```cpp showLineNumbers={false}
+std::tuple<llvm::Function *, llvm::CallInst *> query_template(
+    llvm::Module *,
+    const size_t aggr_col_count,
+    const bool hoist_literals,
+    const bool is_estimate_query,
+    const GpuSharedMemoryContext &gpu_smem_context
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

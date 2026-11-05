@@ -1,0 +1,66 @@
+---
+title: TableFunctions_Namespace::OneHotEncoder_Namespace::KeyToOneHotColBytemap
+description: "A struct that creates a bytemap to map each key to its corresponding one-hot column index."
+---
+
+A struct that creates a bytemap to map each key to its corresponding one-hot column index.
+
+---
+
+## Constructors
+
+### KeyToOneHotColBytemap [#keytoonehotcolbytemap]
+
+<CodeBlock links={{"KeyToOneHotColBytemap": "keytoonehotcolbytemap"}}>
+```cpp showLineNumbers={false}
+TableFunctions_Namespace::OneHotEncoder_Namespace::KeyToOneHotColBytemap::KeyToOneHotColBytemap(
+    const std::vector<int32_t> &top_k_keys,
+    const int32_t min_key,
+    const int32_t max_key,
+    const bool has_other_key
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_col_idx_for_key [#getcolidxforkey]
+
+<CodeBlock links={{"KeyToOneHotColBytemap": "keytoonehotcolbytemap"}}>
+```cpp showLineNumbers={false}
+int16_t TableFunctions_Namespace::OneHotEncoder_Namespace::KeyToOneHotColBytemap::get_col_idx_for_key(
+    const int32_t key
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### init_bytemap [#initbytemap]
+
+<CodeBlock links={{"KeyToOneHotColBytemap": "keytoonehotcolbytemap"}}>
+```cpp showLineNumbers={false}
+static std::vector<int16_t> TableFunctions_Namespace::OneHotEncoder_Namespace::KeyToOneHotColBytemap::init_bytemap(
+    const std::vector<int32_t> &top_k_keys,
+    const int32_t min_key,
+    const int32_t max_key,
+    const bool has_other_key
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `min_key_` | `const int32_t` | |
+| `max_key_` | `const int32_t` | |
+| `has_other_key_` | `const bool` | |
+| `other_key_` | `const int32_t` | |
+| `bytemap_` | `const std::vector< int16_t >` | |

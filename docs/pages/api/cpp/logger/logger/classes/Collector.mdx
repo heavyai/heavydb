@@ -1,0 +1,66 @@
+---
+title: logger::Collector
+description: ""
+---
+
+**Inherits from:** `sinks::file::collector` (public)
+
+---
+
+## Constructors
+
+### Collector [#collector]
+
+<CodeBlock links={{"Collector": "collector", "LogOptions": "logoptions"}}>
+```cpp showLineNumbers={false}
+logger::Collector::Collector(
+    fs::path const &full_log_dir,
+    LogOptions const &log_opts
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### store_file [#storefile]
+
+<CodeBlock links={{"Collector": "collector"}}>
+```cpp showLineNumbers={false}
+void logger::Collector::store_file(
+    fs::path const &path
+) override
+```
+</CodeBlock>
+
+### scan_for_files [#scanforfiles]
+
+<CodeBlock links={{"Collector": "collector"}}>
+```cpp showLineNumbers={false}
+uintmax_t logger::Collector::scan_for_files(
+    sinks::file::scan_method method,
+    fs::path const &path = fs::path(),
+    unsigned *counter = nullptr
+) override
+```
+</CodeBlock>
+
+### track_symlink [#tracksymlink]
+
+<CodeBlock links={{"Collector": "collector"}}>
+```cpp showLineNumbers={false}
+void logger::Collector::track_symlink(
+    fs::path symlink_path
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `collector_` | `boost::shared_ptr< sinks::file::collector >` | |
+| `symlink_paths_` | `std::vector< fs::path >` | |

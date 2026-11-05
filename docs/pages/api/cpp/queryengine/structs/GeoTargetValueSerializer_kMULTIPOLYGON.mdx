@@ -1,0 +1,23 @@
+---
+title: "GeoTargetValueSerializer< kMULTIPOLYGON >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetGeoSerialization.h>
+```
+
+---
+
+## Static methods
+
+### serialize [#serialize]
+
+<CodeBlock links={{"GeoTargetValueSerializer< kMULTIPOLYGON >": "geotargetvalueserializerkmultipolygon"}}>
+```cpp showLineNumbers={false}
+static TargetValue GeoTargetValueSerializer<kMULTIPOLYGON>::serialize(
+    const SQLTypeInfo &geo_ti,
+    std::array<VarlenDatumPtr, 3> &vals
+)
+```
+</CodeBlock>

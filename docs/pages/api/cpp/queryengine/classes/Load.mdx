@@ -1,0 +1,79 @@
+---
+title: Load
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### Load [#load]
+
+<CodeBlock links={{"Load": "load", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Load::Load(
+    const Value *source,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### source [#source]
+
+<CodeBlock links={{"Load": "load", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * Load::source() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"Load": "load", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void Load::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"Load": "load", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"Load": "load", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"Load": "load", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `source_` | `const Value *` | |

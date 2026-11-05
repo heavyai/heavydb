@@ -1,0 +1,81 @@
+---
+title: Parser::CreateDBStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### CreateDBStmt [#createdbstmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"CreateDBStmt": "createdbstmt"}}>
+```cpp showLineNumbers={false}
+Parser::CreateDBStmt::CreateDBStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"CreateDBStmt": "createdbstmt", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::CreateDBStmt::CreateDBStmt(
+    std::string *n,
+    std::list<NameValueAssign *> *l,
+    const bool if_not_exists
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"CreateDBStmt": "createdbstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateDBStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"CreateDBStmt": "createdbstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::CreateDBStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `db_name_` | `std::unique_ptr< std::string >` | |
+| `options_` | `std::list< std::unique_ptr< NameValueAssign > >` | |
+| `if_not_exists_` | `bool` | |

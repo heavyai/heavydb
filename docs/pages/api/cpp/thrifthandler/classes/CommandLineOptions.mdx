@@ -1,0 +1,147 @@
+---
+title: CommandLineOptions
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CommandLineOptions.h>
+```
+
+---
+
+## Constructors
+
+### CommandLineOptions [#commandlineoptions]
+
+<CodeBlock links={{"CommandLineOptions": "commandlineoptions"}}>
+```cpp showLineNumbers={false}
+CommandLineOptions::CommandLineOptions(
+    char const *argv0
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### fillOptions [#filloptions]
+
+<CodeBlock links={{"CommandLineOptions": "commandlineoptions"}}>
+```cpp showLineNumbers={false}
+void CommandLineOptions::fillOptions()
+```
+</CodeBlock>
+
+### fillDeveloperOptions [#filldeveloperoptions]
+
+<CodeBlock links={{"CommandLineOptions": "commandlineoptions"}}>
+```cpp showLineNumbers={false}
+void CommandLineOptions::fillDeveloperOptions()
+```
+</CodeBlock>
+
+### parse_command_line [#parsecommandline]
+
+<CodeBlock links={{"CommandLineOptions": "commandlineoptions"}}>
+```cpp showLineNumbers={false}
+boost::optional<int> CommandLineOptions::parse_command_line(
+    int argc,
+    char const *const *argv,
+    const bool should_init_logging = false
+)
+```
+</CodeBlock>
+
+### validate [#validate]
+
+<CodeBlock links={{"CommandLineOptions": "commandlineoptions"}}>
+```cpp showLineNumbers={false}
+void CommandLineOptions::validate()
+```
+</CodeBlock>
+
+### validate_base_path [#validatebasepath]
+
+<CodeBlock links={{"CommandLineOptions": "commandlineoptions"}}>
+```cpp showLineNumbers={false}
+void CommandLineOptions::validate_base_path()
+```
+</CodeBlock>
+
+### init_logging [#initlogging]
+
+<CodeBlock links={{"CommandLineOptions": "commandlineoptions"}}>
+```cpp showLineNumbers={false}
+void CommandLineOptions::init_logging()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `http_port` | `int` | |
+| `http_binary_port` | `int` | |
+| `reserved_gpu_mem` | `size_t` | |
+| `base_path` | `std::string` | |
+| `disk_cache_config` | `File_Namespace::DiskCacheConfig` | |
+| `encryption_key_store_path` | `std::string` | |
+| `verbose_logging` | `bool` | |
+| `jit_debug` | `bool` | |
+| `intel_jit_profile` | `bool` | |
+| `allow_multifrag` | `bool` | |
+| `read_only` | `bool` | |
+| `allow_loop_joins` | `bool` | |
+| `enable_legacy_syntax` | `bool` | |
+| `log_user_origin` | `bool` | |
+| `authMetadata` | `AuthMetadata` | |
+| `system_parameters` | `SystemParameters` | |
+| `enable_rendering` | `bool` | |
+| `enable_auto_clear_render_mem` | `bool` | |
+| `render_oom_retry_threshold` | `int` | |
+| `render_mem_bytes` | `size_t` | |
+| `max_concurrent_render_sessions` | `size_t` | |
+| `render_compositor_use_last_gpu` | `bool` | |
+| `renderer_prefer_igpu` | `bool` | |
+| `renderer_vulkan_timeout_ms` | `unsigned` | |
+| `renderer_use_parallel_executors` | `bool` | |
+| `renderer_enable_slab_allocation` | `bool` | |
+| `enable_watchdog` | `bool` | |
+| `enable_dynamic_watchdog` | `bool` | |
+| `watchdog_none_encoded_string_translation_limit` | `size_t` | |
+| `watchdog_max_projected_rows_per_device` | `size_t` | |
+| `preflight_count_query_threshold` | `size_t` | |
+| `enable_runtime_query_interrupt` | `bool` | |
+| `enable_non_kernel_time_query_interrupt` | `bool` | |
+| `use_estimator_result_cache` | `bool` | |
+| `running_query_interrupt_freq` | `double` | |
+| `pending_query_interrupt_freq` | `unsigned` | |
+| `dynamic_watchdog_time_limit` | `unsigned` | |
+| `disk_cache_level` | `std::string` | |
+| `enable_data_recycler` | `bool` | |
+| `use_hashtable_cache` | `bool` | |
+| `hashtable_cache_total_bytes` | `size_t` | |
+| `max_cacheable_hashtable_size_bytes` | `size_t` | |
+| `optimize_cuda_block_and_grid_sizes` | `bool` | |
+| `num_reader_threads` | `size_t` | Number of threads used when loading data. |
+| `db_query_file` | `std::string` | path to file containing warmup queries list |
+| `exit_after_warmup` | `bool` | exit after warmup |
+| `idle_session_duration` | `int` | Inactive session tolerance in mins (60 mins). |
+| `max_session_duration` | `int` | Maximum session life in mins (43,200 mins == 30 Days) ([https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth](https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth)). |
+| `udf_file_name` | `std::string` | |
+| `udf_compiler_path` | `std::string` | |
+| `udf_compiler_options` | `std::vector< std::string >` | |
+| `allowed_import_paths` | `std::string` | |
+| `allowed_export_paths` | `std::string` | |
+| `help_desc_` | `po::options_description` | |
+| `developer_desc_` | `po::options_description` | |
+| `log_options_` | `logger::LogOptions` | |
+| `exe_name` | `std::string` | |
+| `positional_options` | `po::positional_options_description` | |
+| `vm` | `po::variables_map` | |
+| `enable_runtime_udfs` | `bool` | |
+| `enable_runtime_udf` | `bool` | |
+| `enable_udf_registration_for_all_users` | `bool` | |

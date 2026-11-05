@@ -1,0 +1,197 @@
+---
+title: data_conversion::StringViewToScalarEncoder
+description: ""
+---
+
+<CodeBlock id="StringViewToScalarEncoder" links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder"}}>
+```cpp showLineNumbers={false}
+template <typename DataType, typename MetadataType = DataType>
+class StringViewToScalarEncoder
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <data_conversion/StringViewToScalarEncoder.h>
+```
+
+**Template parameters**
+
+<ParamField path="DataType" type="typename">
+</ParamField>
+
+<ParamField path="MetadataType" type="typename" default="DataType">
+</ParamField>
+
+**Inherits from:** `data_conversion::TypedBaseConvertEncoder< DataType, DataType >` (public)
+
+---
+
+## Constructors
+
+### StringViewToScalarEncoder [#stringviewtoscalarencoder]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+data_conversion::StringViewToScalarEncoder<DataType, MetadataType>::StringViewToScalarEncoder(
+    const Chunk_NS::Chunk &dst_chunk,
+    const bool error_tracking_enabled
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### encodeAndAppendData [#encodeandappenddata]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToScalarEncoder<DataType, MetadataType>::encodeAndAppendData(
+    const int8_t *data,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToScalarEncoder<DataType, MetadataType>::clear() override
+```
+</CodeBlock>
+
+### getDstChunk [#getdstchunk]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+const Chunk_NS::Chunk & data_conversion::StringViewToScalarEncoder<DataType, MetadataType>::getDstChunk() const
+```
+</CodeBlock>
+
+### getDeleteBuffer [#getdeletebuffer]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder"}}>
+```cpp showLineNumbers={false}
+std::optional<std::vector<bool>> & data_conversion::StringViewToScalarEncoder<DataType, MetadataType>::getDeleteBuffer()
+```
+</CodeBlock>
+
+### getMetadata [#getmetadata]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> data_conversion::TypedBaseConvertEncoder<DataType, DataType>::getMetadata(
+    const Chunk_NS::Chunk &chunk
+) const override
+```
+</CodeBlock>
+
+### initializeDeleteBuffer [#initializedeletebuffer]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::BaseConvertEncoder::initializeDeleteBuffer(
+    const size_t size_hint
+)
+```
+</CodeBlock>
+
+### finalize [#finalize]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::BaseConvertEncoder::finalize(
+    const size_t rows_appended
+)
+```
+</CodeBlock>
+
+### initialize [#initialize]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToScalarEncoder<DataType, MetadataType>::initialize()
+```
+</CodeBlock>
+
+### convertAndUpdateMetadata [#convertandupdatemetadata]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder"}}>
+```cpp showLineNumbers={false}
+DataType data_conversion::StringViewToScalarEncoder<DataType, MetadataType>::convertAndUpdateMetadata(
+    const std::string_view &typed_value
+)
+```
+</CodeBlock>
+
+### convert [#convert]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder"}}>
+```cpp showLineNumbers={false}
+DataType data_conversion::StringViewToScalarEncoder<DataType, MetadataType>::convert(
+    const std::string_view &typed_value
+)
+```
+</CodeBlock>
+
+### getNull [#getnull]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+DataType data_conversion::TypedBaseConvertEncoder<DataType, DataType>::getNull() const
+```
+</CodeBlock>
+
+### updateMetadataStats [#updatemetadatastats]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::TypedBaseConvertEncoder<DataType, DataType>::updateMetadataStats(
+    const DataType &typed_value,
+    const bool is_date_in_days = false
+)
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"StringViewToScalarEncoder": "stringviewtoscalarencoder", "TypedBaseConvertEncoder": "typedbaseconvertencoder"}}>
+```cpp showLineNumbers={false}
+template <typename DataType>
+bool data_conversion::BaseConvertEncoder::isNull(
+    const DataType &typed_value
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `DataType` | `DataType` |
+| `MetadataType` | `DataType` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dst_type_info_` | `SQLTypeInfo` | |
+| `dst_chunk_` | `const Chunk_NS::Chunk &` | |
+| `buffer_` | `AbstractBuffer *` | |
+| `is_date_in_days_` | `const bool` | |
+| `date_days_overflow_validator_` | `std::optional< DateDaysOverflowValidator >` | |
+| `decimal_overflow_validator_` | `std::optional< DecimalOverflowValidator >` | |
+| `min_` | `MetadataType` | |
+| `max_` | `MetadataType` | |
+| `delete_buffer_` | `std::optional< std::vector< bool > >` | |
+| `error_tracking_enabled_` | `const bool` | |
+| `has_nulls_` | `bool` | |
+| `num_elements_` | `size_t` | |

@@ -1,0 +1,178 @@
+---
+title: RexCase
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RexScalar` (public)
+
+---
+
+## Constructors
+
+### RexCase [#rexcase]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+RexCase::RexCase() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RexCase": "rexcase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+RexCase::RexCase(
+    std::vector<std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>> &expr_pair_list,
+    std::unique_ptr<const RexScalar> &else_expr
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexCase": "rexcase", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexCase::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexCase": "rexcase", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexCase::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### branchCount [#branchcount]
+
+<CodeBlock links={{"RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+size_t RexCase::branchCount() const
+```
+</CodeBlock>
+
+### getWhen [#getwhen]
+
+<CodeBlock links={{"RexCase": "rexcase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RexCase::getWhen(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getThen [#getthen]
+
+<CodeBlock links={{"RexCase": "rexcase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RexCase::getThen(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getElse [#getelse]
+
+<CodeBlock links={{"RexCase": "rexcase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RexCase::getElse() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexCase": "rexcase", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexCase::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexCase": "rexcase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual size_t Rex::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexCase": "rexcase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+size_t Rex::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexCase": "rexcase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexCase": "rexcase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexCase": "rexcase", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+size_t RexCase::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `expr_pair_list_` | `std::vector< std::pair< std::unique_ptr< const RexScalar >, std::unique_ptr< const RexScalar > > >` | |
+| `else_expr_` | `std::unique_ptr< const RexScalar >` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

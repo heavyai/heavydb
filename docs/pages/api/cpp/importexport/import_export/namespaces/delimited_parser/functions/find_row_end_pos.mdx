@@ -1,0 +1,59 @@
+---
+title: import_export::delimited_parser::find_row_end_pos
+description: "Finds the closest possible row ending to the end of the given buffer."
+---
+
+<CodeBlock links={{"CopyParams": "../../../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+size_t import_export::delimited_parser::find_row_end_pos(
+    size_t &alloc_size,
+    std::unique_ptr<char[]> &buffer,
+    size_t &buffer_size,
+    const CopyParams &copy_params,
+    const size_t buffer_first_row_index,
+    unsigned int &num_rows_in_buffer,
+    FILE *file,
+    foreign_storage::FileReader *file_reader = nullptr
+)
+```
+</CodeBlock>
+
+Finds the closest possible row ending to the end of the given buffer.
+
+The buffer is resized as needed, with more content read from the file, until an end of row is found or a configured max buffer limit is reached.
+
+**Returns:** The position of the closest possible row ending to the end of the given buffer.
+
+**Parameters**
+
+<ParamField path="alloc_size" type="size_t &">
+Allocation size of subsequent buffer. This is adjusted as needed, if the buffer has to be resized.
+</ParamField>
+
+<ParamField path="buffer" type="std::unique_ptr<char[]> &">
+Given buffer which has the rows in csv format.
+</ParamField>
+
+<ParamField path="buffer_size" type="size_t &">
+Size of the buffer.
+</ParamField>
+
+<ParamField path="copy_params" type="const CopyParams &">
+Copy params for the table.
+</ParamField>
+
+<ParamField path="buffer_first_row_index" type="const size_t">
+Index of first row in the buffer.
+</ParamField>
+
+<ParamField path="num_rows_in_buffer" type="unsigned int &">
+Number of rows until the closest possible row ending.
+</ParamField>
+
+<ParamField path="file" type="FILE *">
+Handle to CSV file being parsed. (optional)
+</ParamField>
+
+<ParamField path="file_reader" type="foreign_storage::FileReader *" default="nullptr">
+Handle to a FileReader class, must be valid if file isnt
+</ParamField>

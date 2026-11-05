@@ -1,0 +1,78 @@
+---
+title: Analyzer::LargeNDVEstimator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/CardinalityEstimator.h>
+```
+
+**Inherits from:** `Analyzer::NDVEstimator` (public)
+
+---
+
+## Constructors
+
+### LargeNDVEstimator [#largendvestimator]
+
+<CodeBlock links={{"LargeNDVEstimator": "largendvestimator"}}>
+```cpp showLineNumbers={false}
+Analyzer::LargeNDVEstimator::LargeNDVEstimator(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &expr_tuple
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getBufferSize [#getbuffersize]
+
+<CodeBlock links={{"LargeNDVEstimator": "largendvestimator"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::LargeNDVEstimator::getBufferSize() const
+```
+</CodeBlock>
+
+### getArgument [#getargument]
+
+<CodeBlock links={{"LargeNDVEstimator": "largendvestimator", "NDVEstimator": "ndvestimator"}}>
+```cpp showLineNumbers={false}
+const std::list<std::shared_ptr<Analyzer::Expr>> & Analyzer::LargeNDVEstimator::getArgument() const override
+```
+</CodeBlock>
+
+### getRuntimeFunctionName [#getruntimefunctionname]
+
+<CodeBlock links={{"LargeNDVEstimator": "largendvestimator", "NDVEstimator": "ndvestimator"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::LargeNDVEstimator::getRuntimeFunctionName() const override
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"LargeNDVEstimator": "largendvestimator", "NDVEstimator": "ndvestimator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Estimator::deep_copy() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"LargeNDVEstimator": "largendvestimator", "NDVEstimator": "ndvestimator"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Estimator::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"LargeNDVEstimator": "largendvestimator", "NDVEstimator": "ndvestimator"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::Estimator::toString() const override
+```
+</CodeBlock>

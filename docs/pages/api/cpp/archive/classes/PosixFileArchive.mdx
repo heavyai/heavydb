@@ -1,0 +1,192 @@
+---
+title: PosixFileArchive
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <PosixFileArchive.h>
+```
+
+**Inherits from:** `Archive` (public)
+
+---
+
+## Constructors
+
+### PosixFileArchive [#posixfilearchive]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive"}}>
+```cpp showLineNumbers={false}
+PosixFileArchive::PosixFileArchive(
+    const std::string url,
+    const bool plain_text
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~PosixFileArchive
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive"}}>
+```cpp showLineNumbers={false}
+PosixFileArchive::~PosixFileArchive() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### init_for_read [#initforread]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive"}}>
+```cpp showLineNumbers={false}
+void PosixFileArchive::init_for_read() override
+```
+</CodeBlock>
+
+### read_next_header [#readnextheader]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive"}}>
+```cpp showLineNumbers={false}
+bool PosixFileArchive::read_next_header() override
+```
+</CodeBlock>
+
+### read_data_block [#readdatablock]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive"}}>
+```cpp showLineNumbers={false}
+bool PosixFileArchive::read_data_block(
+    const void **buff,
+    size_t *size,
+    int64_t *offset
+) override
+```
+</CodeBlock>
+
+### archive_error [#archiveerror]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual std::string PosixFileArchive::archive_error(
+    int err
+)
+```
+</CodeBlock>
+
+### get_position_compressed [#getpositioncompressed]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual int64_t PosixFileArchive::get_position_compressed() const
+```
+</CodeBlock>
+
+### open [#open]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual int PosixFileArchive::open()
+```
+</CodeBlock>
+
+### close [#close]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual int PosixFileArchive::close()
+```
+</CodeBlock>
+
+### read [#read]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual ptrdiff_t PosixFileArchive::read(
+    const void **buff
+)
+```
+</CodeBlock>
+
+### url_part [#urlpart]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+const std::string PosixFileArchive::url_part(
+    const int i
+)
+```
+</CodeBlock>
+
+### entryName [#entryname]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+std::string PosixFileArchive::entryName()
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### open [#open]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+static int PosixFileArchive::open(
+    struct archive *a,
+    void *client_data
+)
+```
+</CodeBlock>
+
+### close [#close]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+static int PosixFileArchive::close(
+    struct archive *a,
+    void *client_data
+)
+```
+</CodeBlock>
+
+### read [#read]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+static ptrdiff_t PosixFileArchive::read(
+    struct archive *a,
+    void *client_data,
+    const void **buff
+)
+```
+</CodeBlock>
+
+### parse_url [#parseurl]
+
+<CodeBlock links={{"PosixFileArchive": "posixfilearchive", "Archive": "archive"}}>
+```cpp showLineNumbers={false}
+static void PosixFileArchive::parse_url(
+    const std::string url,
+    std::map<int, std::string> &url_parts
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buf` | `char *` | |
+| `fp` | `FILE *` | |
+| `url` | `std::string` | |
+| `url_parts` | `std::map< int, std::string >` | |
+| `ar` | `archive *` | |
+| `entry` | `archive_entry *` | |
+| `plain_text` | `bool` | |

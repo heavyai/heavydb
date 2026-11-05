@@ -1,0 +1,15 @@
+---
+title: only_shards_for_device
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments,
+    Data_Namespace::MemoryLevel effective_memory_level,
+    const int device_id,
+    const std::set<int> &device_ids
+)
+```
+</CodeBlock>

@@ -1,0 +1,68 @@
+---
+title: column_list_safe_row_sum__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"ColumnList": "../structs/columnlist", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t column_list_safe_row_sum__cpu_template(
+    const ColumnList<T> &input,
+    Column<T> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"ColumnList": "../structs/columnlist", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t column_list_safe_row_sum__cpu_template(
+    const ColumnList<int32_t> &input,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"ColumnList": "../structs/columnlist", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t column_list_safe_row_sum__cpu_template(
+    const ColumnList<int64_t> &input,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock links={{"ColumnList": "../structs/columnlist", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t column_list_safe_row_sum__cpu_template(
+    const ColumnList<float> &input,
+    Column<float> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock links={{"ColumnList": "../structs/columnlist", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t column_list_safe_row_sum__cpu_template(
+    const ColumnList<double> &input,
+    Column<double> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

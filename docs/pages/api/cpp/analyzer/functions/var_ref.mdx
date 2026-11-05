@@ -1,0 +1,14 @@
+---
+title: var_ref
+description: ""
+---
+
+<CodeBlock links={{"Expr": "../analyzer/classes/expr", "Var": "../analyzer/classes/var"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Var> var_ref(
+    const Analyzer::Expr *expr,
+    const Analyzer::Var::WhichRow which_row,
+    const int varno
+)
+```
+</CodeBlock>

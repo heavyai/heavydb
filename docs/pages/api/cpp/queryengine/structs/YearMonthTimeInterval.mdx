@@ -1,0 +1,85 @@
+---
+title: YearMonthTimeInterval
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Constructors
+
+### YearMonthTimeInterval [#yearmonthtimeinterval]
+
+<CodeBlock links={{"YearMonthTimeInterval": "yearmonthtimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE YearMonthTimeInterval::YearMonthTimeInterval(
+    int64_t init
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"YearMonthTimeInterval": "yearmonthtimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool YearMonthTimeInterval::operator==(
+    const YearMonthTimeInterval &other
+) const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"YearMonthTimeInterval": "yearmonthtimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool YearMonthTimeInterval::operator!=(
+    const YearMonthTimeInterval &other
+) const
+```
+</CodeBlock>
+
+### operator+ [#operator_plus]
+
+<CodeBlock links={{"YearMonthTimeInterval": "yearmonthtimeinterval", "Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE Timestamp YearMonthTimeInterval::operator+(
+    const Timestamp &t
+) const
+```
+</CodeBlock>
+
+### operator* [#operator_mul]
+
+<CodeBlock links={{"YearMonthTimeInterval": "yearmonthtimeinterval"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE YearMonthTimeInterval YearMonthTimeInterval::operator*(
+    const int64_t multiplier
+) const
+```
+</CodeBlock>
+
+### numStepsBetween [#numstepsbetween]
+
+<CodeBlock links={{"YearMonthTimeInterval": "yearmonthtimeinterval", "Timestamp": "timestamp"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t YearMonthTimeInterval::numStepsBetween(
+    const Timestamp &begin,
+    const Timestamp &end
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `timeval` | `int64_t` | |

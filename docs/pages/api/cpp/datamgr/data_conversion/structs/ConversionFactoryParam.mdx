@@ -1,0 +1,21 @@
+---
+title: data_conversion::ConversionFactoryParam
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <data_conversion/ConversionFactory.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dst_chunk` | `Chunk_NS::Chunk` | |
+| `scalar_temp_chunk` | `Chunk_NS::Chunk` | |
+| `geo_chunks` | `std::list< Chunk_NS::Chunk >` | |
+| `geo_chunk_metadata` | `std::list< std::unique_ptr< ChunkMetadata > >` | |
+| `delete_chunk` | `std::optional< Chunk_NS::Chunk >` | |
+| `db_id` | `int` | |

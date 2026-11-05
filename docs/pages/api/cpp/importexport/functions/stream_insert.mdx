@@ -1,0 +1,15 @@
+---
+title: stream_insert
+description: ""
+---
+
+<CodeBlock links={{"RowToColumnLoader": "../classes/rowtocolumnloader", "CopyParams": "../importexport/structs/copyparams"}}>
+```cpp showLineNumbers={false}
+void stream_insert(
+    RowToColumnLoader &row_loader,
+    const std::map<std::string, std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>> &transformations,
+    const import_export::CopyParams &copy_params,
+    const bool remove_quotes
+)
+```
+</CodeBlock>

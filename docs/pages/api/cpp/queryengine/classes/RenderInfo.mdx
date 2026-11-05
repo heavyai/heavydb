@@ -1,0 +1,167 @@
+---
+title: RenderInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RenderInfo.h>
+```
+
+**Inherits from:** `heavyai::InSituFlagsOwnerInterface` (public)
+
+---
+
+## Constructors
+
+### RenderInfo [#renderinfo]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+RenderInfo::RenderInfo(
+    const ::QueryRenderer::RenderSessionKey &in_render_session_key,
+    const RenderQueryOptions &in_render_query_opts,
+    const heavyai::InSituFlags in_insitu_flags = heavyai::InSituFlags::kInSitu
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getSessionInfo [#getsessioninfo]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+const Catalog_Namespace::SessionInfo & RenderInfo::getSessionInfo() const
+```
+</CodeBlock>
+
+### getSessionInfoPtr [#getsessioninfoptr]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Catalog_Namespace::SessionInfo const> RenderInfo::getSessionInfoPtr() const
+```
+</CodeBlock>
+
+### forceNonInSitu [#forcenoninsitu]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+void RenderInfo::forceNonInSitu()
+```
+</CodeBlock>
+
+### setNonInSitu [#setnoninsitu]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+void RenderInfo::setNonInSitu()
+```
+</CodeBlock>
+
+### useCudaBuffers [#usecudabuffers]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+bool RenderInfo::useCudaBuffers() const
+```
+</CodeBlock>
+
+### disableCudaBuffers [#disablecudabuffers]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+void RenderInfo::disableCudaBuffers()
+```
+</CodeBlock>
+
+### getQueryVboLayout [#getqueryvbolayout]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<QueryRenderer::QueryDataLayout> RenderInfo::getQueryVboLayout() const
+```
+</CodeBlock>
+
+### setQueryVboLayout [#setqueryvbolayout]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+void RenderInfo::setQueryVboLayout(
+    const std::shared_ptr<QueryRenderer::QueryDataLayout> &vbo_layout
+)
+```
+</CodeBlock>
+
+### getQuerySsboLayout [#getqueryssbolayout]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<QueryRenderer::QueryDataLayout> RenderInfo::getQuerySsboLayout() const
+```
+</CodeBlock>
+
+### setQuerySsboLayout [#setqueryssbolayout]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+void RenderInfo::setQuerySsboLayout(
+    const std::shared_ptr<QueryRenderer::QueryDataLayout> &ssbo_layout
+)
+```
+</CodeBlock>
+
+### getRenderQueryOptions [#getrenderqueryoptions]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+const RenderQueryOptions & RenderInfo::getRenderQueryOptions() const
+```
+</CodeBlock>
+
+### setRenderQueryStr [#setrenderquerystr]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+void RenderInfo::setRenderQueryStr(
+    std::string const &query_str
+)
+```
+</CodeBlock>
+
+### getRenderQueryStr [#getrenderquerystr]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+std::string RenderInfo::getRenderQueryStr() const
+```
+</CodeBlock>
+
+### reset [#reset]
+
+<CodeBlock links={{"RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+void RenderInfo::reset(
+    const RenderQueryOptions &in_query_opts,
+    const heavyai::InSituFlags in_insitu_flags
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `render_allocator_map_ptr` | `std::unique_ptr< RenderAllocatorMap >` | |
+| `render_session_key` | `const ::QueryRenderer::RenderSessionKey &` | |
+| `targets` | `std::vector< std::shared_ptr< Analyzer::TargetEntry > >` | |
+| `table_names` | `std::unordered_set< shared::FullyQualifiedTableName >` | |
+| `cuda_using_buffers_` | `bool` | |
+| `query_vbo_layout` | `std::shared_ptr< QueryRenderer::QueryDataLayout >` | |
+| `query_ssbo_layout` | `std::shared_ptr< QueryRenderer::QueryDataLayout >` | |
+| `render_query_opts_` | `RenderQueryOptions` | |
+| `render_query_str_` | `std::string` | |

@@ -1,0 +1,185 @@
+---
+title: BloscCompressor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Compressor.h>
+```
+
+---
+
+## Constructors
+
+### BloscCompressor [#blosccompressor]
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+BloscCompressor::BloscCompressor()
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~BloscCompressor
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+BloscCompressor::~BloscCompressor()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getScratchSpaceSize [#getscratchspacesize]
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+size_t BloscCompressor::getScratchSpaceSize(
+    const size_t len
+) const
+```
+</CodeBlock>
+
+### compress [#compress]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+int64_t BloscCompressor::compress(
+    const uint8_t *buffer,
+    const size_t buffer_size,
+    uint8_t *compressed_buffer,
+    const size_t compressed_buffer_size,
+    const size_t min_compressor_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+std::string BloscCompressor::compress(
+    const std::string &buffer
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### decompress [#decompress]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+size_t BloscCompressor::decompress(
+    const uint8_t *compressed_buffer,
+    uint8_t *decompressed_buffer,
+    const size_t decompressed_size
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+std::string BloscCompressor::decompress(
+    const std::string &buffer,
+    const size_t decompressed_size
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### compressOrMemcpy [#compressormemcpy]
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+size_t BloscCompressor::compressOrMemcpy(
+    const uint8_t *input_buffer,
+    uint8_t *output_buffer,
+    const size_t uncompressed_size,
+    const size_t min_compressor_bytes
+)
+```
+</CodeBlock>
+
+### decompressOrMemcpy [#decompressormemcpy]
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+bool BloscCompressor::decompressOrMemcpy(
+    const uint8_t *compressed_buffer,
+    const size_t compressed_buffer_size,
+    uint8_t *decompressed_buffer,
+    const size_t decompressed_size
+)
+```
+</CodeBlock>
+
+### getBloscBufferSizes [#getbloscbuffersizes]
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+void BloscCompressor::getBloscBufferSizes(
+    const uint8_t *data_ptr,
+    size_t *num_bytes_compressed,
+    size_t *num_bytes_uncompressed,
+    size_t *block_size
+)
+```
+</CodeBlock>
+
+### setThreads [#setthreads]
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+int BloscCompressor::setThreads(
+    size_t num_threads
+)
+```
+</CodeBlock>
+
+### setCompressor [#setcompressor]
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+int BloscCompressor::setCompressor(
+    std::string &compressor
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getCompressor [#getcompressor]
+
+<CodeBlock links={{"BloscCompressor": "blosccompressor"}}>
+```cpp showLineNumbers={false}
+BloscCompressor * BloscCompressor::getCompressor()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `compressor_lock` | `std::mutex` | |
+| `instance` <Badge intent="note" minimal>static</Badge> | `BloscCompressor *` | |

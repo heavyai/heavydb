@@ -1,0 +1,180 @@
+---
+title: TextEncodingNone
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Constructors
+
+### TextEncodingNone [#textencodingnone]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+TextEncodingNone::TextEncodingNone() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<Badge intent="note" minimal>inline</Badge> <Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+TextEncodingNone::TextEncodingNone(
+    char const *const c_str
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge> <Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename M>
+DEVICE ALWAYS_INLINE TextEncodingNone::TextEncodingNone(
+    M &mgr,
+    const std::string &str
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator std::string [#operatorstdstring]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+TextEncodingNone::operator std::string() const
+```
+</CodeBlock>
+
+### getString [#getstring]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+std::string TextEncodingNone::getString() const
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE char & TextEncodingNone::operator[](
+    const unsigned int index
+)
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingNone::operator==(
+    const char *rhs
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingNone::operator==(
+    const TextEncodingNone &rhs
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator!= [#operator_ne]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingNone::operator!=(
+    const char *rhs
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingNone::operator!=(
+    const TextEncodingNone &rhs
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator char * [#operatorchar]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE TextEncodingNone::operator char *() const
+```
+</CodeBlock>
+
+### data [#data]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE char * TextEncodingNone::data() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE int64_t TextEncodingNone::size() const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"TextEncodingNone": "textencodingnone"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool TextEncodingNone::isNull() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr_` | `char *` | |
+| `size_` | `int64_t` | |
+| `is_null_` | `int8_t` | |

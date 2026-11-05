@@ -1,0 +1,35 @@
+---
+title: init_hash_join_buff_on_device
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void init_hash_join_buff_on_device(
+    int32_t *buff,
+    const int64_t entry_count,
+    const int32_t invalid_slot_val,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void init_hash_join_buff_on_device(
+    int32_t *buff,
+    const int64_t hash_entry_count,
+    const int32_t invalid_slot_val,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

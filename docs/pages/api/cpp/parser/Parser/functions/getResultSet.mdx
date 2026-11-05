@@ -1,0 +1,17 @@
+---
+title: Parser::getResultSet
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::shared_ptr<ResultSet> Parser::getResultSet(
+    QueryStateProxy query_state_proxy,
+    const std::string select_stmt,
+    std::vector<TargetMetaInfo> &targets,
+    bool validate_only = false,
+    std::vector<size_t> outer_fragment_indices = {},
+    bool allow_interrupt = false
+)
+```
+</CodeBlock>

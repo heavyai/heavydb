@@ -1,0 +1,141 @@
+---
+title: DateTruncExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DateTimeTranslator.h>
+```
+
+**Inherits from:** `DateTimeTranslator` (protected)
+
+---
+
+## Constructors
+
+### DateTruncExpr [#datetruncexpr]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DateTruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+DateTruncExpr::DateTruncExpr(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    const DatetruncField &field
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"DateTruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+DateTruncExpr::DateTruncExpr(
+    const std::shared_ptr<Analyzer::Expr> expr,
+    const std::string &field
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### generate [#generate]
+
+<CodeBlock links={{"DateTruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+const std::shared_ptr<Analyzer::Expr> DateTruncExpr::generate() const
+```
+</CodeBlock>
+
+### to_datetrunc_field [#todatetruncfield]
+
+<CodeBlock links={{"DateTruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+DatetruncField DateTruncExpr::to_datetrunc_field(
+    const std::string &field
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generate [#generate]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DateTruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> DateTruncExpr::generate(
+    const std::shared_ptr<Analyzer::Expr>,
+    const std::string &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"DateTruncExpr": "datetruncexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> DateTruncExpr::generate(
+    const std::shared_ptr<Analyzer::Expr>,
+    const DatetruncField &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getExtractFromTimeConstantValue [#getextractfromtimeconstantvalue]
+
+<CodeBlock links={{"DateTruncExpr": "datetruncexpr", "DateTimeTranslator": "datetimetranslator"}}>
+```cpp showLineNumbers={false}
+static int64_t DateTruncExpr::getExtractFromTimeConstantValue(
+    const int64_t &timeval,
+    const ExtractField &field,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### getDateTruncConstantValue [#getdatetruncconstantvalue]
+
+<CodeBlock links={{"DateTruncExpr": "datetruncexpr", "DateTimeTranslator": "datetimetranslator"}}>
+```cpp showLineNumbers={false}
+static int64_t DateTruncExpr::getDateTruncConstantValue(
+    const int64_t &timeval,
+    const DatetruncField &field,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### getNumericConstant [#getnumericconstant]
+
+<CodeBlock links={{"DateTruncExpr": "datetruncexpr", "DateTimeTranslator": "datetimetranslator"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<Analyzer::Constant> DateTruncExpr::getNumericConstant(
+    const int64_t scale
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `from_expr_` | `std::shared_ptr< Analyzer::Expr >` | |
+| `field_` | `DatetruncField` | |

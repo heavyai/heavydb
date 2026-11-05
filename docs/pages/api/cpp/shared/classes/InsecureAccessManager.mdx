@@ -1,0 +1,52 @@
+---
+title: InsecureAccessManager
+description: ""
+---
+
+**Inherits from:** `AccessManager` (public)
+
+---
+
+## Methods
+
+### verify [#verify]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"InsecureAccessManager": "insecureaccessmanager"}}>
+```cpp showLineNumbers={false}
+Decision InsecureAccessManager::verify(
+    const sockaddr_storage &sa
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"InsecureAccessManager": "insecureaccessmanager"}}>
+```cpp showLineNumbers={false}
+Decision InsecureAccessManager::verify(
+    const std::string &host,
+    const char *name,
+    int size
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item">
+
+<CodeBlock links={{"InsecureAccessManager": "insecureaccessmanager"}}>
+```cpp showLineNumbers={false}
+Decision InsecureAccessManager::verify(
+    const sockaddr_storage &sa,
+    const char *data,
+    int size
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

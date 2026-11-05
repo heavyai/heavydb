@@ -1,0 +1,79 @@
+---
+title: heavyai::test::DebugTestHook
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavyai/test/DebugTestHook.h>
+```
+
+---
+
+## Methods
+
+### setCallback [#setcallback]
+
+<CodeBlock links={{"DebugTestHook": "debugtesthook"}}>
+```cpp showLineNumbers={false}
+static void heavyai::test::DebugTestHook::setCallback(
+    std::string point,
+    Callback callback
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### set [#set]
+
+<CodeBlock links={{"DebugTestHook": "debugtesthook"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename Callable>
+static void heavyai::test::DebugTestHook::set(
+    std::string point,
+    Callable &&callable
+)
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"DebugTestHook": "debugtesthook"}}>
+```cpp showLineNumbers={false}
+static void heavyai::test::DebugTestHook::clear(
+    const std::string &point
+)
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"DebugTestHook": "debugtesthook"}}>
+```cpp showLineNumbers={false}
+static void heavyai::test::DebugTestHook::run(
+    const std::string &point,
+    void *data
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Callback` | `std::function< void(void *)>` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `callbacks_` <Badge intent="note" minimal>static</Badge> | `std::unordered_map< std::string, Callback >` | |

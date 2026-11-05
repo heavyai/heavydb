@@ -1,0 +1,427 @@
+---
+title: ResultSetRecycler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetRecycler.h>
+```
+
+**Inherits from:** `DataRecycler< ResultSetPtr, ResultSetMetaInfo >` (public)
+
+---
+
+## Constructors
+
+### ResultSetRecycler [#resultsetrecycler]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+ResultSetRecycler::ResultSetRecycler()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getItemFromCache [#getitemfromcache]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "ResultSetMetaInfo": "../structs/resultsetmetainfo"}}>
+```cpp showLineNumbers={false}
+ResultSetPtr ResultSetRecycler::getItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::optional<ResultSetMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### getOutputMetaInfo [#getoutputmetainfo]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+std::optional<std::vector<TargetMetaInfo>> ResultSetRecycler::getOutputMetaInfo(
+    QueryPlanHash key
+)
+```
+</CodeBlock>
+
+### putItemToCache [#putitemtocache]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "ResultSetMetaInfo": "../structs/resultsetmetainfo"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecycler::putItemToCache(
+    QueryPlanHash key,
+    ResultSetPtr item_ptr,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    size_t item_size,
+    size_t compute_time,
+    std::optional<ResultSetMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### initCache [#initcache]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecycler::initCache() override
+```
+</CodeBlock>
+
+### clearCache [#clearcache]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecycler::clearCache() override
+```
+</CodeBlock>
+
+### markCachedItemAsDirty [#markcacheditemasdirty]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecycler::markCachedItemAsDirty(
+    size_t table_key,
+    std::unordered_set<QueryPlanHash> &key_set,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+std::string ResultSetRecycler::toString() const override
+```
+</CodeBlock>
+
+### getCachedResultSetWithoutCacheKey [#getcachedresultsetwithoutcachekey]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "ResultSetMetaInfo": "../structs/resultsetmetainfo"}}>
+```cpp showLineNumbers={false}
+std::tuple<QueryPlanHash, ResultSetPtr, std::optional<ResultSetMetaInfo>> ResultSetRecycler::getCachedResultSetWithoutCacheKey(
+    std::set<size_t> &visited,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### addQueryPlanDagForTableKeys [#addqueryplandagfortablekeys]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecycler::addQueryPlanDagForTableKeys(
+    size_t hashed_query_plan_dag,
+    const std::unordered_set<size_t> &table_keys,
+    std::lock_guard<std::mutex> &lock
+)
+```
+</CodeBlock>
+
+### getMappedQueryPlanDagsWithTableKey [#getmappedqueryplandagswithtablekey]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+std::optional<std::unordered_set<size_t>> ResultSetRecycler::getMappedQueryPlanDagsWithTableKey(
+    size_t table_key
+) const
+```
+</CodeBlock>
+
+### removeTableKeyInfoFromQueryPlanDagMap [#removetablekeyinfofromqueryplandagmap]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecycler::removeTableKeyInfoFromQueryPlanDagMap(
+    size_t table_key
+)
+```
+</CodeBlock>
+
+### hasItemInCache [#hasitemincache]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+bool ResultSetRecycler::hasItemInCache(
+    QueryPlanHash key
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge> <Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "ResultSetMetaInfo": "../structs/resultsetmetainfo"}}>
+```cpp showLineNumbers={false}
+bool ResultSetRecycler::hasItemInCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<ResultSetMetaInfo> meta_info = std::nullopt
+) const override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getTargetExprs [#gettargetexprs]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> & ResultSetRecycler::getTargetExprs(
+    QueryPlanHash key
+) const
+```
+</CodeBlock>
+
+### getResultSetRecyclerMetricTracker [#getresultsetrecyclermetrictracker]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "CacheMetricTracker": "cachemetrictracker"}}>
+```cpp showLineNumbers={false}
+CacheMetricTracker & ResultSetRecycler::getResultSetRecyclerMetricTracker()
+```
+</CodeBlock>
+
+### markCachedItemAsDirtyImpl [#markcacheditemasdirtyimpl]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<ResultSetPtr, ResultSetMetaInfo>::markCachedItemAsDirtyImpl(
+    QueryPlanHash key,
+    CachedItemContainer &m
+) const
+```
+</CodeBlock>
+
+### isCachedItemDirty [#iscacheditemdirty]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+bool DataRecycler<ResultSetPtr, ResultSetMetaInfo>::isCachedItemDirty(
+    QueryPlanHash key,
+    CachedItemContainer &m
+) const
+```
+</CodeBlock>
+
+### getCachedItemContainer [#getcacheditemcontainer]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CachedItemContainer> DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getCachedItemContainer(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCachedItemWithoutConsideringMetaInfo [#getcacheditemwithoutconsideringmetainfo]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "CachedItem": "../structs/cacheditem", "ResultSetMetaInfo": "../structs/resultsetmetainfo", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::optional<CachedItem<ResultSetPtr, ResultSetMetaInfo>> DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getCachedItemWithoutConsideringMetaInfo(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    CachedItemContainer &m,
+    std::lock_guard<std::mutex> &lock
+)
+```
+</CodeBlock>
+
+### getCurrentNumCachedItems [#getcurrentnumcacheditems]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getCurrentNumCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentNumDirtyCachedItems [#getcurrentnumdirtycacheditems]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getCurrentNumDirtyCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentNumCleanCachedItems [#getcurrentnumcleancacheditems]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getCurrentNumCleanCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentCacheSizeForDevice [#getcurrentcachesizefordevice]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getCurrentCacheSizeForDevice(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCachedItemMetric [#getcacheditemmetric]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "CacheItemMetric": "cacheitemmetric", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CacheItemMetric> DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getCachedItemMetric(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    QueryPlanHash key
+) const
+```
+</CodeBlock>
+
+### setTotalCacheSize [#settotalcachesize]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<ResultSetPtr, ResultSetMetaInfo>::setTotalCacheSize(
+    CacheItemType item_type,
+    size_t new_total_cache_size
+)
+```
+</CodeBlock>
+
+### setMaxCacheItemSize [#setmaxcacheitemsize]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<ResultSetPtr, ResultSetMetaInfo>::setMaxCacheItemSize(
+    CacheItemType item_type,
+    size_t new_max_cache_item_size
+)
+```
+</CodeBlock>
+
+### removeItemFromCache [#removeitemfromcache]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "ResultSetMetaInfo": "../structs/resultsetmetainfo"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecycler::removeItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<ResultSetMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### cleanupCacheForInsertion [#cleanupcacheforinsertion]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "ResultSetMetaInfo": "../structs/resultsetmetainfo"}}>
+```cpp showLineNumbers={false}
+void ResultSetRecycler::cleanupCacheForInsertion(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    size_t required_size,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<ResultSetMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### removeCachedItemFromBeginning [#removecacheditemfrombeginning]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<ResultSetPtr, ResultSetMetaInfo>::removeCachedItemFromBeginning(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    int offset
+)
+```
+</CodeBlock>
+
+### sortCacheContainerByQueryMetric [#sortcachecontainerbyquerymetric]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<ResultSetPtr, ResultSetMetaInfo>::sortCacheContainerByQueryMetric(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### getCacheLock [#getcachelock]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::mutex & DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getCacheLock() const
+```
+</CodeBlock>
+
+### getMetricTracker [#getmetrictracker]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "CacheMetricTracker": "cachemetrictracker", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+CacheMetricTracker & DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getMetricTracker(
+    CacheItemType item_type
+)
+```
+</CodeBlock>
+
+### getCacheItemType [#getcacheitemtype]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<CacheItemType> const & DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getCacheItemType() const
+```
+</CodeBlock>
+
+### getItemCache [#getitemcache]
+
+<CodeBlock links={{"ResultSetRecycler": "resultsetrecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+PerTypeCacheItemContainer const & DataRecycler<ResultSetPtr, ResultSetMetaInfo>::getItemCache() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `CachedItemContainer` | `std::vector< CachedItem< ResultSetPtr, ResultSetMetaInfo > >` |
+| `PerDeviceCacheItemContainer` | `std::unordered_map< DeviceIdentifier, std::shared_ptr< CachedItemContainer > >` |
+| `PerTypeCacheItemContainer` | `std::unordered_map< CacheItemType, std::shared_ptr< PerDeviceCacheItemContainer > >` |
+| `PerTypeCacheMetricTracker` | `std::unordered_map< CacheItemType, CacheMetricTracker >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_key_to_query_plan_dag_map_` | `std::unordered_map< size_t, std::unordered_set< size_t > >` | |

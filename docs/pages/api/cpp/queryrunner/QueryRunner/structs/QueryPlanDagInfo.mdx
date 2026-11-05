@@ -1,0 +1,19 @@
+---
+title: QueryRunner::QueryPlanDagInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryRunner/QueryRunner.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `root_node` | `std::shared_ptr< const RelAlgNode >` | |
+| `left_deep_trees_id` | `std::vector< unsigned >` | |
+| `left_deep_trees_info` | `std::unordered_map< unsigned, JoinQualsPerNestingLevel >` | |
+| `rel_alg_translator` | `std::shared_ptr< RelAlgTranslator >` | |

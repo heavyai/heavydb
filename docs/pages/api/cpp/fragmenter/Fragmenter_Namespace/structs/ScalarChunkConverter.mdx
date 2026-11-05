@@ -1,0 +1,92 @@
+---
+title: Fragmenter_Namespace::ScalarChunkConverter
+description: ""
+---
+
+<CodeBlock id="ScalarChunkConverter" links={{"ScalarChunkConverter": "scalarchunkconverter"}}>
+```cpp showLineNumbers={false}
+template <typename BUFFER_DATA_TYPE, typename INSERT_DATA_TYPE>
+struct ScalarChunkConverter
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="BUFFER_DATA_TYPE" type="typename">
+</ParamField>
+
+<ParamField path="INSERT_DATA_TYPE" type="typename">
+</ParamField>
+
+**Inherits from:** `Fragmenter_Namespace::ChunkToInsertDataConverter` (public)
+
+---
+
+## Constructors
+
+### ScalarChunkConverter [#scalarchunkconverter]
+
+<CodeBlock links={{"ScalarChunkConverter": "scalarchunkconverter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::ScalarChunkConverter<BUFFER_DATA_TYPE, INSERT_DATA_TYPE>::ScalarChunkConverter(
+    const size_t num_rows,
+    const Chunk_NS::Chunk *chunk
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~ScalarChunkConverter
+
+<CodeBlock links={{"ScalarChunkConverter": "scalarchunkconverter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::ScalarChunkConverter<BUFFER_DATA_TYPE, INSERT_DATA_TYPE>::~ScalarChunkConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"ScalarChunkConverter": "scalarchunkconverter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::ScalarChunkConverter<BUFFER_DATA_TYPE, INSERT_DATA_TYPE>::convertToColumnarFormat(
+    size_t row,
+    size_t indexInFragment
+) override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"ScalarChunkConverter": "scalarchunkconverter", "InsertData": "insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::ScalarChunkConverter<BUFFER_DATA_TYPE, INSERT_DATA_TYPE>::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ColumnDataPtr` | `std::unique_ptr< INSERT_DATA_TYPE, CheckedMallocDeleter< INSERT_DATA_TYPE > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `chunk_` | `const Chunk_NS::Chunk *` | |
+| `column_data_` | `ColumnDataPtr` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `data_buffer_addr_` | `const BUFFER_DATA_TYPE *` | |

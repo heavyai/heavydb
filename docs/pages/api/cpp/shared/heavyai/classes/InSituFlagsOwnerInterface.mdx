@@ -1,0 +1,74 @@
+---
+title: heavyai::InSituFlagsOwnerInterface
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavyai/InSituFlags.h>
+```
+
+---
+
+## Constructors
+
+### InSituFlagsOwnerInterface [#insituflagsownerinterface]
+
+<CodeBlock links={{"InSituFlagsOwnerInterface": "insituflagsownerinterface"}}>
+```cpp showLineNumbers={false}
+heavyai::InSituFlagsOwnerInterface::InSituFlagsOwnerInterface(
+    const InSituFlags insitu_flags
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getInSituFlags [#getinsituflags]
+
+<CodeBlock links={{"InSituFlagsOwnerInterface": "insituflagsownerinterface"}}>
+```cpp showLineNumbers={false}
+InSituFlags heavyai::InSituFlagsOwnerInterface::getInSituFlags() const
+```
+</CodeBlock>
+
+### isForcedNonInSitu [#isforcednoninsitu]
+
+<CodeBlock links={{"InSituFlagsOwnerInterface": "insituflagsownerinterface"}}>
+```cpp showLineNumbers={false}
+bool heavyai::InSituFlagsOwnerInterface::isForcedNonInSitu() const
+```
+</CodeBlock>
+
+### isInSitu [#isinsitu]
+
+<CodeBlock links={{"InSituFlagsOwnerInterface": "insituflagsownerinterface"}}>
+```cpp showLineNumbers={false}
+bool heavyai::InSituFlagsOwnerInterface::isInSitu() const
+```
+</CodeBlock>
+
+### isNonInSitu [#isnoninsitu]
+
+<CodeBlock links={{"InSituFlagsOwnerInterface": "insituflagsownerinterface"}}>
+```cpp showLineNumbers={false}
+bool heavyai::InSituFlagsOwnerInterface::isNonInSitu() const
+```
+</CodeBlock>
+
+### couldRunInSitu [#couldruninsitu]
+
+<CodeBlock links={{"InSituFlagsOwnerInterface": "insituflagsownerinterface"}}>
+```cpp showLineNumbers={false}
+bool heavyai::InSituFlagsOwnerInterface::couldRunInSitu() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `insitu_flags_` | `InSituFlags` | |

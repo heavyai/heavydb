@@ -1,0 +1,20 @@
+---
+title: push_heap
+description: ""
+---
+
+<CodeBlock links={{"KeyComparator": "../structs/keycomparator", "KeyAccessor": "../structs/keyaccessor"}}>
+```cpp showLineNumbers={false}
+template <typename KeyT = int64_t, typename NodeT = int64_t>
+ALWAYS_INLINE DEVICE void push_heap(
+    int64_t *heap_ptr,
+    int64_t *rows_ptr,
+    NodeT &node_count,
+    const uint32_t row_size_quad,
+    const uint32_t key_offset,
+    const KeyComparator<KeyT> &comparator,
+    const KeyAccessor<KeyT, NodeT> &accessor,
+    const KeyT curr_key
+)
+```
+</CodeBlock>

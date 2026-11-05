@@ -1,0 +1,484 @@
+---
+title: ColumnarResults
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ColumnarResults.h>
+```
+
+---
+
+## Constructors
+
+### ColumnarResults [#columnarresults]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "RowSetMemoryOwner": "rowsetmemoryowner", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ColumnarResults::ColumnarResults(
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const ResultSet &rows,
+    const size_t num_columns,
+    const std::vector<SQLTypeInfo> &target_types,
+    const size_t executor_id,
+    const size_t thread_idx,
+    const bool is_parallel_execution_enforced = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+ColumnarResults::ColumnarResults(
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const int8_t *one_col_buffer,
+    const size_t num_rows,
+    const SQLTypeInfo &target_type,
+    const size_t executor_id,
+    const size_t thread_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"ColumnarResults": "columnarresults"}}>
+```cpp showLineNumbers={false}
+ColumnarResults::ColumnarResults(
+    const size_t num_rows,
+    const std::vector<SQLTypeInfo> &target_types,
+    const std::vector<size_t> &padded_target_sizes
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getColumnBuffers [#getcolumnbuffers]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults"}}>
+```cpp showLineNumbers={false}
+const std::vector<int8_t *> & ColumnarResults::getColumnBuffers() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults"}}>
+```cpp showLineNumbers={false}
+const size_t ColumnarResults::size() const
+```
+</CodeBlock>
+
+### getColumnType [#getcolumntype]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & ColumnarResults::getColumnType(
+    const int col_id
+) const
+```
+</CodeBlock>
+
+### isParallelConversion [#isparallelconversion]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults"}}>
+```cpp showLineNumbers={false}
+bool ColumnarResults::isParallelConversion() const
+```
+</CodeBlock>
+
+### isDirectColumnarConversionPossible [#isdirectcolumnarconversionpossible]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults"}}>
+```cpp showLineNumbers={false}
+bool ColumnarResults::isDirectColumnarConversionPossible() const
+```
+</CodeBlock>
+
+### writeBackCell [#writebackcell]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::writeBackCell(
+    const TargetValue &col_val,
+    const size_t row_idx,
+    const SQLTypeInfo &type_info,
+    int8_t *column_buf,
+    std::mutex *write_mutex = nullptr
+)
+```
+</CodeBlock>
+
+### materializeAllColumnsDirectly [#materializeallcolumnsdirectly]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::materializeAllColumnsDirectly(
+    const ResultSet &rows,
+    const size_t num_columns
+)
+```
+</CodeBlock>
+
+This function materializes all columns from the main storage and all appended storages and form a single continguous column for each output column.
+
+Depending on whether the column is lazily fetched or not, it will treat them differently.
+
+NOTE: this function should only be used when the result set is columnar and completely compacted (e.g., in columnar projections).
+
+### materializeAllColumnsThroughIteration [#materializeallcolumnsthroughiteration]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::materializeAllColumnsThroughIteration(
+    const ResultSet &rows,
+    const size_t num_columns
+)
+```
+</CodeBlock>
+
+This function iterates through the result set (using the getRowAtNoTranslation and getNextRow family of functions) and writes back the results into output column buffers.
+
+### materializeAllColumnsGroupBy [#materializeallcolumnsgroupby]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::materializeAllColumnsGroupBy(
+    const ResultSet &rows,
+    const size_t num_columns
+)
+```
+</CodeBlock>
+
+This function is to directly columnarize a result set for group by queries.
+
+Its main difference with the traditional alternative is that it directly reads non-empty entries from the result set, and then writes them into output column buffers, rather than using the result set's iterators.
+
+### materializeAllColumnsProjection [#materializeallcolumnsprojection]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::materializeAllColumnsProjection(
+    const ResultSet &rows,
+    const size_t num_columns
+)
+```
+</CodeBlock>
+
+This function handles materialization for two types of columns in columnar projections:
+
+1. for all non-lazy columns, it directly copies the results from the result set's storage into the output column buffers
+2. for all lazy fetched columns, it uses result set's iterators to decode the proper values before storing them into the output column buffers
+
+### materializeAllColumnsTableFunction [#materializeallcolumnstablefunction]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::materializeAllColumnsTableFunction(
+    const ResultSet &rows,
+    const size_t num_columns
+)
+```
+</CodeBlock>
+
+### copyAllNonLazyColumns [#copyallnonlazycolumns]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ColumnLazyFetchInfo": "../structs/columnlazyfetchinfo", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::copyAllNonLazyColumns(
+    const std::vector<ColumnLazyFetchInfo> &lazy_fetch_info,
+    const ResultSet &rows,
+    const size_t num_columns
+)
+```
+</CodeBlock>
+
+### materializeAllLazyColumns [#materializealllazycolumns]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ColumnLazyFetchInfo": "../structs/columnlazyfetchinfo", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::materializeAllLazyColumns(
+    const std::vector<ColumnLazyFetchInfo> &lazy_fetch_info,
+    const ResultSet &rows,
+    const size_t num_columns
+)
+```
+</CodeBlock>
+
+[For](for) all lazy fetched columns, we should iterate through the column's content and properly materialize it.
+
+This function is parallelized through dividing total rows among all existing threads. Since there's no invalid element in the result set (e.g., columnar projections), the output buffer will have as many rows as there are in the result set, removing the need for atomicly incrementing the output buffer position.
+
+### locateAndCountEntries [#locateandcountentries]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset", "ColumnBitmap": "columnbitmap"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::locateAndCountEntries(
+    const ResultSet &rows,
+    ColumnBitmap &bitmap,
+    std::vector<size_t> &non_empty_per_thread,
+    const size_t entry_count,
+    const size_t num_threads,
+    const size_t size_per_thread
+) const
+```
+</CodeBlock>
+
+This function goes through all the keys in the result set, and count the total number of non-empty keys.
+
+It also store the location of non-empty keys in a bitmap data structure for later faster access.
+
+### compactAndCopyEntries [#compactandcopyentries]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset", "ColumnBitmap": "columnbitmap"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::compactAndCopyEntries(
+    const ResultSet &rows,
+    const ColumnBitmap &bitmap,
+    const std::vector<size_t> &non_empty_per_thread,
+    const size_t num_columns,
+    const size_t entry_count,
+    const size_t num_threads,
+    const size_t size_per_thread
+)
+```
+</CodeBlock>
+
+This function goes through all non-empty elements marked in the bitmap data structure, and store them back into output column buffers.
+
+The output column buffers are compacted without any holes in it.
+
+TODO(Saman): if necessary, we can look into the distribution of non-empty entries and choose a different load-balanced strategy (assigning equal number of non-empties to each thread) as opposed to equal partitioning of the bitmap
+
+### compactAndCopyEntriesWithTargetSkipping [#compactandcopyentrieswithtargetskipping]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset", "ColumnBitmap": "columnbitmap"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
+    const ResultSet &rows,
+    const ColumnBitmap &bitmap,
+    const std::vector<size_t> &non_empty_per_thread,
+    const std::vector<size_t> &global_offsets,
+    const std::vector<bool> &targets_to_skip,
+    const std::vector<size_t> &slot_idx_per_target_idx,
+    const size_t num_columns,
+    const size_t entry_count,
+    const size_t num_threads,
+    const size_t size_per_thread
+)
+```
+</CodeBlock>
+
+This functions takes a bitmap of non-empty entries within the result set's storage and compact and copy those contents back into the output column_buffers_.
+
+In this variation, multi-slot targets (e.g., AVG) are treated with the existing result set's iterations, but everything else is directly columnarized.
+
+### compactAndCopyEntriesWithoutTargetSkipping [#compactandcopyentrieswithouttargetskipping]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset", "ColumnBitmap": "columnbitmap"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
+    const ResultSet &rows,
+    const ColumnBitmap &bitmap,
+    const std::vector<size_t> &non_empty_per_thread,
+    const std::vector<size_t> &global_offsets,
+    const std::vector<size_t> &slot_idx_per_target_idx,
+    const size_t num_columns,
+    const size_t entry_count,
+    const size_t num_threads,
+    const size_t size_per_thread
+)
+```
+</CodeBlock>
+
+This functions takes a bitmap of non-empty entries within the result set's storage and compact and copy those contents back into the output column_buffers_.
+
+In this variation, all targets are assumed to be single-slot and thus can be directly columnarized.
+
+### writeBackCellDirect [#writebackcelldirect]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <typename DATA_TYPE>
+void ColumnarResults::writeBackCellDirect(
+    const ResultSet &rows,
+    const size_t input_buffer_entry_idx,
+    const size_t output_buffer_entry_idx,
+    const size_t target_idx,
+    const size_t slot_idx,
+    const ReadFunction &read_function
+)
+```
+</CodeBlock>
+
+A set of write functions to be used to directly write into final column_buffers_.
+
+The read_from_function is used to read from the input result set's storage NOTE: currently only used for direct columnarizations
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::writeBackCellDirect(
+    const ResultSet &rows,
+    const size_t input_buffer_entry_idx,
+    const size_t output_buffer_entry_idx,
+    const size_t target_idx,
+    const size_t slot_idx,
+    const ReadFunction &read_from_function
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::writeBackCellDirect(
+    const ResultSet &rows,
+    const size_t input_buffer_entry_idx,
+    const size_t output_buffer_entry_idx,
+    const size_t target_idx,
+    const size_t slot_idx,
+    const ReadFunction &read_from_function
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### initWriteFunctions [#initwritefunctions]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::vector<ColumnarResults::WriteFunction> ColumnarResults::initWriteFunctions(
+    const ResultSet &rows,
+    const std::vector<bool> &targets_to_skip = {}
+)
+```
+</CodeBlock>
+
+Initialize a set of write functions per target (i.e., column).
+
+Target types' logical size are used to categorize the correct write function per target. These functions are then used for every row in the result set.
+
+### initReadFunctions [#initreadfunctions]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+std::vector<ColumnarResults::ReadFunction> ColumnarResults::initReadFunctions(
+    const ResultSet &rows,
+    const std::vector<size_t> &slot_idx_per_target_idx,
+    const std::vector<bool> &targets_to_skip = {}
+)
+```
+</CodeBlock>
+
+Initializes a set of read funtions to properly access the contents of the result set's storage buffer.
+
+Each particular read function is chosen based on the data type and data size used to store that target in the result set's storage buffer. These functions are then used for each row in the result set.
+
+### initAllConversionFunctions [#initallconversionfunctions]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::tuple<std::vector<ColumnarResults::WriteFunction>, std::vector<ColumnarResults::ReadFunction>> ColumnarResults::initAllConversionFunctions(
+    const ResultSet &rows,
+    const std::vector<size_t> &slot_idx_per_target_idx,
+    const std::vector<bool> &targets_to_skip = {}
+)
+```
+</CodeBlock>
+
+This function goes through all target types in the output, and chooses appropriate write and read functions per target.
+
+The goal is then to simply use these functions for each row and per target. Read functions are used to read each cell's data content (particular target in a row), and write functions are used to properly write back the cell's content into the output column buffers.
+
+### checkInterruption [#checkinterruption]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults"}}>
+```cpp showLineNumbers={false}
+void ColumnarResults::checkInterruption(
+    size_t row_idx
+) const
+```
+</CodeBlock>
+
+### fetchAndCheckInterruption [#fetchandcheckinterruption]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void ColumnarResults::fetchAndCheckInterruption(
+    const size_t start,
+    const size_t end,
+    const size_t col_idx,
+    const size_t col_width,
+    int8_t *col_buffer,
+    const ResultSet &rows
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### mergeResults [#mergeresults]
+
+<CodeBlock links={{"ColumnarResults": "columnarresults", "RowSetMemoryOwner": "rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const std::vector<std::unique_ptr<ColumnarResults>> &sub_results
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ReadFunction` | `std::function< int64_t(const ResultSet &, const size_t, const size_t, const size_t)>` |
+| `WriteFunction` | `std::function< void(const ResultSet &, const size_t, const size_t, const size_t, const size_t, const ReadFunction &)>` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_buffers_` | `std::vector< int8_t * >` | |
+| `direct_columnar_conversion_` | `bool` | |
+| `num_rows_` | `size_t` | |
+| `target_types_` | `const std::vector< SQLTypeInfo >` | |
+| `parallel_conversion_` | `bool` | |
+| `thread_idx_` | `size_t` | |
+| `executor_` | `std::shared_ptr< Executor >` | |
+| `padded_target_sizes_` | `std::vector< size_t >` | |

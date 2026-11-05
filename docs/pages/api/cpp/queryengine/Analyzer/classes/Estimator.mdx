@@ -1,0 +1,76 @@
+---
+title: Analyzer::Estimator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/CardinalityEstimator.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### Estimator [#estimator]
+
+<CodeBlock links={{"Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+Analyzer::Estimator::Estimator()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getArgument [#getargument]
+
+<CodeBlock links={{"Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+virtual const std::list<std::shared_ptr<Analyzer::Expr>> & Analyzer::Estimator::getArgument() const
+```
+</CodeBlock>
+
+### getBufferSize [#getbuffersize]
+
+<CodeBlock links={{"Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+virtual size_t Analyzer::Estimator::getBufferSize() const
+```
+</CodeBlock>
+
+### getRuntimeFunctionName [#getruntimefunctionname]
+
+<CodeBlock links={{"Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+virtual std::string Analyzer::Estimator::getRuntimeFunctionName() const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Estimator::deep_copy() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Estimator::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"Estimator": "estimator"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::Estimator::toString() const override
+```
+</CodeBlock>

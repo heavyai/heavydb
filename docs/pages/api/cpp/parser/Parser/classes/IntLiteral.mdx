@@ -1,0 +1,90 @@
+---
+title: Parser::IntLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Literal` (public)
+
+---
+
+## Constructors
+
+### IntLiteral [#intliteral]
+
+<CodeBlock links={{"IntLiteral": "intliteral"}}>
+```cpp showLineNumbers={false}
+Parser::IntLiteral::IntLiteral(
+    int64_t i
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_intval [#getintval]
+
+<CodeBlock links={{"IntLiteral": "intliteral"}}>
+```cpp showLineNumbers={false}
+int64_t Parser::IntLiteral::get_intval() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"IntLiteral": "intliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::IntLiteral::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"IntLiteral": "intliteral"}}>
+```cpp showLineNumbers={false}
+std::string Parser::IntLiteral::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### analyzeValue [#analyzevalue]
+
+<CodeBlock links={{"IntLiteral": "intliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::IntLiteral::analyzeValue(
+    const int64_t intval
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `intval_` | `int64_t` | |

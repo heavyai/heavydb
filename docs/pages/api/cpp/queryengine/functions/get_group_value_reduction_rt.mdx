@@ -1,0 +1,21 @@
+---
+title: get_group_value_reduction_rt
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT void get_group_value_reduction_rt(
+    int8_t *groups_buffer,
+    const int8_t *key,
+    const uint32_t key_count,
+    const void *this_qmd_handle,
+    const int8_t *that_buff,
+    const uint32_t that_entry_idx,
+    const uint32_t that_entry_count,
+    const uint32_t row_size_bytes,
+    int64_t **buff_out,
+    uint8_t *empty
+)
+```
+</CodeBlock>

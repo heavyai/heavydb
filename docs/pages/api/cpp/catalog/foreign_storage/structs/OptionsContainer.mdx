@@ -1,0 +1,140 @@
+---
+title: foreign_storage::OptionsContainer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/OptionsContainer.h>
+```
+
+---
+
+## Constructors
+
+### OptionsContainer [#optionscontainer]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::OptionsContainer::OptionsContainer()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with options)">
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::OptionsContainer::OptionsContainer(
+    const OptionsMap &options
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with options str)">
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::OptionsContainer::OptionsContainer(
+    const std::string &options_str
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### populateOptionsMap [#populateoptionsmap]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OptionsContainer::populateOptionsMap(
+    OptionsMap &&options_map,
+    bool clear = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OptionsContainer::populateOptionsMap(
+    const rapidjson::Value &ddl_options,
+    bool clear = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::OptionsContainer::populateOptionsMap(
+    const std::string &options_json,
+    bool clear = false
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOptionsAsJsonString [#getoptionsasjsonstring]
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OptionsContainer::getOptionsAsJsonString() const
+```
+</CodeBlock>
+
+### getOption [#getoption]
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::optional<std::string> foreign_storage::OptionsContainer::getOption(
+    const std::string_view &key
+) const
+```
+</CodeBlock>
+
+### getOptionAsBool [#getoptionasbool]
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::OptionsContainer::getOptionAsBool(
+    const std::string_view &key,
+    const bool default_value = false
+) const
+```
+</CodeBlock>
+
+### getOptionAsString [#getoptionasstring]
+
+<CodeBlock links={{"OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::OptionsContainer::getOptionAsString(
+    const std::string_view &key
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `options` | `OptionsMap` | |

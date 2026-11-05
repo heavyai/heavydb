@@ -1,0 +1,87 @@
+---
+title: Parser::DropDBStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### DropDBStmt [#dropdbstmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"DropDBStmt": "dropdbstmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropDBStmt::DropDBStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge> <Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"DropDBStmt": "dropdbstmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropDBStmt::DropDBStmt(
+    std::string *n,
+    bool i
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getDatabaseName [#getdatabasename]
+
+<CodeBlock links={{"DropDBStmt": "dropdbstmt"}}>
+```cpp showLineNumbers={false}
+auto const  & Parser::DropDBStmt::getDatabaseName()
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"DropDBStmt": "dropdbstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropDBStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"DropDBStmt": "dropdbstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropDBStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `db_name_` | `std::unique_ptr< std::string >` | |
+| `if_exists_` | `bool` | |

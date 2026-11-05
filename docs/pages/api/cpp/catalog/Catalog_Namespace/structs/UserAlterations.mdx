@@ -1,0 +1,43 @@
+---
+title: Catalog_Namespace::UserAlterations
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/SysCatalog.h>
+```
+
+---
+
+## Methods
+
+### wouldChange [#wouldchange]
+
+<CodeBlock links={{"UserAlterations": "useralterations", "UserMetadata": "usermetadata"}}>
+```cpp showLineNumbers={false}
+bool Catalog_Namespace::UserAlterations::wouldChange(
+    UserMetadata const &user_meta
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"UserAlterations": "useralterations"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::UserAlterations::toString(
+    bool hide_password = true
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `passwd` | `std::optional< std::string >` | |
+| `is_super` | `std::optional< bool >` | |
+| `default_db` | `std::optional< std::string >` | |
+| `can_login` | `std::optional< bool >` | |

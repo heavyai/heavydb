@@ -1,0 +1,130 @@
+---
+title: Analyzer::RangeTableEntry
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/RangeTableEntry.h>
+```
+
+---
+
+## Constructors
+
+### RangeTableEntry [#rangetableentry]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry", "Query": "query"}}>
+```cpp showLineNumbers={false}
+Analyzer::RangeTableEntry::RangeTableEntry(
+    const std::string &r,
+    const TableDescriptor *t,
+    Query *v
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~RangeTableEntry
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+Analyzer::RangeTableEntry::~RangeTableEntry()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_column_desc [#getcolumndesc]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * Analyzer::RangeTableEntry::get_column_desc(
+    const Catalog_Namespace::Catalog &catalog,
+    const std::string &name
+)
+```
+</CodeBlock>
+
+### get_column_descs [#getcolumndescs]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+const std::list<const ColumnDescriptor *> & Analyzer::RangeTableEntry::get_column_descs() const
+```
+</CodeBlock>
+
+### get_rangevar [#getrangevar]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+const std::string & Analyzer::RangeTableEntry::get_rangevar() const
+```
+</CodeBlock>
+
+### get_table_id [#gettableid]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+int32_t Analyzer::RangeTableEntry::get_table_id() const
+```
+</CodeBlock>
+
+### get_table_name [#gettablename]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+const std::string & Analyzer::RangeTableEntry::get_table_name() const
+```
+</CodeBlock>
+
+### get_table_desc [#gettabledesc]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * Analyzer::RangeTableEntry::get_table_desc() const
+```
+</CodeBlock>
+
+### get_view_query [#getviewquery]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry", "Query": "query"}}>
+```cpp showLineNumbers={false}
+const Query * Analyzer::RangeTableEntry::get_view_query() const
+```
+</CodeBlock>
+
+### expand_star_in_targetlist [#expandstarintargetlist]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry", "TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RangeTableEntry::expand_star_in_targetlist(
+    const Catalog_Namespace::Catalog &catalog,
+    std::vector<std::shared_ptr<TargetEntry>> &tlist,
+    int rte_idx
+)
+```
+</CodeBlock>
+
+### add_all_column_descs [#addallcolumndescs]
+
+<CodeBlock links={{"RangeTableEntry": "rangetableentry"}}>
+```cpp showLineNumbers={false}
+void Analyzer::RangeTableEntry::add_all_column_descs(
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `rangevar` | `std::string` | |
+| `table_desc` | `const TableDescriptor *` | |
+| `column_descs` | `std::list< const ColumnDescriptor * >` | |
+| `view_query` | `Query *` | |

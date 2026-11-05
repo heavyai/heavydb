@@ -1,0 +1,213 @@
+---
+title: foreign_storage::FileReader
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/FileReader.h>
+```
+
+---
+
+## Constructors
+
+### FileReader [#filereader]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+foreign_storage::FileReader::FileReader(
+    const std::string &file_path,
+    const import_export::CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~FileReader
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual foreign_storage::FileReader::~FileReader() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### read [#read]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::FileReader::read(
+    void *buffer,
+    size_t max_size
+)
+```
+</CodeBlock>
+
+Read up to max_size bytes from archive into buffer starting starting from the end of the last read.
+
+**Returns:** number of bytes actually read
+
+**Parameters**
+
+<ParamField path="buffer" type="void *">
+- Buffer to load into
+</ParamField>
+
+<ParamField path="max_size" type="size_t">
+- Maximum number of bytes to read into the buffer
+</ParamField>
+
+### isScanFinished [#isscanfinished]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::FileReader::isScanFinished() const
+```
+</CodeBlock>
+
+**Returns:** true if the entire file has been read
+
+### readRegion [#readregion]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::FileReader::readRegion(
+    void *buffer,
+    size_t offset,
+    size_t size
+)
+```
+</CodeBlock>
+
+Read up to max_size bytes from archive, starting at given offset isScanFinished() must return true to use readRegion.
+
+**Returns:** number of bytes actually read
+
+**Parameters**
+
+<ParamField path="buffer" type="void *">
+- Buffer to load into
+</ParamField>
+
+<ParamField path="offset" type="size_t">
+- Starting point into the archive to read
+</ParamField>
+
+<ParamField path="size" type="size_t">
+- Maximum number of bytes to read into the buffer
+</ParamField>
+
+### getRemainingSize [#getremainingsize]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::FileReader::getRemainingSize()
+```
+</CodeBlock>
+
+**Returns:** size of the remaining content to be read
+
+### isRemainingSizeKnown [#isremainingsizeknown]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::FileReader::isRemainingSizeKnown()
+```
+</CodeBlock>
+
+**Returns:** if remaining size is known
+
+### checkForMoreRows [#checkformorerows]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::FileReader::checkForMoreRows(
+    size_t file_offset,
+    const shared::FilePathOptions &options,
+    const ForeignServer *server_options = nullptr,
+    const UserMapping *user_mapping = nullptr
+)
+```
+</CodeBlock>
+
+Rescan the target files Throws an exception if the rescan fails (ie files are not in a valid appended state or not supported).
+
+**Parameters**
+
+<ParamField path="file_offset" type="size_t">
+- Where to resume the scan from (end of the last row) as not all of the bytes may have been consumed by the upstream compoennet
+</ParamField>
+
+<ParamField path="server_options" type="const ForeignServer *" default="nullptr">
+- Only needed for S3 backed files
+</ParamField>
+
+<ParamField path="user_mapping" type="const UserMapping *" default="nullptr">
+- Only needed for S3 backed files
+</ParamField>
+
+### serialize [#serialize]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::FileReader::serialize(
+    rapidjson::Value &value,
+    rapidjson::Document::AllocatorType &allocator
+) const
+```
+</CodeBlock>
+
+Serialize internal state to given json object This Json will later be used to restore the reader state through a constructor must be called when isScanFinished() is true.
+
+**Parameters**
+
+<ParamField path="value" type="rapidjson::Value &">
+- Json object to store needed state to this function can store any needed data or none
+</ParamField>
+
+<ParamField path="allocator" type="rapidjson::Document::AllocatorType &">
+- Allocator to use for json contruction
+</ParamField>
+
+### getFirstLineForEachFile [#getfirstlineforeachfile]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual FirstLineByFilePath foreign_storage::FileReader::getFirstLineForEachFile() const
+```
+</CodeBlock>
+
+Returns a map containing the first line for each file that will be read.
+
+### isEndOfLastFile [#isendoflastfile]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::FileReader::isEndOfLastFile()
+```
+</CodeBlock>
+
+Returns a boolean indicating whether the reader is at the end of the last file that was read.
+
+### getCurrentFilePath [#getcurrentfilepath]
+
+<CodeBlock links={{"FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual std::string foreign_storage::FileReader::getCurrentFilePath() const
+```
+</CodeBlock>
+
+Returns the path of the currently processed file.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `copy_params_` | `import_export::CopyParams` | |
+| `file_path_` | `std::string` | |

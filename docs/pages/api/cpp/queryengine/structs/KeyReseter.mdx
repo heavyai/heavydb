@@ -1,0 +1,56 @@
+---
+title: KeyReseter
+description: ""
+---
+
+<CodeBlock id="KeyReseter" links={{"KeyReseter": "keyreseter"}}>
+```cpp showLineNumbers={false}
+template <class K>
+struct KeyReseter
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="K" type="class">
+</ParamField>
+
+---
+
+## Constructors
+
+### KeyReseter [#keyreseter]
+
+<CodeBlock links={{"KeyReseter": "keyreseter"}}>
+```cpp showLineNumbers={false}
+KeyReseter<K>::KeyReseter(
+    int8_t *out_base,
+    const size_t stride,
+    const K emp_key
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"KeyReseter": "keyreseter"}}>
+```cpp showLineNumbers={false}
+__host__ __device__ void KeyReseter<K>::operator()(
+    const size_t index
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `rows_base` | `int8_t *` | |
+| `key_stride` | `const size_t` | |
+| `empty_key` | `const K` | |

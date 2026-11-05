@@ -1,0 +1,37 @@
+---
+title: agg_approximate_count_distinct_gpu
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ void agg_approximate_count_distinct_gpu(
+    int64_t *agg,
+    const int64_t key,
+    const uint32_t b,
+    const int64_t base_dev_addr,
+    const int64_t base_host_addr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+NEVER_INLINE void agg_approximate_count_distinct_gpu(
+    int64_t *,
+    const int64_t,
+    const uint32_t,
+    const int64_t,
+    const int64_t
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

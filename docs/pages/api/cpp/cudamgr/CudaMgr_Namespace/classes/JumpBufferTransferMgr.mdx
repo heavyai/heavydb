@@ -1,0 +1,204 @@
+---
+title: CudaMgr_Namespace::JumpBufferTransferMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CudaMgr_Namespace/JumpBufferTransferMgr.h>
+```
+
+---
+
+## Constructors
+
+### JumpBufferTransferMgr [#jumpbuffertransfermgr]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::JumpBufferTransferMgr::JumpBufferTransferMgr(
+    size_t device_count,
+    const std::vector<CUcontext> &device_contexts
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~JumpBufferTransferMgr
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::JumpBufferTransferMgr::~JumpBufferTransferMgr()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### shouldUseForHostToDeviceTransfer [#shoulduseforhosttodevicetransfer]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+bool CudaMgr_Namespace::JumpBufferTransferMgr::shouldUseForHostToDeviceTransfer(
+    size_t num_bytes
+) const
+```
+</CodeBlock>
+
+### shouldUseForDeviceToHostTransfer [#shouldusefordevicetohosttransfer]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+bool CudaMgr_Namespace::JumpBufferTransferMgr::shouldUseForDeviceToHostTransfer(
+    size_t num_bytes
+) const
+```
+</CodeBlock>
+
+### copyHostToDevice [#copyhosttodevice]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+bool CudaMgr_Namespace::JumpBufferTransferMgr::copyHostToDevice(
+    int8_t *device_ptr,
+    const int8_t *host_ptr,
+    size_t num_bytes,
+    int32_t device_num,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+### copyDeviceToHost [#copydevicetohost]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+bool CudaMgr_Namespace::JumpBufferTransferMgr::copyDeviceToHost(
+    int8_t *host_ptr,
+    const int8_t *device_ptr,
+    size_t num_bytes,
+    int32_t device_num,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+### allocatePinnedHostMem [#allocatepinnedhostmem]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+int8_t * CudaMgr_Namespace::JumpBufferTransferMgr::allocatePinnedHostMem(
+    int32_t device_num,
+    size_t num_bytes
+)
+```
+</CodeBlock>
+
+### freePinnedHostMem [#freepinnedhostmem]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::JumpBufferTransferMgr::freePinnedHostMem(
+    int32_t device_num,
+    int8_t *host_ptr
+)
+```
+</CodeBlock>
+
+### resetTransferState [#resettransferstate]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::JumpBufferTransferMgr::resetTransferState(
+    QueuedJumpBuffer &jump_buffer
+)
+```
+</CodeBlock>
+
+### createHostToDeviceProducer [#createhosttodeviceproducer]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+std::thread CudaMgr_Namespace::JumpBufferTransferMgr::createHostToDeviceProducer(
+    QueuedJumpBuffer &jump_buffer,
+    const int8_t *host_ptr,
+    size_t num_bytes
+)
+```
+</CodeBlock>
+
+### createHostToDeviceConsumer [#createhosttodeviceconsumer]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+std::thread CudaMgr_Namespace::JumpBufferTransferMgr::createHostToDeviceConsumer(
+    QueuedJumpBuffer &jump_buffer,
+    int8_t *device_ptr,
+    int32_t device_num,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>
+
+### createDeviceToHostProducer [#createdevicetohostproducer]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+std::thread CudaMgr_Namespace::JumpBufferTransferMgr::createDeviceToHostProducer(
+    QueuedJumpBuffer &jump_buffer,
+    const int8_t *device_ptr,
+    int32_t device_num,
+    CUstream cuda_stream,
+    size_t num_bytes
+)
+```
+</CodeBlock>
+
+### createDeviceToHostConsumer [#createdevicetohostconsumer]
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+std::thread CudaMgr_Namespace::JumpBufferTransferMgr::createDeviceToHostConsumer(
+    QueuedJumpBuffer &jump_buffer,
+    int8_t *host_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `jump_buffers_` | `std::vector< std::unique_ptr< QueuedJumpBuffer > >` | |
+| `device_count_` | `const size_t` | |
+| `device_contexts_` | `const std::vector< CUcontext > &` | |
+
+---
+
+## Inner classes
+
+### QueuedJumpBuffer
+
+<CodeBlock links={{"JumpBufferTransferMgr": "jumpbuffertransfermgr"}}>
+```cpp showLineNumbers={false}
+struct CudaMgr_Namespace::JumpBufferTransferMgr::QueuedJumpBuffer
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `buffer` | `int8_t *` | |
+| `size` | `size_t` | |
+| `segment_size` | `size_t` | |
+| `transfer_mutex` | `std::mutex` | |
+| `queue_mutex` | `std::mutex` | |
+| `writer_cv` | `std::condition_variable` | |
+| `reader_cv` | `std::condition_variable` | |
+| `read_allowed` | `bool` | |
+| `write_allowed` | `bool` | |
+| `write_finished` | `bool` | |
+| `error_occurred` | `bool` | |
+| `segment_buffer_size` | `size_t` | |

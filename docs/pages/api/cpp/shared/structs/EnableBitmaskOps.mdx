@@ -1,0 +1,38 @@
+---
+title: EnableBitmaskOps
+description: "Template operators to add typesafe bitwise operators to enum classes."
+---
+
+<CodeBlock id="EnableBitmaskOps" links={{"EnableBitmaskOps": "enablebitmaskops"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct EnableBitmaskOps
+```
+</CodeBlock>
+
+Template operators to add typesafe bitwise operators to enum classes.
+
+These are intended for use with mask types, so shift operators are not provided as they can lead to invalid bits being set.
+
+To avoid nest namespace issues, ENABLE_BITMASK_OPS must be used outside any namespaces
+
+Example Usage: namespace my_namespace &#123; enum class MyEnum : uint8_t &#123; kEmpty = 0x00, kSomething = 0x01, kAnother = 0x02 &#125;; &#125; // namespace my_namespace
+
+ENABLE_BITMASK_OPS(::my_namespace::MyEnum) MyEnum e = MyEnum::kSomething & MyEnum::kAnother;
+
+```cpp showLineNumbers={false}
+#include <EnumBitmaskOps.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `enable` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `bool` | |

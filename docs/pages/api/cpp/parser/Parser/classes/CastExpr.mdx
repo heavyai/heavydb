@@ -1,0 +1,70 @@
+---
+title: Parser::CastExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Expr` (public)
+
+---
+
+## Constructors
+
+### CastExpr [#castexpr]
+
+<CodeBlock links={{"CastExpr": "castexpr", "Expr": "expr", "SQLType": "sqltype"}}>
+```cpp showLineNumbers={false}
+Parser::CastExpr::CastExpr(
+    Expr *a,
+    SQLType *t
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### analyze [#analyze]
+
+<CodeBlock links={{"CastExpr": "castexpr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::CastExpr::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"CastExpr": "castexpr"}}>
+```cpp showLineNumbers={false}
+std::string Parser::CastExpr::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `arg_` | `std::unique_ptr< Expr >` | |
+| `target_type_` | `std::unique_ptr< SQLType >` | |

@@ -1,0 +1,112 @@
+---
+title: GeoMultiLinestringValueConverter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetValueConvertersImpl.h>
+```
+
+**Inherits from:** `GeoPointValueConverter` (public)
+
+---
+
+## Constructors
+
+### GeoMultiLinestringValueConverter [#geomultilinestringvalueconverter]
+
+<CodeBlock links={{"GeoMultiLinestringValueConverter": "geomultilinestringvalueconverter"}}>
+```cpp showLineNumbers={false}
+GeoMultiLinestringValueConverter::GeoMultiLinestringValueConverter(
+    const Catalog_Namespace::Catalog &cat,
+    size_t num_rows,
+    const ColumnDescriptor *logicalColumnDescriptor
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~GeoMultiLinestringValueConverter
+
+<CodeBlock links={{"GeoMultiLinestringValueConverter": "geomultilinestringvalueconverter"}}>
+```cpp showLineNumbers={false}
+GeoMultiLinestringValueConverter::~GeoMultiLinestringValueConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateColumnarData [#allocatecolumnardata]
+
+<CodeBlock links={{"GeoMultiLinestringValueConverter": "geomultilinestringvalueconverter"}}>
+```cpp showLineNumbers={false}
+void GeoMultiLinestringValueConverter::allocateColumnarData(
+    size_t num_rows
+) override
+```
+</CodeBlock>
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"GeoMultiLinestringValueConverter": "geomultilinestringvalueconverter"}}>
+```cpp showLineNumbers={false}
+void GeoMultiLinestringValueConverter::convertToColumnarFormat(
+    size_t row,
+    const TargetValue *value
+) override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"GeoMultiLinestringValueConverter": "geomultilinestringvalueconverter", "InsertData": "../fragmenternamespace/structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void GeoMultiLinestringValueConverter::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+### toCompressedCoords [#tocompressedcoords]
+
+<CodeBlock links={{"GeoMultiLinestringValueConverter": "geomultilinestringvalueconverter", "GeoPointValueConverter": "geopointvalueconverter"}}>
+```cpp showLineNumbers={false}
+ArrayDatum GeoMultiLinestringValueConverter::toCompressedCoords(
+    const std::shared_ptr<std::vector<double>> &coords
+)
+```
+</CodeBlock>
+
+### finalizeDataBlocksForInsertData [#finalizedatablocksforinsertdata]
+
+<CodeBlock links={{"GeoMultiLinestringValueConverter": "geomultilinestringvalueconverter", "GeoPointValueConverter": "geopointvalueconverter"}}>
+```cpp showLineNumbers={false}
+virtual void TargetValueConverter::finalizeDataBlocksForInsertData()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `linestring_sizes_column_descriptor_` | `const ColumnDescriptor *` | |
+| `bounds_column_descriptor_` | `const ColumnDescriptor *` | |
+| `linestring_sizes_data_` | `std::unique_ptr< std::vector< ArrayDatum > >` | |
+| `bounds_data_` | `std::unique_ptr< std::vector< ArrayDatum > >` | |
+| `GEO_MULTILINESTRING_VALUE_ACCESSOR` | `boost_variant_accessor< GeoMultiLineStringTargetValue >` | |
+| `coords_column_descriptor_` | `const ColumnDescriptor *` | |
+| `column_data_` | `std::unique_ptr< std::vector< std::string > >` | |
+| `signed_compressed_coords_data_` | `std::unique_ptr< std::vector< ArrayDatum > >` | |
+| `GEO_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `GEO_POINT_VALUE_ACCESSOR` | `boost_variant_accessor< GeoPointTargetValue >` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `SCALAR_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ScalarTargetValue >` | |
+| `ARRAY_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ArrayTargetValue >` | |
+| `GEO_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `NULLABLE_STRING_ACCESSOR` | `boost_variant_accessor< NullableString >` | |
+| `STRING_ACCESSOR` | `boost_variant_accessor< std::string >` | |

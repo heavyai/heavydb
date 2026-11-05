@@ -1,0 +1,453 @@
+---
+title: StringFunctionDetector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CommonVisitors.h>
+```
+
+**Inherits from:** `ScalarExprVisitor< void * >` (public)
+
+---
+
+## Methods
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector"}}>
+```cpp showLineNumbers={false}
+void * StringFunctionDetector::visitStringOper(
+    const Analyzer::StringOper *expr
+) const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitColumnVar(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *
+) const
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitConstant(
+    const Analyzer::Constant *
+) const
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitUOper(
+    const Analyzer::UOper *uoper
+) const
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::aggregateResult(
+    const void *&aggregate,
+    const void *&next_result
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<void *>::visitBegin() const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::defaultResult() const
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+void * ScalarExprVisitor<void *>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### hasStringFunction [#hasstringfunction]
+
+<CodeBlock links={{"StringFunctionDetector": "stringfunctiondetector"}}>
+```cpp showLineNumbers={false}
+static bool StringFunctionDetector::hasStringFunction(
+    const Analyzer::Expr *expr
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `has_string_oper_` | `bool` | |

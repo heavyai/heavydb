@@ -1,0 +1,53 @@
+---
+title: TestProcessSignalHandler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TestProcessSignalHandler.h>
+```
+
+---
+
+## Methods
+
+### shutdownSubsystemsAndExit [#shutdownsubsystemsandexit]
+
+<CodeBlock links={{"TestProcessSignalHandler": "testprocesssignalhandler"}}>
+```cpp showLineNumbers={false}
+void TestProcessSignalHandler::shutdownSubsystemsAndExit(
+    int signal_number
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### registerSignalHandler [#registersignalhandler]
+
+<CodeBlock links={{"TestProcessSignalHandler": "testprocesssignalhandler"}}>
+```cpp showLineNumbers={false}
+void TestProcessSignalHandler::registerSignalHandler()
+```
+</CodeBlock>
+
+### addShutdownCallback [#addshutdowncallback]
+
+<CodeBlock links={{"TestProcessSignalHandler": "testprocesssignalhandler"}}>
+```cpp showLineNumbers={false}
+void TestProcessSignalHandler::addShutdownCallback(
+    std::function<void()> shutdown_callback
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `has_registered_signal_handler_` <Badge intent="note" minimal>static</Badge> | `bool` | |
+| `shutdown_callbacks_` <Badge intent="note" minimal>static</Badge> | `std::vector< std::function< void()> >` | |

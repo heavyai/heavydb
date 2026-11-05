@@ -1,0 +1,304 @@
+---
+title: Analyzer::DateaddExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### DateaddExpr [#dateaddexpr]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::DateaddExpr::DateaddExpr(
+    const SQLTypeInfo &ti,
+    const DateaddField f,
+    const std::shared_ptr<Analyzer::Expr> number,
+    const std::shared_ptr<Analyzer::Expr> datetime
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_field [#getfield]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+DateaddField Analyzer::DateaddExpr::get_field() const
+```
+</CodeBlock>
+
+### get_number_expr [#getnumberexpr]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::DateaddExpr::get_number_expr() const
+```
+</CodeBlock>
+
+### get_datetime_expr [#getdatetimeexpr]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::DateaddExpr::get_datetime_expr() const
+```
+</CodeBlock>
+
+### set_fixed_encoding_null_val [#setfixedencodingnullval]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DateaddExpr::set_fixed_encoding_null_val() const
+```
+</CodeBlock>
+
+### use_fixed_encoding_null_val [#usefixedencodingnullval]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::DateaddExpr::use_fixed_encoding_null_val() const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DateaddExpr::deep_copy() const override
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DateaddExpr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DateaddExpr::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DateaddExpr::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DateaddExpr::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DateaddExpr::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DateaddExpr::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DateaddExpr::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::DateaddExpr::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::DateaddExpr::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DateaddExpr::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DateaddExpr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::DateaddExpr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DateaddExpr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::DateaddExpr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DateaddExpr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DateaddExpr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::DateaddExpr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::DateaddExpr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::DateaddExpr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::DateaddExpr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::DateaddExpr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"DateaddExpr": "dateaddexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::DateaddExpr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `field_` | `const DateaddField` | |
+| `number_` | `const std::shared_ptr< Analyzer::Expr >` | |
+| `datetime_` | `const std::shared_ptr< Analyzer::Expr >` | |
+| `use_fixed_encoding_null_val_` | `bool` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

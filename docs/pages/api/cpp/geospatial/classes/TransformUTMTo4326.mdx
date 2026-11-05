@@ -1,0 +1,55 @@
+---
+title: TransformUTMTo4326
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Utm.h>
+```
+
+---
+
+## Constructors
+
+### TransformUTMTo4326 [#transformutmto4326]
+
+<CodeBlock links={{"TransformUTMTo4326": "transformutmto4326"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE TransformUTMTo4326::TransformUTMTo4326(
+    unsigned const srid,
+    double const x,
+    double const y
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### calculateX [#calculatex]
+
+<CodeBlock links={{"TransformUTMTo4326": "transformutmto4326"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE double TransformUTMTo4326::calculateX() const
+```
+</CodeBlock>
+
+### calculateY [#calculatey]
+
+<CodeBlock links={{"TransformUTMTo4326": "transformutmto4326"}}>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE double TransformUTMTo4326::calculateY() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `srid_` | `unsigned const` | |
+| `eta_` | `double` | |
+| `xi_` | `double` | |
+| `small_eta_` | `bool` | |

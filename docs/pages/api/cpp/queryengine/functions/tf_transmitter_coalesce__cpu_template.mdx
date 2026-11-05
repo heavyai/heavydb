@@ -1,0 +1,33 @@
+---
+title: tf_transmitter_coalesce__cpu_template
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename S, typename T, typename Z>
+TEMPLATE_NOINLINE int32_t tf_transmitter_coalesce__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<S> &input_site,
+    const Column<S> &input_id,
+    const Column<T> &input_x,
+    const Column<T> &input_y,
+    const Column<Z> &input_z,
+    const Column<T> &input_power,
+    const Column<T> &input_freq,
+    const Column<T> &input_azimuth,
+    const Column<T> &input_downtilt,
+    const Column<TextEncodingDict> &input_antenna_type,
+    Column<S> &output_site,
+    Column<Array<S>> &output_id,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Z> &output_z,
+    Column<Array<T>> &output_power,
+    Column<Array<T>> &output_freq,
+    Column<Array<T>> &output_azimuth,
+    Column<Array<T>> &output_downtilt,
+    Column<Array<TextEncodingDict>> &output_antenna_type
+)
+```
+</CodeBlock>

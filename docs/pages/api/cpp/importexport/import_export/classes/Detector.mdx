@@ -1,0 +1,255 @@
+---
+title: import_export::Detector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/Importer.h>
+```
+
+**Inherits from:** `import_export::DataStreamSink` (public)
+
+---
+
+## Constructors
+
+### Detector [#detector]
+
+<CodeBlock links={{"Detector": "detector", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+import_export::Detector::Detector(
+    const boost::filesystem::path &fp,
+    CopyParams &cp
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_headers [#getheaders]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> import_export::Detector::get_headers()
+```
+</CodeBlock>
+
+### get_sample_rows [#getsamplerows]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+std::vector<std::vector<std::string>> import_export::Detector::get_sample_rows(
+    size_t n
+)
+```
+</CodeBlock>
+
+### getBestColumnTypes [#getbestcolumntypes]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+std::vector<SQLTypeInfo> import_export::Detector::getBestColumnTypes() const
+```
+</CodeBlock>
+
+### get_copy_params [#getcopyparams]
+
+<CodeBlock links={{"Detector": "detector", "CopyParams": "../structs/copyparams", "DataStreamSink": "datastreamsink"}}>
+```cpp showLineNumbers={false}
+const CopyParams & import_export::Detector::get_copy_params() const
+```
+</CodeBlock>
+
+### import_compressed [#importcompressed]
+
+<CodeBlock links={{"Detector": "detector", "DataStreamSink": "datastreamsink"}}>
+```cpp showLineNumbers={false}
+void import_export::Detector::import_compressed(
+    std::vector<std::string> &file_paths,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### init [#init]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+void import_export::Detector::init()
+```
+</CodeBlock>
+
+### read_file [#readfile]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+void import_export::Detector::read_file()
+```
+</CodeBlock>
+
+### detect_row_delimiter [#detectrowdelimiter]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+void import_export::Detector::detect_row_delimiter()
+```
+</CodeBlock>
+
+### split_raw_data [#splitrawdata]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+void import_export::Detector::split_raw_data()
+```
+</CodeBlock>
+
+### detect_column_types [#detectcolumntypes]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+std::vector<SQLTypes> import_export::Detector::detect_column_types(
+    const std::vector<std::string> &row
+)
+```
+</CodeBlock>
+
+### find_best_sqltypes [#findbestsqltypes]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+void import_export::Detector::find_best_sqltypes()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Detector": "detector", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+std::vector<SQLTypes> import_export::Detector::find_best_sqltypes(
+    const std::vector<std::vector<std::string>> &raw_rows,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Detector": "detector", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+std::vector<SQLTypes> import_export::Detector::find_best_sqltypes(
+    const std::vector<std::vector<std::string>>::const_iterator &row_begin,
+    const std::vector<std::vector<std::string>>::const_iterator &row_end,
+    const CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### find_best_encodings [#findbestencodings]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+std::vector<EncodingType> import_export::Detector::find_best_encodings(
+    const std::vector<std::vector<std::string>>::const_iterator &row_begin,
+    const std::vector<std::vector<std::string>>::const_iterator &row_end,
+    const std::vector<SQLTypes> &best_types
+)
+```
+</CodeBlock>
+
+### detect_headers [#detectheaders]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+bool import_export::Detector::detect_headers(
+    const std::vector<SQLTypes> &first_types,
+    const std::vector<SQLTypes> &rest_types
+)
+```
+</CodeBlock>
+
+### find_best_sqltypes_and_headers [#findbestsqltypesandheaders]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+void import_export::Detector::find_best_sqltypes_and_headers()
+```
+</CodeBlock>
+
+### importDelimited [#importdelimited]
+
+<CodeBlock links={{"Detector": "detector", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::Detector::importDelimited(
+    const std::string &file_path,
+    const bool decompressed,
+    const Catalog_Namespace::SessionInfo *session_info
+) override
+```
+</CodeBlock>
+
+### more_restrictive_sqltype [#morerestrictivesqltype]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+bool import_export::Detector::more_restrictive_sqltype(
+    const SQLTypes a,
+    const SQLTypes b
+)
+```
+</CodeBlock>
+
+### archivePlumber [#archiveplumber]
+
+<CodeBlock links={{"Detector": "detector", "ImportStatus": "../structs/importstatus", "DataStreamSink": "datastreamsink"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::Detector::archivePlumber(
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### detect_sqltype [#detectsqltype]
+
+<CodeBlock links={{"Detector": "detector"}}>
+```cpp showLineNumbers={false}
+SQLTypes import_export::Detector::detect_sqltype(
+    const std::string &str
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `raw_rows` | `std::vector< std::vector< std::string > >` | |
+| `has_headers` | `bool` | |
+| `raw_data` | `std::string` | |
+| `file_path` | `boost::filesystem::path` | |
+| `timeout` | `std::chrono::duration< double >` | |
+| `line1` | `std::string` | |
+| `best_sqltypes` | `std::vector< SQLTypes >` | |
+| `best_encodings` | `std::vector< EncodingType >` | |
+| `copy_params` | `CopyParams` | |
+| `p_file` | `FILE *` | |
+| `import_status_` | `ImportStatus` | |
+| `import_mutex_` | `heavyai::shared_mutex` | |
+| `total_file_size` | `size_t` | |
+| `file_offsets` | `std::vector< size_t >` | |
+| `file_offsets_mutex` | `std::mutex` | |

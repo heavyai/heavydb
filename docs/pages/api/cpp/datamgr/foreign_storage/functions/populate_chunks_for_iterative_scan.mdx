@@ -1,0 +1,18 @@
+---
+title: foreign_storage::populate_chunks_for_iterative_scan
+description: "Consumes and processes scan requests from a pending requests queue and populates chunks during an iterative file scan."
+---
+
+<CodeBlock links={{"MetadataScanMultiThreadingParams": "../structs/metadatascanmultithreadingparams", "TextFileBufferParser": "../classes/textfilebufferparser", "IterativeFileScanParameters": "../structs/iterativefilescanparameters"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::populate_chunks_for_iterative_scan(
+    MetadataScanMultiThreadingParams &multi_threading_params,
+    const TextFileBufferParser &parser,
+    foreign_storage::IterativeFileScanParameters &file_scan_param,
+    std::atomic<int> &iterative_scan_last_populated_fragment_id,
+    const int thread_id
+)
+```
+</CodeBlock>
+
+Consumes and processes scan requests from a pending requests queue and populates chunks during an iterative file scan.

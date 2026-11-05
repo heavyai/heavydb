@@ -1,0 +1,23 @@
+---
+title: ExecutorResourceMgr_Namespace::gen_ratio_resource_grant_policy
+description: "Generates a ResourceGrantPolicy with ResourceGrantPolicySizeType::RATIO_TO_TOTAL."
+---
+
+<CodeBlock links={{"ResourceGrantPolicy": "../structs/resourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+ResourceGrantPolicy ExecutorResourceMgr_Namespace::gen_ratio_resource_grant_policy(
+    const ResourceSubtype resource_subtype,
+    const double ratio_grant
+)
+```
+</CodeBlock>
+
+Generates a [`ResourceGrantPolicy`](../structs/resourcegrantpolicy) with `ResourceGrantPolicySizeType::RATIO_TO_TOTAL`.
+
+**Returns:** [ResourceGrantPolicy](../structs/resourcegrantpolicy) - The generated "ratio-to-total" [`ResourceGrantPolicy`](../structs/resourcegrantpolicy)
+
+**Parameters**
+
+<ParamField path="resource_subtype" type="const ResourceSubtype">
+- Type of resource subtype to create a [`ResourceGrantPolicy`](../structs/resourcegrantpolicy) for
+</ParamField>

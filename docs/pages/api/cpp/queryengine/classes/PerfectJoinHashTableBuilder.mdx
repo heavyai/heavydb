@@ -1,0 +1,119 @@
+---
+title: PerfectJoinHashTableBuilder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <PerfectHashTableBuilder.h>
+```
+
+---
+
+## Constructors
+
+### PerfectJoinHashTableBuilder [#perfectjoinhashtablebuilder]
+
+<CodeBlock links={{"PerfectJoinHashTableBuilder": "perfectjoinhashtablebuilder"}}>
+```cpp showLineNumbers={false}
+PerfectJoinHashTableBuilder::PerfectJoinHashTableBuilder()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateDeviceMemory [#allocatedevicememory]
+
+<CodeBlock links={{"PerfectJoinHashTableBuilder": "perfectjoinhashtablebuilder", "BucketizedHashEntryInfo": "../structs/bucketizedhashentryinfo", "PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTableBuilder::allocateDeviceMemory(
+    BucketizedHashEntryInfo hash_entry_info,
+    PerfectHashTableEntryInfo hash_table_entry_info,
+    size_t num_join_col_elems,
+    const size_t shard_count,
+    const int device_id,
+    const size_t device_count,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### initOneToOneHashTableOnCpu [#initonetoonehashtableoncpu]
+
+<CodeBlock links={{"PerfectJoinHashTableBuilder": "perfectjoinhashtablebuilder", "JoinColumn": "../structs/joincolumn", "ExpressionRange": "expressionrange", "BucketizedHashEntryInfo": "../structs/bucketizedhashentryinfo", "PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTableBuilder::initOneToOneHashTableOnCpu(
+    const JoinColumn &join_column,
+    const ExpressionRange &col_range,
+    const bool is_bitwise_eq,
+    const InnerOuter &cols,
+    const StringDictionaryProxy::IdMap *str_proxy_translation_map,
+    const JoinType join_type,
+    const BucketizedHashEntryInfo hash_entry_info,
+    const PerfectHashTableEntryInfo hash_table_entry_info,
+    const int32_t hash_join_invalid_val,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### initOneToManyHashTableOnCpu [#initonetomanyhashtableoncpu]
+
+<CodeBlock links={{"PerfectJoinHashTableBuilder": "perfectjoinhashtablebuilder", "JoinColumn": "../structs/joincolumn", "ExpressionRange": "expressionrange", "BucketizedHashEntryInfo": "../structs/bucketizedhashentryinfo", "PerfectHashTableEntryInfo": "perfecthashtableentryinfo", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+void PerfectJoinHashTableBuilder::initOneToManyHashTableOnCpu(
+    const JoinColumn &join_column,
+    const ExpressionRange &col_range,
+    const bool is_bitwise_eq,
+    const std::pair<const Analyzer::ColumnVar *, const Analyzer::Expr *> &cols,
+    const StringDictionaryProxy::IdMap *str_proxy_translation_map,
+    const JoinType join_type,
+    const BucketizedHashEntryInfo hash_entry_info,
+    const PerfectHashTableEntryInfo hash_table_entry_info,
+    const int32_t hash_join_invalid_val,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### getHashTable [#gethashtable]
+
+<CodeBlock links={{"PerfectJoinHashTableBuilder": "perfectjoinhashtablebuilder", "PerfectHashTable": "perfecthashtable"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<PerfectHashTable> PerfectJoinHashTableBuilder::getHashTable()
+```
+</CodeBlock>
+
+### for_semi_anti_join [#forsemiantijoin]
+
+<CodeBlock links={{"PerfectJoinHashTableBuilder": "perfectjoinhashtablebuilder"}}>
+```cpp showLineNumbers={false}
+const bool PerfectJoinHashTableBuilder::for_semi_anti_join(
+    const JoinType join_type
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### get_entries_per_shard [#getentriespershard]
+
+<CodeBlock links={{"PerfectJoinHashTableBuilder": "perfectjoinhashtablebuilder"}}>
+```cpp showLineNumbers={false}
+static size_t PerfectJoinHashTableBuilder::get_entries_per_shard(
+    const size_t total_entry_count,
+    const size_t shard_count
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `hash_table_` | `std::unique_ptr< PerfectHashTable >` | |

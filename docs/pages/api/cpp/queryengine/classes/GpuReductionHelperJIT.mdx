@@ -1,0 +1,94 @@
+---
+title: GpuReductionHelperJIT
+description: "This is a helper class for performing GPU reduction code."
+---
+
+This is a helper class for performing GPU reduction code.
+
+It uses the same functions that [ResultSetReductionJIT](resultsetreductionjit) generates so that it can be reused and help the reduction procedure within GPU.
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionJIT.h>
+```
+
+**Inherits from:** `ResultSetReductionJIT` (public)
+
+---
+
+## Constructors
+
+### GpuReductionHelperJIT [#gpureductionhelperjit]
+
+<CodeBlock links={{"GpuReductionHelperJIT": "gpureductionhelperjit", "QueryMemoryDescriptor": "querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+GpuReductionHelperJIT::GpuReductionHelperJIT(
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::vector<TargetInfo> &targets,
+    const std::vector<int64_t> &target_init_vals,
+    const size_t executor_id
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegen [#codegen]
+
+<CodeBlock links={{"GpuReductionHelperJIT": "gpureductionhelperjit", "ReductionCode": "../structs/reductioncode"}}>
+```cpp showLineNumbers={false}
+ReductionCode GpuReductionHelperJIT::codegen() const override
+```
+</CodeBlock>
+
+generates code for perfect hash group by reduction: the following functions are internally created: isEmpty, reduceOneEntryNoCollision (reduce for perfect hash), reduceOneEntryNoCollissionsIdx(reduce one slot for perfect hash), and reduceLoop (the outer loop).
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"GpuReductionHelperJIT": "gpureductionhelperjit", "ReductionCode": "../structs/reductioncode", "ResultSetReductionJIT": "resultsetreductionjit"}}>
+```cpp showLineNumbers={false}
+void GpuReductionHelperJIT::isEmpty(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+### reduceOneEntryNoCollisions [#reduceoneentrynocollisions]
+
+<CodeBlock links={{"GpuReductionHelperJIT": "gpureductionhelperjit", "ReductionCode": "../structs/reductioncode", "ResultSetReductionJIT": "resultsetreductionjit"}}>
+```cpp showLineNumbers={false}
+void GpuReductionHelperJIT::reduceOneEntryNoCollisions(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+### reduceOneEntryNoCollisionsIdx [#reduceoneentrynocollisionsidx]
+
+<CodeBlock links={{"GpuReductionHelperJIT": "gpureductionhelperjit", "ReductionCode": "../structs/reductioncode", "ResultSetReductionJIT": "resultsetreductionjit"}}>
+```cpp showLineNumbers={false}
+void GpuReductionHelperJIT::reduceOneEntryNoCollisionsIdx(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+### reduceLoop [#reduceloop]
+
+<CodeBlock links={{"GpuReductionHelperJIT": "gpureductionhelperjit", "ReductionCode": "../structs/reductioncode", "ResultSetReductionJIT": "resultsetreductionjit"}}>
+```cpp showLineNumbers={false}
+void GpuReductionHelperJIT::reduceLoop(
+    const ReductionCode &reduction_code
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_mem_desc_` | `const QueryMemoryDescriptor &` | |
+| `executor_id_` | `size_t` | |

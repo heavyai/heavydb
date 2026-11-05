@@ -1,0 +1,127 @@
+---
+title: RexDeepCopyVisitor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RexVisitor.h>
+```
+
+**Inherits from:** `RexVisitorBase< std::unique_ptr< const RexScalar > >` (public)
+
+---
+
+## Methods
+
+### visitInput [#visitinput]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+RetType RexDeepCopyVisitor::visitInput(
+    const RexInput *input
+) const override
+```
+</CodeBlock>
+
+### visitLiteral [#visitliteral]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor", "RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+RetType RexDeepCopyVisitor::visitLiteral(
+    const RexLiteral *literal
+) const override
+```
+</CodeBlock>
+
+### visitSubQuery [#visitsubquery]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+RetType RexDeepCopyVisitor::visitSubQuery(
+    const RexSubQuery *subquery
+) const override
+```
+</CodeBlock>
+
+### visitRef [#visitref]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor", "RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+RetType RexDeepCopyVisitor::visitRef(
+    const RexRef *ref
+) const override
+```
+</CodeBlock>
+
+### visitOperator [#visitoperator]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+RetType RexDeepCopyVisitor::visitOperator(
+    const RexOperator *rex_operator
+) const override
+```
+</CodeBlock>
+
+### visitWindowFunctionOperator [#visitwindowfunctionoperator]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor", "RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+RetType RexDeepCopyVisitor::visitWindowFunctionOperator(
+    const RexWindowFunctionOperator *rex_window_function_operator
+) const
+```
+</CodeBlock>
+
+### visitCase [#visitcase]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor", "RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+RetType RexDeepCopyVisitor::visitCase(
+    const RexCase *rex_case
+) const override
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType RexDeepCopyVisitor::defaultResult() const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor", "RexScalar": "rexscalar", "RexVisitorBase": "rexvisitorbase"}}>
+```cpp showLineNumbers={false}
+virtual std::unique_ptr<const RexScalar> RexVisitorBase<std::unique_ptr<const RexScalar>>::visit(
+    const RexScalar *rex_scalar
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### copy [#copy]
+
+<CodeBlock links={{"RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+static std::vector<RowValues> RexDeepCopyVisitor::copy(
+    std::vector<RowValues> const &rhs
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `RetType` | `std::unique_ptr< const RexScalar >` |
+| `RowValues` | `std::vector< std::unique_ptr< const RexScalar > >` |

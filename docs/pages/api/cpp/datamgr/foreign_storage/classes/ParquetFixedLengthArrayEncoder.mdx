@@ -1,0 +1,370 @@
+---
+title: foreign_storage::ParquetFixedLengthArrayEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetFixedLengthArrayEncoder.h>
+```
+
+**Inherits from:** `foreign_storage::ParquetArrayEncoder` (public)
+
+---
+
+## Constructors
+
+### ParquetFixedLengthArrayEncoder [#parquetfixedlengtharrayencoder]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer", "ParquetScalarEncoder": "parquetscalarencoder"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetFixedLengthArrayEncoder::ParquetFixedLengthArrayEncoder(
+    Data_Namespace::AbstractBuffer *data_buffer,
+    std::shared_ptr<ParquetScalarEncoder> scalar_encoder,
+    const ColumnDescriptor *column_desciptor
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getRowGroupMetadata [#getrowgroupmetadata]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ChunkMetadata": "../../structs/chunkmetadata"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> foreign_storage::ParquetFixedLengthArrayEncoder::getRowGroupMetadata(
+    const parquet::RowGroupMetaData *group_metadata,
+    const int parquet_column_index,
+    const SQLTypeInfo &column_type
+) override
+```
+</CodeBlock>
+
+### appendDataTrackErrors [#appenddatatrackerrors]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::appendDataTrackErrors(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetEncoder::appendDataTrackErrors(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### appendData [#appenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::appendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetEncoder::appendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### finalizeRowGroup [#finalizerowgroup]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::finalizeRowGroup()
+```
+</CodeBlock>
+
+### disableMetadataStatsValidation [#disablemetadatastatsvalidation]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetFixedLengthArrayEncoder::disableMetadataStatsValidation() override
+```
+</CodeBlock>
+
+### initializeErrorTracking [#initializeerrortracking]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetFixedLengthArrayEncoder::initializeErrorTracking() override
+```
+</CodeBlock>
+
+### initializeColumnType [#initializecolumntype]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetFixedLengthArrayEncoder::initializeColumnType(
+    const SQLTypeInfo &column_type
+) override
+```
+</CodeBlock>
+
+### getRejectedRowIndices [#getrejectedrowindices]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+RejectedRowIndices foreign_storage::ParquetEncoder::getRejectedRowIndices() const
+```
+</CodeBlock>
+
+### processLastArray [#processlastarray]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::processLastArray() override
+```
+</CodeBlock>
+
+### appendArraysToBuffer [#appendarraystobuffer]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetFixedLengthArrayEncoder::appendArraysToBuffer()
+```
+</CodeBlock>
+
+### isLastArrayNull [#islastarraynull]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ParquetFixedLengthArrayEncoder::isLastArrayNull() const
+```
+</CodeBlock>
+
+### isLastArrayEmpty [#islastarrayempty]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ParquetFixedLengthArrayEncoder::isLastArrayEmpty() const
+```
+</CodeBlock>
+
+### sizeOfLastArray [#sizeoflastarray]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ParquetFixedLengthArrayEncoder::sizeOfLastArray() const
+```
+</CodeBlock>
+
+### resizeArrayDataBytes [#resizearraydatabytes]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+int8_t * foreign_storage::ParquetFixedLengthArrayEncoder::resizeArrayDataBytes(
+    const size_t additional_num_elements
+)
+```
+</CodeBlock>
+
+### resetLastArrayMetadata [#resetlastarraymetadata]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetFixedLengthArrayEncoder::resetLastArrayMetadata()
+```
+</CodeBlock>
+
+### isNewArray [#isnewarray]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ParquetFixedLengthArrayEncoder::isNewArray(
+    const int16_t rep_level
+) const
+```
+</CodeBlock>
+
+### encodedDataAtIndex [#encodeddataatindex]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+int8_t * foreign_storage::ParquetFixedLengthArrayEncoder::encodedDataAtIndex(
+    const size_t index
+)
+```
+</CodeBlock>
+
+### updateMetadataForAppendedArrayItem [#updatemetadataforappendedarrayitem]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::updateMetadataForAppendedArrayItem(
+    const int64_t encoded_index
+)
+```
+</CodeBlock>
+
+### appendArrayItem [#appendarrayitem]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetFixedLengthArrayEncoder::appendArrayItem(
+    const int64_t encoded_index
+)
+```
+</CodeBlock>
+
+### encodeAllValues [#encodeallvalues]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetFixedLengthArrayEncoder::encodeAllValues(
+    const int8_t *values,
+    const int64_t values_read
+)
+```
+</CodeBlock>
+
+### appendNullFixedLengthArray [#appendnullfixedlengtharray]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::appendNullFixedLengthArray()
+```
+</CodeBlock>
+
+### setNullFixedLengthArraySentinel [#setnullfixedlengtharraysentinel]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::setNullFixedLengthArraySentinel(
+    int8_t *omnisci_data_bytes
+)
+```
+</CodeBlock>
+
+### appendNullArrayOrCheckArraySize [#appendnullarrayorcheckarraysize]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::appendNullArrayOrCheckArraySize()
+```
+</CodeBlock>
+
+### throwEmptyArrayException [#throwemptyarrayexception]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::throwEmptyArrayException(
+    const size_t array_element_count,
+    const std::string &omnisci_column_name
+)
+```
+</CodeBlock>
+
+### throwWrongSizeArray [#throwwrongsizearray]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetFixedLengthArrayEncoder::throwWrongSizeArray(
+    const size_t size_of_last_array,
+    const size_t array_element_count,
+    const std::string &omnisci_column_name
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### createMetadata [#createmetadata]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ChunkMetadata": "../../structs/chunkmetadata", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<ChunkMetadata> foreign_storage::ParquetEncoder::createMetadata(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### throwNotNullViolation [#thrownotnullviolation]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetEncoder::throwNotNullViolation(
+    const std::string &parquet_column_name
+)
+```
+</CodeBlock>
+
+### validateNullCount [#validatenullcount]
+
+<CodeBlock links={{"ParquetFixedLengthArrayEncoder": "parquetfixedlengtharrayencoder", "ParquetArrayEncoder": "parquetarrayencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetEncoder::validateNullCount(
+    const std::string &parquet_column_name,
+    int64_t null_count,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_desciptor_` | `const ColumnDescriptor` | |
+| `array_element_count_` | `size_t` | |
+| `omnisci_data_type_byte_size_` | `size_t` | |
+| `scalar_encoder_` | `std::shared_ptr< ParquetScalarEncoder >` | |
+| `data_buffer_bytes_` | `std::vector< int8_t >` | |
+| `buffer_` | `Data_Namespace::AbstractBuffer *` | |
+| `is_error_tracking_enabled_` | `bool` | |
+| `invalid_indices_` | `RejectedRowIndices` | |
+| `current_chunk_offset_` | `size_t` | |
+| `column_type_` | `SQLTypeInfo` | |
+| `validate_metadata_stats_` | `bool` | |
+| `non_null_def_level` <Badge intent="note" minimal>static</Badge> | `const int16_t` | |
+| `item_null_def_level` <Badge intent="note" minimal>static</Badge> | `const int16_t` | |
+| `empty_list_def_level` <Badge intent="note" minimal>static</Badge> | `const int16_t` | |
+| `list_null_def_level` <Badge intent="note" minimal>static</Badge> | `const int16_t` | |

@@ -1,0 +1,96 @@
+---
+title: InsertionOrderedMap
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <InsertionOrderedMap.h>
+```
+
+---
+
+## Methods
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"InsertionOrderedMap": "insertionorderedmap"}}>
+```cpp showLineNumbers={false}
+auto & InsertionOrderedMap::operator[](
+    llvm::Value *key
+)
+```
+</CodeBlock>
+
+### replace [#replace]
+
+<CodeBlock links={{"InsertionOrderedMap": "insertionorderedmap"}}>
+```cpp showLineNumbers={false}
+void InsertionOrderedMap::replace(
+    llvm::Value *key1,
+    llvm::Value *key2
+)
+```
+</CodeBlock>
+
+### begin [#begin]
+
+<CodeBlock links={{"InsertionOrderedMap": "insertionorderedmap"}}>
+```cpp showLineNumbers={false}
+auto InsertionOrderedMap::begin()
+```
+</CodeBlock>
+
+### end [#end]
+
+<CodeBlock links={{"InsertionOrderedMap": "insertionorderedmap"}}>
+```cpp showLineNumbers={false}
+auto InsertionOrderedMap::end()
+```
+</CodeBlock>
+
+### find [#find]
+
+<CodeBlock links={{"InsertionOrderedMap": "insertionorderedmap"}}>
+```cpp showLineNumbers={false}
+auto InsertionOrderedMap::find(
+    llvm::Value *key
+)
+```
+</CodeBlock>
+
+### emplace [#emplace]
+
+<CodeBlock links={{"InsertionOrderedMap": "insertionorderedmap", "Iterator": "#iterator"}}>
+```cpp showLineNumbers={false}
+std::pair<Iterator, bool> InsertionOrderedMap::emplace(
+    llvm::Value *key,
+    llvm::Value *val
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `m_` | `std::unordered_map< llvm::Value *, llvm::Value * >` | |
+| `v_` | `std::vector< llvm::Value * >` | |
+
+---
+
+## Inner classes
+
+### Iterator
+
+<CodeBlock links={{"InsertionOrderedMap": "insertionorderedmap"}}>
+```cpp showLineNumbers={false}
+struct InsertionOrderedMap::Iterator
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `that_` | `InsertionOrderedMap *` | |
+| `v_it_` | `std::vector< llvm::Value * >::iterator` | |

@@ -1,0 +1,73 @@
+---
+title: Catalog_Namespace::cat_lock
+description: ""
+---
+
+<CodeBlock id="cat_lock" links={{"cat_lock": "catlock"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class cat_lock
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/RWLocks.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### cat_lock [#catlock]
+
+<CodeBlock links={{"cat_lock": "catlock"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::cat_lock<T>::cat_lock(
+    const T *cat
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~cat_lock
+
+<CodeBlock links={{"cat_lock": "catlock"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::cat_lock<T>::~cat_lock()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### lock [#lock]
+
+<CodeBlock links={{"cat_lock": "catlock"}}>
+```cpp showLineNumbers={false}
+virtual void Catalog_Namespace::cat_lock<T>::lock()
+```
+</CodeBlock>
+
+### unlock [#unlock]
+
+<CodeBlock links={{"cat_lock": "catlock"}}>
+```cpp showLineNumbers={false}
+virtual void Catalog_Namespace::cat_lock<T>::unlock()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cat_` | `const T *` | |
+| `holds_lock_` | `bool` | |

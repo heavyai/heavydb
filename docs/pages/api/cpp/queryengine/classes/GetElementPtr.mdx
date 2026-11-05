@@ -1,0 +1,89 @@
+---
+title: GetElementPtr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### GetElementPtr [#getelementptr]
+
+<CodeBlock links={{"GetElementPtr": "getelementptr", "Value": "value"}}>
+```cpp showLineNumbers={false}
+GetElementPtr::GetElementPtr(
+    const Value *base,
+    const Value *index,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### base [#base]
+
+<CodeBlock links={{"GetElementPtr": "getelementptr", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * GetElementPtr::base() const
+```
+</CodeBlock>
+
+### index [#index]
+
+<CodeBlock links={{"GetElementPtr": "getelementptr", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * GetElementPtr::index() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"GetElementPtr": "getelementptr", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void GetElementPtr::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"GetElementPtr": "getelementptr", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"GetElementPtr": "getelementptr", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"GetElementPtr": "getelementptr", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `base_` | `const Value *` | |
+| `index_` | `const Value *` | |

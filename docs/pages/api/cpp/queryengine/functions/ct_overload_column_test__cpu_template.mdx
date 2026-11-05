@@ -1,0 +1,80 @@
+---
+title: ct_overload_column_test__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_overload_column_test__cpu_template(
+    const Column<T> &input,
+    Column<T> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"Column": "../structs/column", "Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_overload_column_test__cpu_template(
+    const Column<Timestamp> &input,
+    Column<Timestamp> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_overload_column_test__cpu_template(
+    const Column<TextEncodingDict> &input,
+    Column<TextEncodingDict> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_overload_column_test__cpu_template(
+    const Column<int64_t> &input,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_overload_column_test__cpu_template(
+    const Column<Array<TextEncodingDict>> &input,
+    Column<Array<TextEncodingDict>> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (6)">
+
+<CodeBlock links={{"Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_overload_column_test__cpu_template(
+    const Column<Array<int64_t>> &input,
+    Column<Array<int64_t>> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,26 @@
+---
+title: Catalog_Namespace::TableNotFoundException
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/Catalog.h>
+```
+
+**Inherits from:** `std::runtime_error` (public)
+
+---
+
+## Constructors
+
+### TableNotFoundException [#tablenotfoundexception]
+
+<CodeBlock links={{"TableNotFoundException": "tablenotfoundexception"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::TableNotFoundException::TableNotFoundException(
+    const std::string &table_name,
+    const std::string &db_name,
+    const std::string &context_msg = {}
+)
+```
+</CodeBlock>

@@ -1,0 +1,27 @@
+---
+title: ExecutorResourceMgr_Namespace::ResourceType
+description: "@type ResourceType"
+---
+
+@type [ResourceType](resourcetype)
+
+```cpp showLineNumbers={false}
+enum class ExecutorResourceMgr_Namespace::ResourceType
+```
+
+Stores the resource type for a [ExecutorResourcePool](../classes/executorresourcepool) request
+
+---
+
+## Values
+
+| Name | Value |
+| --- | --- |
+| `CPU_SLOTS` | `= 0` |
+| `GPU_SLOTS` | `= 1` |
+| `CPU_RESULT_MEM` | `= 2` |
+| `GPU_RESULT_MEM` | `= 3` |
+| `CPU_BUFFER_POOL_MEM` | `= 4` |
+| `GPU_BUFFER_POOL_MEM` | `= 5` |
+| `INVALID_TYPE` | `= 6` |
+| `NUM_RESOURCE_TYPES` | `= 6` |

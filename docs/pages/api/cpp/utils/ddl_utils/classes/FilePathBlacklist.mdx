@@ -1,0 +1,48 @@
+---
+title: ddl_utils::FilePathBlacklist
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ddl_utils/DdlUtils.h>
+```
+
+---
+
+## Static methods
+
+### addToBlacklist [#addtoblacklist]
+
+<CodeBlock links={{"FilePathBlacklist": "filepathblacklist"}}>
+```cpp showLineNumbers={false}
+void ddl_utils::FilePathBlacklist::addToBlacklist(
+    const std::string &path
+)
+```
+</CodeBlock>
+
+### isBlacklistedPath [#isblacklistedpath]
+
+<CodeBlock links={{"FilePathBlacklist": "filepathblacklist"}}>
+```cpp showLineNumbers={false}
+bool ddl_utils::FilePathBlacklist::isBlacklistedPath(
+    const std::string &path
+)
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"FilePathBlacklist": "filepathblacklist"}}>
+```cpp showLineNumbers={false}
+void ddl_utils::FilePathBlacklist::clear()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `blacklisted_paths_` <Badge intent="note" minimal>static</Badge> | `std::vector< std::string >` | |

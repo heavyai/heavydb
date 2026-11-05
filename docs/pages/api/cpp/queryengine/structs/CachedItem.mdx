@@ -1,0 +1,72 @@
+---
+title: CachedItem
+description: ""
+---
+
+<CodeBlock id="CachedItem" links={{"CachedItem": "cacheditem"}}>
+```cpp showLineNumbers={false}
+template <typename CACHED_ITEM_TYPE, typename META_INFO_TYPE>
+struct CachedItem
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <DataRecycler.h>
+```
+
+**Template parameters**
+
+<ParamField path="CACHED_ITEM_TYPE" type="typename">
+</ParamField>
+
+<ParamField path="META_INFO_TYPE" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### CachedItem [#cacheditem]
+
+<CodeBlock links={{"CachedItem": "cacheditem", "CacheItemMetric": "../classes/cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+CachedItem<CACHED_ITEM_TYPE, META_INFO_TYPE>::CachedItem(
+    QueryPlanHash hashed_plan,
+    CACHED_ITEM_TYPE item,
+    std::shared_ptr<CacheItemMetric> item_metric_ptr,
+    std::optional<META_INFO_TYPE> metadata = std::nullopt
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setDirty [#setdirty]
+
+<CodeBlock links={{"CachedItem": "cacheditem"}}>
+```cpp showLineNumbers={false}
+void CachedItem<CACHED_ITEM_TYPE, META_INFO_TYPE>::setDirty()
+```
+</CodeBlock>
+
+### isDirty [#isdirty]
+
+<CodeBlock links={{"CachedItem": "cacheditem"}}>
+```cpp showLineNumbers={false}
+bool CachedItem<CACHED_ITEM_TYPE, META_INFO_TYPE>::isDirty() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `key` | `QueryPlanHash` | |
+| `cached_item` | `CACHED_ITEM_TYPE` | |
+| `item_metric` | `std::shared_ptr< CacheItemMetric >` | |
+| `meta_info` | `std::optional< META_INFO_TYPE >` | |
+| `dirty` | `bool` | |

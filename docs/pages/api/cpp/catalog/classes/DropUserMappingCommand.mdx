@@ -1,0 +1,66 @@
+---
+title: DropUserMappingCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `UserMappingDdlCommand` (public)
+
+---
+
+## Constructors
+
+### DropUserMappingCommand [#dropusermappingcommand]
+
+<CodeBlock links={{"DropUserMappingCommand": "dropusermappingcommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+DropUserMappingCommand::DropUserMappingCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"DropUserMappingCommand": "dropusermappingcommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult DropUserMappingCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+### getForeignServer [#getforeignserver]
+
+<CodeBlock links={{"DropUserMappingCommand": "dropusermappingcommand", "ForeignServer": "../foreignstorage/structs/foreignserver", "UserMappingDdlCommand": "usermappingddlcommand"}}>
+```cpp showLineNumbers={false}
+const foreign_storage::ForeignServer * DropUserMappingCommand::getForeignServer()
+```
+</CodeBlock>
+
+### getUserIdAndUserMappingType [#getuseridandusermappingtype]
+
+<CodeBlock links={{"DropUserMappingCommand": "dropusermappingcommand", "UserMappingDdlCommand": "usermappingddlcommand"}}>
+```cpp showLineNumbers={false}
+std::pair<int32_t, std::string> DropUserMappingCommand::getUserIdAndUserMappingType()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

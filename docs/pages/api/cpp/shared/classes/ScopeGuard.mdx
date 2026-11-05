@@ -1,0 +1,83 @@
+---
+title: ScopeGuard
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <scope.h>
+```
+
+---
+
+## Constructors
+
+### ScopeGuard [#scopeguard]
+
+<Tabs>
+<Tab title="Move (with at exit)">
+
+<CodeBlock links={{"ScopeGuard": "scopeguard"}}>
+```cpp showLineNumbers={false}
+template <class Callable>
+ScopeGuard::ScopeGuard(
+    Callable &&at_exit
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move (with other)">
+
+<CodeBlock links={{"ScopeGuard": "scopeguard"}}>
+```cpp showLineNumbers={false}
+ScopeGuard::ScopeGuard(
+    ScopeGuard &&other
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"ScopeGuard": "scopeguard"}}>
+```cpp showLineNumbers={false}
+ScopeGuard::ScopeGuard(
+    const ScopeGuard &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~ScopeGuard
+
+<CodeBlock links={{"ScopeGuard": "scopeguard"}}>
+```cpp showLineNumbers={false}
+ScopeGuard::~ScopeGuard()
+```
+</CodeBlock>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"ScopeGuard": "scopeguard"}}>
+```cpp showLineNumbers={false}
+void ScopeGuard::operator=(
+    const ScopeGuard &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `at_exit_` | `std::function< void()>` | |

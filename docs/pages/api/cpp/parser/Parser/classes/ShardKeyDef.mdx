@@ -1,0 +1,44 @@
+---
+title: Parser::ShardKeyDef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::TableConstraintDef` (public)
+
+---
+
+## Constructors
+
+### ShardKeyDef [#shardkeydef]
+
+<CodeBlock links={{"ShardKeyDef": "shardkeydef"}}>
+```cpp showLineNumbers={false}
+Parser::ShardKeyDef::ShardKeyDef(
+    const std::string &column
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_column [#getcolumn]
+
+<CodeBlock links={{"ShardKeyDef": "shardkeydef"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::ShardKeyDef::get_column() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_` | `const std::string` | |

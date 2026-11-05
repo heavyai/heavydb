@@ -1,0 +1,106 @@
+---
+title: RemoteHostInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RemoteHostInfo.h>
+```
+
+---
+
+## Constructors
+
+### RemoteHostInfo [#remotehostinfo]
+
+<CodeBlock links={{"RemoteHostInfo": "remotehostinfo"}}>
+```cpp showLineNumbers={false}
+RemoteHostInfo::RemoteHostInfo(
+    const std::string &host,
+    const uint16_t port,
+    const bool with_keepalive = default_with_keepalive,
+    const unsigned connect_timeout = default_connect_timeout,
+    const unsigned recv_timeout = default_recv_timeout,
+    const unsigned send_timeout = default_send_timeout,
+    const std::string &ca_cert = ""
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getHost [#gethost]
+
+<CodeBlock links={{"RemoteHostInfo": "remotehostinfo"}}>
+```cpp showLineNumbers={false}
+const std::string & RemoteHostInfo::getHost() const
+```
+</CodeBlock>
+
+### getPort [#getport]
+
+<CodeBlock links={{"RemoteHostInfo": "remotehostinfo"}}>
+```cpp showLineNumbers={false}
+uint16_t RemoteHostInfo::getPort() const
+```
+</CodeBlock>
+
+### getWithKeepAlive [#getwithkeepalive]
+
+<CodeBlock links={{"RemoteHostInfo": "remotehostinfo"}}>
+```cpp showLineNumbers={false}
+const bool RemoteHostInfo::getWithKeepAlive() const
+```
+</CodeBlock>
+
+### getConnectTimeout [#getconnecttimeout]
+
+<CodeBlock links={{"RemoteHostInfo": "remotehostinfo"}}>
+```cpp showLineNumbers={false}
+const unsigned RemoteHostInfo::getConnectTimeout() const
+```
+</CodeBlock>
+
+### getRecvTimeout [#getrecvtimeout]
+
+<CodeBlock links={{"RemoteHostInfo": "remotehostinfo"}}>
+```cpp showLineNumbers={false}
+const unsigned RemoteHostInfo::getRecvTimeout() const
+```
+</CodeBlock>
+
+### getSendTimeout [#getsendtimeout]
+
+<CodeBlock links={{"RemoteHostInfo": "remotehostinfo"}}>
+```cpp showLineNumbers={false}
+const unsigned RemoteHostInfo::getSendTimeout() const
+```
+</CodeBlock>
+
+### getCACertFile [#getcacertfile]
+
+<CodeBlock links={{"RemoteHostInfo": "remotehostinfo"}}>
+```cpp showLineNumbers={false}
+const std::string & RemoteHostInfo::getCACertFile() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `default_with_keepalive` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `bool` | |
+| `default_connect_timeout` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `unsigned` | |
+| `default_recv_timeout` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `unsigned` | |
+| `default_send_timeout` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `unsigned` | |
+| `host_` | `std::string` | |
+| `port_` | `uint16_t` | |
+| `with_keepalive_` | `bool` | |
+| `connect_timeout_` | `unsigned` | |
+| `recv_timeout_` | `unsigned` | |
+| `send_timeout_` | `unsigned` | |
+| `ca_ref_cert_` | `std::string` | |

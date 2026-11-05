@@ -1,0 +1,38 @@
+---
+title: Decoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Codec.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~Decoder
+
+<CodeBlock links={{"Decoder": "decoder"}}>
+```cpp showLineNumbers={false}
+virtual Decoder::~Decoder()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegenDecode [#codegendecode]
+
+<CodeBlock links={{"Decoder": "decoder"}}>
+```cpp showLineNumbers={false}
+virtual llvm::Instruction * Decoder::codegenDecode(
+    llvm::Value *byte_stream,
+    llvm::Value *pos,
+    llvm::Module *llvm_module
+) const
+```
+</CodeBlock>

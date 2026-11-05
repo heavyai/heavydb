@@ -1,0 +1,102 @@
+---
+title: RenderAllocator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RenderAllocator.h>
+```
+
+**Inherits from:** `Allocator` (public)
+
+---
+
+## Constructors
+
+### RenderAllocator [#renderallocator]
+
+<CodeBlock links={{"RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+RenderAllocator::RenderAllocator(
+    int8_t *preallocated_ptr,
+    const size_t preallocated_size,
+    const size_t device_id
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### alloc [#alloc]
+
+<CodeBlock links={{"RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+int8_t * RenderAllocator::alloc(
+    const size_t bytes
+)
+```
+</CodeBlock>
+
+### markChunkComplete [#markchunkcomplete]
+
+<CodeBlock links={{"RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+void RenderAllocator::markChunkComplete()
+```
+</CodeBlock>
+
+### getCurrentChunkOffset [#getcurrentchunkoffset]
+
+<CodeBlock links={{"RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+size_t RenderAllocator::getCurrentChunkOffset() const
+```
+</CodeBlock>
+
+### getCurrentChunkSize [#getcurrentchunksize]
+
+<CodeBlock links={{"RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+size_t RenderAllocator::getCurrentChunkSize() const
+```
+</CodeBlock>
+
+### getAllocatedSize [#getallocatedsize]
+
+<CodeBlock links={{"RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+size_t RenderAllocator::getAllocatedSize() const
+```
+</CodeBlock>
+
+### getPeakAllocatedSize [#getpeakallocatedsize]
+
+<CodeBlock links={{"RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+size_t RenderAllocator::getPeakAllocatedSize() const
+```
+</CodeBlock>
+
+### getBasePtr [#getbaseptr]
+
+<CodeBlock links={{"RenderAllocator": "renderallocator"}}>
+```cpp showLineNumbers={false}
+int8_t * RenderAllocator::getBasePtr() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `preallocated_ptr_` | `int8_t *` | |
+| `preallocated_size_` | `const size_t` | |
+| `device_id_` | `const size_t` | |
+| `crt_chunk_offset_bytes_` | `size_t` | |
+| `crt_allocated_bytes_` | `size_t` | |
+| `peak_allocated_bytes_` | `size_t` | |
+| `alloc_mtx_ptr_` | `std::unique_ptr< std::mutex >` | |

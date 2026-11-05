@@ -1,0 +1,77 @@
+---
+title: generate_antenna_pattern_map
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "Array": "../structs/array", "AntennaPatternMap": "../structs/antennapatternmap"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+AntennaPatternMap generate_antenna_pattern_map(
+    const Column<TextEncodingDict> &rf_source_antenna_type,
+    const Column<TextEncodingDict> &antenna_types,
+    const Column<T> &antenna_gain,
+    const Column<Array<T>> &antenna_horizontal_degrees,
+    const Column<Array<T>> &antenna_horizontal_attenuations,
+    const Column<Array<T>> &antenna_vertical_degrees,
+    const Column<Array<T>> &antenna_vertical_attenuations
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "Array": "../structs/array", "AntennaPatternMap": "../structs/antennapatternmap"}}>
+```cpp showLineNumbers={false}
+template AntennaPatternMap generate_antenna_pattern_map(
+    const Column<TextEncodingDict> &rf_source_antenna_type,
+    const Column<TextEncodingDict> &antenna_types,
+    const Column<float> &antenna_gain,
+    const Column<Array<float>> &antenna_horizontal_degrees,
+    const Column<Array<float>> &antenna_horizontal_attenuations,
+    const Column<Array<float>> &antenna_vertical_degrees,
+    const Column<Array<float>> &antenna_vertical_attenuations
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "Array": "../structs/array", "AntennaPatternMap": "../structs/antennapatternmap"}}>
+```cpp showLineNumbers={false}
+template AntennaPatternMap generate_antenna_pattern_map(
+    const Column<TextEncodingDict> &rf_source_antenna_type,
+    const Column<TextEncodingDict> &antenna_types,
+    const Column<double> &antenna_gain,
+    const Column<Array<double>> &antenna_horizontal_degrees,
+    const Column<Array<double>> &antenna_horizontal_attenuations,
+    const Column<Array<double>> &antenna_vertical_degrees,
+    const Column<Array<double>> &antenna_vertical_attenuations
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict", "Array": "../structs/array", "AntennaPatternMap": "../structs/antennapatternmap"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+AntennaPatternMap generate_antenna_pattern_map(
+    const Column<TextEncodingDict> &rf_source_antenna_type,
+    const Column<TextEncodingDict> &antenna_types,
+    const Column<T> &antenna_gains,
+    const Column<Array<T>> &antenna_horizontal_degrees,
+    const Column<Array<T>> &antenna_horizontal_attenuations,
+    const Column<Array<T>> &antenna_vertical_degrees,
+    const Column<Array<T>> &antenna_vertical_attenuations
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,47 @@
+---
+title: DateDaysOverflowValidator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Encoder.h>
+```
+
+---
+
+## Constructors
+
+### DateDaysOverflowValidator [#datedaysoverflowvalidator]
+
+<CodeBlock links={{"DateDaysOverflowValidator": "datedaysoverflowvalidator"}}>
+```cpp showLineNumbers={false}
+DateDaysOverflowValidator::DateDaysOverflowValidator(
+    SQLTypeInfo type
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### validate [#validate]
+
+<CodeBlock links={{"DateDaysOverflowValidator": "datedaysoverflowvalidator"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void DateDaysOverflowValidator::validate(
+    T value
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_date_in_days_` | `bool` | |
+| `max_` | `int64_t` | |
+| `min_` | `int64_t` | |

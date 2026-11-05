@@ -1,0 +1,35 @@
+---
+title: agg_count_distinct_bitmap
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE void agg_count_distinct_bitmap(
+    int64_t *agg,
+    const int64_t val,
+    const int64_t min_val,
+    const int64_t bucket_size
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT void agg_count_distinct_bitmap(
+    int64_t *agg,
+    const int64_t val,
+    const int64_t min_val,
+    const int64_t bucket_size
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

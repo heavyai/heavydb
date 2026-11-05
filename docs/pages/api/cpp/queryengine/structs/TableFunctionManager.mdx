@@ -1,0 +1,556 @@
+---
+title: TableFunctionManager
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableFunctionManager.h>
+```
+
+---
+
+## Constructors
+
+### TableFunctionManager [#tablefunctionmanager]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager", "TableFunctionExecutionUnit": "tablefunctionexecutionunit", "Executor": "../classes/executor", "RowSetMemoryOwner": "../classes/rowsetmemoryowner"}}>
+```cpp showLineNumbers={false}
+TableFunctionManager::TableFunctionManager(
+    const TableFunctionExecutionUnit &exe_unit,
+    Executor *executor,
+    std::vector<const int8_t *> &col_buf_ptrs,
+    std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    bool is_singleton,
+    gfx::GfxContext *gfx_context
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~TableFunctionManager
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+TableFunctionManager::~TableFunctionManager()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### set_output_array_values_total_number [#setoutputarrayvaluestotalnumber]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::set_output_array_values_total_number(
+    int32_t index,
+    int64_t output_array_values_total_number
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::set_output_array_values_total_number(
+    int32_t index,
+    int64_t output_array_values_total_number
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### set_output_item_values_total_number [#setoutputitemvaluestotalnumber]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::set_output_item_values_total_number(
+    int32_t index,
+    int64_t output_item_values_total_number
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::set_output_item_values_total_number(
+    int32_t index,
+    int64_t output_item_values_total_number
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### set_output_row_size [#setoutputrowsize]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::set_output_row_size(
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+### disable_output_allocations [#disableoutputallocations]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::disable_output_allocations()
+```
+</CodeBlock>
+
+### enable_output_allocations [#enableoutputallocations]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::enable_output_allocations()
+```
+</CodeBlock>
+
+### error_message [#errormessage]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t TableFunctionManager::error_message(
+    const char *message
+)
+```
+</CodeBlock>
+
+### set_metadata [#setmetadata]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void TableFunctionManager::set_metadata(
+    const std::string &key,
+    const T &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::set_metadata(
+    const char *key,
+    const uint8_t *raw_bytes,
+    const size_t num_bytes,
+    const TableFunctionMetadataType value_type
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_metadata [#getmetadata]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void TableFunctionManager::get_metadata(
+    const std::string &key,
+    T &value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::get_metadata(
+    const char *key,
+    const uint8_t *&raw_bytes,
+    size_t &num_bytes,
+    TableFunctionMetadataType &value_type
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNewDictDbId [#getnewdictdbid]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t TableFunctionManager::getNewDictDbId()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t TableFunctionManager::getNewDictDbId()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNewDictId [#getnewdictid]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t TableFunctionManager::getNewDictId()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t TableFunctionManager::getNewDictId()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getStringDictionaryProxy [#getstringdictionaryproxy]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy * TableFunctionManager::getStringDictionaryProxy(
+    int32_t db_id,
+    int32_t dict_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+int8_t * TableFunctionManager::getStringDictionaryProxy(
+    int32_t db_id,
+    int32_t dict_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getString [#getstring]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+std::string TableFunctionManager::getString(
+    int32_t db_id,
+    int32_t dict_id,
+    int32_t string_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+std::string TableFunctionManager::getString(
+    int32_t db_id,
+    int32_t dict_id,
+    int32_t string_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOrAddTransient [#getoraddtransient]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+int32_t TableFunctionManager::getOrAddTransient(
+    int32_t db_id,
+    int32_t dict_id,
+    std::string str
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+const int32_t TableFunctionManager::getOrAddTransient(
+    int32_t db_id,
+    int32_t dict_id,
+    const std::string &str
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### makeBuffer [#makebuffer]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+int8_t * TableFunctionManager::makeBuffer(
+    int64_t element_count,
+    int64_t element_size
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+int8_t * TableFunctionManager::makeBuffer(
+    int64_t element_count,
+    int64_t element_size
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getGfxContext [#getgfxcontext]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+const gfx::GfxContext * TableFunctionManager::getGfxContext()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+const gfx::GfxContext * TableFunctionManager::getGfxContext() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getGfxCommandExecutionContext [#getgfxcommandexecutioncontext]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+gfx::CommandExecutionContext * TableFunctionManager::getGfxCommandExecutionContext()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+gfx::CommandExecutionContext * TableFunctionManager::getGfxCommandExecutionContext()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_ncols [#getncols]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+size_t TableFunctionManager::get_ncols() const
+```
+</CodeBlock>
+
+### get_nrows [#getnrows]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+size_t TableFunctionManager::get_nrows() const
+```
+</CodeBlock>
+
+### check_thread_id [#checkthreadid]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::check_thread_id() const
+```
+</CodeBlock>
+
+### set_output_column [#setoutputcolumn]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::set_output_column(
+    int32_t index,
+    int8_t *ptr
+)
+```
+</CodeBlock>
+
+### allocate_output_buffers [#allocateoutputbuffers]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::allocate_output_buffers(
+    int64_t output_num_rows
+)
+```
+</CodeBlock>
+
+### get_error_message [#geterrormessage]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+const char * TableFunctionManager::get_error_message() const
+```
+</CodeBlock>
+
+### set_error_message [#seterrormessage]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::set_error_message(
+    const char *msg
+)
+```
+</CodeBlock>
+
+### isSingleton [#issingleton]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+bool TableFunctionManager::isSingleton() const
+```
+</CodeBlock>
+
+### lock [#lock]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::lock()
+```
+</CodeBlock>
+
+### unlock [#unlock]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+void TableFunctionManager::unlock()
+```
+</CodeBlock>
+
+### set_singleton [#setsingleton]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+static void TableFunctionManager::set_singleton(
+    TableFunctionManager *instance
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### get_singleton [#getsingleton]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+static TableFunctionManager * TableFunctionManager::get_singleton()
+```
+</CodeBlock>
+
+### get_singleton_internal [#getsingletoninternal]
+
+<CodeBlock links={{"TableFunctionManager": "tablefunctionmanager"}}>
+```cpp showLineNumbers={false}
+static TableFunctionManager *& TableFunctionManager::get_singleton_internal()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `output_allocations_disabled` | `bool` | |
+| `query_buffers` | `std::unique_ptr< QueryMemoryInitializer >` | |
+| `exe_unit_` | `const TableFunctionExecutionUnit &` | |
+| `executor_` | `Executor *` | |
+| `col_buf_ptrs_` | `std::vector< const int8_t * > &` | |
+| `row_set_mem_owner_` | `std::shared_ptr< RowSetMemoryOwner >` | |
+| `output_col_buf_ptrs` | `std::vector< int64_t * >` | |
+| `output_num_rows_` | `size_t` | |
+| `output_item_values_total_number_` | `std::vector< int64_t >` | |
+| `output_column_ptrs` | `std::vector< int8_t * >` | |
+| `is_singleton_` | `bool` | |
+| `thread_id_` | `std::thread::id` | |
+| `error_message_` | `std::string` | |
+| `gfx_context_` | `gfx::GfxContext *` | |
+| `gfx_execution_context_` | `gfx::CommandExecutionContextUqPtr` | |

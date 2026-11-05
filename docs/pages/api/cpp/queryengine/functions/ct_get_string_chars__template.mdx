@@ -1,0 +1,53 @@
+---
+title: ct_get_string_chars__template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE DEVICE int32_t ct_get_string_chars__template(
+    const Column<T> &indices,
+    const TextEncodingNone &str,
+    const int32_t multiplier,
+    Column<int32_t> &idx,
+    Column<int8_t> &char_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t ct_get_string_chars__template(
+    const Column<int16_t> &indices,
+    const TextEncodingNone &str,
+    const int32_t multiplier,
+    Column<int32_t> &idx,
+    Column<int8_t> &char_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingNone": "../structs/textencodingnone"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE DEVICE int32_t ct_get_string_chars__template(
+    const Column<int32_t> &indices,
+    const TextEncodingNone &str,
+    const int32_t multiplier,
+    Column<int32_t> &idx,
+    Column<int8_t> &char_bytes
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

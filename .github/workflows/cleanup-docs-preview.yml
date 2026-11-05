@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Deletes a PR's Fern docs preview deployment once the PR merges, so stale
+# previews (created by docs-tests.yml's `preview` job via `/test docs`)
+# don't linger. Companion to docs-tests.yml.
+#
+# Runs on `pull_request: closed` for every PR (cheap, no build), but only
+# acts when the PR actually merged; nothing to delete for closed-without-
+# merge PRs, and merging is the trust boundary — nothing here executes code
+# from the PR branch, only the base branch's fern/ config plus the PR number.
+
+name: Cleanup docs preview
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Delete docs preview
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Install Fern CLI
+        run: npm install -g fern-api
+
+      - name: Delete preview
+        env:
+          FERN_TOKEN: ${{ secrets.FERN_TOKEN }}
+        run: cd fern && fern docs preview delete --id "pr-${{ github.event.pull_request.number }}"

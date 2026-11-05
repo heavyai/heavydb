@@ -1,0 +1,375 @@
+---
+title: foreign_storage::InternalMemoryStatsDataWrapper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/InternalMemoryStatsDataWrapper.h>
+```
+
+**Inherits from:** `foreign_storage::InternalSystemDataWrapper` (public)
+
+---
+
+## Constructors
+
+### InternalMemoryStatsDataWrapper [#internalmemorystatsdatawrapper]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper"}}>
+```cpp showLineNumbers={false}
+foreign_storage::InternalMemoryStatsDataWrapper::InternalMemoryStatsDataWrapper()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper"}}>
+```cpp showLineNumbers={false}
+foreign_storage::InternalMemoryStatsDataWrapper::InternalMemoryStatsDataWrapper(
+    const int db_id,
+    const ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### populateChunkMetadata [#populatechunkmetadata]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::InternalMemoryStatsDataWrapper::populateChunkMetadata(
+    ChunkMetadataVector &chunk_metadata_vector
+) override
+```
+</CodeBlock>
+
+Populates given chunk metadata vector with metadata for all chunks in related foreign table.
+
+**Parameters**
+
+<ParamField path="chunk_metadata_vector" type="ChunkMetadataVector &">
+- Vector that will be populated with chunk metadata
+</ParamField>
+
+### populateChunkBuffers [#populatechunkbuffers]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "AbstractBuffer": "../../classes/abstractbuffer", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::InternalMemoryStatsDataWrapper::populateChunkBuffers(
+    const ChunkToBufferMap &required_buffers,
+    const ChunkToBufferMap &optional_buffers,
+    AbstractBuffer *delete_buffer
+) override
+```
+</CodeBlock>
+
+Populates given chunk buffers identified by chunk keys.
+
+All provided chunk buffers are expected to be for the same fragment.
+
+**Parameters**
+
+<ParamField path="required_buffers" type="const ChunkToBufferMap &">
+- Chunk buffers that must always be populated
+</ParamField>
+
+<ParamField path="optional_buffers" type="const ChunkToBufferMap &">
+- Chunk buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats)
+</ParamField>
+
+<ParamField path="delete_buffer" type="AbstractBuffer *">
+- Chunk buffer for fragment's delete column, if non-null data wrapper is expected to mark deleted rows in buffer and continue processing
+</ParamField>
+
+### validateServerOptions [#validateserveroptions]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::InternalMemoryStatsDataWrapper::validateServerOptions(
+    const ForeignServer *foreign_server
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given foreign server object are valid.
+
+**Parameters**
+
+<ParamField path="foreign_server" type="const ForeignServer *">
+- Foreign server object containing options to be validated
+</ParamField>
+
+### validateTableOptions [#validatetableoptions]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::InternalMemoryStatsDataWrapper::validateTableOptions(
+    const ForeignTable *foreign_table
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given foreign table object are valid.
+
+**Parameters**
+
+<ParamField path="foreign_table" type="const ForeignTable *">
+- Foreign table object containing options to be validated
+</ParamField>
+
+### getSupportedTableOptions [#getsupportedtableoptions]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string_view> & foreign_storage::InternalMemoryStatsDataWrapper::getSupportedTableOptions() const override
+```
+</CodeBlock>
+
+Gets the set of supported table options for the data wrapper.
+
+### validateUserMappingOptions [#validateusermappingoptions]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::InternalMemoryStatsDataWrapper::validateUserMappingOptions(
+    const UserMapping *user_mapping,
+    const ForeignServer *foreign_server
+) const override
+```
+</CodeBlock>
+
+Checks that the options for the given user mapping object are valid.
+
+**Parameters**
+
+<ParamField path="user_mapping" type="const UserMapping *">
+- User mapping object containing options to be validated
+</ParamField>
+
+### getSupportedUserMappingOptions [#getsupportedusermappingoptions]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+const std::set<std::string_view> & foreign_storage::InternalMemoryStatsDataWrapper::getSupportedUserMappingOptions() const override
+```
+</CodeBlock>
+
+Gets the set of supported user mapping options for the data wrapper.
+
+### getSerializedDataWrapper [#getserializeddatawrapper]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::InternalMemoryStatsDataWrapper::getSerializedDataWrapper() const override
+```
+</CodeBlock>
+
+Serialize internal state of wrapper into file at given path if implemented.
+
+### restoreDataWrapperInternals [#restoredatawrapperinternals]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::InternalMemoryStatsDataWrapper::restoreDataWrapperInternals(
+    const std::string &file_path,
+    const ChunkMetadataVector &chunk_metadata
+) override
+```
+</CodeBlock>
+
+Restore internal state of datawrapper.
+
+**Parameters**
+
+<ParamField path="file_path" type="const std::string &">
+- Location of file created by serializeMetadata
+</ParamField>
+
+### isRestored [#isrestored]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::InternalMemoryStatsDataWrapper::isRestored() const override
+```
+</CodeBlock>
+
+### populateChunkBatchBuffers [#populatechunkbatchbuffers]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "AbstractBuffer": "../../classes/abstractbuffer", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ForeignDataWrapper::populateChunkBatchBuffers(
+    const ChunkToBatchBufferMap &required_buffers,
+    const ChunkToBatchBufferMap &optional_buffers,
+    const std::vector<AbstractBuffer *> &delete_buffer = {}
+)
+```
+</CodeBlock>
+
+Mirrors [`populateChunkBuffers`](abstractfilestoragedatawrapper#populatechunkbuffers), but uses batch buffers instead as an optimization.
+
+Populates given chunk batch buffers identified by chunk keys. All provided chunk buffers are expected to be for the same fragment.
+
+**Parameters**
+
+<ParamField path="required_buffers" type="const ChunkToBatchBufferMap &">
+- Chunk batch buffers that must always be populated
+</ParamField>
+
+<ParamField path="optional_buffers" type="const ChunkToBatchBufferMap &">
+- Chunk batch buffers that can be optionally populated, if the data wrapper has to scan through chunk data anyways (typically for row wise data formats)
+</ParamField>
+
+<ParamField path="delete_buffer" type="const std::vector<AbstractBuffer *> &" default="{}">
+- Chunk batch buffer for fragment's delete column, if non-null data wrapper is expected to mark deleted rows in buffer and continue processing
+</ParamField>
+
+### getOptimalBatchSize [#getoptimalbatchsize]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::ForeignDataWrapper::getOptimalBatchSize()
+```
+</CodeBlock>
+
+Get the size of batches to be used in `BatchBuffer` code paths.
+
+This quantity must be a constant and can not change over the course of the lifetime of the data wrapper. Typically, this quantity is chosen to ensure concurrency can be best executed.
+
+### getAlterableTableOptions [#getalterabletableoptions]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual const std::set<std::string> foreign_storage::ForeignDataWrapper::getAlterableTableOptions() const
+```
+</CodeBlock>
+
+Gets the subset of table options that can be altered for the data wrapper.
+
+### validateSchema [#validateschema]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ForeignDataWrapper::validateSchema(
+    const std::list<ColumnDescriptor> &columns,
+    const ForeignTable *foreign_table
+) const
+```
+</CodeBlock>
+
+Verifies the schema is supported by this foreign table.
+
+**Parameters**
+
+<ParamField path="columns" type="const std::list<ColumnDescriptor> &">
+- Column descriptors for this table
+</ParamField>
+
+### getCachedParallelismLevel [#getcachedparallelismlevel]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual ParallelismLevel foreign_storage::ForeignDataWrapper::getCachedParallelismLevel() const
+```
+</CodeBlock>
+
+Gets the desired level of parallelism for the data wrapper when a cache is in use.
+
+This affects the optional buffers that the data wrapper is made aware of during data requests.
+
+### getNonCachedParallelismLevel [#getnoncachedparallelismlevel]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual ParallelismLevel foreign_storage::ForeignDataWrapper::getNonCachedParallelismLevel() const
+```
+</CodeBlock>
+
+Gets the desired level of parallelism for the data wrapper when no cache is in use.
+
+This affects the optional buffers that the data wrapper is made aware of during data requests.
+
+### isLazyFragmentFetchingEnabled [#islazyfragmentfetchingenabled]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::ForeignDataWrapper::isLazyFragmentFetchingEnabled() const
+```
+</CodeBlock>
+
+If `true` data wrapper implements a lazy fragment fetching mode.
+
+This mode allows requests for fragments to be issued to `populateChunks` *without* the prerequisite that [`populateChunkMetadata`](abstractfilestoragedatawrapper#populatechunkmetadata) has successfully finished execution. This is an optimization that has some specific use-cases and is not required.
+
+NOTE: this mode is not guaranteed to work as expected when combined with certain types of refresh modes such as append. This is subject to change in the future, but has no impact on the intended use-cases of this mode.
+
+### acceptsPrepopulatedDeleteBuffer [#acceptsprepopulateddeletebuffer]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper", "InternalSystemDataWrapper": "internalsystemdatawrapper"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::ForeignDataWrapper::acceptsPrepopulatedDeleteBuffer() const
+```
+</CodeBlock>
+
+If `true` data wrapper accepts delete buffers that may be prepoulated with a speculative number of `false` values.
+
+This is an minor optimization that prevents unnecessary allocations and deallocations by reusing the buffer when it is large enouhg, and requiring a smaller allocation when it needs to be resized.
+
+This option is only used when delete buffers are in use.
+
+TODO: remove this method when it will become the default behaviour for all data wrappers going forward.
+
+### initializeObjectsForTable [#initializeobjectsfortable]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::InternalMemoryStatsDataWrapper::initializeObjectsForTable(
+    const std::string &table_name
+) override
+```
+</CodeBlock>
+
+### populateChunkBuffersForTable [#populatechunkbuffersfortable]
+
+<CodeBlock links={{"InternalMemoryStatsDataWrapper": "internalmemorystatsdatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::InternalMemoryStatsDataWrapper::populateChunkBuffersForTable(
+    const std::string &table_name,
+    std::map<std::string, import_export::UnmanagedTypedImportBuffer *> &import_buffers
+) override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### ParallelismLevel
+
+ParallelismLevel describes the desired level of parallelism of the data wrapper.
+
+| Name | Value | Description |
+|---|---|---|
+| `NONE` | | |
+| `INTRA_FRAGMENT` | | |
+| `INTER_FRAGMENT` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `memory_info_by_device_type_` | `std::map< std::string, std::vector< Buffer_Namespace::MemoryInfo > >` | |
+| `db_id_` | `const int` | |
+| `foreign_table_` | `const ForeignTable *` | |
+| `row_count_` | `size_t` | |

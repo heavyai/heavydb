@@ -1,0 +1,998 @@
+---
+title: SQLTypeInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <sqltypes.h>
+```
+
+---
+
+## Constructors
+
+### SQLTypeInfo [#sqltypeinfo]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo::SQLTypeInfo(
+    SQLTypes t,
+    int d,
+    int s,
+    bool n,
+    EncodingType c,
+    int p,
+    SQLTypes st
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo::SQLTypeInfo(
+    SQLTypes t,
+    int d,
+    int s,
+    bool n
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo::SQLTypeInfo(
+    SQLTypes t,
+    EncodingType c,
+    int p,
+    SQLTypes st
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo::SQLTypeInfo(
+    SQLTypes t,
+    int d,
+    int s
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo::SQLTypeInfo(
+    SQLTypes t,
+    bool n
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo::SQLTypeInfo(
+    SQLTypes t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo::SQLTypeInfo(
+    SQLTypes t,
+    bool n,
+    EncodingType c
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo::SQLTypeInfo()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::operator=(
+    const SQLTypeInfo &rhs
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_type [#gettype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypes SQLTypeInfo::get_type() const
+```
+</CodeBlock>
+
+### get_subtype [#getsubtype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypes SQLTypeInfo::get_subtype() const
+```
+</CodeBlock>
+
+### get_dimension [#getdimension]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_dimension() const
+```
+</CodeBlock>
+
+### get_precision [#getprecision]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_precision() const
+```
+</CodeBlock>
+
+### get_input_srid [#getinputsrid]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_input_srid() const
+```
+</CodeBlock>
+
+### get_scale [#getscale]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_scale() const
+```
+</CodeBlock>
+
+### get_output_srid [#getoutputsrid]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_output_srid() const
+```
+</CodeBlock>
+
+### get_notnull [#getnotnull]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::get_notnull() const
+```
+</CodeBlock>
+
+### get_compression [#getcompression]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+EncodingType SQLTypeInfo::get_compression() const
+```
+</CodeBlock>
+
+### get_comp_param [#getcompparam]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_comp_param() const
+```
+</CodeBlock>
+
+### get_size [#getsize]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_size() const
+```
+</CodeBlock>
+
+### get_max_strlen [#getmaxstrlen]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+size_t SQLTypeInfo::get_max_strlen() const
+```
+</CodeBlock>
+
+### is_logical_geo_type [#islogicalgeotype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::is_logical_geo_type() const
+```
+</CodeBlock>
+
+### is_variable_size [#isvariablesize]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_variable_size() const
+```
+</CodeBlock>
+
+### get_logical_size [#getlogicalsize]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_logical_size() const
+```
+</CodeBlock>
+
+### get_physical_cols [#getphysicalcols]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_physical_cols() const
+```
+</CodeBlock>
+
+### get_physical_coord_cols [#getphysicalcoordcols]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_physical_coord_cols() const
+```
+</CodeBlock>
+
+### has_bounds [#hasbounds]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::has_bounds() const
+```
+</CodeBlock>
+
+### set_type [#settype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_type(
+    SQLTypes t
+)
+```
+</CodeBlock>
+
+### set_subtype [#setsubtype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_subtype(
+    SQLTypes st
+)
+```
+</CodeBlock>
+
+### set_dimension [#setdimension]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_dimension(
+    int d
+)
+```
+</CodeBlock>
+
+### set_precision [#setprecision]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_precision(
+    int d
+)
+```
+</CodeBlock>
+
+### set_input_srid [#setinputsrid]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_input_srid(
+    int d
+)
+```
+</CodeBlock>
+
+### set_scale [#setscale]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_scale(
+    int s
+)
+```
+</CodeBlock>
+
+### set_output_srid [#setoutputsrid]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_output_srid(
+    int s
+)
+```
+</CodeBlock>
+
+### set_notnull [#setnotnull]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_notnull(
+    bool n
+)
+```
+</CodeBlock>
+
+### set_size [#setsize]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_size(
+    int s
+)
+```
+</CodeBlock>
+
+### set_fixed_size [#setfixedsize]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_fixed_size()
+```
+</CodeBlock>
+
+### set_dict_intersection [#setdictintersection]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_dict_intersection()
+```
+</CodeBlock>
+
+### set_compression [#setcompression]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_compression(
+    EncodingType c
+)
+```
+</CodeBlock>
+
+### set_comp_param [#setcompparam]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::set_comp_param(
+    int p
+)
+```
+</CodeBlock>
+
+### get_type_name [#gettypename]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+std::string SQLTypeInfo::get_type_name() const
+```
+</CodeBlock>
+
+### get_compression_name [#getcompressionname]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+std::string SQLTypeInfo::get_compression_name() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+std::string SQLTypeInfo::toString() const
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+std::string SQLTypeInfo::to_string() const
+```
+</CodeBlock>
+
+### get_buffer_name [#getbuffername]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+std::string SQLTypeInfo::get_buffer_name() const
+```
+</CodeBlock>
+
+### is_any [#isany]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+template <SQLTypes... types>
+bool SQLTypeInfo::is_any() const
+```
+</CodeBlock>
+
+### is_string [#isstring]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_string() const
+```
+</CodeBlock>
+
+### is_string_array [#isstringarray]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_string_array() const
+```
+</CodeBlock>
+
+### is_integer [#isinteger]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_integer() const
+```
+</CodeBlock>
+
+### is_decimal [#isdecimal]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_decimal() const
+```
+</CodeBlock>
+
+### is_fp [#isfp]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_fp() const
+```
+</CodeBlock>
+
+### is_number [#isnumber]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_number() const
+```
+</CodeBlock>
+
+### is_time [#istime]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_time() const
+```
+</CodeBlock>
+
+### is_boolean [#isboolean]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_boolean() const
+```
+</CodeBlock>
+
+### is_array [#isarray]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_array() const
+```
+</CodeBlock>
+
+### is_varlen_array [#isvarlenarray]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_varlen_array() const
+```
+</CodeBlock>
+
+### is_fixlen_array [#isfixlenarray]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_fixlen_array() const
+```
+</CodeBlock>
+
+### is_timeinterval [#istimeinterval]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_timeinterval() const
+```
+</CodeBlock>
+
+### is_geometry [#isgeometry]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_geometry() const
+```
+</CodeBlock>
+
+### is_column [#iscolumn]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_column() const
+```
+</CodeBlock>
+
+### is_column_list [#iscolumnlist]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_column_list() const
+```
+</CodeBlock>
+
+### is_column_array [#iscolumnarray]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_column_array() const
+```
+</CodeBlock>
+
+### is_column_list_array [#iscolumnlistarray]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_column_list_array() const
+```
+</CodeBlock>
+
+### is_text_encoding_none [#istextencodingnone]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_text_encoding_none() const
+```
+</CodeBlock>
+
+### is_text_encoding_dict [#istextencodingdict]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_text_encoding_dict() const
+```
+</CodeBlock>
+
+### is_text_encoding_dict_array [#istextencodingdictarray]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_text_encoding_dict_array() const
+```
+</CodeBlock>
+
+### is_buffer [#isbuffer]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_buffer() const
+```
+</CodeBlock>
+
+### transforms [#transforms]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::transforms() const
+```
+</CodeBlock>
+
+### is_varlen [#isvarlen]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_varlen() const
+```
+</CodeBlock>
+
+### is_varlen_indeed [#isvarlenindeed]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_varlen_indeed() const
+```
+</CodeBlock>
+
+### is_dict_encoded_string [#isdictencodedstring]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_dict_encoded_string() const
+```
+</CodeBlock>
+
+### is_none_encoded_string [#isnoneencodedstring]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_none_encoded_string() const
+```
+</CodeBlock>
+
+### is_subtype_dict_encoded_string [#issubtypedictencodedstring]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_subtype_dict_encoded_string() const
+```
+</CodeBlock>
+
+### is_dict_encoded_type [#isdictencodedtype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_dict_encoded_type() const
+```
+</CodeBlock>
+
+### is_dict_intersection [#isdictintersection]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_dict_intersection() const
+```
+</CodeBlock>
+
+### has_same_itemtype [#hassameitemtype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::has_same_itemtype(
+    const SQLTypeInfo &other
+) const
+```
+</CodeBlock>
+
+### is_extractable_int_type [#isextractableinttype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_extractable_int_type() const
+```
+</CodeBlock>
+
+### operator!= [#operator_ne]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::operator!=(
+    const SQLTypeInfo &rhs
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::operator==(
+    const SQLTypeInfo &rhs
+) const
+```
+</CodeBlock>
+
+### get_array_context_logical_size [#getarraycontextlogicalsize]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_array_context_logical_size() const
+```
+</CodeBlock>
+
+### is_castable [#iscastable]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_castable(
+    const SQLTypeInfo &new_type_info
+) const
+```
+</CodeBlock>
+
+### is_numeric_scalar_auto_castable [#isnumericscalarautocastable]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_numeric_scalar_auto_castable(
+    const SQLTypeInfo &new_type_info
+) const
+```
+</CodeBlock>
+
+returns true if the sql_type can be cast to the type specified by new_type_info with no loss of precision.
+
+Currently only used in ExtensionFunctionsBindings to determine legal function matches, but we should consider whether we need to rationalize implicit casting behavior more broadly in QueryEngine.
+
+### get_numeric_scalar_scale [#getnumericscalarscale]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int32_t SQLTypeInfo::get_numeric_scalar_scale() const
+```
+</CodeBlock>
+
+returns integer between 1 and 8 indicating what is roughly equivalent to the logical byte size of a scalar numeric type (including boolean + time types), but with decimals and numerics mapped to the byte size of their dimension (which may vary from the type width), and timestamps, dates and times handled in a relative fashion.
+
+Note: this function only takes the scalar numeric types above, and will throw a check for other types.
+
+### is_null [#isnull]
+
+<Tabs>
+<Tab title="Const (with d)">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_null(
+    const Datum &d
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with val)">
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_null(
+    const int8_t *val
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### is_null_fixlen_array [#isnullfixlenarray]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_null_fixlen_array(
+    const int8_t *val,
+    int array_size
+) const
+```
+</CodeBlock>
+
+### is_null_point_coord_array [#isnullpointcoordarray]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_null_point_coord_array(
+    const int8_t *val,
+    int array_size
+) const
+```
+</CodeBlock>
+
+### get_elem_type [#getelemtype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo SQLTypeInfo::get_elem_type() const
+```
+</CodeBlock>
+
+### get_array_type [#getarraytype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo SQLTypeInfo::get_array_type() const
+```
+</CodeBlock>
+
+### is_date_in_days [#isdateindays]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_date_in_days() const
+```
+</CodeBlock>
+
+### is_date [#isdate]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_date() const
+```
+</CodeBlock>
+
+### is_time_or_date [#istimeordate]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_time_or_date() const
+```
+</CodeBlock>
+
+### is_high_precision_timestamp [#ishighprecisiontimestamp]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_high_precision_timestamp() const
+```
+</CodeBlock>
+
+### is_timestamp [#istimestamp]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_timestamp() const
+```
+</CodeBlock>
+
+### is_encoded_timestamp [#isencodedtimestamp]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::is_encoded_timestamp() const
+```
+</CodeBlock>
+
+### setStorageSize [#setstoragesize]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::setStorageSize()
+```
+</CodeBlock>
+
+### getStringDictKey [#getstringdictkey]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo", "StringDictKey": "../shared/structs/stringdictkey"}}>
+```cpp showLineNumbers={false}
+const shared::StringDictKey & SQLTypeInfo::getStringDictKey() const
+```
+</CodeBlock>
+
+### setStringDictKey [#setstringdictkey]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo", "StringDictKey": "../shared/structs/stringdictkey"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::setStringDictKey(
+    const shared::StringDictKey &dict_key
+)
+```
+</CodeBlock>
+
+### getStringDictKeySkipCompParamCheck [#getstringdictkeyskipcompparamcheck]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo", "StringDictKey": "../shared/structs/stringdictkey"}}>
+```cpp showLineNumbers={false}
+const shared::StringDictKey & SQLTypeInfo::getStringDictKeySkipCompParamCheck() const
+```
+</CodeBlock>
+
+### setStringDictKeySkipCompParamCheck [#setstringdictkeyskipcompparamcheck]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo", "StringDictKey": "../shared/structs/stringdictkey"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::setStringDictKeySkipCompParamCheck(
+    const shared::StringDictKey &dict_key
+)
+```
+</CodeBlock>
+
+### setUsesFlatBuffer [#setusesflatbuffer]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+void SQLTypeInfo::setUsesFlatBuffer(
+    bool uses_flatbuffer = true
+)
+```
+</CodeBlock>
+
+### usesFlatBuffer [#usesflatbuffer]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::usesFlatBuffer() const
+```
+</CodeBlock>
+
+### supportsFlatBuffer [#supportsflatbuffer]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+bool SQLTypeInfo::supportsFlatBuffer() const
+```
+</CodeBlock>
+
+### toLite [#tolite]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo", "SQLTypeInfoLite": "../structs/sqltypeinfolite"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfoLite SQLTypeInfo::toLite() const
+```
+</CodeBlock>
+
+### toValueType [#tovaluetype]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+FlatBufferManager::ValueType SQLTypeInfo::toValueType() const
+```
+</CodeBlock>
+
+### get_storage_size [#getstoragesize]
+
+<CodeBlock links={{"SQLTypeInfo": "sqltypeinfo"}}>
+```cpp showLineNumbers={false}
+int SQLTypeInfo::get_storage_size() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type` | `SQLTypes` | |
+| `subtype` | `SQLTypes` | |
+| `dimension` | `int` | |
+| `scale` | `int` | |
+| `notnull` | `bool` | |
+| `compression` | `EncodingType` | |
+| `comp_param` | `int` | |
+| `size` | `int` | |
+| `dict_intersection` | `bool` | |
+| `dict_key_` | `shared::StringDictKey` | |
+| `uses_flatbuffer_` | `bool` | |
+| `type_name` <Badge intent="note" minimal>static</Badge> | `std::string` | |
+| `comp_name` <Badge intent="note" minimal>static</Badge> | `std::string` | |

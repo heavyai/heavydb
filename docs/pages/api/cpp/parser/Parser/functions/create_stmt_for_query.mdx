@@ -1,0 +1,17 @@
+---
+title: Parser::create_stmt_for_query
+description: "Helper functions for parsing the DDL returned from calcite as part of the plan result to a parser node in this class."
+---
+
+<CodeBlock links={{"Stmt": "../classes/stmt"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<Parser::Stmt> Parser::create_stmt_for_query(
+    const std::string &queryStr,
+    const Catalog_Namespace::SessionInfo &session_info
+)
+```
+</CodeBlock>
+
+Helper functions for parsing the DDL returned from calcite as part of the plan result to a parser node in this class.
+
+Currently only used in QueryRunner/DistributedQueryRunner, where we do not want to link in the thrift dependencies wich DdlCommandExecutor currently brings along.

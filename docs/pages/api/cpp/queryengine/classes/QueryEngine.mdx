@@ -1,0 +1,94 @@
+---
+title: QueryEngine
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryEngine.h>
+```
+
+---
+
+## Constructors
+
+### QueryEngine [#queryengine]
+
+<CodeBlock links={{"QueryEngine": "queryengine"}}>
+```cpp showLineNumbers={false}
+QueryEngine::QueryEngine(
+    CudaMgr_Namespace::CudaMgr *cuda_mgr,
+    bool cpu_only
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~QueryEngine
+
+<CodeBlock links={{"QueryEngine": "queryengine"}}>
+```cpp showLineNumbers={false}
+QueryEngine::~QueryEngine()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getCudaStream [#getcudastream]
+
+<CodeBlock links={{"QueryEngine": "queryengine"}}>
+```cpp showLineNumbers={false}
+CUstream QueryEngine::getCudaStream()
+```
+</CodeBlock>
+
+### getCudaStreamForDevice [#getcudastreamfordevice]
+
+<CodeBlock links={{"QueryEngine": "queryengine"}}>
+```cpp showLineNumbers={false}
+CUstream QueryEngine::getCudaStreamForDevice(
+    int device_num
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getInstance [#getinstance]
+
+<CodeBlock links={{"QueryEngine": "queryengine"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<QueryEngine> QueryEngine::getInstance()
+```
+</CodeBlock>
+
+### createInstance [#createinstance]
+
+<CodeBlock links={{"QueryEngine": "queryengine"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<QueryEngine> QueryEngine::createInstance(
+    CudaMgr_Namespace::CudaMgr *cuda_mgr,
+    bool cpu_only
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cuda_mgr_` | `CudaMgr_Namespace::CudaMgr *` | |
+| `cuda_streams_` | `std::vector< CUstream >` | |
+| `mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `instance_` <Badge intent="note" minimal>static</Badge> | `std::weak_ptr< QueryEngine >` | |
+| `s_stubs_accessor` | `std::unique_ptr< CodeCacheAccessor< CpuCompilationContext > >` | |
+| `s_code_accessor` | `std::unique_ptr< CodeCacheAccessor< CpuCompilationContext > >` | |
+| `cpu_code_accessor` | `std::unique_ptr< CodeCacheAccessor< CpuCompilationContext > >` | |
+| `gpu_code_accessor` | `std::unique_ptr< CodeCacheAccessor< GpuCompilationContext > >` | |
+| `tf_code_accessor` | `std::unique_ptr< CodeCacheAccessor< CompilationContext > >` | |

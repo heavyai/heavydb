@@ -1,0 +1,29 @@
+---
+title: ExecutorResourceMgr_Namespace::generate_executor_resource_mgr
+description: "Convenience factory-esque method that allows us to use the same logic to generate an ExecutorResourceMgr both internally and for ExecutorResourceMgr tests."
+---
+
+<CodeBlock links={{"ExecutorResourceMgr": "../classes/executorresourcemgr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ExecutorResourceMgr> ExecutorResourceMgr_Namespace::generate_executor_resource_mgr(
+    const size_t num_cpu_slots,
+    const size_t num_gpu_slots,
+    const size_t cpu_result_mem,
+    const bool use_cpu_mem_pool_for_output_buffers,
+    const size_t cpu_buffer_pool_mem,
+    const size_t gpu_buffer_pool_mem,
+    const double per_query_max_cpu_slots_ratio,
+    const double per_query_max_cpu_result_mem_ratio,
+    const double per_query_max_pinned_cpu_buffer_pool_mem_ratio,
+    const double per_query_max_pageable_cpu_buffer_pool_mem_ratio,
+    const bool allow_cpu_kernel_concurrency,
+    const bool allow_cpu_gpu_kernel_concurrency,
+    const bool allow_cpu_slot_oversubscription_concurrency,
+    const bool allow_gpu_slot_oversubscription,
+    const bool allow_cpu_result_mem_oversubscription_concurrency,
+    const double max_available_resource_use_ratio
+)
+```
+</CodeBlock>
+
+Convenience factory-esque method that allows us to use the same logic to generate an [`ExecutorResourceMgr`](../classes/executorresourcemgr) both internally and for [`ExecutorResourceMgr`](../classes/executorresourcemgr) tests.

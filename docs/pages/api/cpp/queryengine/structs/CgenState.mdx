@@ -1,0 +1,516 @@
+---
+title: CgenState
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CgenState.h>
+```
+
+---
+
+## Constructors
+
+### CgenState [#cgenstate]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CgenState": "cgenstate", "Executor": "../classes/executor"}}>
+```cpp showLineNumbers={false}
+CgenState::CgenState(
+    const size_t num_query_infos,
+    const bool contains_left_deep_outer_join,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+CgenState::CgenState(
+    const size_t num_query_infos,
+    const bool contains_left_deep_outer_join
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+CgenState::CgenState(
+    llvm::LLVMContext &context
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getOrAddLiteral [#getoraddliteral]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+std::tuple<size_t, size_t> CgenState::getOrAddLiteral(
+    const Analyzer::Constant *constant,
+    const EncodingType enc_type,
+    const shared::StringDictKey &dict_id,
+    const int device_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+template <class T>
+std::tuple<size_t, size_t> CgenState::getOrAddLiteral(
+    T val,
+    const int device_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getLiterals [#getliterals]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+const std::unordered_map<int, LiteralValues> & CgenState::getLiterals() const
+```
+</CodeBlock>
+
+### addStringConstant [#addstringconstant]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CgenState::addStringConstant(
+    const std::string &str
+)
+```
+</CodeBlock>
+
+### moveStringDictionaryTranslationMgr [#movestringdictionarytranslationmgr]
+
+<CodeBlock links={{"CgenState": "cgenstate", "StringDictionaryTranslationMgr": "../classes/stringdictionarytranslationmgr"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryTranslationMgr * CgenState::moveStringDictionaryTranslationMgr(
+    std::unique_ptr<const StringDictionaryTranslationMgr> &&str_dict_translation_mgr
+)
+```
+</CodeBlock>
+
+### moveTreeModelPredictionMgr [#movetreemodelpredictionmgr]
+
+<CodeBlock links={{"CgenState": "cgenstate", "TreeModelPredictionMgr": "../classes/treemodelpredictionmgr"}}>
+```cpp showLineNumbers={false}
+const TreeModelPredictionMgr * CgenState::moveTreeModelPredictionMgr(
+    std::unique_ptr<const TreeModelPredictionMgr> &&tree_model_prediction_mgr
+)
+```
+</CodeBlock>
+
+### addInValuesBitmap [#addinvaluesbitmap]
+
+<CodeBlock links={{"CgenState": "cgenstate", "InValuesBitmap": "../classes/invaluesbitmap"}}>
+```cpp showLineNumbers={false}
+const InValuesBitmap * CgenState::addInValuesBitmap(
+    std::unique_ptr<InValuesBitmap> &in_values_bitmap
+)
+```
+</CodeBlock>
+
+### moveInValuesBitmap [#moveinvaluesbitmap]
+
+<CodeBlock links={{"CgenState": "cgenstate", "InValuesBitmap": "../classes/invaluesbitmap"}}>
+```cpp showLineNumbers={false}
+void CgenState::moveInValuesBitmap(
+    std::unique_ptr<const InValuesBitmap> &in_values_bitmap
+)
+```
+</CodeBlock>
+
+### emitExternalCall [#emitexternalcall]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CgenState::emitExternalCall(
+    const std::string &fname,
+    llvm::Type *ret_type,
+    const std::vector<llvm::Value *> args,
+    const std::vector<llvm::Attribute::AttrKind> &fnattrs = {},
+    const bool has_struct_return = false
+)
+```
+</CodeBlock>
+
+### emitCall [#emitcall]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CgenState::emitCall(
+    const std::string &fname,
+    const std::vector<llvm::Value *> &args
+)
+```
+</CodeBlock>
+
+### emitEntryCall [#emitentrycall]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CgenState::emitEntryCall(
+    const std::string &fname,
+    const std::vector<llvm::Value *> &args
+)
+```
+</CodeBlock>
+
+### getLiteralBufferUsage [#getliteralbufferusage]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+size_t CgenState::getLiteralBufferUsage(
+    const int device_id
+)
+```
+</CodeBlock>
+
+### castToTypeIn [#casttotypein]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CgenState::castToTypeIn(
+    llvm::Value *val,
+    const size_t bit_width
+)
+```
+</CodeBlock>
+
+### inlineIntMaxMin [#inlineintmaxmin]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+std::pair<llvm::ConstantInt *, llvm::ConstantInt *> CgenState::inlineIntMaxMin(
+    const size_t byte_width,
+    const bool is_signed
+)
+```
+</CodeBlock>
+
+### inlineIntNull [#inlineintnull]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::ConstantInt * CgenState::inlineIntNull(
+    const SQLTypeInfo &
+)
+```
+</CodeBlock>
+
+### inlineFpNull [#inlinefpnull]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::ConstantFP * CgenState::inlineFpNull(
+    const SQLTypeInfo &
+)
+```
+</CodeBlock>
+
+### inlineNull [#inlinenull]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::Constant * CgenState::inlineNull(
+    const SQLTypeInfo &
+)
+```
+</CodeBlock>
+
+### llInt [#llint]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+template <class T>
+llvm::ConstantInt * CgenState::llInt(
+    const T v
+) const
+```
+</CodeBlock>
+
+### llFp [#llfp]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::ConstantFP * CgenState::llFp(
+    const float v
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::ConstantFP * CgenState::llFp(
+    const double v
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### llBool [#llbool]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::ConstantInt * CgenState::llBool(
+    const bool v
+) const
+```
+</CodeBlock>
+
+### emitErrorCheck [#emiterrorcheck]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+void CgenState::emitErrorCheck(
+    llvm::Value *condition,
+    llvm::Value *errorCode,
+    std::string label
+)
+```
+</CodeBlock>
+
+### gpuFunctionsToReplace [#gpufunctionstoreplace]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> CgenState::gpuFunctionsToReplace(
+    llvm::Function *fn
+)
+```
+</CodeBlock>
+
+### replaceFunctionForGpu [#replacefunctionforgpu]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+void CgenState::replaceFunctionForGpu(
+    const std::string &fcn_to_replace,
+    llvm::Function *fn
+)
+```
+</CodeBlock>
+
+### getExecutor [#getexecutor]
+
+<CodeBlock links={{"CgenState": "cgenstate", "Executor": "../classes/executor"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Executor> CgenState::getExecutor() const
+```
+</CodeBlock>
+
+### getExecutorContext [#getexecutorcontext]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::LLVMContext & CgenState::getExecutorContext() const
+```
+</CodeBlock>
+
+### set_module_shallow_copy [#setmoduleshallowcopy]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+void CgenState::set_module_shallow_copy(
+    const std::unique_ptr<llvm::Module> &module,
+    bool always_clone = false
+)
+```
+</CodeBlock>
+
+### isCountDistinctOnEncodedDate [#iscountdistinctonencodeddate]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+bool CgenState::isCountDistinctOnEncodedDate(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+### maybeCloneFunctionRecursive [#maybeclonefunctionrecursive]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+void CgenState::maybeCloneFunctionRecursive(
+    llvm::Function *fn
+)
+```
+</CodeBlock>
+
+### getStringView [#getstringview]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CgenState::getStringView(
+    llvm::Value *ptr,
+    llvm::Value *len
+)
+```
+</CodeBlock>
+
+### makeArrayLiteral [#makearrayliteral]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+static std::vector<T> CgenState::makeArrayLiteral(
+    Analyzer::Constant const *constant_array
+)
+```
+</CodeBlock>
+
+Return the actual values in a std::vector&lt;T&gt; of a given [Constant](../classes/constant) array.
+
+---
+
+## Static methods
+
+### align [#align]
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+static size_t CgenState::align(
+    size_t const offset,
+    size_t const alignment
+)
+```
+</CodeBlock>
+
+Return offset if offset is divisible by alignment, otherwise the next highest multiple of alignment.
+
+Requirements: alignment is a power of two. Examples: align(12, 4) -&gt; 12 align(13, 4) -&gt; 16
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `LiteralValue` | `std::variant< int8_t, int16_t, int32_t, int64_t, float, double, std::pair< std::string, shared::StringDictKey >, std::string, std::vector< double >, std::vector< float >, std::vector< int32_t >, std::vector< int8_t >, std::pair< std::vector< int8_t >, int > >` |
+| `LiteralValues` | `std::vector< LiteralValue >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_id_` | `size_t` | |
+| `module_` | `llvm::Module *` | |
+| `row_func_` | `llvm::Function *` | |
+| `filter_func_` | `llvm::Function *` | |
+| `current_func_` | `llvm::Function *` | |
+| `row_func_bb_` | `llvm::BasicBlock *` | |
+| `filter_func_bb_` | `llvm::BasicBlock *` | |
+| `row_func_call_` | `llvm::CallInst *` | |
+| `filter_func_call_` | `llvm::CallInst *` | |
+| `helper_functions_` | `std::vector< llvm::Function * >` | |
+| `context_` | `llvm::LLVMContext &` | |
+| `vmap_` | `llvm::ValueToValueMapTy` | |
+| `ir_builder_` | `llvm::IRBuilder` | |
+| `fetch_cache_` | `std::unordered_map< size_t, std::vector< llvm::Value * > >` | |
+| `ext_call_cache_` | `std::vector< FunctionOperValue >` | |
+| `group_by_expr_cache_` | `std::vector< llvm::Value * >` | |
+| `str_constants_` | `std::vector< llvm::Value * >` | |
+| `frag_offsets_` | `std::vector< llvm::Value * >` | |
+| `contains_left_deep_outer_join_` | `const bool` | |
+| `outer_join_match_found_per_level_` | `std::vector< llvm::Value * >` | |
+| `scan_idx_to_hash_pos_` | `std::unordered_map< int, llvm::Value * >` | |
+| `filter_func_args_` | `InsertionOrderedMap` | |
+| `in_values_bitmaps_` | `std::vector< std::unique_ptr< const InValuesBitmap > >` | |
+| `tree_model_prediction_mgrs_` | `std::vector< std::unique_ptr< const TreeModelPredictionMgr > >` | |
+| `str_dict_translation_mgrs_` | `std::vector< std::unique_ptr< const StringDictionaryTranslationMgr > >` | |
+| `array_load_cache_` | `std::map< std::pair< llvm::Value *, llvm::Value * >, ArrayLoadCodegen >` | |
+| `geo_target_cache_` | `std::unordered_map< std::string, llvm::Value * >` | |
+| `needs_error_check_` | `bool` | |
+| `needs_geos_` | `bool` | |
+| `query_func_` | `llvm::Function *` | |
+| `query_func_entry_ir_builder_` | `llvm::IRBuilder` | |
+| `query_func_literal_loads_` | `std::unordered_map< int, std::vector< llvm::Value * > >` | |
+| `count_distinct_on_encoded_date_arg_` | `std::unordered_set< const Analyzer::Expr * >` | |
+| `row_func_hoisted_literals_` | `std::unordered_map< llvm::Value *, HoistedLiteralLoadLocator >` | |
+| `literals_` | `std::unordered_map< int, LiteralValues >` | |
+| `literal_bytes_` | `std::unordered_map< int, size_t >` | |
+
+---
+
+## Inner classes
+
+### FunctionOperValue
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+struct CgenState::FunctionOperValue
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `foper` | `const Analyzer::FunctionOper *` | |
+| `lv` | `llvm::Value *` | |
+
+### HoistedLiteralLoadLocator
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+struct CgenState::HoistedLiteralLoadLocator
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `offset_in_literal_buffer` | `int` | |
+| `index_of_literal_load` | `int` | |
+
+### LiteralBytes
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+struct CgenState::LiteralBytes
+```
+</CodeBlock>
+
+### GetConstval
+
+<CodeBlock links={{"CgenState": "cgenstate"}}>
+```cpp showLineNumbers={false}
+struct CgenState::GetConstval
+```
+</CodeBlock>

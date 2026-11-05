@@ -1,0 +1,112 @@
+---
+title: GeoPolygonValueConverter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetValueConvertersImpl.h>
+```
+
+**Inherits from:** `GeoPointValueConverter` (public)
+
+---
+
+## Constructors
+
+### GeoPolygonValueConverter [#geopolygonvalueconverter]
+
+<CodeBlock links={{"GeoPolygonValueConverter": "geopolygonvalueconverter"}}>
+```cpp showLineNumbers={false}
+GeoPolygonValueConverter::GeoPolygonValueConverter(
+    const Catalog_Namespace::Catalog &cat,
+    size_t num_rows,
+    const ColumnDescriptor *logicalColumnDescriptor
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~GeoPolygonValueConverter
+
+<CodeBlock links={{"GeoPolygonValueConverter": "geopolygonvalueconverter"}}>
+```cpp showLineNumbers={false}
+GeoPolygonValueConverter::~GeoPolygonValueConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateColumnarData [#allocatecolumnardata]
+
+<CodeBlock links={{"GeoPolygonValueConverter": "geopolygonvalueconverter"}}>
+```cpp showLineNumbers={false}
+void GeoPolygonValueConverter::allocateColumnarData(
+    size_t num_rows
+) override
+```
+</CodeBlock>
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"GeoPolygonValueConverter": "geopolygonvalueconverter"}}>
+```cpp showLineNumbers={false}
+void GeoPolygonValueConverter::convertToColumnarFormat(
+    size_t row,
+    const TargetValue *value
+) override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"GeoPolygonValueConverter": "geopolygonvalueconverter", "InsertData": "../fragmenternamespace/structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void GeoPolygonValueConverter::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+### toCompressedCoords [#tocompressedcoords]
+
+<CodeBlock links={{"GeoPolygonValueConverter": "geopolygonvalueconverter", "GeoPointValueConverter": "geopointvalueconverter"}}>
+```cpp showLineNumbers={false}
+ArrayDatum GeoPolygonValueConverter::toCompressedCoords(
+    const std::shared_ptr<std::vector<double>> &coords
+)
+```
+</CodeBlock>
+
+### finalizeDataBlocksForInsertData [#finalizedatablocksforinsertdata]
+
+<CodeBlock links={{"GeoPolygonValueConverter": "geopolygonvalueconverter", "GeoPointValueConverter": "geopointvalueconverter"}}>
+```cpp showLineNumbers={false}
+virtual void TargetValueConverter::finalizeDataBlocksForInsertData()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ring_sizes_column_descriptor_` | `const ColumnDescriptor *` | |
+| `bounds_column_descriptor_` | `const ColumnDescriptor *` | |
+| `ring_sizes_data_` | `std::unique_ptr< std::vector< ArrayDatum > >` | |
+| `bounds_data_` | `std::unique_ptr< std::vector< ArrayDatum > >` | |
+| `GEO_POLY_VALUE_ACCESSOR` | `boost_variant_accessor< GeoPolyTargetValue >` | |
+| `coords_column_descriptor_` | `const ColumnDescriptor *` | |
+| `column_data_` | `std::unique_ptr< std::vector< std::string > >` | |
+| `signed_compressed_coords_data_` | `std::unique_ptr< std::vector< ArrayDatum > >` | |
+| `GEO_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `GEO_POINT_VALUE_ACCESSOR` | `boost_variant_accessor< GeoPointTargetValue >` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `SCALAR_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ScalarTargetValue >` | |
+| `ARRAY_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ArrayTargetValue >` | |
+| `GEO_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `NULLABLE_STRING_ACCESSOR` | `boost_variant_accessor< NullableString >` | |
+| `STRING_ACCESSOR` | `boost_variant_accessor< std::string >` | |

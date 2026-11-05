@@ -1,0 +1,16 @@
+---
+title: compute_bucket_sizes_on_cpu
+description: ""
+---
+
+<CodeBlock links={{"JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+void compute_bucket_sizes_on_cpu(
+    std::vector<double> &bucket_sizes_for_dimension,
+    const JoinColumn &join_column,
+    const JoinColumnTypeInfo &type_info,
+    const std::vector<double> &bucket_size_thresholds,
+    const int thread_count
+)
+```
+</CodeBlock>

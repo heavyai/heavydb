@@ -1,0 +1,93 @@
+---
+title: Parser::ValidateStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### ValidateStmt [#validatestmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ValidateStmt": "validatestmt", "NameValueAssign": "namevalueassign"}}>
+```cpp showLineNumbers={false}
+Parser::ValidateStmt::ValidateStmt(
+    std::string *type,
+    std::list<NameValueAssign *> *with_opts
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"ValidateStmt": "validatestmt"}}>
+```cpp showLineNumbers={false}
+Parser::ValidateStmt::ValidateStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### isRepairTypeRemove [#isrepairtyperemove]
+
+<CodeBlock links={{"ValidateStmt": "validatestmt"}}>
+```cpp showLineNumbers={false}
+bool Parser::ValidateStmt::isRepairTypeRemove() const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"ValidateStmt": "validatestmt"}}>
+```cpp showLineNumbers={false}
+const std::string Parser::ValidateStmt::getType() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"ValidateStmt": "validatestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::ValidateStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"ValidateStmt": "validatestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::ValidateStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `type_` | `std::unique_ptr< std::string >` | |
+| `isRepairTypeRemove_` | `bool` | |

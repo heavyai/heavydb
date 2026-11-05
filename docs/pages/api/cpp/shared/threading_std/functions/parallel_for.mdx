@@ -1,0 +1,40 @@
+---
+title: threading_std::parallel_for
+description: "Parallel iteration over range with default partitioner."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"blocked_range": "../../threadingcommon/classes/blockedrange"}}>
+```cpp showLineNumbers={false}
+template <typename Int, typename Body, typename Partitioner = auto_partitioner>
+void threading_std::parallel_for(
+    const blocked_range<Int> &range,
+    const Body &body,
+    const Partitioner &p = Partitioner()
+)
+```
+</CodeBlock>
+
+Parallel iteration over range with default partitioner.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename Index, typename Function, typename Partitioner = auto_partitioner>
+void threading_std::parallel_for(
+    Index first,
+    Index last,
+    const Function &f,
+    const Partitioner &p = Partitioner()
+)
+```
+</CodeBlock>
+
+Parallel iteration over a range of integers with a default step value and default partitioner
+
+</Tab>
+</Tabs>

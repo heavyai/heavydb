@@ -1,0 +1,313 @@
+---
+title: Geospatial::GeoMultiLineString
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Geospatial/Types.h>
+```
+
+**Inherits from:** `Geospatial::GeoBase` (public)
+
+---
+
+## Constructors
+
+### GeoMultiLineString [#geomultilinestring]
+
+<Tabs>
+<Tab title="Copy (with coords and linestring sizes)">
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoMultiLineString::GeoMultiLineString(
+    const std::vector<double> &coords,
+    const std::vector<int32_t> &linestring_sizes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with wkt)">
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoMultiLineString::GeoMultiLineString(
+    const std::string &wkt
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoMultiLineString::GeoMultiLineString(
+    OGRGeometry *geom,
+    const bool owns_geom_obj
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getColumns [#getcolumns]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring"}}>
+```cpp showLineNumbers={false}
+void Geospatial::GeoMultiLineString::getColumns(
+    std::vector<double> &coords,
+    std::vector<int32_t> &linestring_sizes,
+    std::vector<double> &bounds
+) const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring"}}>
+```cpp showLineNumbers={false}
+GeoType Geospatial::GeoMultiLineString::getType() const
+```
+</CodeBlock>
+
+### clone [#clone]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoMultiLineString::clone() const
+```
+</CodeBlock>
+
+### getWktString [#getwktstring]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::string Geospatial::GeoMultiLineString::getWktString() const
+```
+</CodeBlock>
+
+### getWkb [#getwkb]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoMultiLineString::getWkb(
+    std::vector<uint8_t> &
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with wkb size)">
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+uint8_t * Geospatial::GeoMultiLineString::getWkb(
+    size_t &wkb_size
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOGRGeometry [#getogrgeometry]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+const OGRGeometry * Geospatial::GeoMultiLineString::getOGRGeometry() const
+```
+</CodeBlock>
+
+### getBestPlanarSRID [#getbestplanarsrid]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+int32_t Geospatial::GeoMultiLineString::getBestPlanarSRID() const
+```
+</CodeBlock>
+
+### transform [#transform]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoMultiLineString::transform(
+    int32_t srid0,
+    int32_t srid1
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoMultiLineString::transform(
+    SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoMultiLineString::operator==(
+    const GeoBase &other
+) const
+```
+</CodeBlock>
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoMultiLineString::isEmpty() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<Tabs>
+<Tab title="Const (with other)">
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoMultiLineString::run(
+    GeoOp op,
+    const GeoBase &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with param)">
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoMultiLineString::run(
+    GeoOp op,
+    double param
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoMultiLineString::run(
+    GeoOp op
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### optimized_run [#optimizedrun]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoMultiLineString::optimized_run(
+    GeoOp op,
+    const GeoBase &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getTransformation [#gettransformation]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<OGRCoordinateTransformation> Geospatial::GeoMultiLineString::getTransformation(
+    int32_t srid0,
+    int32_t srid1
+)
+```
+</CodeBlock>
+
+### createFromWktString [#createfromwktstring]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+OGRErr Geospatial::GeoMultiLineString::createFromWktString(
+    const std::string &wkt,
+    OGRGeometry **geom
+)
+```
+</CodeBlock>
+
+### createFromWkbView [#createfromwkbview]
+
+<CodeBlock links={{"GeoMultiLineString": "geomultilinestring", "WkbView": "../structs/wkbview", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+OGRErr Geospatial::GeoMultiLineString::createFromWkbView(
+    OGRGeometry **geom,
+    WkbView const
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### GeoType
+
+| Name | Value | Description |
+|---|---|---|
+| `kPOINT` | | |
+| `kLINESTRING` | | |
+| `kPOLYGON` | | |
+| `kMULTIPOLYGON` | | |
+| `kGEOMETRY` | | |
+| `kGEOMETRYCOLLECTION` | | |
+| `kMULTILINESTRING` | | |
+| `kMULTIPOINT` | | |
+### GeoOp
+
+| Name | Value | Description |
+|---|---|---|
+| `kPROJECTION` | `= 0` | |
+| `kINTERSECTION` | `= 1` | |
+| `kDIFFERENCE` | `= 2` | |
+| `kUNION` | `= 3` | |
+| `kBUFFER` | `= 4` | |
+| `kISVALID` | `= 5` | |
+| `kISEMPTY` | `= 6` | |
+| `kEQUALS` | `= 7` | |
+| `kCONCAVEHULL` | `= 8` | |
+| `kCONVEXHULL` | `= 9` | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `geom_` | `OGRGeometry *` | |
+| `owns_geom_obj_` | `bool` | |

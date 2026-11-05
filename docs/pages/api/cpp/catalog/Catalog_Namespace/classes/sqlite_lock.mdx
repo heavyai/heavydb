@@ -1,0 +1,78 @@
+---
+title: Catalog_Namespace::sqlite_lock
+description: ""
+---
+
+<CodeBlock id="sqlite_lock" links={{"sqlite_lock": "sqlitelock"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+class sqlite_lock
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/RWLocks.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+**Inherits from:** `Catalog_Namespace::cat_lock< T >` (public)
+
+---
+
+## Constructors
+
+### sqlite_lock [#sqlitelock]
+
+<CodeBlock links={{"sqlite_lock": "sqlitelock"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::sqlite_lock<T>::sqlite_lock(
+    const T *cat
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~sqlite_lock
+
+<CodeBlock links={{"sqlite_lock": "sqlitelock"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::sqlite_lock<T>::~sqlite_lock()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### lock [#lock]
+
+<CodeBlock links={{"sqlite_lock": "sqlitelock"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::sqlite_lock<T>::lock() override
+```
+</CodeBlock>
+
+### unlock [#unlock]
+
+<CodeBlock links={{"sqlite_lock": "sqlitelock"}}>
+```cpp showLineNumbers={false}
+void Catalog_Namespace::sqlite_lock<T>::unlock() override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cat_read_lock_` | `read_lock< T >` | |
+| `lock_` | `heavyai::unique_lock< heavyai::shared_mutex >` | |
+| `dlock_` | `heavyai::unique_lock< heavyai::DistributedSharedMutex >` | |
+| `cat_` | `const T *` | |
+| `holds_lock_` | `bool` | |

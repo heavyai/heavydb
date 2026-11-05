@@ -1,0 +1,38 @@
+---
+title: ThreadController_NS::FutureGetter
+description: ""
+---
+
+<CodeBlock id="FutureGetter" links={{"FutureGetter": "futuregetter"}}>
+```cpp showLineNumbers={false}
+template <typename FutureReturnType>
+struct FutureGetter
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <ThreadController_NS/ThreadController.h>
+```
+
+**Template parameters**
+
+<ParamField path="FutureReturnType" type="typename">
+</ParamField>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `FutureGetterFunction` | `void(*)(FutureReturnType)` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `get` | `FutureGetterFunction` | |

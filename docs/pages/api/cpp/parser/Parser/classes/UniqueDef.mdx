@@ -1,0 +1,54 @@
+---
+title: Parser::UniqueDef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::TableConstraintDef` (public)
+
+---
+
+## Constructors
+
+### UniqueDef [#uniquedef]
+
+<CodeBlock links={{"UniqueDef": "uniquedef"}}>
+```cpp showLineNumbers={false}
+Parser::UniqueDef::UniqueDef(
+    bool p,
+    std::list<std::string *> *cl
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_primarykey [#getisprimarykey]
+
+<CodeBlock links={{"UniqueDef": "uniquedef"}}>
+```cpp showLineNumbers={false}
+bool Parser::UniqueDef::get_is_primarykey() const
+```
+</CodeBlock>
+
+### get_column_list [#getcolumnlist]
+
+<CodeBlock links={{"UniqueDef": "uniquedef"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<std::string>> & Parser::UniqueDef::get_column_list() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_primarykey_` | `bool` | |
+| `column_list_` | `std::list< std::unique_ptr< std::string > >` | |

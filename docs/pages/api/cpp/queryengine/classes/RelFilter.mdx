@@ -1,0 +1,418 @@
+---
+title: RelFilter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public)
+
+---
+
+## Constructors
+
+### RelFilter [#relfilter]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RelFilter": "relfilter"}}>
+```cpp showLineNumbers={false}
+RelFilter::RelFilter() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with filter and input)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelFilter": "relfilter", "RexScalar": "rexscalar", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RelFilter::RelFilter(
+    std::unique_ptr<const RexScalar> &filter,
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with filter)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelFilter": "relfilter", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+RelFilter::RelFilter(
+    std::unique_ptr<const RexScalar> &filter
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"RelFilter": "relfilter"}}>
+```cpp showLineNumbers={false}
+RelFilter::RelFilter(
+    RelFilter const &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelFilter": "relfilter", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelFilter::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelFilter": "relfilter", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelFilter::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### getCondition [#getcondition]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelFilter::getCondition() const
+```
+</CodeBlock>
+
+### getAndReleaseCondition [#getandreleasecondition]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RelFilter::getAndReleaseCondition()
+```
+</CodeBlock>
+
+### setCondition [#setcondition]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelFilter::setCondition(
+    std::unique_ptr<const RexScalar> &condition
+)
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelFilter": "relfilter"}}>
+```cpp showLineNumbers={false}
+size_t RelFilter::size() const override
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+) override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelFilter::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelFilter::deepCopy() const override
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelFilter": "relfilter", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::string RelFilter::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelFilter::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelFilter": "relfilter", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelFilter::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+unsigned RelFilter::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelFilter::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelFilter::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const size_t RelFilter::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelFilter::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelFilter::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelFilter::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelFilter::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelFilter::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelFilter::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelFilter::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelFilter": "relfilter"}}>
+```cpp showLineNumbers={false}
+size_t RelFilter::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelFilter": "relfilter", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelFilter::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `filter_` | `std::unique_ptr< const RexScalar >` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

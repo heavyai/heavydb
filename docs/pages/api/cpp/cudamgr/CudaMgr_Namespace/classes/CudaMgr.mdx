@@ -1,0 +1,292 @@
+---
+title: CudaMgr_Namespace::CudaMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CudaMgr_Namespace/CudaMgr.h>
+```
+
+---
+
+## Constructors
+
+### CudaMgr [#cudamgr]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::CudaMgr::CudaMgr(
+    const int num_gpus,
+    const int start_gpu = 0
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~CudaMgr
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::CudaMgr::~CudaMgr()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### synchronizeDevices [#synchronizedevices]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::CudaMgr::synchronizeDevices() const
+```
+</CodeBlock>
+
+### getDeviceCount [#getdevicecount]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+int CudaMgr_Namespace::CudaMgr::getDeviceCount() const
+```
+</CodeBlock>
+
+### getStartGpu [#getstartgpu]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+int CudaMgr_Namespace::CudaMgr::getStartGpu() const
+```
+</CodeBlock>
+
+### getDeviceGroup [#getdevicegroup]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+const heavyai::DeviceGroup & CudaMgr_Namespace::CudaMgr::getDeviceGroup() const
+```
+</CodeBlock>
+
+### computePaddedBufferSize [#computepaddedbuffersize]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+size_t CudaMgr_Namespace::CudaMgr::computePaddedBufferSize(
+    size_t buf_size,
+    size_t granularity
+) const
+```
+</CodeBlock>
+
+### getGranularity [#getgranularity]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+size_t CudaMgr_Namespace::CudaMgr::getGranularity(
+    const int device_num
+) const
+```
+</CodeBlock>
+
+### copyHostToDevice [#copyhosttodevice]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::CudaMgr::copyHostToDevice(
+    int8_t *device_ptr,
+    const int8_t *host_ptr,
+    const size_t num_bytes,
+    const int device_num,
+    std::optional<std::string_view> tag,
+    CUstream cuda_stream = 0
+)
+```
+</CodeBlock>
+
+### copyDeviceToHost [#copydevicetohost]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::CudaMgr::copyDeviceToHost(
+    int8_t *host_ptr,
+    const int8_t *device_ptr,
+    const size_t num_bytes,
+    std::optional<std::string_view> tag,
+    CUstream cuda_stream = 0
+)
+```
+</CodeBlock>
+
+### copyDeviceToDevice [#copydevicetodevice]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::CudaMgr::copyDeviceToDevice(
+    int8_t *dest_ptr,
+    int8_t *src_ptr,
+    const size_t num_bytes,
+    const int dest_device_num,
+    const int src_device_num,
+    std::optional<std::string_view> tag,
+    CUstream cuda_stream = 0
+)
+```
+</CodeBlock>
+
+### allocateDeviceMem [#allocatedevicemem]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+int8_t * CudaMgr_Namespace::CudaMgr::allocateDeviceMem(
+    const size_t num_bytes,
+    const int device_num,
+    const bool is_slab = false
+)
+```
+</CodeBlock>
+
+### freeDeviceMem [#freedevicemem]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::CudaMgr::freeDeviceMem(
+    int8_t *device_ptr
+)
+```
+</CodeBlock>
+
+### zeroDeviceMem [#zerodevicemem]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::CudaMgr::zeroDeviceMem(
+    int8_t *device_ptr,
+    const size_t num_bytes,
+    const int device_num,
+    CUstream cuda_stream = 0
+)
+```
+</CodeBlock>
+
+### setDeviceMem [#setdevicemem]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::CudaMgr::setDeviceMem(
+    int8_t *device_ptr,
+    const unsigned char uc,
+    const size_t num_bytes,
+    const int device_num,
+    CUstream cuda_stream = 0
+)
+```
+</CodeBlock>
+
+### getMinSharedMemoryPerBlockForAllDevices [#getminsharedmemoryperblockforalldevices]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+size_t CudaMgr_Namespace::CudaMgr::getMinSharedMemoryPerBlockForAllDevices() const
+```
+</CodeBlock>
+
+### getMinNumMPsForAllDevices [#getminnummpsforalldevices]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+size_t CudaMgr_Namespace::CudaMgr::getMinNumMPsForAllDevices() const
+```
+</CodeBlock>
+
+### getAllDeviceProperties [#getalldeviceproperties]
+
+<CodeBlock links={{"CudaMgr": "cudamgr", "DeviceProperties": "../structs/deviceproperties"}}>
+```cpp showLineNumbers={false}
+const std::vector<DeviceProperties> & CudaMgr_Namespace::CudaMgr::getAllDeviceProperties() const
+```
+</CodeBlock>
+
+### getDeviceProperties [#getdeviceproperties]
+
+<CodeBlock links={{"CudaMgr": "cudamgr", "DeviceProperties": "../structs/deviceproperties"}}>
+```cpp showLineNumbers={false}
+const DeviceProperties * CudaMgr_Namespace::CudaMgr::getDeviceProperties(
+    const size_t device_num
+) const
+```
+</CodeBlock>
+
+### isArchPascal [#isarchpascal]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+bool CudaMgr_Namespace::CudaMgr::isArchPascal() const
+```
+</CodeBlock>
+
+### isArchVoltaOrGreaterForAll [#isarchvoltaorgreaterforall]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+bool CudaMgr_Namespace::CudaMgr::isArchVoltaOrGreaterForAll() const
+```
+</CodeBlock>
+
+Returns true if all devices have Volta micro-architecture Returns false, if there is any non-Volta device available.
+
+### getDeviceArch [#getdevicearch]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+NvidiaDeviceArch CudaMgr_Namespace::CudaMgr::getDeviceArch() const
+```
+</CodeBlock>
+
+### setContext [#setcontext]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+void CudaMgr_Namespace::CudaMgr::setContext(
+    const int device_num
+) const
+```
+</CodeBlock>
+
+### getContext [#getcontext]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+int CudaMgr_Namespace::CudaMgr::getContext() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### deviceArchToSM [#devicearchtosm]
+
+<CodeBlock links={{"CudaMgr": "cudamgr"}}>
+```cpp showLineNumbers={false}
+static std::string CudaMgr_Namespace::CudaMgr::deviceArchToSM(
+    const NvidiaDeviceArch arch
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `device_count_` | `int` | |
+| `start_gpu_` | `int` | |
+| `min_shared_memory_per_block_for_all_devices` | `size_t` | |
+| `min_num_mps_for_all_devices` | `size_t` | |
+| `device_properties_` | `std::vector< DeviceProperties >` | |
+| `device_group_` | `heavyai::DeviceGroup` | |
+| `device_contexts_` | `std::vector< CUcontext >` | |
+| `device_mutex_` | `std::mutex` | |
+| `device_properties_initialized_` | `bool` | |

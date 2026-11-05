@@ -1,0 +1,80 @@
+---
+title: JoinColumnTupleIterator
+description: "Iterates over the rows of a JoinColumnTuple across multiple fragments/chunks."
+---
+
+Iterates over the rows of a [JoinColumnTuple](joincolumntuple) across multiple fragments/chunks.
+
+```cpp showLineNumbers={false}
+#include <JoinColumnIterator.h>
+```
+
+---
+
+## Constructors
+
+### JoinColumnTupleIterator [#joincolumntupleiterator]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"JoinColumnTupleIterator": "joincolumntupleiterator"}}>
+```cpp showLineNumbers={false}
+DEVICE JoinColumnTupleIterator::JoinColumnTupleIterator()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"JoinColumnTupleIterator": "joincolumntupleiterator", "JoinColumn": "joincolumn", "JoinColumnTypeInfo": "joincolumntypeinfo"}}>
+```cpp showLineNumbers={false}
+DEVICE JoinColumnTupleIterator::JoinColumnTupleIterator(
+    size_t num_cols,
+    const JoinColumn *join_column_per_key,
+    const JoinColumnTypeInfo *type_info_per_key,
+    size_t start,
+    size_t step
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator bool [#operatorbool]
+
+<CodeBlock links={{"JoinColumnTupleIterator": "joincolumntupleiterator"}}>
+```cpp showLineNumbers={false}
+DEVICE FORCE_INLINE JoinColumnTupleIterator::operator bool() const
+```
+</CodeBlock>
+
+### operator++ [#operator_inc]
+
+<CodeBlock links={{"JoinColumnTupleIterator": "joincolumntupleiterator"}}>
+```cpp showLineNumbers={false}
+DEVICE FORCE_INLINE JoinColumnTupleIterator & JoinColumnTupleIterator::operator++()
+```
+</CodeBlock>
+
+### operator* [#operator_mul]
+
+<CodeBlock links={{"JoinColumnTupleIterator": "joincolumntupleiterator"}}>
+```cpp showLineNumbers={false}
+DEVICE FORCE_INLINE JoinColumnTupleIterator & JoinColumnTupleIterator::operator*()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `num_cols` | `size_t` | |
+| `join_column_iterators` | `JoinColumnIterator` | |

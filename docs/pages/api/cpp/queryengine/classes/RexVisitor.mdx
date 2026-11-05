@@ -1,0 +1,126 @@
+---
+title: RexVisitor
+description: ""
+---
+
+<CodeBlock id="RexVisitor" links={{"RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+template <class T>
+class RexVisitor
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <RexVisitor.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="class">
+</ParamField>
+
+**Inherits from:** `RexVisitorBase< T >` (public)
+
+---
+
+## Methods
+
+### visitInput [#visitinput]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+T RexVisitor<T>::visitInput(
+    const RexInput *
+) const override
+```
+</CodeBlock>
+
+### visitLiteral [#visitliteral]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor", "RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+T RexVisitor<T>::visitLiteral(
+    const RexLiteral *
+) const override
+```
+</CodeBlock>
+
+### visitSubQuery [#visitsubquery]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+T RexVisitor<T>::visitSubQuery(
+    const RexSubQuery *
+) const override
+```
+</CodeBlock>
+
+### visitRef [#visitref]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor", "RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+T RexVisitor<T>::visitRef(
+    const RexRef *
+) const override
+```
+</CodeBlock>
+
+### visitOperator [#visitoperator]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+T RexVisitor<T>::visitOperator(
+    const RexOperator *rex_operator
+) const override
+```
+</CodeBlock>
+
+### visitCase [#visitcase]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor", "RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+T RexVisitor<T>::visitCase(
+    const RexCase *rex_case
+) const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor", "RexScalar": "rexscalar", "RexVisitorBase": "rexvisitorbase"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitorBase<T>::visit(
+    const RexScalar *rex_scalar
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+virtual T RexVisitor<T>::aggregateResult(
+    const T &aggregate,
+    const T &next_result
+) const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor"}}>
+```cpp showLineNumbers={false}
+T RexVisitor<T>::defaultResult() const override
+```
+</CodeBlock>
+
+### visitWindowFunctionOperator [#visitwindowfunctionoperator]
+
+<CodeBlock links={{"RexVisitor": "rexvisitor", "RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+T RexVisitor<T>::visitWindowFunctionOperator(
+    const RexWindowFunctionOperator *rex_window_func_operator,
+    const T operands_visit_result
+) const
+```
+</CodeBlock>

@@ -1,0 +1,89 @@
+---
+title: Fragmenter_Namespace::DateChunkConverter
+description: ""
+---
+
+<CodeBlock id="DateChunkConverter" links={{"DateChunkConverter": "datechunkconverter"}}>
+```cpp showLineNumbers={false}
+template <typename BUFFER_DATA_TYPE>
+struct DateChunkConverter
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="BUFFER_DATA_TYPE" type="typename">
+</ParamField>
+
+**Inherits from:** `Fragmenter_Namespace::ChunkToInsertDataConverter` (public)
+
+---
+
+## Constructors
+
+### DateChunkConverter [#datechunkconverter]
+
+<CodeBlock links={{"DateChunkConverter": "datechunkconverter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::DateChunkConverter<BUFFER_DATA_TYPE>::DateChunkConverter(
+    const size_t num_rows,
+    const Chunk_NS::Chunk *chunk
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~DateChunkConverter
+
+<CodeBlock links={{"DateChunkConverter": "datechunkconverter"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::DateChunkConverter<BUFFER_DATA_TYPE>::~DateChunkConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"DateChunkConverter": "datechunkconverter"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::DateChunkConverter<BUFFER_DATA_TYPE>::convertToColumnarFormat(
+    size_t row,
+    size_t indexInFragment
+) override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"DateChunkConverter": "datechunkconverter", "InsertData": "insertdata"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::DateChunkConverter<BUFFER_DATA_TYPE>::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ColumnDataPtr` | `std::unique_ptr< int64_t, CheckedMallocDeleter< int64_t > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `chunk_` | `const Chunk_NS::Chunk *` | |
+| `column_data_` | `ColumnDataPtr` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `data_buffer_addr_` | `const BUFFER_DATA_TYPE *` | |

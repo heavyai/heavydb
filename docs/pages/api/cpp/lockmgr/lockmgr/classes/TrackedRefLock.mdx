@@ -1,0 +1,99 @@
+---
+title: lockmgr::TrackedRefLock
+description: ""
+---
+
+<CodeBlock id="TrackedRefLock" links={{"TrackedRefLock": "trackedreflock"}}>
+```cpp showLineNumbers={false}
+template <typename LOCK>
+class TrackedRefLock
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgrImpl.h>
+```
+
+**Template parameters**
+
+<ParamField path="LOCK" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### TrackedRefLock [#trackedreflock]
+
+<Tabs>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"TrackedRefLock": "trackedreflock", "MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+lockmgr::TrackedRefLock<LOCK>::TrackedRefLock(
+    MutexTracker *m
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"TrackedRefLock": "trackedreflock"}}>
+```cpp showLineNumbers={false}
+lockmgr::TrackedRefLock<LOCK>::TrackedRefLock(
+    TrackedRefLock &&other
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"TrackedRefLock": "trackedreflock"}}>
+```cpp showLineNumbers={false}
+lockmgr::TrackedRefLock<LOCK>::TrackedRefLock(
+    const TrackedRefLock &
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"TrackedRefLock": "trackedreflock"}}>
+```cpp showLineNumbers={false}
+TrackedRefLock & lockmgr::TrackedRefLock<LOCK>::operator=(
+    const TrackedRefLock &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### checkPointer [#checkpointer]
+
+<CodeBlock links={{"TrackedRefLock": "trackedreflock", "MutexTracker": "mutextracker"}}>
+```cpp showLineNumbers={false}
+static MutexTracker * lockmgr::TrackedRefLock<LOCK>::checkPointer(
+    MutexTracker *m
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `mutex_` | `MutexTracker *` | |
+| `lock_` | `LOCK` | |

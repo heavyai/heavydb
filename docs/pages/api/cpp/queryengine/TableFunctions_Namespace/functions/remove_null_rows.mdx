@@ -1,0 +1,41 @@
+---
+title: TableFunctions_Namespace::remove_null_rows
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"InputData": "../structs/inputdata", "MaskedData": "../structs/maskeddata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+MaskedData<T> TableFunctions_Namespace::remove_null_rows(
+    const InputData<T> &input_data
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"InputData": "../structs/inputdata", "MaskedData": "../structs/maskeddata"}}>
+```cpp showLineNumbers={false}
+template MaskedData<float> TableFunctions_Namespace::remove_null_rows(
+    const InputData<float> &input_data
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"InputData": "../structs/inputdata", "MaskedData": "../structs/maskeddata"}}>
+```cpp showLineNumbers={false}
+template MaskedData<double> TableFunctions_Namespace::remove_null_rows(
+    const InputData<double> &input_data
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

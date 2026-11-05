@@ -1,0 +1,284 @@
+---
+title: Analyzer::LikelihoodExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### LikelihoodExpr [#likelihoodexpr]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::LikelihoodExpr::LikelihoodExpr(
+    std::shared_ptr<Analyzer::Expr> a,
+    float l = 0.5
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_arg [#getarg]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::LikelihoodExpr::get_arg() const
+```
+</CodeBlock>
+
+### get_own_arg [#getownarg]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::shared_ptr<Analyzer::Expr> Analyzer::LikelihoodExpr::get_own_arg() const
+```
+</CodeBlock>
+
+### get_likelihood [#getlikelihood]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+float Analyzer::LikelihoodExpr::get_likelihood() const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::LikelihoodExpr::deep_copy() const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::LikelihoodExpr::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::LikelihoodExpr::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::LikelihoodExpr::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::LikelihoodExpr::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::LikelihoodExpr::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::LikelihoodExpr::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::LikelihoodExpr::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::LikelihoodExpr::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::LikelihoodExpr::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::LikelihoodExpr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::LikelihoodExpr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::LikelihoodExpr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::LikelihoodExpr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::LikelihoodExpr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::LikelihoodExpr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::LikelihoodExpr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::LikelihoodExpr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::LikelihoodExpr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::LikelihoodExpr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::LikelihoodExpr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::LikelihoodExpr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"LikelihoodExpr": "likelihoodexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::LikelihoodExpr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `arg` | `std::shared_ptr< Analyzer::Expr >` | |
+| `likelihood` | `float` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

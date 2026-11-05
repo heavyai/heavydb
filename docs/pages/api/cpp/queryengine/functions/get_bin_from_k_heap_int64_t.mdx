@@ -1,0 +1,20 @@
+---
+title: get_bin_from_k_heap_int64_t
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int64_t * get_bin_from_k_heap_int64_t(
+    int64_t *heaps,
+    const uint32_t k,
+    const uint32_t row_size_quad,
+    const uint32_t key_offset,
+    const bool min_heap,
+    const bool has_null,
+    const bool nulls_first,
+    const int64_t null_key,
+    const int64_t curr_key
+)
+```
+</CodeBlock>

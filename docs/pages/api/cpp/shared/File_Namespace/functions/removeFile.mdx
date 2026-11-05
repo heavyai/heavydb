@@ -1,0 +1,23 @@
+---
+title: File_Namespace::removeFile
+description: "Deletes the file pointed to by the FILE pointer."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+bool File_Namespace::removeFile(
+    const std::string &basePath,
+    const std::string &filename
+)
+```
+</CodeBlock>
+
+Deletes the file pointed to by the FILE pointer.
+
+**Returns:** mapd_err_t Returns an error code when unable to close the file properly.
+
+**Parameters**
+
+<ParamField path="basePath" type="const std::string &">
+The base path (directory) of the file.
+</ParamField>

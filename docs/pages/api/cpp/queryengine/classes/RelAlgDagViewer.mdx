@@ -1,0 +1,493 @@
+---
+title: RelAlgDagViewer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDagViewer.h>
+```
+
+**Inherits from:** `RelAlgDagNode::Visitor` (public)
+
+---
+
+## Constructors
+
+### RelAlgDagViewer [#relalgdagviewer]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+RelAlgDagViewer::RelAlgDagViewer()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+RelAlgDagViewer::RelAlgDagViewer(
+    bool showing_steps,
+    bool verbose
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### clear [#clear]
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagViewer::clear()
+```
+</CodeBlock>
+
+### str [#str]
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+virtual std::string RelAlgDagViewer::str() const
+```
+</CodeBlock>
+
+### emplace [#emplace]
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelAlgDagNode": "relalgdagnode"}}>
+```cpp showLineNumbers={false}
+virtual id_map::iterator RelAlgDagViewer::emplace(
+    RelAlgDagNode const *n
+)
+```
+</CodeBlock>
+
+### handleQueryEngineVector [#handlequeryenginevector]
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagViewer::handleQueryEngineVector(
+    std::vector<std::shared_ptr<RelAlgNode>> const nodes
+)
+```
+</CodeBlock>
+
+### emplaceVoid [#emplacevoid]
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+virtual id_map::iterator RelAlgDagViewer::emplaceVoid(
+    void const *n
+)
+```
+</CodeBlock>
+
+### beginNextLine [#beginnextline]
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagViewer::beginNextLine(
+    std::optional<size_t> step = {}
+)
+```
+</CodeBlock>
+
+### visitChild [#visitchild]
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+void RelAlgDagViewer::visitChild(
+    T child,
+    std::string name
+)
+```
+</CodeBlock>
+
+### innerVisit [#innervisit]
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+bool RelAlgDagViewer::innerVisit(
+    T t,
+    std::string name,
+    bool recurse = true
+)
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelAggregate const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelCompound const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelFilter": "relfilter"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelFilter const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelJoin": "reljoin"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelJoin const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelLeftDeepInnerJoin": "relleftdeepinnerjoin"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelLeftDeepInnerJoin const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelLogicalUnion const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelLogicalValues const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelModify": "relmodify"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelModify const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelProject const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelScan const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelSort const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelTableFunction const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RelTranslatedJoin const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexAbstractInput const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexCase const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 16">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexFunctionOperator const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 17">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexInput const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 18">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexLiteral const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 19">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexOperator const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 20">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexRef const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 21">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexAgg const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 22">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexSubQuery const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 23">
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+bool RelAlgDagViewer::visit(
+    RexWindowFunctionOperator const *n,
+    std::string s
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### visitAny [#visitany]
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer", "RelAlgDagNode": "relalgdagnode", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual bool RelAlgDagViewer::visitAny(
+    RelAlgDagNode const *n,
+    std::string s
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `id_map` | `std::unordered_map< std::uintptr_t, NodeInfo >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `out_` | `std::ostringstream` | |
+| `indent_level_` | `size_t` | |
+| `line_number_` | `size_t` | |
+| `showing_steps_` | `bool` | |
+| `ids_` | `id_map` | |
+| `next_id_` | `size_t` | |
+| `top_call_` | `bool` | |
+| `already_indented_` | `bool` | |
+| `needs_newline_` | `bool` | |
+| `needs_colon_` | `bool` | |
+| `verbose_` | `bool` | |
+| `indent_spaces_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+
+---
+
+## Inner classes
+
+### NodeInfo
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+struct RelAlgDagViewer::NodeInfo
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `id` | `size_t` | |
+| `top_node` | `bool` | |
+| `used_node` | `bool` | |
+
+### BreadthFirstSearch
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+struct RelAlgDagViewer::BreadthFirstSearch
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `nodes` | `std::vector< RelAlgDagNode const  * >` | |
+| `callback` | `std::function< void(RelAlgDagNode const  *)>` | |
+
+**Inherits from:** `RelAlgDagNode::Visitor` (public)
+
+### CollectImmediateChildren
+
+<CodeBlock links={{"RelAlgDagViewer": "relalgdagviewer"}}>
+```cpp showLineNumbers={false}
+struct RelAlgDagViewer::CollectImmediateChildren
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `nodes` | `std::vector< std::pair< std::string, RelAlgDagNode const  * > >` | |
+
+**Inherits from:** `RelAlgDagNode::Visitor` (public)

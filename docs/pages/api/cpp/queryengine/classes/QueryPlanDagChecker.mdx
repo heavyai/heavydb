@@ -1,0 +1,393 @@
+---
+title: QueryPlanDagChecker
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryPlanDagChecker.h>
+```
+
+**Inherits from:** `RelRexDagVisitor` (public)
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Constructors
+
+### QueryPlanDagChecker [#queryplandagchecker]
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker"}}>
+```cpp showLineNumbers={false}
+QueryPlanDagChecker::QueryPlanDagChecker()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### check [#check]
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::check(
+    const RelAlgNode *
+)
+```
+</CodeBlock>
+
+### detectNonSupportedNode [#detectnonsupportednode]
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::detectNonSupportedNode(
+    const std::string &node_tag
+)
+```
+</CodeBlock>
+
+### reset [#reset]
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::reset()
+```
+</CodeBlock>
+
+### getCheckResult [#getcheckresult]
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker"}}>
+```cpp showLineNumbers={false}
+bool QueryPlanDagChecker::getCheckResult() const
+```
+</CodeBlock>
+
+### getNonSupportedNodeTag [#getnonsupportednodetag]
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker"}}>
+```cpp showLineNumbers={false}
+const std::string & QueryPlanDagChecker::getNonSupportedNodeTag() const
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelAlgNode": "relalgnode", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RelAlgNode const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexScalar": "rexscalar", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RexScalar const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    const RelLogicalValues *
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelModify": "relmodify"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    const RelModify *
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    const RelProject *
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    const RelScan *
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    const RelCompound *
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    const RelLogicalUnion *
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    const RexFunctionOperator *
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    const RexOperator *
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelAggregate": "relaggregate", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void QueryPlanDagChecker::visit(
+    RelAggregate const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelFilter": "relfilter", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RelFilter const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelJoin": "reljoin", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RelJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelLeftDeepInnerJoin": "relleftdeepinnerjoin", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RelLeftDeepInnerJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelSort": "relsort", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void QueryPlanDagChecker::visit(
+    RelSort const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 16">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelTableFunction": "reltablefunction", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RelTableFunction const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 17">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelTranslatedJoin": "reltranslatedjoin", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RelTranslatedJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 18">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexAbstractInput": "rexabstractinput", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void QueryPlanDagChecker::visit(
+    RexAbstractInput const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 19">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexCase": "rexcase", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RexCase const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 20">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexInput": "rexinput", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RexInput const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 21">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexLiteral": "rexliteral", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void QueryPlanDagChecker::visit(
+    RexLiteral const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 22">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexRef": "rexref", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void QueryPlanDagChecker::visit(
+    RexRef const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 23">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexSubQuery": "rexsubquery", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RexSubQuery const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 24">
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RexWindowFunctionOperator": "rexwindowfunctionoperator", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::visit(
+    RexWindowFunctionOperator const *
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### castAndVisit [#castandvisit]
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelAlgNode": "relalgnode", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagChecker::castAndVisit(
+    RelAlgNode const *
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getNonSupportedFunctionsList [#getnonsupportedfunctionslist]
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker"}}>
+```cpp showLineNumbers={false}
+static std::unordered_set<std::string> QueryPlanDagChecker::getNonSupportedFunctionsList()
+```
+</CodeBlock>
+
+### hasNonSupportedNodeInDag [#hasnonsupportednodeindag]
+
+<CodeBlock links={{"QueryPlanDagChecker": "queryplandagchecker", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::pair<bool, std::string> QueryPlanDagChecker::hasNonSupportedNodeInDag(
+    const RelAlgNode *rel_alg_node
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `detect_non_supported_node_` | `bool` | |
+| `non_supported_node_tag_` | `std::string` | |
+| `non_supported_functions_` | `const std::unordered_set< std::string >` | |

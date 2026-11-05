@@ -1,0 +1,37 @@
+---
+title: split
+description: "split apart a string into a vector of substrings"
+---
+
+<Tabs>
+<Tab title="Split apart a string into a vector of substrings (1)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<std::string> split(
+    std::string_view str,
+    std::string_view delim,
+    std::optional<size_t> maxsplit
+)
+```
+</CodeBlock>
+
+split apart a string into a vector of substrings
+
+</Tab>
+<Tab title="Split apart a string into a vector of substrings (2)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<std::string> split(
+    std::string_view str,
+    std::string_view delim = {},
+    std::optional<size_t> maxsplit = std::nullopt
+)
+```
+</CodeBlock>
+
+split apart a string into a vector of substrings
+
+</Tab>
+</Tabs>

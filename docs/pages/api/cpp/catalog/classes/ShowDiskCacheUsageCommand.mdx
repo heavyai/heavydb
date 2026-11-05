@@ -1,0 +1,58 @@
+---
+title: ShowDiskCacheUsageCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### ShowDiskCacheUsageCommand [#showdiskcacheusagecommand]
+
+<CodeBlock links={{"ShowDiskCacheUsageCommand": "showdiskcacheusagecommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+ShowDiskCacheUsageCommand::ShowDiskCacheUsageCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"ShowDiskCacheUsageCommand": "showdiskcacheusagecommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult ShowDiskCacheUsageCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+### getFilteredTableNames [#getfilteredtablenames]
+
+<CodeBlock links={{"ShowDiskCacheUsageCommand": "showdiskcacheusagecommand"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> ShowDiskCacheUsageCommand::getFilteredTableNames()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

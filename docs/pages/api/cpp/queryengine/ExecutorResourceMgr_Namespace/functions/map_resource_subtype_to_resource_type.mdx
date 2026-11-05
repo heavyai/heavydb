@@ -1,0 +1,22 @@
+---
+title: ExecutorResourceMgr_Namespace::map_resource_subtype_to_resource_type
+description: "Returns the ResourceType associated with a given ResourceSubtype."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+ResourceType ExecutorResourceMgr_Namespace::map_resource_subtype_to_resource_type(
+    const ResourceSubtype resource_subtype
+)
+```
+</CodeBlock>
+
+Returns the [`ResourceType`](../enums/resourcetype) associated with a given [`ResourceSubtype`](../enums/resourcesubtype).
+
+**Returns:** [ResourceType](../enums/resourcetype) - The resource type that subsumes (as a category) the specified `resource_subtype`
+
+**Parameters**
+
+<ParamField path="resource_subtype" type="const ResourceSubtype">
+- The [`ResourceSubtype`](../enums/resourcesubtype) to find the parent [`ResourceType`](../enums/resourcetype) for
+</ParamField>

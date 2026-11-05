@@ -1,0 +1,51 @@
+---
+title: TrackingProcessor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DBHandler.h>
+```
+
+**Inherits from:** `HeavyProcessor` (public)
+
+---
+
+## Constructors
+
+### TrackingProcessor [#trackingprocessor]
+
+<CodeBlock links={{"TrackingProcessor": "trackingprocessor"}}>
+```cpp showLineNumbers={false}
+TrackingProcessor::TrackingProcessor(
+    std::shared_ptr<HeavyIf> handler,
+    const bool check_origin
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### process [#process]
+
+<CodeBlock links={{"TrackingProcessor": "trackingprocessor"}}>
+```cpp showLineNumbers={false}
+bool TrackingProcessor::process(
+    std::shared_ptr<::apache::thrift::protocol::TProtocol> in,
+    std::shared_ptr<::apache::thrift::protocol::TProtocol> out,
+    void *connectionContext
+) override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `client_address` <Badge intent="note" minimal>static</Badge> | `std::string` | |
+| `client_protocol` <Badge intent="note" minimal>static</Badge> | `ClientProtocol` | |
+| `check_origin_` | `const bool` | |

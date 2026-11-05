@@ -1,0 +1,32 @@
+---
+title: BoundingBoxIntersectMetaInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashtableRecycler.h>
+```
+
+---
+
+## Methods
+
+### isCompatibleWith [#iscompatiblewith]
+
+<CodeBlock links={{"BoundingBoxIntersectMetaInfo": "boundingboxintersectmetainfo"}}>
+```cpp showLineNumbers={false}
+bool BoundingBoxIntersectMetaInfo::isCompatibleWith(
+    BoundingBoxIntersectMetaInfo const &
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `bbox_intersect_max_table_size_bytes` | `size_t` | |
+| `bbox_intersect_bucket_threshold` | `double` | |
+| `bucket_sizes` | `std::vector< double >` | |

@@ -1,0 +1,48 @@
+---
+title: FixedWidthInt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Codec.h>
+```
+
+**Inherits from:** `Decoder` (public)
+
+---
+
+## Constructors
+
+### FixedWidthInt [#fixedwidthint]
+
+<CodeBlock links={{"FixedWidthInt": "fixedwidthint"}}>
+```cpp showLineNumbers={false}
+FixedWidthInt::FixedWidthInt(
+    const size_t byte_width
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegenDecode [#codegendecode]
+
+<CodeBlock links={{"FixedWidthInt": "fixedwidthint"}}>
+```cpp showLineNumbers={false}
+llvm::Instruction * FixedWidthInt::codegenDecode(
+    llvm::Value *byte_stream,
+    llvm::Value *pos,
+    llvm::Module *llvm_module
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `byte_width_` | `const size_t` | |

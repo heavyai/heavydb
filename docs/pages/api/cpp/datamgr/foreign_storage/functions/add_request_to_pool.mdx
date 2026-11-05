@@ -1,0 +1,15 @@
+---
+title: foreign_storage::add_request_to_pool
+description: "Adds the request object for a processed request back to the request pool for reuse in subsequent requests."
+---
+
+<CodeBlock links={{"MetadataScanMultiThreadingParams": "../structs/metadatascanmultithreadingparams", "ParseBufferRequest": "../structs/parsebufferrequest"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::add_request_to_pool(
+    MetadataScanMultiThreadingParams &multi_threading_params,
+    ParseBufferRequest &request
+)
+```
+</CodeBlock>
+
+Adds the request object for a processed request back to the request pool for reuse in subsequent requests.

@@ -1,0 +1,69 @@
+---
+title: foreign_storage::ChunkSizeValidator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ForeignStorageMgr.h>
+```
+
+---
+
+## Constructors
+
+### ChunkSizeValidator [#chunksizevalidator]
+
+<CodeBlock links={{"ChunkSizeValidator": "chunksizevalidator"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ChunkSizeValidator::ChunkSizeValidator(
+    const ChunkKey &chunk_key
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### validateChunkSize [#validatechunksize]
+
+<CodeBlock links={{"ChunkSizeValidator": "chunksizevalidator", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ChunkSizeValidator::validateChunkSize(
+    const AbstractBuffer *buffer
+) const
+```
+</CodeBlock>
+
+### validateChunkSizes [#validatechunksizes]
+
+<CodeBlock links={{"ChunkSizeValidator": "chunksizevalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ChunkSizeValidator::validateChunkSizes(
+    const ChunkToBufferMap &buffers
+) const
+```
+</CodeBlock>
+
+### throwChunkSizeViolatedError [#throwchunksizeviolatederror]
+
+<CodeBlock links={{"ChunkSizeValidator": "chunksizevalidator"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ChunkSizeValidator::throwChunkSizeViolatedError(
+    const int64_t actual_chunk_size,
+    const int column_id = -1
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_id_` | `int` | |
+| `max_chunk_size_` | `int64_t` | |
+| `catalog_` | `std::shared_ptr< Catalog_Namespace::Catalog >` | |
+| `column_` | `const ColumnDescriptor *` | |
+| `foreign_table_` | `const ForeignTable *` | |

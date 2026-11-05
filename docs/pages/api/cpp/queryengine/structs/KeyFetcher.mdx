@@ -1,0 +1,61 @@
+---
+title: KeyFetcher
+description: ""
+---
+
+<CodeBlock id="KeyFetcher" links={{"KeyFetcher": "keyfetcher"}}>
+```cpp showLineNumbers={false}
+template <class K, class I>
+struct KeyFetcher
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="K" type="class">
+</ParamField>
+
+<ParamField path="I" type="class">
+</ParamField>
+
+---
+
+## Constructors
+
+### KeyFetcher [#keyfetcher]
+
+<CodeBlock links={{"KeyFetcher": "keyfetcher"}}>
+```cpp showLineNumbers={false}
+KeyFetcher<K, I>::KeyFetcher(
+    K *out_base,
+    const int8_t *src_oe_base,
+    const size_t stride,
+    const I *indices
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"KeyFetcher": "keyfetcher"}}>
+```cpp showLineNumbers={false}
+__host__ __device__ void KeyFetcher<K, I>::operator()(
+    const I index
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `key_base` | `K *` | |
+| `oe_base` | `const int8_t *` | |
+| `oe_stride` | `const size_t` | |
+| `idx_base` | `const I *` | |

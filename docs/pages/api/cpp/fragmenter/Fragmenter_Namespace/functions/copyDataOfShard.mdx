@@ -1,0 +1,16 @@
+---
+title: Fragmenter_Namespace::copyDataOfShard
+description: ""
+---
+
+<CodeBlock links={{"ShardDataOwner": "../structs/sharddataowner", "InsertData": "../structs/insertdata"}}>
+```cpp showLineNumbers={false}
+InsertData Fragmenter_Namespace::copyDataOfShard(
+    const Catalog_Namespace::Catalog &cat,
+    ShardDataOwner &dataOwner,
+    InsertData &insert_data,
+    int shardTableIndex,
+    const std::vector<size_t> &rowIndices
+)
+```
+</CodeBlock>

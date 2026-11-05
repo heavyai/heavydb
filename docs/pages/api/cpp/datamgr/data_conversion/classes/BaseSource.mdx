@@ -1,0 +1,34 @@
+---
+title: data_conversion::BaseSource
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <data_conversion/StringViewSource.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~BaseSource
+
+<CodeBlock links={{"BaseSource": "basesource"}}>
+```cpp showLineNumbers={false}
+virtual data_conversion::BaseSource::~BaseSource() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getSourceData [#getsourcedata]
+
+<CodeBlock links={{"BaseSource": "basesource"}}>
+```cpp showLineNumbers={false}
+virtual std::pair<const int8_t *, size_t> data_conversion::BaseSource::getSourceData()
+```
+</CodeBlock>

@@ -1,0 +1,87 @@
+---
+title: Parser::DropRoleStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### DropRoleStmt [#droprolestmt]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"DropRoleStmt": "droprolestmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropRoleStmt::DropRoleStmt(
+    std::string *r,
+    bool e
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"DropRoleStmt": "droprolestmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropRoleStmt::DropRoleStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_role [#getrole]
+
+<CodeBlock links={{"DropRoleStmt": "droprolestmt"}}>
+```cpp showLineNumbers={false}
+const std::string & Parser::DropRoleStmt::get_role() const
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"DropRoleStmt": "droprolestmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropRoleStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"DropRoleStmt": "droprolestmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropRoleStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `role_` | `std::unique_ptr< std::string >` | |
+| `if_exists_` | `bool` | |

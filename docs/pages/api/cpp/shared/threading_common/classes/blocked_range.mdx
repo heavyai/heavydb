@@ -1,0 +1,162 @@
+---
+title: threading_common::blocked_range
+description: "A range over which to iterate."
+---
+
+<CodeBlock id="blocked_range" links={{"blocked_range": "blockedrange"}}>
+```cpp showLineNumbers={false}
+template <typename Value>
+class blocked_range
+```
+</CodeBlock>
+
+A range over which to iterate.
+
+```cpp showLineNumbers={false}
+#include <threading_common/threading_std.h>
+```
+
+**Template parameters**
+
+<ParamField path="Value" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### blocked_range [#blockedrange]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"blocked_range": "blockedrange"}}>
+```cpp showLineNumbers={false}
+threading_common::blocked_range<Value>::blocked_range(
+    Value begin_,
+    Value end_
+)
+```
+</CodeBlock>
+
+Construct range over half-open interval [begin,end), with the given grainsize.
+
+</Tab>
+<Tab title="Split range">
+
+<CodeBlock links={{"blocked_range": "blockedrange", "split": "split"}}>
+```cpp showLineNumbers={false}
+threading_common::blocked_range<Value>::blocked_range(
+    blocked_range &r,
+    split
+)
+```
+</CodeBlock>
+
+Split range.
+
+The new Range *this has the second part, the old range r has the first part. Unspecified if end()&lt;begin() or !is_divisible().
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### begin [#begin]
+
+<CodeBlock links={{"blocked_range": "blockedrange"}}>
+```cpp showLineNumbers={false}
+const_iterator threading_common::blocked_range<Value>::begin() const
+```
+</CodeBlock>
+
+Beginning of range.
+
+### end [#end]
+
+<CodeBlock links={{"blocked_range": "blockedrange"}}>
+```cpp showLineNumbers={false}
+const_iterator threading_common::blocked_range<Value>::end() const
+```
+</CodeBlock>
+
+One past last value in range.
+
+### size [#size]
+
+<CodeBlock links={{"blocked_range": "blockedrange"}}>
+```cpp showLineNumbers={false}
+size_type threading_common::blocked_range<Value>::size() const
+```
+</CodeBlock>
+
+Size of the range.
+
+Unspecified if end()&lt;begin().
+
+### grainsize [#grainsize]
+
+<CodeBlock links={{"blocked_range": "blockedrange"}}>
+```cpp showLineNumbers={false}
+size_type threading_common::blocked_range<Value>::grainsize() const
+```
+</CodeBlock>
+
+The grain size for this range.
+
+### empty [#empty]
+
+<CodeBlock links={{"blocked_range": "blockedrange"}}>
+```cpp showLineNumbers={false}
+bool threading_common::blocked_range<Value>::empty() const
+```
+</CodeBlock>
+
+True if range is empty.
+
+### is_divisible [#isdivisible]
+
+<CodeBlock links={{"blocked_range": "blockedrange"}}>
+```cpp showLineNumbers={false}
+bool threading_common::blocked_range<Value>::is_divisible() const
+```
+</CodeBlock>
+
+True if range is divisible.
+
+Unspecified if end()&lt;begin().
+
+### do_split [#dosplit]
+
+<CodeBlock links={{"blocked_range": "blockedrange", "split": "split"}}>
+```cpp showLineNumbers={false}
+static Value threading_common::blocked_range<Value>::do_split(
+    blocked_range &r,
+    split
+)
+```
+</CodeBlock>
+
+Auxiliary function used by the splitting constructor.
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition | Description |
+|---|---|---|
+| `const_iterator` | `Value` | Type of a value. |
+| `size_type` | `std::size_t` | Type for size of a range. |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `my_end` | `Value` | NOTE: my_end MUST be declared before my_begin, otherwise the splitting constructor will break. |
+| `my_begin` | `Value` | |

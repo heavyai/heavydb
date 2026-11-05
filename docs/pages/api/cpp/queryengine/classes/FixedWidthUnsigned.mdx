@@ -1,0 +1,48 @@
+---
+title: FixedWidthUnsigned
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Codec.h>
+```
+
+**Inherits from:** `Decoder` (public)
+
+---
+
+## Constructors
+
+### FixedWidthUnsigned [#fixedwidthunsigned]
+
+<CodeBlock links={{"FixedWidthUnsigned": "fixedwidthunsigned"}}>
+```cpp showLineNumbers={false}
+FixedWidthUnsigned::FixedWidthUnsigned(
+    const size_t byte_width
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegenDecode [#codegendecode]
+
+<CodeBlock links={{"FixedWidthUnsigned": "fixedwidthunsigned"}}>
+```cpp showLineNumbers={false}
+llvm::Instruction * FixedWidthUnsigned::codegenDecode(
+    llvm::Value *byte_stream,
+    llvm::Value *pos,
+    llvm::Module *llvm_module
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `byte_width_` | `const size_t` | |

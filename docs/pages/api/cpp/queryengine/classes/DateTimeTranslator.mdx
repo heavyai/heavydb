@@ -1,0 +1,46 @@
+---
+title: DateTimeTranslator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DateTimeTranslator.h>
+```
+
+---
+
+## Static methods
+
+### getExtractFromTimeConstantValue [#getextractfromtimeconstantvalue]
+
+<CodeBlock links={{"DateTimeTranslator": "datetimetranslator"}}>
+```cpp showLineNumbers={false}
+static int64_t DateTimeTranslator::getExtractFromTimeConstantValue(
+    const int64_t &timeval,
+    const ExtractField &field,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### getDateTruncConstantValue [#getdatetruncconstantvalue]
+
+<CodeBlock links={{"DateTimeTranslator": "datetimetranslator"}}>
+```cpp showLineNumbers={false}
+static int64_t DateTimeTranslator::getDateTruncConstantValue(
+    const int64_t &timeval,
+    const DatetruncField &field,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### getNumericConstant [#getnumericconstant]
+
+<CodeBlock links={{"DateTimeTranslator": "datetimetranslator"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<Analyzer::Constant> DateTimeTranslator::getNumericConstant(
+    const int64_t scale
+)
+```
+</CodeBlock>

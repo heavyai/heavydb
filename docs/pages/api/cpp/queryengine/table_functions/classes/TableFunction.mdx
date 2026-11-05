@@ -1,0 +1,487 @@
+---
+title: table_functions::TableFunction
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <table_functions/TableFunctionsFactory.h>
+```
+
+---
+
+## Constructors
+
+### TableFunction [#tablefunction]
+
+<CodeBlock links={{"TableFunction": "tablefunction", "TableFunctionOutputRowSizer": "../structs/tablefunctionoutputrowsizer"}}>
+```cpp showLineNumbers={false}
+table_functions::TableFunction::TableFunction(
+    const std::string &name,
+    const TableFunctionOutputRowSizer output_sizer,
+    const std::vector<ExtArgumentType> &input_args,
+    const std::vector<ExtArgumentType> &output_args,
+    const std::vector<ExtArgumentType> &sql_args,
+    const std::vector<std::map<std::string, std::string>> &annotations,
+    bool is_runtime,
+    bool uses_manager
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getArgs [#getargs]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::vector<ExtArgumentType> table_functions::TableFunction::getArgs(
+    const bool ensure_column = false
+) const
+```
+</CodeBlock>
+
+### getInputArgs [#getinputargs]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::vector<ExtArgumentType> & table_functions::TableFunction::getInputArgs() const
+```
+</CodeBlock>
+
+### getOutputArgs [#getoutputargs]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::vector<ExtArgumentType> & table_functions::TableFunction::getOutputArgs() const
+```
+</CodeBlock>
+
+### getSqlArgs [#getsqlargs]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::vector<ExtArgumentType> & table_functions::TableFunction::getSqlArgs() const
+```
+</CodeBlock>
+
+### getAnnotations [#getannotations]
+
+<Tabs>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::map<std::string, std::string>> & table_functions::TableFunction::getAnnotations() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with idx)">
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::map<std::string, std::string> table_functions::TableFunction::getAnnotations(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getRet [#getret]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const ExtArgumentType table_functions::TableFunction::getRet() const
+```
+</CodeBlock>
+
+### getInputSQLType [#getinputsqltype]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo table_functions::TableFunction::getInputSQLType(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getOutputSQLType [#getoutputsqltype]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo table_functions::TableFunction::getOutputSQLType(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### countScalarArgs [#countscalarargs]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+int32_t table_functions::TableFunction::countScalarArgs() const
+```
+</CodeBlock>
+
+### getInputsSize [#getinputssize]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+size_t table_functions::TableFunction::getInputsSize() const
+```
+</CodeBlock>
+
+### getOutputsSize [#getoutputssize]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+size_t table_functions::TableFunction::getOutputsSize() const
+```
+</CodeBlock>
+
+### getName [#getname]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::string table_functions::TableFunction::getName(
+    const bool drop_suffix = false,
+    const bool lower = false
+) const
+```
+</CodeBlock>
+
+### getSignature [#getsignature]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::string table_functions::TableFunction::getSignature(
+    const bool include_name,
+    const bool include_output
+) const
+```
+</CodeBlock>
+
+### hasCompileTimeOutputSizeConstant [#hascompiletimeoutputsizeconstant]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasCompileTimeOutputSizeConstant() const
+```
+</CodeBlock>
+
+### hasPreFlightOutputSizer [#haspreflightoutputsizer]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasPreFlightOutputSizer() const
+```
+</CodeBlock>
+
+### hasUserSpecifiedOutputSizeConstant [#hasuserspecifiedoutputsizeconstant]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasUserSpecifiedOutputSizeConstant() const
+```
+</CodeBlock>
+
+### hasConstantOutputSize [#hasconstantoutputsize]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasConstantOutputSize() const
+```
+</CodeBlock>
+
+### hasTableFunctionSpecifiedParameter [#hastablefunctionspecifiedparameter]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasTableFunctionSpecifiedParameter() const
+```
+</CodeBlock>
+
+### hasUserSpecifiedOutputSizeParameter [#hasuserspecifiedoutputsizeparameter]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasUserSpecifiedOutputSizeParameter() const
+```
+</CodeBlock>
+
+### hasNonUserSpecifiedOutputSize [#hasnonuserspecifiedoutputsize]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasNonUserSpecifiedOutputSize() const
+```
+</CodeBlock>
+
+### hasOutputSizeIndependentOfInputSize [#hasoutputsizeindependentofinputsize]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasOutputSizeIndependentOfInputSize() const
+```
+</CodeBlock>
+
+### hasOutputSizeKnownPreLaunch [#hasoutputsizeknownprelaunch]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasOutputSizeKnownPreLaunch() const
+```
+</CodeBlock>
+
+### hasUserSpecifiedOutputSizeMultiplier [#hasuserspecifiedoutputsizemultiplier]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::hasUserSpecifiedOutputSizeMultiplier() const
+```
+</CodeBlock>
+
+### getOutputRowSizeType [#getoutputrowsizetype]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+OutputBufferSizeType table_functions::TableFunction::getOutputRowSizeType() const
+```
+</CodeBlock>
+
+### getOutputRowSizeParameter [#getoutputrowsizeparameter]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+size_t table_functions::TableFunction::getOutputRowSizeParameter() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with variant)">
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+size_t table_functions::TableFunction::getOutputRowSizeParameter(
+    const std::vector<SQLTypeInfo> &variant
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### containsPreFlightFn [#containspreflightfn]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::containsPreFlightFn() const
+```
+</CodeBlock>
+
+### getPreFlightFnName [#getpreflightfnname]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::string table_functions::TableFunction::getPreFlightFnName() const
+```
+</CodeBlock>
+
+### getInputAnnotations [#getinputannotations]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::map<std::string, std::string> table_functions::TableFunction::getInputAnnotations(
+    const size_t input_arg_idx
+) const
+```
+</CodeBlock>
+
+### getInputAnnotation [#getinputannotation]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::string table_functions::TableFunction::getInputAnnotation(
+    const size_t input_arg_idx,
+    const std::string &key,
+    const std::string &default_
+) const
+```
+</CodeBlock>
+
+### getOutputAnnotations [#getoutputannotations]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::map<std::string, std::string> table_functions::TableFunction::getOutputAnnotations(
+    const size_t output_arg_idx
+) const
+```
+</CodeBlock>
+
+### getOutputAnnotation [#getoutputannotation]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::string table_functions::TableFunction::getOutputAnnotation(
+    const size_t output_arg_idx,
+    const std::string &key,
+    const std::string &default_
+) const
+```
+</CodeBlock>
+
+### getFunctionAnnotation [#getfunctionannotation]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::string table_functions::TableFunction::getFunctionAnnotation(
+    const std::string &key,
+    const std::string &default_
+) const
+```
+</CodeBlock>
+
+### getFunctionAnnotations [#getfunctionannotations]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::map<std::string, std::string> table_functions::TableFunction::getFunctionAnnotations() const
+```
+</CodeBlock>
+
+### getCursorFields [#getcursorfields]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> table_functions::TableFunction::getCursorFields(
+    const size_t sql_idx
+) const
+```
+</CodeBlock>
+
+### getArgTypes [#getargtypes]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::string table_functions::TableFunction::getArgTypes(
+    const bool use_input_args
+) const
+```
+</CodeBlock>
+
+### getArgNames [#getargnames]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::string table_functions::TableFunction::getArgNames(
+    const bool use_input_args
+) const
+```
+</CodeBlock>
+
+### getInputArgsDefaultValues [#getinputargsdefaultvalues]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+const std::string table_functions::TableFunction::getInputArgsDefaultValues() const
+```
+</CodeBlock>
+
+### getInputID [#getinputid]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::pair<int32_t, int32_t> table_functions::TableFunction::getInputID(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getSqlOutputRowSizeParameter [#getsqloutputrowsizeparameter]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+size_t table_functions::TableFunction::getSqlOutputRowSizeParameter() const
+```
+</CodeBlock>
+
+### isRuntime [#isruntime]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::isRuntime() const
+```
+</CodeBlock>
+
+### usesManager [#usesmanager]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::usesManager() const
+```
+</CodeBlock>
+
+### isGPU [#isgpu]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::isGPU() const
+```
+</CodeBlock>
+
+### isCPU [#iscpu]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::isCPU() const
+```
+</CodeBlock>
+
+### useDefaultSizer [#usedefaultsizer]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+bool table_functions::TableFunction::useDefaultSizer() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::string table_functions::TableFunction::toString() const
+```
+</CodeBlock>
+
+### toStringSQL [#tostringsql]
+
+<CodeBlock links={{"TableFunction": "tablefunction"}}>
+```cpp showLineNumbers={false}
+std::string table_functions::TableFunction::toStringSQL() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name_` | `const std::string` | |
+| `output_sizer_` | `const TableFunctionOutputRowSizer` | |
+| `input_args_` | `const std::vector< ExtArgumentType >` | |
+| `output_args_` | `const std::vector< ExtArgumentType >` | |
+| `sql_args_` | `const std::vector< ExtArgumentType >` | |
+| `annotations_` | `const std::vector< std::map< std::string, std::string > >` | |
+| `is_runtime_` | `const bool` | |
+| `uses_manager_` | `const bool` | |

@@ -1,0 +1,51 @@
+---
+title: ExecutorResourceMgr_Namespace::ResourceGrant
+description: "Specifies the resources of each type for a given resource grant."
+---
+
+Specifies the resources of each type for a given resource grant.
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ExecutorResourcePool.h>
+```
+
+---
+
+## Methods
+
+### is_empty [#isempty]
+
+<CodeBlock links={{"ResourceGrant": "resourcegrant"}}>
+```cpp showLineNumbers={false}
+bool ExecutorResourceMgr_Namespace::ResourceGrant::is_empty() const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"ResourceGrant": "resourcegrant"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::ResourceGrant::print() const
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"ResourceGrant": "resourcegrant"}}>
+```cpp showLineNumbers={false}
+std::string ExecutorResourceMgr_Namespace::ResourceGrant::to_string() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cpu_slots` | `size_t` | |
+| `gpu_slots` | `size_t` | |
+| `cpu_result_mem` | `size_t` | |
+| `buffer_mem_gated_per_slot` | `bool` | |
+| `buffer_mem_per_slot` | `size_t` | |
+| `buffer_mem_for_given_slots` | `size_t` | |

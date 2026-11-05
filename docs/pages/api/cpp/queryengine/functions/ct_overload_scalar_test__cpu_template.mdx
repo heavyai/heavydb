@@ -1,0 +1,44 @@
+---
+title: ct_overload_scalar_test__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_overload_scalar_test__cpu_template(
+    const T scalar,
+    Column<T> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Timestamp": "../structs/timestamp", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_overload_scalar_test__cpu_template(
+    const Timestamp scalar,
+    Column<Timestamp> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_overload_scalar_test__cpu_template(
+    const int64_t scalar,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

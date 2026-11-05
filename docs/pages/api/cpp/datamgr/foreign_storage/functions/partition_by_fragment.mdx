@@ -1,0 +1,16 @@
+---
+title: foreign_storage::partition_by_fragment
+description: "Given a start row index, maximum fragment size, and number of rows in a buffer, this function returns a vector indicating how the rows in the buffer should be partitioned in order to fill up available fragment slots while staying within the capacity of fragments."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<size_t> foreign_storage::partition_by_fragment(
+    const size_t start_row_index,
+    const size_t max_fragment_size,
+    const size_t buffer_row_count
+)
+```
+</CodeBlock>
+
+Given a start row index, maximum fragment size, and number of rows in a buffer, this function returns a vector indicating how the rows in the buffer should be partitioned in order to fill up available fragment slots while staying within the capacity of fragments.

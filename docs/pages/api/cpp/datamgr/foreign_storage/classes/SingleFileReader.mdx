@@ -1,0 +1,232 @@
+---
+title: foreign_storage::SingleFileReader
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/FileReader.h>
+```
+
+**Inherits from:** `foreign_storage::FileReader` (public)
+
+---
+
+## Constructors
+
+### SingleFileReader [#singlefilereader]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader"}}>
+```cpp showLineNumbers={false}
+foreign_storage::SingleFileReader::SingleFileReader(
+    const std::string &file_path,
+    const import_export::CopyParams &copy_params
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~SingleFileReader
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader"}}>
+```cpp showLineNumbers={false}
+foreign_storage::SingleFileReader::~SingleFileReader() override = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getFirstLineForEachFile [#getfirstlineforeachfile]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader"}}>
+```cpp showLineNumbers={false}
+FirstLineByFilePath foreign_storage::SingleFileReader::getFirstLineForEachFile() const override
+```
+</CodeBlock>
+
+Returns a map containing the first line for each file that will be read.
+
+### isEndOfLastFile [#isendoflastfile]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::SingleFileReader::isEndOfLastFile() override
+```
+</CodeBlock>
+
+Returns a boolean indicating whether the reader is at the end of the last file that was read.
+
+### getCurrentFilePath [#getcurrentfilepath]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::SingleFileReader::getCurrentFilePath() const override
+```
+</CodeBlock>
+
+Returns the path of the currently processed file.
+
+### read [#read]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::SingleFileReader::read(
+    void *buffer,
+    size_t max_size
+)
+```
+</CodeBlock>
+
+Read up to max_size bytes from archive into buffer starting starting from the end of the last read.
+
+**Returns:** number of bytes actually read
+
+**Parameters**
+
+<ParamField path="buffer" type="void *">
+- Buffer to load into
+</ParamField>
+
+<ParamField path="max_size" type="size_t">
+- Maximum number of bytes to read into the buffer
+</ParamField>
+
+### isScanFinished [#isscanfinished]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::SingleFileReader::isScanFinished() const
+```
+</CodeBlock>
+
+**Returns:** true if the entire file has been read
+
+### readRegion [#readregion]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::SingleFileReader::readRegion(
+    void *buffer,
+    size_t offset,
+    size_t size
+)
+```
+</CodeBlock>
+
+Read up to max_size bytes from archive, starting at given offset isScanFinished() must return true to use readRegion.
+
+**Returns:** number of bytes actually read
+
+**Parameters**
+
+<ParamField path="buffer" type="void *">
+- Buffer to load into
+</ParamField>
+
+<ParamField path="offset" type="size_t">
+- Starting point into the archive to read
+</ParamField>
+
+<ParamField path="size" type="size_t">
+- Maximum number of bytes to read into the buffer
+</ParamField>
+
+### getRemainingSize [#getremainingsize]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual size_t foreign_storage::SingleFileReader::getRemainingSize()
+```
+</CodeBlock>
+
+**Returns:** size of the remaining content to be read
+
+### isRemainingSizeKnown [#isremainingsizeknown]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual bool foreign_storage::SingleFileReader::isRemainingSizeKnown()
+```
+</CodeBlock>
+
+**Returns:** if remaining size is known
+
+### checkForMoreRows [#checkformorerows]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::SingleFileReader::checkForMoreRows(
+    size_t file_offset,
+    const shared::FilePathOptions &options,
+    const ForeignServer *server_options = nullptr,
+    const UserMapping *user_mapping = nullptr
+)
+```
+</CodeBlock>
+
+Rescan the target files Throws an exception if the rescan fails (ie files are not in a valid appended state or not supported).
+
+**Parameters**
+
+<ParamField path="file_offset" type="size_t">
+- Where to resume the scan from (end of the last row) as not all of the bytes may have been consumed by the upstream compoennet
+</ParamField>
+
+<ParamField path="server_options" type="const ForeignServer *" default="nullptr">
+- Only needed for S3 backed files
+</ParamField>
+
+<ParamField path="user_mapping" type="const UserMapping *" default="nullptr">
+- Only needed for S3 backed files
+</ParamField>
+
+### serialize [#serialize]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader", "FileReader": "filereader"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::SingleFileReader::serialize(
+    rapidjson::Value &value,
+    rapidjson::Document::AllocatorType &allocator
+) const
+```
+</CodeBlock>
+
+Serialize internal state to given json object This Json will later be used to restore the reader state through a constructor must be called when isScanFinished() is true.
+
+**Parameters**
+
+<ParamField path="value" type="rapidjson::Value &">
+- Json object to store needed state to this function can store any needed data or none
+</ParamField>
+
+<ParamField path="allocator" type="rapidjson::Document::AllocatorType &">
+- Allocator to use for json contruction
+</ParamField>
+
+### getFirstLine [#getfirstline]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader"}}>
+```cpp showLineNumbers={false}
+virtual std::string foreign_storage::SingleFileReader::getFirstLine() const
+```
+</CodeBlock>
+
+### skipHeader [#skipheader]
+
+<CodeBlock links={{"SingleFileReader": "singlefilereader"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::SingleFileReader::skipHeader()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `DEFAULT_HEADER_READ_SIZE` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `copy_params_` | `import_export::CopyParams` | |
+| `file_path_` | `std::string` | |

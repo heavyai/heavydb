@@ -1,0 +1,190 @@
+---
+title: StringOps_Namespace::LevenshteinDistance
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <StringOps_Namespace/StringOps.h>
+```
+
+**Inherits from:** `StringOps_Namespace::StringOp` (public)
+
+---
+
+## Constructors
+
+### LevenshteinDistance [#levenshteindistance]
+
+<Tabs>
+<Tab title="Copy (with str literal)">
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::LevenshteinDistance::LevenshteinDistance(
+    const std::optional<std::string> &var_str_optional_literal,
+    const std::string &str_literal,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "StringOpInfo": "stringopinfo"}}>
+```cpp showLineNumbers={false}
+StringOps_Namespace::LevenshteinDistance::LevenshteinDistance(
+    const std::optional<std::string> &var_str_optional_literal,
+    const StringOpInfo &string_op_info
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "NullableStrType": "nullablestrtype"}}>
+```cpp showLineNumbers={false}
+NullableStrType StringOps_Namespace::LevenshteinDistance::operator()(
+    const std::string &str
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::LevenshteinDistance::operator()(
+    const std::string &str1,
+    const std::string &str2
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "NullableStrType": "nullablestrtype", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual NullableStrType StringOps_Namespace::LevenshteinDistance::operator()() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### numericEval [#numericeval]
+
+<Tabs>
+<Tab title="Const (with str)">
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance"}}>
+```cpp showLineNumbers={false}
+Datum StringOps_Namespace::LevenshteinDistance::numericEval(
+    const std::string_view str
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with str1 and str2)">
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance"}}>
+```cpp showLineNumbers={false}
+Datum StringOps_Namespace::LevenshteinDistance::numericEval(
+    const std::string_view str1,
+    const std::string_view str2
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual Datum StringOps_Namespace::LevenshteinDistance::numericEval() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getReturnType [#getreturntype]
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+virtual const SQLTypeInfo & StringOps_Namespace::LevenshteinDistance::getReturnType() const
+```
+</CodeBlock>
+
+### getVarStringLiteral [#getvarstringliteral]
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const std::string & StringOps_Namespace::LevenshteinDistance::getVarStringLiteral() const
+```
+</CodeBlock>
+
+### hasVarStringLiteral [#hasvarstringliteral]
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+bool StringOps_Namespace::LevenshteinDistance::hasVarStringLiteral() const
+```
+</CodeBlock>
+
+### getOpInfo [#getopinfo]
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "StringOpInfo": "stringopinfo", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+const StringOpInfo & StringOps_Namespace::LevenshteinDistance::getOpInfo() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### generateRegex [#generateregex]
+
+<CodeBlock links={{"LevenshteinDistance": "levenshteindistance", "StringOp": "stringop"}}>
+```cpp showLineNumbers={false}
+boost::regex StringOps_Namespace::LevenshteinDistance::generateRegex(
+    const std::string &op_name,
+    const std::string &regex_pattern,
+    const std::string &regex_params,
+    const bool supports_sub_matches
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `str_literal_` | `const std::string` | |
+| `op_kind_` | `const SqlStringOpKind` | |
+| `return_ti_` | `const SQLTypeInfo` | |
+| `has_var_str_literal_` | `const bool` | |
+| `var_str_literal_` | `const NullableStrType` | |
+| `string_op_info_` | `const StringOpInfo` | |

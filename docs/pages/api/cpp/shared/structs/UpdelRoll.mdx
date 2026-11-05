@@ -1,0 +1,139 @@
+---
+title: UpdelRoll
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <UpdelRoll.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~UpdelRoll
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+UpdelRoll::~UpdelRoll()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### cancelUpdate [#cancelupdate]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+void UpdelRoll::cancelUpdate()
+```
+</CodeBlock>
+
+### commitUpdate [#commitupdate]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+bool UpdelRoll::commitUpdate()
+```
+</CodeBlock>
+
+### stageUpdate [#stageupdate]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+void UpdelRoll::stageUpdate()
+```
+</CodeBlock>
+
+### addDirtyChunk [#adddirtychunk]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+void UpdelRoll::addDirtyChunk(
+    std::shared_ptr<Chunk_NS::Chunk> chunk,
+    int fragment_id
+)
+```
+</CodeBlock>
+
+### getChunkMetadata [#getchunkmetadata]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ChunkMetadata> UpdelRoll::getChunkMetadata(
+    const MetaDataKey &key,
+    int32_t column_id,
+    Fragmenter_Namespace::FragmentInfo &fragment_info
+)
+```
+</CodeBlock>
+
+### getChunkMetadataMap [#getchunkmetadatamap]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+ChunkMetadataMap UpdelRoll::getChunkMetadataMap(
+    const MetaDataKey &key
+) const
+```
+</CodeBlock>
+
+### getNumTuple [#getnumtuple]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+size_t UpdelRoll::getNumTuple(
+    const MetaDataKey &key
+) const
+```
+</CodeBlock>
+
+### setNumTuple [#setnumtuple]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+void UpdelRoll::setNumTuple(
+    const MetaDataKey &key,
+    size_t num_tuple
+)
+```
+</CodeBlock>
+
+### updateFragmenterAndCleanupChunks [#updatefragmenterandcleanupchunks]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+void UpdelRoll::updateFragmenterAndCleanupChunks()
+```
+</CodeBlock>
+
+### initializeUnsetMetadata [#initializeunsetmetadata]
+
+<CodeBlock links={{"UpdelRoll": "updelroll"}}>
+```cpp showLineNumbers={false}
+void UpdelRoll::initializeUnsetMetadata(
+    const TableDescriptor *td,
+    Fragmenter_Namespace::FragmentInfo &fragment_info
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `catalog` | `const Catalog_Namespace::Catalog *` | |
+| `logicalTableId` | `int` | |
+| `memoryLevel` | `Data_Namespace::MemoryLevel` | |
+| `is_varlen_update` | `bool` | |
+| `table_descriptor` | `const TableDescriptor *` | |
+| `chunk_update_tracker_mutex` | `heavyai::shared_mutex` | |
+| `dirty_chunks` | `std::map< ChunkKey, std::shared_ptr< Chunk_NS::Chunk > >` | |
+| `num_tuples` | `std::map< MetaDataKey, size_t >` | |
+| `chunk_metadata_map_per_fragment` | `std::map< MetaDataKey, ChunkMetadataMap >` | |

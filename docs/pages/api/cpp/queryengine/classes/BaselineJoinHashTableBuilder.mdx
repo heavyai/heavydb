@@ -1,0 +1,109 @@
+---
+title: BaselineJoinHashTableBuilder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <BaselineHashTableBuilder.h>
+```
+
+---
+
+## Constructors
+
+### BaselineJoinHashTableBuilder [#baselinejoinhashtablebuilder]
+
+<CodeBlock links={{"BaselineJoinHashTableBuilder": "baselinejoinhashtablebuilder"}}>
+```cpp showLineNumbers={false}
+BaselineJoinHashTableBuilder::BaselineJoinHashTableBuilder() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### initHashTableOnCpu [#inithashtableoncpu]
+
+<CodeBlock links={{"BaselineJoinHashTableBuilder": "baselinejoinhashtablebuilder", "CompositeKeyInfo": "../structs/compositekeyinfo", "JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo", "JoinBucketInfo": "../structs/joinbucketinfo", "BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+template <class KEY_HANDLER>
+int BaselineJoinHashTableBuilder::initHashTableOnCpu(
+    KEY_HANDLER *key_handler,
+    const CompositeKeyInfo &composite_key_info,
+    const std::vector<JoinColumn> &join_columns,
+    const std::vector<JoinColumnTypeInfo> &join_column_types,
+    const std::vector<JoinBucketInfo> &join_bucket_info,
+    const StrProxyTranslationMapsPtrsAndOffsets &str_proxy_translation_maps_ptrs_and_offsets,
+    const BaselineHashTableEntryInfo hash_table_entry_info,
+    const JoinType join_type,
+    const Executor *executor,
+    const RegisteredQueryHint &query_hint
+)
+```
+</CodeBlock>
+
+### allocateDeviceMemory [#allocatedevicememory]
+
+<CodeBlock links={{"BaselineJoinHashTableBuilder": "baselinejoinhashtablebuilder", "BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTableBuilder::allocateDeviceMemory(
+    const BaselineHashTableEntryInfo hash_table_entry_info,
+    const int device_id,
+    const Executor *executor,
+    const RegisteredQueryHint &query_hint
+)
+```
+</CodeBlock>
+
+### initHashTableOnGpu [#inithashtableongpu]
+
+<CodeBlock links={{"BaselineJoinHashTableBuilder": "baselinejoinhashtablebuilder", "JoinColumn": "../structs/joincolumn", "BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+template <class KEY_HANDLER>
+int BaselineJoinHashTableBuilder::initHashTableOnGpu(
+    KEY_HANDLER *key_handler,
+    const std::vector<JoinColumn> &join_columns,
+    const JoinType join_type,
+    const BaselineHashTableEntryInfo hash_table_entry_info,
+    const int device_id,
+    const Executor *executor,
+    const RegisteredQueryHint &query_hint
+)
+```
+</CodeBlock>
+
+### getHashTable [#gethashtable]
+
+<CodeBlock links={{"BaselineJoinHashTableBuilder": "baselinejoinhashtablebuilder", "BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<BaselineHashTable> BaselineJoinHashTableBuilder::getHashTable()
+```
+</CodeBlock>
+
+### setHashLayout [#sethashlayout]
+
+<CodeBlock links={{"BaselineJoinHashTableBuilder": "baselinejoinhashtablebuilder"}}>
+```cpp showLineNumbers={false}
+void BaselineJoinHashTableBuilder::setHashLayout(
+    HashType layout
+)
+```
+</CodeBlock>
+
+### getHashLayout [#gethashlayout]
+
+<CodeBlock links={{"BaselineJoinHashTableBuilder": "baselinejoinhashtablebuilder"}}>
+```cpp showLineNumbers={false}
+HashType BaselineJoinHashTableBuilder::getHashLayout() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `hash_table_` | `std::unique_ptr< BaselineHashTable >` | |
+| `layout_` | `HashType` | |

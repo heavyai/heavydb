@@ -1,0 +1,428 @@
+---
+title: Analyzer::Var
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::ColumnVar` (public)
+
+---
+
+## Constructors
+
+### Var [#var]
+
+<Tabs>
+<Tab title="Copy (with column key and rte idx)">
+
+<CodeBlock links={{"Var": "var"}}>
+```cpp showLineNumbers={false}
+Analyzer::Var::Var(
+    const SQLTypeInfo &ti,
+    const shared::ColumnKey &column_key,
+    int32_t rte_idx,
+    WhichRow o,
+    int32_t v
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"Var": "var"}}>
+```cpp showLineNumbers={false}
+Analyzer::Var::Var(
+    const SQLTypeInfo &ti,
+    WhichRow o,
+    int32_t v
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_which_row [#getwhichrow]
+
+<CodeBlock links={{"Var": "var"}}>
+```cpp showLineNumbers={false}
+WhichRow Analyzer::Var::get_which_row() const
+```
+</CodeBlock>
+
+### set_which_row [#setwhichrow]
+
+<CodeBlock links={{"Var": "var"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Var::set_which_row(
+    WhichRow r
+)
+```
+</CodeBlock>
+
+### get_varno [#getvarno]
+
+<CodeBlock links={{"Var": "var"}}>
+```cpp showLineNumbers={false}
+int32_t Analyzer::Var::get_varno() const
+```
+</CodeBlock>
+
+### set_varno [#setvarno]
+
+<CodeBlock links={{"Var": "var"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Var::set_varno(
+    int32_t n
+)
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"Var": "var", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Var::deep_copy() const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"Var": "var"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::Var::toString() const override
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"Var": "var", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Var::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"Var": "var"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Var::collect_rte_idx(
+    std::set<int32_t> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"Var": "var", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Var::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"Var": "var", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Var::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"Var": "var", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Var::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### getColumnKey [#getcolumnkey]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+const shared::ColumnKey & Analyzer::Var::getColumnKey() const
+```
+</CodeBlock>
+
+### getTableKey [#gettablekey]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+shared::TableKey Analyzer::Var::getTableKey() const
+```
+</CodeBlock>
+
+### get_rte_idx [#getrteidx]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+int32_t Analyzer::Var::get_rte_idx() const
+```
+</CodeBlock>
+
+### set_rte_idx [#setrteidx]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Var::set_rte_idx(
+    int32_t new_rte_idx
+)
+```
+</CodeBlock>
+
+### get_compression [#getcompression]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+EncodingType Analyzer::Var::get_compression() const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"Var": "var", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Var::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Var::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"Var": "var", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Var::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Var::operator==(
+    const ColumnVar &rhs
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"Var": "var", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::Expr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::Expr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"Var": "var", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"Var": "var", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::Expr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::Expr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"Var": "var", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::Expr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"Var": "var", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"Var": "var", "Expr": "expr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::Expr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::Expr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### colvar_comp [#colvarcomp]
+
+<CodeBlock links={{"Var": "var", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+static bool Analyzer::Var::colvar_comp(
+    const ColumnVar *l,
+    const ColumnVar *r
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### WhichRow
+
+| Name | Value | Description |
+|---|---|---|
+| `kINPUT_OUTER` | | |
+| `kINPUT_INNER` | | |
+| `kOUTPUT` | | |
+| `kGROUPBY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `which_row` | `WhichRow` | |
+| `varno` | `int32_t` | |
+| `column_key_` | `shared::ColumnKey` | |
+| `rte_idx_` | `int32_t` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

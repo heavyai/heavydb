@@ -1,0 +1,16 @@
+---
+title: compute_table_function_col_chunk_stats
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+void compute_table_function_col_chunk_stats(
+    std::shared_ptr<ChunkMetadata> &chunk_metadata,
+    const T *values_buffer,
+    const size_t values_count,
+    const T null_val
+)
+```
+</CodeBlock>

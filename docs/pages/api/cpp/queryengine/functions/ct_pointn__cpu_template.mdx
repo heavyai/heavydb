@@ -1,0 +1,53 @@
+---
+title: ct_pointn__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_pointn__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<T> &points,
+    int64_t n,
+    Column<double> &xcoords,
+    Column<double> &ycoords
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pointn__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<GeoLineString> &points,
+    int64_t n,
+    Column<double> &xcoords,
+    Column<double> &ycoords
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pointn__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<GeoMultiPoint> &points,
+    int64_t n,
+    Column<double> &xcoords,
+    Column<double> &ycoords
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

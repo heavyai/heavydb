@@ -1,0 +1,150 @@
+---
+title: Epoch
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Epoch.h>
+```
+
+---
+
+## Constructors
+
+### Epoch [#epoch]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+Epoch::Epoch()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+Epoch::Epoch(
+    const int32_t epoch_floor,
+    const int32_t epoch_ceiling
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### floor [#floor]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+void Epoch::floor(
+    const int32_t epoch_floor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+int32_t Epoch::floor() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### ceiling [#ceiling]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+void Epoch::ceiling(
+    const int32_t epoch_ceiling
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+int32_t Epoch::ceiling() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### increment [#increment]
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+int32_t Epoch::increment()
+```
+</CodeBlock>
+
+### storage_ptr [#storageptr]
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+int8_t * Epoch::storage_ptr()
+```
+</CodeBlock>
+
+Allows access to ptr to epoch internal storage for atomic file reads and writes to epoch storage.
+
+---
+
+## Static methods
+
+### byte_size [#bytesize]
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+static size_t Epoch::byte_size()
+```
+</CodeBlock>
+
+### min_allowable_epoch [#minallowableepoch]
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+static int64_t Epoch::min_allowable_epoch()
+```
+</CodeBlock>
+
+### max_allowable_epoch [#maxallowableepoch]
+
+<CodeBlock links={{"Epoch": "epoch"}}>
+```cpp showLineNumbers={false}
+static int64_t Epoch::max_allowable_epoch()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `epoch_storage` | `int64_t` | |

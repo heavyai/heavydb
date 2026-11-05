@@ -1,0 +1,96 @@
+---
+title: Catalog_Namespace::UserMetadata
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/SysCatalog.h>
+```
+
+---
+
+## Constructors
+
+### UserMetadata [#usermetadata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"UserMetadata": "usermetadata"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::UserMetadata::UserMetadata(
+    int32_t u,
+    const std::string &n,
+    const std::string &p,
+    bool s,
+    int32_t d,
+    bool l,
+    bool t,
+    const std::string &immerse_metadata_json
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"UserMetadata": "usermetadata"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::UserMetadata::UserMetadata()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"UserMetadata": "usermetadata"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::UserMetadata::UserMetadata(
+    UserMetadata const &user_meta
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"UserMetadata": "usermetadata"}}>
+```cpp showLineNumbers={false}
+UserMetadata & Catalog_Namespace::UserMetadata::operator=(
+    UserMetadata const &user_meta
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### userLoggable [#userloggable]
+
+<CodeBlock links={{"UserMetadata": "usermetadata"}}>
+```cpp showLineNumbers={false}
+std::string Catalog_Namespace::UserMetadata::userLoggable() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `userId` | `int32_t` | |
+| `userName` | `std::string` | |
+| `passwd_hash` | `std::string` | |
+| `isSuper` | `std::atomic< bool >` | |
+| `defaultDbId` | `int32_t` | |
+| `can_login` | `bool` | |
+| `is_temporary` | `bool` | |
+| `immerse_metadata_json` | `std::string` | |

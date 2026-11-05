@@ -1,0 +1,102 @@
+---
+title: Cast
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### Cast [#cast]
+
+<CodeBlock links={{"Cast": "cast", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Cast::Cast(
+    const CastOp op,
+    const Value *source,
+    const Type type,
+    const std::string &label
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### op [#op]
+
+<CodeBlock links={{"Cast": "cast"}}>
+```cpp showLineNumbers={false}
+CastOp Cast::op() const
+```
+</CodeBlock>
+
+### source [#source]
+
+<CodeBlock links={{"Cast": "cast", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * Cast::source() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"Cast": "cast", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void Cast::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"Cast": "cast", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"Cast": "cast", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"Cast": "cast", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### CastOp
+
+| Name | Value | Description |
+|---|---|---|
+| `Trunc` | | |
+| `SExt` | | |
+| `BitCast` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `op_` | `const CastOp` | |
+| `source_` | `const Value *` | |

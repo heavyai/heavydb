@@ -1,0 +1,74 @@
+---
+title: GeoPolygonStruct
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Methods
+
+### getRingSizes [#getringsizes]
+
+<CodeBlock links={{"GeoPolygonStruct": "geopolygonstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int8_t * GeoPolygonStruct::getRingSizes()
+```
+</CodeBlock>
+
+### getCoordsSize [#getcoordssize]
+
+<CodeBlock links={{"GeoPolygonStruct": "geopolygonstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoPolygonStruct::getCoordsSize() const
+```
+</CodeBlock>
+
+### getNumRings [#getnumrings]
+
+<CodeBlock links={{"GeoPolygonStruct": "geopolygonstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoPolygonStruct::getNumRings() const
+```
+</CodeBlock>
+
+### getCompression [#getcompression]
+
+<CodeBlock links={{"GeoPolygonStruct": "geopolygonstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoPolygonStruct::getCompression() const
+```
+</CodeBlock>
+
+### getInputSrid [#getinputsrid]
+
+<CodeBlock links={{"GeoPolygonStruct": "geopolygonstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoPolygonStruct::getInputSrid() const
+```
+</CodeBlock>
+
+### getOutputSrid [#getoutputsrid]
+
+<CodeBlock links={{"GeoPolygonStruct": "geopolygonstruct"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t GeoPolygonStruct::getOutputSrid() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr_coords` | `int8_t *` | |
+| `coords_size` | `int32_t` | |
+| `ring_sizes` | `int8_t *` | |
+| `num_rings` | `int32_t` | |
+| `compression` | `int32_t` | |
+| `input_srid` | `int32_t` | |
+| `output_srid` | `int32_t` | |

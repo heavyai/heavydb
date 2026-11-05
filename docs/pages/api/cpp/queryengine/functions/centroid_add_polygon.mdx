@@ -1,0 +1,24 @@
+---
+title: centroid_add_polygon
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+DEVICE ALWAYS_INLINE bool centroid_add_polygon(
+    int8_t *poly_coords,
+    int64_t poly_coords_size,
+    int32_t *poly_ring_sizes,
+    int64_t poly_num_rings,
+    int32_t ic,
+    int32_t isr,
+    int32_t osr,
+    double *total_area2,
+    double *cg3,
+    double *total_length,
+    double *linestring_centroid_sum,
+    int64_t *num_points,
+    double *point_centroid_sum
+)
+```
+</CodeBlock>

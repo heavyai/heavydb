@@ -1,0 +1,16 @@
+---
+title: File_Namespace::Chunk
+description: "@type Chunk"
+---
+
+@type [Chunk](chunk)
+
+```cpp showLineNumbers={false}
+using Chunk = FileBuffer;
+```
+
+A [Chunk](chunk) is the fundamental unit of execution in Map-D.
+
+A chunk is composed of logical pages. These pages can exist across multiple files managed by the file manager.
+
+The collection of pages is implemented as a [FileBuffer](../classes/filebuffer) object, which is composed of a vector of [MultiPage](../structs/multipage) objects, one for each logical page of the file buffer.

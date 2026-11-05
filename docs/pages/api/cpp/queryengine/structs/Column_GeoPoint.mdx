@@ -1,0 +1,159 @@
+---
+title: "Column< GeoPoint >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint", "Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoPoint> & Column<GeoPoint>::operator=(
+    const Column<GeoPoint> &other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getItem [#getitem]
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint", "Point2D": "../geo/structs/point2d"}}>
+```cpp showLineNumbers={false}
+DEVICE Geo::Point2D Column<GeoPoint>::getItem(
+    const int64_t index,
+    const int32_t output_srid = 0
+) const
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint", "Point2D": "../geo/structs/point2d"}}>
+```cpp showLineNumbers={false}
+DEVICE Geo::Point2D Column<GeoPoint>::operator[](
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t Column<GeoPoint>::size() const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Column<GeoPoint>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Column<Timestamp>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### setNull [#setnull]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<GeoPoint>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<Timestamp>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### setItem [#setitem]
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint", "Point2D": "../geo/structs/point2d"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<GeoPoint>::setItem(
+    int64_t index,
+    const Geo::Point2D &other
+)
+```
+</CodeBlock>
+
+### Column [#column]
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<GeoPoint>::Column(
+    GeoPoint *ptr,
+    const int64_t num_rows
+)
+```
+</CodeBlock>
+
+### getPtr [#getptr]
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint"}}>
+```cpp showLineNumbers={false}
+DEVICE GeoPoint * Column<GeoPoint>::getPtr() const
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"Column< GeoPoint >": "columngeopoint"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<GeoPoint>::setSize(
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `flatbuffer_` | `int8_t *` | |
+| `num_rows_` | `int64_t` | |
+| `ptr_` | `GeoPoint *` | |

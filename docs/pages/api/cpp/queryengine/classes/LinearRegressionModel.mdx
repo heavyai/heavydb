@@ -1,0 +1,138 @@
+---
+title: LinearRegressionModel
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <MLModel.h>
+```
+
+**Inherits from:** `AbstractMLModel` (public)
+
+---
+
+## Constructors
+
+### LinearRegressionModel [#linearregressionmodel]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel"}}>
+```cpp showLineNumbers={false}
+LinearRegressionModel::LinearRegressionModel(
+    const std::vector<double> &coefs,
+    const std::string &model_metadata
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with cat feature keys)">
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel"}}>
+```cpp showLineNumbers={false}
+LinearRegressionModel::LinearRegressionModel(
+    const std::vector<double> &coefs,
+    const std::string &model_metadata,
+    const std::vector<std::vector<std::string>> &cat_feature_keys
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getModelType [#getmodeltype]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel"}}>
+```cpp showLineNumbers={false}
+virtual MLModelType LinearRegressionModel::getModelType() const override
+```
+</CodeBlock>
+
+### getModelTypeString [#getmodeltypestring]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel"}}>
+```cpp showLineNumbers={false}
+virtual std::string LinearRegressionModel::getModelTypeString() const override
+```
+</CodeBlock>
+
+### getNumFeatures [#getnumfeatures]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel"}}>
+```cpp showLineNumbers={false}
+virtual int64_t LinearRegressionModel::getNumFeatures() const override
+```
+</CodeBlock>
+
+### getCoefs [#getcoefs]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel"}}>
+```cpp showLineNumbers={false}
+const std::vector<double> & LinearRegressionModel::getCoefs() const
+```
+</CodeBlock>
+
+### getModelMetadataStr [#getmodelmetadatastr]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const std::string & LinearRegressionModel::getModelMetadataStr() const
+```
+</CodeBlock>
+
+### getModelMetadata [#getmodelmetadata]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel", "MLModelMetadata": "mlmodelmetadata", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+MLModelMetadata LinearRegressionModel::getModelMetadata() const
+```
+</CodeBlock>
+
+### getCatFeatureKeys [#getcatfeaturekeys]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::vector<std::string>> & LinearRegressionModel::getCatFeatureKeys() const
+```
+</CodeBlock>
+
+### getNumCatFeatures [#getnumcatfeatures]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t LinearRegressionModel::getNumCatFeatures() const
+```
+</CodeBlock>
+
+### getNumOneHotFeatures [#getnumonehotfeatures]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t LinearRegressionModel::getNumOneHotFeatures() const
+```
+</CodeBlock>
+
+### getNumLogicalFeatures [#getnumlogicalfeatures]
+
+<CodeBlock links={{"LinearRegressionModel": "linearregressionmodel", "AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t LinearRegressionModel::getNumLogicalFeatures() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `coefs_` | `std::vector< double >` | |
+| `model_metadata_` | `std::string` | |
+| `cat_feature_keys_` | `std::vector< std::vector< std::string > >` | |

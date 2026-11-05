@@ -1,0 +1,175 @@
+---
+title: BaselineHashTable
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <BaselineHashTable.h>
+```
+
+**Inherits from:** `HashTable` (public)
+
+---
+
+## Constructors
+
+### BaselineHashTable [#baselinehashtable]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable", "BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+BaselineHashTable::BaselineHashTable(
+    MemoryLevel memory_level,
+    BaselineHashTableEntryInfo hash_table_entry_info,
+    size_t max_slab_size,
+    Data_Namespace::DataMgr *data_mgr = nullptr,
+    const int device_id = -1
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~BaselineHashTable
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+BaselineHashTable::~BaselineHashTable() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getGpuBuffer [#getgpubuffer]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+int8_t * BaselineHashTable::getGpuBuffer() const override
+```
+</CodeBlock>
+
+### getHashTableBufferSize [#gethashtablebuffersize]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTable::getHashTableBufferSize(
+    const ExecutorDeviceType device_type
+) const override
+```
+</CodeBlock>
+
+### getCpuBuffer [#getcpubuffer]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+int8_t * BaselineHashTable::getCpuBuffer() override
+```
+</CodeBlock>
+
+### getLayout [#getlayout]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+HashType BaselineHashTable::getLayout() const override
+```
+</CodeBlock>
+
+### getEntryCount [#getentrycount]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTable::getEntryCount() const override
+```
+</CodeBlock>
+
+### getEmittedKeysCount [#getemittedkeyscount]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTable::getEmittedKeysCount() const override
+```
+</CodeBlock>
+
+### getRowIdSize [#getrowidsize]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+size_t BaselineHashTable::getRowIdSize() const override
+```
+</CodeBlock>
+
+### getHashTableEntryInfo [#gethashtableentryinfo]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable", "BaselineHashTableEntryInfo": "baselinehashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+BaselineHashTableEntryInfo BaselineHashTable::getHashTableEntryInfo() const
+```
+</CodeBlock>
+
+### printInitLog [#printinitlog]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+void BaselineHashTable::printInitLog()
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### toSet [#toset]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+DecodedJoinHashBufferSet BaselineHashTable::toSet(
+    size_t key_component_count,
+    size_t key_component_width,
+    size_t entry_count,
+    const int8_t *ptr1,
+    const int8_t *ptr2,
+    const int8_t *ptr3,
+    const int8_t *ptr4,
+    size_t buffer_size
+)
+```
+</CodeBlock>
+
+Decode hash table into a std::set for easy inspection and validation.
+
+### toString [#tostring]
+
+<CodeBlock links={{"BaselineHashTable": "baselinehashtable", "HashTable": "hashtable"}}>
+```cpp showLineNumbers={false}
+std::string BaselineHashTable::toString(
+    const std::string &type,
+    const std::string &layout_type,
+    size_t key_component_count,
+    size_t key_component_width,
+    size_t entry_count,
+    const int8_t *ptr1,
+    const int8_t *ptr2,
+    const int8_t *ptr3,
+    const int8_t *ptr4,
+    size_t buffer_size,
+    bool raw = false
+)
+```
+</CodeBlock>
+
+Decode hash table into a human-readable string.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cpu_hash_table_buff_` | `int32_t *` | |
+| `gpu_hash_table_buff_` | `Data_Namespace::AbstractBuffer *` | |
+| `memory_level_` | `MemoryLevel` | |
+| `hash_table_entry_info_` | `BaselineHashTableEntryInfo` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `device_id_` | `const int` | |
+| `allocator_` | `std::unique_ptr< Arena >` | |

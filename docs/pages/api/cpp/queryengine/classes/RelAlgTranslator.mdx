@@ -1,0 +1,815 @@
+---
+title: RelAlgTranslator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgTranslator.h>
+```
+
+---
+
+## Constructors
+
+### RelAlgTranslator [#relalgtranslator]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "Executor": "executor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+RelAlgTranslator::RelAlgTranslator(
+    std::shared_ptr<const query_state::QueryState> q_s,
+    const Executor *executor,
+    const std::unordered_map<const RelAlgNode *, int> &input_to_nest_level,
+    const std::vector<JoinType> &join_types,
+    const time_t now,
+    const bool just_explain
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### translate [#translate]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translate(
+    const RexScalar *rex
+) const
+```
+</CodeBlock>
+
+### generated_geos_ops [#generatedgeosops]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator"}}>
+```cpp showLineNumbers={false}
+bool RelAlgTranslator::generated_geos_ops()
+```
+</CodeBlock>
+
+### translateRexScalar [#translaterexscalar]
+
+<Tabs>
+<Tab title="Const">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar(
+    RexScalar const *
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with rex) (1)">
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar(
+    RexScalar const *rex
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with rex) (2)">
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar(
+    RexScalar const *rex
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with rex) (3)">
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar(
+    RexScalar const *rex
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with rex) (4)">
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar(
+    RexScalar const *rex
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with rex) (5)">
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar(
+    RexScalar const *rex
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with rex) (6)">
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar(
+    RexScalar const *rex
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with rex) (7)">
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRexScalar(
+    RexScalar const *rex
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### translateScalarRex [#translatescalarrex]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarRex(
+    const RexScalar *rex
+) const
+```
+</CodeBlock>
+
+### translateScalarSubquery [#translatescalarsubquery]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
+    const RexSubQuery *
+) const
+```
+</CodeBlock>
+
+### translateInput [#translateinput]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
+    const RexInput *
+) const
+```
+</CodeBlock>
+
+### translateUoper [#translateuoper]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
+    const RexOperator *
+) const
+```
+</CodeBlock>
+
+### translateInOper [#translateinoper]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInOper(
+    const RexOperator *
+) const
+```
+</CodeBlock>
+
+### getInIntegerSetExpr [#getinintegersetexpr]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
+    std::shared_ptr<Analyzer::Expr> arg,
+    const ResultSet &val_set
+) const
+```
+</CodeBlock>
+
+### translateOper [#translateoper]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
+    const RexOperator *
+) const
+```
+</CodeBlock>
+
+### translateBoundingBoxIntersectOper [#translateboundingboxintersectoper]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBoundingBoxIntersectOper(
+    const RexOperator *
+) const
+```
+</CodeBlock>
+
+### translateCase [#translatecase]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
+    const RexCase *
+) const
+```
+</CodeBlock>
+
+### translateWidthBucket [#translatewidthbucket]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWidthBucket(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateMLPredict [#translatemlpredict]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateMLPredict(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translatePCAProject [#translatepcaproject]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translatePCAProject(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateLike [#translatelike]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateRegexp [#translateregexp]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateRegexp(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateLikely [#translatelikely]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLikely(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateUnlikely [#translateunlikely]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnlikely(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateExtract [#translateextract]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateDateadd [#translatedateadd]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateDatePlusMinus [#translatedateplusminus]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
+    const RexOperator *
+) const
+```
+</CodeBlock>
+
+### translateDatediff [#translatedatediff]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateDatepart [#translatedatepart]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateLength [#translatelength]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateKeyForString [#translatekeyforstring]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateKeyForString(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateSampleRatio [#translatesampleratio]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSampleRatio(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateCurrentUser [#translatecurrentuser]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentUser(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateStringOper [#translatestringoper]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateStringOper(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateCardinality [#translatecardinality]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateDotProduct [#translatedotproduct]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+Analyzer::ExpressionPtr RelAlgTranslator::translateDotProduct(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateItem [#translateitem]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateItem(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateCurrentDate [#translatecurrentdate]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentDate() const
+```
+</CodeBlock>
+
+### translateCurrentTime [#translatecurrenttime]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTime() const
+```
+</CodeBlock>
+
+### translateCurrentTimestamp [#translatecurrenttimestamp]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCurrentTimestamp() const
+```
+</CodeBlock>
+
+### translateDatetime [#translatedatetime]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateHPTLiteral [#translatehptliteral]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateHPTLiteral(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateAbs [#translateabs]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAbs(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateSign [#translatesign]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateSign(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateOffsetInFragment [#translateoffsetinfragment]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOffsetInFragment(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateFragmentId [#translatefragmentid]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFragmentId(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateFragmentIdAndOffset [#translatefragmentidandoffset]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFragmentIdAndOffset(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateArrayFunction [#translatearrayfunction]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateFunction [#translatefunction]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateWindowFunction [#translatewindowfunction]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
+    const RexWindowFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateFrameBoundExpr [#translateframeboundexpr]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::tuple<bool, bool, std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateFrameBoundExpr(
+    const RexScalar *bound_expr
+) const
+```
+</CodeBlock>
+
+### translateIntervalExprForWindowFraming [#translateintervalexprforwindowframing]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateIntervalExprForWindowFraming(
+    std::shared_ptr<Analyzer::Expr> order_key,
+    bool for_preceding_bound,
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+### translateFunctionArgs [#translatefunctionargs]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+Analyzer::ExpressionPtrVector RelAlgTranslator::translateFunctionArgs(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateUnaryGeoFunction [#translateunarygeofunction]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateBinaryGeoFunction [#translatebinarygeofunction]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateTernaryGeoFunction [#translateternarygeofunction]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateFunctionWithGeoArg [#translatefunctionwithgeoarg]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
+    const RexFunctionOperator *
+) const
+```
+</CodeBlock>
+
+### translateGeoComparison [#translategeocomparison]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoComparison(
+    const RexOperator *
+) const
+```
+</CodeBlock>
+
+### translateGeoProjection [#translategeoprojection]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoProjection(
+    const RexFunctionOperator *,
+    SQLTypeInfo &,
+    const bool with_bounds
+) const
+```
+</CodeBlock>
+
+### translateGeoH3Function [#translategeoh3function]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoH3Function(
+    const RexFunctionOperator *,
+    SQLTypeInfo &
+) const
+```
+</CodeBlock>
+
+### translateUnaryGeoPredicate [#translateunarygeopredicate]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoPredicate(
+    const RexFunctionOperator *,
+    SQLTypeInfo &,
+    const bool with_bounds
+) const
+```
+</CodeBlock>
+
+### translateUnaryGeoConstructor [#translateunarygeoconstructor]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoConstructor(
+    const RexFunctionOperator *,
+    SQLTypeInfo &,
+    const bool with_bounds
+) const
+```
+</CodeBlock>
+
+### translateBinaryGeoPredicate [#translatebinarygeopredicate]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoPredicate(
+    const RexFunctionOperator *,
+    SQLTypeInfo &,
+    const bool with_bounds
+) const
+```
+</CodeBlock>
+
+### translateBinaryGeoConstructor [#translatebinarygeoconstructor]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoConstructor(
+    const RexFunctionOperator *,
+    SQLTypeInfo &,
+    const bool with_bounds
+) const
+```
+</CodeBlock>
+
+### translateGeoBoundingBoxIntersectOper [#translategeoboundingboxintersectoper]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoBoundingBoxIntersectOper(
+    const RexOperator *
+) const
+```
+</CodeBlock>
+
+### translateGeoFunctionArg [#translategeofunctionarg]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunctionArg(
+    const RexScalar *rex_scalar,
+    SQLTypeInfo &arg_ti,
+    const bool with_bounds,
+    const bool expand_geo_col,
+    const bool is_projection = false,
+    const bool use_geo_expressions = false,
+    const bool try_to_compress = false,
+    const bool allow_gdal_transforms = false
+) const
+```
+</CodeBlock>
+
+### translateGeoColumn [#translategeocolumn]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColumn(
+    const RexInput *,
+    SQLTypeInfo &,
+    const bool with_bounds,
+    const bool expand_geo_col
+) const
+```
+</CodeBlock>
+
+### translateGeoLiteral [#translategeoliteral]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiteral(
+    const RexLiteral *,
+    SQLTypeInfo &,
+    bool
+) const
+```
+</CodeBlock>
+
+### getQuantifiedRhs [#getquantifiedrhs]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> RelAlgTranslator::getQuantifiedRhs(
+    const RexScalar *
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### translateAggregateRex [#translateaggregaterex]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexAgg": "rexagg"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
+    const RexAgg *rex,
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &scalar_sources
+)
+```
+</CodeBlock>
+
+### translateLiteral [#translateliteral]
+
+<CodeBlock links={{"RelAlgTranslator": "relalgtranslator", "RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
+    const RexLiteral *
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_state_` | `std::shared_ptr< const query_state::QueryState >` | |
+| `executor_` | `const Executor *` | |
+| `input_to_nest_level_` | `const std::unordered_map< const RelAlgNode *, int >` | |
+| `join_types_` | `const std::vector< JoinType >` | |
+| `now_` | `time_t` | |
+| `generated_geos_ops_` | `bool` | |
+| `just_explain_` | `const bool` | |
+| `cache_` | `robin_hood::unordered_map< RexScalar const  *, std::shared_ptr< Analyzer::Expr > >` | |

@@ -1,0 +1,18 @@
+---
+title: find_push_down_filters
+description: "Go through all tables involved in the relational algebra plan, and select potential candidates to be pushed down by calcite."
+---
+
+<CodeBlock links={{"RelAlgExecutionUnit": "../structs/relalgexecutionunit", "PushedDownFilterInfo": "../structs/pusheddownfilterinfo"}}>
+```cpp showLineNumbers={false}
+std::vector<PushedDownFilterInfo> find_push_down_filters(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const std::vector<size_t> &input_permutation,
+    const std::vector<size_t> &left_deep_join_input_sizes
+)
+```
+</CodeBlock>
+
+Go through all tables involved in the relational algebra plan, and select potential candidates to be pushed down by calcite.
+
+[For](../classes/for) each filter we store a set of intermediate indices (previous, current, and next table) based on the column indices in their query string.

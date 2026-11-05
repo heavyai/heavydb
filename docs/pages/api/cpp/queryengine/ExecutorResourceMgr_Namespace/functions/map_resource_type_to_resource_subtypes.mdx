@@ -1,0 +1,22 @@
+---
+title: ExecutorResourceMgr_Namespace::map_resource_type_to_resource_subtypes
+description: "Returns the 1-or-more ResourceSubtypes associated with a given ResourceType."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::vector<ResourceSubtype> ExecutorResourceMgr_Namespace::map_resource_type_to_resource_subtypes(
+    const ResourceType resource_type
+)
+```
+</CodeBlock>
+
+Returns the 1-or-more [`ResourceSubtype`](../enums/resourcesubtype)s associated with a given [`ResourceType`](../enums/resourcetype).
+
+**Returns:** std::vector&lt;ResourceSubtype&gt; - A vector of one or more [`ResourceSubtype`](../enums/resourcesubtype)s associated with the [`ResourceType`](../enums/resourcetype)
+
+**Parameters**
+
+<ParamField path="resource_type" type="const ResourceType">
+- The parent [`ResourceType`](../enums/resourcetype)
+</ParamField>

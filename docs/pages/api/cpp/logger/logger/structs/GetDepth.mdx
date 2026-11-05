@@ -1,0 +1,37 @@
+---
+title: logger::GetDepth
+description: ""
+---
+
+**Inherits from:** `boost::static_visitor< int >` (public)
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<Tabs>
+<Tab title="Const (with duration)">
+
+<CodeBlock links={{"GetDepth": "getdepth", "Duration": "../classes/duration"}}>
+```cpp showLineNumbers={false}
+int logger::GetDepth::operator()(
+    Duration const &duration
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with duration tree)">
+
+<CodeBlock links={{"GetDepth": "getdepth", "DurationTree": "../classes/durationtree"}}>
+```cpp showLineNumbers={false}
+int logger::GetDepth::operator()(
+    DurationTree const &duration_tree
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

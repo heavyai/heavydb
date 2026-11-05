@@ -1,0 +1,89 @@
+---
+title: ExecutorResourceMgr_Namespace::ResourcePoolInfo
+description: "A container for various stats about the current state of the ExecutorResourcePool."
+---
+
+A container for various stats about the current state of the [`ExecutorResourcePool`](../classes/executorresourcepool).
+
+Note that [`ExecutorResourcePool`](../classes/executorresourcepool) does not persist a struct of this type, but rather builds one on the fly when `ExecutorResourcePool::get_resource_info()` is called.
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ExecutorResourcePool.h>
+```
+
+---
+
+## Constructors
+
+### ResourcePoolInfo [#resourcepoolinfo]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ResourcePoolInfo": "resourcepoolinfo"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ResourcePoolInfo::ResourcePoolInfo()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ResourcePoolInfo": "resourcepoolinfo"}}>
+```cpp showLineNumbers={false}
+ExecutorResourceMgr_Namespace::ResourcePoolInfo::ResourcePoolInfo(
+    const size_t total_cpu_slots,
+    const size_t total_gpu_slots,
+    const size_t total_cpu_result_mem,
+    const size_t total_cpu_buffer_pool_mem,
+    const size_t total_gpu_buffer_pool_mem,
+    const size_t allocated_cpu_slots,
+    const size_t allocated_gpu_slots,
+    const size_t allocated_cpu_result_mem,
+    const size_t allocated_cpu_buffer_pool_mem,
+    const size_t allocated_gpu_buffer_pool_mem,
+    const size_t allocated_cpu_buffers,
+    const size_t allocated_gpu_buffers,
+    const size_t allocated_temp_cpu_buffer_pool_mem,
+    const size_t allocated_temp_gpu_buffer_pool_mem,
+    const size_t total_requests,
+    const size_t outstanding_requests,
+    const size_t outstanding_cpu_slots_requests,
+    const size_t outstanding_gpu_slots_requests,
+    const size_t outstanding_cpu_result_mem_requests,
+    const size_t outstanding_cpu_buffer_pool_mem_requests,
+    const size_t outstanding_gpu_buffer_pool_mem_requests
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `total_cpu_slots` | `size_t` | |
+| `total_gpu_slots` | `size_t` | |
+| `total_cpu_result_mem` | `size_t` | |
+| `total_cpu_buffer_pool_mem` | `size_t` | |
+| `total_gpu_buffer_pool_mem` | `size_t` | |
+| `allocated_cpu_slots` | `size_t` | |
+| `allocated_gpu_slots` | `size_t` | |
+| `allocated_cpu_result_mem` | `size_t` | |
+| `allocated_cpu_buffer_pool_mem` | `size_t` | |
+| `allocated_gpu_buffer_pool_mem` | `size_t` | |
+| `allocated_cpu_buffers` | `size_t` | |
+| `allocated_gpu_buffers` | `size_t` | |
+| `allocated_temp_cpu_buffer_pool_mem` | `size_t` | |
+| `allocated_temp_gpu_buffer_pool_mem` | `size_t` | |
+| `total_requests` | `size_t` | |
+| `outstanding_requests` | `size_t` | |
+| `outstanding_cpu_slots_requests` | `size_t` | |
+| `outstanding_gpu_slots_requests` | `size_t` | |
+| `outstanding_cpu_result_mem_requests` | `size_t` | |
+| `outstanding_cpu_buffer_pool_mem_requests` | `size_t` | |
+| `outstanding_gpu_buffer_pool_mem_requests` | `size_t` | |
