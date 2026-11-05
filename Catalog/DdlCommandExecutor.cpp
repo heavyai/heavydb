@@ -3424,8 +3424,11 @@ ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
       throw std::runtime_error(
           "Current user does not have the privilege to alter table: " + tableName);
     }
-    catalog.addTableConstraint(
-        td, table_constraint_from_json(*ddl_payload["constraintData"].Begin()));
+    validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
+    const auto constraint =
+        table_constraint_from_json(*ddl_payload["constraintData"].Begin());
+    Parser::check_foreign_key_privilege(*session_ptr_, tableName, constraint);
+    catalog.addTableConstraint(td, constraint);
     return {};
   } else if (type == "DROP_CONSTRAINT") {
     if (!ddl_payload.HasMember("constraintName") ||
@@ -3448,6 +3451,7 @@ ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
       throw std::runtime_error(
           "Current user does not have the privilege to alter table: " + tableName);
     }
+    validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
     catalog.dropTableConstraint(td, json_str(ddl_payload["constraintName"]));
     return {};
   } else if (type == "ADD_COLUMN") {
