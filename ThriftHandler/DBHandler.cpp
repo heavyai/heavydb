@@ -2447,7 +2447,7 @@ int64_t saturated_num_rows(const size_t num_rows) {
 }
 
 int64_t get_table_num_rows(const Catalog& cat, const TableDescriptor* td) {
-  if (td->isView) {
+  if (td->isView || td->isForeignTable()) {
     return -1;
   }
   auto get_fragmenter_num_rows = [&cat](const TableDescriptor* table_desc) -> int64_t {

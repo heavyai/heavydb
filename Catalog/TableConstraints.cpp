@@ -170,11 +170,6 @@ std::optional<TableConstraintType> table_constraint_type_from_string(
   return {};
 }
 
-bool table_constraint_is_trusted(const TableConstraint& constraint,
-                                 const bool trust_unenforced_constraints) {
-  return constraint.enforced || trust_unenforced_constraints;
-}
-
 std::vector<TableConstraint> parse_table_constraints_from_key_metainfo(
     const std::string& key_metainfo) {
   auto document = parse_key_metainfo_document(key_metainfo);
