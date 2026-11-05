@@ -285,7 +285,8 @@ void check_cpu_scheduling(const SQLTypes sql_type) {
             std::vector<T> expected;
             for (size_t i = 0; i < qmd.getEntryCount(); ++i) {
               auto row = storage->getUnderlyingBuffer() + i * get_row_bytes(qmd);
-              const bool live = !empty && i % 4 == 0;
+              // Spread live rows (including NULLs) across all four worker stripes.
+              const bool live = !empty && i % 3 == 0;
               for (size_t k = 0; k < qmd.getKeyCount(); ++k) {
                 reinterpret_cast<K*>(row)[k] = live ? i : empty_key_val<K>();
               }

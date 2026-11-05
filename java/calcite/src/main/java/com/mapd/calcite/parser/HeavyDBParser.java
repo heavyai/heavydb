@@ -544,7 +544,7 @@ public final class HeavyDBParser {
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     RelRoot optRel = planner.buildRATreeAndPerformQueryOptimization(query, schema);
     optRel = replaceIsTrue(planner.getTypeFactory(), optRel);
-    return HeavyDBSerializer.toString(optRel.project());
+    return HeavyDBSerializer.toString(normalizeAggregateGroupKeys(optRel.project()));
   }
 
   public Pair<String, Boolean> processSql(
@@ -592,7 +592,7 @@ public final class HeavyDBParser {
       project.explain(planWriter);
       return new Pair<String, Boolean>(sw.toString(), true);
     } else if (parserOptions.isExplain()) {
-      return new Pair<String, Boolean>(RelOptUtil.toString(sqlRel.project()), true);
+      return new Pair<String, Boolean>(RelOptUtil.toString(project), true);
     }
     return new Pair<String, Boolean>(HeavyDBSerializer.toString(project), true);
   }
