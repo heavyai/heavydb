@@ -15,8 +15,11 @@
 #include "ResultSetSortImpl.h"
 
 #include "../Shared/thread_count.h"
+#include "../Shared/threading.h"
 
 #include <future>
+
+extern size_t g_parallel_top_min;
 
 std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;  // for unit tests only
 
@@ -72,9 +75,11 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   auto data_mgr = getDataManager();
   std::set<int> device_ids_to_sort = executor->getAvailableDevicesToProcessQuery();
   if (device_type == ExecutorDeviceType::CPU) {
-    // for CPU execution, we can logically assume thread id represents device id
+    // CPU partitions use logical device IDs without CUDA contexts.
     device_ids_to_sort.clear();
-    for (auto thread_id = 0; thread_id < cpu_threads(); ++thread_id) {
+    const auto worker_count = baseline_sort_cpu_worker_count(
+        layout.entry_count, cpu_threads(), g_parallel_top_min);
+    for (size_t thread_id = 0; thread_id < worker_count; ++thread_id) {
       device_ids_to_sort.insert(thread_id);
     }
   }
@@ -84,55 +89,77 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
   if (num_devices_to_sort > 1) {
     std::vector<std::future<void>> top_futures;
     std::vector<Permutation> strided_permutations(num_devices_to_sort);
+    std::vector<std::exception_ptr> cpu_errors(num_devices_to_sort);
+    threading::task_group cpu_tasks;
     for (auto it = device_ids_to_sort.begin(); it != device_ids_to_sort.end(); it++) {
       auto const device_id = *it;
       auto const slot_idx = std::distance(device_ids_to_sort.begin(), it);
-      top_futures.emplace_back(std::async(
-          std::launch::async,
-          [&strided_permutations,
-           data_mgr,
-           device_type,
-           groupby_buffer,
-           pod_oe,
-           key_bytewidth,
-           layout,
-           top_n,
-           device_id,
-           slot_idx,
-           num_devices_to_sort,
-           &executor] {
-            CudaAllocator* device_allocator{nullptr};
-            CUstream cuda_stream{nullptr};
-            if (device_type == ExecutorDeviceType::GPU) {
-              set_cuda_context(data_mgr, device_id);
-              device_allocator = executor->getCudaAllocator(device_id);
-              CHECK(device_allocator);
-              cuda_stream = executor->getCudaStream(device_id);
-            }
-            strided_permutations[slot_idx] =
-                (key_bytewidth == 4) ? baseline_sort<int32_t>(device_type,
-                                                              device_id,
-                                                              data_mgr,
-                                                              device_allocator,
-                                                              groupby_buffer,
-                                                              pod_oe,
-                                                              layout,
-                                                              top_n,
-                                                              slot_idx,
-                                                              num_devices_to_sort,
-                                                              cuda_stream)
-                                     : baseline_sort<int64_t>(device_type,
-                                                              device_id,
-                                                              data_mgr,
-                                                              device_allocator,
-                                                              groupby_buffer,
-                                                              pod_oe,
-                                                              layout,
-                                                              top_n,
-                                                              slot_idx,
-                                                              num_devices_to_sort,
-                                                              cuda_stream);
-          }));
+      const auto sort_partition = [&strided_permutations,
+                                   data_mgr,
+                                   device_type,
+                                   groupby_buffer,
+                                   pod_oe,
+                                   key_bytewidth,
+                                   layout,
+                                   top_n,
+                                   device_id,
+                                   slot_idx,
+                                   num_devices_to_sort,
+                                   &executor] {
+        CudaAllocator* device_allocator{nullptr};
+        CUstream cuda_stream{nullptr};
+        if (device_type == ExecutorDeviceType::GPU) {
+          set_cuda_context(data_mgr, device_id);
+          device_allocator = executor->getCudaAllocator(device_id);
+          CHECK(device_allocator);
+          cuda_stream = executor->getCudaStream(device_id);
+        }
+        strided_permutations[slot_idx] = (key_bytewidth == 4)
+                                             ? baseline_sort<int32_t>(device_type,
+                                                                      device_id,
+                                                                      data_mgr,
+                                                                      device_allocator,
+                                                                      groupby_buffer,
+                                                                      pod_oe,
+                                                                      layout,
+                                                                      top_n,
+                                                                      slot_idx,
+                                                                      num_devices_to_sort,
+                                                                      cuda_stream)
+                                             : baseline_sort<int64_t>(device_type,
+                                                                      device_id,
+                                                                      data_mgr,
+                                                                      device_allocator,
+                                                                      groupby_buffer,
+                                                                      pod_oe,
+                                                                      layout,
+                                                                      top_n,
+                                                                      slot_idx,
+                                                                      num_devices_to_sort,
+                                                                      cuda_stream);
+      };
+      if (device_type == ExecutorDeviceType::CPU) {
+        cpu_tasks.run([sort_partition,
+                       &cpu_errors,
+                       slot_idx,
+                       parent_thread_local_ids = logger::thread_local_ids()] {
+          try {
+            logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
+            sort_partition();
+          } catch (...) {
+            // The std task_group backend waits without rethrowing task exceptions.
+            cpu_errors[slot_idx] = std::current_exception();
+          }
+        });
+      } else {
+        top_futures.emplace_back(std::async(std::launch::async, sort_partition));
+      }
+    }
+    cpu_tasks.wait();
+    for (const auto& error : cpu_errors) {
+      if (error) {
+        std::rethrow_exception(error);
+      }
     }
     for (auto& top_future : top_futures) {
       top_future.wait();
@@ -184,6 +211,11 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
                                                                  /*start=*/0,
                                                                  /*step=*/1,
                                                                  cuda_stream);
+    // A worker concatenates separately sorted value/null buckets, each with candidates.
+    // With no merge pass, enforce the final limit here as well.
+    if (permutation_.size() > top_n) {
+      permutation_.resize(top_n);
+    }
   }
 }
 
