@@ -763,6 +763,7 @@ void InsertOrderFragmenter::insertChunks(const InsertChunks& insert_chunk) {
     catalog_->setTableEpochs(db_id, table_epochs);
     throw;
   }
+  catalog_->markTableStatisticsDirty(physicalTableId_);
 }
 
 void InsertOrderFragmenter::insertData(InsertData& insert_data_struct) {
@@ -789,6 +790,7 @@ void InsertOrderFragmenter::insertData(InsertData& insert_data_struct) {
     catalog_->setTableEpochs(insert_data_struct.databaseId, table_epochs);
     throw;
   }
+  catalog_->markTableStatisticsDirty(physicalTableId_);
 }
 
 void InsertOrderFragmenter::insertChunksNoCheckpoint(const InsertChunks& insert_chunk) {
@@ -797,6 +799,8 @@ void InsertOrderFragmenter::insertChunksNoCheckpoint(const InsertChunks& insert_
       insertMutex_);  // prevent two threads from trying to insert into the same table
                       // simultaneously
   insertChunksImpl(insert_chunk);
+  insertLock.unlock();
+  catalog_->markTableStatisticsDirty(physicalTableId_);
 }
 
 void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insert_data_struct) {
@@ -809,6 +813,8 @@ void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insert_data_struc
   } else {
     addColumns(insert_data_struct);
   }
+  insertLock.unlock();
+  catalog_->markTableStatisticsDirty(physicalTableId_);
 }
 
 void InsertOrderFragmenter::addColumns(const InsertData& insertDataStruct) {

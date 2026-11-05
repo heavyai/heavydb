@@ -49,7 +49,7 @@ std::unique_ptr<RelAlgDag> build_unoptimized_dag(const std::string& sql) {
   auto query_state = QR::create_query_state(QR::get()->getSession(), sql);
   auto const parsing_option = g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto const optimization_option = g_calcite->getCalciteOptimizationOption(
-      g_enable_calcite_view_optimize, g_enable_watchdog, {});
+      g_enable_calcite_view_optimize, g_enable_watchdog, {}, false, false);
   auto const plan = query_parsing::process_and_check_access_privileges(
       g_calcite.get(),
       query_state->createQueryStateProxy(),
