@@ -20,6 +20,7 @@
 #include <atomic>
 #include <cstdint>
 #include <ctime>
+#include <functional>
 #include <limits>
 #include <list>
 #include <map>
@@ -179,6 +180,11 @@ class Catalog final {
   void invalidateCachesForTable(const int table_id);
   void removeFragmenterForTable(const int table_id) const;
   std::vector<TableConstraint> getTableConstraints(const TableDescriptor* td) const;
+  std::map<std::string, std::vector<int32_t>> getForeignKeyColumnOrdinals(
+      const TableDescriptor* td) const;
+  void validateColumnConstraintDependencies(const TableDescriptor* td,
+                                            const ColumnDescriptor* cd,
+                                            const std::string& operation) const;
   TableConstraint normalizeTableConstraint(const TableDescriptor* td,
                                            const TableConstraint& constraint) const;
   std::vector<TableConstraint> normalizeTableConstraintsForCreate(
@@ -879,6 +885,13 @@ class Catalog final {
                             std::set<std::string>& shared_dict_column_names,
                             const TableDescriptor* td) const;
   std::string quoteIfRequired(const std::string& column_name) const;
+  void gatherTableConstraintInfo(std::vector<std::string>& definitions,
+                                 const TableDescriptor* td,
+                                 bool for_archive) const;
+  void updateTableConstraintMetadata(
+      const TableDescriptor* td,
+      const std::function<std::string(const std::string&)>& update,
+      const std::string& operation);
   DeletedColumnPerTableMap deletedColumnPerTable_;
   void adjustAlteredTableFiles(
       const std::string& temp_data_dir,

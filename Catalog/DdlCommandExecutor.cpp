@@ -3319,9 +3319,11 @@ void AlterTableAlterColumnCommand::alterColumn() {
 
   for (const auto& coldef : columns) {
     const auto& column_name = *coldef.get_column_name();
-    if (catalog.getMetadataForColumn(td->tableId, column_name) == nullptr) {
+    const auto cd = catalog.getMetadataForColumn(td->tableId, column_name);
+    if (!cd) {
       throw std::runtime_error("Column " + column_name + " does not exist.");
     }
+    catalog.validateColumnConstraintDependencies(td, cd, "alter");
   }
 
   CHECK(td->fragmenter);
