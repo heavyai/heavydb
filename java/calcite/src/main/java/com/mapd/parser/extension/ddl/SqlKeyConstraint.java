@@ -14,7 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * This file is a modified derivative of Apache Calcite's org.apache.calcite.sql.ddl.SqlKeyConstraint.
+ * This file is a modified derivative of Apache Calcite's
+ * org.apache.calcite.sql.ddl.SqlKeyConstraint.
  *
  * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -38,10 +39,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Parse tree for {@code UNIQUE}, {@code PRIMARY KEY} constraints.
- *
- * <p>
- * And {@code FOREIGN KEY}, when we support it.
+ * Parse tree for table keys, foreign keys, and storage column directives.
  */
 public class SqlKeyConstraint extends SqlCall {
   private static final SqlSpecialOperator UNIQUE =
@@ -52,6 +50,10 @@ public class SqlKeyConstraint extends SqlCall {
 
   protected static final SqlSpecialOperator FOREIGN =
           new SqlSpecialOperator("FOREIGN KEY", SqlKind.FOREIGN_KEY);
+  private static final SqlSpecialOperator SHARD =
+          new SqlSpecialOperator("SHARD KEY", SqlKind.OTHER);
+  private static final SqlSpecialOperator SHARED_DICTIONARY =
+          new SqlSpecialOperator("SHARED DICTIONARY", SqlKind.OTHER);
 
   private final SqlIdentifier name;
   private final SqlNodeList columnList;
@@ -75,9 +77,9 @@ public class SqlKeyConstraint extends SqlCall {
                     ? referencesCol.getComponent(0)
                     : null,
             referencesCol == null ? null
-                    : SqlNodeList.of(referencesCol.isSimple()
-                                    ? referencesCol
-                                    : referencesCol.getComponent(1)));
+                                  : SqlNodeList.of(referencesCol.isSimple()
+                                                  ? referencesCol
+                                                  : referencesCol.getComponent(1)));
   }
 
   SqlKeyConstraint(SqlParserPos pos,
@@ -115,7 +117,8 @@ public class SqlKeyConstraint extends SqlCall {
           SqlNodeList columnList,
           SqlIdentifier referencesTable,
           SqlNodeList referencesColumnList) {
-    return new SqlKeyConstraint(pos, name, columnList, referencesTable, referencesColumnList) {
+    return new SqlKeyConstraint(
+            pos, name, columnList, referencesTable, referencesColumnList) {
       @Override
       public SqlOperator getOperator() {
         return FOREIGN;
@@ -126,15 +129,25 @@ public class SqlKeyConstraint extends SqlCall {
   /** Creates a SHARD KEY constraint */
   public static SqlKeyConstraint shard(SqlParserPos pos, SqlIdentifier colName) {
     SqlNodeList colList = SqlNodeList.of(colName);
-    return new SqlKeyConstraint(pos, new SqlIdentifier("SHARD_KEY", pos), colList);
+    return new SqlKeyConstraint(pos, new SqlIdentifier("SHARD_KEY", pos), colList) {
+      @Override
+      public SqlOperator getOperator() {
+        return SHARD;
+      }
+    };
   }
 
-  /** CReates a SHARED DICTIONARY constraint */
+  /** Creates a SHARED DICTIONARY directive. */
   public static SqlKeyConstraint sharedDict(
           SqlParserPos pos, SqlIdentifier colName, SqlIdentifier referencesCol) {
     SqlNodeList colList = SqlNodeList.of(colName);
     return new SqlKeyConstraint(
-            pos, new SqlIdentifier("SHARED_DICT", pos), colList, referencesCol);
+            pos, new SqlIdentifier("SHARED_DICT", pos), colList, referencesCol) {
+      @Override
+      public SqlOperator getOperator() {
+        return SHARED_DICTIONARY;
+      }
+    };
   }
 
   @Override

@@ -2273,6 +2273,9 @@ std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element);
 
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
                                  const TableDescriptor* td);
+void check_foreign_key_privilege(const Catalog_Namespace::SessionInfo& session,
+                                 const std::string& source_table,
+                                 const Catalog_Namespace::TableConstraint& constraint);
 
 int32_t validate_and_get_fragment_size(const std::string& fragment_size_str);
 }  // namespace Parser

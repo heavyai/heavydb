@@ -3091,10 +3091,12 @@ void parse_elements(const rapidjson::Value& payload,
       auto col_def = column_from_json(element);
       table_element_list.emplace_back(std::move(col_def));
     } else if (json_str(element["type"]) == "SQL_COLUMN_CONSTRAINT") {
-      CHECK(element.HasMember("name"));
-      const auto constraint_name =
-          element["name"].IsString() ? json_str(element["name"]) : std::string{};
-      if (constraint_name == "SHARD_KEY") {
+      if (!element.HasMember("constraintType") || !element["constraintType"].IsString()) {
+        throw std::runtime_error(
+            "CREATE TABLE constraint is missing a string constraintType.");
+      }
+      const auto constraint_type = json_str(element["constraintType"]);
+      if (constraint_type == "SHARD KEY") {
         CHECK(element.HasMember("columns"));
         CHECK(element["columns"].IsArray());
         const auto& columns = element["columns"].GetArray();
@@ -3103,7 +3105,7 @@ void parse_elements(const rapidjson::Value& payload,
         }
         auto shard_key_def = std::make_unique<ShardKeyDef>(json_str(columns[0]));
         table_element_list.emplace_back(std::move(shard_key_def));
-      } else if (constraint_name == "SHARED_DICT") {
+      } else if (constraint_type == "SHARED DICTIONARY") {
         CHECK(element.HasMember("columns"));
         CHECK(element["columns"].IsArray());
         const auto& columns = element["columns"].GetArray();
@@ -3404,6 +3406,9 @@ void CreateTableStmt::executeDryRun(
   }
   if (td.shardedColumnId && !td.nShards) {
     throw std::runtime_error("SHARD_COUNT needs to be specified with SHARD_KEY.");
+  }
+  for (const auto& constraint : table_constraints) {
+    check_foreign_key_privilege(session, td.tableName, constraint);
   }
   table_constraints =
       catalog.normalizeTableConstraintsForCreate(&td, columns, table_constraints);
@@ -5108,6 +5113,26 @@ ValidateStmt::ValidateStmt(const rapidjson::Value& payload) {
   parse_options(payload, options);
 
   isRepairTypeRemove_ = repair_type(options);
+}
+
+void check_foreign_key_privilege(const Catalog_Namespace::SessionInfo& session,
+                                 const std::string& source_table,
+                                 const Catalog_Namespace::TableConstraint& constraint) {
+  if (!constraint.foreign_key_reference ||
+      boost::iequals(source_table, constraint.foreign_key_reference->table_name)) {
+    return;
+  }
+  const auto& referenced_table = constraint.foreign_key_reference->table_name;
+  if (!session.getCatalog().getMetadataForTable(referenced_table, false)) {
+    throw std::runtime_error("Referenced table " + referenced_table + " does not exist.");
+  }
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::SELECT_FROM_TABLE,
+                                       referenced_table)) {
+    throw std::runtime_error(
+        "Current user does not have SELECT privileges on referenced table: " +
+        referenced_table);
+  }
 }
 
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
