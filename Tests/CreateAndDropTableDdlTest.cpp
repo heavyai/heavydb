@@ -508,6 +508,37 @@ TEST_F(TableConstraintTest, ShardedSelfReferenceAllowsDrop) {
   EXPECT_NO_THROW(sql("DROP TABLE constraint_review_parent;"));
 }
 
+TEST_F(TableConstraintTest, RowCountsExcludeExternalTablesAndIncludeShards) {
+  const auto previous = system_parameters_.enable_experimental_query_rewrites;
+  ScopeGuard restore = [&] {
+    system_parameters_.enable_experimental_query_rewrites = previous;
+  };
+  system_parameters_.enable_experimental_query_rewrites = true;
+  sql("CREATE TABLE constraint_review_parent (id INT, SHARD KEY(id)) WITH "
+      "(SHARD_COUNT=4);");
+  sql("INSERT INTO constraint_review_parent VALUES(1),(2),(3),(4),(5);");
+  auto [handler, session] = getDbHandlerAndSessionId();
+  TTableDetails details;
+  handler->get_table_details(details, session, "constraint_review_parent");
+  EXPECT_TRUE(details.__isset.num_rows);
+  EXPECT_EQ(5, details.num_rows);
+  sql("INSERT INTO constraint_review_parent VALUES(6);");
+  handler->get_table_details(details, session, "constraint_review_parent");
+  EXPECT_EQ(6, details.num_rows);
+  const auto path = bf::absolute(bf::path(BASE_PATH) / "constraint-review.csv");
+  bf::copy_file(getTestFilePath(), path);
+  ScopeGuard remove_file = [&] { bf::remove(path); };
+  sql("CREATE FOREIGN TABLE constraint_review_child (id INT) SERVER "
+      "default_local_delimited "
+      "WITH (file_path='" +
+      path.string() + "');");
+  bf::remove(path);
+  TTableDetails external;
+  EXPECT_NO_THROW(
+      handler->get_table_details(external, session, "constraint_review_child"));
+  EXPECT_FALSE(external.__isset.num_rows);
+}
+
 TEST_F(TableConstraintTest, AlterConstraintRejectsInvalidDefinitions) {
   sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, code INT NOT NULL, "
       "PRIMARY KEY(id));");
@@ -595,6 +626,29 @@ TEST_F(TableConstraintTest, ShowCreateRoundTripsConstraints) {
   const auto recreated = catalog.getMetadataForTable("constraint_review_child", false);
   EXPECT_EQ(child_metadata, recreated->keyMetainfo);
   EXPECT_EQ(ordinals, catalog.getForeignKeyColumnOrdinals(recreated));
+}
+
+TEST_F(TableConstraintTest, RowCountsRequireRewritesAndExcludeViews) {
+  const auto previous = system_parameters_.enable_experimental_query_rewrites;
+  ScopeGuard restore = [&] {
+    system_parameters_.enable_experimental_query_rewrites = previous;
+  };
+  sql("CREATE TABLE constraint_review_parent (id INT);");
+  sql("INSERT INTO constraint_review_parent VALUES(1),(2);");
+  sql("CREATE VIEW constraint_review_view AS SELECT id FROM constraint_review_parent;");
+  auto [handler, session] = getDbHandlerAndSessionId();
+  const auto details = [&](const std::string& table) {
+    TTableDetails result;
+    handler->get_table_details(result, session, table);
+    return result;
+  };
+  system_parameters_.enable_experimental_query_rewrites = false;
+  EXPECT_FALSE(details("constraint_review_parent").__isset.num_rows);
+  system_parameters_.enable_experimental_query_rewrites = true;
+  const auto native = details("constraint_review_parent");
+  EXPECT_TRUE(native.__isset.num_rows);
+  EXPECT_EQ(2, native.num_rows);
+  EXPECT_FALSE(details("constraint_review_view").__isset.num_rows);
 }
 
 TEST_F(TableConstraintTest, ForeignKeyRequiresReferencedTablePrivileges) {

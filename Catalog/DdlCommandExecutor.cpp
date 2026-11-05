@@ -1912,8 +1912,8 @@ ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
     auto calcite_mgr = catalog.getCalciteMgr();
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-    const auto calciteOptimizationOption =
-        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+    const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+        false, g_enable_watchdog, {}, false, false);
     auto result = calcite_mgr->process(query_state_proxy,
                                        td->viewSQL,
                                        calciteQueryParsingOption,

@@ -165,6 +165,38 @@ public class HeavyDBTableTest {
   }
 
   @Test
+  public void rowCountIsAvailableWithoutTrust() {
+    TTableDetails details = details("[]", false);
+    details.setNum_rows(0);
+    HeavyDBTable.setTrustUnenforcedTableConstraints(false);
+    assertEquals(Double.valueOf(0), table(details).getStatistic().getRowCount());
+    details.setNum_rows(-1);
+    assertNull(table(details).getStatistic().getRowCount());
+  }
+
+  @Test
+  public void invalidationRemovesPublishedRowCounts() {
+    TTableDetails details = details("[]", false);
+    details.setNum_rows(42);
+    table(details);
+    assertEquals(Double.valueOf(42),
+            HeavyDBTable.getRowCountEstimate(Arrays.asList("constraint_test", "child")));
+    HeavyDBTable.invalidateMetadata("CONSTRAINT_TEST", "CHILD");
+    assertNull(
+            HeavyDBTable.getRowCountEstimate(Arrays.asList("constraint_test", "child")));
+  }
+
+  @Test
+  public void unknownRowCountReplacesOldEstimate() {
+    table(details("[]", false));
+    TTableDetails unknown = details("[]", false);
+    unknown.unsetNum_rows();
+    table(unknown);
+    assertNull(
+            HeavyDBTable.getRowCountEstimate(Arrays.asList("constraint_test", "child")));
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   public void parentSchemaChangeInvalidatesReferringTables() throws Exception {
     Field field = MetaConnect.class.getDeclaredField("DB_TABLE_DETAILS");

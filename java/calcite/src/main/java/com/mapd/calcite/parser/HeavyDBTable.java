@@ -123,8 +123,12 @@ public class HeavyDBTable implements Table {
     this.schemaName = schemaName;
     this.tableName = tableName;
     final Double rowCountEstimate = getRowCountEstimate();
-    if (schemaName != null && tableName != null && rowCountEstimate != null) {
-      ROW_COUNT_ESTIMATES.put(rowCountKey(schemaName, tableName), rowCountEstimate);
+    if (schemaName != null && tableName != null) {
+      if (rowCountEstimate != null) {
+        ROW_COUNT_ESTIMATES.put(rowCountKey(schemaName, tableName), rowCountEstimate);
+      } else {
+        ROW_COUNT_ESTIMATES.remove(rowCountKey(schemaName, tableName));
+      }
     }
     systemColumnNames = rowInfo.row_desc.stream()
                                 .filter(row_desc -> row_desc.is_system)
