@@ -796,8 +796,12 @@ HeavyDB validates the referenced tables, columns, types, and presence of a decla
 referenced unique key at DDL time. It also blocks schema operations that would leave
 recorded dependencies dangling.
 
-Constraints are stored with `enforced=false`, so inserts and updates can introduce rows
-that violate the declarations. With trust disabled, Calcite leaves these declarations
+On CREATE TABLE, PRIMARY KEY implies NOT NULL for its columns. ALTER TABLE ADD PRIMARY
+KEY requires those columns to be NOT NULL already; it does not silently change the
+nullability of populated storage. Existing nullable declarations are not migrated.
+
+Constraints are stored with `enforced=false`: uniqueness and foreign-key membership
+are not checked on writes. With trust disabled, Calcite leaves these declarations
 out of cardinality and join-elimination proofs. With trust enabled, it assumes they
 hold, and an invalid declaration can produce a wrong query result. The checks below
 help establish whether a declaration is suitable for optimizer use.
@@ -2079,7 +2083,8 @@ and can bypass the checks that prevent data corruption.
 
 ## Current limitations and follow-up areas
 
-- Declarative PK/UNIQUE/FK constraints are not write-enforced.
+- Key uniqueness and foreign-key membership are not write-enforced. PRIMARY KEY implies
+  NOT NULL on CREATE; ADD PRIMARY KEY requires existing NOT NULL columns.
 - Persistent cubin keys intentionally exclude runtime GPU UDF bodies; such sessions skip
   the persistent cache.
 - Snappy, GDeflate, and Bitcomp GPU decode require the matching nvCOMP capabilities; raw
