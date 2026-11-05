@@ -48,6 +48,9 @@ std::string table_constraint_type_to_string(const TableConstraintType type);
 std::optional<TableConstraintType> table_constraint_type_from_string(
     const std::string& type);
 
+bool table_constraint_is_trusted(const TableConstraint& constraint,
+                                 bool trust_unenforced_constraints);
+
 std::vector<TableConstraint> parse_table_constraints_from_key_metainfo(
     const std::string& key_metainfo);
 
