@@ -6107,6 +6107,14 @@ int Catalog::getLogicalTableId(const int physicalTableId) const {
   return physicalTableId;
 }
 
+void Catalog::markTableStatisticsDirty(int table_id) const {
+  cat_read_lock read_lock(this);
+  const auto td = getMetadataForTable(getLogicalTableId(table_id), false);
+  if (td) {
+    calciteMgr_->markTableStatisticsDirty(currentDB_.dbName, td->tableName);
+  }
+}
+
 void Catalog::checkpoint(const int logicalTableId) const {
   const auto td = getMetadataForTable(logicalTableId);
   const auto shards = getPhysicalTablesDescriptors(td);

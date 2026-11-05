@@ -178,6 +178,7 @@ class Catalog final {
   void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
   void dropColumnPolicies(const TableDescriptor& td, const ColumnDescriptor& cd);
   void invalidateCachesForTable(const int table_id);
+  void markTableStatisticsDirty(int table_id) const;
   void removeFragmenterForTable(const int table_id) const;
   std::vector<TableConstraint> getTableConstraints(const TableDescriptor* td) const;
   std::map<std::string, std::vector<int32_t>> getForeignKeyColumnOrdinals(
