@@ -10,8 +10,8 @@
  */
 
 #include <gtest/gtest.h>
-#include <set>
 #include <boost/filesystem.hpp>
+#include <set>
 
 #include "Calcite/Calcite.h"
 #include "Catalog/ForeignTable.h"
@@ -186,8 +186,7 @@ class DictionaryDirectoryTest : public CreateAndDropTableDdlTest {
 
   std::set<std::string> dictionaryDirectories() const {
     std::set<std::string> dirs;
-    const auto prefix =
-        "DB_" + std::to_string(getCatalog().getDatabaseId()) + "_DICT_";
+    const auto prefix = "DB_" + std::to_string(getCatalog().getDatabaseId()) + "_DICT_";
     for (bf::directory_iterator it(bf::path(BASE_PATH) / shared::kDataDirectoryName), end;
          it != end;
          ++it) {
@@ -207,9 +206,9 @@ class DictionaryDirectoryTest : public CreateAndDropTableDdlTest {
 // table to reuse the dictionary id found a non-empty directory.
 TEST_F(DictionaryDirectoryTest, DropSharedDictionaryColumnThenTableRemovesDirectory) {
   const auto dirs_before = dictionaryDirectories();
-  const std::string shared_create =
-      std::string("CREATE TABLE ") + kTable + " (a TEXT, b TEXT, SHARED DICTIONARY (b) " +
-      "REFERENCES " + kTable + "(a));";
+  const std::string shared_create = std::string("CREATE TABLE ") + kTable +
+                                    " (a TEXT, b TEXT, SHARED DICTIONARY (b) " +
+                                    "REFERENCES " + kTable + "(a));";
 
   sql(shared_create);
   sql("INSERT INTO " + std::string(kTable) + " VALUES ('x', 'y');");
@@ -226,8 +225,8 @@ TEST_F(DictionaryDirectoryTest, DropSharedDictionaryColumnThenTableRemovesDirect
 }
 
 // A crash between creating a dictionary directory and committing the table leaves an
-// empty directory and no catalog rows. Dictionary ids are reused, so the next CREATE TABLE
-// finds it; it must reuse the directory, not abort on every retry.
+// empty directory and no catalog rows. Dictionary ids are reused, so the next CREATE
+// TABLE finds it; it must reuse the directory, not abort on every retry.
 TEST_F(DictionaryDirectoryTest, EmptyDictionaryDirectoryLeftByCrashIsReused) {
   const auto dirs_before = dictionaryDirectories();
   sql(createQuery());
@@ -352,7 +351,229 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
   }
 };
 
-TEST_F(CreateAndDropTableDdlTest, InlineTableConstraintsMatchAlterTableMetadata) {
+class TableConstraintTest : public CreateAndDropTableDdlTest {
+ protected:
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    for (const auto td : getCatalog().getAllTableMetadata()) {
+      existing_tables_.insert(td->tableId);
+    }
+  }
+
+  void TearDown() override {
+    loginAdmin();
+    std::vector<std::string> tables;
+    for (const auto td : getCatalog().getAllTableMetadata()) {
+      if (existing_tables_.count(td->tableId) || td->shard >= 0) {
+        continue;
+      }
+      tables.push_back(std::string(td->isView             ? "VIEW "
+                                   : td->isForeignTable() ? "FOREIGN TABLE "
+                                                          : "TABLE ") +
+                       td->tableName);
+      for (const auto& constraint : getCatalog().getTableConstraints(td)) {
+        if (constraint.foreign_key_reference) {
+          getCatalog().dropTableConstraint(td, *constraint.name);
+        }
+      }
+    }
+    for (const auto& table : tables) {
+      sql("DROP " + table + ";");
+    }
+    CreateAndDropTableDdlTest::TearDown();
+  }
+
+ private:
+  std::set<int> existing_tables_;
+};
+
+TEST_F(TableConstraintTest, AlterColumnToGeoKeepsForeignKeyOrdinalsValid) {
+  sql("CREATE TABLE constraint_review_parent (location TEXT ENCODING NONE, "
+      "id INTEGER NOT NULL, PRIMARY KEY (id));");
+  sql("CREATE TABLE constraint_review_child (parent_id INTEGER, "
+      "FOREIGN KEY (parent_id) REFERENCES constraint_review_parent (id));");
+  sql("INSERT INTO constraint_review_parent VALUES ('POINT (1 2)', 7);");
+  sql("INSERT INTO constraint_review_child VALUES (7);");
+  sql("ALTER TABLE constraint_review_parent ALTER COLUMN location TYPE POINT;");
+
+  const auto& catalog = getCatalog();
+  const auto child = catalog.getMetadataForTable("constraint_review_child", false);
+  const auto constraints = catalog.getTableConstraints(child);
+  ASSERT_EQ(size_t(1), constraints.size());
+  const auto& reference = constraints.front().foreign_key_reference;
+  ASSERT_TRUE(reference);
+  const auto ordinals = catalog.getForeignKeyColumnOrdinals(child);
+  ASSERT_EQ(size_t(1), ordinals.at(*constraints.front().name).size());
+  auto [handler, session] = getDbHandlerAndSessionId();
+  TTableDetails details;
+  handler->get_internal_table_details_for_database(
+      details, session, "constraint_review_parent", shared::kDefaultDbName);
+  const auto ordinal = ordinals.at(*constraints.front().name).front();
+  ASSERT_LT(static_cast<size_t>(ordinal), details.row_desc.size());
+  EXPECT_EQ("id", details.row_desc[ordinal].col_name);
+  sqlAndCompareResult(
+      "SELECT p.id, ST_X(p.location), ST_Y(p.location) FROM "
+      "constraint_review_parent p JOIN constraint_review_child c ON p.id=c.parent_id;",
+      {{i(7), double(1), double(2)}});
+}
+
+TEST_F(TableConstraintTest, AlterKeyColumnTypeIsRejectedBeforeMutation) {
+  sql("CREATE TABLE constraint_review_parent (id TEXT, PRIMARY KEY (id));");
+  sql("CREATE TABLE constraint_review_child (id TEXT, FOREIGN KEY (id) "
+      "REFERENCES constraint_review_parent (id));");
+  for (const auto table : {"constraint_review_parent", "constraint_review_child"}) {
+    EXPECT_ANY_THROW(
+        sql(std::string("ALTER TABLE ") + table + " ALTER COLUMN id TYPE INT;"));
+    const auto td = getCatalog().getMetadataForTable(table, false);
+    EXPECT_TRUE(
+        getCatalog().getMetadataForColumn(td->tableId, "id")->columnType.is_string());
+  }
+}
+
+TEST_F(TableConstraintTest, ShardConstraintsFollowLogicalAddAndDrop) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
+  sql("CREATE TABLE constraint_review_child (id INT NOT NULL, SHARD KEY(id)) WITH "
+      "(SHARD_COUNT=4);");
+  sql("ALTER TABLE constraint_review_child ADD CONSTRAINT child_fk FOREIGN KEY(id) "
+      "REFERENCES constraint_review_parent(id);");
+  const auto td = getCatalog().getMetadataForTable("constraint_review_child", false);
+  const auto shards = getCatalog().getPhysicalTablesDescriptors(td, false);
+  ASSERT_EQ(size_t(4), shards.size());
+  auto check_metadata = [&](size_t count) {
+    for (const auto shard : shards) {
+      EXPECT_EQ(count, getCatalog().getTableConstraints(shard).size());
+      auto& sqlite = getCatalog().getSqliteConnector();
+      sqlite.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=" +
+                   std::to_string(shard->tableId));
+      EXPECT_EQ(shard->keyMetainfo, sqlite.getData<std::string>(0, 0));
+    }
+  };
+  check_metadata(1);
+  sql("ALTER TABLE constraint_review_child DROP CONSTRAINT child_fk;");
+  check_metadata(0);
+  EXPECT_NO_THROW(sql("DROP TABLE constraint_review_parent;"));
+}
+
+TEST_F(TableConstraintTest, ShardUpdateFailureRollsBackEveryDescriptor) {
+  sql("CREATE TABLE constraint_review_parent (id INT, SHARD KEY(id)) WITH "
+      "(SHARD_COUNT=4);");
+  const auto td = getCatalog().getMetadataForTable("constraint_review_parent", false);
+  auto tables = getCatalog().getPhysicalTablesDescriptors(td, false);
+  ASSERT_EQ(size_t(4), tables.size());
+  auto& sqlite = getCatalog().getSqliteConnector();
+  sqlite.query(
+      "CREATE TRIGGER fail_constraint_shard BEFORE UPDATE OF key_metainfo ON mapd_tables "
+      "WHEN NEW.tableid=" +
+      std::to_string(tables[1]->tableId) +
+      " BEGIN SELECT RAISE(ABORT, 'injected shard update failure'); END;");
+  ScopeGuard cleanup = [&] { sqlite.query("DROP TRIGGER fail_constraint_shard;"); };
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE constraint_review_parent ADD CONSTRAINT uk UNIQUE(id);"));
+  tables.push_back(td);
+  for (const auto table : tables) {
+    EXPECT_TRUE(getCatalog().getTableConstraints(table).empty());
+    sqlite.query("SELECT key_metainfo FROM mapd_tables WHERE tableid=" +
+                 std::to_string(table->tableId));
+    EXPECT_EQ(table->keyMetainfo, sqlite.getData<std::string>(0, 0));
+  }
+}
+
+TEST_F(TableConstraintTest, ShardedSelfReferenceAllowsDrop) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, parent_id INT, "
+      "PRIMARY KEY(id), FOREIGN KEY(parent_id) REFERENCES constraint_review_parent(id), "
+      "SHARD KEY(id)) WITH (SHARD_COUNT=4);");
+  EXPECT_NO_THROW(sql("DROP TABLE constraint_review_parent;"));
+}
+
+TEST_F(TableConstraintTest, ConstraintChangesPersistInCatalog) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL);");
+  auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("constraint_review_parent", false);
+  const auto persisted = [&] {
+    auto& connector = catalog.getSqliteConnector();
+    connector.query_with_text_params(
+        "SELECT key_metainfo FROM mapd_tables WHERE tableid = ?",
+        std::vector<std::string>{std::to_string(td->tableId)});
+    return connector.getData<std::string>(0, 0);
+  };
+  const auto original = td->keyMetainfo;
+  EXPECT_EQ(original, persisted());
+  sql("ALTER TABLE constraint_review_parent ADD CONSTRAINT parent_pk PRIMARY KEY(id);");
+  EXPECT_EQ(td->keyMetainfo, persisted());
+  EXPECT_NE(std::string::npos, persisted().find("parent_pk"));
+  sql("ALTER TABLE constraint_review_parent DROP CONSTRAINT parent_pk;");
+  EXPECT_EQ(original, td->keyMetainfo);
+  EXPECT_EQ(original, persisted());
+}
+
+TEST_F(TableConstraintTest, ShowCreateRoundTripsConstraints) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, code INT, "
+      "CONSTRAINT parent_pk PRIMARY KEY(id), CONSTRAINT parent_uq UNIQUE(code));");
+  sql("CREATE TABLE constraint_review_child (id INT, CONSTRAINT child_fk "
+      "FOREIGN KEY(id) REFERENCES constraint_review_parent(id));");
+  auto& catalog = getCatalog();
+  const auto parent = catalog.getMetadataForTable("constraint_review_parent", false);
+  const auto child = catalog.getMetadataForTable("constraint_review_child", false);
+  const auto parent_metadata = parent->keyMetainfo;
+  const auto child_metadata = child->keyMetainfo;
+  const auto ordinals = catalog.getForeignKeyColumnOrdinals(child);
+  const auto parent_ddl = catalog.dumpCreateTable(parent, false);
+  const auto child_ddl = catalog.dumpCreateTable(child, false);
+  EXPECT_NE(std::string::npos, parent_ddl.find("PRIMARY KEY"));
+  EXPECT_NE(std::string::npos, parent_ddl.find("UNIQUE"));
+  EXPECT_NE(std::string::npos, child_ddl.find("FOREIGN KEY"));
+  sql("DROP TABLE constraint_review_child;");
+  sql("DROP TABLE constraint_review_parent;");
+  sql(parent_ddl);
+  sql(child_ddl);
+  EXPECT_EQ(parent_metadata,
+            catalog.getMetadataForTable("constraint_review_parent", false)->keyMetainfo);
+  const auto recreated = catalog.getMetadataForTable("constraint_review_child", false);
+  EXPECT_EQ(child_metadata, recreated->keyMetainfo);
+  EXPECT_EQ(ordinals, catalog.getForeignKeyColumnOrdinals(recreated));
+}
+
+TEST_F(TableConstraintTest, MalformedMetadataIncludesTableName) {
+  sql("CREATE TABLE constraint_review_parent (id INT);");
+  auto td = const_cast<TableDescriptor*>(
+      getCatalog().getMetadataForTable("constraint_review_parent", false));
+  const auto original = td->keyMetainfo;
+  ScopeGuard restore = [&] { td->keyMetainfo = original; };
+  for (const auto metadata :
+       {"not json", "[{\"type\":\"UNIQUE\",\"columns\":[\"id\"],\"name\":42}]"}) {
+    td->keyMetainfo = metadata;
+    try {
+      getCatalog().getTableConstraints(td);
+      FAIL() << "Malformed constraint metadata was accepted";
+    } catch (const std::runtime_error& e) {
+      EXPECT_NE(std::string::npos, std::string(e.what()).find(td->tableName));
+    }
+  }
+}
+
+TEST_F(TableConstraintTest, ArchivePreservesConstraintsAndSelfReference) {
+  sql("CREATE TABLE constraint_review_parent (id INT, parent_id INT, "
+      "PRIMARY KEY(id), UNIQUE(parent_id), FOREIGN KEY(parent_id) REFERENCES "
+      "constraint_review_parent(id));");
+  sql("INSERT INTO constraint_review_parent VALUES(1,1);");
+  const auto archive =
+      bf::absolute(bf::path(BASE_PATH) / "constraint_review.dump").string();
+  ScopeGuard cleanup = [&] { bf::remove_all(archive); };
+  sql("DUMP TABLE constraint_review_parent TO '" + archive +
+      "' WITH (COMPRESSION='none');");
+  sql("RESTORE TABLE constraint_review_child FROM '" + archive +
+      "' WITH (COMPRESSION='none');");
+  const auto td = getCatalog().getMetadataForTable("constraint_review_child", false);
+  const auto constraints = getCatalog().getTableConstraints(td);
+  ASSERT_EQ(size_t(3), constraints.size());
+  ASSERT_TRUE(constraints.back().foreign_key_reference);
+  EXPECT_EQ("constraint_review_child",
+            constraints.back().foreign_key_reference->table_name);
+  sqlAndCompareResult("SELECT id, parent_id FROM constraint_review_child;",
+                      {{int64_t(1), int64_t(1)}});
+}
+
+TEST_F(TableConstraintTest, InlineTableConstraintsMatchAlterTableMetadata) {
   sql("DROP TABLE IF EXISTS test_child_inline;");
   sql("DROP TABLE IF EXISTS test_child_alter;");
   sql("DROP TABLE IF EXISTS test_parent;");
@@ -395,12 +616,12 @@ TEST_F(CreateAndDropTableDdlTest, InlineTableConstraintsMatchAlterTableMetadata)
             inline_fk.foreign_key_reference->table_name);
   EXPECT_EQ(alter_fk.foreign_key_reference->column_names,
             inline_fk.foreign_key_reference->column_names);
-  EXPECT_EQ(alter_fk.foreign_key_reference->column_ordinals,
-            inline_fk.foreign_key_reference->column_ordinals);
-  EXPECT_FALSE(inline_fk.foreign_key_reference->column_ordinals.empty());
+  EXPECT_EQ(catalog.getForeignKeyColumnOrdinals(alter_td),
+            catalog.getForeignKeyColumnOrdinals(inline_td));
+  EXPECT_FALSE(catalog.getForeignKeyColumnOrdinals(inline_td).empty());
 }
 
-TEST_F(CreateAndDropTableDdlTest, InlineForeignKeyRejectsNonUniqueReference) {
+TEST_F(TableConstraintTest, InlineForeignKeyRejectsNonUniqueReference) {
   sql("DROP TABLE IF EXISTS test_child_bad_fk;");
   sql("DROP TABLE IF EXISTS test_parent_without_key;");
   sql("CREATE TABLE test_parent_without_key (id INTEGER, code INTEGER);");
@@ -414,7 +635,7 @@ TEST_F(CreateAndDropTableDdlTest, InlineForeignKeyRejectsNonUniqueReference) {
   EXPECT_EQ(nullptr, getCatalog().getMetadataForTable("test_child_bad_fk", false));
 }
 
-TEST_F(CreateAndDropTableDdlTest, ForeignKeyRejectsMismatchedColumnTypes) {
+TEST_F(TableConstraintTest, ForeignKeyRejectsMismatchedColumnTypes) {
   sql("DROP TABLE IF EXISTS test_mismatched_fk_child_alter;");
   sql("DROP TABLE IF EXISTS test_mismatched_fk_child_inline;");
   sql("DROP TABLE IF EXISTS test_mismatched_fk_parent;");
@@ -440,7 +661,7 @@ TEST_F(CreateAndDropTableDdlTest, ForeignKeyRejectsMismatchedColumnTypes) {
   sql("DROP TABLE test_mismatched_fk_parent;");
 }
 
-TEST_F(CreateAndDropTableDdlTest, InlineCompositeForeignKeyStoresReferenceOrdinals) {
+TEST_F(TableConstraintTest, InlineCompositeForeignKeyResolvesReferenceOrdinals) {
   sql("DROP TABLE IF EXISTS test_composite_child;");
   sql("DROP TABLE IF EXISTS test_composite_parent;");
 
@@ -469,10 +690,12 @@ TEST_F(CreateAndDropTableDdlTest, InlineCompositeForeignKeyStoresReferenceOrdina
   EXPECT_EQ("test_composite_parent", fk.foreign_key_reference->table_name);
   EXPECT_EQ((std::vector<std::string>{"tenant_id", "code"}),
             fk.foreign_key_reference->column_names);
-  EXPECT_EQ((std::vector<int32_t>{0, 1}), fk.foreign_key_reference->column_ordinals);
+  EXPECT_EQ((std::vector<int32_t>{0, 1}),
+            catalog.getForeignKeyColumnOrdinals(child_td).at(*fk.name));
+  EXPECT_EQ(std::string::npos, child_td->keyMetainfo.find("foreign_column_ordinals"));
 }
 
-TEST_F(CreateAndDropTableDdlTest, InlineSelfReferentialForeignKeyUsesInlineKey) {
+TEST_F(TableConstraintTest, InlineSelfReferentialForeignKeyUsesInlineKey) {
   sql("DROP TABLE IF EXISTS test_self_referencing;");
 
   sql("CREATE TABLE test_self_referencing ("
@@ -503,14 +726,14 @@ TEST_F(CreateAndDropTableDdlTest, InlineSelfReferentialForeignKeyUsesInlineKey) 
       EXPECT_EQ(std::vector<std::string>{"id"},
                 constraint.foreign_key_reference->column_names);
       EXPECT_EQ(std::vector<int32_t>{0},
-                constraint.foreign_key_reference->column_ordinals);
+                catalog.getForeignKeyColumnOrdinals(td).at(*constraint.name));
     }
   }
   EXPECT_TRUE(saw_pk);
   EXPECT_TRUE(saw_fk);
 }
 
-TEST_F(CreateAndDropTableDdlTest, ConstraintDependenciesRejectDestructiveDdl) {
+TEST_F(TableConstraintTest, ConstraintDependenciesRejectDestructiveDdl) {
   sql("DROP TABLE IF EXISTS test_constraint_dependency_child;");
   sql("DROP TABLE IF EXISTS test_constraint_dependency_parent;");
 
@@ -535,10 +758,8 @@ TEST_F(CreateAndDropTableDdlTest, ConstraintDependenciesRejectDestructiveDdl) {
           "RENAME COLUMN parent_id TO renamed_parent_id;"));
   EXPECT_ANY_THROW(
       sql("ALTER TABLE test_constraint_dependency_child DROP COLUMN parent_id;"));
-  // Calcite stores referenced-column ordinals in key metadata. Dropping a preceding
-  // column would silently retarget that ordinal, so reject the operation until the
-  // catalog can update every dependent constraint atomically.
-  EXPECT_ANY_THROW(
+  // Referenced positions are derived from names after a schema change.
+  EXPECT_NO_THROW(
       sql("ALTER TABLE test_constraint_dependency_parent DROP COLUMN prefix;"));
 
   // Columns outside every key remain ordinary schema fields.
@@ -555,7 +776,7 @@ TEST_F(CreateAndDropTableDdlTest, ConstraintDependenciesRejectDestructiveDdl) {
   sql("DROP TABLE test_constraint_dependency_parent;");
 }
 
-TEST_F(CreateAndDropTableDdlTest, SelfReferentialConstraintAllowsTableDrop) {
+TEST_F(TableConstraintTest, SelfReferentialConstraintAllowsTableDrop) {
   sql("DROP TABLE IF EXISTS test_self_constraint_drop;");
   sql("CREATE TABLE test_self_constraint_drop ("
       "id INTEGER NOT NULL, parent_id INTEGER, "
@@ -565,7 +786,7 @@ TEST_F(CreateAndDropTableDdlTest, SelfReferentialConstraintAllowsTableDrop) {
   EXPECT_NO_THROW(sql("DROP TABLE test_self_constraint_drop;"));
 }
 
-TEST_F(CreateAndDropTableDdlTest, DropConstraintReleasesDependencies) {
+TEST_F(TableConstraintTest, DropConstraintReleasesDependencies) {
   sql("DROP TABLE IF EXISTS test_drop_constraint_child;");
   sql("DROP TABLE IF EXISTS test_drop_constraint_parent;");
   sql("CREATE TABLE test_drop_constraint_parent ("
@@ -605,7 +826,7 @@ TEST_F(CreateAndDropTableDdlTest, DropConstraintReleasesDependencies) {
   sql("DROP TABLE test_drop_constraint_parent;");
 }
 
-TEST_F(CreateAndDropTableDdlTest, InlineConstraintRejectsDuplicateColumnReference) {
+TEST_F(TableConstraintTest, InlineConstraintRejectsDuplicateColumnReference) {
   sql("DROP TABLE IF EXISTS test_duplicate_constraint_columns;");
 
   EXPECT_ANY_THROW(
@@ -616,7 +837,7 @@ TEST_F(CreateAndDropTableDdlTest, InlineConstraintRejectsDuplicateColumnReferenc
             getCatalog().getMetadataForTable("test_duplicate_constraint_columns", false));
 }
 
-TEST_F(CreateAndDropTableDdlTest, InlineDuplicateConstraintsAreRejected) {
+TEST_F(TableConstraintTest, InlineDuplicateConstraintsAreRejected) {
   sql("DROP TABLE IF EXISTS test_duplicate_constraints;");
 
   EXPECT_ANY_THROW(

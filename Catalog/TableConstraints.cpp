@@ -20,8 +20,8 @@
  */
 
 #include "Catalog/TableConstraints.h"
+#include "Shared/JsonUtils.h"
 
-#include <cstdint>
 #include <stdexcept>
 
 #include <rapidjson/document.h>
@@ -37,73 +37,24 @@ std::string json_string(const rapidjson::Value& value) {
   if (!value.IsString()) {
     throw std::runtime_error("Malformed table constraint metadata.");
   }
-  return {value.GetString(), value.GetStringLength()};
+  std::string result;
+  json_utils::get_value(value, result);
+  return result;
 }
 
 std::vector<std::string> json_string_array(const rapidjson::Value& value) {
   if (!value.IsArray()) {
     throw std::runtime_error("Malformed table constraint metadata.");
   }
-  std::vector<std::string> strings;
-  strings.reserve(value.Size());
+  // Validate catalog input before using the CHECK-based shared deserializer.
   for (const auto& element : value.GetArray()) {
-    strings.emplace_back(json_string(element));
-  }
-  return strings;
-}
-
-std::vector<int32_t> json_int_array(const rapidjson::Value& value) {
-  if (!value.IsArray()) {
-    throw std::runtime_error("Malformed table constraint metadata.");
-  }
-  std::vector<int32_t> ints;
-  ints.reserve(value.Size());
-  for (const auto& element : value.GetArray()) {
-    if (!element.IsInt()) {
+    if (!element.IsString()) {
       throw std::runtime_error("Malformed table constraint metadata.");
     }
-    ints.emplace_back(element.GetInt());
   }
-  return ints;
-}
-
-void add_string_member(rapidjson::Value& object,
-                       const char* key,
-                       const std::string& value,
-                       rapidjson::Document::AllocatorType& allocator) {
-  rapidjson::Value json_key;
-  json_key.SetString(key, allocator);
-  rapidjson::Value json_value;
-  json_value.SetString(value.c_str(), value.size(), allocator);
-  object.AddMember(json_key, json_value, allocator);
-}
-
-void add_string_array_member(rapidjson::Value& object,
-                             const char* key,
-                             const std::vector<std::string>& values,
-                             rapidjson::Document::AllocatorType& allocator) {
-  rapidjson::Value json_key;
-  json_key.SetString(key, allocator);
-  rapidjson::Value json_values(rapidjson::kArrayType);
-  for (const auto& value : values) {
-    rapidjson::Value json_value;
-    json_value.SetString(value.c_str(), value.size(), allocator);
-    json_values.PushBack(json_value, allocator);
-  }
-  object.AddMember(json_key, json_values, allocator);
-}
-
-void add_int_array_member(rapidjson::Value& object,
-                          const char* key,
-                          const std::vector<int32_t>& values,
-                          rapidjson::Document::AllocatorType& allocator) {
-  rapidjson::Value json_key;
-  json_key.SetString(key, allocator);
-  rapidjson::Value json_values(rapidjson::kArrayType);
-  for (const auto value : values) {
-    json_values.PushBack(value, allocator);
-  }
-  object.AddMember(json_key, json_values, allocator);
+  std::vector<std::string> strings;
+  json_utils::get_value(value, strings);
+  return strings;
 }
 
 rapidjson::Document parse_key_metainfo_document(const std::string& key_metainfo) {
@@ -122,31 +73,25 @@ rapidjson::Document parse_key_metainfo_document(const std::string& key_metainfo)
 rapidjson::Value table_constraint_to_json(const TableConstraint& constraint,
                                           rapidjson::Document::AllocatorType& allocator) {
   rapidjson::Value object(rapidjson::kObjectType);
-  add_string_member(
-      object, "type", table_constraint_type_to_string(constraint.type), allocator);
-  add_string_array_member(object, "columns", constraint.column_names, allocator);
-  object.AddMember(rapidjson::StringRef("enforced"), constraint.enforced, allocator);
+  json_utils::add_value_to_object(
+      object, table_constraint_type_to_string(constraint.type), "type", allocator);
+  json_utils::add_value_to_object(object, constraint.column_names, "columns", allocator);
+  json_utils::add_value_to_object(object, constraint.enforced, "enforced", allocator);
 
   if (constraint.name && !constraint.name->empty()) {
-    add_string_member(object, "name", *constraint.name, allocator);
+    json_utils::add_value_to_object(object, *constraint.name, "name", allocator);
   }
 
   if (constraint.type == TableConstraintType::ForeignKey) {
     if (!constraint.foreign_key_reference) {
       throw std::runtime_error("Foreign key metadata is missing its reference.");
     }
-    add_string_member(
-        object, "foreign_table", constraint.foreign_key_reference->table_name, allocator);
-    add_string_array_member(object,
-                            "foreign_columns",
-                            constraint.foreign_key_reference->column_names,
-                            allocator);
-    if (!constraint.foreign_key_reference->column_ordinals.empty()) {
-      add_int_array_member(object,
-                           "foreign_column_ordinals",
-                           constraint.foreign_key_reference->column_ordinals,
-                           allocator);
-    }
+    json_utils::add_value_to_object(
+        object, constraint.foreign_key_reference->table_name, "foreign_table", allocator);
+    json_utils::add_value_to_object(object,
+                                    constraint.foreign_key_reference->column_names,
+                                    "foreign_columns",
+                                    allocator);
   }
 
   return object;
@@ -172,7 +117,7 @@ std::optional<TableConstraint> table_constraint_from_json(
   constraint.type = *constraint_type;
   constraint.column_names = json_string_array(object["columns"]);
 
-  if (object.HasMember("name") && object["name"].IsString()) {
+  if (object.HasMember("name")) {
     constraint.name = json_string(object["name"]);
   }
   if (object.HasMember("enforced")) {
@@ -190,9 +135,6 @@ std::optional<TableConstraint> table_constraint_from_json(
     ForeignKeyReference reference;
     reference.table_name = json_string(object["foreign_table"]);
     reference.column_names = json_string_array(object["foreign_columns"]);
-    if (object.HasMember("foreign_column_ordinals")) {
-      reference.column_ordinals = json_int_array(object["foreign_column_ordinals"]);
-    }
     constraint.foreign_key_reference = reference;
   }
 

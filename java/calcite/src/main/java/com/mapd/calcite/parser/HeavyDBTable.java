@@ -13,9 +13,9 @@ import com.mapd.metadata.LinestringSqlType;
 import com.mapd.metadata.PointSqlType;
 import com.mapd.metadata.PolygonSqlType;
 
+import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.rel.RelReferentialConstraintImpl;
-import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.Schema;
@@ -81,8 +81,9 @@ public class HeavyDBTable implements Table {
     if (qualifiedName == null || qualifiedName.size() < 2) {
       return null;
     }
-    return ROW_COUNT_ESTIMATES.get(rowCountKey(qualifiedName.get(qualifiedName.size() - 2),
-            qualifiedName.get(qualifiedName.size() - 1)));
+    return ROW_COUNT_ESTIMATES.get(
+            rowCountKey(qualifiedName.get(qualifiedName.size() - 2),
+                    qualifiedName.get(qualifiedName.size() - 1)));
   }
 
   private static String rowCountKey(String schemaName, String tableName) {
@@ -157,7 +158,8 @@ public class HeavyDBTable implements Table {
     List<RelReferentialConstraint> referentialConstraints =
             getReferentialConstraintStatistics();
     if (rowCount != null || !keys.isEmpty() || !referentialConstraints.isEmpty()) {
-      return Statistics.of(rowCount, keys, referentialConstraints, Collections.emptyList());
+      return Statistics.of(
+              rowCount, keys, referentialConstraints, Collections.emptyList());
     }
     return Statistics.UNKNOWN;
   }
@@ -196,8 +198,8 @@ public class HeavyDBTable implements Table {
       }
       try {
         String type = object.get("type").getAsString();
-        final boolean isKey = "PRIMARY KEY".equalsIgnoreCase(type)
-                || "UNIQUE".equalsIgnoreCase(type);
+        final boolean isKey =
+                "PRIMARY KEY".equalsIgnoreCase(type) || "UNIQUE".equalsIgnoreCase(type);
         final boolean isForeignKey = "FOREIGN KEY".equalsIgnoreCase(type);
         if ((!isKey && !isForeignKey) || !hasNonEmptyStringArray(object, "columns")) {
           continue;
@@ -208,15 +210,10 @@ public class HeavyDBTable implements Table {
           continue;
         }
         if (isForeignKey
-                && (!hasString(object, "foreign_table")
+                && (!hasString(object, "name") || !hasString(object, "foreign_table")
                         || !hasNonEmptyStringArray(object, "foreign_columns")
-                        || !hasNonNegativeIntegerArray(
-                                object, "foreign_column_ordinals")
                         || object.getAsJsonArray("columns").size()
-                                != object.getAsJsonArray("foreign_columns").size()
-                        || object.getAsJsonArray("columns").size()
-                                != object.getAsJsonArray("foreign_column_ordinals")
-                                           .size())) {
+                                != object.getAsJsonArray("foreign_columns").size())) {
           continue;
         }
         constraintObjects.add(object);
@@ -253,31 +250,6 @@ public class HeavyDBTable implements Table {
     return true;
   }
 
-  private static boolean hasNonNegativeIntegerArray(
-          JsonObject object, String fieldName) {
-    if (!object.has(fieldName) || !object.get(fieldName).isJsonArray()
-            || object.getAsJsonArray(fieldName).size() == 0) {
-      return false;
-    }
-    HashSet<Integer> values = new HashSet<Integer>();
-    for (JsonElement value : object.getAsJsonArray(fieldName)) {
-      if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
-        return false;
-      }
-      try {
-        final String encodedValue = value.getAsString();
-        final int ordinal = Integer.parseInt(encodedValue);
-        if (!encodedValue.matches("0|[1-9][0-9]*") || ordinal < 0
-                || !values.add(ordinal)) {
-          return false;
-        }
-      } catch (RuntimeException ex) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   private Map<String, Integer> getColumnOrdinals() {
     Map<String, Integer> columnOrdinals = new HashMap<String, Integer>();
     for (int i = 0; i < rowInfo.getRow_descSize(); ++i) {
@@ -289,7 +261,8 @@ public class HeavyDBTable implements Table {
 
   private List<Integer> getColumnOrdinals(
           JsonObject constraintObject, Map<String, Integer> columnOrdinals) {
-    if (!constraintObject.has("columns") || !constraintObject.get("columns").isJsonArray()) {
+    if (!constraintObject.has("columns")
+            || !constraintObject.get("columns").isJsonArray()) {
       return Collections.emptyList();
     }
 
@@ -312,17 +285,6 @@ public class HeavyDBTable implements Table {
     List<String> values = new ArrayList<String>();
     for (JsonElement value : object.getAsJsonArray(fieldName)) {
       values.add(value.getAsString());
-    }
-    return values;
-  }
-
-  private List<Integer> getIntegerList(JsonObject object, String fieldName) {
-    if (!object.has(fieldName) || !object.get(fieldName).isJsonArray()) {
-      return Collections.emptyList();
-    }
-    List<Integer> values = new ArrayList<Integer>();
-    for (JsonElement value : object.getAsJsonArray(fieldName)) {
-      values.add(value.getAsInt());
     }
     return values;
   }
@@ -358,8 +320,8 @@ public class HeavyDBTable implements Table {
 
   private boolean keyColumnsAreNotNull(List<Integer> ordinals) {
     for (int ordinal : ordinals) {
-      if (ordinal < 0 || ordinal >= rowInfo.getRow_descSize() ||
-              rowInfo.getRow_desc().get(ordinal).getCol_type().nullable) {
+      if (ordinal < 0 || ordinal >= rowInfo.getRow_descSize()
+              || rowInfo.getRow_desc().get(ordinal).getCol_type().nullable) {
         return false;
       }
     }
@@ -375,7 +337,7 @@ public class HeavyDBTable implements Table {
   }
 
   private List<RelReferentialConstraint> getReferentialConstraintStatistics() {
-    if (tableName == null) {
+    if (tableName == null || !rowInfo.isSetForeign_key_column_ordinals()) {
       return Collections.emptyList();
     }
 
@@ -387,8 +349,7 @@ public class HeavyDBTable implements Table {
         continue;
       }
       String type = constraintObject.get("type").getAsString();
-      if (!"FOREIGN KEY".equalsIgnoreCase(type)
-              || !constraintObject.has("foreign_table")
+      if (!"FOREIGN KEY".equalsIgnoreCase(type) || !constraintObject.has("foreign_table")
               || !constraintObject.has("foreign_columns")) {
         continue;
       }
@@ -396,11 +357,16 @@ public class HeavyDBTable implements Table {
       String foreignTableName = constraintObject.get("foreign_table").getAsString();
       List<Integer> sourceOrdinals =
               getColumnOrdinals(constraintObject, sourceColumnOrdinals);
-      List<String> foreignColumnNames = getStringList(constraintObject, "foreign_columns");
-      List<Integer> foreignColumnOrdinals =
-              getIntegerList(constraintObject, "foreign_column_ordinals");
-      if (sourceOrdinals.isEmpty() || sourceOrdinals.size() != foreignColumnNames.size()
-              || sourceOrdinals.size() != foreignColumnOrdinals.size()) {
+      List<String> foreignColumnNames =
+              getStringList(constraintObject, "foreign_columns");
+      List<Integer> foreignColumnOrdinals = rowInfo.getForeign_key_column_ordinals().get(
+              constraintObject.get("name").getAsString());
+      if (sourceOrdinals.isEmpty() || foreignColumnOrdinals == null
+              || sourceOrdinals.size() != foreignColumnNames.size()
+              || sourceOrdinals.size() != foreignColumnOrdinals.size()
+              || foreignColumnOrdinals.stream().anyMatch(i -> i == null || i < 0)
+              || new HashSet<>(foreignColumnOrdinals).size()
+                      != foreignColumnOrdinals.size()) {
         continue;
       }
 
@@ -408,12 +374,19 @@ public class HeavyDBTable implements Table {
       for (int i = 0; i < sourceOrdinals.size(); ++i) {
         columnPairs.add(IntPair.of(sourceOrdinals.get(i), foreignColumnOrdinals.get(i)));
       }
-      referentialConstraints.add(RelReferentialConstraintImpl.of(
-              getQualifiedName(tableName),
-              getQualifiedName(foreignTableName),
-              columnPairs));
+      referentialConstraints.add(
+              RelReferentialConstraintImpl.of(getQualifiedName(tableName),
+                      getQualifiedName(foreignTableName),
+                      columnPairs));
     }
     return referentialConstraints;
+  }
+
+  public boolean referencesTable(String referencedTable) {
+    return constraintObjects.stream().anyMatch(constraint
+            -> "FOREIGN KEY".equalsIgnoreCase(constraint.get("type").getAsString())
+                    && referencedTable.equalsIgnoreCase(
+                            constraint.get("foreign_table").getAsString()));
   }
 
   @Override
