@@ -5222,27 +5222,23 @@ void Catalog::addTableConstraint(const TableDescriptor* td,
   if (table_desc_it == tableDescriptorMapById_.end()) {
     throw std::runtime_error("Table disappeared while adding a constraint.");
   }
+  auto updated_key_metainfo =
+      append_table_constraint_to_key_metainfo(td->keyMetainfo, normalized_constraint);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    auto updated_key_metainfo =
-        append_table_constraint_to_key_metainfo(td->keyMetainfo, normalized_constraint);
     sqliteConnector_.query_with_text_params(
         "UPDATE mapd_tables SET key_metainfo = ? WHERE tableid = ?",
         std::vector<std::string>{updated_key_metainfo, std::to_string(td->tableId)});
-    sqliteConnector_.query("END TRANSACTION");
-    table_desc_it->second->keyMetainfo.swap(updated_key_metainfo);
   } catch (const std::exception&) {
-    try {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
-    } catch (const std::exception& rollback_error) {
-      LOG(ERROR) << "Failed to roll back table constraint addition for table "
-                 << td->tableName << ": " << rollback_error.what();
-    } catch (...) {
-      LOG(ERROR) << "Failed to roll back table constraint addition for table "
-                 << td->tableName << " with an unknown error";
-    }
+    end_transaction_or_abort(sqliteConnector_,
+                             "ROLLBACK TRANSACTION",
+                             "ALTER TABLE " + td->tableName + " ADD CONSTRAINT");
     throw;
   }
+  end_transaction_or_abort(sqliteConnector_,
+                           "END TRANSACTION",
+                           "ALTER TABLE " + td->tableName + " ADD CONSTRAINT");
+  table_desc_it->second->keyMetainfo.swap(updated_key_metainfo);
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
@@ -5272,27 +5268,23 @@ void Catalog::dropTableConstraint(const TableDescriptor* td,
   if (table_desc_it == tableDescriptorMapById_.end()) {
     throw std::runtime_error("Table disappeared while dropping a constraint.");
   }
+  auto updated_key_metainfo =
+      remove_table_constraint_from_key_metainfo(td->keyMetainfo, constraint_name);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
-    auto updated_key_metainfo =
-        remove_table_constraint_from_key_metainfo(td->keyMetainfo, constraint_name);
     sqliteConnector_.query_with_text_params(
         "UPDATE mapd_tables SET key_metainfo = ? WHERE tableid = ?",
         std::vector<std::string>{updated_key_metainfo, std::to_string(td->tableId)});
-    sqliteConnector_.query("END TRANSACTION");
-    table_desc_it->second->keyMetainfo.swap(updated_key_metainfo);
   } catch (const std::exception&) {
-    try {
-      sqliteConnector_.query("ROLLBACK TRANSACTION");
-    } catch (const std::exception& rollback_error) {
-      LOG(ERROR) << "Failed to roll back table constraint removal for table "
-                 << td->tableName << ": " << rollback_error.what();
-    } catch (...) {
-      LOG(ERROR) << "Failed to roll back table constraint removal for table "
-                 << td->tableName << " with an unknown error";
-    }
+    end_transaction_or_abort(sqliteConnector_,
+                             "ROLLBACK TRANSACTION",
+                             "ALTER TABLE " + td->tableName + " DROP CONSTRAINT");
     throw;
   }
+  end_transaction_or_abort(sqliteConnector_,
+                           "END TRANSACTION",
+                           "ALTER TABLE " + td->tableName + " DROP CONSTRAINT");
+  table_desc_it->second->keyMetainfo.swap(updated_key_metainfo);
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
