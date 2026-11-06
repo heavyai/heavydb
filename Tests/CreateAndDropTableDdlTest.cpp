@@ -437,6 +437,174 @@ INSTANTIATE_TEST_SUITE_P(CreateAndAlter,
                          ForeignKeyReferenceColumnsTest,
                          testing::Combine(testing::Bool(), testing::Bool()));
 
+class ConstraintColumnTypeTest
+    : public TableConstraintTest,
+      public testing::WithParamInterface<std::tuple<bool, std::string, std::string>> {};
+
+TEST_P(ConstraintColumnTypeTest, RejectsNonScalarKeysBeforeCatalogMutation) {
+  const auto& [alter, type, key] = GetParam();
+  const auto columns = "id INT NOT NULL, bad " + type + (alter ? " NOT NULL" : "");
+  const auto constraint = "CONSTRAINT invalid_key " + key + "(id, bad)";
+  if (alter) {
+    sql("CREATE TABLE key_type_test (" + columns + ");");
+  }
+  const auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("key_type_test", false);
+  const auto original_keys = td ? td->keyMetainfo : std::string{};
+  std::map<std::string, SQLTypeInfo> original_types;
+  if (td) {
+    for (const auto cd :
+         catalog.getAllColumnMetadataForTable(td->tableId, true, true, true)) {
+      original_types.emplace(cd->columnName, cd->columnType);
+    }
+  }
+
+  queryAndAssertPartialException(
+      alter ? "ALTER TABLE key_type_test ADD " + constraint + ";"
+            : "CREATE TABLE key_type_test (" + columns + ", " + constraint + ");",
+      "which is not supported in a table constraint");
+  ASSERT_EQ(td, catalog.getMetadataForTable("key_type_test", false));
+  if (td) {
+    ASSERT_EQ(original_keys, td->keyMetainfo);
+    for (const auto& [name, column_type] : original_types) {
+      EXPECT_EQ(column_type, catalog.getMetadataForColumn(td->tableId, name)->columnType);
+    }
+  } else {
+    sql("CREATE TABLE key_type_test (" + columns + ");");
+  }
+  sql("ALTER TABLE key_type_test ADD CONSTRAINT valid_key " + key + "(id);");
+  EXPECT_EQ(
+      size_t(1),
+      catalog.getTableConstraints(catalog.getMetadataForTable("key_type_test", false))
+          .size());
+  sqlAndCompareResult("SELECT COUNT(*) FROM key_type_test;", {{i(0)}});
+}
+
+INSTANTIATE_TEST_SUITE_P(CreateAndAlter,
+                         ConstraintColumnTypeTest,
+                         testing::Combine(testing::Bool(),
+                                          testing::Values("INT[]",
+                                                          "INT[2]",
+                                                          "TEXT[]",
+                                                          "POINT",
+                                                          "MULTIPOINT",
+                                                          "LINESTRING",
+                                                          "MULTILINESTRING",
+                                                          "POLYGON",
+                                                          "MULTIPOLYGON",
+                                                          "GEOMETRY(POINT, 4326)"),
+                                          testing::Values("PRIMARY KEY", "UNIQUE")));
+
+class ForeignKeyColumnTypeTest
+    : public TableConstraintTest,
+      public testing::WithParamInterface<std::tuple<bool, bool, std::string>> {};
+
+TEST_P(ForeignKeyColumnTypeTest, RejectsNonScalarSourceAndReferencedColumns) {
+  const auto& [alter, bad_reference, type] = GetParam();
+  sql("CREATE TABLE key_type_parent (k " + (bad_reference ? type : "INT") + ");");
+  auto parent = const_cast<TableDescriptor*>(
+      getCatalog().getMetadataForTable("key_type_parent", false));
+  const auto original_keys = parent->keyMetainfo;
+  ScopeGuard restore_metadata = [&] { parent->keyMetainfo = original_keys; };
+  if (bad_reference) {
+    // Model a non-scalar key accepted before column-type validation was added.
+    Catalog_Namespace::TableConstraint legacy_key;
+    legacy_key.type = Catalog_Namespace::TableConstraintType::Unique;
+    legacy_key.name = "legacy_key";
+    legacy_key.column_names = {"k"};
+    parent->keyMetainfo = Catalog_Namespace::append_table_constraint_to_key_metainfo(
+        parent->keyMetainfo, legacy_key);
+  } else {
+    sql("ALTER TABLE key_type_parent ADD CONSTRAINT parent_key UNIQUE(k);");
+  }
+
+  const auto columns = "k " + (bad_reference ? std::string("INT") : type);
+  if (alter) {
+    sql("CREATE TABLE key_type_child (" + columns + ");");
+  }
+  const auto child = getCatalog().getMetadataForTable("key_type_child", false);
+  const auto child_keys = child ? child->keyMetainfo : std::string{};
+  const std::string constraint =
+      "CONSTRAINT child_fk FOREIGN KEY(k) REFERENCES key_type_parent(k)";
+  const auto message = "Column " +
+                       std::string(bad_reference ? "key_type_parent" : "key_type_child") +
+                       ".k has type ";
+  queryAndAssertPartialException(
+      alter ? "ALTER TABLE key_type_child ADD " + constraint + ";"
+            : "CREATE TABLE key_type_child (" + columns + ", " + constraint + ");",
+      message);
+  ASSERT_EQ(child, getCatalog().getMetadataForTable("key_type_child", false));
+  if (child) {
+    EXPECT_EQ(child_keys, child->keyMetainfo);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(CreateAndAlter,
+                         ForeignKeyColumnTypeTest,
+                         testing::Combine(testing::Bool(),
+                                          testing::Bool(),
+                                          testing::Values("INT[]", "POINT")));
+
+class ScalarConstraintColumnTypeTest
+    : public TableConstraintTest,
+      public testing::WithParamInterface<std::tuple<bool, std::string>> {};
+
+TEST_P(ScalarConstraintColumnTypeTest, KeepsScalarKeysAndUnconstrainedNonScalarColumns) {
+  const auto& [alter, column] = GetParam();
+  const auto columns = "id INT NOT NULL, k " + column + ", a INT[], g POINT";
+  const std::string keys =
+      "CONSTRAINT parent_pk PRIMARY KEY(id, k), CONSTRAINT parent_uq UNIQUE(k, id)";
+  if (alter) {
+    sql("CREATE TABLE scalar_key_parent (" + columns + ");");
+    sql("ALTER TABLE scalar_key_parent ADD CONSTRAINT parent_pk PRIMARY KEY(id, k);");
+    sql("ALTER TABLE scalar_key_parent ADD CONSTRAINT parent_uq UNIQUE(k, id);");
+  } else {
+    sql("CREATE TABLE scalar_key_parent (" + columns + ", " + keys + ");");
+  }
+  const std::string reference =
+      "CONSTRAINT child_fk FOREIGN KEY(k, id) REFERENCES scalar_key_parent(k, id)";
+  if (alter) {
+    sql("CREATE TABLE scalar_key_child (" + columns + ");");
+    sql("ALTER TABLE scalar_key_child ADD " + reference + ";");
+  } else {
+    sql("CREATE TABLE scalar_key_child (" + columns + ", " + reference + ");");
+  }
+  const auto& catalog = getCatalog();
+  const auto parent = catalog.getMetadataForTable("scalar_key_parent", false);
+  const auto child = catalog.getMetadataForTable("scalar_key_child", false);
+  ASSERT_NE(nullptr, parent);
+  ASSERT_NE(nullptr, child);
+  EXPECT_EQ(size_t(2), catalog.getTableConstraints(parent).size());
+  const auto child_keys = catalog.getTableConstraints(child);
+  ASSERT_EQ(size_t(1), child_keys.size());
+  ASSERT_TRUE(child_keys.front().foreign_key_reference);
+  EXPECT_EQ((std::vector<std::string>{"k", "id"}),
+            child_keys.front().foreign_key_reference->column_names);
+  EXPECT_FALSE(
+      catalog.getMetadataForColumn(parent->tableId, "a")->columnType.get_notnull());
+  EXPECT_FALSE(
+      catalog.getMetadataForColumn(parent->tableId, "g")->columnType.get_notnull());
+  sqlAndCompareResult("SELECT COUNT(*) FROM scalar_key_child;", {{i(0)}});
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    CreateAndAlter,
+    ScalarConstraintColumnTypeTest,
+    testing::Combine(testing::Bool(),
+                     testing::Values("BOOLEAN NOT NULL",
+                                     "TINYINT NOT NULL",
+                                     "SMALLINT NOT NULL",
+                                     "INT NOT NULL",
+                                     "BIGINT NOT NULL",
+                                     "DECIMAL(12, 2) NOT NULL",
+                                     "FLOAT NOT NULL",
+                                     "DOUBLE NOT NULL",
+                                     "DATE NOT NULL",
+                                     "TIME NOT NULL",
+                                     "TIMESTAMP NOT NULL",
+                                     "TEXT NOT NULL ENCODING DICT(32)",
+                                     "TEXT NOT NULL ENCODING NONE")));
+
 class TableConstraintJsonTest : public TableConstraintTest,
                                 public testing::WithParamInterface<bool> {
  protected:
