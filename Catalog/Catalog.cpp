@@ -4501,6 +4501,7 @@ void Catalog::truncateTable(const TableDescriptor* td) {
   const auto physical_tables = getPhysicalTablesDescriptors(td);
   for (const auto table : physical_tables) {
     doTruncateTable(table);
+    markTableStatisticsDirty(table->tableId);
   }
 }
 
