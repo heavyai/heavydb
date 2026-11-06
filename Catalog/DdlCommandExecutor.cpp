@@ -494,57 +494,6 @@ const rapidjson::Value* extractFilters(const rapidjson::Value& payload) {
   return filters;
 }
 
-Catalog_Namespace::TableConstraint table_constraint_from_json(
-    const rapidjson::Value& constraint_json) {
-  if (!constraint_json.IsObject()) {
-    throw std::runtime_error("Table constraint payload must be an object.");
-  }
-  if (!constraint_json.HasMember("constraintType") ||
-      !constraint_json["constraintType"].IsString()) {
-    throw std::runtime_error(
-        "Table constraint payload is missing a string constraintType.");
-  }
-  if (!constraint_json.HasMember("columns")) {
-    throw std::runtime_error("Table constraint payload is missing columns.");
-  }
-
-  Catalog_Namespace::TableConstraint constraint;
-  const auto constraint_type = Catalog_Namespace::table_constraint_type_from_string(
-      json_str(constraint_json["constraintType"]));
-  if (!constraint_type) {
-    throw std::runtime_error("Unsupported table constraint type: " +
-                             json_str(constraint_json["constraintType"]));
-  }
-  constraint.type = *constraint_type;
-  if (constraint_json.HasMember("name") && !constraint_json["name"].IsNull()) {
-    if (!constraint_json["name"].IsString()) {
-      throw std::runtime_error("Table constraint name must be a string or null.");
-    }
-    constraint.name = json_str(constraint_json["name"]);
-  }
-  json_utils::get_value_from_object(constraint_json, constraint.column_names, "columns");
-
-  if (constraint.type == Catalog_Namespace::TableConstraintType::ForeignKey) {
-    if (!constraint_json.HasMember("references") ||
-        !constraint_json["references"].IsObject()) {
-      throw std::runtime_error("FOREIGN KEY constraint is missing a references object.");
-    }
-    const auto& references = constraint_json["references"].GetObject();
-    if (!references.HasMember("table") || !references["table"].IsString()) {
-      throw std::runtime_error(
-          "FOREIGN KEY references must include a string table name.");
-    }
-    if (!references.HasMember("columns")) {
-      throw std::runtime_error("FOREIGN KEY references must include columns.");
-    }
-
-    Catalog_Namespace::ForeignKeyReference reference;
-    reference.table_name = json_str(references["table"]);
-    json_utils::get_value(references["columns"], reference.column_names);
-    constraint.foreign_key_reference = reference;
-  }
-  return constraint;
-}
 }  // namespace
 
 DdlCommandExecutor::DdlCommandExecutor(
@@ -3411,7 +3360,7 @@ ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
     }
     validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
     const auto constraint =
-        table_constraint_from_json(*ddl_payload["constraintData"].Begin());
+        Parser::table_constraint_from_json(*ddl_payload["constraintData"].Begin());
     Parser::check_foreign_key_privilege(*session_ptr_, tableName, constraint);
     catalog.addTableConstraint(td, constraint);
     return {};
