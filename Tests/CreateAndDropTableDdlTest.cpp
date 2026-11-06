@@ -10,16 +10,20 @@
  */
 
 #include <gtest/gtest.h>
+#include <boost/algorithm/string/case_conv.hpp>
 #include <boost/filesystem.hpp>
 #include <set>
 
 #include "Calcite/Calcite.h"
+#include "Catalog/DdlCommandExecutor.h"
 #include "Catalog/ForeignTable.h"
 #include "Catalog/TableConstraints.h"
 #include "Catalog/TableDescriptor.h"
 #include "DBHandlerTestHelpers.h"
 #include "DataMgr/FileMgr/FileBuffer.h"
 #include "Fragmenter/FragmentDefaultValues.h"
+#include "Parser/ParserNode.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/SysDefinitions.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
@@ -386,6 +390,140 @@ class TableConstraintTest : public CreateAndDropTableDdlTest {
  private:
   std::set<int> existing_tables_;
 };
+
+class TableConstraintJsonTest : public TableConstraintTest,
+                                public testing::WithParamInterface<bool> {
+ protected:
+  void executeConstraint(const rapidjson::Value& constraint) {
+    // Bypass Calcite's grammar to exercise malformed native DDL payloads too.
+    auto document = json_utils::read_from_string(
+        GetParam() ? R"({"payload":{"command":"CREATE_TABLE",
+                         "name":"constraint_json_child","elements":[
+                         {"type":"SQL_COLUMN_DECLARATION","name":"a","sqltype":"INTEGER","nullable":false},
+                         {"type":"SQL_COLUMN_DECLARATION","name":"b","sqltype":"INTEGER","nullable":false}]}})"
+                   : R"({"payload":{"command":"ALTER_TABLE","alterType":"ADD_CONSTRAINT",
+                         "tableName":"constraint_json_child","constraintData":[]}})");
+    auto& allocator = document.GetAllocator();
+    rapidjson::Value element(constraint, allocator);
+    element.AddMember("type", "SQL_COLUMN_CONSTRAINT", allocator);
+    document["payload"][GetParam() ? "elements" : "constraintData"].PushBack(element,
+                                                                             allocator);
+    const auto serialized = json_utils::write_to_string(document);
+    const auto [handler, session_id] = getDbHandlerAndSessionId();
+    const auto session = std::make_shared<Catalog_Namespace::SessionInfo>(
+        handler->get_session_copy(session_id));
+    if (GetParam()) {
+      Parser::execute_stmt_for_json(serialized, session, false);
+    } else {
+      DdlCommandExecutor(serialized, session).execute(false);
+    }
+  }
+};
+
+TEST_P(TableConstraintJsonTest, DecodesNamedAndUnnamedCompositeKeys) {
+  sql("CREATE TABLE constraint_json_parent (x INT, y INT, UNIQUE(y, x));");
+  const auto& catalog = getCatalog();
+  for (const auto type : {Catalog_Namespace::TableConstraintType::PrimaryKey,
+                          Catalog_Namespace::TableConstraintType::Unique,
+                          Catalog_Namespace::TableConstraintType::ForeignKey}) {
+    for (const auto name : {"absent", "null", "named"}) {
+      SCOPED_TRACE(Catalog_Namespace::table_constraint_type_to_string(type));
+      SCOPED_TRACE(name);
+      auto constraint = json_utils::read_from_string(R"({"columns":["b","a"]})");
+      auto& allocator = constraint.GetAllocator();
+      // Exercise case-insensitive type decoding without normalizing identifiers.
+      json_utils::add_value_to_object(
+          constraint,
+          boost::to_lower_copy(Catalog_Namespace::table_constraint_type_to_string(type)),
+          "constraintType",
+          allocator);
+      if (std::string(name) == "null") {
+        constraint.AddMember("name", rapidjson::Value(), allocator);
+      } else if (std::string(name) == "named") {
+        constraint.AddMember("name", "MixedCaseKey", allocator);
+      }
+      if (type == Catalog_Namespace::TableConstraintType::ForeignKey) {
+        auto references = json_utils::read_from_string(
+            R"({"table":"constraint_json_parent","columns":["y","x"]})");
+        constraint.AddMember(
+            "references", rapidjson::Value(references, allocator), allocator);
+      }
+      if (!GetParam()) {
+        sql("CREATE TABLE constraint_json_child (a INT NOT NULL, b INT NOT NULL);");
+      }
+      ASSERT_NO_THROW(executeConstraint(constraint));
+      const auto td = catalog.getMetadataForTable("constraint_json_child", false);
+      ASSERT_NE(nullptr, td);
+      const auto constraints = catalog.getTableConstraints(td);
+      ASSERT_EQ(size_t(1), constraints.size());
+      const auto& actual = constraints.front();
+      EXPECT_EQ(type, actual.type);
+      EXPECT_EQ((std::vector<std::string>{"b", "a"}), actual.column_names);
+      ASSERT_TRUE(actual.name);
+      EXPECT_FALSE(actual.name->empty());
+      if (std::string(name) == "named") {
+        EXPECT_EQ("MixedCaseKey", *actual.name);
+      }
+      EXPECT_FALSE(actual.enforced);
+      if (type == Catalog_Namespace::TableConstraintType::ForeignKey) {
+        ASSERT_TRUE(actual.foreign_key_reference);
+        EXPECT_EQ("constraint_json_parent", actual.foreign_key_reference->table_name);
+        EXPECT_EQ((std::vector<std::string>{"y", "x"}),
+                  actual.foreign_key_reference->column_names);
+      } else {
+        EXPECT_FALSE(actual.foreign_key_reference);
+      }
+      sql("DROP TABLE constraint_json_child;");
+    }
+  }
+}
+
+TEST_P(TableConstraintJsonTest, RejectsMalformedKeysWithoutCatalogMutation) {
+  sql("CREATE TABLE p (x INT, UNIQUE(x));");
+  if (!GetParam()) {
+    sql("CREATE TABLE constraint_json_child (a INT, b INT);");
+  }
+  const auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("constraint_json_child", false);
+  const auto original_keys = td ? td->keyMetainfo : std::string{};
+  for (
+      const auto payload :
+      {R"({"columns":["a"]})",
+       R"({"constraintType":1,"columns":["a"]})",
+       R"({"constraintType":"CHECK","columns":["a"]})",
+       R"({"constraintType":"UNIQUE"})",
+       R"({"constraintType":"UNIQUE","columns":null})",
+       R"({"constraintType":"UNIQUE","columns":"a"})",
+       R"({"constraintType":"UNIQUE","columns":["a",1]})",
+       R"({"constraintType":"UNIQUE","columns":["a"],"name":1})",
+       R"({"constraintType":"FOREIGN KEY","columns":["a"]})",
+       R"({"constraintType":"FOREIGN KEY","columns":["a"],"references":null})",
+       R"({"constraintType":"FOREIGN KEY","columns":["a"],"references":[]})",
+       R"({"constraintType":"FOREIGN KEY","columns":["a"],"references":{"columns":["x"]}})",
+       R"({"constraintType":"FOREIGN KEY","columns":["a"],"references":{"table":1,"columns":["x"]}})",
+       R"({"constraintType":"FOREIGN KEY","columns":["a"],"references":{"table":"p"}})",
+       R"({"constraintType":"FOREIGN KEY","columns":["a"],"references":{"table":"p","columns":null}})",
+       R"({"constraintType":"FOREIGN KEY","columns":["a"],"references":{"table":"p","columns":"x"}})",
+       R"({"constraintType":"FOREIGN KEY","columns":["a"],"references":{"table":"p","columns":[1]}})"}) {
+    SCOPED_TRACE(payload);
+    const auto constraint = json_utils::read_from_string(payload);
+    EXPECT_THROW(executeConstraint(constraint), std::runtime_error);
+    EXPECT_EQ(td, catalog.getMetadataForTable("constraint_json_child", false));
+    if (td) {
+      EXPECT_EQ(original_keys, td->keyMetainfo);
+    }
+  }
+  const auto valid =
+      json_utils::read_from_string(R"({"constraintType":"UNIQUE","columns":["a"]})");
+  ASSERT_NO_THROW(executeConstraint(valid));
+  const auto valid_td = catalog.getMetadataForTable("constraint_json_child", false);
+  ASSERT_NE(nullptr, valid_td);
+  EXPECT_EQ(size_t(1), catalog.getTableConstraints(valid_td).size());
+  sql("INSERT INTO constraint_json_child VALUES (1, 2);");
+  sqlAndCompareResult("SELECT a, b FROM constraint_json_child;", {{i(1), i(2)}});
+}
+
+INSTANTIATE_TEST_SUITE_P(CreateAndAlter, TableConstraintJsonTest, testing::Bool());
 
 class AlterAddColumnConstraintTest
     : public TableConstraintTest,
