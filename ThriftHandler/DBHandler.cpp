@@ -7341,6 +7341,8 @@ void DBHandler::shutdown() {
   emergency_shutdown();
 
   Executor::clearExternalCaches(false, nullptr, -1);
+  // Cached executors hold a raw DataMgr pointer and must not survive this handler.
+  Executor::nukeCacheOfExecutors();
 
   query_engine_.reset();
 
