@@ -15,7 +15,9 @@
 #include "gen-cpp/extension_functions_types.h"
 
 #include <mutex>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace apache::thrift::transport;
@@ -71,6 +73,7 @@ class Calcite {
   std::string getExtensionFunctionWhitelist();
   std::string getUserDefinedFunctionWhitelist();
   virtual void updateMetadata(std::string catalog, std::string table);
+  void markTableStatisticsDirty(const std::string& catalog, const std::string& table);
   void close_calcite_server(bool log = true);
   virtual ~Calcite();
   std::string getRuntimeExtensionFunctionWhitelist();
@@ -87,7 +90,9 @@ class Calcite {
   TOptimizationOption getCalciteOptimizationOption(
       bool is_view_optimize,
       bool enable_watchdog,
-      const std::vector<TFilterPushDownInfo>& filter_push_down_info);
+      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+      bool enable_experimental_query_rewrites,
+      bool trust_unenforced_table_constraints);
 
  private:
   void init(const int db_port,
@@ -107,6 +112,7 @@ class Calcite {
                           const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
+  void updateMetadataImpl(const std::string& catalog, const std::string& table);
   std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> getClient(
       int port);
 
@@ -124,5 +130,7 @@ class Calcite {
   std::string ssl_keystore_password_;
   std::string ssl_ca_file_;
   std::string db_config_file_;
+  std::mutex statistics_mutex_;
+  std::set<std::pair<std::string, std::string>> dirty_statistics_;
   std::once_flag shutdown_once_flag_;
 };

@@ -28,12 +28,14 @@
 #include <regex>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <typeinfo>
 
 #include "Analyzer/RangeTableEntry.h"
 #include "Catalog/Catalog.h"
 #include "Catalog/SharedDictionaryValidator.h"
+#include "Catalog/TableConstraints.h"
 #include "DataMgr/FileMgr/FileBuffer.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
@@ -55,6 +57,7 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/DbObjectKeys.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/QuotedIdentifierUtil.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
@@ -2859,7 +2862,8 @@ void set_string_field(rapidjson::Value& obj,
 
 std::string serialize_key_metainfo(
     const ShardKeyDef* shard_key_def,
-    const std::vector<SharedDictionaryDef>& shared_dict_defs) {
+    const std::vector<SharedDictionaryDef>& shared_dict_defs,
+    const std::vector<Catalog_Namespace::TableConstraint>& table_constraints = {}) {
   rapidjson::Document document;
   auto& allocator = document.GetAllocator();
   rapidjson::Value arr(rapidjson::kArrayType);
@@ -2884,7 +2888,12 @@ std::string serialize_key_metainfo(
   rapidjson::StringBuffer buffer;
   rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
   arr.Accept(writer);
-  return buffer.GetString();
+  std::string key_metainfo = buffer.GetString();
+  for (const auto& table_constraint : table_constraints) {
+    key_metainfo = Catalog_Namespace::append_table_constraint_to_key_metainfo(
+        key_metainfo, table_constraint);
+  }
+  return key_metainfo;
 }
 
 template <typename LITERAL_TYPE,
@@ -3054,8 +3063,12 @@ void parse_elements(const rapidjson::Value& payload,
       auto col_def = column_from_json(element);
       table_element_list.emplace_back(std::move(col_def));
     } else if (json_str(element["type"]) == "SQL_COLUMN_CONSTRAINT") {
-      CHECK(element.HasMember("name"));
-      if (json_str(element["name"]) == "SHARD_KEY") {
+      if (!element.HasMember("constraintType") || !element["constraintType"].IsString()) {
+        throw std::runtime_error(
+            "CREATE TABLE constraint is missing a string constraintType.");
+      }
+      const auto constraint_type = json_str(element["constraintType"]);
+      if (constraint_type == "SHARD KEY") {
         CHECK(element.HasMember("columns"));
         CHECK(element["columns"].IsArray());
         const auto& columns = element["columns"].GetArray();
@@ -3064,7 +3077,7 @@ void parse_elements(const rapidjson::Value& payload,
         }
         auto shard_key_def = std::make_unique<ShardKeyDef>(json_str(columns[0]));
         table_element_list.emplace_back(std::move(shard_key_def));
-      } else if (json_str(element["name"]) == "SHARED_DICT") {
+      } else if (constraint_type == "SHARED DICTIONARY") {
         CHECK(element.HasMember("columns"));
         CHECK(element["columns"].IsArray());
         const auto& columns = element["columns"].GetArray();
@@ -3087,8 +3100,20 @@ void parse_elements(const rapidjson::Value& payload,
         table_element_list.emplace_back(std::move(shared_dict_def));
 
       } else {
-        LOG(FATAL) << "Unsupported type for SQL_COLUMN_CONSTRAINT: "
-                   << json_str(element["name"]);
+        auto constraint = table_constraint_from_json(element);
+        if (constraint.type == Catalog_Namespace::TableConstraintType::ForeignKey) {
+          auto& reference = constraint.foreign_key_reference.value();
+          table_element_list.emplace_back(
+              std::make_unique<ForeignKeyDef>(std::move(constraint.column_names),
+                                              std::move(reference.table_name),
+                                              std::move(reference.column_names),
+                                              std::move(constraint.name)));
+        } else {
+          table_element_list.emplace_back(std::make_unique<UniqueDef>(
+              constraint.type == Catalog_Namespace::TableConstraintType::PrimaryKey,
+              std::move(constraint.column_names),
+              std::move(constraint.name)));
+        }
       }
     } else {
       LOG(FATAL) << "Unsupported element type for CREATE TABLE: "
@@ -3097,6 +3122,58 @@ void parse_elements(const rapidjson::Value& payload,
   }
 }
 }  // namespace
+
+Catalog_Namespace::TableConstraint table_constraint_from_json(
+    const rapidjson::Value& constraint_json) {
+  if (!constraint_json.IsObject()) {
+    throw std::runtime_error("Table constraint payload must be an object.");
+  }
+  if (!constraint_json.HasMember("constraintType") ||
+      !constraint_json["constraintType"].IsString()) {
+    throw std::runtime_error(
+        "Table constraint payload is missing a string constraintType.");
+  }
+  if (!constraint_json.HasMember("columns")) {
+    throw std::runtime_error("Table constraint payload is missing columns.");
+  }
+
+  Catalog_Namespace::TableConstraint constraint;
+  const auto constraint_type = Catalog_Namespace::table_constraint_type_from_string(
+      json_str(constraint_json["constraintType"]));
+  if (!constraint_type) {
+    throw std::runtime_error("Unsupported table constraint type: " +
+                             json_str(constraint_json["constraintType"]));
+  }
+  constraint.type = *constraint_type;
+  if (constraint_json.HasMember("name") && !constraint_json["name"].IsNull()) {
+    if (!constraint_json["name"].IsString()) {
+      throw std::runtime_error("Table constraint name must be a string or null.");
+    }
+    constraint.name = json_str(constraint_json["name"]);
+  }
+  json_utils::get_value_from_object(constraint_json, constraint.column_names, "columns");
+
+  if (constraint.type == Catalog_Namespace::TableConstraintType::ForeignKey) {
+    if (!constraint_json.HasMember("references") ||
+        !constraint_json["references"].IsObject()) {
+      throw std::runtime_error("FOREIGN KEY constraint is missing a references object.");
+    }
+    const auto& references = constraint_json["references"].GetObject();
+    if (!references.HasMember("table") || !references["table"].IsString()) {
+      throw std::runtime_error(
+          "FOREIGN KEY references must include a string table name.");
+    }
+    if (!references.HasMember("columns")) {
+      throw std::runtime_error("FOREIGN KEY references must include columns.");
+    }
+
+    Catalog_Namespace::ForeignKeyReference reference;
+    reference.table_name = json_str(references["table"]);
+    json_utils::get_value(references["columns"], reference.column_names);
+    constraint.foreign_key_reference = reference;
+  }
+  return constraint;
+}
 
 std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element) {
   CHECK(element.HasMember("name"));
@@ -3216,10 +3293,57 @@ CreateTableStmt::CreateTableStmt(const rapidjson::Value& payload) {
   parse_options(payload, storage_options_);
 }
 
-void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& session,
-                                    TableDescriptor& td,
-                                    std::list<ColumnDescriptor>& columns,
-                                    std::vector<SharedDictionaryDef>& shared_dict_defs) {
+namespace {
+
+std::vector<std::string> table_constraint_column_names(
+    const std::list<std::unique_ptr<std::string>>& column_list) {
+  std::vector<std::string> column_names;
+  column_names.reserve(column_list.size());
+  for (const auto& column_name : column_list) {
+    column_names.emplace_back(*column_name);
+  }
+  return column_names;
+}
+
+Catalog_Namespace::TableConstraint table_constraint_from_unique_def(
+    const UniqueDef& unique_def) {
+  Catalog_Namespace::TableConstraint constraint;
+  constraint.type = unique_def.get_is_primarykey()
+                        ? Catalog_Namespace::TableConstraintType::PrimaryKey
+                        : Catalog_Namespace::TableConstraintType::Unique;
+  if (const auto constraint_name = unique_def.get_constraint_name()) {
+    constraint.name = *constraint_name;
+  }
+  constraint.column_names = table_constraint_column_names(unique_def.get_column_list());
+  return constraint;
+}
+
+Catalog_Namespace::TableConstraint table_constraint_from_foreign_key_def(
+    const ForeignKeyDef& foreign_key_def) {
+  Catalog_Namespace::TableConstraint constraint;
+  constraint.type = Catalog_Namespace::TableConstraintType::ForeignKey;
+  if (const auto constraint_name = foreign_key_def.get_constraint_name()) {
+    constraint.name = *constraint_name;
+  }
+  constraint.column_names =
+      table_constraint_column_names(foreign_key_def.get_column_list());
+
+  Catalog_Namespace::ForeignKeyReference reference;
+  reference.table_name = *foreign_key_def.get_foreign_table();
+  reference.column_names =
+      table_constraint_column_names(foreign_key_def.get_foreign_column_list());
+  constraint.foreign_key_reference = reference;
+  return constraint;
+}
+
+}  // namespace
+
+void CreateTableStmt::executeDryRun(
+    const Catalog_Namespace::SessionInfo& session,
+    TableDescriptor& td,
+    std::list<ColumnDescriptor>& columns,
+    std::vector<SharedDictionaryDef>& shared_dict_defs,
+    std::vector<Catalog_Namespace::TableConstraint>& table_constraints) {
   std::unordered_set<std::string> uc_col_names;
   const auto& catalog = session.getCatalog();
   const ShardKeyDef* shard_key_def{nullptr};
@@ -3236,6 +3360,16 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
         throw std::runtime_error("Specified more than one shard key");
       }
       shard_key_def = static_cast<const ShardKeyDef*>(e.get());
+      continue;
+    }
+    if (dynamic_cast<UniqueDef*>(e.get())) {
+      table_constraints.emplace_back(
+          table_constraint_from_unique_def(*static_cast<UniqueDef*>(e.get())));
+      continue;
+    }
+    if (dynamic_cast<ForeignKeyDef*>(e.get())) {
+      table_constraints.emplace_back(
+          table_constraint_from_foreign_key_def(*static_cast<ForeignKeyDef*>(e.get())));
       continue;
     }
     if (!dynamic_cast<ColumnDef*>(e.get())) {
@@ -3271,7 +3405,21 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
   if (td.shardedColumnId && !td.nShards) {
     throw std::runtime_error("SHARD_COUNT needs to be specified with SHARD_KEY.");
   }
-  td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
+  for (const auto& constraint : table_constraints) {
+    check_foreign_key_privilege(session, td.tableName, constraint);
+  }
+  table_constraints =
+      catalog.normalizeTableConstraintsForCreate(&td, columns, table_constraints);
+  td.keyMetainfo =
+      serialize_key_metainfo(shard_key_def, shared_dict_defs, table_constraints);
+}
+
+void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& session,
+                                    TableDescriptor& td,
+                                    std::list<ColumnDescriptor>& columns,
+                                    std::vector<SharedDictionaryDef>& shared_dict_defs) {
+  std::vector<Catalog_Namespace::TableConstraint> table_constraints;
+  executeDryRun(session, td, columns, shared_dict_defs, table_constraints);
 }
 
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
@@ -3300,8 +3448,9 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   TableDescriptor td;
   std::list<ColumnDescriptor> columns;
   std::vector<SharedDictionaryDef> shared_dict_defs;
+  std::vector<Catalog_Namespace::TableConstraint> table_constraints;
 
-  executeDryRun(session, td, columns, shared_dict_defs);
+  executeDryRun(session, td, columns, shared_dict_defs, table_constraints);
   td.userId = session.get_currentUser().userId;
 
   catalog.createShardedTable(td, columns, shared_dict_defs);
@@ -3750,8 +3899,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   // view optimization
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, false, false);
   const auto query_ra =
       query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
                                                          query_state_proxy,
@@ -3820,8 +3969,8 @@ size_t LocalQueryConnector::getOuterFragmentCount(QueryStateProxy query_state_pr
   // view optimization
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, false, false);
   const auto query_ra =
       query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
                                                          query_state_proxy,
@@ -4476,8 +4625,8 @@ lockmgr::LockedTableDescriptors acquire_query_table_locks(
   auto& calcite_mgr = sys_catalog.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr.getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption =
-      calcite_mgr.getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr.getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, false, false);
   const auto result =
       query_parsing::process_and_check_access_privileges(&calcite_mgr,
                                                          query_state_proxy,
@@ -4962,6 +5111,26 @@ ValidateStmt::ValidateStmt(const rapidjson::Value& payload) {
   parse_options(payload, options);
 
   isRepairTypeRemove_ = repair_type(options);
+}
+
+void check_foreign_key_privilege(const Catalog_Namespace::SessionInfo& session,
+                                 const std::string& source_table,
+                                 const Catalog_Namespace::TableConstraint& constraint) {
+  if (!constraint.foreign_key_reference ||
+      boost::iequals(source_table, constraint.foreign_key_reference->table_name)) {
+    return;
+  }
+  const auto& referenced_table = constraint.foreign_key_reference->table_name;
+  if (!session.getCatalog().getMetadataForTable(referenced_table, false)) {
+    throw std::runtime_error("Referenced table " + referenced_table + " does not exist.");
+  }
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::SELECT_FROM_TABLE,
+                                       referenced_table)) {
+    throw std::runtime_error(
+        "Current user does not have SELECT privileges on referenced table: " +
+        referenced_table);
+  }
 }
 
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
@@ -6745,8 +6914,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session,
   // this now also ensures that access permissions are checked
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, false, false);
 
   query_parsing::process_and_check_access_privileges(calcite_mgr.get(),
                                                      query_state->createQueryStateProxy(),
@@ -7264,8 +7433,8 @@ std::unique_ptr<Parser::Stmt> create_stmt_for_query(
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
       calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-  const auto calciteOptimizationOption =
-      calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+  const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+      false, g_enable_watchdog, {}, false, false);
   const auto query_json = query_parsing::process_and_check_access_privileges(
                               calcite_mgr.get(),
                               query_state->createQueryStateProxy(),
