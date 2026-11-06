@@ -1416,7 +1416,7 @@ function install_opensaml() {
   check_artifact_cleanup opensaml-${OPENSAML_VERSION}.tar.gz opensaml-${OPENSAML_VERSION}
 }
 
-LIBPNG_VERSION=1.6.58 # latest 1.6 release as of 20260604, suggested pngcrush 1.7.88
+LIBPNG_VERSION=1.6.59
 
 function install_png() {
   download_make_install http://download.sourceforge.net/libpng/libpng-$LIBPNG_VERSION.tar.xz
