@@ -4627,6 +4627,19 @@ std::string constraint_column_list_to_string(const std::vector<std::string>& col
   return boost::algorithm::join(columns, ", ");
 }
 
+void validate_constraint_column(const std::string& table_name,
+                                const ColumnDescriptor& cd) {
+  if (cd.isSystemCol || cd.isVirtualCol) {
+    throw std::runtime_error("Column " + cd.columnName +
+                             " cannot be used in a table constraint.");
+  }
+  if (cd.columnType.is_array() || cd.columnType.is_geometry()) {
+    throw std::runtime_error("Column " + table_name + "." + cd.columnName + " has type " +
+                             cd.columnType.toString() +
+                             ", which is not supported in a table constraint.");
+  }
+}
+
 std::vector<std::string> normalize_constraint_columns(
     const Catalog& catalog,
     const TableDescriptor* td,
@@ -4644,10 +4657,7 @@ std::vector<std::string> normalize_constraint_columns(
       throw std::runtime_error("Column " + column_name + " does not exist for table " +
                                td->tableName + ".");
     }
-    if (cd->isSystemCol || cd->isVirtualCol) {
-      throw std::runtime_error("Column " + cd->columnName +
-                               " cannot be used in a table constraint.");
-    }
+    validate_constraint_column(td->tableName, *cd);
     const auto normalized_name = boost::to_upper_copy<std::string>(cd->columnName);
     if (!normalized_column_names.insert(normalized_name).second) {
       throw std::runtime_error("Column " + cd->columnName +
@@ -4678,10 +4688,7 @@ std::vector<std::string> normalize_constraint_columns(
       throw std::runtime_error("Column " + column_name + " does not exist for table " +
                                table_name + ".");
     }
-    if (column_it->isSystemCol || column_it->isVirtualCol) {
-      throw std::runtime_error("Column " + column_it->columnName +
-                               " cannot be used in a table constraint.");
-    }
+    validate_constraint_column(table_name, *column_it);
     const auto normalized_name = boost::to_upper_copy<std::string>(column_it->columnName);
     if (!normalized_column_names.insert(normalized_name).second) {
       throw std::runtime_error("Column " + column_it->columnName +
