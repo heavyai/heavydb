@@ -727,6 +727,96 @@ TEST_F(TableConstraintTest, RowCountsRequireRewritesAndExcludeViews) {
   EXPECT_FALSE(details("constraint_review_view").__isset.num_rows);
 }
 
+class ForeignKeyMetadataTest : public TableConstraintTest,
+                               public testing::WithParamInterface<bool> {
+ protected:
+  TTableDetails getTableDetails() {
+    auto [handler, session] = getDbHandlerAndSessionId();
+    TTableDetails details;
+    if (GetParam()) {
+      handler->get_internal_table_details_for_database(
+          details,
+          session,
+          "constraint_review_child",
+          getCatalog().getCurrentDB().dbName);
+    } else {
+      handler->get_table_details(details, session, "constraint_review_child");
+    }
+    return details;
+  }
+};
+
+TEST_P(ForeignKeyMetadataTest, OrdinalsRequireRewritesButNotTrust) {
+  const auto previous_rewrites = system_parameters_.enable_experimental_query_rewrites;
+  const auto previous_trust = system_parameters_.trust_unenforced_table_constraints;
+  ScopeGuard restore = [&] {
+    system_parameters_.enable_experimental_query_rewrites = previous_rewrites;
+    system_parameters_.trust_unenforced_table_constraints = previous_trust;
+  };
+  sql("CREATE TABLE constraint_review_parent (p1 INT, p2 INT, PRIMARY KEY(p2,p1));");
+  sql("CREATE TABLE constraint_review_child (a INT, b INT, CONSTRAINT child_fk "
+      "FOREIGN KEY(a,b) REFERENCES constraint_review_parent(p2,p1));");
+  const auto metadata =
+      getCatalog().getMetadataForTable("constraint_review_child", false)->keyMetainfo;
+  for (const bool trust : {false, true}) {
+    SCOPED_TRACE(trust);
+    system_parameters_.trust_unenforced_table_constraints = trust;
+    for (const bool rewrites : {false, true}) {
+      SCOPED_TRACE(rewrites);
+      system_parameters_.enable_experimental_query_rewrites = rewrites;
+      const auto details = getTableDetails();
+      EXPECT_EQ(metadata, details.key_metainfo);
+      ASSERT_GE(details.row_desc.size(), 2u);
+      EXPECT_EQ("a", details.row_desc[0].col_name);
+      EXPECT_EQ("b", details.row_desc[1].col_name);
+      EXPECT_EQ(rewrites, details.__isset.foreign_key_column_ordinals);
+      if (rewrites) {
+        ASSERT_EQ(1u, details.foreign_key_column_ordinals.size());
+        EXPECT_EQ((std::vector<int32_t>{1, 0}),
+                  details.foreign_key_column_ordinals.at("child_fk"));
+      } else {
+        EXPECT_TRUE(details.foreign_key_column_ordinals.empty());
+      }
+    }
+  }
+}
+
+TEST_P(ForeignKeyMetadataTest, DisabledRewritesSkipReferencedTableLookup) {
+  const auto previous = system_parameters_.enable_experimental_query_rewrites;
+  ScopeGuard restore_flag = [&] {
+    system_parameters_.enable_experimental_query_rewrites = previous;
+  };
+  sql("CREATE TABLE constraint_review_parent (id INT, PRIMARY KEY(id));");
+  sql("CREATE TABLE constraint_review_child (id INT, CONSTRAINT child_fk "
+      "FOREIGN KEY(id) REFERENCES constraint_review_parent(id));");
+  auto td = const_cast<TableDescriptor*>(
+      getCatalog().getMetadataForTable("constraint_review_child", false));
+  const auto original = td->keyMetainfo;
+  ScopeGuard restore_metadata = [&] { td->keyMetainfo = original; };
+  auto constraints = getCatalog().getTableConstraints(td);
+  ASSERT_EQ(1u, constraints.size());
+  ASSERT_TRUE(constraints.front().foreign_key_reference);
+  // DDL dependency guards prevent this state; inject it to detect an unwanted lookup.
+  constraints.front().foreign_key_reference->table_name = "constraint_review_missing";
+  td->keyMetainfo = Catalog_Namespace::append_table_constraint_to_key_metainfo(
+      "[]", constraints.front());
+
+  system_parameters_.enable_experimental_query_rewrites = false;
+  const auto details = getTableDetails();
+  EXPECT_EQ(td->keyMetainfo, details.key_metainfo);
+  ASSERT_GE(details.row_desc.size(), 1u);
+  EXPECT_EQ("id", details.row_desc[0].col_name);
+  EXPECT_FALSE(details.__isset.foreign_key_column_ordinals);
+
+  system_parameters_.enable_experimental_query_rewrites = true;
+  executeLambdaAndAssertException(
+      [&] { getTableDetails(); },
+      "Referenced table constraint_review_missing does not exist for table "
+      "constraint_review_child.");
+}
+
+INSTANTIATE_TEST_SUITE_P(TableDetailsEndpoints, ForeignKeyMetadataTest, testing::Bool());
+
 TEST_F(TableConstraintTest, ForeignKeyRequiresReferencedTablePrivileges) {
   sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
   createTestUser();
