@@ -758,8 +758,18 @@ TEST_F(TableConstraintTest, MalformedMetadataIncludesTableName) {
       getCatalog().getMetadataForTable("constraint_review_parent", false));
   const auto original = td->keyMetainfo;
   ScopeGuard restore = [&] { td->keyMetainfo = original; };
-  for (const auto metadata :
-       {"not json", "[{\"type\":\"UNIQUE\",\"columns\":[\"id\"],\"name\":42}]"}) {
+  for (
+      const auto metadata :
+      {"not json",
+       R"([{"type":42}])",
+       R"([{"type":"UNIQUE"}])",
+       R"([{"type":"UNIQUE","columns":"id"}])",
+       R"([{"type":"UNIQUE","columns":["id",42]}])",
+       R"([{"type":"UNIQUE","columns":["id"],"name":42}])",
+       R"([{"type":"UNIQUE","columns":["id"],"enforced":0}])",
+       R"([{"type":"FOREIGN KEY","columns":["id"],"foreign_table":42,"foreign_columns":["id"]}])",
+       R"([{"type":"FOREIGN KEY","columns":["id"],"foreign_table":"parent","foreign_columns":["id",null]}])"}) {
+    SCOPED_TRACE(metadata);
     td->keyMetainfo = metadata;
     try {
       getCatalog().getTableConstraints(td);

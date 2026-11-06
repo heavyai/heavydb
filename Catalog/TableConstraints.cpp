@@ -33,30 +33,6 @@ namespace Catalog_Namespace {
 
 namespace {
 
-std::string json_string(const rapidjson::Value& value) {
-  if (!value.IsString()) {
-    throw std::runtime_error("Malformed table constraint metadata.");
-  }
-  std::string result;
-  json_utils::get_value(value, result);
-  return result;
-}
-
-std::vector<std::string> json_string_array(const rapidjson::Value& value) {
-  if (!value.IsArray()) {
-    throw std::runtime_error("Malformed table constraint metadata.");
-  }
-  // Validate catalog input before using the CHECK-based shared deserializer.
-  for (const auto& element : value.GetArray()) {
-    if (!element.IsString()) {
-      throw std::runtime_error("Malformed table constraint metadata.");
-    }
-  }
-  std::vector<std::string> strings;
-  json_utils::get_value(value, strings);
-  return strings;
-}
-
 rapidjson::Document parse_key_metainfo_document(const std::string& key_metainfo) {
   rapidjson::Document document;
   if (key_metainfo.empty()) {
@@ -103,8 +79,9 @@ std::optional<TableConstraint> table_constraint_from_json(
     return {};
   }
 
-  const auto constraint_type =
-      table_constraint_type_from_string(json_string(object["type"]));
+  std::string type;
+  json_utils::get_value_from_object(object, type, "type");
+  const auto constraint_type = table_constraint_type_from_string(type);
   if (!constraint_type) {
     return {};
   }
@@ -115,17 +92,15 @@ std::optional<TableConstraint> table_constraint_from_json(
 
   TableConstraint constraint;
   constraint.type = *constraint_type;
-  constraint.column_names = json_string_array(object["columns"]);
+  json_utils::get_value_from_object(object, constraint.column_names, "columns");
 
   if (object.HasMember("name")) {
-    constraint.name = json_string(object["name"]);
+    std::string name;
+    json_utils::get_value_from_object(object, name, "name");
+    constraint.name = std::move(name);
   }
   if (object.HasMember("enforced")) {
-    if (!object["enforced"].IsBool()) {
-      throw std::runtime_error(
-          "Malformed table constraint metadata: invalid enforced flag.");
-    }
-    constraint.enforced = object["enforced"].GetBool();
+    json_utils::get_value_from_object(object, constraint.enforced, "enforced");
   }
 
   if (constraint.type == TableConstraintType::ForeignKey) {
@@ -133,8 +108,8 @@ std::optional<TableConstraint> table_constraint_from_json(
       throw std::runtime_error("Malformed foreign key metadata.");
     }
     ForeignKeyReference reference;
-    reference.table_name = json_string(object["foreign_table"]);
-    reference.column_names = json_string_array(object["foreign_columns"]);
+    json_utils::get_value_from_object(object, reference.table_name, "foreign_table");
+    json_utils::get_value_from_object(object, reference.column_names, "foreign_columns");
     constraint.foreign_key_reference = reference;
   }
 
