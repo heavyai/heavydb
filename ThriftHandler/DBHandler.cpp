@@ -2626,6 +2626,7 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
       if (num_rows >= 0) {
         _return.__set_num_rows(num_rows);
       }
+      _return.__set_foreign_key_column_ordinals(cat->getForeignKeyColumnOrdinals(td));
     }
     _return.view_sql =
         (have_privileges_on_view_sources ? td->viewSQL
@@ -2637,7 +2638,6 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
       _return.sharded_column_name = cd->columnName;
     }
     _return.key_metainfo = td->keyMetainfo;
-    _return.__set_foreign_key_column_ordinals(cat->getForeignKeyColumnOrdinals(td));
     _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
     if (td->partitions.empty()) {
       _return.partition_detail = TPartitionDetail::DEFAULT;
