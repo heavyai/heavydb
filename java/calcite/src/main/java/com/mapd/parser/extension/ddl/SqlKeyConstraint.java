@@ -166,7 +166,7 @@ public class SqlKeyConstraint extends SqlCall {
       writer.keyword("CONSTRAINT");
       name.unparse(writer, 0, 0);
     }
-    writer.keyword(getOperator().getName()); // "UNIQUE" or "PRIMARY KEY"
+    writer.keyword(getOperator().getName());
     columnList.unparse(writer, 1, 1);
     if (referencesTable != null) {
       writer.keyword("REFERENCES");
