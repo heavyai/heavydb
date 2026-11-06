@@ -25,6 +25,7 @@
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "ThriftHandler/QueryAuth.h"
@@ -493,22 +494,6 @@ const rapidjson::Value* extractFilters(const rapidjson::Value& payload) {
   return filters;
 }
 
-std::vector<std::string> json_string_vector(const rapidjson::Value& value) {
-  if (!value.IsArray()) {
-    throw std::runtime_error("Table constraint columns must be an array.");
-  }
-  std::vector<std::string> strings;
-  strings.reserve(value.Size());
-  for (const auto& element : value.GetArray()) {
-    if (!element.IsString()) {
-      throw std::runtime_error(
-          "Table constraint columns must contain only column names.");
-    }
-    strings.emplace_back(json_str(element));
-  }
-  return strings;
-}
-
 Catalog_Namespace::TableConstraint table_constraint_from_json(
     const rapidjson::Value& constraint_json) {
   if (!constraint_json.IsObject()) {
@@ -537,7 +522,7 @@ Catalog_Namespace::TableConstraint table_constraint_from_json(
     }
     constraint.name = json_str(constraint_json["name"]);
   }
-  constraint.column_names = json_string_vector(constraint_json["columns"]);
+  json_utils::get_value_from_object(constraint_json, constraint.column_names, "columns");
 
   if (constraint.type == Catalog_Namespace::TableConstraintType::ForeignKey) {
     if (!constraint_json.HasMember("references") ||
@@ -555,7 +540,7 @@ Catalog_Namespace::TableConstraint table_constraint_from_json(
 
     Catalog_Namespace::ForeignKeyReference reference;
     reference.table_name = json_str(references["table"]);
-    reference.column_names = json_string_vector(references["columns"]);
+    json_utils::get_value(references["columns"], reference.column_names);
     constraint.foreign_key_reference = reference;
   }
   return constraint;
