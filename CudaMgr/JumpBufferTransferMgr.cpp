@@ -8,8 +8,17 @@
 #include "CudaMgr/CudaShared.h"
 #include "Logger/Logger.h"
 
+#ifdef __linux__
+#include <linux/mempolicy.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
 size_t g_jump_buffer_size{128 * 1024 * 1024};  // 128MB
 size_t g_jump_buffer_parallel_copy_threads{4};
+size_t g_jump_buffer_slots_per_device{1};
+bool g_enable_lazy_jump_buffer_allocation{false};
+bool g_enable_background_jump_buffer_allocation{false};
 
 // We use a larger default minimum transfer size for D2H transfers because host memory
 // copies from the pinned jump buffer are slower than copies to the pinned jump buffer
@@ -25,28 +34,57 @@ JumpBufferTransferMgr::JumpBufferTransferMgr(
   if (g_jump_buffer_size > 0) {
     CHECK_EQ(device_count_, device_contexts_.size());
 
-    VLOG(1) << "Initializing " << device_count << " pinned memory jump buffers of size "
-            << g_jump_buffer_size << " bytes";
-    jump_buffers_.reserve(device_count_);
-    for (size_t device_num = 0; device_num < device_count_; device_num++) {
-      jump_buffers_.emplace_back(std::make_unique<QueuedJumpBuffer>());
-      jump_buffers_.back()->buffer =
-          allocatePinnedHostMem(device_num, g_jump_buffer_size);
-      jump_buffers_.back()->size = g_jump_buffer_size;
+    const auto slot_count = std::max<size_t>(g_jump_buffer_slots_per_device, 1);
+    try {
+      jump_buffers_.resize(device_count_);
+      for (size_t device_num = 0; device_num < device_count_; device_num++) {
+        auto& device_jump_buffers = jump_buffers_[device_num];
+        device_jump_buffers.reserve(slot_count);
+        for (size_t slot_idx = 0; slot_idx < slot_count; ++slot_idx) {
+          device_jump_buffers.emplace_back(std::make_unique<QueuedJumpBuffer>());
+          device_jump_buffers.back()->size = g_jump_buffer_size;
+          if (!g_enable_lazy_jump_buffer_allocation) {
+            device_jump_buffers.back()->buffer =
+                allocatePinnedHostMem(device_num, g_jump_buffer_size);
+          }
+        }
+      }
+    } catch (...) {
+      for (size_t device_num = 0; device_num < jump_buffers_.size(); ++device_num) {
+        for (auto& jump_buffer : jump_buffers_[device_num]) {
+          if (!jump_buffer || !jump_buffer->buffer) {
+            continue;
+          }
+          try {
+            freePinnedHostMem(device_num, jump_buffer->buffer);
+          } catch (const std::exception& error) {
+            LOG(ERROR) << "Failed to roll back pinned jump-buffer allocation: device="
+                       << device_num << " error=" << error.what();
+          } catch (...) {
+            LOG(ERROR) << "Failed to roll back pinned jump-buffer allocation: device="
+                       << device_num << " with an unknown error";
+          }
+          jump_buffer->buffer = nullptr;
+        }
+      }
+      throw;
     }
-
     CHECK_EQ(device_count_, jump_buffers_.size());
-    VLOG(1) << "Initialized " << device_count << " pinned memory jump buffers of size "
-            << g_jump_buffer_size << " bytes";
   }
 }
 
 JumpBufferTransferMgr::~JumpBufferTransferMgr() {
+  joinBackgroundAllocationThreads();
   if (!jump_buffers_.empty()) {
-    VLOG(1) << "Freeing " << jump_buffers_.size() << " pinned memory jump buffers";
     int32_t device_num{0};
-    for (auto& jump_buffer : jump_buffers_) {
-      if (jump_buffer) {
+    for (auto& device_jump_buffers : jump_buffers_) {
+      for (auto& jump_buffer : device_jump_buffers) {
+        if (!jump_buffer) {
+          continue;
+        }
+        if (!jump_buffer->buffer) {
+          continue;
+        }
         try {
           freePinnedHostMem(device_num, jump_buffer->buffer);
         } catch (const CudaErrorException& e) {
@@ -64,7 +102,6 @@ JumpBufferTransferMgr::~JumpBufferTransferMgr() {
       }
       device_num++;
     }
-    VLOG(1) << "Freed " << jump_buffers_.size() << " pinned memory jump buffers";
     jump_buffers_.clear();
   }
 }
@@ -77,15 +114,88 @@ bool JumpBufferTransferMgr::shouldUseForDeviceToHostTransfer(size_t num_bytes) c
   return g_jump_buffer_size > 0 && num_bytes >= g_jump_buffer_min_d2h_transfer_threshold;
 }
 
+void JumpBufferTransferMgr::startBackgroundAllocations() {
+  if (jump_buffers_.empty() || !g_enable_lazy_jump_buffer_allocation ||
+      !g_enable_background_jump_buffer_allocation) {
+    return;
+  }
+
+  int32_t device_num{0};
+  for (auto& device_jump_buffers : jump_buffers_) {
+    for (auto& jump_buffer : device_jump_buffers) {
+      if (!jump_buffer) {
+        continue;
+      }
+      // startBackgroundAllocation arbitrates with synchronous allocation through the
+      // atomic flag, then examines buffer and size while holding transfer_mutex.
+      startBackgroundAllocation(*jump_buffer, device_num);
+    }
+    ++device_num;
+  }
+}
+
 namespace {
+#ifdef __linux__
+class ScopedNumaPolicy {
+ public:
+  explicit ScopedNumaPolicy(const int numa_node) : previous_mask_(kNumaMaskWordCount, 0) {
+    if (numa_node < 0 || static_cast<unsigned long>(numa_node) >= kMaxNumaNodes) {
+      return;
+    }
+    if (syscall(SYS_get_mempolicy,
+                &previous_mode_,
+                previous_mask_.data(),
+                kMaxNumaNodes,
+                nullptr,
+                0) != 0) {
+      return;
+    }
+
+    std::vector<unsigned long> target_mask(kNumaMaskWordCount, 0);
+    target_mask[static_cast<size_t>(numa_node) / kBitsPerMaskWord] |=
+        1UL << (static_cast<size_t>(numa_node) % kBitsPerMaskWord);
+    restore_ =
+        syscall(SYS_set_mempolicy, MPOL_BIND, target_mask.data(), kMaxNumaNodes) == 0;
+  }
+
+  ~ScopedNumaPolicy() {
+    if (!restore_) {
+      return;
+    }
+    const auto base_mode = previous_mode_ & ~MPOL_MODE_FLAGS;
+    const bool has_node_mask = base_mode != MPOL_DEFAULT && base_mode != MPOL_LOCAL;
+    if (syscall(SYS_set_mempolicy,
+                previous_mode_,
+                has_node_mask ? previous_mask_.data() : nullptr,
+                has_node_mask ? kMaxNumaNodes : 0,
+                nullptr,
+                0) != 0) {
+      LOG(WARNING) << "Failed to restore the host NUMA allocation policy";
+    }
+  }
+
+ private:
+  static constexpr unsigned long kMaxNumaNodes{1024};
+  static constexpr size_t kBitsPerMaskWord{sizeof(unsigned long) * 8};
+  static constexpr size_t kNumaMaskWordCount{(kMaxNumaNodes + kBitsPerMaskWord - 1) /
+                                             kBitsPerMaskWord};
+
+  int previous_mode_{MPOL_DEFAULT};
+  std::vector<unsigned long> previous_mask_;
+  bool restore_{false};
+};
+#endif
+
 void parallel_copy_buffer(int8_t* dst, const int8_t* src, size_t buffer_size) {
   CHECK_GT(buffer_size, size_t(0));
 
   // Calculate number of threads based on segment size ratio
   const size_t segment_size = std::max(g_jump_buffer_size / 2, size_t(1));
+  CHECK_GT(g_jump_buffer_parallel_copy_threads, size_t(0));
+  const size_t bytes_per_thread =
+      std::max(segment_size / g_jump_buffer_parallel_copy_threads, size_t(1));
   const size_t num_threads =
-      std::min((buffer_size * g_jump_buffer_parallel_copy_threads + segment_size - 1) /
-                   segment_size,
+      std::min(size_t(1) + (buffer_size - size_t(1)) / bytes_per_thread,
                g_jump_buffer_parallel_copy_threads);
   CHECK_GT(num_threads, size_t(0));
 
@@ -103,8 +213,15 @@ void parallel_copy_buffer(int8_t* dst, const int8_t* src, size_t buffer_size) {
       remainder--;
     }
 
-    threads.emplace_back(
-        [=]() { memcpy(dst + offset, src + offset, thread_chunk_size); });
+    try {
+      threads.emplace_back(
+          [=]() { memcpy(dst + offset, src + offset, thread_chunk_size); });
+    } catch (...) {
+      for (auto& thread : threads) {
+        thread.join();
+      }
+      throw;
+    }
 
     offset += thread_chunk_size;
   }
@@ -114,18 +231,24 @@ void parallel_copy_buffer(int8_t* dst, const int8_t* src, size_t buffer_size) {
   }
 }
 
+constexpr size_t min_pipelined_segment_size = 16 * 1024 * 1024;  // 16MB
+
 size_t get_segment_size(size_t num_bytes) {
   // Calculate dynamic segment size based on transfer size
-  constexpr size_t min_segment_size = 16 * 1024 * 1024;  // 16MB minimum segment size
 
   // Simply divide by 2 for double buffering
-  size_t segment_size = (num_bytes + 1) / 2;  // Round up division to handle odd numbers
+  size_t segment_size = num_bytes / 2 + num_bytes % 2;
 
   // Apply constraints
-  segment_size = std::max(segment_size, min_segment_size);
+  segment_size = std::max(segment_size, min_pipelined_segment_size);
   segment_size = std::min(segment_size, g_jump_buffer_size / 2);
 
   return segment_size;
+}
+
+bool should_pipeline_pinned_producer_transfer(size_t num_bytes, size_t buffer_size) {
+  return buffer_size >= min_pipelined_segment_size * 2 &&
+         num_bytes > min_pipelined_segment_size;
 }
 }  // namespace
 
@@ -134,35 +257,111 @@ bool JumpBufferTransferMgr::copyHostToDevice(int8_t* device_ptr,
                                              size_t num_bytes,
                                              int32_t device_num,
                                              CUstream cuda_stream) {
-  CHECK_GE(device_num, 0);
-  CHECK_LT(size_t(device_num), jump_buffers_.size());
+  auto* jump_buffer = tryLockJumpBuffer(device_num);
+  if (jump_buffer) {
+    std::unique_lock<std::mutex> transfer_lock(jump_buffer->transfer_mutex,
+                                               std::adopt_lock);
+    if (!ensureJumpBufferAllocated(*jump_buffer, device_num)) {
+      return false;
+    }
+    jump_buffer->segment_size = get_segment_size(num_bytes);
 
-  auto& jump_buffer = *jump_buffers_[device_num];
-  if (jump_buffer.transfer_mutex.try_lock()) {
+    resetTransferState(*jump_buffer);
+
+    set_context(device_contexts_, device_num);
+
+    std::thread producer;
+    std::thread consumer;
     try {
-      jump_buffer.segment_size = get_segment_size(num_bytes);
-
-      resetTransferState(jump_buffer);
-
-      set_context(device_contexts_, device_num);
-
-      auto producer = createHostToDeviceProducer(jump_buffer, host_ptr, num_bytes);
-      auto consumer =
-          createHostToDeviceConsumer(jump_buffer, device_ptr, device_num, cuda_stream);
-
-      producer.join();
-      consumer.join();
-
-      jump_buffer.transfer_mutex.unlock();
-      return true;
+      producer = createHostToDeviceProducer(*jump_buffer, host_ptr, num_bytes);
+      consumer =
+          createHostToDeviceConsumer(*jump_buffer, device_ptr, device_num, cuda_stream);
     } catch (...) {
-      jump_buffer.transfer_mutex.unlock();
+      recordTransferError(*jump_buffer);
+      jump_buffer->reader_cv.notify_all();
+      jump_buffer->writer_cv.notify_all();
+      if (producer.joinable()) {
+        producer.join();
+      }
+      if (consumer.joinable()) {
+        consumer.join();
+      }
       throw;
     }
+
+    producer.join();
+    consumer.join();
+    if (jump_buffer->transfer_exception) {
+      std::rethrow_exception(jump_buffer->transfer_exception);
+    }
+
+    return true;
   } else {
     // Fall back to direct transfer if the transfer lock cannot be acquired
     return false;
   }
+}
+
+bool JumpBufferTransferMgr::copyHostToDeviceFromPinnedProducer(
+    int8_t* device_ptr,
+    size_t num_bytes,
+    int32_t device_num,
+    CUstream cuda_stream,
+    const std::function<void(int8_t* host_ptr, size_t num_bytes, size_t offset)>&
+        producer) {
+  if (num_bytes == 0 || jump_buffers_.empty()) {
+    return false;
+  }
+
+  auto* jump_buffer = tryLockJumpBuffer(device_num);
+  if (!jump_buffer) {
+    return false;
+  }
+  std::unique_lock<std::mutex> transfer_lock(jump_buffer->transfer_mutex,
+                                             std::adopt_lock);
+  if (!ensureJumpBufferAllocated(*jump_buffer, device_num)) {
+    return false;
+  }
+
+  if (num_bytes <= jump_buffer->size &&
+      !should_pipeline_pinned_producer_transfer(num_bytes, jump_buffer->size)) {
+    producer(jump_buffer->buffer, num_bytes, 0);
+    set_context(device_contexts_, device_num);
+    if (cuda_stream) {
+      check_error(cuMemcpyHtoDAsync(reinterpret_cast<CUdeviceptr>(device_ptr),
+                                    jump_buffer->buffer,
+                                    num_bytes,
+                                    cuda_stream));
+      check_error(cuStreamSynchronize(cuda_stream));
+    } else {
+      check_error(cuMemcpyHtoD(
+          reinterpret_cast<CUdeviceptr>(device_ptr), jump_buffer->buffer, num_bytes));
+    }
+    return true;
+  }
+
+  jump_buffer->segment_size = get_segment_size(num_bytes);
+  resetTransferState(*jump_buffer);
+
+  set_context(device_contexts_, device_num);
+
+  auto consumer_thread =
+      createHostToDeviceConsumer(*jump_buffer, device_ptr, device_num, cuda_stream);
+  try {
+    runHostToDeviceProducer(*jump_buffer, num_bytes, producer);
+  } catch (...) {
+    recordTransferError(*jump_buffer);
+    jump_buffer->reader_cv.notify_all();
+    jump_buffer->writer_cv.notify_all();
+    consumer_thread.join();
+    throw;
+  }
+  consumer_thread.join();
+  if (jump_buffer->transfer_exception) {
+    std::rethrow_exception(jump_buffer->transfer_exception);
+  }
+
+  return true;
 }
 
 void JumpBufferTransferMgr::resetTransferState(QueuedJumpBuffer& jump_buffer) {
@@ -174,14 +373,53 @@ void JumpBufferTransferMgr::resetTransferState(QueuedJumpBuffer& jump_buffer) {
   jump_buffer.write_allowed[1] = true;
   jump_buffer.write_finished = false;
   jump_buffer.error_occurred = false;
-  jump_buffer.segment_buffer_size = 0;
+  jump_buffer.transfer_exception = nullptr;
+  jump_buffer.segment_buffer_size[0] = 0;
+  jump_buffer.segment_buffer_size[1] = 0;
+}
+
+bool JumpBufferTransferMgr::ensureJumpBufferAllocated(QueuedJumpBuffer& jump_buffer,
+                                                      int32_t device_num) {
+  if (jump_buffer.buffer) {
+    return true;
+  }
+  if (jump_buffer.size == 0 || g_jump_buffer_size == 0) {
+    return false;
+  }
+  bool expected{false};
+  if (!jump_buffer.allocation_in_progress.compare_exchange_strong(expected, true)) {
+    return false;
+  }
+
+  try {
+    jump_buffer.buffer = allocatePinnedHostMem(device_num, jump_buffer.size);
+    jump_buffer.allocation_in_progress.store(false);
+    return true;
+  } catch (const CudaErrorException& e) {
+    VLOG(1) << "Failed to allocate lazy pinned jump buffer of size " << jump_buffer.size
+            << " bytes for device " << device_num << ": " << e.what();
+    jump_buffer.size = 0;
+    jump_buffer.allocation_in_progress.store(false);
+    return false;
+  } catch (...) {
+    jump_buffer.allocation_in_progress.store(false);
+    throw;
+  }
+}
+
+void JumpBufferTransferMgr::recordTransferError(QueuedJumpBuffer& jump_buffer) {
+  std::lock_guard<std::mutex> lock(jump_buffer.queue_mutex);
+  jump_buffer.error_occurred = true;
+  if (!jump_buffer.transfer_exception) {
+    jump_buffer.transfer_exception = std::current_exception();
+  }
 }
 
 std::thread JumpBufferTransferMgr::createHostToDeviceProducer(
     QueuedJumpBuffer& jump_buffer,
     const int8_t* host_ptr,
     size_t num_bytes) {
-  return std::thread([&jump_buffer, host_ptr, num_bytes]() {
+  return std::thread([this, &jump_buffer, host_ptr, num_bytes]() {
     size_t bytes_remaining = num_bytes;
     size_t src_offset = 0;
     int32_t current_segment = 0;
@@ -195,11 +433,10 @@ std::thread JumpBufferTransferMgr::createHostToDeviceProducer(
         jump_buffer.writer_cv.wait(lock, [&]() {
           return jump_buffer.error_occurred || jump_buffer.write_allowed[current_segment];
         });
+        if (jump_buffer.error_occurred) {
+          return;
+        }
         jump_buffer.write_allowed[current_segment] = false;
-      }
-
-      if (jump_buffer.error_occurred) {
-        return;
       }
 
       try {
@@ -209,19 +446,16 @@ std::thread JumpBufferTransferMgr::createHostToDeviceProducer(
             copy_size);
       } catch (...) {
         // Ensure consumer stops processing if an exception occurs.
-        {
-          std::lock_guard<std::mutex> lock(jump_buffer.queue_mutex);
-          jump_buffer.error_occurred = true;
-        }
+        recordTransferError(jump_buffer);
         jump_buffer.reader_cv.notify_one();
-        throw;
+        return;
       }
 
       // Mark segment as ready to be read and specify the segment buffer size
       {
         std::lock_guard<std::mutex> lock(jump_buffer.queue_mutex);
         jump_buffer.read_allowed[current_segment] = true;
-        jump_buffer.segment_buffer_size = copy_size;
+        jump_buffer.segment_buffer_size[current_segment] = copy_size;
       }
       jump_buffer.reader_cv.notify_one();
 
@@ -237,6 +471,68 @@ std::thread JumpBufferTransferMgr::createHostToDeviceProducer(
     }
     jump_buffer.reader_cv.notify_one();
   });
+}
+
+std::thread JumpBufferTransferMgr::createHostToDeviceProducer(
+    QueuedJumpBuffer& jump_buffer,
+    size_t num_bytes,
+    const std::function<void(int8_t* host_ptr, size_t num_bytes, size_t offset)>&
+        producer) {
+  return std::thread([this, &jump_buffer, num_bytes, producer]() {
+    runHostToDeviceProducer(jump_buffer, num_bytes, producer);
+  });
+}
+
+void JumpBufferTransferMgr::runHostToDeviceProducer(
+    QueuedJumpBuffer& jump_buffer,
+    size_t num_bytes,
+    const std::function<void(int8_t* host_ptr, size_t num_bytes, size_t offset)>&
+        producer) {
+  size_t bytes_remaining = num_bytes;
+  size_t src_offset = 0;
+  int32_t current_segment = 0;
+
+  while (bytes_remaining > 0) {
+    const size_t copy_size = std::min(bytes_remaining, jump_buffer.segment_size);
+
+    {
+      std::unique_lock<std::mutex> lock(jump_buffer.queue_mutex);
+      jump_buffer.writer_cv.wait(lock, [&]() {
+        return jump_buffer.error_occurred || jump_buffer.write_allowed[current_segment];
+      });
+      if (jump_buffer.error_occurred) {
+        return;
+      }
+      jump_buffer.write_allowed[current_segment] = false;
+    }
+
+    try {
+      producer(jump_buffer.buffer + (current_segment * jump_buffer.segment_size),
+               copy_size,
+               src_offset);
+    } catch (...) {
+      recordTransferError(jump_buffer);
+      jump_buffer.reader_cv.notify_one();
+      return;
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(jump_buffer.queue_mutex);
+      jump_buffer.read_allowed[current_segment] = true;
+      jump_buffer.segment_buffer_size[current_segment] = copy_size;
+    }
+    jump_buffer.reader_cv.notify_one();
+
+    bytes_remaining -= copy_size;
+    src_offset += copy_size;
+    current_segment = 1 - current_segment;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(jump_buffer.queue_mutex);
+    jump_buffer.write_finished = true;
+  }
+  jump_buffer.reader_cv.notify_one();
 }
 
 std::thread JumpBufferTransferMgr::createHostToDeviceConsumer(
@@ -269,7 +565,7 @@ std::thread JumpBufferTransferMgr::createHostToDeviceConsumer(
         }
 
         if (jump_buffer.read_allowed[current_segment]) {
-          copy_size = jump_buffer.segment_buffer_size;
+          copy_size = jump_buffer.segment_buffer_size[current_segment];
           jump_buffer.read_allowed[current_segment] = false;
           continue_reading = true;
         } else {
@@ -294,12 +590,9 @@ std::thread JumpBufferTransferMgr::createHostToDeviceConsumer(
           }
         } catch (...) {
           // Ensure producer stops processing if an exception occurs.
-          {
-            std::lock_guard<std::mutex> lock(jump_buffer.queue_mutex);
-            jump_buffer.error_occurred = true;
-          }
+          recordTransferError(jump_buffer);
           jump_buffer.writer_cv.notify_one();
-          throw;
+          return;
         }
 
         // Mark segment as available for writes
@@ -321,31 +614,45 @@ bool JumpBufferTransferMgr::copyDeviceToHost(int8_t* host_ptr,
                                              size_t num_bytes,
                                              int32_t device_num,
                                              CUstream cuda_stream) {
-  CHECK_GE(device_num, 0);
-  CHECK_LT(size_t(device_num), jump_buffers_.size());
+  auto* jump_buffer = tryLockJumpBuffer(device_num);
+  if (jump_buffer) {
+    std::unique_lock<std::mutex> transfer_lock(jump_buffer->transfer_mutex,
+                                               std::adopt_lock);
+    if (!ensureJumpBufferAllocated(*jump_buffer, device_num)) {
+      return false;
+    }
+    jump_buffer->segment_size = get_segment_size(num_bytes);
 
-  auto& jump_buffer = *jump_buffers_[device_num];
-  if (jump_buffer.transfer_mutex.try_lock()) {
+    resetTransferState(*jump_buffer);
+
+    set_context(device_contexts_, device_num);
+
+    std::thread producer;
+    std::thread consumer;
     try {
-      jump_buffer.segment_size = get_segment_size(num_bytes);
-
-      resetTransferState(jump_buffer);
-
-      set_context(device_contexts_, device_num);
-
-      auto producer = createDeviceToHostProducer(
-          jump_buffer, device_ptr, device_num, cuda_stream, num_bytes);
-      auto consumer = createDeviceToHostConsumer(jump_buffer, host_ptr);
-
-      producer.join();
-      consumer.join();
-
-      jump_buffer.transfer_mutex.unlock();
-      return true;
+      producer = createDeviceToHostProducer(
+          *jump_buffer, device_ptr, device_num, cuda_stream, num_bytes);
+      consumer = createDeviceToHostConsumer(*jump_buffer, host_ptr);
     } catch (...) {
-      jump_buffer.transfer_mutex.unlock();
+      recordTransferError(*jump_buffer);
+      jump_buffer->reader_cv.notify_all();
+      jump_buffer->writer_cv.notify_all();
+      if (producer.joinable()) {
+        producer.join();
+      }
+      if (consumer.joinable()) {
+        consumer.join();
+      }
       throw;
     }
+
+    producer.join();
+    consumer.join();
+    if (jump_buffer->transfer_exception) {
+      std::rethrow_exception(jump_buffer->transfer_exception);
+    }
+
+    return true;
   } else {
     // Fall back to direct transfer if the transfer lock cannot be acquired
     return false;
@@ -401,19 +708,16 @@ std::thread JumpBufferTransferMgr::createDeviceToHostProducer(
             }
           } catch (...) {
             // Ensure consumer stops processing if an exception occurs.
-            {
-              std::lock_guard<std::mutex> lock(jump_buffer.queue_mutex);
-              jump_buffer.error_occurred = true;
-            }
+            recordTransferError(jump_buffer);
             jump_buffer.reader_cv.notify_one();
-            throw;
+            return;
           }
 
           // Mark segment as ready for reads
           {
             std::lock_guard<std::mutex> lock(jump_buffer.queue_mutex);
             jump_buffer.read_allowed[current_segment] = true;
-            jump_buffer.segment_buffer_size = copy_size;
+            jump_buffer.segment_buffer_size[current_segment] = copy_size;
           }
           jump_buffer.reader_cv.notify_one();
 
@@ -435,7 +739,7 @@ std::thread JumpBufferTransferMgr::createDeviceToHostConsumer(
     QueuedJumpBuffer& jump_buffer,
     int8_t* host_ptr) {
   // Consumer thread - writes from jump buffer to host memory
-  return std::thread([&jump_buffer, host_ptr]() {
+  return std::thread([this, &jump_buffer, host_ptr]() {
     int32_t current_segment = 0;
     size_t dst_offset = 0;
 
@@ -458,7 +762,7 @@ std::thread JumpBufferTransferMgr::createDeviceToHostConsumer(
         }
 
         if (jump_buffer.read_allowed[current_segment]) {
-          copy_size = jump_buffer.segment_buffer_size;
+          copy_size = jump_buffer.segment_buffer_size[current_segment];
           jump_buffer.read_allowed[current_segment] = false;
           continue_reading = true;
         } else {
@@ -475,11 +779,9 @@ std::thread JumpBufferTransferMgr::createDeviceToHostConsumer(
               copy_size);
         } catch (...) {
           // Ensure producer stops processing if an exception occurs.
-          {
-            std::lock_guard<std::mutex> lock(jump_buffer.queue_mutex);
-            jump_buffer.error_occurred = true;
-          }
+          recordTransferError(jump_buffer);
           jump_buffer.writer_cv.notify_one();
+          return;
         }
 
         // Mark segment as available
@@ -496,9 +798,31 @@ std::thread JumpBufferTransferMgr::createDeviceToHostConsumer(
   });
 }
 
+JumpBufferTransferMgr::QueuedJumpBuffer* JumpBufferTransferMgr::tryLockJumpBuffer(
+    int32_t device_num) {
+  CHECK_GE(device_num, 0);
+  CHECK_LT(static_cast<size_t>(device_num), jump_buffers_.size());
+  for (auto& jump_buffer : jump_buffers_[device_num]) {
+    if (jump_buffer && !jump_buffer->allocation_in_progress.load() &&
+        jump_buffer->transfer_mutex.try_lock()) {
+      return jump_buffer.get();
+    }
+  }
+  return nullptr;
+}
+
 int8_t* JumpBufferTransferMgr::allocatePinnedHostMem(int32_t device_num,
                                                      size_t num_bytes) {
   set_context(device_contexts_, device_num);
+
+#if defined(__linux__) && CUDA_VERSION >= 12090
+  CUdevice device;
+  check_error(cuCtxGetDevice(&device));
+  int host_numa_id{-1};
+  const auto numa_status =
+      cuDeviceGetAttribute(&host_numa_id, CU_DEVICE_ATTRIBUTE_HOST_NUMA_ID, device);
+  ScopedNumaPolicy numa_policy(numa_status == CUDA_SUCCESS ? host_numa_id : -1);
+#endif
 
   void* host_ptr;
   check_error(cuMemHostAlloc(&host_ptr, num_bytes, CU_MEMHOSTALLOC_PORTABLE));
@@ -512,5 +836,53 @@ void JumpBufferTransferMgr::freePinnedHostMem(int32_t device_num, int8_t* host_p
 
   set_context(device_contexts_, device_num);
   check_error(cuMemFreeHost(host_ptr));
+}
+
+void JumpBufferTransferMgr::startBackgroundAllocation(QueuedJumpBuffer& jump_buffer,
+                                                      int32_t device_num) {
+  bool expected{false};
+  if (!jump_buffer.allocation_in_progress.compare_exchange_strong(expected, true)) {
+    return;
+  }
+  try {
+    allocation_threads_.emplace_back([this, &jump_buffer, device_num]() {
+      std::lock_guard<std::mutex> transfer_lock(jump_buffer.transfer_mutex);
+      if (jump_buffer.buffer || jump_buffer.size == 0) {
+        jump_buffer.allocation_in_progress.store(false);
+        return;
+      }
+      try {
+        jump_buffer.buffer = allocatePinnedHostMem(device_num, jump_buffer.size);
+      } catch (const CudaErrorException& e) {
+        VLOG(1) << "Failed to allocate background pinned jump buffer of size "
+                << jump_buffer.size << " bytes for device " << device_num << ": "
+                << e.what();
+        jump_buffer.size = 0;
+      } catch (const std::exception& e) {
+        VLOG(1) << "Unexpected error allocating background pinned jump buffer of size "
+                << jump_buffer.size << " bytes for device " << device_num << ": "
+                << e.what();
+        jump_buffer.size = 0;
+      } catch (...) {
+        VLOG(1) << "Unexpected unknown error allocating background pinned jump buffer "
+                   "of size "
+                << jump_buffer.size << " bytes for device " << device_num;
+        jump_buffer.size = 0;
+      }
+      jump_buffer.allocation_in_progress.store(false);
+    });
+  } catch (...) {
+    jump_buffer.allocation_in_progress.store(false);
+    throw;
+  }
+}
+
+void JumpBufferTransferMgr::joinBackgroundAllocationThreads() {
+  for (auto& thread : allocation_threads_) {
+    if (thread.joinable()) {
+      thread.join();
+    }
+  }
+  allocation_threads_.clear();
 }
 }  // namespace CudaMgr_Namespace
