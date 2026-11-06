@@ -222,6 +222,11 @@ target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES}
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS CreateAndDropTableDdlTest)
 
+add_executable(TableStatisticsTest TableStatisticsTest.cpp)
+target_link_libraries(TableStatisticsTest ${THRIFT_HANDLER_TEST_LIBRARIES})
+add_test(TableStatisticsTest TableStatisticsTest ${TEST_ARGS})
+list(APPEND SANITY_TEST_PROGRAMS TableStatisticsTest)
+
 add_executable(TableConstraintTransactionTest TableConstraintTransactionTest.cpp)
 target_link_libraries(TableConstraintTransactionTest ${EXECUTE_TEST_LIBS})
 add_test(TableConstraintTransactionTest TableConstraintTransactionTest ${TEST_ARGS})

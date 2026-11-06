@@ -528,7 +528,11 @@ void TableOptimizer::vacuumFragments(const TableDescriptor* td,
       delete_cpu_chunks(cat_, cpu_chunks_to_delete);
     }
   }
+  const auto previous_num_rows = td->fragmenter->getNumRows();
   td->fragmenter->resetSizesFromFragments();
+  if (td->fragmenter->getNumRows() != previous_num_rows) {
+    cat_.markTableStatisticsDirty(td->tableId);
+  }
 }
 
 void TableOptimizer::vacuumFragmentsAboveMinSelectivity(
