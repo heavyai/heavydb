@@ -179,7 +179,7 @@ CFLAGS="$CFLAGS" download_make_install https://libarchive.org/downloads/libarchi
 
 install_uriparser
 
-VERS=8.20.0
+VERS=8.23.0
 C_DLOAD=curl-$VERS.tar.xz
 download_make_install https://curl.se/download/${C_DLOAD} ${C_DLOAD} "" "--disable-ldap --disable-ldaps --with-openssl --without-libpsl --without-libidn2"
 

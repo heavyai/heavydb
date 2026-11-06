@@ -388,7 +388,7 @@ function install_boost() {
   check_artifact_cleanup boost_${BOOST_VERSION}.tar.bz2 boost_${BOOST_VERSION}
 }
 
-OPENSSL_VERSION=3.6.4
+OPENSSL_VERSION=3.6.5
 function install_openssl() {
   download_make_install https://www.openssl.org/source/old/3.0/openssl-${OPENSSL_VERSION}.tar.gz "openssl-${OPENSSL_VERSION}.tar.gz" "" "linux-${ARCH} no-shared no-dso -fPIC"
 }
@@ -449,9 +449,9 @@ function install_arrow() {
   sed -Ei 's/^\s*vendored\/uriparser\/.*\)/)/' ../src/arrow/CMakeLists.txt
   sed -Ei  '/^\s*vendored\/uriparser\//d'      ../src/arrow/CMakeLists.txt
 
-  # Use Thrift 0.24.0 instead of 0.20.0
-  sed -i 's/ARROW_THRIFT_BUILD_VERSION=0.20.0/ARROW_THRIFT_BUILD_VERSION=0.24.0/' ../thirdparty/versions.txt
-  sed -i 's/ARROW_THRIFT_BUILD_SHA256_CHECKSUM=b5d8311a779470e1502c027f428a1db542f5c051c8e1280ccd2163fa935ff2d6/ARROW_THRIFT_BUILD_SHA256_CHECKSUM=1859d932d2ae1f13d16c5a196931208c116310a5ff50f2bfd11d3db03be8f46f/' ../thirdparty/versions.txt
+  # Use Thrift 0.25.0 instead of 0.20.0
+  sed -i 's/ARROW_THRIFT_BUILD_VERSION=0.20.0/ARROW_THRIFT_BUILD_VERSION=0.25.0/' ../thirdparty/versions.txt
+  sed -i 's/ARROW_THRIFT_BUILD_SHA256_CHECKSUM=b5d8311a779470e1502c027f428a1db542f5c051c8e1280ccd2163fa935ff2d6/ARROW_THRIFT_BUILD_SHA256_CHECKSUM=66da4707214c54c94bac082103dc67adaf9e08925662700f269170a7b534b214/' ../thirdparty/versions.txt
 
   # Arrow 16+ requires the latest liblz4 (1.10.0) and libzstd (1.5.6) or it won't
   # find them. Also, a little known factoid (only shown in some older versions of
@@ -600,7 +600,7 @@ function install_llvm() {
     fi
 }
 
-THRIFT_VERSION=0.24.0
+THRIFT_VERSION=0.25.0
 
 function install_thrift() {
     download https://archive.apache.org/dist/thrift/$THRIFT_VERSION/thrift-$THRIFT_VERSION.tar.gz
@@ -639,7 +639,7 @@ function install_sqlite3() {
     CFLAGS="-O2 -DSQLITE_ENABLE_RTREE=1" download_make_install https://sqlite.org/${SQLITE3_YEAR_DIR}/sqlite-autoconf-${SQLITE3_VERSION}.tar.gz
 }
 
-EXPAT_VERSION=2.8.3
+EXPAT_VERSION=2.10.0
 PROJ_VERSION=9.6.0
 GDAL_VERSION=3.10.3
 TIFF_VERSION=4.7.2
