@@ -3443,21 +3443,24 @@ ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
     CHECK(ddl_payload.HasMember("columnData"));
     CHECK(ddl_payload["columnData"].IsArray());
 
-    // New Columns go into this list
-    std::list<Parser::ColumnDef*>* table_element_list_ =
-        new std::list<Parser::ColumnDef*>;
-
+    // Reject table-level elements before allocating column definitions.
     const auto elements = ddl_payload["columnData"].GetArray();
     for (const auto& element : elements) {
       CHECK(element.IsObject());
       CHECK(element.HasMember("type"));
-      if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
-        auto col_def = Parser::column_from_json(element);
-        table_element_list_->emplace_back(col_def.release());
-      } else {
-        LOG(FATAL) << "Unsupported element type for ALTER TABLE: "
-                   << element["type"].GetString();
+      if (json_str(element["type"]) != "SQL_COLUMN_DECLARATION") {
+        throw std::runtime_error(
+            "ALTER TABLE ADD COLUMN does not support table constraints or storage "
+            "directives.");
       }
+    }
+
+    // New Columns go into this list
+    std::list<Parser::ColumnDef*>* table_element_list_ =
+        new std::list<Parser::ColumnDef*>;
+    for (const auto& element : elements) {
+      auto col_def = Parser::column_from_json(element);
+      table_element_list_->emplace_back(col_def.release());
     }
 
     std::unique_ptr<Parser::DDLStmt>(
