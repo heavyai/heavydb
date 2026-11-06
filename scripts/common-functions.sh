@@ -1121,7 +1121,7 @@ function install_glm() {
 
 
 function install_blosc() {
-  BLOSC_VERSION=1.21.2
+  BLOSC_VERSION=1.21.7
   BLOSC_DLOAD=blosc_v${BLOSC_VERSION}.tar.gz
   download https://github.com/Blosc/c-blosc/archive/v${BLOSC_VERSION}.tar.gz ${BLOSC_DLOAD}
   tar xvf ${BLOSC_DLOAD}
