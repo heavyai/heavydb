@@ -8,6 +8,7 @@ import static org.junit.Assert.*;
 
 import com.mapd.metadata.MetaConnect;
 
+import org.apache.calcite.rel.RelReferentialConstraint;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.ImmutableBitSet;
 import org.apache.calcite.util.mapping.IntPair;
@@ -97,6 +98,24 @@ public class HeavyDBTableTest {
   }
 
   @Test
+  public void mixedKeysPreserveCompositeOrdinalsAndRejectNullableColumns() {
+    TTableDetails details = details("["
+                    + "{\"type\":\"PRIMARY KEY\",\"columns\":[\"id\"],\"enforced\":false},"
+                    + "{\"type\":\"UNIQUE\",\"columns\":[\"nullable_code\"],\"enforced\":false},"
+                    + "{\"type\":\"UNIQUE\",\"columns\":[\"ID\",\"code\"],\"enforced\":false}]",
+            false);
+    TColumnType id = details.getRow_desc().get(0);
+    TColumnType nullable = id.deepCopy();
+    nullable.setCol_name("nullable_code");
+    nullable.getCol_type().setNullable(true);
+    TColumnType code = id.deepCopy();
+    code.setCol_name("code");
+    details.setRow_desc(Arrays.asList(id, nullable, code));
+    assertEquals(Arrays.asList(ImmutableBitSet.of(0), ImmutableBitSet.of(0, 2)),
+            table(details).getStatistic().getKeys());
+  }
+
+  @Test
   public void foreignKeysUseRuntimeOrdinalsNotPersistedPositions() {
     TTableDetails details = details(foreignKey(), false);
     details.setForeign_key_column_ordinals(
@@ -122,12 +141,16 @@ public class HeavyDBTableTest {
     details.setRow_desc(Arrays.asList(details.getRow_desc().get(0), other));
     details.setForeign_key_column_ordinals(
             Collections.singletonMap("fk", Arrays.asList(3, 1)));
+    List<RelReferentialConstraint> constraints =
+            table(details).getStatistic().getReferentialConstraints();
+    assertEquals(1, constraints.size());
+    RelReferentialConstraint constraint = constraints.get(0);
+    assertEquals(Arrays.asList("constraint_test", "child"),
+            constraint.getSourceQualifiedName());
+    assertEquals(Arrays.asList("constraint_test", "parent"),
+            constraint.getTargetQualifiedName());
     assertEquals(Arrays.asList(IntPair.of(1, 3), IntPair.of(0, 1)),
-            table(details)
-                    .getStatistic()
-                    .getReferentialConstraints()
-                    .get(0)
-                    .getColumnPairs());
+            constraint.getColumnPairs());
   }
 
   @Test
@@ -153,14 +176,27 @@ public class HeavyDBTableTest {
 
   @Test
   public void malformedAndLegacyMetadataAreIgnored() {
-    for (String metadata : Arrays.asList("not json",
+    for (String metadata : Arrays.asList("",
+                 "[]",
+                 "not json",
                  "{}",
+                 "{\"type\":\"PRIMARY KEY\"}",
                  "[{\"type\":\"SHARD KEY\",\"name\":\"id\"}]",
+                 "[{\"type\":\"SHARD KEY\",\"name\":\"id\"},"
+                         + "{\"type\":\"SHARED DICTIONARY\",\"name\":\"id\","
+                         + "\"foreign_table\":\"t\",\"foreign_column\":\"id\"}]",
+                 "[{\"type\":\"PRIMARY KEY\",\"columns\":[]}]",
                  "[{\"type\":\"UNIQUE\",\"columns\":[\"id\",\"ID\"]}]",
-                 "[{\"type\":\"UNIQUE\",\"columns\":[\"absent\"]}]")) {
-      assertFalse(table(details(metadata, false))
-                          .getStatistic()
-                          .isKey(ImmutableBitSet.of(0)));
+                 "[{\"type\":\"UNIQUE\",\"columns\":[\"absent\"]}]",
+                 "[{\"type\":\"FOREIGN KEY\",\"name\":\"fk\",\"columns\":[\"id\"],"
+                         + "\"enforced\":false,\"foreign_table\":\"parent\","
+                         + "\"foreign_columns\":[\"a\",\"b\"]}]")) {
+      TTableDetails details = details(metadata, false);
+      details.setForeign_key_column_ordinals(
+              Collections.singletonMap("fk", Collections.singletonList(0)));
+      HeavyDBTable table = table(details);
+      assertTrue(metadata, table.getStatistic().getKeys().isEmpty());
+      assertTrue(metadata, table.getStatistic().getReferentialConstraints().isEmpty());
     }
   }
 
@@ -170,6 +206,13 @@ public class HeavyDBTableTest {
     details.setNum_rows(0);
     HeavyDBTable.setTrustUnenforcedTableConstraints(false);
     assertEquals(Double.valueOf(0), table(details).getStatistic().getRowCount());
+    details.setNum_rows(42);
+    details.setKey_metainfo(unique());
+    HeavyDBTable table = table(details);
+    assertEquals(Double.valueOf(42), table.getStatistic().getRowCount());
+    assertTrue(table.getStatistic().getKeys().isEmpty());
+    details.unsetNum_rows();
+    assertNull(table(details).getStatistic().getRowCount());
     details.setNum_rows(-1);
     assertNull(table(details).getStatistic().getRowCount());
   }

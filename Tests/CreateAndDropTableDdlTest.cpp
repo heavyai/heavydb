@@ -441,6 +441,31 @@ TEST_F(TableConstraintTest, InternalMarkerNamesAreOrdinaryConstraintNames) {
   EXPECT_EQ(Catalog_Namespace::TableConstraintType::Unique, constraints[1].type);
 }
 
+TEST_F(TableConstraintTest, StorageDirectivesCoexistWithMarkerNamedConstraints) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, "
+      "a TEXT ENCODING DICT(32), b TEXT, SHARD KEY(id), "
+      "SHARED DICTIONARY(b) REFERENCES constraint_review_parent(a), "
+      "CONSTRAINT SHARD_KEY PRIMARY KEY(id), CONSTRAINT SHARED_DICT UNIQUE(id)) "
+      "WITH (SHARD_COUNT=2);");
+  const auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("constraint_review_parent", false);
+  ASSERT_NE(nullptr, td);
+  EXPECT_EQ(2, td->nShards);
+  EXPECT_EQ(catalog.getMetadataForColumn(td->tableId, "id")->columnId,
+            td->shardedColumnId);
+  const auto a = catalog.getMetadataForColumn(td->tableId, "a");
+  const auto b = catalog.getMetadataForColumn(td->tableId, "b");
+  ASSERT_NE(nullptr, a);
+  ASSERT_NE(nullptr, b);
+  EXPECT_EQ(a->columnType.get_comp_param(), b->columnType.get_comp_param());
+  const auto constraints = catalog.getTableConstraints(td);
+  ASSERT_EQ(size_t(2), constraints.size());
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::PrimaryKey, constraints[0].type);
+  EXPECT_EQ(std::optional<std::string>{"SHARD_KEY"}, constraints[0].name);
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::Unique, constraints[1].type);
+  EXPECT_EQ(std::optional<std::string>{"SHARED_DICT"}, constraints[1].name);
+}
+
 TEST_F(TableConstraintTest, ShardConstraintsFollowLogicalAddAndDrop) {
   sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
   sql("CREATE TABLE constraint_review_child (id INT NOT NULL, SHARD KEY(id)) WITH "
@@ -682,6 +707,37 @@ TEST_F(TableConstraintTest, ForeignTablesRejectAlterConstraints) {
       sql("ALTER TABLE constraint_review_parent ADD CONSTRAINT key_unique UNIQUE(id);"));
   EXPECT_ANY_THROW(
       sql("ALTER TABLE constraint_review_parent DROP CONSTRAINT key_unique;"));
+}
+
+TEST_F(TableConstraintTest, ViewsRejectAlterConstraints) {
+  sql("CREATE TABLE constraint_review_parent (id INT);");
+  sql("CREATE VIEW constraint_review_view AS SELECT id FROM constraint_review_parent;");
+  EXPECT_ANY_THROW(
+      sql("ALTER TABLE constraint_review_view ADD CONSTRAINT view_uq UNIQUE(id);"));
+  EXPECT_ANY_THROW(sql("ALTER TABLE constraint_review_view DROP CONSTRAINT view_uq;"));
+}
+
+TEST_F(TableConstraintTest, AlterConstraintsRequireAlterPrivilege) {
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, "
+      "CONSTRAINT parent_pk PRIMARY KEY(id));");
+  createTestUser();
+  ScopeGuard cleanup = [&] {
+    loginAdmin();
+    dropTestUser();
+  };
+  sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  login("test_user", "test_pass");
+  const std::string privilege_error =
+      "Current user does not have the privilege to alter table: constraint_review_parent";
+  queryAndAssertException(
+      "ALTER TABLE constraint_review_parent ADD CONSTRAINT parent_uq UNIQUE(id);",
+      privilege_error);
+  queryAndAssertException(
+      "ALTER TABLE constraint_review_parent DROP CONSTRAINT parent_pk;", privilege_error);
+  sql("CREATE TABLE constraint_review_child (id INT NOT NULL);");
+  EXPECT_NO_THROW(sql(
+      "ALTER TABLE constraint_review_child ADD CONSTRAINT child_pk PRIMARY KEY(id);"));
+  EXPECT_NO_THROW(sql("ALTER TABLE constraint_review_child DROP CONSTRAINT child_pk;"));
 }
 
 TEST_F(TableConstraintTest, PrimaryKeyNullability) {
