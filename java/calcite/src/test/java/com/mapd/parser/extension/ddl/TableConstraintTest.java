@@ -11,6 +11,8 @@ import com.google.gson.JsonObject;
 
 import org.junit.Test;
 
+import ai.heavy.thrift.calciteserver.InvalidParseRequest;
+
 public class TableConstraintTest extends DDLTest {
   public TableConstraintTest() {
     resourceDirPath =
@@ -118,6 +120,78 @@ public class TableConstraintTest extends DDLTest {
             constraint("CREATE TABLE t (id INT, FOREIGN KEY(id) REFERENCES parent(id));");
     assertEquals("FOREIGN KEY", key.get("constraintType").getAsString());
     assertEquals("parent", key.getAsJsonObject("references").get("table").getAsString());
+  }
+
+  private void assertReferenceColumnsRequired(String sql) {
+    InvalidParseRequest error =
+            assertThrows(sql, InvalidParseRequest.class, () -> processDdlCommand(sql));
+    assertEquals(-2, error.getWhatUp());
+    assertTrue(error.getWhyUp(), error.getWhyUp().contains("\"(\""));
+  }
+
+  @Test
+  public void createForeignKeyRequiresReferenceColumns() {
+    assertReferenceColumnsRequired(
+            "CREATE TABLE child (id INT, FOREIGN KEY(id) REFERENCES parent);");
+  }
+
+  @Test
+  public void createNamedForeignKeyRequiresReferenceColumns() {
+    assertReferenceColumnsRequired("CREATE TABLE child (id INT, "
+            + "CONSTRAINT fk FOREIGN KEY(id) REFERENCES parent);");
+  }
+
+  @Test
+  public void addForeignKeyRequiresReferenceColumns() {
+    assertReferenceColumnsRequired(
+            "ALTER TABLE child ADD FOREIGN KEY(id) REFERENCES parent;");
+  }
+
+  @Test
+  public void addNamedForeignKeyRequiresReferenceColumns() {
+    assertReferenceColumnsRequired(
+            "ALTER TABLE child ADD CONSTRAINT fk FOREIGN KEY(id) REFERENCES parent;");
+  }
+
+  @Test(expected = InvalidParseRequest.class)
+  public void createForeignKeyRejectsEmptyReferenceColumns() throws Exception {
+    processDdlCommand(
+            "CREATE TABLE child (id INT, FOREIGN KEY(id) REFERENCES parent());");
+  }
+
+  @Test(expected = InvalidParseRequest.class)
+  public void addForeignKeyRejectsEmptyReferenceColumns() throws Exception {
+    processDdlCommand("ALTER TABLE child ADD FOREIGN KEY(id) REFERENCES parent();");
+  }
+
+  @Test
+  public void compositeForeignKeysPreserveReferenceColumnOrder() throws Exception {
+    JsonObject create = payload("CREATE TABLE child (a INT, b INT, "
+            + "CONSTRAINT fk FOREIGN KEY(b, a) REFERENCES parent(y, x));")
+                                .getAsJsonArray("elements")
+                                .get(2)
+                                .getAsJsonObject();
+    JsonObject alter = payload("ALTER TABLE child ADD CONSTRAINT fk "
+            + "FOREIGN KEY(b, a) REFERENCES parent(y, x);")
+                               .getAsJsonArray("constraintData")
+                               .get(0)
+                               .getAsJsonObject();
+    assertEquals(create, alter);
+    assertEquals(strings("b", "a"), create.get("columns"));
+    assertEquals(strings("y", "x"), create.getAsJsonObject("references").get("columns"));
+  }
+
+  @Test
+  public void sharedDictionaryMayReferenceLocalColumn() throws Exception {
+    JsonObject key =
+            payload("CREATE TABLE t (a TEXT, b TEXT, SHARED DICTIONARY(b) REFERENCES a);")
+                    .getAsJsonArray("elements")
+                    .get(2)
+                    .getAsJsonObject();
+    assertEquals("SHARED DICTIONARY", key.get("constraintType").getAsString());
+    JsonObject reference = key.getAsJsonObject("references");
+    assertFalse(reference.has("table"));
+    assertEquals(strings("a"), reference.get("columns"));
   }
 
   @Test

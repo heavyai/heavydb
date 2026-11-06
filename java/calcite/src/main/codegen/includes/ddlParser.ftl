@@ -422,7 +422,7 @@ void TableConstraint(List<SqlNode> list) :
     SqlIdentifier constraintName = null;
     SqlNodeList columnList;
     SqlIdentifier referencesTable;
-    SqlNodeList referencesColumnList = null;
+    SqlNodeList referencesColumnList;
 }
 {
     { s = span(); }
@@ -444,11 +444,10 @@ void TableConstraint(List<SqlNode> list) :
         columnList = ParenthesizedSimpleIdentifierList()
         <REFERENCES>
         referencesTable = CompoundIdentifier()
-        [ referencesColumnList = ParenthesizedSimpleIdentifierList() ]
+        referencesColumnList = ParenthesizedSimpleIdentifierList()
         {
             list.add(SqlDdlNodes.foreign(
-                s.end(this), constraintName, columnList, referencesTable,
-                referencesColumnList == null ? SqlNodeList.EMPTY : referencesColumnList));
+                s.end(this), constraintName, columnList, referencesTable, referencesColumnList));
         }
     )
 }
