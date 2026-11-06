@@ -14,14 +14,20 @@
 class RelAlgNode;
 class RexSubQuery;
 
+extern bool g_enable_experimental_query_rewrites;
+extern bool g_trust_unenforced_table_constraints;
+
 std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> build_du_web(
     const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
+void eliminate_lossless_fk_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes);
 void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void eliminate_dead_subqueries(std::vector<std::shared_ptr<RexSubQuery>>& subqueries,
                                RelAlgNode const* root);
 void fold_filters(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void hoist_filter_cond_to_cross_join(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
+void inline_geo_join_input_filters(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void simplify_sort(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept;
 void sink_projected_boolean_expr_to_join(
