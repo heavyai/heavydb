@@ -391,6 +391,52 @@ class TableConstraintTest : public CreateAndDropTableDdlTest {
   std::set<int> existing_tables_;
 };
 
+class ForeignKeyReferenceColumnsTest
+    : public TableConstraintTest,
+      public testing::WithParamInterface<std::tuple<bool, bool>> {};
+
+TEST_P(ForeignKeyReferenceColumnsTest, RequiresExplicitColumnsBeforeCatalogMutation) {
+  const auto [alter, named] = GetParam();
+  sql("CREATE TABLE reference_columns_parent (id INT, PRIMARY KEY(id));");
+  if (alter) {
+    sql("CREATE TABLE reference_columns_child (id INT);");
+  }
+  const auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("reference_columns_child", false);
+  const auto original_keys = td ? td->keyMetainfo : std::string{};
+  const auto statement = [=](const std::string& reference_columns) {
+    return std::string(alter ? "ALTER TABLE reference_columns_child ADD "
+                             : "CREATE TABLE reference_columns_child (id INT, ") +
+           (named ? "CONSTRAINT fk " : "") +
+           "FOREIGN KEY(id) REFERENCES reference_columns_parent" + reference_columns +
+           (alter ? ";" : ");");
+  };
+  for (const auto reference_columns : {"", "()"}) {
+    SCOPED_TRACE(statement(reference_columns));
+    queryAndAssertPartialException(statement(reference_columns),
+                                   "SQL Error: Encountered");
+    EXPECT_EQ(td, catalog.getMetadataForTable("reference_columns_child", false));
+    if (td) {
+      EXPECT_EQ(original_keys, td->keyMetainfo);
+    }
+  }
+
+  sql(statement("(id)"));
+  const auto child = catalog.getMetadataForTable("reference_columns_child", false);
+  ASSERT_NE(nullptr, child);
+  const auto constraints = catalog.getTableConstraints(child);
+  ASSERT_EQ(size_t(1), constraints.size());
+  ASSERT_TRUE(constraints.front().foreign_key_reference);
+  EXPECT_EQ((std::vector<std::string>{"id"}),
+            constraints.front().foreign_key_reference->column_names);
+  sql("INSERT INTO reference_columns_child VALUES(7);");
+  sqlAndCompareResult("SELECT id FROM reference_columns_child;", {{i(7)}});
+}
+
+INSTANTIATE_TEST_SUITE_P(CreateAndAlter,
+                         ForeignKeyReferenceColumnsTest,
+                         testing::Combine(testing::Bool(), testing::Bool()));
+
 class TableConstraintJsonTest : public TableConstraintTest,
                                 public testing::WithParamInterface<bool> {
  protected:
