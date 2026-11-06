@@ -30,8 +30,10 @@ GpuCudaBufferMgr::GpuCudaBufferMgr(const int device_id,
 
 GpuCudaBufferMgr::~GpuCudaBufferMgr() {
   try {
-    cuda_mgr_->synchronizeDevices();
-    freeAllMem();
+    if (!slabs_.empty()) {
+      cuda_mgr_->synchronizeDevices();
+      freeAllMem();
+    }
 #ifdef HAVE_CUDA
   } catch (const CudaMgr_Namespace::CudaErrorException& e) {
     if (e.getStatus() == CUDA_ERROR_DEINITIALIZED) {
@@ -49,7 +51,7 @@ void GpuCudaBufferMgr::addSlab(const size_t slab_size) {
   try {
     slabs_.back() =
         cuda_mgr_->allocateDeviceMem(slab_size, device_id_, /* is_slab */ true);
-  } catch (std::runtime_error& error) {
+  } catch (const std::exception& error) {
     slabs_.resize(slabs_.size() - 1);
     throw FailedToCreateSlab(slab_size);
   }
