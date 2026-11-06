@@ -57,6 +57,7 @@
 #include "QueryEngine/TableOptimizer.h"
 #include "ReservedKeywords.h"
 #include "Shared/DbObjectKeys.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/QuotedIdentifierUtil.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
@@ -3050,25 +3051,6 @@ void get_table_definitions_for_ctas(TableDescriptor& td,
   return it->second(td, p.get(), columns);
 }
 
-std::vector<std::string> strings_from_json_array(const rapidjson::Value& array,
-                                                 const std::string_view field_name) {
-  if (!array.IsArray()) {
-    throw std::runtime_error("CREATE TABLE constraint field '" + std::string(field_name) +
-                             "' must be an array.");
-  }
-  std::vector<std::string> strings;
-  strings.reserve(array.Size());
-  for (const auto& value : array.GetArray()) {
-    if (!value.IsString()) {
-      throw std::runtime_error("CREATE TABLE constraint field '" +
-                               std::string(field_name) +
-                               "' must contain only column names.");
-    }
-    strings.emplace_back(json_str(value));
-  }
-  return strings;
-}
-
 std::optional<std::string> optional_constraint_name(const rapidjson::Value& element) {
   if (!element.HasMember("name") || element["name"].IsNull()) {
     return std::nullopt;
@@ -3138,7 +3120,8 @@ void parse_elements(const rapidjson::Value& payload,
         if (!element.HasMember("columns")) {
           throw std::runtime_error("CREATE TABLE constraint is missing columns.");
         }
-        auto columns = strings_from_json_array(element["columns"], "columns");
+        std::vector<std::string> columns;
+        json_utils::get_value_from_object(element, columns, "columns");
         auto constraint_name = optional_constraint_name(element);
         if (constraint_type == "PRIMARY KEY" || constraint_type == "UNIQUE") {
           auto unique_def = std::make_unique<UniqueDef>(constraint_type == "PRIMARY KEY",
@@ -3158,11 +3141,13 @@ void parse_elements(const rapidjson::Value& payload,
           if (!references.HasMember("columns")) {
             throw std::runtime_error("FOREIGN KEY references must include columns.");
           }
-          auto foreign_key_def = std::make_unique<ForeignKeyDef>(
-              std::move(columns),
-              json_str(references["table"]),
-              strings_from_json_array(references["columns"], "references.columns"),
-              std::move(constraint_name));
+          std::vector<std::string> reference_columns;
+          json_utils::get_value(references["columns"], reference_columns);
+          auto foreign_key_def =
+              std::make_unique<ForeignKeyDef>(std::move(columns),
+                                              json_str(references["table"]),
+                                              std::move(reference_columns),
+                                              std::move(constraint_name));
           table_element_list.emplace_back(std::move(foreign_key_def));
         } else {
           throw std::runtime_error("Unsupported SQL column constraint type: " +

@@ -51,7 +51,9 @@ void set_value(rapidjson::Value& json_val,
   json_val.SetUint64(value);
 }
 void get_value(const rapidjson::Value& json_val, size_t& value) {
-  CHECK(json_val.IsUint64());
+  if (!json_val.IsUint64()) {
+    throw json_schema_error("Expected uint64, got " + get_type_as_string(json_val));
+  }
   value = json_val.GetUint64();
 }
 
@@ -62,7 +64,9 @@ void set_value(rapidjson::Value& json_val,
 }
 
 void get_value(const rapidjson::Value& json_val, int& value) {
-  CHECK(json_val.IsInt());
+  if (!json_val.IsInt()) {
+    throw json_schema_error("Expected int32, got " + get_type_as_string(json_val));
+  }
   value = json_val.GetInt();
 }
 
@@ -74,7 +78,9 @@ void set_value(rapidjson::Value& json_val,
 
 // int64_t
 void get_value(const rapidjson::Value& json_val, std::string& value) {
-  CHECK(json_val.IsString());
+  if (!json_val.IsString()) {
+    throw json_schema_error("Expected string, got " + get_type_as_string(json_val));
+  }
   value = json_val.GetString();
 }
 
@@ -85,7 +91,9 @@ void set_value(rapidjson::Value& json_val,
 }
 
 void get_value(const rapidjson::Value& json_val, int64_t& value) {
-  CHECK(json_val.IsInt64());
+  if (!json_val.IsInt64()) {
+    throw json_schema_error("Expected int64, got " + get_type_as_string(json_val));
+  }
   value = json_val.GetInt64();
 }
 
@@ -97,7 +105,9 @@ void set_value(rapidjson::Value& json_val,
 }
 
 void get_value(const rapidjson::Value& json_val, bool& value) {
-  CHECK(json_val.IsBool());
+  if (!json_val.IsBool()) {
+    throw json_schema_error("Expected bool, got " + get_type_as_string(json_val));
+  }
   value = json_val.GetBool();
 }
 
@@ -109,8 +119,9 @@ void set_value(rapidjson::Value& json_val,
 }
 
 void get_value(const rapidjson::Value& json_val, SQLTypes& value) {
-  CHECK(json_val.IsInt64());
-  value = static_cast<SQLTypes>(json_val.GetInt64());
+  int64_t serialized_value;
+  get_value(json_val, serialized_value);
+  value = static_cast<SQLTypes>(serialized_value);
 }
 
 // EncodingType
@@ -121,8 +132,9 @@ void set_value(rapidjson::Value& json_val,
 }
 
 void get_value(const rapidjson::Value& json_val, EncodingType& value) {
-  CHECK(json_val.IsInt64());
-  value = static_cast<EncodingType>(json_val.GetInt64());
+  int64_t serialized_value;
+  get_value(json_val, serialized_value);
+  value = static_cast<EncodingType>(serialized_value);
 }
 
 // StringDictKey
@@ -135,7 +147,6 @@ void set_value(rapidjson::Value& json_obj,
 }
 
 void get_value(const rapidjson::Value& json_obj, shared::StringDictKey& dict_key) {
-  CHECK(json_obj.IsObject());
   get_value_from_object(json_obj, dict_key.db_id, "db_id");
   get_value_from_object(json_obj, dict_key.dict_id, "dict_id");
 }
@@ -162,7 +173,6 @@ void set_value(rapidjson::Value& json_val,
 }
 
 void get_value(const rapidjson::Value& json_val, SQLTypeInfo& type_info) {
-  CHECK(json_val.IsObject());
   get_value_from_object<SQLTypes>(
       json_val, std::mem_fn(&SQLTypeInfo::set_type), type_info, "type");
   get_value_from_object<SQLTypes>(
@@ -236,16 +246,27 @@ std::optional<std::string> get_optional_string_value_from_object(
 
 const rapidjson::Value& get_member(const rapidjson::Value& value,
                                    const std::string& key) {
-  if (!value.HasMember(key)) {
-    throw json_schema_error(std::string{"value '"} + value.GetString() +
-                            "' does not contain member '" + key + "'.");
+  if (!value.IsObject()) {
+    throw json_schema_error("Expected object, got " + get_type_as_string(value));
   }
-  return value[key];
+  const auto member = value.FindMember(key);
+  if (member == value.MemberEnd()) {
+    throw json_schema_error("Could not find member: " + key);
+  }
+  return member->value;
+}
+
+rapidjson::Value::ConstArray get_array(const rapidjson::Value& value) {
+  if (!value.IsArray()) {
+    throw json_schema_error("Expected array, got " + get_type_as_string(value));
+  }
+  return value.GetArray();
 }
 
 int32_t get_int(const rapidjson::Value& value) {
-  CHECK(value.IsInt()) << "value '" << value.GetString() << "' is not an int32_t.";
-  return value.GetInt();
+  int32_t result;
+  get_value(value, result);
+  return result;
 }
 
 int32_t get_int_member(const rapidjson::Value& value, const std::string& key) {
@@ -254,11 +275,8 @@ int32_t get_int_member(const rapidjson::Value& value, const std::string& key) {
 }
 
 std::vector<int32_t> get_int_vector(const rapidjson::Value& value) {
-  CHECK(value.IsArray()) << "value '" << value.GetString() << "' is not an array.";
   std::vector<int32_t> ret;
-  for (rapidjson::SizeType i = 0; i < value.Size(); ++i) {
-    ret.emplace_back(get_int(value[i]));
-  }
+  get_value(value, ret);
   return ret;
 }
 }  // namespace json_utils
