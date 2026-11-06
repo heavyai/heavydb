@@ -34,6 +34,7 @@
 #include <iostream>
 #include <list>
 #include <map>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <thread>
@@ -129,6 +130,12 @@ struct get_has_toString<T, decltype(std::declval<T>().get()->toString(), void())
 template <class T>
 inline constexpr bool get_has_toString_v = get_has_toString<T>::value;
 
+template <typename T>
+struct is_tostring_unique_ptr : std::false_type {};
+template <typename T, typename D>
+struct is_tostring_unique_ptr<std::unique_ptr<T, D>> : std::true_type {};
+template <class T>
+inline constexpr bool is_tostring_unique_ptr_v = is_tostring_unique_ptr<T>::value;
 #ifdef ENABLE_TOSTRING_to_string
 template <typename T, typename = void>
 struct has_to_string : std::false_type {};
@@ -254,7 +261,7 @@ std::string toString(const T& v) {
 #endif
   } else if constexpr (has_toString_v<T>) {  // NOLINT
     return v.toString();
-  } else if constexpr (shared::is_shared_ptr_v<T>) {
+  } else if constexpr (shared::is_shared_ptr_v<T> || is_tostring_unique_ptr_v<T>) {
     auto ptr = v.get();
     return (ptr == nullptr ? "NULL" : toString(*ptr));
   } else if constexpr (get_has_toString_v<T>) {

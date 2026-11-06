@@ -13,18 +13,25 @@
 #define QUERYENGINE_RESULTSET_H
 
 #include "CardinalityEstimator.h"
+#include "ColumnBufferLayout.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 #include "DataMgr/Chunk/Chunk.h"
 #include "ResultSetBufferAccessors.h"
+#include "ResultSetEntryFilter.h"
 #include "ResultSetStorage.h"
 #include "Shared/quantile.h"
 #include "TargetValue.h"
+#include "ThirdParty/robin_hood/robin_hood.h"
 
 #include <algorithm>
 #include <atomic>
 #include <functional>
+#include <future>
 #include <list>
+#include <mutex>
 #include <optional>
+#include <unordered_map>
+#include <utility>
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
@@ -84,6 +91,7 @@ struct OrderEntry;
 }  // namespace Analyzer
 
 class Executor;
+class StringDictionaryProxy;
 
 class ResultSet;
 
@@ -149,6 +157,72 @@ using PermutationIdx = uint32_t;
 using Permutation = std::vector<PermutationIdx>;
 using PermutationView = VectorView<PermutationIdx>;
 
+struct DeferredLazyFetchChunkSource {
+  ChunkKey chunk_key;
+  size_t num_bytes;
+  size_t num_elements;
+};
+
+class DeferredLazyFetchChunk {
+ public:
+  DeferredLazyFetchChunk(const ColumnDescriptor& column_descriptor,
+                         Data_Namespace::DataMgr* data_mgr,
+                         ChunkKey chunk_key,
+                         size_t num_bytes,
+                         size_t num_elements);
+  DeferredLazyFetchChunk(const ColumnDescriptor& column_descriptor,
+                         Data_Namespace::DataMgr* data_mgr,
+                         std::vector<DeferredLazyFetchChunkSource> sources);
+  ~DeferredLazyFetchChunk();
+
+  void materialize(const int8_t*& buffer_slot) const;
+  void materializeRows(const std::vector<int64_t>& local_row_indices,
+                       const int8_t*& buffer_slot) const;
+  void materializeRow(const int64_t local_row_idx, const int8_t*& buffer_slot) const;
+
+ private:
+  struct SourceState {
+    ChunkKey chunk_key;
+    size_t num_bytes;
+    size_t num_elements;
+    size_t byte_offset;
+    size_t row_offset;
+    std::shared_ptr<Chunk_NS::Chunk> chunk;
+    size_t sparse_frame_size{0};
+    std::vector<bool> materialized_frames;
+  };
+
+  void materializeFullyLocked(const int8_t*& buffer_slot) const;
+  bool materializeFullyViaGpuLocked() const;
+  bool materializeRowsLocked(const int64_t* local_row_indices,
+                             size_t row_count,
+                             const int8_t*& buffer_slot) const;
+
+  const ColumnDescriptor column_descriptor_;
+  Data_Namespace::DataMgr* const data_mgr_;
+  mutable std::vector<SourceState> sources_;
+  size_t num_bytes_{0};
+  size_t num_elements_{0};
+  mutable std::mutex mutex_;
+  mutable std::vector<int8_t> materialized_buffer_;
+  mutable const int8_t* buffer_{nullptr};
+  mutable int8_t* sparse_buffer_{nullptr};
+  mutable std::future<void> cpu_cache_future_;
+  mutable std::atomic<bool> fully_materialized_{false};
+};
+
+using DeferredLazyFetchChunkPtr = std::shared_ptr<DeferredLazyFetchChunk>;
+using DeferredLazyFetchChunkFragment = std::vector<DeferredLazyFetchChunkPtr>;
+using DeferredLazyFetchChunks = std::vector<DeferredLazyFetchChunkFragment>;
+using DeferredLazyFetchChunkStorages = std::vector<DeferredLazyFetchChunks>;
+
+struct LazyFetchSourceMetadataEntry {
+  std::shared_ptr<const ChunkMetadata> chunk_metadata;
+  SQLTypeInfo source_type;
+};
+using LazyFetchSourceMetadata =
+    std::unordered_map<size_t, std::vector<LazyFetchSourceMetadataEntry>>;
+
 // Common base class to ResultSetComparator template specializations.
 class ResultSetComparatorBase {
  public:
@@ -170,6 +244,7 @@ class ResultSet {
   ResultSet(const std::vector<TargetInfo>& targets,
             const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
             const std::vector<std::vector<const int8_t*>>& col_buffers,
+            const ColumnBufferLayouts& col_buffer_layouts,
             const std::vector<std::vector<int64_t>>& frag_offsets,
             const std::vector<int64_t>& consistent_frag_sizes,
             const ExecutorDeviceType device_type,
@@ -225,20 +300,23 @@ class ResultSet {
 
   const ResultSetStorage* allocateStorage() const;
 
-  const ResultSetStorage* allocateStorage(
-      int8_t*,
-      const std::vector<int64_t>&,
-      std::shared_ptr<VarlenOutputInfo> = nullptr) const;
+  const ResultSetStorage* allocateStorage(int8_t*,
+                                          const std::vector<int64_t>&,
+                                          std::shared_ptr<VarlenOutputInfo> = nullptr,
+                                          size_t provided_buffer_size_bytes = 0) const;
 
   const ResultSetStorage* allocateStorage(const std::vector<int64_t>&) const;
 
   void updateStorageEntryCount(const size_t new_entry_count) {
     CHECK(query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection ||
           query_mem_desc_.getQueryDescriptionType() ==
-              QueryDescriptionType::TableFunction);
+              QueryDescriptionType::TableFunction ||
+          query_mem_desc_.getQueryDescriptionType() ==
+              QueryDescriptionType::GroupByBaselineHash);
     query_mem_desc_.setEntryCount(new_entry_count);
     CHECK(storage_);
     storage_->updateEntryCount(new_entry_count);
+    invalidateCachedRowCount();
   }
 
   std::vector<TargetValue> getNextRow(const bool translate_strings,
@@ -275,6 +353,12 @@ class ResultSet {
   void dropFirstN(const size_t n);
 
   void append(ResultSet& that);
+
+  bool hasStorage() const { return static_cast<bool>(storage_); }
+
+  bool hasMultipleStorages() const {
+    return (storage_ ? size_t(1) : size_t(0)) + appended_storage_.size() > size_t(1);
+  }
 
   const ResultSetStorage* getStorage() const;
 
@@ -443,6 +527,22 @@ class ResultSet {
   void holdChunks(const std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
     chunks_ = chunks;
   }
+  void setDeferredLazyFetchChunks(
+      const DeferredLazyFetchChunks& deferred_lazy_fetch_chunks);
+  bool hasDeferredLazyFetchChunks() const { return !deferred_lazy_fetch_chunks_.empty(); }
+  void materializeDeferredLazyFetchColumns(
+      const std::vector<size_t>& target_logical_indices) const;
+  // Materialize only source rows referenced by non-empty physical result entries.
+  void materializeDeferredLazyFetchColumnsForAllRows(
+      const std::vector<size_t>& target_logical_indices) const;
+  void materializeDeferredLazyFetchColumnsForOutputRows(
+      const std::vector<size_t>& target_logical_indices) const;
+  void materializeDeferredLazyFetchColumn(const size_t target_logical_idx) const;
+  void setLazyFetchSourceMetadata(
+      const LazyFetchSourceMetadata& lazy_fetch_source_metadata);
+  bool hasLazyFetchSourceMetadata() const { return !lazy_fetch_source_metadata_.empty(); }
+  std::vector<LazyFetchSourceMetadataEntry> getLazyFetchSourceMetadata(
+      const size_t target_logical_idx) const;
   void holdChunkIterators(const std::shared_ptr<std::list<ChunkIter>> chunk_iters) {
     chunk_iters_.push_back(chunk_iters);
   }
@@ -465,7 +565,27 @@ class ResultSet {
   size_t getLimit() const;
 
   // APIs for data recycler
-  ResultSetPtr copy();
+  ResultSetPtr copyForCacheInsertion();
+  ResultSetPtr copyForCacheRetrieval();
+
+  ResultSetPtr compactBaselineHashForReduction(
+      const size_t min_compaction_entry_count = 1000000000,
+      const ResultSetEntryFilter* entry_filter = nullptr) const;
+  ResultSetPtr extractAndClearBaselineHashEntries(
+      const std::vector<int64_t>& keys,
+      const bool retain_device_rowwise_for_post_filter = false);
+  void markBaselineHashDenseForReduction(const size_t row_count) {
+    CHECK(query_mem_desc_.getQueryDescriptionType() ==
+          QueryDescriptionType::GroupByBaselineHash);
+    baseline_hash_dense_for_reduction_ = true;
+    setCachedRowCount(row_count);
+  }
+  bool isBaselineHashDenseForReduction() const {
+    return baseline_hash_dense_for_reduction_;
+  }
+  void clearBaselineHashDenseForReduction() {
+    baseline_hash_dense_for_reduction_ = false;
+  }
 
   void clearPermutation() {
     if (!permutation_.empty()) {
@@ -565,6 +685,65 @@ class ResultSet {
   bool isZeroCopyColumnarConversionPossible(size_t column_idx) const;
   const int8_t* getColumnarBuffer(size_t column_idx) const;
   const size_t getColumnarBufferSize(size_t column_idx) const;
+  using ColumnarBufferFragment = std::pair<const int8_t*, size_t>;
+  struct DeviceColumnarBufferFragment {
+    const int8_t* buffer;
+    size_t entry_count;
+    int device_id;
+    std::shared_ptr<CudaAllocator> owner;
+    std::shared_ptr<CudaStreamReadyEvent> ready_event;
+  };
+  struct DeviceColumnarFragmentInfo {
+    size_t entry_count;
+    int device_id;
+  };
+  struct DeviceRowwiseBufferFragment {
+    const int8_t* buffer;
+    size_t entry_count;
+    int device_id;
+    std::shared_ptr<CudaAllocator> owner;
+    std::shared_ptr<CudaStreamReadyEvent> ready_event;
+  };
+  void addDeviceColumnarBufferFragment(size_t column_idx,
+                                       const int device_id,
+                                       const int8_t* buffer,
+                                       const size_t entry_count);
+  void clearDeviceColumnarBufferFragments();
+  void markDeviceColumnarFragmentsCoverLogicalRows() const;
+  void markDeviceColumnarFragmentsFormDenseCpuRows() const;
+  void markDeviceColumnarFragmentsExcludeBaselineBoundaryKeys() const;
+  void addDeviceRowwiseBufferFragment(const int device_id,
+                                      const int8_t* buffer,
+                                      const size_t entry_count);
+  void clearDeviceRowwiseBufferFragments();
+  bool getDeviceRowwiseBufferFragments(
+      std::vector<DeviceRowwiseBufferFragment>& fragments) const;
+  bool canDeferDeviceColumnarCpuMaterialization() const;
+  void markDeviceColumnarCpuStorageInvalid() const;
+  void markDeviceColumnarCpuStorageValid() const;
+  void markEntryFilterApplied() { entry_filter_applied_ = true; }
+  bool isEntryFilterApplied() const { return entry_filter_applied_; }
+  void markSparseBaselineEntryFilterAppliedBeforeCopy() {
+    sparse_baseline_entry_filter_applied_before_copy_ = true;
+  }
+  bool wasSparseBaselineEntryFilterAppliedBeforeCopy() const {
+    return sparse_baseline_entry_filter_applied_before_copy_;
+  }
+  void markDeviceColumnarFragmentsCoverCpuBaselineBoundaryRows() const;
+  void materializeDeviceColumnarCpuStorageIfNeeded() const;
+  bool getDeviceColumnarBufferFragments(
+      size_t column_idx,
+      size_t elem_size,
+      std::vector<DeviceColumnarBufferFragment>& fragments) const;
+  bool appendDeviceColumnarFragmentsFromCpuBaselineHashResult(const ResultSet& source);
+  bool appendDeviceOnlyColumnarFragmentsFromCpuBaselineHashResult(
+      const ResultSet& source);
+  bool getDeviceColumnarFragmentInfo(
+      std::vector<DeviceColumnarFragmentInfo>& fragments) const;
+  bool getColumnarFragmentRowCounts(std::vector<size_t>& row_counts) const;
+  bool getColumnarBufferFragments(size_t column_idx,
+                                  size_t elem_size,
+                                  std::vector<ColumnarBufferFragment>& fragments) const;
 
   QueryDescriptionType getQueryDescriptionType() const {
     return query_mem_desc_.getQueryDescriptionType();
@@ -602,8 +781,14 @@ class ResultSet {
   const std::vector<std::string> getStringDictionaryPayloadCopy(
       const shared::StringDictKey& dict_key) const;
 
-  const std::pair<std::vector<int32_t>, std::vector<std::string>>
-  getUniqueStringsForDictEncodedTargetCol(const size_t col_idx) const;
+  using UniqueStringsForDictEncodedTargetCol =
+      std::pair<std::vector<int32_t>, std::vector<std::string>>;
+
+  const UniqueStringsForDictEncodedTargetCol getUniqueStringsForDictEncodedTargetCol(
+      const size_t col_idx) const;
+
+  std::vector<UniqueStringsForDictEncodedTargetCol>
+  getUniqueStringsForDictEncodedTargetCols(const std::vector<size_t>& col_indices) const;
 
   StringDictionaryProxy* getStringDictionaryProxy(
       const shared::StringDictKey& dict_key) const;
@@ -638,8 +823,11 @@ class ResultSet {
   }
 
   void setCudaAllocator(const Executor* executor, int device_id);
+  void setCudaAllocator(std::shared_ptr<CudaAllocator> cuda_allocator);
 
   CudaAllocator* getCudaAllocator() const;
+
+  bool hasDeviceBufferOwnership() const;
 
   void setCudaStream(const Executor* executor, int device_id);
 
@@ -671,6 +859,17 @@ class ResultSet {
                             T* output_ptr) const;
 
  private:
+  enum class DeferredLazyFetchRowSelection { AllNonEmptyRows, OutputRows };
+
+  void materializeDeferredLazyFetchColumnsForRows(
+      const std::vector<size_t>& target_logical_indices,
+      const DeferredLazyFetchRowSelection row_selection) const;
+  void markDeferredLazyFetchColumnsMaterializedForAllRows(
+      const std::vector<size_t>& target_logical_indices) const;
+  bool isDeferredLazyFetchColumnMaterializedForAllRows(size_t target_logical_idx) const;
+
+  ResultSetPtr copyForCache();
+
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
 
   std::vector<TargetValue> getNextRowImpl(const bool translate_strings,
@@ -723,6 +922,7 @@ class ResultSet {
   TargetValue getTargetValueFromBufferRowwise(
       int8_t* rowwise_target_ptr,
       int8_t* keys_ptr,
+      const QueryMemoryDescriptor& query_mem_desc,
       const size_t entry_buff_idx,
       const TargetInfo& target_info,
       const size_t target_logical_idx,
@@ -744,15 +944,18 @@ class ResultSet {
 
   TargetValue makeTargetValue(const int8_t* ptr,
                               const int8_t compact_sz,
+                              const QueryMemoryDescriptor& query_mem_desc,
                               const TargetInfo& target_info,
                               const size_t target_logical_idx,
                               const bool translate_strings,
                               const bool decimal_to_double,
                               const size_t entry_buff_idx) const;
 
-  ScalarTargetValue makeStringTargetValue(SQLTypeInfo const& chosen_type,
-                                          bool const translate_strings,
-                                          int64_t const ival) const;
+  ScalarTargetValue makeStringTargetValue(
+      SQLTypeInfo const& chosen_type,
+      bool const translate_strings,
+      int64_t const ival,
+      std::optional<size_t> target_logical_idx = std::nullopt) const;
 
   TargetValue makeVarlenTargetValue(const int8_t* ptr1,
                                     const int8_t compact_sz1,
@@ -784,6 +987,12 @@ class ResultSet {
     const size_t storage_idx;
   };
 
+  struct ColumnFragmentLookupResult {
+    size_t storage_idx;
+    size_t fragment_idx;
+    int64_t local_row_idx;
+  };
+
   InternalTargetValue getVarlenOrderEntry(const int64_t str_ptr,
                                           const size_t str_len) const;
 
@@ -798,7 +1007,12 @@ class ResultSet {
 
   const std::vector<const int8_t*>& getColumnFrag(const size_t storge_idx,
                                                   const size_t col_logical_idx,
+                                                  const int local_col_id,
                                                   int64_t& global_idx) const;
+  ColumnFragmentLookupResult resolveColumnFragment(const size_t storage_idx,
+                                                   const size_t col_logical_idx,
+                                                   const int local_col_id,
+                                                   const int64_t global_idx) const;
 
   const VarlenOutputInfo* getVarlenOutputInfo(const size_t entry_idx) const;
 
@@ -809,15 +1023,18 @@ class ResultSet {
     const size_t compact_sz1;
     const int8_t* ptr2;
     const size_t compact_sz2;
+    const size_t slot_idx;
+  };
+
+  struct RowWiseStorageOffsets {
+    std::vector<TargetOffsets> target_offsets;
+    size_t row_bytes;
+    size_t key_width;
+    size_t key_bytes_with_padding;
   };
 
   struct RowWiseTargetAccessor {
-    RowWiseTargetAccessor(const ResultSet* result_set)
-        : result_set_(result_set)
-        , row_bytes_(get_row_bytes(result_set->query_mem_desc_))
-        , key_width_(result_set_->query_mem_desc_.getEffectiveKeyWidth())
-        , key_bytes_with_padding_(
-              align_to_int64(get_key_bytes_rowwise(result_set->query_mem_desc_))) {
+    RowWiseTargetAccessor(const ResultSet* result_set) : result_set_(result_set) {
       initializeOffsetsForStorage();
     }
 
@@ -829,19 +1046,16 @@ class ResultSet {
 
     void initializeOffsetsForStorage();
 
-    inline const int8_t* get_rowwise_ptr(const int8_t* buff,
-                                         const size_t entry_idx) const {
-      return buff + entry_idx * row_bytes_;
+    inline const int8_t* get_rowwise_ptr(
+        const int8_t* buff,
+        const size_t entry_idx,
+        const RowWiseStorageOffsets& storage_offsets) const {
+      return buff + entry_idx * storage_offsets.row_bytes;
     }
 
-    std::vector<std::vector<TargetOffsets>> offsets_for_storage_;
+    std::vector<RowWiseStorageOffsets> offsets_for_storage_;
 
     const ResultSet* result_set_;
-
-    // Row-wise iteration
-    const size_t row_bytes_;
-    const size_t key_width_;
-    const size_t key_bytes_with_padding_;
   };
 
   struct ColumnWiseTargetAccessor {
@@ -872,17 +1086,57 @@ class ResultSet {
    */
   class MaterializedSortBuffersBase {
    public:
-    MaterializedSortBuffersBase(const ResultSet* result_set,
-                                const std::list<Analyzer::OrderEntry>& order_entries,
-                                bool single_threaded)
+    struct TopNDictionarySortContext {
+      size_t candidate_count;
+      size_t top_n;
+    };
+
+    MaterializedSortBuffersBase(
+        const ResultSet* result_set,
+        const std::list<Analyzer::OrderEntry>& order_entries,
+        bool single_threaded,
+        std::optional<size_t> compact_permutation_size,
+        std::optional<TopNDictionarySortContext> top_n_dictionary_sort_context)
         : result_set_(result_set)
         , order_entries_(order_entries)
-        , single_threaded_(single_threaded) {}
+        , single_threaded_(single_threaded)
+        , compact_permutation_size_(compact_permutation_size)
+        , top_n_dictionary_sort_context_(top_n_dictionary_sort_context) {}
 
     virtual ~MaterializedSortBuffersBase() = default;
 
-    const std::vector<SortedStringPermutation>& getDictionaryEncodedSortPermutations()
-        const {
+    struct DictionaryStringSortPermutation {
+      using LocalStringRankMap = robin_hood::unordered_flat_map<int32_t, int32_t>;
+
+      explicit DictionaryStringSortPermutation(SortedStringPermutation global_permutation)
+          : global_permutation_(std::move(global_permutation)) {}
+
+      explicit DictionaryStringSortPermutation(LocalStringRankMap local_string_id_to_rank)
+          : local_string_id_to_rank_(std::move(local_string_id_to_rank)) {}
+
+      DictionaryStringSortPermutation(
+          const StringDictionaryProxy* string_dictionary_proxy,
+          const bool notnull,
+          std::optional<int64_t> translated_null)
+          : string_dictionary_proxy_(string_dictionary_proxy)
+          , notnull_(notnull)
+          , translated_null_(translated_null) {}
+
+      bool operator()(int32_t lhs,
+                      int32_t rhs,
+                      bool sort_descending,
+                      bool nulls_first) const;
+
+     private:
+      std::optional<SortedStringPermutation> global_permutation_;
+      LocalStringRankMap local_string_id_to_rank_;
+      const StringDictionaryProxy* string_dictionary_proxy_{nullptr};
+      bool notnull_{false};
+      std::optional<int64_t> translated_null_;
+    };
+
+    const std::vector<DictionaryStringSortPermutation>&
+    getDictionaryEncodedSortPermutations() const {
       return dictionary_string_sorted_permutations_;
     }
     const std::vector<std::vector<int64_t>>& getCountDistinctBuffers() const {
@@ -899,8 +1153,10 @@ class ResultSet {
     const ResultSet* result_set_;
     const std::list<Analyzer::OrderEntry>& order_entries_;
     const bool single_threaded_;
+    const std::optional<size_t> compact_permutation_size_;
+    const std::optional<TopNDictionarySortContext> top_n_dictionary_sort_context_;
 
-    std::vector<SortedStringPermutation> dictionary_string_sorted_permutations_;
+    std::vector<DictionaryStringSortPermutation> dictionary_string_sorted_permutations_;
     std::vector<std::vector<int64_t>> count_distinct_materialized_buffers_;
     ApproxQuantileBuffers approx_quantile_materialized_buffers_;
     ModeBuffers mode_buffers_;
@@ -916,10 +1172,17 @@ class ResultSet {
    public:
     using BufferIteratorType = BUFFER_ITERATOR_TYPE;
 
-    MaterializedSortBuffers(const ResultSet* result_set,
-                            const std::list<Analyzer::OrderEntry>& order_entries,
-                            bool single_threaded)
-        : MaterializedSortBuffersBase(result_set, order_entries, single_threaded)
+    MaterializedSortBuffers(
+        const ResultSet* result_set,
+        const std::list<Analyzer::OrderEntry>& order_entries,
+        bool single_threaded,
+        std::optional<size_t> compact_permutation_size,
+        std::optional<TopNDictionarySortContext> top_n_dictionary_sort_context)
+        : MaterializedSortBuffersBase(result_set,
+                                      order_entries,
+                                      single_threaded,
+                                      compact_permutation_size,
+                                      top_n_dictionary_sort_context)
         , buffer_itr_(result_set) {
       materializeBuffers();
     }
@@ -931,12 +1194,14 @@ class ResultSet {
       count_distinct_materialized_buffers_ = materializeCountDistinctColumns();
       approx_quantile_materialized_buffers_ = materializeApproxQuantileColumns();
       mode_buffers_ = materializeModeColumns();
-      VLOG(1) << logMaterializedBuffers();
     }
 
    private:
-    std::vector<SortedStringPermutation> materializeDictionaryEncodedSortPermutations()
-        const;
+    std::vector<MaterializedSortBuffersBase::DictionaryStringSortPermutation>
+    materializeDictionaryEncodedSortPermutations() const;
+    MaterializedSortBuffersBase::DictionaryStringSortPermutation
+    materializeDictionaryEncodedSortPermutation(
+        const Analyzer::OrderEntry& order_entry) const;
     std::vector<std::vector<int64_t>> materializeCountDistinctColumns() const;
     ResultSet::ApproxQuantileBuffers materializeApproxQuantileColumns() const;
     ResultSet::ModeBuffers materializeModeColumns() const;
@@ -946,8 +1211,6 @@ class ResultSet {
         const Analyzer::OrderEntry& order_entry) const;
     ModeBuffers::value_type materializeModeColumn(
         const Analyzer::OrderEntry& order_entry) const;
-    std::string logMaterializedBuffers() const;
-
     struct ModeScatter;  // Functor for setting mode_buffers_.
 
     const BufferIteratorType buffer_itr_;
@@ -958,8 +1221,12 @@ class ResultSet {
    *  permutations, count distinct/approx_count distinct, mode, and
    * quantile/percentile calculations
    */
-  void initMaterializedSortBuffers(const std::list<Analyzer::OrderEntry>& order_entries,
-                                   bool single_threaded);
+  void initMaterializedSortBuffers(
+      const std::list<Analyzer::OrderEntry>& order_entries,
+      bool single_threaded,
+      std::optional<size_t> compact_permutation_size = std::nullopt,
+      std::optional<MaterializedSortBuffersBase::TopNDictionarySortContext>
+          top_n_dictionary_sort_context = std::nullopt);
 
   template <typename BUFFER_ITERATOR_TYPE>
   struct ResultSetComparator : public ResultSetComparatorBase {
@@ -996,7 +1263,8 @@ class ResultSet {
     const BufferIteratorType buffer_itr_;
     const Executor* executor_;
     const bool single_threaded_;
-    const std::vector<SortedStringPermutation>& dictionary_string_sorted_permutations_;
+    const std::vector<MaterializedSortBuffersBase::DictionaryStringSortPermutation>&
+        dictionary_string_sorted_permutations_;
     const std::vector<std::vector<int64_t>>& count_distinct_materialized_buffers_;
     const ApproxQuantileBuffers& approx_quantile_materialized_buffers_;
     const ModeBuffers& mode_buffers_;
@@ -1029,10 +1297,16 @@ class ResultSet {
   PermutationView initPermutationBuffer(PermutationView permutation,
                                         PermutationIdx const begin,
                                         PermutationIdx const end) const;
+  PermutationView parallelInitPermutationBuffer(size_t entry_count);
 
   void parallelTop(const std::list<Analyzer::OrderEntry>& order_entries,
                    const size_t top_n,
+                   const size_t entry_count,
                    const Executor* executor);
+
+  bool sortWithMaterializedNumericKey(
+      const std::list<Analyzer::OrderEntry>& order_entries,
+      PermutationView permutation) const;
 
   void baselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
                     const size_t top_n,
@@ -1046,6 +1320,8 @@ class ResultSet {
 
   bool canUseFastBaselineSort(const std::list<Analyzer::OrderEntry>& order_entries,
                               const size_t top_n);
+
+  size_t sortRowCountForWatchdog() const;
 
   size_t rowCountImpl(const bool force_parallel) const;
 
@@ -1083,9 +1359,10 @@ class ResultSet {
   const ExecutorDeviceType device_type_;
   const int device_id_;
   const int thread_idx_;
-  QueryMemoryDescriptor query_mem_desc_;
+  mutable QueryMemoryDescriptor query_mem_desc_;
   mutable std::unique_ptr<ResultSetStorage> storage_;
-  AppendedStorage appended_storage_;
+  mutable size_t storage_buffer_size_bytes_{0};
+  mutable AppendedStorage appended_storage_;
   mutable size_t crt_row_buff_idx_;
   mutable size_t fetched_so_far_;
   size_t drop_first_;
@@ -1103,9 +1380,24 @@ class ResultSet {
   //   setting offset instead of ptr in group by buffer.
   std::vector<std::vector<int8_t>> literal_buffers_;
   std::vector<ColumnLazyFetchInfo> lazy_fetch_info_;
-  std::vector<std::vector<std::vector<const int8_t*>>> col_buffers_;
+  mutable std::vector<std::vector<std::vector<const int8_t*>>> col_buffers_;
+  DeferredLazyFetchChunkStorages deferred_lazy_fetch_chunks_;
+  LazyFetchSourceMetadata lazy_fetch_source_metadata_;
+  mutable std::mutex deferred_lazy_fetch_materialization_mutex_;
+  mutable std::vector<uint8_t> deferred_lazy_fetch_columns_materialized_for_all_rows_;
+  std::vector<std::vector<std::vector<ColumnBufferLayout>>> col_buffer_layouts_;
   std::vector<std::vector<std::vector<int64_t>>> frag_offsets_;
   std::vector<std::vector<int64_t>> consistent_frag_sizes_;
+  std::vector<std::vector<DeviceColumnarBufferFragment>> device_columnar_fragments_;
+  std::vector<DeviceRowwiseBufferFragment> device_rowwise_fragments_;
+  mutable std::atomic<bool> device_columnar_cpu_storage_valid_{true};
+  mutable bool device_columnar_fragments_cover_logical_rows_{false};
+  mutable bool device_columnar_fragments_form_dense_cpu_rows_{false};
+  mutable bool device_columnar_fragments_exclude_baseline_boundary_keys_{false};
+  mutable bool device_columnar_fragments_cover_cpu_baseline_boundary_rows_{false};
+  bool entry_filter_applied_{false};
+  bool sparse_baseline_entry_filter_applied_before_copy_{false};
+  mutable std::mutex device_columnar_cpu_storage_mutex_;
 
   const std::shared_ptr<const Analyzer::Estimator> estimator_;
   Data_Namespace::AbstractBuffer* device_estimator_buffer_{nullptr};
@@ -1122,6 +1414,7 @@ class ResultSet {
   std::string explanation_;
   const bool just_explain_;
   bool for_validation_only_;
+  bool baseline_hash_dense_for_reduction_{false};
   mutable std::atomic<int64_t> cached_row_count_;
   mutable std::mutex row_iteration_mutex_;
 

@@ -15,11 +15,14 @@
 #include "ExpressionRange.h"
 #include "QueryPhysicalInputsCollector.h"
 
+#include <optional>
 #include <unordered_map>
 
 class AggregatedColRange {
  public:
   ExpressionRange getColRange(const PhysicalInput&) const;
+
+  std::optional<ExpressionRange> getOptionalColRange(const PhysicalInput&) const;
 
   void setColRange(const PhysicalInput&, const ExpressionRange&);
 

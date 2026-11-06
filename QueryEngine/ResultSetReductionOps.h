@@ -341,7 +341,9 @@ class BinaryOperator : public Instruction {
                  const Value* lhs,
                  const Value* rhs,
                  const std::string& label)
-      : Instruction(Type::Int1, label), op_(op), lhs_(lhs), rhs_(rhs) {}
+      : Instruction(lhs->type(), label), op_(op), lhs_(lhs), rhs_(rhs) {
+    CHECK_EQ(lhs->type(), rhs->type());
+  }
 
   BinaryOp op() const { return op_; }
 

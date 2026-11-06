@@ -276,8 +276,10 @@ hash_join_idx(int64_t hash_buff,
               const int64_t key,
               const int64_t min_key,
               const int64_t max_key) {
-  if (key >= min_key && key <= max_key) {
-    return *SUFFIX(get_hash_slot)(reinterpret_cast<int32_t*>(hash_buff), key, min_key);
+  if (hash_buff && key >= min_key && key <= max_key) {
+    const auto value =
+        *SUFFIX(get_hash_slot)(reinterpret_cast<int32_t*>(hash_buff), key, min_key);
+    return value;
   }
   return -1;
 }

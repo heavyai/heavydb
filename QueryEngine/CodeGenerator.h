@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <llvm/IR/Value.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
@@ -112,7 +114,7 @@ class CodeGenerator {
       const bool is_gpu_smem_used,
       const CompilationOptions& co,
       const GPUTarget& gpu_target,
-      std::chrono::steady_clock::time_point& compile_start_timer);
+      const CodeCacheKey& code_cache_key);
 
   static void link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
                               llvm::Module& module,
@@ -350,6 +352,9 @@ class CodeGenerator {
   llvm::Value* codegenRowId(const Analyzer::ColumnVar* col_var,
                             const CompilationOptions& co);
 
+  llvm::Value* codegenLazyFetchRowId(const Analyzer::ColumnVar* col_var,
+                                     llvm::Value* pos_arg);
+
   llvm::Value* codgenAdjustFixedEncNull(llvm::Value*, const SQLTypeInfo&);
 
   std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(
@@ -460,6 +465,26 @@ class CodeGenerator {
                                       const SQLTypeInfo&,
                                       const Analyzer::Expr*,
                                       const CompilationOptions&);
+
+  struct DictPrefixEqInfo {
+    std::shared_ptr<Analyzer::Expr> source_arg;
+    SQLTypeInfo source_ti;
+    shared::ColumnKey source_col_key;
+    int32_t source_rte_idx;
+    std::vector<int64_t> matching_ids;
+  };
+
+  std::optional<DictPrefixEqInfo> getDictPrefixEqInfo(const Analyzer::BinOper* bin_oper);
+
+  llvm::Value* codegenDictPrefixInSet(const DictPrefixEqInfo& prefix_info,
+                                      std::vector<int64_t> matching_ids,
+                                      const CompilationOptions& co);
+
+  llvm::Value* codegenDictPrefixCmp(const Analyzer::BinOper* bin_oper,
+                                    const CompilationOptions& co);
+
+  llvm::Value* codegenDictPrefixOr(const Analyzer::BinOper* bin_oper,
+                                   const CompilationOptions& co);
 
   llvm::Value* codegenBoundingBoxIntersect(const SQLOps,
                                            const SQLQualifier,

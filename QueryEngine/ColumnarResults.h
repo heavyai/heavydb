@@ -11,6 +11,7 @@
 #include "../Shared/checked_alloc.h"
 
 #include <memory>
+#include <optional>
 #include <unordered_map>
 
 class ColumnarConversionNotSupported : public std::runtime_error {
@@ -49,13 +50,18 @@ class ColumnBitmap {
 
 class ColumnarResults {
  public:
+  enum class RowOrderMode { Preserve, Unordered };
+
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                   const ResultSet& rows,
                   const size_t num_columns,
                   const std::vector<SQLTypeInfo>& target_types,
                   const size_t executor_id,
                   const size_t thread_idx,
-                  const bool is_parallel_execution_enforced = false);
+                  const bool is_parallel_execution_enforced = false,
+                  const RowOrderMode row_order_mode = RowOrderMode::Preserve,
+                  const std::optional<size_t> selected_column_idx = std::nullopt,
+                  const std::vector<size_t>& selected_column_indices = {});
 
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                   const int8_t* one_col_buffer,
@@ -67,6 +73,13 @@ class ColumnarResults {
   static std::unique_ptr<ColumnarResults> mergeResults(
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
       const std::vector<std::unique_ptr<ColumnarResults>>& sub_results);
+
+  static std::unique_ptr<ColumnarResults> mergeColumnBuffers(
+      const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+      const std::vector<const int8_t*>& column_buffers,
+      const std::vector<size_t>& row_counts,
+      const SQLTypeInfo& target_type,
+      const size_t thread_idx);
 
   const std::vector<int8_t*>& getColumnBuffers() const { return column_buffers_; }
 
@@ -116,6 +129,8 @@ class ColumnarResults {
   void materializeAllColumnsDirectly(const ResultSet& rows, const size_t num_columns);
   void materializeAllColumnsThroughIteration(const ResultSet& rows,
                                              const size_t num_columns);
+  void materializeSelectedColumnsThroughIteration(const ResultSet& rows,
+                                                  const size_t num_columns);
 
   // Direct columnarization for group by queries (perfect hash or baseline hash)
   void materializeAllColumnsGroupBy(const ResultSet& rows, const size_t num_columns);
@@ -207,6 +222,9 @@ class ColumnarResults {
   size_t thread_idx_;
   std::shared_ptr<Executor> executor_;
   std::vector<size_t> padded_target_sizes_;
+  RowOrderMode row_order_mode_{RowOrderMode::Preserve};
+  std::optional<size_t> selected_column_idx_;
+  std::vector<bool> selected_columns_;
 };
 
 using ColumnCacheMap =

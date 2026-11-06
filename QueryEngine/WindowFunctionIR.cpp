@@ -43,9 +43,15 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
       CHECK_EQ(arg_lvs.size(), size_t(1));
       return arg_lvs.front();
     }
-    case SqlWindowFunctionKind::AVG:
     case SqlWindowFunctionKind::MIN:
-    case SqlWindowFunctionKind::MAX:
+    case SqlWindowFunctionKind::MAX: {
+      if (window_func_context->hasPrecomputedOutput()) {
+        return codegenPrecomputedWindowOutput(
+            window_func_context, co, code_generator.posArg(nullptr));
+      }
+      return codegenWindowFunctionAggregate(&code_generator, co);
+    }
+    case SqlWindowFunctionKind::AVG:
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::SUM_IF:
     case SqlWindowFunctionKind::COUNT:
@@ -255,12 +261,27 @@ llvm::Value* Executor::aggregateWindowStatePtr(CodeGenerator* code_generator,
 llvm::Value* Executor::codegenWindowFunctionAggregate(CodeGenerator* code_generator,
                                                       const CompilationOptions& co) {
   AUTOMATIC_IR_METADATA(cgen_state_.get());
-  auto [reset_state_false_bb, aggregate_state] =
-      codegenWindowResetStateControlFlow(code_generator, co);
-  llvm::Value* aggregate_state_count = nullptr;
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext(this);
   const auto window_func = window_func_context->getWindowFunction();
+  if (window_func_context->elementCount() == 0) {
+    // Empty windows have no state or partition buffers. Handle them before generating
+    // state-reset code, which would reference those buffers and an invalid row range.
+    if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+      return cgen_state_->inlineFpNull(SQLTypeInfo(SQLTypes::kDOUBLE));
+    }
+    if (window_func->getKind() == SqlWindowFunctionKind::COUNT ||
+        window_func->getKind() == SqlWindowFunctionKind::COUNT_IF) {
+      return cgen_state_->llInt(int64_t(0));
+    }
+    const auto window_func_ti = get_adjusted_window_type_info(window_func);
+    return window_func_ti.is_fp() ? cgen_state_->inlineFpNull(window_func_ti)
+                                  : cgen_state_->castToTypeIn(
+                                        cgen_state_->inlineIntNull(window_func_ti), 64);
+  }
+  auto [reset_state_false_bb, aggregate_state] =
+      codegenWindowResetStateControlFlow(code_generator, co);
+  llvm::Value* aggregate_state_count = nullptr;
   if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
     const auto aggregate_state_count_i64 = cgen_state_->llInt(
         reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
@@ -285,6 +306,36 @@ llvm::Value* Executor::codegenWindowFunctionAggregate(CodeGenerator* code_genera
   cgen_state_->ir_builder_.SetInsertPoint(reset_state_false_bb);
   CHECK(WindowProjectNodeContext::get(this));
   return codegenWindowFunctionAggregateCalls(aggregate_state, co);
+}
+
+llvm::Value* Executor::codegenPrecomputedWindowOutput(
+    const WindowFunctionContext* window_func_context,
+    const CompilationOptions& co,
+    llvm::Value* pos_arg) {
+  AUTOMATIC_IR_METADATA(cgen_state_.get());
+  CodeGenerator code_generator(this);
+  const auto output_ti =
+      get_adjusted_window_type_info(window_func_context->getWindowFunction());
+  CHECK_EQ(output_ti.get_size(), 8);
+  auto output_type = output_ti.is_fp() ? get_fp_type(64, cgen_state_->context_)
+                                       : get_int_type(64, cgen_state_->context_);
+  auto output_addr = cgen_state_->llInt(
+      reinterpret_cast<const int64_t>(window_func_context->precomputedOutput()));
+  const auto output_ptr_lvs =
+      CodegenUtil::createPtrWithHoistedMemoryAddr(cgen_state_.get(),
+                                                  &code_generator,
+                                                  co,
+                                                  output_addr,
+                                                  llvm::PointerType::get(output_type, 0),
+                                                  getAvailableDevicesToProcessQuery());
+  CHECK_EQ(output_ptr_lvs.size(), 1u);
+  auto output_ptr = output_ptr_lvs.begin()->second;
+  auto value_ptr = cgen_state_->ir_builder_.CreateGEP(
+      output_type, output_ptr, pos_arg, "precomputed_window_output_ptr");
+  return cgen_state_->ir_builder_.CreateLoad(
+      value_ptr->getType()->getPointerElementType(),
+      value_ptr,
+      "precomputed_window_output");
 }
 
 std::pair<llvm::BasicBlock*, llvm::Value*> Executor::codegenWindowResetStateControlFlow(
@@ -1142,18 +1193,6 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
       window_func_ti.is_fp()
           ? cgen_state_->inlineFpNull(window_func_ti)
           : cgen_state_->castToTypeIn(cgen_state_->inlineIntNull(window_func_ti), 64);
-  if (window_func_context->elementCount() == 0) {
-    // We do not need to generate code for an empty input table, but COUNT still
-    // follows SQL aggregate semantics and returns 0 instead of the null sentinel.
-    if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
-      return cgen_state_->inlineFpNull(SQLTypeInfo(SQLTypes::kDOUBLE));
-    }
-    if (window_func->getKind() == SqlWindowFunctionKind::COUNT ||
-        window_func->getKind() == SqlWindowFunctionKind::COUNT_IF) {
-      return cgen_state_->llInt(int64_t(0));
-    }
-    return window_func_null_val;
-  }
   const auto& args = window_func->getArgs();
   CodeGenerator code_generator(this);
   if (window_func_context->needsToBuildAggregateTree()) {

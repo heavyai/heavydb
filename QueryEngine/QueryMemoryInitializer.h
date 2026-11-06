@@ -48,6 +48,7 @@ class QueryMemoryInitializer {
                          const shared::TableKey& outer_table_key,
                          const int64_t num_rows,
                          const std::vector<std::vector<const int8_t*>>& col_buffers,
+                         const ColumnBufferLayouts& col_buffer_layouts,
                          const std::vector<std::vector<uint64_t>>& frag_offsets,
                          RenderAllocatorMap* render_allocator_map,
                          RenderInfo* render_info,
@@ -63,6 +64,7 @@ class QueryMemoryInitializer {
                          const ExecutorDeviceType device_type,
                          const int64_t num_rows,
                          const std::vector<std::vector<const int8_t*>>& col_buffers,
+                         const ColumnBufferLayouts& col_buffer_layouts,
                          const std::vector<std::vector<uint64_t>>& frag_offsets,
                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                          DeviceAllocator* device_allocator,
@@ -105,6 +107,11 @@ class QueryMemoryInitializer {
     result_sets_[index].reset();
   }
 
+  void setDeferredLazyFetchChunks(
+      const DeferredLazyFetchChunks& deferred_lazy_fetch_chunks);
+  void setLazyFetchSourceMetadata(
+      const LazyFetchSourceMetadata& lazy_fetch_source_metadata);
+
   int64_t getAggInitValForIndex(const size_t index) const {
     CHECK_LT(index, init_agg_vals_.size());
     return init_agg_vals_[index];
@@ -144,7 +151,9 @@ class QueryMemoryInitializer {
                                  const unsigned block_size_x,
                                  const unsigned grid_size_x,
                                  const int device_id,
-                                 const bool prepend_index_buffer) const;
+                                 CUstream cuda_stream,
+                                 const bool prepend_index_buffer,
+                                 const bool defer_cpu_materialization);
 
   void copyFromDeviceForAggMode();
 
@@ -177,7 +186,8 @@ class QueryMemoryInitializer {
                          const std::vector<int64_t>& init_vals,
                          const TargetAggOpsMetadata& agg_op_metadata);
 
-  void allocateCountDistinctGpuMem(const QueryMemoryDescriptor& query_mem_desc);
+  void allocateCountDistinctGpuMem(const QueryMemoryDescriptor& query_mem_desc,
+                                   size_t total_bytes);
 
   std::vector<int64_t> calculateCountDistinctBufferSize(
       const QueryMemoryDescriptor& query_mem_desc,
@@ -243,7 +253,8 @@ class QueryMemoryInitializer {
                                    DeviceAllocator* device_allocator,
                                    const GpuGroupByBuffers& gpu_group_by_buffers,
                                    const size_t projection_count,
-                                   const int device_id);
+                                   const int device_id,
+                                   const bool defer_cpu_materialization);
 
   void applyStreamingTopNOffsetCpu(const QueryMemoryDescriptor& query_mem_desc,
                                    const RelAlgExecutionUnit& ra_exe_unit);
@@ -267,6 +278,7 @@ class QueryMemoryInitializer {
 
   size_t num_buffers_;
   std::vector<int64_t*> group_by_buffers_;
+  bool defer_gpu_baseline_hash_host_storage_{false};
   std::shared_ptr<VarlenOutputInfo> varlen_output_info_;
   CUdeviceptr varlen_output_buffer_;
   int8_t* varlen_output_buffer_host_ptr_;
