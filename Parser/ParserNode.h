@@ -2271,6 +2271,9 @@ void set_column_descriptor(ColumnDescriptor& cd, const ColumnDef* coldef);
 
 std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element);
 
+Catalog_Namespace::TableConstraint table_constraint_from_json(
+    const rapidjson::Value& constraint_json);
+
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
                                  const TableDescriptor* td);
 void check_foreign_key_privilege(const Catalog_Namespace::SessionInfo& session,

@@ -3051,16 +3051,6 @@ void get_table_definitions_for_ctas(TableDescriptor& td,
   return it->second(td, p.get(), columns);
 }
 
-std::optional<std::string> optional_constraint_name(const rapidjson::Value& element) {
-  if (!element.HasMember("name") || element["name"].IsNull()) {
-    return std::nullopt;
-  }
-  if (!element["name"].IsString()) {
-    throw std::runtime_error("CREATE TABLE constraint name must be a string or null.");
-  }
-  return json_str(element["name"]);
-}
-
 void parse_elements(const rapidjson::Value& payload,
                     std::string element_name,
                     std::string& table_name,
@@ -3110,48 +3100,19 @@ void parse_elements(const rapidjson::Value& payload,
         table_element_list.emplace_back(std::move(shared_dict_def));
 
       } else {
-        if (!element.HasMember("constraintType") ||
-            !element["constraintType"].IsString()) {
-          throw std::runtime_error(
-              "CREATE TABLE constraint is missing a string constraintType.");
-        }
-        const auto constraint_type =
-            boost::to_upper_copy<std::string>(json_str(element["constraintType"]));
-        if (!element.HasMember("columns")) {
-          throw std::runtime_error("CREATE TABLE constraint is missing columns.");
-        }
-        std::vector<std::string> columns;
-        json_utils::get_value_from_object(element, columns, "columns");
-        auto constraint_name = optional_constraint_name(element);
-        if (constraint_type == "PRIMARY KEY" || constraint_type == "UNIQUE") {
-          auto unique_def = std::make_unique<UniqueDef>(constraint_type == "PRIMARY KEY",
-                                                        std::move(columns),
-                                                        std::move(constraint_name));
-          table_element_list.emplace_back(std::move(unique_def));
-        } else if (constraint_type == "FOREIGN KEY") {
-          if (!element.HasMember("references") || !element["references"].IsObject()) {
-            throw std::runtime_error(
-                "FOREIGN KEY constraint is missing a references object.");
-          }
-          const auto& references = element["references"].GetObject();
-          if (!references.HasMember("table") || !references["table"].IsString()) {
-            throw std::runtime_error(
-                "FOREIGN KEY references must include a string table name.");
-          }
-          if (!references.HasMember("columns")) {
-            throw std::runtime_error("FOREIGN KEY references must include columns.");
-          }
-          std::vector<std::string> reference_columns;
-          json_utils::get_value(references["columns"], reference_columns);
-          auto foreign_key_def =
-              std::make_unique<ForeignKeyDef>(std::move(columns),
-                                              json_str(references["table"]),
-                                              std::move(reference_columns),
-                                              std::move(constraint_name));
-          table_element_list.emplace_back(std::move(foreign_key_def));
+        auto constraint = table_constraint_from_json(element);
+        if (constraint.type == Catalog_Namespace::TableConstraintType::ForeignKey) {
+          auto& reference = constraint.foreign_key_reference.value();
+          table_element_list.emplace_back(
+              std::make_unique<ForeignKeyDef>(std::move(constraint.column_names),
+                                              std::move(reference.table_name),
+                                              std::move(reference.column_names),
+                                              std::move(constraint.name)));
         } else {
-          throw std::runtime_error("Unsupported SQL column constraint type: " +
-                                   constraint_type);
+          table_element_list.emplace_back(std::make_unique<UniqueDef>(
+              constraint.type == Catalog_Namespace::TableConstraintType::PrimaryKey,
+              std::move(constraint.column_names),
+              std::move(constraint.name)));
         }
       }
     } else {
@@ -3161,6 +3122,58 @@ void parse_elements(const rapidjson::Value& payload,
   }
 }
 }  // namespace
+
+Catalog_Namespace::TableConstraint table_constraint_from_json(
+    const rapidjson::Value& constraint_json) {
+  if (!constraint_json.IsObject()) {
+    throw std::runtime_error("Table constraint payload must be an object.");
+  }
+  if (!constraint_json.HasMember("constraintType") ||
+      !constraint_json["constraintType"].IsString()) {
+    throw std::runtime_error(
+        "Table constraint payload is missing a string constraintType.");
+  }
+  if (!constraint_json.HasMember("columns")) {
+    throw std::runtime_error("Table constraint payload is missing columns.");
+  }
+
+  Catalog_Namespace::TableConstraint constraint;
+  const auto constraint_type = Catalog_Namespace::table_constraint_type_from_string(
+      json_str(constraint_json["constraintType"]));
+  if (!constraint_type) {
+    throw std::runtime_error("Unsupported table constraint type: " +
+                             json_str(constraint_json["constraintType"]));
+  }
+  constraint.type = *constraint_type;
+  if (constraint_json.HasMember("name") && !constraint_json["name"].IsNull()) {
+    if (!constraint_json["name"].IsString()) {
+      throw std::runtime_error("Table constraint name must be a string or null.");
+    }
+    constraint.name = json_str(constraint_json["name"]);
+  }
+  json_utils::get_value_from_object(constraint_json, constraint.column_names, "columns");
+
+  if (constraint.type == Catalog_Namespace::TableConstraintType::ForeignKey) {
+    if (!constraint_json.HasMember("references") ||
+        !constraint_json["references"].IsObject()) {
+      throw std::runtime_error("FOREIGN KEY constraint is missing a references object.");
+    }
+    const auto& references = constraint_json["references"].GetObject();
+    if (!references.HasMember("table") || !references["table"].IsString()) {
+      throw std::runtime_error(
+          "FOREIGN KEY references must include a string table name.");
+    }
+    if (!references.HasMember("columns")) {
+      throw std::runtime_error("FOREIGN KEY references must include columns.");
+    }
+
+    Catalog_Namespace::ForeignKeyReference reference;
+    reference.table_name = json_str(references["table"]);
+    json_utils::get_value(references["columns"], reference.column_names);
+    constraint.foreign_key_reference = reference;
+  }
+  return constraint;
+}
 
 std::unique_ptr<ColumnDef> column_from_json(const rapidjson::Value& element) {
   CHECK(element.HasMember("name"));
