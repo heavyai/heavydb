@@ -387,6 +387,57 @@ class TableConstraintTest : public CreateAndDropTableDdlTest {
   std::set<int> existing_tables_;
 };
 
+class AlterAddColumnConstraintTest
+    : public TableConstraintTest,
+      public testing::WithParamInterface<std::tuple<bool, std::string>> {};
+
+TEST_P(AlterAddColumnConstraintTest, RejectsNonColumnElementsBeforeMutation) {
+  const auto& [parenthesized, definition] = GetParam();
+  const auto column_list = [parenthesized](const std::string& elements) {
+    return parenthesized ? "(" + elements + ")" : elements;
+  };
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, PRIMARY KEY(id));");
+  sql("CREATE TABLE constraint_review_child (id INT NOT NULL, "
+      "s TEXT ENCODING DICT(32), UNIQUE(id));");
+  sql("INSERT INTO constraint_review_child VALUES (7, 'kept');");
+  const auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("constraint_review_child", false);
+  ASSERT_NE(nullptr, td);
+  const auto columns_before = td->nColumns;
+  const auto keys_before = td->keyMetainfo;
+
+  queryAndAssertException(
+      "ALTER TABLE constraint_review_child ADD " + column_list(definition) + ";",
+      "ALTER TABLE ADD COLUMN does not support table constraints or storage directives.");
+
+  EXPECT_EQ(columns_before, td->nColumns);
+  EXPECT_EQ(keys_before, td->keyMetainfo);
+  EXPECT_EQ(0, td->nShards);
+  EXPECT_EQ(0, td->shardedColumnId);
+  EXPECT_EQ(nullptr, catalog.getMetadataForColumn(td->tableId, "c"));
+  sqlAndCompareResult("SELECT id, s FROM constraint_review_child;", {{i(7), "kept"}});
+
+  sql("ALTER TABLE constraint_review_child ADD " +
+      column_list("c INT NOT NULL DEFAULT 9, d TEXT") + ";");
+  sql("ALTER TABLE constraint_review_child ADD CONSTRAINT child_pk PRIMARY KEY(c);");
+  EXPECT_EQ(columns_before + 2, td->nColumns);
+  EXPECT_EQ(size_t(2), catalog.getTableConstraints(td).size());
+  sqlAndCompareResult("SELECT id, c FROM constraint_review_child;", {{i(7), i(9)}});
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    TableConstraintTest,
+    AlterAddColumnConstraintTest,
+    testing::Combine(
+        testing::Bool(),
+        testing::Values(
+            "c INT NOT NULL, PRIMARY KEY(c)",
+            "c INT NOT NULL, UNIQUE(c)",
+            "c INT NOT NULL, CONSTRAINT child_uq UNIQUE(c)",
+            "c INT, FOREIGN KEY(c) REFERENCES constraint_review_parent(id)",
+            "c INT, SHARD KEY(c)",
+            "c TEXT, SHARED DICTIONARY(c) REFERENCES constraint_review_child(s)")));
+
 TEST_F(TableConstraintTest, AlterColumnToGeoKeepsForeignKeyOrdinalsValid) {
   sql("CREATE TABLE constraint_review_parent (location TEXT ENCODING NONE, "
       "id INTEGER NOT NULL, PRIMARY KEY (id));");
