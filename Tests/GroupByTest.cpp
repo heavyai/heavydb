@@ -11,6 +11,7 @@
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/InputMetadata.h"
 #include "../QueryRunner/QueryRunner.h"
+#include "Shared/scope.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -42,6 +43,118 @@ bool skip_tests(const ExecutorDeviceType device_type) {
     LOG(WARNING) << "GPU not available, skipping GPU tests"; \
     continue;                                                \
   }
+class SerialKernelCapacityTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    Executor::nukeCacheOfExecutors();
+    run_ddl_statement("DROP TABLE IF EXISTS serial_kernel_capacity;");
+    run_ddl_statement(
+        "CREATE TABLE serial_kernel_capacity (x INT) "
+        "WITH (FRAGMENT_SIZE=2);");
+    QR::get()->runSQL(
+        "INSERT INTO serial_kernel_capacity VALUES (1), (2), (3), "
+        "(4), (5), (6);",
+        ExecutorDeviceType::CPU);
+  }
+
+  void TearDown() override {
+    run_ddl_statement("DROP TABLE serial_kernel_capacity;");
+    // Direct kernel calls bypass the normal query-end metadata-cache cleanup.
+    Executor::nukeCacheOfExecutors();
+  }
+
+  void checkSerialCapacity(const bool is_agg) {
+    auto executor = QR::get()->getExecutor();
+    auto cat = QR::get()->getCatalog();
+    const auto td = cat->getMetadataForTable("serial_kernel_capacity");
+    const auto cd = cat->getMetadataForColumn(td->tableId, "x");
+    const auto db_id = cat->getDatabaseId();
+    executor->setupCaching({PhysicalInput{cd->columnId, td->tableId, db_id}},
+                           {shared::TableKey{db_id, td->tableId}});
+    const auto input =
+        std::make_shared<const InputColDescriptor>(cd->columnId, td->tableId, db_id, 0);
+    std::shared_ptr<Analyzer::Expr> target = makeExpr<Analyzer::ColumnVar>(
+        cd->columnType, shared::ColumnKey{db_id, td->tableId, cd->columnId}, 0);
+    std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
+    if (is_agg) {
+      target = makeExpr<Analyzer::AggExpr>(
+          SQLTypeInfo(kBIGINT, false), kCOUNT, target, false, nullptr);
+    } else {
+      groupby_exprs.push_back(nullptr);
+    }
+    const RelAlgExecutionUnit unit{{input->getScanDesc()},
+                                   {input},
+                                   {},
+                                   {},
+                                   {},
+                                   groupby_exprs,
+                                   {target.get()},
+                                   nullptr,
+                                   SortInfo(),
+                                   0};
+    const auto table_infos = get_table_infos(unit, executor.get());
+    ASSERT_EQ(table_infos.size(), size_t(1));
+    ASSERT_EQ(table_infos.front().info.fragments.size(), size_t(3));
+    const auto co = CompilationOptions::defaults(ExecutorDeviceType::CPU);
+    const auto eo = ExecutionOptions::defaults();
+    const auto resource_mgr = Executor::executor_resource_mgr_;
+    ASSERT_TRUE(resource_mgr);
+    using ExecutorResourceMgr_Namespace::ResourceType;
+    const auto [allocated_slots, total_slots] =
+        resource_mgr->get_resource_info(ResourceType::CPU_SLOTS);
+    ASSERT_EQ(allocated_slots, size_t(0));
+    ScopeGuard restore_resources = [&] {
+      Executor::executor_resource_mgr_ = resource_mgr;
+      resource_mgr->set_resource(ResourceType::CPU_SLOTS, total_slots);
+    };
+
+    // Two distinct budgets detect the stale cpu_threads() default on any host.
+    // Zero selects the no-resource-manager fallback, not a zero-sized pool.
+    for (const size_t idle_slots : {1, 2, 0}) {
+      SCOPED_TRACE(idle_slots);
+      if (idle_slots) {
+        resource_mgr->set_resource(ResourceType::CPU_SLOTS, idle_slots);
+      } else {
+        Executor::executor_resource_mgr_ = nullptr;
+      }
+      const size_t expected_threads = idle_slots ? 1 + idle_slots : cpu_threads();
+      size_t fragments_checked = 0;
+      const auto check_result = [&](const ResultSetPtr& result) {
+        ASSERT_TRUE(result);
+        EXPECT_EQ(result->getQueryMemDesc().getAvailableCpuThreads(), expected_threads);
+        EXPECT_EQ(result->rowCount(), is_agg ? size_t(1) : size_t(2));
+        if (is_agg) {
+          const auto row = result->getNextRow(false, false);
+          ASSERT_EQ(row.size(), size_t(1));
+          EXPECT_EQ(v<int64_t>(row[0]), int64_t(2));
+        }
+        ++fragments_checked;
+      };
+      executor->executeUpdate(
+          unit,
+          table_infos,
+          td,
+          co,
+          eo,
+          *cat,
+          executor->getRowSetMemoryOwner(),
+          [&](const UpdateLogForFragment& log, TableUpdateMetadata&) {
+            check_result(log.getResultSet());
+          },
+          is_agg);
+      EXPECT_EQ(fragments_checked, size_t(3));
+    }
+  }
+};
+
+TEST_F(SerialKernelCapacityTest, ProjectionUsesResourceCapacity) {
+  checkSerialCapacity(/*is_agg=*/false);
+}
+
+TEST_F(SerialKernelCapacityTest, AggregateUsesResourceCapacity) {
+  checkSerialCapacity(/*is_agg=*/true);
+}
+
 class HighCardinalityStringEnv : public ::testing::Test {
  protected:
   void SetUp() override {

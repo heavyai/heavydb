@@ -99,8 +99,9 @@ class PerfectJoinHashTableBuilder {
     const auto inner_col = cols.first;
     CHECK(inner_col);
     const auto& ti = inner_col->get_type_info();
+    const auto use_bucketization = ti.get_type() == kDATE;
     auto translated_null_val = col_range.getIntMax() + 1;
-    if (col_range.getIntMax() < col_range.getIntMin()) {
+    if (use_bucketization && col_range.getIntMax() < col_range.getIntMin()) {
       translated_null_val = col_range.getIntMin() - 1;
     }
     JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
@@ -110,7 +111,6 @@ class PerfectJoinHashTableBuilder {
                                  is_bitwise_eq,
                                  translated_null_val,
                                  get_join_column_type_kind(ti)};
-    auto use_bucketization = inner_col->get_type_info().get_type() == kDATE;
     auto timer_fill = DEBUG_TIMER("Fill GPU Perfect Hash Table");
     if (hash_table_entry_info.getHashTableLayout() == HashType::OneToOne) {
       OneToOnePerfectJoinHashTableFillFuncArgs one_to_one_args{
@@ -238,7 +238,7 @@ class PerfectJoinHashTableBuilder {
     auto const for_semi_join = for_semi_anti_join(join_type);
     auto const use_bucketization = inner_col->get_type_info().get_type() == kDATE;
     auto translated_null_val = col_range.getIntMax() + 1;
-    if (col_range.getIntMax() < col_range.getIntMin()) {
+    if (use_bucketization && col_range.getIntMax() < col_range.getIntMin()) {
       translated_null_val = col_range.getIntMin() - 1;
     }
     JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
@@ -338,7 +338,7 @@ class PerfectJoinHashTableBuilder {
     auto timer_build = DEBUG_TIMER("Fill CPU One-To-Many Perfect Hash Table");
     auto const use_bucketization = inner_col->get_type_info().get_type() == kDATE;
     auto translated_null_val = col_range.getIntMax() + 1;
-    if (col_range.getIntMax() < col_range.getIntMin()) {
+    if (use_bucketization && col_range.getIntMax() < col_range.getIntMin()) {
       translated_null_val = col_range.getIntMin() - 1;
     }
     JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),

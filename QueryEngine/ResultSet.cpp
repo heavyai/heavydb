@@ -1102,31 +1102,35 @@ ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::materializeCountDistin
   std::vector<int64_t> count_distinct_materialized_buffer(num_storage_entries);
   const CountDistinctDescriptor count_distinct_descriptor =
       result_set_->query_mem_desc_.getCountDistinctDescriptor(order_entry.tle_no - 1);
-  const size_t num_non_empty_entries = result_set_->permutation_.size();
 
+  // The permutation backing buffer still contains unused slots here, including
+  // gaps between Top-N worker ranges. Visit storage entries directly so each
+  // populated row has exactly one writer, regardless of permutation layout.
   const auto work = [&,
                      parent_thread_local_ids = logger::thread_local_ids(),
                      result_set_ = this->result_set_](const size_t start,
                                                       const size_t end) {
     logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
     for (size_t i = start; i < end; ++i) {
-      const PermutationIdx permuted_idx = result_set_->permutation_[i];
-      const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
+      const auto storage_lookup_result = result_set_->findStorage(i);
       const auto storage = storage_lookup_result.storage_ptr;
       const auto off = storage_lookup_result.fixedup_entry_idx;
+      if (storage->isEmptyEntry(off)) {
+        continue;
+      }
       const auto value = buffer_itr_.getColumnInternal(
           storage->buff_, off, order_entry.tle_no - 1, storage_lookup_result);
-      count_distinct_materialized_buffer[permuted_idx] =
+      count_distinct_materialized_buffer[i] =
           count_distinct_set_size(value.i1, count_distinct_descriptor);
     }
   };
   // TODO(tlm): Allow use of tbb after we determine how to easily encapsulate the choice
   // between thread pool types
   if (single_threaded_) {
-    work(0, num_non_empty_entries);
+    work(0, num_storage_entries);
   } else {
     threading::task_group thread_pool;
-    for (auto interval : makeIntervals<size_t>(0, num_non_empty_entries, cpu_threads())) {
+    for (auto interval : makeIntervals<size_t>(0, num_storage_entries, cpu_threads())) {
       thread_pool.run([=] { work(interval.begin, interval.end); });
     }
     thread_pool.wait();
@@ -1148,20 +1152,22 @@ ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::materializeApproxQuant
     const Analyzer::OrderEntry& order_entry) const {
   ResultSet::ApproxQuantileBuffers::value_type materialized_buffer(
       result_set_->query_mem_desc_.getEntryCount());
-  const size_t size = result_set_->permutation_.size();
+  const size_t size = materialized_buffer.size();
   const auto work = [&,
                      parent_thread_local_ids = logger::thread_local_ids(),
                      result_set_ = this->result_set_](const size_t start,
                                                       const size_t end) {
     logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
     for (size_t i = start; i < end; ++i) {
-      const PermutationIdx permuted_idx = result_set_->permutation_[i];
-      const auto storage_lookup_result = result_set_->findStorage(permuted_idx);
+      const auto storage_lookup_result = result_set_->findStorage(i);
       const auto storage = storage_lookup_result.storage_ptr;
       const auto off = storage_lookup_result.fixedup_entry_idx;
+      if (storage->isEmptyEntry(off)) {
+        continue;
+      }
       const auto value = buffer_itr_.getColumnInternal(
           storage->buff_, off, order_entry.tle_no - 1, storage_lookup_result);
-      materialized_buffer[permuted_idx] =
+      materialized_buffer[i] =
           value.i1 ? calculateQuantile(reinterpret_cast<quantile::TDigest*>(value.i1))
                    : NULL_DOUBLE;
     }
@@ -1203,15 +1209,15 @@ struct ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::ModeScatter {
   void operator()(ModeBlockedRange const& r) const {
     logger::LocalIdsScopeGuard lisg = parent_thread_local_ids_.setNewThreadId();
     for (size_t i = r.begin(); i != r.end(); ++i) {
-      PermutationIdx const permuted_idx = shared_buffers_->result_set_->permutation_[i];
-      auto const storage_lookup_result =
-          shared_buffers_->result_set_->findStorage(permuted_idx);
+      auto const storage_lookup_result = shared_buffers_->result_set_->findStorage(i);
       auto const storage = storage_lookup_result.storage_ptr;
       auto const off = storage_lookup_result.fixedup_entry_idx;
+      if (storage->isEmptyEntry(off)) {
+        continue;
+      }
       auto const value = shared_buffers_->buffer_itr_.getColumnInternal(
           storage->buff_, off, order_entry_.tle_no - 1, storage_lookup_result);
-      materialized_buffer_[permuted_idx] =
-          materialize_mode(row_set_memory_owner_, value.i1);
+      materialized_buffer_[i] = materialize_mode(row_set_memory_owner_, value.i1);
     }
   }
 };
@@ -1226,11 +1232,9 @@ ResultSet::MaterializedSortBuffers<BUFFER_ITERATOR_TYPE>::materializeModeColumn(
   ModeScatter mode_scatter{
       logger::thread_local_ids(), this, rsmo, order_entry, materialized_buffer};
   if (single_threaded_) {
-    mode_scatter(ModeBlockedRange(
-        0, result_set_->permutation_.size()));  // Still has new thread_id.
+    mode_scatter(ModeBlockedRange(0, materialized_buffer.size()));
   } else {
-    tbb::parallel_for(ModeBlockedRange(0, result_set_->permutation_.size()),
-                      mode_scatter);
+    tbb::parallel_for(ModeBlockedRange(0, materialized_buffer.size()), mode_scatter);
   }
   return materialized_buffer;
 }

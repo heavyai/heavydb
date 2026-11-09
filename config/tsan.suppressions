@@ -14,10 +14,6 @@ race:google::RawLog__SetLastTime
 race:apache::thrift::transport::TServerSocket
 race:apache::thrift::server
 thread:libcuda.so
-race:libtbbmalloc*
-race:tbb::detail::*
-# TODO: remove TSAN wildcard after TSAN-enabled TBB deps go out
-race:^tbb*
 # mktime in libarchive uses tzset
 race:^tzset
 race:^testing::internal::TestEventRepeater::OnTestIterationEnd
@@ -34,6 +30,7 @@ race:ResultSet::parallelTop
 race:rml::internal::BootStrapBlocks::allocate
 # QE-891
 race:daal::*
+race:_daal_*
 # 2023-06-13 Ignore issues reported in third-party ODBC drivers
 race:libSnowflake.so
 deadlock:libSnowflake.so

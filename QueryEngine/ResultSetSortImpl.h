@@ -10,6 +10,8 @@
 #include "CompilationOptions.h"
 #include "DataMgr/Allocators/CudaAllocator.h"
 
+#include <algorithm>
+
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #else
@@ -30,6 +32,16 @@ struct GroupByBufferLayoutInfo {
   const TargetInfo oe_target_info;
   const int64_t target_groupby_index;
 };
+
+inline size_t baseline_sort_cpu_worker_count(const size_t entry_count,
+                                             const size_t available_threads,
+                                             const size_t parallel_top_min) {
+  if (entry_count <= parallel_top_min) {
+    return 1;
+  }
+  // The activation threshold is not a per-worker scan grain.
+  return std::max(size_t{1}, std::min(entry_count, available_threads));
+}
 
 namespace Data_Namespace {
 
