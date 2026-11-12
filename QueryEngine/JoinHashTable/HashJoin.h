@@ -7,6 +7,9 @@
 
 #include <llvm/IR/Value.h>
 #include <cstdint>
+#include <list>
+#include <map>
+#include <memory>
 #include <set>
 #include <string>
 
@@ -57,6 +60,11 @@ class HashJoinFail : public std::runtime_error {
       : std::runtime_error(err_msg), inner_qual_decision(qual_decision) {}
 
   InnerQualDecision inner_qual_decision;
+};
+
+class HashJoinOutOfMemory : public HashJoinFail {
+ public:
+  HashJoinOutOfMemory(const std::string& err_msg) : HashJoinFail(err_msg) {}
 };
 
 class NeedsOneToManyHash : public HashJoinFail {
@@ -177,6 +185,12 @@ class HashJoin {
 
   virtual Data_Namespace::MemoryLevel getMemoryLevel() const noexcept = 0;
 
+  virtual bool usesBuildSideGlobalRowIds() const noexcept { return false; }
+
+  virtual bool isBuildSideQualifierPushedDown(const Analyzer::Expr*) const {
+    return false;
+  }
+
   virtual size_t offsetBufferOff() const noexcept = 0;
 
   virtual size_t countBufferOff() const noexcept = 0;
@@ -196,7 +210,10 @@ class HashJoin {
       DeviceAllocator* dev_buff_owner,
       std::vector<std::shared_ptr<void>>& malloc_owner,
       Executor* executor,
-      ColumnCacheMap* column_cache);
+      ColumnCacheMap* column_cache,
+      bool preserve_result_set_fragment_offsets = false,
+      const std::map<std::pair<int, int>, size_t>* physical_fragment_rowid_offsets =
+          nullptr);
 
   //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<HashJoin> getInstance(
@@ -210,7 +227,9 @@ class HashJoin {
       Executor* executor,
       const HashTableBuildDagMap& hashtable_build_dag_map,
       const RegisteredQueryHint& query_hint,
-      const TableIdToNodeMap& table_id_to_node_map);
+      const TableIdToNodeMap& table_id_to_node_map,
+      const std::list<std::shared_ptr<Analyzer::Expr>>& build_side_quals = {},
+      bool payload_free_unique_probe = false);
 
   //! Make hash table from named tables and columns (such as for testing).
   static std::shared_ptr<HashJoin> getSyntheticInstance(
@@ -268,6 +287,22 @@ class HashJoin {
   static std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>>
   normalizeColumnPairs(const Analyzer::BinOper* condition,
                        const TemporaryTables* temporary_tables);
+
+  static SQLTypeInfo getColumnTypeForJoin(const Analyzer::ColumnVar* column,
+                                          const TemporaryTables* temporary_tables,
+                                          const TableIdToNodeMap& table_id_to_node_map,
+                                          const bool logical_type);
+
+  static SQLTypeInfo getExpressionTypeForJoin(
+      const Analyzer::Expr* expr,
+      const TemporaryTables* temporary_tables,
+      const TableIdToNodeMap& table_id_to_node_map,
+      const bool logical_type);
+
+  static void checkStringEncodingForHashJoin(
+      const std::vector<InnerOuter>& inner_outer_pairs,
+      const TemporaryTables* temporary_tables,
+      const TableIdToNodeMap& table_id_to_node_map);
 
   size_t getJoinHashBufferSize(const ExecutorDeviceType device_type) {
     CHECK(device_type == ExecutorDeviceType::CPU);
@@ -362,7 +397,8 @@ class HashJoin {
   static CompositeKeyInfo getCompositeKeyInfo(
       const std::vector<InnerOuter>& inner_outer_pairs,
       const Executor* executor,
-      const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs = {});
+      const std::vector<InnerOuterStringOpInfos>& inner_outer_string_op_infos_pairs = {},
+      const TableIdToNodeMap* table_id_to_node_map = nullptr);
 
   static std::vector<const StringDictionaryProxy::IdMap*>
   translateCompositeStrDictProxies(
@@ -373,13 +409,15 @@ class HashJoin {
   static std::pair<const StringDictionaryProxy*, StringDictionaryProxy*>
   getStrDictProxies(const InnerOuter& cols,
                     const Executor* executor,
-                    const bool has_string_ops);
+                    const bool has_string_ops,
+                    const TableIdToNodeMap* table_id_to_node_map = nullptr);
 
   static const StringDictionaryProxy::IdMap* translateInnerToOuterStrDictProxies(
       const InnerOuter& cols,
       const InnerOuterStringOpInfos& inner_outer_string_op_infos,
       ExpressionRange& old_col_range,
-      const Executor* executor);
+      const Executor* executor,
+      const TableIdToNodeMap* table_id_to_node_map = nullptr);
 
  protected:
   static llvm::Value* codegenColOrStringOper(

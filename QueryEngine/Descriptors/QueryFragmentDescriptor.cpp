@@ -8,8 +8,136 @@
 #include "Catalog/ColumnDescriptor.h"
 #include "Catalog/TableDescriptor.h"
 #include "DataMgr/DataMgr.h"
+#include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/Execute.h"
 #include "Shared/misc.h"
+
+#include <limits>
+#include <numeric>
+
+extern bool g_enable_result_reduction_pipeline;
+
+namespace {
+
+bool is_projection_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {
+  return ra_exe_unit.groupby_exprs.size() == size_t(1) &&
+         !ra_exe_unit.groupby_exprs.front();
+}
+
+bool can_coalesce_gpu_projection_fragments(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const ExecutorDeviceType device_type,
+    const heavyai::QueryDescriptionType query_description_type) {
+  return device_type == ExecutorDeviceType::GPU &&
+         query_description_type == heavyai::QueryDescriptionType::Projection &&
+         is_projection_execution_unit(ra_exe_unit) &&
+         ra_exe_unit.input_descs.size() == size_t(1) && !ra_exe_unit.union_all &&
+         ra_exe_unit.scan_limit > 0 && ra_exe_unit.sort_info.order_entries.empty() &&
+         !ra_exe_unit.sort_info.limit && ra_exe_unit.sort_info.offset == 0;
+}
+
+bool can_coalesce_gpu_groupby_fragments(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    const InputDescriptor& table_desc,
+    const ExecutorDeviceType device_type,
+    const heavyai::QueryDescriptionType query_description_type,
+    const std::optional<size_t> table_desc_offset,
+    const size_t max_kernel_input_rows) {
+  return device_type == ExecutorDeviceType::GPU &&
+         (query_description_type == heavyai::QueryDescriptionType::GroupByBaselineHash ||
+          query_description_type == heavyai::QueryDescriptionType::GroupByPerfectHash) &&
+         (table_desc.getSourceType() == InputSourceType::TABLE ||
+          table_desc.getSourceType() == InputSourceType::RESULT) &&
+         ra_exe_unit.input_descs.size() == size_t(1) && !ra_exe_unit.union_all &&
+         !ra_exe_unit.groupby_exprs.empty() &&
+         !is_projection_execution_unit(ra_exe_unit) && !table_desc_offset &&
+         max_kernel_input_rows > 0;
+}
+
+size_t gpu_input_row_limit(const std::set<int>& device_ids,
+                           const std::map<size_t, size_t>& available_gpu_mem_bytes,
+                           const double gpu_input_mem_limit_percent,
+                           const size_t num_bytes_for_row) {
+  if (!num_bytes_for_row) {
+    return std::numeric_limits<size_t>::max();
+  }
+  size_t row_limit = std::numeric_limits<size_t>::max();
+  for (const auto device_id : device_ids) {
+    auto mem_it = available_gpu_mem_bytes.find(static_cast<size_t>(device_id));
+    if (mem_it == available_gpu_mem_bytes.end()) {
+      continue;
+    }
+    const auto gpu_bytes_limit = static_cast<size_t>(static_cast<double>(mem_it->second) *
+                                                     gpu_input_mem_limit_percent);
+    row_limit = std::min(row_limit, gpu_bytes_limit / num_bytes_for_row);
+  }
+  return row_limit == 0 ? size_t(1) : row_limit;
+}
+
+bool batched_kernel_input_fits(const size_t current_outer_tuple_count,
+                               const size_t candidate_outer_tuple_count,
+                               const size_t max_kernel_input_rows,
+                               const size_t row_multiplier) {
+  if (current_outer_tuple_count >
+      std::numeric_limits<size_t>::max() - candidate_outer_tuple_count) {
+    return false;
+  }
+  const auto batched_outer_tuple_count =
+      current_outer_tuple_count + candidate_outer_tuple_count;
+  if (batched_outer_tuple_count > std::numeric_limits<size_t>::max() / row_multiplier) {
+    return false;
+  }
+  return batched_outer_tuple_count * row_multiplier <= max_kernel_input_rows;
+}
+
+bool projection_output_bounded_by_outer_table(const RelAlgExecutionUnit& ra_exe_unit) {
+  return !ra_exe_unit.join_quals.empty() &&
+         std::all_of(ra_exe_unit.join_quals.begin(),
+                     ra_exe_unit.join_quals.end(),
+                     [](const auto& join_condition) {
+                       return join_condition.type == JoinType::SEMI ||
+                              join_condition.type == JoinType::ANTI;
+                     });
+}
+
+void append_unique_fragment_ids(std::vector<size_t>& dst,
+                                const std::vector<size_t>& src) {
+  for (const auto fragment_id : src) {
+    if (std::find(dst.begin(), dst.end(), fragment_id) == dst.end()) {
+      dst.push_back(fragment_id);
+    }
+  }
+}
+
+bool try_append_gpu_fragment_kernel(ExecutionKernelDescriptor& dst,
+                                    const ExecutionKernelDescriptor& src,
+                                    const size_t max_kernel_input_rows,
+                                    const size_t row_multiplier) {
+  if (dst.device_id != src.device_id || !dst.outer_tuple_count ||
+      !src.outer_tuple_count ||
+      !batched_kernel_input_fits(*dst.outer_tuple_count,
+                                 *src.outer_tuple_count,
+                                 max_kernel_input_rows,
+                                 row_multiplier) ||
+      dst.fragments.size() != src.fragments.size()) {
+    return false;
+  }
+
+  for (size_t table_idx = 0; table_idx < dst.fragments.size(); ++table_idx) {
+    if (dst.fragments[table_idx].table_key != src.fragments[table_idx].table_key) {
+      return false;
+    }
+  }
+
+  for (size_t table_idx = 0; table_idx < dst.fragments.size(); ++table_idx) {
+    append_unique_fragment_ids(dst.fragments[table_idx].fragment_ids,
+                               src.fragments[table_idx].fragment_ids);
+  }
+  *dst.outer_tuple_count += *src.outer_tuple_count;
+  return true;
+}
+
+}  // namespace
 
 QueryFragmentDescriptor::QueryFragmentDescriptor(
     const RelAlgExecutionUnit& ra_exe_unit,
@@ -54,6 +182,9 @@ void QueryFragmentDescriptor::buildFragmentKernelMap(
     const std::vector<uint64_t>& frag_offsets,
     const std::set<int>& device_ids,
     const ExecutorDeviceType& device_type,
+    const heavyai::QueryDescriptionType query_description_type,
+    const size_t max_kernel_input_rows,
+    const bool uses_lazy_fetch,
     const bool enable_multifrag_kernels,
     const bool enable_inner_join_fragment_skipping,
     Executor* executor) {
@@ -69,19 +200,33 @@ void QueryFragmentDescriptor::buildFragmentKernelMap(
   const auto num_bytes_for_row = executor->getNumBytesForFetchedRow(lhs_table_keys);
 
   if (ra_exe_unit.union_all) {
-    buildFragmentPerKernelMapForUnion(
-        ra_exe_unit, frag_offsets, device_ids, num_bytes_for_row, device_type, executor);
+    buildFragmentPerKernelMapForUnion(ra_exe_unit,
+                                      frag_offsets,
+                                      device_ids,
+                                      num_bytes_for_row,
+                                      device_type,
+                                      query_description_type,
+                                      max_kernel_input_rows,
+                                      executor);
   } else if (enable_multifrag_kernels) {
     buildMultifragKernelMap(ra_exe_unit,
                             frag_offsets,
                             device_ids,
                             num_bytes_for_row,
                             device_type,
+                            query_description_type,
                             enable_inner_join_fragment_skipping,
                             executor);
   } else {
-    buildFragmentPerKernelMap(
-        ra_exe_unit, frag_offsets, device_ids, num_bytes_for_row, device_type, executor);
+    buildFragmentPerKernelMap(ra_exe_unit,
+                              frag_offsets,
+                              device_ids,
+                              num_bytes_for_row,
+                              device_type,
+                              query_description_type,
+                              max_kernel_input_rows,
+                              uses_lazy_fetch,
+                              executor);
   }
 }
 
@@ -96,7 +241,39 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
     const ChunkMetadataVector& deleted_chunk_metadata_vec,
     const std::optional<size_t> table_desc_offset,
     const ExecutorDeviceType& device_type,
+    const heavyai::QueryDescriptionType query_description_type,
+    const size_t max_kernel_input_rows,
+    const bool uses_lazy_fetch,
     Executor* executor) {
+  const auto coalesce_gpu_projection_fragments =
+      g_enable_result_reduction_pipeline && !uses_lazy_fetch &&
+      can_coalesce_gpu_projection_fragments(
+          ra_exe_unit, device_type, query_description_type) &&
+      !table_desc_offset;
+  const auto coalesce_gpu_groupby_fragments =
+      g_enable_result_reduction_pipeline &&
+      can_coalesce_gpu_groupby_fragments(ra_exe_unit,
+                                         table_desc,
+                                         device_type,
+                                         query_description_type,
+                                         table_desc_offset,
+                                         max_kernel_input_rows);
+  const auto coalesce_gpu_fragments =
+      coalesce_gpu_projection_fragments || coalesce_gpu_groupby_fragments;
+  auto coalescing_input_row_limit =
+      coalesce_gpu_projection_fragments ? ra_exe_unit.scan_limit : max_kernel_input_rows;
+  if (coalesce_gpu_groupby_fragments) {
+    coalescing_input_row_limit =
+        std::min(coalescing_input_row_limit,
+                 gpu_input_row_limit(device_ids,
+                                     available_gpu_mem_bytes_,
+                                     gpu_input_mem_limit_percent_,
+                                     num_bytes_for_row));
+  }
+  const auto coalescing_row_multiplier =
+      coalesce_gpu_projection_fragments
+          ? std::max<size_t>(size_t(1), ra_exe_unit.input_descs.size())
+          : size_t(1);
   auto get_fragment_tuple_count = [&deleted_chunk_metadata_vec, &is_temporary_table](
                                       const auto& fragment) -> std::optional<size_t> {
     // returning std::nullopt disables execution dispatch optimizations based on tuple
@@ -137,6 +314,8 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
     if (skip_frag.first) {
       continue;
     }
+    const bool can_coalesce_this_fragment =
+        coalesce_gpu_fragments && skip_frag.second < 0;
     rowid_lookup_key_ = std::max(rowid_lookup_key_, skip_frag.second);
     const int chosen_device_count = device_ids.size();
     CHECK_GT(chosen_device_count, 0);
@@ -151,7 +330,11 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
           << "Cannot find device_id " << device_id
           << " from pre-determined set of devices (device_ids: {"
           << ::toString(device_ids) << "})";
-      checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
+      checkDeviceMemoryUsage(fragment,
+                             device_id,
+                             num_bytes_for_row,
+                             query_description_type,
+                             /*is_multifrag_kernel=*/false);
     }
 
     ExecutionKernelDescriptor execution_kernel_desc{
@@ -187,6 +370,14 @@ void QueryFragmentDescriptor::buildFragmentPerKernelForTable(
     }
 
     auto itr = execution_kernels_per_device_.find(device_id);
+    if (can_coalesce_this_fragment && itr != execution_kernels_per_device_.end() &&
+        !itr->second.empty() &&
+        try_append_gpu_fragment_kernel(itr->second.back(),
+                                       execution_kernel_desc,
+                                       coalescing_input_row_limit,
+                                       coalescing_row_multiplier)) {
+      continue;
+    }
     if (itr == execution_kernels_per_device_.end()) {
       auto const pair = execution_kernels_per_device_.insert(std::make_pair(
           device_id,
@@ -204,6 +395,8 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
     const std::set<int>& device_ids,
     const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
+    const heavyai::QueryDescriptionType query_description_type,
+    const size_t max_kernel_input_rows,
     Executor* executor) {
   for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
     auto const& table_desc = ra_exe_unit.input_descs[j];
@@ -245,6 +438,9 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMapForUnion(
                                    {},
                                    j,
                                    device_type,
+                                   query_description_type,
+                                   max_kernel_input_rows,
+                                   /*uses_lazy_fetch=*/false,
                                    executor);
 
     std::vector<int> table_ids =
@@ -268,6 +464,9 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const std::set<int>& device_ids,
     const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
+    const heavyai::QueryDescriptionType query_description_type,
+    const size_t max_kernel_input_rows,
+    const bool uses_lazy_fetch,
     Executor* executor) {
   const auto& outer_table_desc = ra_exe_unit.input_descs.front();
   const auto& outer_table_key = outer_table_desc.getTableKey();
@@ -326,6 +525,9 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
                                  deleted_chunk_metadata_vec,
                                  std::nullopt,
                                  device_type,
+                                 query_description_type,
+                                 max_kernel_input_rows,
+                                 uses_lazy_fetch,
                                  executor);
 }
 
@@ -335,6 +537,7 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
     const std::set<int>& device_ids,
     const size_t num_bytes_for_row,
     const ExecutorDeviceType& device_type,
+    const heavyai::QueryDescriptionType query_description_type,
     const bool enable_inner_join_fragment_skipping,
     Executor* executor) {
   // Allocate all the fragments of the tables involved in the query to available
@@ -385,7 +588,11 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
           << " from pre-determined set of devices (fragment_id: " << fragment.fragmentId
           << ", device_ids for the fragment: " << ::toString(fragment.deviceIds)
           << ", query_device_ids: " << ::toString(device_ids) << ")";
-      checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
+      checkDeviceMemoryUsage(fragment,
+                             device_id,
+                             num_bytes_for_row,
+                             query_description_type,
+                             /*is_multifrag_kernel=*/true);
     }
     for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
       const auto& table_key = ra_exe_unit.input_descs[j].getTableKey();
@@ -465,20 +672,80 @@ bool QueryFragmentDescriptor::terminateDispatchMaybe(
   return false;
 }
 
+std::optional<size_t> QueryFragmentDescriptor::getMaxKernelOutputRowCountEstimate(
+    const RelAlgExecutionUnit& ra_exe_unit) const {
+  std::optional<size_t> max_output_rows;
+  const bool output_bounded_by_outer_table =
+      ra_exe_unit.input_descs.size() == size_t(1) ||
+      projection_output_bounded_by_outer_table(ra_exe_unit);
+  if (!output_bounded_by_outer_table) {
+    return std::nullopt;
+  }
+  for (const auto& device_kernels : execution_kernels_per_device_) {
+    for (const auto& kernel : device_kernels.second) {
+      if (!kernel.outer_tuple_count) {
+        return std::nullopt;
+      }
+      const auto estimated_rows = *kernel.outer_tuple_count;
+      max_output_rows = max_output_rows ? std::max(*max_output_rows, estimated_rows)
+                                        : std::optional<size_t>(estimated_rows);
+    }
+  }
+  return max_output_rows;
+}
+
 void QueryFragmentDescriptor::checkDeviceMemoryUsage(
     const Fragmenter_Namespace::FragmentInfo& fragment,
     const int device_id,
-    const size_t num_bytes_for_row) {
+    const size_t num_bytes_for_row,
+    const heavyai::QueryDescriptionType query_description_type,
+    const bool is_multifrag_kernel) {
   CHECK_GE(device_id, 0);
-  tuple_count_per_device_[device_id] += fragment.getNumTuples();
   const size_t gpu_bytes_limit =
       available_gpu_mem_bytes_[device_id] * gpu_input_mem_limit_percent_;
-  if (tuple_count_per_device_[device_id] * num_bytes_for_row > gpu_bytes_limit) {
+  if (!g_enable_result_reduction_pipeline) {
+    auto& tuple_count = tuple_count_per_device_[device_id];
+    if (fragment.getNumTuples() > std::numeric_limits<size_t>::max() - tuple_count) {
+      throw QueryMustRunOnCpu();
+    }
+    tuple_count += fragment.getNumTuples();
+    if (num_bytes_for_row && tuple_count > gpu_bytes_limit / num_bytes_for_row) {
+      LOG(WARNING) << "Not enough memory on device " << device_id
+                   << " for input chunks totaling more than " << gpu_bytes_limit
+                   << " bytes (available device memory: " << gpu_bytes_limit << " bytes)";
+      throw QueryMustRunOnCpu();
+    }
+    return;
+  }
+
+  size_t tuple_count = fragment.getNumTuples();
+  if (is_multifrag_kernel) {
+    auto& accumulated_tuple_count = tuple_count_per_device_[device_id];
+    if (fragment.getNumTuples() >
+        std::numeric_limits<size_t>::max() - accumulated_tuple_count) {
+      throw QueryExecutionError(
+          ErrorCode::OUT_OF_GPU_MEM,
+          "Input tuple count overflowed for the selected dispatch mode.",
+          QueryExecutionProperties{query_description_type, is_multifrag_kernel});
+    }
+    accumulated_tuple_count += fragment.getNumTuples();
+    tuple_count = accumulated_tuple_count;
+  }
+  const bool required_bytes_overflow =
+      num_bytes_for_row &&
+      tuple_count > std::numeric_limits<size_t>::max() / num_bytes_for_row;
+  const size_t required_bytes = required_bytes_overflow
+                                    ? std::numeric_limits<size_t>::max()
+                                    : tuple_count * num_bytes_for_row;
+  if (required_bytes_overflow || required_bytes > gpu_bytes_limit) {
     LOG(WARNING) << "Not enough memory on device " << device_id
-                 << " for input chunks totaling "
-                 << tuple_count_per_device_[device_id] * num_bytes_for_row
-                 << " bytes (available device memory: " << gpu_bytes_limit << " bytes)";
-    throw QueryMustRunOnCpu();
+                 << " for input chunks totaling " << required_bytes
+                 << " bytes (available device memory: " << gpu_bytes_limit
+                 << " bytes, multifrag kernel: " << is_multifrag_kernel << ")";
+    throw QueryExecutionError(
+        ErrorCode::OUT_OF_GPU_MEM,
+        "Input chunks exceed available GPU memory for the selected dispatch mode.",
+        QueryExecutionProperties{query_description_type, is_multifrag_kernel});
   }
 }
 
