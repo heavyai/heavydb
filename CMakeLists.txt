@@ -1231,7 +1231,7 @@ set (UTILITY_JAR "heavyai-utility-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
 set(MVN_PATH_COMMAND "MVNPATH=${CMAKE_SOURCE_DIR}/java")
 
-set(THRIFT_MVN_VERSION "0.24.0") # independent of Thrift C++ version
+set(THRIFT_MVN_VERSION "0.25.0") # independent of Thrift C++ version
 add_custom_command(
   OUTPUT
     ${CMAKE_BINARY_DIR}/bin/${UTILITY_JAR}

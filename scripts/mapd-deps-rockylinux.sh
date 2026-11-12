@@ -229,7 +229,7 @@ GLOG_VERS=0.3.5
 GLOG_DLOAD=v$GLOG_VERS.tar.gz
 CXXFLAGS="-fPIC -std=c++11" download_make_install https://github.com/google/glog/archive/${GLOG_DLOAD} ${GLOG_DLOAD} glog-$GLOG_VERS "--enable-shared=no"
 
-CURL_VERS=8.20.0
+CURL_VERS=8.23.0
 CURL_DLOAD=curl-$CURL_VERS.tar.xz
 download_make_install https://curl.se/download/${CURL_DLOAD} ${CURL_DLOAD} ""  "--disable-ldap --disable-ldaps --with-openssl --without-libpsl --without-libidn2"
 
