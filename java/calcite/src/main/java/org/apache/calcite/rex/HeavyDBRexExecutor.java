@@ -53,7 +53,9 @@ public class HeavyDBRexExecutor implements RexExecutor {
     }
     if (!delegateExps.isEmpty()) {
       final List<RexNode> delegateReduced = new ArrayList<>(delegateExps.size());
-      delegate.reduce(rexBuilder, delegateExps, delegateReduced);
+      if (!reduceDecimalToFloatingPointLiterals(rexBuilder, delegateExps, delegateReduced)) {
+        delegate.reduce(rexBuilder, delegateExps, delegateReduced);
+      }
       for (int j = 0; j < delegateIndices.size(); j++) {
         out[delegateIndices.get(j)] = delegateReduced.get(j);
       }
@@ -61,6 +63,43 @@ public class HeavyDBRexExecutor implements RexExecutor {
     for (int i = 0; i < n; i++) {
       reducedValues.add(out[i]);
     }
+  }
+
+  private static boolean reduceDecimalToFloatingPointLiterals(RexBuilder rexBuilder,
+      List<RexNode> expressions, List<RexNode> reducedValues) {
+    // Filter simplification repeatedly reduces decimal map bounds to FLOAT/DOUBLE.
+    // Calcite evaluates both using Java double; REAL uses float and stays delegated.
+    // Match RexExecutorImpl's conversion and literal construction without
+    // compiling Java for each bound. Keep mixed batches on the delegate so a
+    // failed evaluation still leaves the entire batch unchanged.
+    final List<RexNode> literals = new ArrayList<>(expressions.size());
+    for (RexNode expression : expressions) {
+      final SqlTypeName target = expression.getType().getSqlTypeName();
+      if (!(expression instanceof RexCall) || expression.getKind() != SqlKind.CAST
+          || (target != SqlTypeName.DOUBLE && target != SqlTypeName.FLOAT)) {
+        return false;
+      }
+      final RexCall cast = (RexCall) expression;
+      if (cast.getOperands().size() != 1) {
+        return false;
+      }
+      final RexNode operand = cast.getOperands().get(0);
+      if (!(operand instanceof RexLiteral)
+          || operand.getType().getSqlTypeName() != SqlTypeName.DECIMAL) {
+        return false;
+      }
+      final BigDecimal value = ((RexLiteral) operand).getValueAs(BigDecimal.class);
+      if (value == null) {
+        return false;
+      }
+      final double converted = value.doubleValue();
+      if (!Double.isFinite(converted)) {
+        return false;
+      }
+      literals.add(rexBuilder.makeLiteral(converted, expression.getType(), true));
+    }
+    reducedValues.addAll(literals);
+    return true;
   }
 
   private static boolean containsApproximateCastOfLiteralNeedingRuntime(RexNode node) {
