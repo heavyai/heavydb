@@ -9,6 +9,7 @@
 #include <boost/iterator/counting_iterator.hpp>
 #include "boost/filesystem.hpp"
 
+#include "Catalog/AlterColumnRecovery.h"
 #include "Catalog/Catalog.h"
 #include "DBHandlerTestHelpers.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
@@ -16,6 +17,7 @@
 #include "ImportExport/Importer.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/scope.h"
 #include "Tests/TestHelpers.h"
@@ -601,6 +603,40 @@ class AlterTableAlterColumnTest : public DBHandlerTestFixture {
     sql("DROP TABLE reference_table;");
   }
 };
+
+TEST_F(AlterTableAlterColumnTest, RecoveryMetadataJsonRoundTrip) {
+  sql("CREATE TABLE test_table (source_value TEXT DEFAULT 'old');");
+  const auto columns = getAllColumns("test_table");
+  ASSERT_EQ(size_t(1), columns.size());
+  const auto& old_column = **columns.begin();
+  auto new_column = old_column;
+  new_column.columnName = "renamed_value";
+  new_column.columnType = SQLTypeInfo(kINT, false);
+  new_column.default_value = std::nullopt;
+
+  AlterTableAlterColumnCommandRecoveryMgr recovery(getCatalog());
+  AlterTableAlterColumnCommandRecoveryMgr::RecoveryInfo expected;
+  expected.added_columns.push_back(new_column);
+  expected.renamed_columns.push_back(old_column);
+  expected.altered_columns.emplace_back(old_column, new_column);
+  expected.updated_dict_cds.push_back(old_column);
+  expected.src_dst_cds.emplace_back(old_column, new_column);
+  expected.table_epoch = 7;
+  expected.is_vacuumed = true;
+
+  const auto serialized = recovery.serializeRecoveryInformation(expected);
+  auto document = json_utils::read_from_string(serialized);
+  const auto path = std::string(BASE_PATH) + "/json_utils_recovery.json";
+  ScopeGuard cleanup = [&] { boost::filesystem::remove(path); };
+  json_utils::write_to_file(document, path);
+  const auto actual = recovery.deserializeRecoveryInformation(path);
+  EXPECT_EQ(serialized, recovery.serializeRecoveryInformation(actual));
+
+  document["is_vacuumed"].SetString("not a boolean");
+  json_utils::write_to_file(document, path);
+  EXPECT_THROW(recovery.deserializeRecoveryInformation(path),
+               json_utils::json_schema_error);
+}
 
 TEST_F(AlterTableAlterColumnTest, InvalidType) {
   sql("create table test_table (a integer, b float);");

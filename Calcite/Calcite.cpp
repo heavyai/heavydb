@@ -398,6 +398,18 @@ Calcite::Calcite(const SystemParameters& system_parameters,
 }
 
 void Calcite::updateMetadata(std::string catalog, std::string table) {
+  std::lock_guard<std::mutex> lock(statistics_mutex_);
+  updateMetadataImpl(catalog, table);
+  for (auto it = dirty_statistics_.begin(); it != dirty_statistics_.end();) {
+    if (it->first == catalog && (table.empty() || it->second == table)) {
+      it = dirty_statistics_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void Calcite::updateMetadataImpl(const std::string& catalog, const std::string& table) {
   if (server_available_) {
     auto ms = measure<>::execution([&]() {
       auto clientP = getClient(remote_calcite_port_);
@@ -410,11 +422,26 @@ void Calcite::updateMetadata(std::string catalog, std::string table) {
   }
 }
 
+void Calcite::markTableStatisticsDirty(const std::string& catalog,
+                                       const std::string& table) {
+  std::lock_guard<std::mutex> lock(statistics_mutex_);
+  dirty_statistics_.emplace(catalog, table);
+}
+
 TPlanResult Calcite::process(query_state::QueryStateProxy query_state_proxy,
                              std::string sql_string,
                              const TQueryParsingOption& query_parsing_option,
                              const TOptimizationOption& optimization_option,
                              const std::string& calcite_session_id) {
+  if (optimization_option.enable_experimental_query_rewrites) {
+    // Coalesce write batches; unchanged read workloads need no metadata RPC.
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    while (!dirty_statistics_.empty()) {
+      const auto it = dirty_statistics_.begin();
+      updateMetadataImpl(it->first, it->second);
+      dirty_statistics_.erase(it);
+    }
+  }
   TPlanResult result = processImpl(query_state_proxy,
                                    std::move(sql_string),
                                    query_parsing_option,
@@ -699,10 +726,16 @@ TQueryParsingOption Calcite::getCalciteQueryParsingOption(bool legacy_syntax,
 TOptimizationOption Calcite::getCalciteOptimizationOption(
     bool is_view_optimize,
     bool enable_watchdog,
-    const std::vector<TFilterPushDownInfo>& filter_push_down_info) {
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+    bool enable_experimental_query_rewrites,
+    bool trust_unenforced_table_constraints) {
   TOptimizationOption optimization_option;
   optimization_option.filter_push_down_info = filter_push_down_info;
   optimization_option.is_view_optimize = is_view_optimize;
   optimization_option.enable_watchdog = enable_watchdog;
+  optimization_option.enable_experimental_query_rewrites =
+      enable_experimental_query_rewrites;
+  optimization_option.trust_unenforced_table_constraints =
+      trust_unenforced_table_constraints;
   return optimization_option;
 }

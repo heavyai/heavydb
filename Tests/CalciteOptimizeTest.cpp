@@ -129,7 +129,7 @@ TEST_F(ViewObject, BasicTest) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(false, false, {});
+      g_calcite->getCalciteOptimizationOption(false, false, {}, false, false);
 
   auto qs1 = QR::create_query_state(session, "select i1 from table1");
   TPlanResult tresult =
@@ -189,7 +189,7 @@ TEST_F(ViewObject, Joins) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(true, false, {});
+      g_calcite->getCalciteOptimizationOption(true, false, {}, false, false);
 
   {
     auto qs1 = QR::create_query_state(
@@ -221,7 +221,7 @@ TEST_F(ViewObject, RestrictLegacy) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(true, false, {});
+      g_calcite->getCalciteOptimizationOption(true, false, {}, false, false);
 
   {
     Catalog_Namespace::Catalog const& cat = *session->get_catalog_ptr();
@@ -284,7 +284,7 @@ TEST_F(ViewObject, Restrict) {
   auto calciteQueryParsingOption =
       g_calcite->getCalciteQueryParsingOption(true, false, false);
   auto calciteOptimizationOption =
-      g_calcite->getCalciteOptimizationOption(true, false, {});
+      g_calcite->getCalciteOptimizationOption(true, false, {}, false, false);
 
   {
     Catalog_Namespace::Catalog const& cat = *session->get_catalog_ptr();

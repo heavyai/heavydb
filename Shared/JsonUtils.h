@@ -5,8 +5,12 @@
 
 #pragma once
 
+#include <list>
 #include <map>
 #include <optional>
+#include <stdexcept>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <rapidjson/document.h>
@@ -17,6 +21,15 @@
 // helper functions for serializing/deserializing objects to rapidjson value
 namespace json_utils {
 std::string get_type_as_string(const rapidjson::Value& object);
+
+class json_schema_error : public std::runtime_error {
+ public:
+  json_schema_error(std::string msg) : std::runtime_error("json parsing error: " + msg) {}
+};
+
+// Malformed input throws; CHECKs below enforce caller-owned output invariants.
+const rapidjson::Value& get_member(const rapidjson::Value& value, const std::string& key);
+rapidjson::Value::ConstArray get_array(const rapidjson::Value& value);
 
 // Forward declare for vector/map functions
 template <class T>
@@ -132,13 +145,16 @@ void set_value(rapidjson::Value& json_val,
 
 template <class T>
 void get_value(const rapidjson::Value& json_val, std::vector<T>& vector_value) {
-  CHECK(json_val.IsArray());
+  const auto array = get_array(json_val);
   CHECK_EQ(vector_value.size(), size_t(0));
-  for (const auto& json_obj : json_val.GetArray()) {
-    T val;
+  std::vector<T> parsed;
+  parsed.reserve(array.Size());
+  for (const auto& json_obj : array) {
+    T val{};
     get_value(json_obj, val);
-    vector_value.push_back(val);
+    parsed.push_back(std::move(val));
   }
+  vector_value = std::move(parsed);
 }
 
 // std::list
@@ -156,13 +172,15 @@ void set_value(rapidjson::Value& json_val,
 
 template <class T>
 void get_value(const rapidjson::Value& json_val, std::list<T>& list_value) {
-  CHECK(json_val.IsArray());
+  const auto array = get_array(json_val);
   CHECK_EQ(list_value.size(), size_t(0));
-  for (const auto& json_obj : json_val.GetArray()) {
-    T val;
+  std::list<T> parsed;
+  for (const auto& json_obj : array) {
+    T val{};
     get_value(json_obj, val);
-    list_value.push_back(val);
+    parsed.push_back(std::move(val));
   }
+  list_value = std::move(parsed);
 }
 
 // std::vector<std::pair>
@@ -183,16 +201,18 @@ void set_value(rapidjson::Value& json_val,
 template <class T, class V>
 void get_value(const rapidjson::Value& json_val,
                std::vector<std::pair<T, V>>& vector_value) {
-  CHECK(json_val.IsArray());
+  const auto array = get_array(json_val);
   CHECK_EQ(vector_value.size(), size_t(0));
-  for (const auto& json_obj : json_val.GetArray()) {
-    CHECK(json_obj.IsObject());
-    T key;
-    V value;
+  std::vector<std::pair<T, V>> parsed;
+  parsed.reserve(array.Size());
+  for (const auto& json_obj : array) {
+    T key{};
+    V value{};
     get_value_from_object(json_obj, key, "key");
     get_value_from_object(json_obj, value, "value");
-    vector_value.emplace_back(std::make_pair(key, value));
+    parsed.emplace_back(std::move(key), std::move(value));
   }
+  vector_value = std::move(parsed);
 }
 
 // std::list<std::pair>
@@ -212,16 +232,17 @@ void set_value(rapidjson::Value& json_val,
 
 template <class T, class V>
 void get_value(const rapidjson::Value& json_val, std::list<std::pair<T, V>>& list_value) {
-  CHECK(json_val.IsArray());
+  const auto array = get_array(json_val);
   CHECK_EQ(list_value.size(), size_t(0));
-  for (const auto& json_obj : json_val.GetArray()) {
-    CHECK(json_obj.IsObject());
-    T key;
-    V value;
+  std::list<std::pair<T, V>> parsed;
+  for (const auto& json_obj : array) {
+    T key{};
+    V value{};
     get_value_from_object(json_obj, key, "key");
     get_value_from_object(json_obj, value, "value");
-    list_value.emplace_back(std::make_pair(key, value));
+    parsed.emplace_back(std::move(key), std::move(value));
   }
+  list_value = std::move(parsed);
 }
 
 // std::map
@@ -241,16 +262,17 @@ void set_value(rapidjson::Value& json_val,
 
 template <class T, class V>
 void get_value(const rapidjson::Value& json_val, std::map<T, V>& map_value) {
-  CHECK(json_val.IsArray());
+  const auto array = get_array(json_val);
   CHECK_EQ(map_value.size(), size_t(0));
-  for (const auto& json_obj : json_val.GetArray()) {
-    CHECK(json_obj.IsObject());
-    T key;
-    V value;
+  std::map<T, V> parsed;
+  for (const auto& json_obj : array) {
+    T key{};
+    V value{};
     get_value_from_object(json_obj, key, "key");
     get_value_from_object(json_obj, value, "value");
-    map_value[key] = value;
+    parsed[std::move(key)] = std::move(value);
   }
+  map_value = std::move(parsed);
 }
 
 // Serialize value into json object with valid set_value functions
@@ -273,9 +295,7 @@ template <class T>
 void get_value_from_object(const rapidjson::Value& object,
                            T& value,
                            const std::string& name) {
-  CHECK(object.IsObject());
-  CHECK(object.HasMember(name)) << "Could not find member: " << name;
-  get_value(object[name], value);
+  get_value(get_member(object, name), value);
 }
 
 // Read JSON content from the given file path
@@ -288,13 +308,6 @@ rapidjson::Document read_from_string(const std::string& input);
 void write_to_file(const rapidjson::Document& document, const std::string& file_path);
 
 std::string write_to_string(const rapidjson::Document& document);
-
-class json_schema_error : public std::runtime_error {
- public:
-  json_schema_error(std::string msg) : std::runtime_error("json parsing error: " + msg) {}
-};
-
-const rapidjson::Value& get_member(const rapidjson::Value& value, const std::string& key);
 
 int32_t get_int(const rapidjson::Value& value);
 
