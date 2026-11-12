@@ -299,6 +299,7 @@ void ForeignStorageMgr::refreshTable(const ChunkKey& table_key,
   auto catalog =
       Catalog_Namespace::SysCatalog::instance().getCatalog(table_key[CHUNK_KEY_DB_IDX]);
   CHECK(catalog);
+  clearTempChunkBufferMapEntriesForTable(table_key);
   // Clear datawrapper unless table is non-append and evict is false
   if (evict_cached_entries ||
       !catalog->getForeignTable(table_key[CHUNK_KEY_TABLE_IDX])->isAppendMode()) {

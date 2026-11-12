@@ -74,6 +74,10 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override {
     return getFileMgr(key)->getBuffer(key, numBytes);
   }
+  AbstractBuffer* getBufferIfNativeStorage(const ChunkKey& key,
+                                           const size_t numBytes = 0) override {
+    return getBuffer(key, numBytes);
+  }
 
   void fetchBuffer(const ChunkKey& key,
                    AbstractBuffer* destBuffer,
@@ -133,6 +137,9 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   size_t getNumChunks() override;
 
   void compactDataFiles(const int32_t db_id, const int32_t tb_id);
+  StorageRewriteStats rewriteStoragePayloadsWithPrefix(
+      const ChunkKey& key_prefix,
+      const NativeStorageCompressionConfig& compression_config);
 
   static constexpr int32_t db_version_{2};
 
