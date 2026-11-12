@@ -11,6 +11,10 @@
 
 #include "Logger/Logger.h"
 
+namespace {
+volatile std::sig_atomic_t shutdown_in_progress{0};
+}
+
 void TestProcessSignalHandler::registerSignalHandler() {
   if (!has_registered_signal_handler_) {
     std::signal(SIGTERM, shutdownSubsystemsAndExit);
@@ -26,6 +30,12 @@ void TestProcessSignalHandler::addShutdownCallback(
 }
 
 void TestProcessSignalHandler::shutdownSubsystemsAndExit(int signal_number) {
+  int const exit_code = signal_number == SIGTERM ? EXIT_SUCCESS : signal_number;
+  if (shutdown_in_progress) {
+    std::_Exit(exit_code);
+  }
+  shutdown_in_progress = 1;
+
   std::cerr << __func__ << ": Interrupt signal (" << signal_number << ") received."
             << std::endl;
 
@@ -39,7 +49,6 @@ void TestProcessSignalHandler::shutdownSubsystemsAndExit(int signal_number) {
 
   // Terminate program
   // TODO: Why convert SIGTERM to EXIT_SUCCESS?
-  int const exit_code = signal_number == SIGTERM ? EXIT_SUCCESS : signal_number;
   std::quick_exit(exit_code);
 }
 
