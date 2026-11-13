@@ -1560,8 +1560,9 @@ class AlterColumnGeoFailureTest : public AlterTableAlterColumnTest {
 
 TEST_F(AlterColumnGeoFailureTest, FailureBeforeGeoColumnsAreAdded) {
   g_test_alter_column_geo_failure_after_rename = true;
-  queryAndAssertException("ALTER TABLE test_table ALTER COLUMN p TYPE POINT;",
-                          "Alter column type: Simulated failure after renaming column p.");
+  queryAndAssertException(
+      "ALTER TABLE test_table ALTER COLUMN p TYPE POINT;",
+      "Alter column type: Simulated failure after renaming column p.");
   assertDataAndSchemaNotChanged();
 }
 
