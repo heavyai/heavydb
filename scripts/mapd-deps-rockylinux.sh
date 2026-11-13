@@ -150,10 +150,11 @@ LD_LIBRARY_PATH=${LD_LIBRARY_PATH}
 PKG_CONFIG_PATH=${PKG_CONFIG_PATH}
 __DEBUG_ENV_PATH
 
-# Pass UPDATE_OPTIONS (e.g. --nobest) here too: ubi-8-appstream can be ahead of
-# the base repos (gcc/gcc-c++ at X+1 with no matching libstdc++/libgcc), and
-# without --nobest dnf picks the uninstallable X+1 candidates and fails.
-sudo dnf groupinstall -y ${UPDATE_OPTIONS} "Development Tools"
+# --nobest: ubi-8-appstream can be ahead of the base repos (gcc/gcc-c++ at X+1
+# with no matching libstdc++/libgcc), so the best candidates are uninstallable.
+# Hard-wired (like install_required_rockylinux_packages) so installs are
+# protected regardless of whether --update-options was passed.
+sudo dnf groupinstall -y --nobest "Development Tools"
 dnf list installed | grep java-1.8.0-openjdk-headless >/dev/null; ST=$?
 if [[ $ST -eq 0 ]] ; then
   sudo dnf remove -y java-1.8.0-openjdk-headless
