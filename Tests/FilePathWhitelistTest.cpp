@@ -7,6 +7,16 @@
  * @file FilePathWhitelistTest.cpp
  * @brief Test suite for file path whitelist validation for COPY FROM, COPY TO, and CREATE
  * FOREIGN TABLE use cases
+ *
+ * Thin-client test: the file path whitelist is fixed when heavydb starts, so the tests are
+ * grouped by the whitelist they need and each group runs against its own server (see the
+ * ctest entries in CMakeLists.txt):
+ *   FilePathWhitelistTest          import path Tests/FilePathWhitelist, export /tmp/...
+ *   FilePathWhitelistTest_blacklist  root path whitelisted ("/")
+ *   FilePathWhitelistTest_default_paths  only the default import/export directories
+ * The server blacklists /etc/passwd itself, which is what the blacklist tests use. The
+ * parts that call ddl_utils directly (config parsing, validate_allowed_file_path) are in
+ * FilePathValidationTest.cpp.
  */
 
 #include <fstream>
@@ -16,29 +26,19 @@
 #include <gtest/gtest.h>
 #include <picosha2.h>
 
-#ifdef HAVE_AWS_S3
-#include "DataMgr/HeavyDbAwsSdk.h"
-#endif  // HAVE_AWS_S3
 #include "Geospatial/ColumnNames.h"
-#include "Geospatial/GDAL.h"
-#include "ImportExport/ForeignDataImporter.h"
 #include "Shared/SysDefinitions.h"
-#include "Tests/DBHandlerTestHelpers.h"
+#include "Tests/SqlTestFixture.h"
 #include "Tests/TestHelpers.h"
-#include "Utils/DdlUtils.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
 
-extern bool g_enable_fsi;
-
-class FilePathWhitelistTest : public DBHandlerTestFixture,
+class FilePathWhitelistTest : public SqlTestFixture,
                               public testing::WithParamInterface<std::string> {
  protected:
   static void SetUpTestSuite() {
-    DBHandlerTestFixture::SetUpTestSuite();
-    ddl_utils::FilePathWhitelist::clear();
     boost::filesystem::create_directories(TEMP_EXPORT_DIR);
     temp_file_path_ =
         TEMP_EXPORT_DIR + "/" + boost::filesystem::unique_path().string() + ".csv";
@@ -49,34 +49,20 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
   static void TearDownTestSuite() {
     boost::filesystem::remove(temp_file_path_);
     boost::filesystem::remove_all(TEMP_EXPORT_DIR);
-    boost::filesystem::remove(CONFIG_FILE_PATH);
     boost::filesystem::remove("symlink_test.csv");
     boost::filesystem::remove_all(DEFAULT_IMPORT_PATH);
     boost::filesystem::remove_all(DEFAULT_EXPORT_PATH);
   }
 
   void SetUp() override {
-    DBHandlerTestFixture::SetUp();
+    SqlTestFixture::SetUp();
     sql("CREATE TABLE IF NOT EXISTS test_table (col1 text);");
   }
 
   void TearDown() override {
     sql("DROP TABLE IF EXISTS test_table;");
     sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
-    DBHandlerTestFixture::TearDown();
-    ddl_utils::FilePathWhitelist::clear();
-    ddl_utils::FilePathBlacklist::clear();
-  }
-
-  void setServerConfig(const std::string& file_name) {
-    boost::filesystem::copy_file("../../Tests/FilePathWhitelist/" + file_name,
-                                 CONFIG_FILE_PATH,
-#if 107400 <= BOOST_VERSION
-                                 boost::filesystem::copy_options::overwrite_existing
-#else
-                                 boost::filesystem::copy_option::overwrite_if_exists
-#endif
-    );
+    SqlTestFixture::TearDown();
   }
 
   std::string getQuery(const std::string& file_path) {
@@ -156,48 +142,9 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
     return clearAndGetSymlinkFilePath(boost::filesystem::path("."));
   }
 
-  std::string getMalformedConfigErrorMessage() {
-    std::string config_key;
-    if (GetParam() == "CopyTo") {
-      config_key = "allowed-export-paths";
-    } else {
-      config_key = "allowed-import-paths";
-    }
-    return "Configuration value for \"" + config_key +
-           "\" is malformed. Value should be a list of paths with format: [ "
-           "\"root-path-1\", \"root-path-2\", ... ]";
-  }
-
-  void initializeWhitelist() {
-    std::string allowed_import_paths, allowed_export_paths;
-    namespace po = boost::program_options;
-    po::options_description desc{};
-    desc.add_options()("allowed-import-paths",
-                       po::value<std::string>(&allowed_import_paths));
-    desc.add_options()("allowed-export-paths",
-                       po::value<std::string>(&allowed_export_paths));
-    po::variables_map vm;
-    po::store(po::parse_config_file<char>(CONFIG_FILE_PATH.c_str(), desc, true), vm);
-    po::notify(vm);
-    ddl_utils::FilePathWhitelist::initialize(
-        BASE_PATH, allowed_import_paths, allowed_export_paths);
-  }
-
-  void initializeWhitelistAndAssertException(const std::string& error_message) {
-    try {
-      initializeWhitelist();
-      FAIL() << "An exception should have been thrown for this test case.";
-    } catch (const std::runtime_error& e) {
-      ASSERT_EQ(error_message, e.what());
-    }
-  }
-
-  void whitelistRootPath() {
-    setServerConfig("root_path_config.conf");
-    initializeWhitelist();
-  }
-
-  inline static const std::string CONFIG_FILE_PATH{"./file_path_whitelist_test.conf"};
+  // A path the server blacklists on its own (see CommandLineOptions.cpp), so no
+  // in-process blacklist has to be set up. The blacklist is checked before the whitelist.
+  inline static const std::string BLACKLISTED_PATH{"/etc/passwd"};
   inline static const std::string TEMP_EXPORT_DIR{"/tmp/heavyai_whitelist_export_test"};
   inline static std::string temp_file_path_;
   inline static const std::string DEFAULT_IMPORT_PATH{std::string{BASE_PATH} + "/" +
@@ -207,15 +154,11 @@ class FilePathWhitelistTest : public DBHandlerTestFixture,
 };
 
 TEST_P(FilePathWhitelistTest, WhitelistedPath) {
-  setServerConfig("test_config.conf");
-  initializeWhitelist();
   std::string file_path = getTestFilePath();
   EXPECT_NO_THROW(sql(getQuery(file_path)));
 }
 
 TEST_P(FilePathWhitelistTest, NonWhitelistedPath) {
-  setServerConfig("test_config.conf");
-  initializeWhitelist();
   std::string file_path =
       boost::filesystem::canonical(
           "../../Tests/Import/datafiles/with_quoted_fields_doublequotes.csv")
@@ -226,8 +169,6 @@ TEST_P(FilePathWhitelistTest, NonWhitelistedPath) {
 }
 
 TEST_P(FilePathWhitelistTest, WhitelistedSymlinkToUnlistedPath) {
-  setServerConfig("test_config.conf");
-  initializeWhitelist();
   const auto file_path =
       boost::filesystem::canonical(
           "../../Tests/Import/datafiles/with_quoted_fields_doublequotes.csv")
@@ -242,8 +183,6 @@ TEST_P(FilePathWhitelistTest, WhitelistedSymlinkToUnlistedPath) {
 }
 
 TEST_P(FilePathWhitelistTest, UnlistedSymlinkToWhitelistedPath) {
-  setServerConfig("test_config.conf");
-  initializeWhitelist();
   const auto file_path = getTestFilePath();
   const auto symlink_path = getUnlistedSymlinkFilePath();
   boost::filesystem::create_symlink(file_path, symlink_path);
@@ -252,8 +191,6 @@ TEST_P(FilePathWhitelistTest, UnlistedSymlinkToWhitelistedPath) {
 }
 
 TEST_P(FilePathWhitelistTest, UnlistedSymlinkToUnlistedPath) {
-  setServerConfig("test_config.conf");
-  initializeWhitelist();
   const auto file_path =
       boost::filesystem::canonical(
           "../../Tests/Import/datafiles/with_quoted_fields_doublequotes.csv")
@@ -267,55 +204,22 @@ TEST_P(FilePathWhitelistTest, UnlistedSymlinkToUnlistedPath) {
                               "\") is not whitelisted.");
 }
 
-TEST_P(FilePathWhitelistTest, InvalidConfigValue) {
-  std::string config_path;
-  if (GetParam() == "CopyTo") {
-    config_path = "malformed_export_config_1.conf";
-  } else {
-    config_path = "malformed_import_config_1.conf";
-  }
-  setServerConfig(config_path);
-  initializeWhitelistAndAssertException(getMalformedConfigErrorMessage());
-}
-
-TEST_P(FilePathWhitelistTest, InvalidConfigListValue) {
-  std::string config_path;
-  if (GetParam() == "CopyTo") {
-    config_path = "malformed_export_config_2.conf";
-  } else {
-    config_path = "malformed_import_config_2.conf";
-  }
-  setServerConfig(config_path);
-  initializeWhitelistAndAssertException(getMalformedConfigErrorMessage());
-}
-
 TEST_P(FilePathWhitelistTest, NonExistentFilePath) {
-  setServerConfig("test_config.conf");
   queryAndAssertException(
       getQuery("/tmp/non_existent/example.csv"),
       "File or directory \"/tmp/non_existent/example.csv\" does not exist.");
 }
 
-TEST_P(FilePathWhitelistTest, NonExistentWhitelistedRootPath) {
-  setServerConfig("non_existent_root_path.conf");
-  initializeWhitelistAndAssertException(
-      "Whitelisted root path \"./nonexistent_path\" does not exist.");
-}
-
 TEST_P(FilePathWhitelistTest, BlacklistedPath) {
-  setServerConfig("test_config.conf");
-  const auto& file_path = getTestFilePath();
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  const auto& file_path = BLACKLISTED_PATH;
   queryAndAssertException(
       getQuery(file_path),
       "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
 
 TEST_P(FilePathWhitelistTest, UnlistedSymlinkToBlacklistedPath) {
-  setServerConfig("test_config.conf");
-  const auto file_path = getTestFilePath();
+  const auto file_path = BLACKLISTED_PATH;
   const auto symlink_path = getUnlistedSymlinkFilePath();
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
   boost::filesystem::create_symlink(file_path, symlink_path);
   queryAndAssertException(getQuery(symlink_path),
                           "Access to file or directory path \"" + symlink_path +
@@ -323,27 +227,23 @@ TEST_P(FilePathWhitelistTest, UnlistedSymlinkToBlacklistedPath) {
 }
 
 TEST_P(FilePathWhitelistTest, RootPathWhitelisted) {
-  whitelistRootPath();
   std::string file_path = getTestFilePath();
   EXPECT_NO_THROW(sql(getQuery(file_path)));
   sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
 
   // Validation should fail if path is in the blacklist,
   // even when the root path is set for the whitelist.
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
   queryAndAssertException(
-      getQuery(file_path),
-      "Access to file or directory path \"" + file_path + "\" is not allowed.");
+      getQuery(BLACKLISTED_PATH),
+      "Access to file or directory path \"" + BLACKLISTED_PATH + "\" is not allowed.");
 }
 
 TEST_P(FilePathWhitelistTest, DefaultImportAndExportPaths) {
-  ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "", "");
   auto file_path = setAndGetFileAtDefaultImportOrExportPath();
   EXPECT_NO_THROW(sql(getQuery(file_path)));
 }
 
 TEST_F(FilePathWhitelistTest, ExportRelativePath) {
-  ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "", "");
   EXPECT_NO_THROW(sql("COPY (SELECT * FROM test_table) TO 'test_export_file.csv';"));
 }
 
@@ -353,8 +253,7 @@ INSTANTIATE_TEST_SUITE_P(FilePathWhitelistTest,
                          [](const auto& param_info) { return param_info.param; });
 
 TEST_F(FilePathWhitelistTest, DetectTypesBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  const auto& file_path = BLACKLISTED_PATH;
   auto db_handler_and_session_id = getDbHandlerAndSessionId();
   auto db_handler = db_handler_and_session_id.first;
   auto session_id = db_handler_and_session_id.second;
@@ -367,8 +266,7 @@ TEST_F(FilePathWhitelistTest, DetectTypesBlacklist) {
 }
 
 TEST_F(FilePathWhitelistTest, ImportTableBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  const auto& file_path = BLACKLISTED_PATH;
   auto db_handler_and_session_id = getDbHandlerAndSessionId();
   auto db_handler = db_handler_and_session_id.first;
   auto session_id = db_handler_and_session_id.second;
@@ -380,8 +278,7 @@ TEST_F(FilePathWhitelistTest, ImportTableBlacklist) {
 }
 
 TEST_F(FilePathWhitelistTest, ImportGeoTableBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  const auto& file_path = BLACKLISTED_PATH;
   auto db_handler_and_session_id = getDbHandlerAndSessionId();
   auto db_handler = db_handler_and_session_id.first;
   auto session_id = db_handler_and_session_id.second;
@@ -394,8 +291,7 @@ TEST_F(FilePathWhitelistTest, ImportGeoTableBlacklist) {
 }
 
 TEST_F(FilePathWhitelistTest, GetFirstGeoFileBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  const auto& file_path = BLACKLISTED_PATH;
   auto db_handler_and_session_id = getDbHandlerAndSessionId();
   auto db_handler = db_handler_and_session_id.first;
   auto session_id = db_handler_and_session_id.second;
@@ -409,8 +305,7 @@ TEST_F(FilePathWhitelistTest, GetFirstGeoFileBlacklist) {
 }
 
 TEST_F(FilePathWhitelistTest, GetAllFilesBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  const auto& file_path = BLACKLISTED_PATH;
   auto db_handler_and_session_id = getDbHandlerAndSessionId();
   auto db_handler = db_handler_and_session_id.first;
   auto session_id = db_handler_and_session_id.second;
@@ -423,8 +318,7 @@ TEST_F(FilePathWhitelistTest, GetAllFilesBlacklist) {
 }
 
 TEST_F(FilePathWhitelistTest, GetLayersInGeoFileBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  const auto& file_path = BLACKLISTED_PATH;
   auto db_handler_and_session_id = getDbHandlerAndSessionId();
   auto db_handler = db_handler_and_session_id.first;
   auto session_id = db_handler_and_session_id.second;
@@ -437,16 +331,14 @@ TEST_F(FilePathWhitelistTest, GetLayersInGeoFileBlacklist) {
 }
 
 TEST_F(FilePathWhitelistTest, DumpTableBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  const auto& file_path = BLACKLISTED_PATH;
   queryAndAssertException(
       "DUMP TABLE test_table TO '" + file_path + "';",
       "Access to file or directory path \"" + file_path + "\" is not allowed.");
 }
 
 TEST_F(FilePathWhitelistTest, RestoreTableBlacklist) {
-  const auto& file_path = temp_file_path_;
-  ddl_utils::FilePathBlacklist::addToBlacklist(file_path);
+  const auto& file_path = BLACKLISTED_PATH;
   queryAndAssertException(
       "RESTORE TABLE test1 FROM '" + file_path + "';",
       "Access to file or directory path \"" + file_path + "\" is not allowed.");
@@ -487,7 +379,7 @@ std::vector<FileLocationTypeValue> getEnabledFileLocationTypes() {
 }  // namespace
 
 class DBHandlerFilePathTest
-    : public DBHandlerTestFixture,
+    : public SqlTestFixture,
       public testing::WithParamInterface<std::tuple<FileLocationTypeValue, std::string>> {
  public:
   static std::string testParamsToString(
@@ -514,12 +406,10 @@ class DBHandlerFilePathTest
 
  protected:
   static void SetUpTestSuite() {
-    createDBHandler();
     sql("CREATE TABLE IF NOT EXISTS test_table (col1 TEXT);");
     sql("CREATE TABLE IF NOT EXISTS test_table_2 (" + Geospatial::kGeoColumnName +
         " POINT);");
     boost::filesystem::create_directory(getImportPath());
-    ddl_utils::FilePathWhitelist::initialize(BASE_PATH, "", "");
   }
 
   static void TearDownTestSuite() {
@@ -667,91 +557,17 @@ INSTANTIATE_TEST_SUITE_P(
       return DBHandlerFilePathTest::testParamsToString(param_info.param);
     });
 
-TEST_F(FilePathWhitelistTest, ThrowOnPunctuation) {
-  executeLambdaAndAssertException(
-      [&] {
-        validate_allowed_file_path("name_with_&", ddl_utils::DataTransferType::IMPORT);
-      },
-      "Punctuation \"&\" is not allowed in file path: name_with_&");
-  executeLambdaAndAssertException(
-      [&] {
-        validate_allowed_file_path("name_with_;", ddl_utils::DataTransferType::IMPORT);
-      },
-      "Punctuation \";\" is not allowed in file path: name_with_;");
-  executeLambdaAndAssertException(
-      [&] {
-        validate_allowed_file_path("name_with_\\", ddl_utils::DataTransferType::IMPORT);
-      },
-      "Punctuation \"\\\" is not allowed in file path: name_with_\\");
-  executeLambdaAndAssertException(
-      [&] {
-        validate_allowed_file_path("name_with_$", ddl_utils::DataTransferType::IMPORT);
-      },
-      "Punctuation \"$\" is not allowed in file path: name_with_$");
-  executeLambdaAndAssertException(
-      [&] {
-        validate_allowed_file_path("name_with_!", ddl_utils::DataTransferType::IMPORT);
-      },
-      "Punctuation \"!\" is not allowed in file path: name_with_!");
-}
-
-TEST_F(FilePathWhitelistTest, ThrowOnAsterisk) {
-  executeLambdaAndAssertException(
-      [&] {
-        validate_allowed_file_path("name_with_*", ddl_utils::DataTransferType::IMPORT);
-      },
-      "Punctuation \"*\" is not allowed in file path: name_with_*");
-}
-
-TEST_F(FilePathWhitelistTest, AllowAsteriskForWildcard) {
-  whitelistRootPath();
-  auto test_path =
-      boost::filesystem::canonical("../../Tests/FilePathWhitelist").string() + "/*";
-  validate_allowed_file_path(test_path, ddl_utils::DataTransferType::IMPORT, true);
-}
-
-TEST_F(FilePathWhitelistTest, AllowRelativePath) {
-  whitelistRootPath();
-  validate_allowed_file_path("./../../Tests/FilePathWhitelist/example.csv",
-                             ddl_utils::DataTransferType::IMPORT);
-}
-
-TEST_F(FilePathWhitelistTest, AllowTilde) {
-  // This test case ensures that an exception is not thrown because of the
-  // presence of the "~" character. Although, an exception is thrown because
-  // the file path does not exist (cannot rely on home directory on test machines).
-  executeLambdaAndAssertException(
-      [&] {
-        validate_allowed_file_path("~/test_path", ddl_utils::DataTransferType::IMPORT);
-      },
-      "File or directory \"~/test_path\" does not exist.");
-}
-
 int main(int argc, char** argv) {
-  g_enable_fsi = true;
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  DBHandlerTestFixture::initTestArgs(argc, argv);
-
-  import_export::ForeignDataImporter::setDefaultImportPath(BASE_PATH);
-
-#ifdef HAVE_AWS_S3
-  heavydb_aws_sdk::init_sdk();
-#endif
-
-  Geospatial::GDAL::init();
 
   int err{0};
   try {
-    testing::AddGlobalTestEnvironment(new DBHandlerTestEnvironment);
+    SqlTestFixture::initConnection(argc, argv);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+    err = 1;
   }
-
-#ifdef HAVE_AWS_S3
-  heavydb_aws_sdk::shutdown_sdk();
-#endif
-
   return err;
 }
