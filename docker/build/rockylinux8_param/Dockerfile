@@ -16,7 +16,10 @@ RUN echo $'#!/bin/bash\n\
     chmod +x /docker-entrypoint.sh
 ENTRYPOINT ["/docker-entrypoint.sh"]
 
-RUN dnf groupinstall -y "Development Tools"
+# --nobest: ubi-8-appstream in the nvcr base can be ahead of the Rocky base repos
+# (gcc/gcc-c++ at X+1 with no matching libstdc++/libgcc), so the best candidates
+# are uninstallable. Same reason as the --nobest in scripts/common-functions.sh.
+RUN dnf groupinstall -y --nobest "Development Tools"
 
 # Enable PowerTools (CRB) — it provides perl module deps (perl-Role::Tiny,
 # Class::Method::Modifiers, Import::Into, Devel::GlobalDestruction) that
@@ -31,7 +34,7 @@ RUN dnf config-manager --add-repo https://download.docker.com/linux/centos/docke
     dnf install -y docker-ce-cli && \
     rm -rf /var/cache/dnf/*
 
-RUN dnf install -y \
+RUN dnf install -y --nobest \
         zlib-devel \
         epel-release \
         libssh \
