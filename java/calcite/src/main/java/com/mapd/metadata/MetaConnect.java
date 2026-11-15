@@ -981,7 +981,8 @@ public class MetaConnect {
         HEAVYDBLOGGER.debug("removing schema " + schema.toUpperCase());
         DATABASE_TO_TABLES.remove(schema.toUpperCase());
       } else {
-        mSet.clear();
+        // Planning threads may still be iterating the previously published set.
+        DATABASE_TO_TABLES.put(schema.toUpperCase(), new HashSet<String>());
       }
     } else {
       // add a empty database descriptor for new DB, it will be lazily populated when

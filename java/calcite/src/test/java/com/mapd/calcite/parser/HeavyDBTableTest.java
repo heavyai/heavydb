@@ -19,8 +19,14 @@ import org.junit.Test;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import ai.heavy.thrift.server.TColumnType;
 import ai.heavy.thrift.server.TDatumType;
@@ -237,6 +243,44 @@ public class HeavyDBTableTest {
     table(unknown);
     assertNull(
             HeavyDBTable.getRowCountEstimate(Arrays.asList("constraint_test", "child")));
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  public void tableNamesAreReadableWhileMetadataIsRefreshed() throws Exception {
+    Field field = MetaConnect.class.getDeclaredField("DATABASE_TO_TABLES");
+    field.setAccessible(true);
+    Map<String, Set<String>> cache = (Map<String, Set<String>>) field.get(null);
+    final String database = "CONSTRAINT_TEST";
+    Set<String> names = new HashSet<>(Arrays.asList("parent", "child", "other"));
+    Set<String> previous = cache.put(database, new HashSet<>(names));
+    ExecutorService writer = Executors.newSingleThreadExecutor();
+    try {
+      MetaConnect connection = new MetaConnect(0, "", null, null, null, database);
+      Set<String> snapshot = connection.getTables();
+      Iterator<String> reader = snapshot.iterator();
+      Set<String> observed = new HashSet<>();
+      observed.add(reader.next());
+
+      // Hold a planning reader across invalidation without relying on scheduling luck.
+      writer.submit(() -> connection.updateMetaData("constraint_test", "child"))
+              .get(5, TimeUnit.SECONDS);
+      while (reader.hasNext()) {
+        observed.add(reader.next());
+      }
+      assertEquals(names, observed);
+      assertEquals(names, snapshot);
+      assertNotSame(snapshot, cache.get(database));
+      assertTrue(cache.get(database).isEmpty());
+    } finally {
+      writer.shutdownNow();
+      writer.awaitTermination(5, TimeUnit.SECONDS);
+      if (previous != null) {
+        cache.put(database, previous);
+      } else {
+        cache.remove(database);
+      }
+    }
   }
 
   @Test
