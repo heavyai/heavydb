@@ -24,14 +24,14 @@ RUN dnf groupinstall -y --nobest "Development Tools"
 # Enable PowerTools (CRB) — it provides perl module deps (perl-Role::Tiny,
 # Class::Method::Modifiers, Import::Into, Devel::GlobalDestruction) that
 # perl-Moo (pulled in by cloc) needs. Disabled by default on the nvcr base.
-RUN dnf install -y dnf-plugins-core && \
+RUN dnf install -y --nobest dnf-plugins-core && \
     dnf config-manager --set-enabled powertools
 
 # Install the Docker CLI (client only) so builds inside this image can run
 # `docker` against a mounted host daemon socket. The nvcr/cuda base has no
 # docker client.
 RUN dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo && \
-    dnf install -y docker-ce-cli && \
+    dnf install -y --nobest docker-ce-cli && \
     rm -rf /var/cache/dnf/*
 
 RUN dnf install -y --nobest \
@@ -51,7 +51,7 @@ RUN dnf install -y --nobest \
         valgrind \
         zip unzip && \
     rm -rf /var/cache/dnf/*
-RUN dnf install -y \
+RUN dnf install -y --nobest \
         cloc \
         jq && \
     rm -rf /var/cache/dnf/*
