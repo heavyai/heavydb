@@ -41,6 +41,7 @@ class MockCalcite : public Calcite {
 
 extern bool g_enable_fsi;
 extern bool g_enable_s3_fsi;
+extern bool g_enable_column_level_security;
 
 using namespace std;
 using namespace TestHelpers;
@@ -1192,6 +1193,93 @@ TEST_F(TableConstraintTest, ForeignKeyRequiresReferencedTablePrivileges) {
       sql("ALTER TABLE constraint_review_child ADD CONSTRAINT child_fk "
           "FOREIGN KEY(id) REFERENCES constraint_review_parent(id);"));
 }
+
+class ForeignKeyColumnPrivilegeTest : public TableConstraintTest,
+                                      public testing::WithParamInterface<bool> {
+ protected:
+  void SetUp() override {
+    TableConstraintTest::SetUp();
+    saved_column_level_security_ = g_enable_column_level_security;
+    g_enable_column_level_security = true;
+    sql("CREATE TABLE fk_privilege_parent (id INT NOT NULL, other INT, PRIMARY "
+        "KEY(id));");
+    createTestUser();
+    sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+    login("test_user", "test_pass");
+    if (GetParam()) {
+      sql("CREATE TABLE fk_privilege_child (id INT);");
+    }
+  }
+
+  void TearDown() override {
+    ScopeGuard restore = [&] {
+      g_enable_column_level_security = saved_column_level_security_;
+    };
+    loginAdmin();
+    sql("DROP TABLE IF EXISTS fk_privilege_child;");
+    sql("DROP TABLE IF EXISTS fk_privilege_parent;");
+    dropTestUser();
+    TableConstraintTest::TearDown();
+  }
+
+  void grantOnParent(const std::string& privilege) {
+    loginAdmin();
+    sql("GRANT " + privilege + " ON TABLE fk_privilege_parent TO test_user;");
+    login("test_user", "test_pass");
+  }
+
+  std::string addForeignKey() const {
+    return std::string(GetParam() ? "ALTER TABLE fk_privilege_child ADD "
+                                  : "CREATE TABLE fk_privilege_child (id INT, ") +
+           "CONSTRAINT child_fk FOREIGN KEY(id) REFERENCES fk_privilege_parent(id)" +
+           (GetParam() ? ";" : ");");
+  }
+
+  void expectDenied() {
+    queryAndAssertException(
+        addForeignKey(),
+        "Current user does not have SELECT privileges on referenced table: "
+        "fk_privilege_parent");
+    loginAdmin();
+    const auto td = getCatalog().getMetadataForTable("fk_privilege_child", false);
+    if (GetParam()) {
+      ASSERT_NE(nullptr, td);
+      EXPECT_TRUE(getCatalog().getTableConstraints(td).empty());
+    } else {
+      EXPECT_EQ(nullptr, td);
+    }
+  }
+
+ private:
+  bool saved_column_level_security_{};
+};
+
+TEST_P(ForeignKeyColumnPrivilegeTest, NoPrivilegeOnReferencedTable) {
+  expectDenied();
+}
+
+TEST_P(ForeignKeyColumnPrivilegeTest, TableLevelSelect) {
+  grantOnParent("SELECT");
+  sql(addForeignKey());
+  loginAdmin();
+  const auto td = getCatalog().getMetadataForTable("fk_privilege_child", false);
+  ASSERT_NE(nullptr, td);
+  const auto constraints = getCatalog().getTableConstraints(td);
+  ASSERT_EQ(1u, constraints.size());
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::ForeignKey, constraints[0].type);
+}
+
+TEST_P(ForeignKeyColumnPrivilegeTest, SelectOnReferencedColumnOnly) {
+  grantOnParent("SELECT (id)");
+  expectDenied();
+}
+
+TEST_P(ForeignKeyColumnPrivilegeTest, SelectOnUnreferencedColumnOnly) {
+  grantOnParent("SELECT (other)");
+  expectDenied();
+}
+
+INSTANTIATE_TEST_SUITE_P(CreateAndAlter, ForeignKeyColumnPrivilegeTest, testing::Bool());
 
 TEST_F(TableConstraintTest, ForeignTablesRejectAlterConstraints) {
   sql(getCreateTableQuery(
