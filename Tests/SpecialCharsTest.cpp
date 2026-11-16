@@ -9,54 +9,33 @@
 #include <codecvt>
 #include <locale>
 
-#include "QueryEngine/ResultSet.h"
-#include "QueryRunner/QueryRunner.h"
+#include "SqlTestFixture.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
 
-using QR = QueryRunner::QueryRunner;
 using namespace TestHelpers;
 
 bool g_keep_data{false};
 
-bool skip_tests(const ExecutorDeviceType device_type) {
-#ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU && !QR::get()->gpusPresent();
-#else
-  return device_type == ExecutorDeviceType::GPU;
-#endif
-}
-
-#define SKIP_NO_GPU()                                        \
-  if (skip_tests(dt)) {                                      \
-    CHECK(dt == ExecutorDeviceType::GPU);                    \
-    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
-    continue;                                                \
-  }
-
-std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
-                                            const ExecutorDeviceType device_type) {
-  return QR::get()->runSQL(query_str, device_type, true, true);
-}
-
-class UnicodeSpecialChars : public ::testing::Test {
+class UnicodeSpecialChars : public SqlTestFixture {
  public:
   void SetUp() override {
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS special_chars;");
-    QR::get()->runDDLStatement(
+    SqlTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS special_chars;");
+    sql(
         "CREATE TABLE special_chars (x INT, str TEXT ENCODING DICT(32)) WITH "
         "(FRAGMENT_SIZE=2);");
 
     run_multiple_agg("INSERT INTO special_chars VALUES (1, '" +
                          UnicodeSpecialChars::getStringValue() + "');",
-                     ExecutorDeviceType::CPU);
+                     TExecuteMode::CPU);
   }
 
   void TearDown() override {
     if (!g_keep_data) {
-      QR::get()->runDDLStatement("DROP TABLE IF EXISTS special_chars;");
+      sql("DROP TABLE IF EXISTS special_chars;");
     }
   }
 
@@ -66,8 +45,8 @@ class UnicodeSpecialChars : public ::testing::Test {
 };
 
 TEST_F(UnicodeSpecialChars, Basics) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
+    SKIP_NO_GPU_THINCLIENT();
 
     auto rows = run_multiple_agg("SELECT count(*) FROM special_chars WHERE str = '" +
                                      UnicodeSpecialChars::getStringValue() + "';",
@@ -79,25 +58,26 @@ TEST_F(UnicodeSpecialChars, Basics) {
   }
 }
 
-class EscapeSeqSpecialChars : public ::testing::Test {
+class EscapeSeqSpecialChars : public SqlTestFixture {
  public:
   void SetUp() override {
-    QR::get()->runDDLStatement("DROP TABLE IF EXISTS special_chars;");
-    QR::get()->runDDLStatement(
+    SqlTestFixture::SetUp();
+    sql("DROP TABLE IF EXISTS special_chars;");
+    sql(
         "CREATE TABLE special_chars (x INT, str TEXT ENCODING DICT(32)) WITH "
         "(FRAGMENT_SIZE=2);");
 
     run_multiple_agg("INSERT INTO special_chars VALUES (1, '" +
                          EscapeSeqSpecialChars::getString1() + "');",
-                     ExecutorDeviceType::CPU);
+                     TExecuteMode::CPU);
     run_multiple_agg("INSERT INTO special_chars VALUES (2, '" +
                          EscapeSeqSpecialChars::getString2() + "');",
-                     ExecutorDeviceType::CPU);
+                     TExecuteMode::CPU);
   }
 
   void TearDown() override {
     if (!g_keep_data) {
-      QR::get()->runDDLStatement("DROP TABLE IF EXISTS special_chars;");
+      sql("DROP TABLE IF EXISTS special_chars;");
     }
   }
 
@@ -111,8 +91,8 @@ class EscapeSeqSpecialChars : public ::testing::Test {
 };
 
 TEST_F(EscapeSeqSpecialChars, Basics) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
+  for (auto dt : {TExecuteMode::CPU, TExecuteMode::GPU}) {
+    SKIP_NO_GPU_THINCLIENT();
 
     {
       auto rows = run_multiple_agg("SELECT x FROM special_chars WHERE str = '" +
@@ -151,7 +131,7 @@ int main(int argc, char** argv) {
                      "--gtest_filter to preserve tables for a specific test group.");
   desc.add_options()(
       "test-help",
-      "Print all BumpAllocatorTest specific options (for gtest options use `--help`).");
+      "Print all SpecialCharsTest specific options (for gtest options use `--help`).");
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
@@ -159,11 +139,13 @@ int main(int argc, char** argv) {
   desc.add(log_options.get_options());
 
   po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  // the connection options (--host, --port, ...) are parsed by initConnection()
+  po::store(
+      po::command_line_parser(argc, argv).options(desc).allow_unregistered().run(), vm);
   po::notify(vm);
 
   if (vm.count("test-help")) {
-    std::cout << "Usage: BumpAllocatorTest" << std::endl << std::endl;
+    std::cout << "Usage: SpecialCharsTest" << std::endl << std::endl;
     std::cout << desc << std::endl;
     return 0;
   }
@@ -174,14 +156,13 @@ int main(int argc, char** argv) {
 
   logger::init(log_options);
 
-  QR::init(BASE_PATH);
-
   int err{0};
   try {
+    SqlTestFixture::initConnection(argc, argv);
     err = RUN_ALL_TESTS();
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
+    err = 1;
   }
-  QR::reset();
   return err;
 }
