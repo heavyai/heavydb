@@ -201,7 +201,7 @@ if [ "$ID" == "ubuntu" ] ; then
   generate_mapd_deps_sh "$PREFIX"
   install_profile_entry "$PREFIX" "$ENABLE"
 elif [ "$ID" == "rocky" ] ; then
-  sudo dnf groupinstall -y "Development Tools"
+  sudo dnf groupinstall -y --nobest "Development Tools"
 
   install_required_rockylinux_packages
 
