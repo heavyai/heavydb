@@ -398,14 +398,25 @@ Calcite::Calcite(const SystemParameters& system_parameters,
 }
 
 void Calcite::updateMetadata(std::string catalog, std::string table) {
-  std::lock_guard<std::mutex> lock(statistics_mutex_);
-  updateMetadataImpl(catalog, table);
-  for (auto it = dirty_statistics_.begin(); it != dirty_statistics_.end();) {
-    if (it->first == catalog && (table.empty() || it->second == table)) {
-      it = dirty_statistics_.erase(it);
-    } else {
-      ++it;
+  // DDL must complete its invalidation, even if a statistics refresh is in flight.
+  std::lock_guard<std::mutex> refresh_lock(metadata_refresh_mutex_);
+  decltype(dirty_statistics_) pending;
+  // Retire only pre-RPC markers, leaving concurrent writes dirty on success.
+  {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    for (auto it = dirty_statistics_.begin(); it != dirty_statistics_.end();) {
+      const auto current = it++;
+      if (current->first == catalog && (table.empty() || current->second == table)) {
+        pending.insert(dirty_statistics_.extract(current));
+      }
     }
+  }
+  try {
+    updateMetadataImpl(catalog, table);
+  } catch (...) {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    dirty_statistics_.merge(pending);
+    throw;
   }
 }
 
@@ -428,19 +439,38 @@ void Calcite::markTableStatisticsDirty(const std::string& catalog,
   dirty_statistics_.emplace(catalog, table);
 }
 
+void Calcite::refreshTableStatistics() {
+  // Other planners may use existing estimates while one caller refreshes them.
+  std::unique_lock<std::mutex> refresh_lock(metadata_refresh_mutex_, std::try_to_lock);
+  if (!refresh_lock.owns_lock()) {
+    return;
+  }
+  decltype(dirty_statistics_) pending;
+  {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    pending.swap(dirty_statistics_);
+  }
+  // Drain only this snapshot. Writes during an RPC belong to the next refresh.
+  try {
+    while (!pending.empty()) {
+      const auto it = pending.begin();
+      updateMetadataImpl(it->first, it->second);
+      pending.erase(it);
+    }
+  } catch (...) {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    dirty_statistics_.merge(pending);
+    throw;
+  }
+}
+
 TPlanResult Calcite::process(query_state::QueryStateProxy query_state_proxy,
                              std::string sql_string,
                              const TQueryParsingOption& query_parsing_option,
                              const TOptimizationOption& optimization_option,
                              const std::string& calcite_session_id) {
   if (optimization_option.enable_experimental_query_rewrites) {
-    // Coalesce write batches; unchanged read workloads need no metadata RPC.
-    std::lock_guard<std::mutex> lock(statistics_mutex_);
-    while (!dirty_statistics_.empty()) {
-      const auto it = dirty_statistics_.begin();
-      updateMetadataImpl(it->first, it->second);
-      dirty_statistics_.erase(it);
-    }
+    refreshTableStatistics();
   }
   TPlanResult result = processImpl(query_state_proxy,
                                    std::move(sql_string),

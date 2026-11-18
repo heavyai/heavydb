@@ -227,7 +227,7 @@ target_link_libraries(CreateAndDropTableDdlTest ${THRIFT_HANDLER_TEST_LIBRARIES}
 add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS CreateAndDropTableDdlTest)
 
-add_executable(TableStatisticsTest TableStatisticsTest.cpp)
+add_executable(TableStatisticsTest TableStatisticsTest.cpp CalciteMetadataTest.cpp)
 target_link_libraries(TableStatisticsTest ${THRIFT_HANDLER_TEST_LIBRARIES})
 add_test(TableStatisticsTest TableStatisticsTest ${TEST_ARGS})
 list(APPEND SANITY_TEST_PROGRAMS TableStatisticsTest)
