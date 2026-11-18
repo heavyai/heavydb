@@ -95,6 +95,8 @@ class Calcite {
       bool trust_unenforced_table_constraints);
 
  private:
+  friend class CalciteMetadataTest;
+
   void init(const int db_port,
             const int port,
             const std::string& data_dir,
@@ -112,7 +114,8 @@ class Calcite {
                           const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
-  void updateMetadataImpl(const std::string& catalog, const std::string& table);
+  virtual void updateMetadataImpl(const std::string& catalog, const std::string& table);
+  void refreshTableStatistics();
   std::pair<std::shared_ptr<CalciteServerClient>, std::shared_ptr<TTransport>> getClient(
       int port);
 
@@ -130,6 +133,8 @@ class Calcite {
   std::string ssl_keystore_password_;
   std::string ssl_ca_file_;
   std::string db_config_file_;
+  // Acquire refresh before statistics; never hold statistics across an RPC.
+  std::mutex metadata_refresh_mutex_;
   std::mutex statistics_mutex_;
   std::set<std::pair<std::string, std::string>> dirty_statistics_;
   std::once_flag shutdown_once_flag_;
