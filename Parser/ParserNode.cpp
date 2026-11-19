@@ -5622,10 +5622,17 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
 
   check_alter_table_privilege(session, td);
 
+  // A rejected column must not leave earlier columns' policies or privileges changed.
   for (const auto& column : columns_) {
-    if (nullptr == catalog.getMetadataForColumn(td->tableId, *column)) {
+    const auto cd = catalog.getMetadataForColumn(td->tableId, *column);
+    if (!cd) {
       throw std::runtime_error("Column " + *column + " does not exist.");
     }
+    if (td->nShards > 0 && td->shardedColumnId == cd->columnId) {
+      throw std::runtime_error("Dropping sharding column " + cd->columnName +
+                               " is not supported.");
+    }
+    catalog.validateColumnConstraintDependencies(td, cd, "drop");
   }
 
   if (td->nColumns <= (td->hasDeletedCol ? 3 : 2)) {
@@ -5640,10 +5647,6 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session,
     std::vector<int> columnIds;
     for (const auto& column : columns_) {
       ColumnDescriptor cd = *catalog.getMetadataForColumn(td->tableId, *column);
-      if (td->nShards > 0 && td->shardedColumnId == cd.columnId) {
-        throw std::runtime_error("Dropping sharding column " + cd.columnName +
-                                 " is not supported.");
-      }
       catalog.dropColumn(*td, cd);
       columnIds.push_back(cd.columnId);
       for (int i = 0; i < cd.columnType.get_physical_cols(); i++) {

@@ -1335,6 +1335,108 @@ TEST_P(ForeignKeyColumnPrivilegeTest, SelectOnUnreferencedColumnOnly) {
 
 INSTANTIATE_TEST_SUITE_P(CreateAndAlter, ForeignKeyColumnPrivilegeTest, testing::Bool());
 
+class RejectedDropColumnTest : public CreateAndDropTableDdlTest,
+                               public testing::WithParamInterface<std::string> {
+ protected:
+  void SetUp() override {
+    CreateAndDropTableDdlTest::SetUp();
+    saved_column_security_ = g_enable_column_level_security;
+    g_enable_column_level_security = true;
+    sql("DROP TABLE IF EXISTS rejected_drop;");
+    sql("CREATE TABLE rejected_drop (region TEXT, id INT NOT NULL, spare INT, " +
+        GetParam() + ")" + (sharded() ? " WITH (SHARD_COUNT=2)" : "") + ";");
+    sql("INSERT INTO rejected_drop VALUES('EU',1,10),('US',2,20),('US',3,30);");
+    createTestUser();
+  }
+
+  void TearDown() override {
+    loginAdmin();
+    sql("DROP TABLE IF EXISTS rejected_drop;");
+    dropTestUser();
+    g_enable_column_level_security = saved_column_security_;
+    CreateAndDropTableDdlTest::TearDown();
+  }
+
+  bool sharded() const { return GetParam() == "SHARD KEY(id)"; }
+
+  void rejectDrop() {
+    queryAndAssertPartialException(
+        "ALTER TABLE rejected_drop DROP COLUMN region, id;",
+        sharded() ? "Dropping sharding column id is not supported"
+                  : "Cannot drop column rejected_drop.id because constraint");
+  }
+
+  void expectColumnCountsUnchanged() {
+    const auto& catalog = getCatalog();
+    const auto table = catalog.getMetadataForTable("rejected_drop", false);
+    auto tables = catalog.getPhysicalTablesDescriptors(table, false);
+    if (sharded()) {
+      tables.push_back(table);
+    }
+    for (const auto td : tables) {
+      ASSERT_NE(nullptr, catalog.getMetadataForColumn(td->tableId, "region"));
+      ASSERT_NE(nullptr, catalog.getMetadataForColumn(td->tableId, "id"));
+      ASSERT_NE(nullptr, catalog.getMetadataForColumn(td->tableId, "spare"));
+      auto& sqlite = getCatalog().getSqliteConnector();
+      sqlite.query("SELECT ncolumns FROM mapd_tables WHERE tableid=" +
+                   std::to_string(td->tableId));
+      ASSERT_EQ(sqlite.getData<int>(0, 0), td->nColumns);
+    }
+  }
+
+ private:
+  bool saved_column_security_{};
+};
+
+TEST_P(RejectedDropColumnTest, PreservesRowPolicyAndColumnCounts) {
+  sql("GRANT SELECT ON TABLE rejected_drop TO test_user;");
+  sql("CREATE POLICY ON COLUMN rejected_drop.region TO test_user VALUES ('EU');");
+  login("test_user", "test_pass");
+  sqlAndCompareResult("SELECT COUNT(*) FROM rejected_drop;", {{int64_t(1)}});
+  loginAdmin();
+  TQueryResult before;
+  sql(before, "SHOW POLICIES test_user;");
+  ASSERT_EQ(1u, before.row_set.columns.at(0).data.str_col.size());
+
+  rejectDrop();
+
+  expectColumnCountsUnchanged();
+  TQueryResult after;
+  sql(after, "SHOW POLICIES test_user;");
+  EXPECT_EQ(before.row_set, after.row_set);
+  login("test_user", "test_pass");
+  sqlAndCompareResult("SELECT COUNT(*) FROM rejected_drop;", {{int64_t(1)}});
+}
+
+TEST_P(RejectedDropColumnTest, PreservesColumnSelectPrivilege) {
+  sql("GRANT SELECT (region) ON TABLE rejected_drop TO test_user;");
+  login("test_user", "test_pass");
+  sqlAndCompareResult("SELECT region FROM rejected_drop ORDER BY region;",
+                      {{"EU"}, {"US"}, {"US"}});
+  loginAdmin();
+
+  rejectDrop();
+
+  login("test_user", "test_pass");
+  sqlAndCompareResult("SELECT region FROM rejected_drop ORDER BY region;",
+                      {{"EU"}, {"US"}, {"US"}});
+}
+
+TEST_P(RejectedDropColumnTest, AllowsSubsequentValidDrops) {
+  rejectDrop();
+  ASSERT_NO_FATAL_FAILURE(expectColumnCountsUnchanged());
+  sql("ALTER TABLE rejected_drop DROP COLUMN region;");
+  sql("ALTER TABLE rejected_drop DROP COLUMN spare;");
+  sqlAndCompareResult("SELECT id FROM rejected_drop ORDER BY id;",
+                      {{int64_t(1)}, {int64_t(2)}, {int64_t(3)}});
+}
+
+INSTANTIATE_TEST_SUITE_P(ProtectedColumns,
+                         RejectedDropColumnTest,
+                         testing::Values("PRIMARY KEY(id)",
+                                         "UNIQUE(id)",
+                                         "SHARD KEY(id)"));
+
 TEST_F(TableConstraintTest, ForeignTablesRejectAlterConstraints) {
   sql(getCreateTableQuery(
       ddl_utils::TableType::FOREIGN_TABLE, "constraint_review_parent", "(id INT)"));
