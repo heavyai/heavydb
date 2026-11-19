@@ -2621,7 +2621,8 @@ void DBHandler::get_table_details_impl(TTableDetails& _return,
     _return.fragment_size = td->maxFragRows;
     _return.page_size = td->fragPageSize;
     _return.max_rows = td->maxRows;
-    if (system_parameters_.enable_experimental_query_rewrites) {
+    // Planner ordinals include system columns and must match that schema.
+    if (get_system && system_parameters_.enable_experimental_query_rewrites) {
       const auto num_rows = get_table_num_rows(*cat, td);
       if (num_rows >= 0) {
         _return.__set_num_rows(num_rows);
