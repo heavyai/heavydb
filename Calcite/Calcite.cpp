@@ -454,13 +454,25 @@ void Calcite::refreshTableStatistics() {
   try {
     while (!pending.empty()) {
       const auto it = pending.begin();
-      updateMetadataImpl(it->first, it->second);
+      try {
+        updateMetadataImpl(it->first, it->second);
+      } catch (const apache::thrift::TException& e) {
+        // Stale statistics may affect the plan, but must not fail an unrelated query.
+        // Stop this snapshot so a failed service is not called once per dirty table.
+        LOG(WARNING) << "Statistics refresh failed for " << it->first << "." << it->second
+                     << ": " << e.what() << "; deferring unfinished refreshes";
+        break;
+      }
       pending.erase(it);
     }
   } catch (...) {
     std::lock_guard<std::mutex> lock(statistics_mutex_);
     dirty_statistics_.merge(pending);
     throw;
+  }
+  if (!pending.empty()) {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    dirty_statistics_.merge(pending);
   }
 }
 

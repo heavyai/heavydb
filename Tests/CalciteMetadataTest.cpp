@@ -4,6 +4,8 @@
  */
 
 #include <gtest/gtest.h>
+#include <thrift/TApplicationException.h>
+#include <thrift/transport/TTransportException.h>
 
 #include <atomic>
 #include <chrono>
@@ -11,12 +13,14 @@
 #include <functional>
 #include <future>
 #include <mutex>
+#include <new>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "Calcite/Calcite.h"
+#include "Tests/LogCaptureTestHelper.h"
 
 namespace {
 
@@ -119,19 +123,22 @@ TEST_F(CalciteMetadataTest, RefreshDoesNotBlockWritersOrOtherPlanners) {
 }
 
 TEST_F(CalciteMetadataTest, FailedRefreshRetainsOnlyUnfinishedTables) {
+  LogCapture log;
   Tables updates;
   bool fail = true;
   calcite_.update = [&](const auto& db, const auto& table) {
     updates.emplace_back(db, table);
     if (table == "b" && fail) {
       fail = false;
-      throw std::runtime_error("metadata update failed");
+      throw apache::thrift::TApplicationException("metadata update failed");
     }
   };
   for (const auto* table : {"a", "b", "c"}) {
     calcite_.markTableStatisticsDirty("db", table);
   }
-  EXPECT_THROW(refresh(), std::runtime_error);
+  EXPECT_NO_THROW(refresh());
+  EXPECT_TRUE(log.contains("Statistics refresh failed for db.b: metadata update failed"));
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}}), updates);
   refresh();
   refresh();
   EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"db", "b"}, {"db", "c"}}), updates);
@@ -146,7 +153,7 @@ TEST_F(CalciteMetadataTest, FailedRefreshMergesConcurrentWrites) {
     if (table == "b" && fail) {
       fail = false;
       paused.pause();
-      throw std::runtime_error("metadata update failed");
+      throw apache::thrift::transport::TTransportException("metadata connection failed");
     }
   };
   for (const auto* table : {"a", "b", "c"}) {
@@ -161,7 +168,7 @@ TEST_F(CalciteMetadataTest, FailedRefreshMergesConcurrentWrites) {
   });
   const auto writer_status = writer.wait_for(5s);
   paused.release();
-  EXPECT_THROW(owner.get(), std::runtime_error);
+  EXPECT_NO_THROW(owner.get());
   writer.get();
   EXPECT_TRUE(entered);
   EXPECT_EQ(std::future_status::ready, writer_status);
@@ -171,6 +178,67 @@ TEST_F(CalciteMetadataTest, FailedRefreshMergesConcurrentWrites) {
       (Tables{
           {"db", "a"}, {"db", "b"}, {"db", "a"}, {"db", "b"}, {"db", "c"}, {"db", "d"}}),
       updates);
+}
+
+TEST_F(CalciteMetadataTest, RepeatedRpcFailureStopsSnapshotAndRecovers) {
+  Tables updates;
+  bool fail = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+    if (table == "b" && fail) {
+      throw apache::thrift::TException("metadata connection failed");
+    }
+  };
+  for (const auto* table : {"a", "b", "c"}) {
+    calcite_.markTableStatisticsDirty("db", table);
+  }
+  calcite_.markTableStatisticsDirty("other", "d");
+  EXPECT_NO_THROW(refresh());
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}}), updates);
+  EXPECT_NO_THROW(refresh());
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"db", "b"}}), updates);
+  fail = false;
+  EXPECT_NO_THROW(refresh());
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"},
+                    {"db", "b"},
+                    {"db", "b"},
+                    {"db", "b"},
+                    {"db", "c"},
+                    {"other", "d"}}),
+            updates);
+}
+
+TEST_F(CalciteMetadataTest, UnexpectedRefreshFailureStillPropagates) {
+  Tables updates;
+  bool fail = true;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+    if (table == "b" && fail) {
+      fail = false;
+      throw std::runtime_error("unexpected failure");
+    }
+  };
+  for (const auto* table : {"a", "b", "c"}) {
+    calcite_.markTableStatisticsDirty("db", table);
+  }
+  EXPECT_THROW(refresh(), std::runtime_error);
+  refresh();
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"db", "b"}, {"db", "c"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, AllocationFailureStillPropagates) {
+  calcite_.markTableStatisticsDirty("db", "a");
+  calcite_.update = [&](const auto&, const auto&) { throw std::bad_alloc(); };
+  EXPECT_THROW(refresh(), std::bad_alloc);
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  refresh();
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}}), updates);
 }
 
 TEST_F(CalciteMetadataTest, TableDdlClearsOnlyItsPendingRefresh) {
@@ -227,21 +295,38 @@ TEST_F(CalciteMetadataTest, DdlDoesNotLoseConcurrentWritesOrBlockStatisticsReade
   EXPECT_EQ(2u, updates.load());
 }
 
-TEST_F(CalciteMetadataTest, FailedDdlPreservesPendingRefreshes) {
+TEST_F(CalciteMetadataTest, DatabaseDdlRpcFailureStillPropagates) {
   Tables updates;
   calcite_.update = [&](const auto&, const auto&) {
-    throw std::runtime_error("metadata update failed");
+    throw apache::thrift::TApplicationException("metadata update failed");
   };
   calcite_.markTableStatisticsDirty("db", "a");
   calcite_.markTableStatisticsDirty("db", "b");
   calcite_.markTableStatisticsDirty("other", "a");
-  EXPECT_THROW(calcite_.updateMetadata("db", ""), std::runtime_error);
+  EXPECT_THROW(calcite_.updateMetadata("db", ""), apache::thrift::TApplicationException);
   calcite_.update = [&](const auto& db, const auto& table) {
     updates.emplace_back(db, table);
   };
   refresh();
   refresh();
   EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}, {"other", "a"}}), updates);
+}
+
+TEST_F(CalciteMetadataTest, TableDdlRpcFailureStillPropagates) {
+  calcite_.markTableStatisticsDirty("db", "a");
+  calcite_.markTableStatisticsDirty("db", "b");
+  calcite_.update = [&](const auto&, const auto&) {
+    throw apache::thrift::transport::TTransportException("metadata connection failed");
+  };
+  EXPECT_THROW(calcite_.updateMetadata("db", "a"),
+               apache::thrift::transport::TTransportException);
+  Tables updates;
+  calcite_.update = [&](const auto& db, const auto& table) {
+    updates.emplace_back(db, table);
+  };
+  refresh();
+  refresh();
+  EXPECT_EQ((Tables{{"db", "a"}, {"db", "b"}}), updates);
 }
 
 TEST_F(CalciteMetadataTest, DdlStillWaitsForItsInvalidation) {
