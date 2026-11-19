@@ -356,6 +356,60 @@ class CreateTableTest : public CreateAndDropTableDdlTest,
   }
 };
 
+class DropDictionaryColumnTest
+    : public CreateAndDropTableDdlTest,
+      public testing::WithParamInterface<std::tuple<bool, bool>> {};
+
+TEST_P(DropDictionaryColumnTest, RemovesOnlyOwnedDictionaryReferences) {
+  const auto [sharded, shared_dictionary] = GetParam();
+  sql("CREATE TABLE drop_dictionary_owner (label TEXT);");
+  ScopeGuard cleanup = [&] {
+    sql("DROP TABLE IF EXISTS drop_dictionary_child;");
+    sql("DROP TABLE drop_dictionary_owner;");
+  };
+  sql(std::string("CREATE TABLE drop_dictionary_child (id INT, label TEXT") +
+      (shared_dictionary
+           ? ", SHARED DICTIONARY(label) REFERENCES drop_dictionary_owner(label)"
+           : "") +
+      (sharded ? ", SHARD KEY(id)) WITH (SHARD_COUNT=2);" : ");"));
+  sql("INSERT INTO drop_dictionary_child VALUES (1,'EU'),(2,'US');");
+  auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("drop_dictionary_child", false);
+  const auto cd = catalog.getMetadataForColumn(td->tableId, "label");
+  const auto dictionary_id = cd->columnType.get_comp_param();
+  ASSERT_GT(dictionary_id, 0);
+
+  sql("ALTER TABLE drop_dictionary_child DROP COLUMN label;");
+
+  auto tables = catalog.getPhysicalTablesDescriptors(td, false);
+  if (sharded) {
+    tables.push_back(td);
+  }
+  for (const auto table : tables) {
+    EXPECT_EQ(nullptr, catalog.getMetadataForColumn(table->tableId, "label"));
+  }
+  auto& sqlite = catalog.getSqliteConnector();
+  sqlite.query("SELECT refcount FROM mapd_dictionaries WHERE dictid=" +
+               std::to_string(dictionary_id));
+  if (shared_dictionary) {
+    ASSERT_EQ(1u, sqlite.getNumRows());
+    EXPECT_EQ(1, sqlite.getData<int>(0, 0));
+    ASSERT_NE(nullptr, catalog.getMetadataForDict(dictionary_id, false));
+    EXPECT_EQ(1, catalog.getMetadataForDict(dictionary_id, false)->refcount);
+  } else {
+    EXPECT_EQ(0u, sqlite.getNumRows());
+    EXPECT_EQ(nullptr, catalog.getMetadataForDict(dictionary_id, false));
+  }
+  sql("INSERT INTO drop_dictionary_owner VALUES ('still usable');");
+  sqlAndCompareResult("SELECT label FROM drop_dictionary_owner;", {{"still usable"}});
+  sqlAndCompareResult("SELECT id FROM drop_dictionary_child ORDER BY id;",
+                      {{int64_t(1)}, {int64_t(2)}});
+}
+
+INSTANTIATE_TEST_SUITE_P(SharedAndSharded,
+                         DropDictionaryColumnTest,
+                         testing::Combine(testing::Bool(), testing::Bool()));
+
 class TableConstraintTest : public CreateAndDropTableDdlTest {
  protected:
   void SetUp() override {
