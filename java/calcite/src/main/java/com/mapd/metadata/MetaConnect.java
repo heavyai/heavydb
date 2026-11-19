@@ -91,6 +91,20 @@ public class MetaConnect {
           new ConcurrentHashMap<>();
   private static volatile Map<List<String>, Table> DB_TABLE_DETAILS =
           new ConcurrentHashMap<>();
+  private static final Map<String, TableCacheGeneration> TABLE_CACHE_GENERATIONS =
+          new ConcurrentHashMap<>();
+
+  private static final class TableCacheGeneration {
+    // Guarded by this generation's monitor, shared by connections to the database.
+    long value;
+  }
+
+  private static TableCacheGeneration tableCacheGeneration(String database) {
+    // Keep the generation across database removal/recreation so old fetches stay invalid.
+    return TABLE_CACHE_GENERATIONS.computeIfAbsent(
+            database.toUpperCase(), key -> new TableCacheGeneration());
+  }
+
   private final SockTransportProperties sock_transport_properties;
 
   public MetaConnect(int dbPort,
@@ -206,23 +220,38 @@ public class MetaConnect {
       return cTable;
     }
 
-    TTableDetails td = get_table_details(tableName);
+    TableCacheGeneration generation = tableCacheGeneration(default_db);
+    while (true) {
+      final long fetchedGeneration;
+      synchronized (generation) {
+        cTable = DB_TABLE_DETAILS.get(dbTable);
+        if (cTable != null) {
+          return cTable;
+        }
+        fetchedGeneration = generation.value;
+      }
 
-    if (td.getView_sql() == null || td.getView_sql().isEmpty()) {
-      HEAVYDBLOGGER.debug("Processing a table");
-      Table rTable = new HeavyDBTable(td, default_db, tableName);
-      DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
-      HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
-              + " details " + rTable + " Not in buffer");
-      return rTable;
-    } else {
-      HEAVYDBLOGGER.debug("Processing a view");
-      Table rTable =
-              new HeavyDBView(getViewSql(tableName), td, parser, default_db, tableName);
-      DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
-      HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get view " + tableName
-              + " details " + rTable + " Not in buffer");
-      return rTable;
+      // Neither the metadata RPC nor view SQL lookup may hold the publication lock.
+      TTableDetails td = get_table_details(tableName);
+      String viewSql = td.getView_sql() == null || td.getView_sql().isEmpty()
+              ? null
+              : getViewSql(tableName);
+
+      synchronized (generation) {
+        if (fetchedGeneration != generation.value) {
+          continue;
+        }
+        cTable = DB_TABLE_DETAILS.get(dbTable);
+        if (cTable != null) {
+          return cTable;
+        }
+        // Construction also publishes the row count; do it only for the cache winner.
+        Table rTable = viewSql == null
+                ? new HeavyDBTable(td, default_db, tableName)
+                : new HeavyDBView(viewSql, td, parser, default_db, tableName);
+        DB_TABLE_DETAILS.put(dbTable, rTable);
+        return rTable;
+      }
     }
   }
 
@@ -938,6 +967,15 @@ public class MetaConnect {
   }
 
   public void updateMetaData(String schema, String table) {
+    TableCacheGeneration generation = tableCacheGeneration(schema);
+    synchronized (generation) {
+      // Dependent tables and views can still be in flight and absent from the cache.
+      ++generation.value;
+      invalidateMetadataCaches(schema, table);
+    }
+  }
+
+  private void invalidateMetadataCaches(String schema, String table) {
     HeavyDBTable.invalidateMetadata(schema, table);
     // Check if table is specified, if not we are dropping an entire DB so need to
     // remove all tables for that DB
