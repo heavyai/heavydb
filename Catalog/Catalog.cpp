@@ -2476,10 +2476,14 @@ void Catalog::delDictionaryNontransactional(const ColumnDescriptor& cd) {
     return;
   }
   const auto dictId = cd.columnType.get_comp_param();
-  CHECK_GT(dictId, 0);
-  // decrement and zero check dict ref count
   const auto td = getMetadataForTable(cd.tableId, false);
   CHECK(td);
+  // Physical shards can carry a dummy dictionary rather than an owned reference.
+  if (dictId == 0 && td->shard >= 0) {
+    return;
+  }
+  CHECK_GT(dictId, 0);
+  // decrement and zero check dict ref count
   sqliteConnector_.query_with_text_param(
       "UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid = ?",
       std::to_string(dictId));
