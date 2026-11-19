@@ -11,6 +11,7 @@
 
 #include <gtest/gtest.h>
 #include <boost/algorithm/string/case_conv.hpp>
+#include <boost/algorithm/string/join.hpp>
 #include <boost/filesystem.hpp>
 #include <set>
 
@@ -1083,6 +1084,72 @@ TEST_F(TableConstraintTest, ConstraintChangesPersistInCatalog) {
   EXPECT_EQ(original, td->keyMetainfo);
   EXPECT_EQ(original, persisted());
 }
+
+class ForeignKeyIdentityTest : public TableConstraintTest,
+                               public testing::WithParamInterface<bool> {};
+
+TEST_P(ForeignKeyIdentityTest, DistinguishesReferencedTablesAndColumns) {
+  sql("CREATE TABLE identity_parent_a (id INT, other INT, PRIMARY KEY(id), "
+      "UNIQUE(other));");
+  sql("CREATE TABLE identity_parent_b (id INT, PRIMARY KEY(id));");
+  ScopeGuard cleanup = [&] {
+    sql("DROP TABLE IF EXISTS identity_child;");
+    sql("DROP TABLE identity_parent_b;");
+    sql("DROP TABLE identity_parent_a;");
+  };
+  const std::vector<std::string> declarations{
+      "CONSTRAINT fk_a FOREIGN KEY(x) REFERENCES identity_parent_a(id)",
+      "CONSTRAINT fk_b FOREIGN KEY(x) REFERENCES identity_parent_b(id)",
+      "CONSTRAINT fk_other FOREIGN KEY(x) REFERENCES identity_parent_a(other)"};
+  if (GetParam()) {
+    sql("CREATE TABLE identity_child (x INT);");
+    for (const auto& declaration : declarations) {
+      sql("ALTER TABLE identity_child ADD " + declaration + ";");
+    }
+  } else {
+    sql("CREATE TABLE identity_child (x INT, " +
+        boost::algorithm::join(declarations, ", ") + ");");
+  }
+  const auto td = getCatalog().getMetadataForTable("identity_child", false);
+  const auto constraints = getCatalog().getTableConstraints(td);
+  ASSERT_EQ(3u, constraints.size());
+  for (const auto& constraint : constraints) {
+    ASSERT_TRUE(constraint.foreign_key_reference);
+  }
+  EXPECT_EQ("identity_parent_a", constraints[0].foreign_key_reference->table_name);
+  EXPECT_EQ("identity_parent_b", constraints[1].foreign_key_reference->table_name);
+  EXPECT_EQ((std::vector<std::string>{"other"}),
+            constraints[2].foreign_key_reference->column_names);
+  queryAndAssertPartialException(
+      "ALTER TABLE identity_child ADD CONSTRAINT duplicate_fk FOREIGN KEY(X) "
+      "REFERENCES IDENTITY_PARENT_A(ID);",
+      "Equivalent FOREIGN KEY constraint already exists");
+  EXPECT_EQ(3u, getCatalog().getTableConstraints(td).size());
+}
+
+TEST_P(ForeignKeyIdentityTest, RejectsEquivalentDeclarationsWithDifferentNames) {
+  sql("CREATE TABLE identity_parent_a (id INT, PRIMARY KEY(id));");
+  ScopeGuard cleanup = [&] {
+    sql("DROP TABLE IF EXISTS identity_child;");
+    sql("DROP TABLE identity_parent_a;");
+  };
+  const std::string first =
+      "CONSTRAINT fk_a FOREIGN KEY(x) REFERENCES identity_parent_a(id)";
+  const std::string duplicate =
+      "CONSTRAINT fk_b FOREIGN KEY(X) REFERENCES IDENTITY_PARENT_A(ID)";
+  if (GetParam()) {
+    sql("CREATE TABLE identity_child (x INT, " + first + ");");
+    queryAndAssertPartialException("ALTER TABLE identity_child ADD " + duplicate + ";",
+                                   "Equivalent FOREIGN KEY constraint already exists");
+  } else {
+    queryAndAssertPartialException(
+        "CREATE TABLE identity_child (x INT, " + first + ", " + duplicate + ");",
+        "Equivalent FOREIGN KEY constraint already exists");
+    EXPECT_EQ(nullptr, getCatalog().getMetadataForTable("identity_child", false));
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(CreateAndAlter, ForeignKeyIdentityTest, testing::Bool());
 
 TEST_F(TableConstraintTest, ShowCreateRoundTripsConstraints) {
   sql("CREATE TABLE constraint_review_parent (id INT NOT NULL, code INT, "

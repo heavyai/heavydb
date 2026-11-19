@@ -4871,6 +4871,16 @@ void validate_new_constraint_against_existing(
     if (existing_constraint.type == normalized_constraint.type &&
         column_lists_match(existing_constraint.column_names,
                            normalized_constraint.column_names)) {
+      if (normalized_constraint.type == TableConstraintType::ForeignKey) {
+        const auto& existing_reference = existing_constraint.foreign_key_reference;
+        const auto& new_reference = normalized_constraint.foreign_key_reference;
+        if (!existing_reference || !new_reference ||
+            !boost::iequals(existing_reference->table_name, new_reference->table_name) ||
+            !column_lists_match(existing_reference->column_names,
+                                new_reference->column_names)) {
+          continue;
+        }
+      }
       throw std::runtime_error(
           "Equivalent " + table_constraint_type_to_string(normalized_constraint.type) +
           " constraint already exists on table " + table_name + ".");
