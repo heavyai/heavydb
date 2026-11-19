@@ -64,7 +64,8 @@ class TableStatisticsTest : public DBHandlerTestFixture,
       system_parameters_.enable_experimental_query_rewrites = true;
     }
     expectVisibleRows(count);
-    EXPECT_TRUE(log.contains(kMetadataRefresh));
+    EXPECT_TRUE(log.contains("(ms), catalog=\"" + getCatalog().getCurrentDB().dbName +
+                             "\", table=\"statistics_maintenance\""));
     expectPhysicalRows(count);
     expectVisibleRows(count);
     EXPECT_FALSE(log.contains(kMetadataRefresh));
@@ -101,6 +102,85 @@ TEST_P(TableStatisticsTest, VacuumInvalidatesOnlyWhenPhysicalCountChanges) {
   sql("OPTIMIZE TABLE statistics_maintenance WITH (VACUUM='true');");
   expectVisibleRows(4);
   EXPECT_FALSE(log.contains(kMetadataRefresh));
+}
+
+TEST_P(TableStatisticsTest, EpochRollbackInvalidatesBeforeNextRewrite) {
+  enum class EpochApi { Batch, ById, ByName, Sql };
+  auto [handler, session] = getDbHandlerAndSessionId();
+  const auto& catalog = getCatalog();
+  const auto db_id = catalog.getDatabaseId();
+  const auto table_id =
+      catalog.getMetadataForTable("statistics_maintenance", false)->tableId;
+  for (const auto api :
+       {EpochApi::Batch, EpochApi::ById, EpochApi::ByName, EpochApi::Sql}) {
+    SCOPED_TRACE(testing::Message() << "epoch API " << static_cast<int>(api));
+    std::vector<TTableEpochInfo> epochs;
+    handler->get_table_epochs(epochs, session, db_id, table_id);
+    ASSERT_FALSE(epochs.empty());
+    const auto saved_epoch = epochs.front().table_epoch;
+    for (const auto& epoch : epochs) {
+      ASSERT_EQ(saved_epoch, epoch.table_epoch);
+    }
+    system_parameters_.enable_experimental_query_rewrites = true;
+    sql("INSERT INTO statistics_maintenance VALUES (7),(8),(9),(10);");
+    expectVisibleRows(10);  // Drain the insert's pending refresh before rollback.
+    expectPhysicalRows(10);
+
+    system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+    LogCapture log;
+    switch (api) {
+      case EpochApi::Batch:
+        handler->set_table_epochs(session, db_id, epochs);
+        break;
+      case EpochApi::ById:
+        handler->set_table_epoch(session, db_id, table_id, saved_epoch);
+        break;
+      case EpochApi::ByName:
+        handler->set_table_epoch_by_name(session, "statistics_maintenance", saved_epoch);
+        break;
+      case EpochApi::Sql:
+        sql("ALTER TABLE statistics_maintenance SET EPOCH = " +
+            std::to_string(saved_epoch) + ";");
+        break;
+    }
+    expectDeferredRefresh(log, 6);
+  }
+}
+
+TEST_P(TableStatisticsTest, FailedEpochBatchRetainsSuccessfulShardInvalidation) {
+  auto [handler, session] = getDbHandlerAndSessionId();
+  const auto& catalog = getCatalog();
+  const auto db_id = catalog.getDatabaseId();
+  const auto table_id =
+      catalog.getMetadataForTable("statistics_maintenance", false)->tableId;
+  std::vector<TTableEpochInfo> epochs;
+  handler->get_table_epochs(epochs, session, db_id, table_id);
+  ASSERT_FALSE(epochs.empty());
+  const bool sharded = std::get<0>(GetParam());
+  if (sharded) {
+    ASSERT_EQ(4u, epochs.size());
+    // Restore one shard, then fail before touching either remaining shard.
+    epochs.resize(2);
+  }
+  epochs.back().table_epoch = -2;
+  sql("INSERT INTO statistics_maintenance VALUES (7),(8),(9),(10);");
+  expectVisibleRows(10);
+  expectPhysicalRows(10);
+
+  system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+  LogCapture log;
+  EXPECT_THROW(handler->set_table_epochs(session, db_id, epochs), std::runtime_error);
+  if (sharded) {
+    // The insert added one row per shard; only the first shard was rolled back.
+    expectDeferredRefresh(log, 9);
+  } else {
+    // Failure before any successful epoch reset must not enqueue a refresh.
+    EXPECT_FALSE(log.contains(kMetadataRefresh));
+    system_parameters_.enable_experimental_query_rewrites = true;
+    expectVisibleRows(10);
+    expectPhysicalRows(10);
+    EXPECT_FALSE(log.contains(kMetadataRefresh));
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(NativeTables,
