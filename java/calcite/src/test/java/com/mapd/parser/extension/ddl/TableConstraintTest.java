@@ -244,6 +244,29 @@ public class TableConstraintTest extends DDLTest {
   }
 
   @Test
+  public void createForeignNamedColumnIsNotAConstraint() throws Exception {
+    JsonArray elements =
+            payload("CREATE TABLE t (foreign INT);").getAsJsonArray("elements");
+    assertEquals(1, elements.size());
+    assertEquals("foreign", elements.get(0).getAsJsonObject().get("name").getAsString());
+    assertFalse(elements.get(0).getAsJsonObject().has("constraintType"));
+  }
+
+  @Test
+  public void addForeignNamedColumnIsNotAConstraint() throws Exception {
+    assertEquals("ADD_COLUMN",
+            payload("ALTER TABLE t ADD foreign INT;").get("alterType").getAsString());
+  }
+
+  @Test
+  public void addExplicitForeignNamedColumnIsNotAConstraint() throws Exception {
+    assertEquals("ADD_COLUMN",
+            payload("ALTER TABLE t ADD COLUMN foreign INT;")
+                    .get("alterType")
+                    .getAsString());
+  }
+
+  @Test
   public void dropColumnIsNotAConstraint() throws Exception {
     assertEquals("DROP_COLUMN",
             payload("ALTER TABLE t DROP COLUMN c;").get("alterType").getAsString());
