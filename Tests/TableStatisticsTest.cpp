@@ -49,7 +49,8 @@ class TableStatisticsTest : public DBHandlerTestFixture,
   void expectPhysicalRows(int64_t count) {
     auto [handler, session] = getDbHandlerAndSessionId();
     TTableDetails details;
-    handler->get_table_details(details, session, "statistics_maintenance");
+    handler->get_internal_table_details_for_database(
+        details, session, "statistics_maintenance", shared::kDefaultDbName);
     ASSERT_TRUE(details.__isset.num_rows);
     EXPECT_EQ(count, details.num_rows);
   }

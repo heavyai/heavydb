@@ -992,6 +992,77 @@ TEST_F(TableConstraintTest, ShardedSelfReferenceAllowsDrop) {
   EXPECT_NO_THROW(sql("DROP TABLE constraint_review_parent;"));
 }
 
+TEST_F(TableConstraintTest, PublicTableDetailsDoNotExposeOptimizerOrdinals) {
+  const auto previous = system_parameters_.enable_experimental_query_rewrites;
+  ScopeGuard restore = [&] {
+    system_parameters_.enable_experimental_query_rewrites = previous;
+  };
+  system_parameters_.enable_experimental_query_rewrites = true;
+  sql("CREATE TABLE constraint_review_parent (id INT NOT NULL);");
+  sql("ALTER TABLE constraint_review_parent ADD COLUMN k INT NOT NULL DEFAULT 0;");
+  sql("ALTER TABLE constraint_review_parent ADD UNIQUE(k);");
+  sql("CREATE TABLE constraint_review_child (x INT, CONSTRAINT child_fk "
+      "FOREIGN KEY(x) REFERENCES constraint_review_parent(k));");
+  const auto key_metadata =
+      getCatalog().getMetadataForTable("constraint_review_child", false)->keyMetainfo;
+  auto [handler, session] = getDbHandlerAndSessionId();
+  for (const bool explicit_database : {false, true}) {
+    TTableDetails parent, child;
+    if (explicit_database) {
+      handler->get_table_details_for_database(
+          parent, session, "constraint_review_parent", shared::kDefaultDbName);
+      handler->get_table_details_for_database(
+          child, session, "constraint_review_child", shared::kDefaultDbName);
+    } else {
+      handler->get_table_details(parent, session, "constraint_review_parent");
+      handler->get_table_details(child, session, "constraint_review_child");
+    }
+    ASSERT_EQ(2u, parent.row_desc.size());
+    EXPECT_EQ("k", parent.row_desc[1].col_name);
+    EXPECT_FALSE(child.__isset.foreign_key_column_ordinals);
+    EXPECT_FALSE(parent.__isset.num_rows);
+    EXPECT_EQ(key_metadata, child.key_metainfo);
+  }
+  TTableDetails parent, child;
+  handler->get_internal_table_details_for_database(
+      parent, session, "constraint_review_parent", shared::kDefaultDbName);
+  handler->get_internal_table_details_for_database(
+      child, session, "constraint_review_child", shared::kDefaultDbName);
+  ASSERT_EQ(3u, parent.row_desc.size());
+  ASSERT_EQ((std::vector<int32_t>{2}), child.foreign_key_column_ordinals.at("child_fk"));
+  EXPECT_EQ("k", parent.row_desc[2].col_name);
+  EXPECT_TRUE(parent.__isset.num_rows);
+}
+
+TEST_F(TableConstraintTest, PublicTableDetailsLeaveFragmenterUnloaded) {
+  const auto previous = system_parameters_.enable_experimental_query_rewrites;
+  ScopeGuard restore = [&] {
+    system_parameters_.enable_experimental_query_rewrites = previous;
+  };
+  system_parameters_.enable_experimental_query_rewrites = true;
+  sql("CREATE TABLE constraint_review_parent (id INT);");
+  auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("constraint_review_parent", false);
+  catalog.removeFragmenterForTable(td->tableId);
+  ASSERT_EQ(nullptr, td->fragmenter);
+  auto [handler, session] = getDbHandlerAndSessionId();
+  TTableDetails details;
+  handler->get_table_details(details, session, "constraint_review_parent");
+  EXPECT_EQ(nullptr, td->fragmenter);
+  EXPECT_FALSE(details.__isset.num_rows);
+  TTableDetails public_for_database;
+  handler->get_table_details_for_database(
+      public_for_database, session, "constraint_review_parent", shared::kDefaultDbName);
+  EXPECT_EQ(nullptr, td->fragmenter);
+  EXPECT_FALSE(public_for_database.__isset.num_rows);
+  TTableDetails internal;
+  handler->get_internal_table_details_for_database(
+      internal, session, "constraint_review_parent", shared::kDefaultDbName);
+  EXPECT_NE(nullptr, td->fragmenter);
+  EXPECT_TRUE(internal.__isset.num_rows);
+  EXPECT_EQ(0, internal.num_rows);
+}
+
 TEST_F(TableConstraintTest, RowCountsExcludeExternalTablesAndIncludeShards) {
   const auto previous = system_parameters_.enable_experimental_query_rewrites;
   ScopeGuard restore = [&] {
@@ -1003,11 +1074,13 @@ TEST_F(TableConstraintTest, RowCountsExcludeExternalTablesAndIncludeShards) {
   sql("INSERT INTO constraint_review_parent VALUES(1),(2),(3),(4),(5);");
   auto [handler, session] = getDbHandlerAndSessionId();
   TTableDetails details;
-  handler->get_table_details(details, session, "constraint_review_parent");
+  handler->get_internal_table_details_for_database(
+      details, session, "constraint_review_parent", shared::kDefaultDbName);
   EXPECT_TRUE(details.__isset.num_rows);
   EXPECT_EQ(5, details.num_rows);
   sql("INSERT INTO constraint_review_parent VALUES(6);");
-  handler->get_table_details(details, session, "constraint_review_parent");
+  handler->get_internal_table_details_for_database(
+      details, session, "constraint_review_parent", shared::kDefaultDbName);
   EXPECT_EQ(6, details.num_rows);
   const auto path = bf::absolute(bf::path(BASE_PATH) / "constraint-review.csv");
   bf::copy_file(getTestFilePath(), path);
@@ -1018,8 +1091,8 @@ TEST_F(TableConstraintTest, RowCountsExcludeExternalTablesAndIncludeShards) {
       path.string() + "');");
   bf::remove(path);
   TTableDetails external;
-  EXPECT_NO_THROW(
-      handler->get_table_details(external, session, "constraint_review_child"));
+  EXPECT_NO_THROW(handler->get_internal_table_details_for_database(
+      external, session, "constraint_review_child", shared::kDefaultDbName));
   EXPECT_FALSE(external.__isset.num_rows);
 }
 
@@ -1189,7 +1262,8 @@ TEST_F(TableConstraintTest, RowCountsRequireRewritesAndExcludeViews) {
   auto [handler, session] = getDbHandlerAndSessionId();
   const auto details = [&](const std::string& table) {
     TTableDetails result;
-    handler->get_table_details(result, session, table);
+    handler->get_internal_table_details_for_database(
+        result, session, table, shared::kDefaultDbName);
     return result;
   };
   system_parameters_.enable_experimental_query_rewrites = false;
@@ -1243,8 +1317,8 @@ TEST_P(ForeignKeyMetadataTest, OrdinalsRequireRewritesButNotTrust) {
       ASSERT_GE(details.row_desc.size(), 2u);
       EXPECT_EQ("a", details.row_desc[0].col_name);
       EXPECT_EQ("b", details.row_desc[1].col_name);
-      EXPECT_EQ(rewrites, details.__isset.foreign_key_column_ordinals);
-      if (rewrites) {
+      EXPECT_EQ(rewrites && GetParam(), details.__isset.foreign_key_column_ordinals);
+      if (rewrites && GetParam()) {
         ASSERT_EQ(1u, details.foreign_key_column_ordinals.size());
         EXPECT_EQ((std::vector<int32_t>{1, 0}),
                   details.foreign_key_column_ordinals.at("child_fk"));
@@ -1283,10 +1357,14 @@ TEST_P(ForeignKeyMetadataTest, DisabledRewritesSkipReferencedTableLookup) {
   EXPECT_FALSE(details.__isset.foreign_key_column_ordinals);
 
   system_parameters_.enable_experimental_query_rewrites = true;
-  executeLambdaAndAssertException(
-      [&] { getTableDetails(); },
-      "Referenced table constraint_review_missing does not exist for table "
-      "constraint_review_child.");
+  if (GetParam()) {
+    executeLambdaAndAssertException(
+        [&] { getTableDetails(); },
+        "Referenced table constraint_review_missing does not exist for table "
+        "constraint_review_child.");
+  } else {
+    EXPECT_FALSE(getTableDetails().__isset.foreign_key_column_ordinals);
+  }
 }
 
 INSTANTIATE_TEST_SUITE_P(TableDetailsEndpoints, ForeignKeyMetadataTest, testing::Bool());
