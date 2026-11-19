@@ -471,6 +471,7 @@ void TableElement(List<SqlNode> list) :
     |
         HeavyDBSharedDictOpt(list)
     |
+        LOOKAHEAD(2)
         TableConstraint(list)
     |
         (
