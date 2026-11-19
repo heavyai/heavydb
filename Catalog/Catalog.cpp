@@ -4042,6 +4042,7 @@ void Catalog::setTableEpoch(const int db_id, const int table_id, int new_epoch) 
     // having to repopulate data on error
     removeChunks(table_id);
     dataMgr_->getGlobalFileMgr()->setFileMgrParams(db_id, table_id, file_mgr_params);
+    markTableStatisticsDirty(table_id);
   }
 }
 
@@ -4226,6 +4227,8 @@ void Catalog::setTableEpochs(const int32_t db_id,
     file_mgr_params.epoch = table_epoch_info.table_epoch;
     dataMgr_->getGlobalFileMgr()->setFileMgrParams(
         db_id, table_epoch_info.table_id, file_mgr_params);
+    // Keep successful shard resets dirty even if a later epoch is rejected.
+    markTableStatisticsDirty(table_epoch_info.table_id);
     LOG(INFO) << "Set table epoch for db id: " << db_id
               << ", table id: " << table_epoch_info.table_id
               << ", back to epoch: " << table_epoch_info.table_epoch;

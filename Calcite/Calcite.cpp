@@ -427,7 +427,8 @@ void Calcite::updateMetadataImpl(const std::string& catalog, const std::string& 
       clientP.first->updateMetadata(catalog, table);
       clientP.second->close();
     });
-    LOG(INFO) << "Time to updateMetadata " << ms << " (ms)";
+    LOG(INFO) << "Time to updateMetadata " << ms << " (ms), catalog=\"" << catalog
+              << "\", table=\"" << table << "\"";
   } else {
     LOG(INFO) << "Not routing to Calcite, server is not up";
   }
