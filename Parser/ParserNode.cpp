@@ -5131,6 +5131,14 @@ void check_foreign_key_privilege(const Catalog_Namespace::SessionInfo& session,
         "Current user does not have SELECT privileges on referenced table: " +
         referenced_table);
   }
+  // A foreign key restricts future DDL on its parent, not just access to metadata.
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::ALTER_TABLE,
+                                       referenced_table)) {
+    throw std::runtime_error(
+        "Current user does not have ALTER privileges on referenced table: " +
+        referenced_table);
+  }
 }
 
 void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
