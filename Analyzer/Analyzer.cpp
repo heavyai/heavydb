@@ -1714,7 +1714,14 @@ void InValues::group_predicates(std::list<const Expr*>& scan_predicates,
 InIntegerSet::InIntegerSet(const std::shared_ptr<const Analyzer::Expr> a,
                            const std::vector<int64_t>& l,
                            const bool not_null)
-    : Expr(kBOOLEAN, not_null), arg(a), value_list(l) {}
+    : InIntegerSet(a, std::make_shared<const std::vector<int64_t>>(l), not_null) {}
+
+InIntegerSet::InIntegerSet(const std::shared_ptr<const Analyzer::Expr> a,
+                           std::shared_ptr<const std::vector<int64_t>> l,
+                           const bool not_null)
+    : Expr(kBOOLEAN, not_null), arg(a), value_list(std::move(l)) {
+  CHECK(value_list);
+}
 
 void CharLengthExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                       std::list<const Expr*>& join_predicates,
@@ -2979,7 +2986,7 @@ bool InIntegerSet::operator==(const Expr& rhs) const {
     return false;
   }
   const auto& rhs_in_integer_set = static_cast<const InIntegerSet&>(rhs);
-  return *arg == *rhs_in_integer_set.arg && value_list == rhs_in_integer_set.value_list;
+  return *arg == *rhs_in_integer_set.arg && *value_list == *rhs_in_integer_set.value_list;
 }
 
 std::string InIntegerSet::toString() const {
@@ -2988,7 +2995,7 @@ std::string InIntegerSet::toString() const {
   str += "( ";
   int cnt = 0;
   bool shorted_value_list_str = false;
-  for (const auto e : value_list) {
+  for (const auto e : *value_list) {
     str += std::to_string(e) + " ";
     cnt++;
     if (cnt > 4) {
@@ -2999,7 +3006,7 @@ std::string InIntegerSet::toString() const {
   if (shorted_value_list_str) {
     str += "... | ";
     str += "Total # values: ";
-    str += std::to_string(value_list.size());
+    str += std::to_string(value_list->size());
   }
   str += ") ";
   return str;

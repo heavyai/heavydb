@@ -23,6 +23,7 @@
 
 #include "QueryEngine/ErrorHandling.h"
 #include "QueryEngine/RelAlgExecutor.h"
+#include "QueryEngine/RelAlgOptimizer.h"
 
 #include "Catalog/Catalog.h"
 #include "Catalog/DdlCommandExecutor.h"
@@ -242,6 +243,10 @@ DBHandler::DBHandler(const std::string& base_data_path,
     , clang_path_(clang_path)
     , clang_options_(clang_options)
     , max_num_sessions_(-1) {
+  g_enable_experimental_query_rewrites =
+      system_parameters_.enable_experimental_query_rewrites;
+  g_trust_unenforced_table_constraints =
+      system_parameters_.trust_unenforced_table_constraints;
   LOG(INFO) << "HeavyDB Server " << MAPD_RELEASE;
   initialize(is_new_db);
   resetSessionsStore();
