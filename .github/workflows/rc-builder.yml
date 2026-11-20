@@ -302,6 +302,9 @@ jobs:
 
       - name: Push docker image to Docker Hub
         if: ${{ inputs.push_to_dockerhub && steps.artifacts.outputs.product_image != '' }}
+        env:
+          SOURCE_REF: ${{ inputs.sha1_heavydb }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           PRODUCT_IMAGE="${{ steps.artifacts.outputs.product_image }}"
           # heavyai-<distro>-<arch>-<render>-<hostarch>:<version> -> <distro>-<arch>-<render>-<hostarch>-<version>
@@ -309,8 +312,15 @@ jobs:
           echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "heavyai" --password-stdin
           docker tag "$PRODUCT_IMAGE" "heavyai/scantest:$TAG"
           docker push "heavyai/scantest:$TAG"
+          if [ "${SOURCE_REF#refs/heads/}" = "$DEFAULT_BRANCH" ]; then
+            docker tag "$PRODUCT_IMAGE" "heavyai/scantest:latest"
+            docker push "heavyai/scantest:latest"
+          else
+            echo "Not updating :latest: '$SOURCE_REF' is not the default branch '$DEFAULT_BRANCH'."
+          fi
           docker logout
           docker rmi "heavyai/scantest:$TAG" 2>/dev/null || true
+          docker rmi "heavyai/scantest:latest" 2>/dev/null || true
 
       - name: Install cosign
         if: ${{ inputs.sign_tarball }}
