@@ -7102,6 +7102,11 @@ void Catalog::gatherTableConstraintInfo(std::vector<std::string>& additional_inf
                                         const TableDescriptor* td,
                                         bool for_archive) const {
   for (const auto& constraint : getTableConstraints(td)) {
+    // A single-table archive must not depend on tables it does not contain.
+    if (for_archive && constraint.type == TableConstraintType::ForeignKey &&
+        !foreign_key_references_table(constraint, td->tableName)) {
+      continue;
+    }
     std::vector<std::string> quoted_columns;
     quoted_columns.reserve(constraint.column_names.size());
     for (const auto& column_name : constraint.column_names) {
