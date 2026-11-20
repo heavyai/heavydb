@@ -9,9 +9,11 @@ import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.ssl.ClientTlsStrategyBuilder;
 import org.apache.hc.client5.http.ssl.DefaultHostnameVerifier;
+import org.apache.hc.client5.http.ssl.HostnameVerificationPolicy;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
-import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
+import org.apache.hc.client5.http.ssl.TlsSocketStrategy;
 import org.apache.thrift.transport.THttpClient;
 import org.apache.thrift.transport.TSSLTransportFactory;
 import org.apache.thrift.transport.TServerSocket;
@@ -269,13 +271,18 @@ public class SockTransportProperties {
     try {
       SSLContext sc = SSLContext.getInstance("TLS");
       sc.init(null, trustManagers, new java.security.SecureRandom());
-      SSLConnectionSocketFactory sslConnectionSocketFactory = null;
-      sslConnectionSocketFactory =
-              new SSLConnectionSocketFactory(sc, x509HostnameVerifier_);
+      // Only use our own hostname verifier. By default the library also runs the JDK's
+      // built-in hostname check, which would still reject a certificate with the wrong
+      // name even when server name validation is turned off.
+      TlsSocketStrategy tlsSocketStrategy = ClientTlsStrategyBuilder.create()
+              .setSslContext(sc)
+              .setHostnameVerifier(x509HostnameVerifier_)
+              .setHostVerificationPolicy(HostnameVerificationPolicy.CLIENT)
+              .buildClassic();
 
       PoolingHttpClientConnectionManager connectionManager =
               PoolingHttpClientConnectionManagerBuilder.create()
-                      .setSSLSocketFactory(sslConnectionSocketFactory)
+                      .setTlsSocketStrategy(tlsSocketStrategy)
                       .build();
       CloseableHttpClient closeableHttpClient =
               HttpClients.custom()
