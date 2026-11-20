@@ -47,3 +47,9 @@ mutex:Aws::Http::HttpClient::RetryRequestSleep
 deadlock:Aws::Http::HttpClient::RetryRequestSleep
 # QE-1226 libarchive function calls mktime -> tzset_internal but are not in stacktrace
 race:zip_time
+# libcurl's curl_version_info() rewrites a function-local static buffer (ssl_buffer)
+# on every call, and cpr calls it from every cpr::Session constructor, so concurrent
+# cpr::Post calls (e.g. LLM_TRANSFORM from parallel TBB threads) race on it. The
+# same bytes are written each time. Only reported since curl 8.23, whose snprintf
+# copies with memcpy (addrun), which TSAN intercepts.
+race:addrun
