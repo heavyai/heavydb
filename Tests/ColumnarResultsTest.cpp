@@ -4,6 +4,7 @@
  */
 
 #include "Logger/Logger.h"
+#include "QueryEngine/ColumnFetcher.h"
 #include "QueryEngine/ColumnarResults.h"
 #include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "QueryEngine/Execute.h"
@@ -15,6 +16,9 @@
 #include "Tests/TestHelpers.h"
 
 #include <gtest/gtest.h>
+
+#include <atomic>
+#include <thread>
 
 extern bool g_is_test_env;
 
@@ -82,6 +86,7 @@ void test_columnar_conversion(const std::vector<TargetInfo>& target_infos,
   }
   ColumnarResultsTester columnar_results(
       row_set_mem_owner, result_set, col_types.size(), col_types, is_parallel_conversion);
+  ASSERT_EQ(columnar_results.size(), result_set.rowCount());
 
   // Validate the results:
   for (size_t rs_row_idx = 0, cr_row_idx = 0; rs_row_idx < query_mem_desc.getEntryCount();
@@ -160,6 +165,85 @@ TEST(Construct, Empty) {
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
   ColumnarResultsTester columnar_results(
       row_set_mem_owner, result_set, sql_type_infos.size(), sql_type_infos);
+}
+
+TEST(ResultSetColumnCache, MergesColumnDemandAndOwnsResultSet) {
+  const SQLTypeInfo int_ti(kINT, false);
+  const SQLTypeInfo null_ti(kNULLT, false);
+  const std::vector<TargetInfo> target_infos{
+      {false, kMIN, int_ti, null_ti, false, false},
+      {false, kMIN, int_ti, null_ti, false, false},
+      {false, kMIN, int_ti, null_ti, false, false}};
+  const QueryMemoryDescriptor query_mem_desc;
+  auto row_set_mem_owner =
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), 0);
+  auto result_set = std::make_shared<ResultSet>(
+      target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, 0, 0);
+  std::weak_ptr<ResultSet> result_set_lifetime = result_set;
+  ResultSetColumnCache cache;
+
+  EXPECT_FALSE(cache.getColumnSelection(result_set.get()).has_value());
+  cache.mergeColumnSelection(result_set, {2, 0, 2});
+  ASSERT_TRUE(cache.getColumnSelection(result_set.get()).has_value());
+  EXPECT_EQ(*cache.getColumnSelection(result_set.get()), (std::vector<size_t>{0, 2}));
+
+  cache.mergeColumnSelection(result_set, {1});
+  EXPECT_FALSE(cache.getColumnSelection(result_set.get()).has_value());
+  cache.mergeColumnSelection(result_set, {0});
+  EXPECT_FALSE(cache.getColumnSelection(result_set.get()).has_value());
+
+  result_set.reset();
+  EXPECT_FALSE(result_set_lifetime.expired());
+  cache.clear();
+  EXPECT_TRUE(result_set_lifetime.expired());
+}
+
+TEST(ResultSetColumnCache, CreatesEachEntryOnceAcrossConcurrentReaders) {
+  const QueryMemoryDescriptor query_mem_desc;
+  auto row_set_mem_owner =
+      std::make_shared<RowSetMemoryOwner>(Executor::getArenaBlockSize(), 0);
+  auto result_set = std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                ExecutorDeviceType::CPU,
+                                                query_mem_desc,
+                                                row_set_mem_owner,
+                                                0,
+                                                0);
+  ResultSetColumnCache cache;
+  const ResultSetColumnCache::Key key{
+      result_set.get(), 0, Data_Namespace::CPU_LEVEL, 0, -1, true, false, false};
+  auto buffer_owner = std::make_shared<int8_t>(42);
+  std::atomic<size_t> create_count{0};
+  std::atomic<size_t> ready_count{0};
+  std::atomic<bool> start{false};
+  constexpr size_t thread_count = 16;
+  std::vector<const int8_t*> buffers(thread_count);
+  std::vector<std::thread> threads;
+  threads.reserve(thread_count);
+
+  for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+    threads.emplace_back([&, thread_idx] {
+      ready_count.fetch_add(1, std::memory_order_release);
+      while (!start.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+      }
+      buffers[thread_idx] = cache.getOrCreate(key, result_set, buffer_owner, [&] {
+        create_count.fetch_add(1, std::memory_order_relaxed);
+        return buffer_owner.get();
+      });
+    });
+  }
+  while (ready_count.load(std::memory_order_acquire) != thread_count) {
+    std::this_thread::yield();
+  }
+  start.store(true, std::memory_order_release);
+  for (auto& thread : threads) {
+    thread.join();
+  }
+
+  EXPECT_EQ(create_count.load(), size_t(1));
+  EXPECT_TRUE(std::all_of(buffers.begin(), buffers.end(), [&](const auto buffer) {
+    return buffer == buffer_owner.get();
+  }));
 }
 
 // Projections:

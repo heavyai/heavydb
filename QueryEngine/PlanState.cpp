@@ -7,6 +7,56 @@
 
 #include "Execute.h"
 #include "Shared/misc.h"
+#include "Visitors/CommonVisitors.h"
+
+extern bool g_enable_result_reduction_pipeline;
+
+namespace {
+
+class ComparisonColumnsVisitor
+    : public ScalarExprVisitor<std::set<const Analyzer::ColumnVar*>> {
+ protected:
+  std::set<const Analyzer::ColumnVar*> visitColumnVar(
+      const Analyzer::ColumnVar*) const override {
+    return {};
+  }
+
+  std::set<const Analyzer::ColumnVar*> visitColumnVarTuple(
+      const Analyzer::ExpressionTuple* expr_tuple) const override {
+    AllColumnVarsVisitor visitor;
+    std::set<const Analyzer::ColumnVar*> result;
+    for (const auto& expr_component : expr_tuple->getTuple()) {
+      const auto component_columns = visitor.visit(expr_component.get());
+      result.insert(component_columns.begin(), component_columns.end());
+    }
+    return result;
+  }
+
+  std::set<const Analyzer::ColumnVar*> visitBinOper(
+      const Analyzer::BinOper* bin_oper) const override {
+    if (IS_COMPARISON(bin_oper->get_optype())) {
+      AllColumnVarsVisitor visitor;
+      auto result = visitor.visit(bin_oper->get_left_operand());
+      const auto rhs_columns = visitor.visit(bin_oper->get_right_operand());
+      result.insert(rhs_columns.begin(), rhs_columns.end());
+      return result;
+    }
+    auto result = visit(bin_oper->get_left_operand());
+    const auto rhs_columns = visit(bin_oper->get_right_operand());
+    result.insert(rhs_columns.begin(), rhs_columns.end());
+    return result;
+  }
+
+  std::set<const Analyzer::ColumnVar*> aggregateResult(
+      const std::set<const Analyzer::ColumnVar*>& aggregate,
+      const std::set<const Analyzer::ColumnVar*>& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+}  // namespace
 
 bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) const {
   if (!allow_lazy_fetch_) {
@@ -108,6 +158,31 @@ bool PlanState::isColumnToNotFetch(const shared::ColumnKey& column_key) const {
   return shared::contains(columns_to_not_fetch_, column_key);
 }
 
+bool PlanState::isColumnToFetchHostMapped(const shared::ColumnKey& column_key) const {
+  return shared::contains(host_mapped_columns_to_fetch_, column_key);
+}
+
+bool PlanState::isColumnToFetchSelectedDense(const shared::ColumnKey& column_key) const {
+  return shared::contains(selected_dense_columns_to_fetch_, column_key);
+}
+
+bool PlanState::hasSelectedDenseColumnsToFetch() const {
+  return !selected_dense_columns_to_fetch_.empty();
+}
+
+bool PlanState::isColumnToFetchSegmented(const InputColDescriptor& column_desc) const {
+  return shared::contains(segmented_columns_to_fetch_, column_desc);
+}
+
+bool PlanState::canUseSegmentedColumnFetch(const InputColDescriptor& column_desc,
+                                           const SQLTypeInfo& type_info,
+                                           const ExecutorDeviceType device_type) const {
+  return g_enable_result_reduction_pipeline && device_type == ExecutorDeviceType::GPU &&
+         column_desc.getScanDesc().getSourceType() == InputSourceType::RESULT &&
+         !type_info.is_array() && !type_info.is_geometry() && !type_info.is_varlen() &&
+         !type_info.usesFlatBuffer() && type_info.get_size() > 0;
+}
+
 // todo (yoonmin): determine non-lazy fetch compilation in a high-level; to avoid
 // recompilation which may incur noticeable overhead
 void PlanState::addColumnToFetch(const shared::ColumnKey& column_key,
@@ -138,6 +213,24 @@ void PlanState::addColumnToNotFetch(const shared::ColumnKey& column_key) {
   columns_to_not_fetch_.emplace(column_key);
 }
 
+void PlanState::addColumnToFetchHostMapped(const shared::ColumnKey& column_key) {
+  host_mapped_columns_to_fetch_.emplace(column_key);
+}
+
+void PlanState::addColumnToFetchSelectedDense(const shared::ColumnKey& column_key) {
+  selected_dense_columns_to_fetch_.emplace(column_key);
+}
+
+void PlanState::addColumnToFetchSegmented(const InputColDescriptor& column_desc) {
+  segmented_columns_to_fetch_.emplace(column_desc);
+}
+
+void PlanState::addColumnToFetchSegmented(const InputColDescriptor& column_desc,
+                                          const bool unmark_lazy_fetch) {
+  addColumnToFetch(column_desc.getColumnKey(), unmark_lazy_fetch);
+  addColumnToFetchSegmented(column_desc);
+}
+
 bool PlanState::hasExpressionNeedsLazyFetch(
     const std::vector<TargetExprCodegen>& target_exprs_to_codegen) const {
   return std::any_of(target_exprs_to_codegen.begin(),
@@ -150,11 +243,18 @@ bool PlanState::hasExpressionNeedsLazyFetch(
 void PlanState::registerNonLazyFetchExpression(
     const std::vector<TargetExprCodegen>& target_exprs_to_codegen) {
   auto const needs_lazy_fetch = hasExpressionNeedsLazyFetch(target_exprs_to_codegen);
+  ComparisonColumnsVisitor comparison_columns_visitor;
   for (const auto& expr : target_exprs_to_codegen) {
     if (needs_lazy_fetch && !expr.target_info.sql_type.usesFlatBuffer()) {
       if (auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr.target_expr)) {
         // force non-lazy fetch on all other columns that don't support flatbuffer
         addColumnToFetch(col_var->getColumnKey(), /*unmark_lazy_fetch=*/true);
+      }
+    }
+    const auto comparison_columns = comparison_columns_visitor.visit(expr.target_expr);
+    for (const auto column : comparison_columns) {
+      if (isLazyFetchColumn(column)) {
+        addColumnToFetch(column->getColumnKey(), /*unmark_lazy_fetch=*/true);
       }
     }
   }

@@ -69,6 +69,19 @@ inline size_t advance_slot(const size_t j,
   return j + get_slots_for_target(target_info, separate_varlen_storage);
 }
 
+inline size_t get_rowwise_agg_payload_width(const TargetInfo& target_info,
+                                            const size_t padded_slot_width,
+                                            const size_t target_slot_idx = 0) {
+  CHECK_GT(padded_slot_width, size_t(0));
+  const bool is_avg_count_slot =
+      target_info.agg_kind == kAVG && target_slot_idx == size_t(1);
+  if (takes_float_argument(target_info) && !is_avg_count_slot) {
+    CHECK_GE(padded_slot_width, sizeof(float));
+    return sizeof(float);
+  }
+  return padded_slot_width;
+}
+
 inline size_t slot_offset_rowwise(const size_t entry_idx,
                                   const size_t slot_idx,
                                   const size_t key_count,
