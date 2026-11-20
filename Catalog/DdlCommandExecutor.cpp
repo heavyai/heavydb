@@ -25,6 +25,7 @@
 #include "DataMgr/ForeignStorage/ForeignTableRefresh.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
+#include "Shared/JsonUtils.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysDefinitions.h"
 #include "ThriftHandler/QueryAuth.h"
@@ -492,6 +493,7 @@ const rapidjson::Value* extractFilters(const rapidjson::Value& payload) {
   }
   return filters;
 }
+
 }  // namespace
 
 DdlCommandExecutor::DdlCommandExecutor(
@@ -1844,8 +1846,8 @@ ExecutionResult ShowCreateTableCommand::execute(bool read_only_mode) {
     auto calcite_mgr = catalog.getCalciteMgr();
     const auto calciteQueryParsingOption =
         calcite_mgr->getCalciteQueryParsingOption(true, false, false);
-    const auto calciteOptimizationOption =
-        calcite_mgr->getCalciteOptimizationOption(false, g_enable_watchdog, {});
+    const auto calciteOptimizationOption = calcite_mgr->getCalciteOptimizationOption(
+        false, g_enable_watchdog, {}, false, false);
     auto result = calcite_mgr->process(query_state_proxy,
                                        td->viewSQL,
                                        calciteQueryParsingOption,
@@ -3251,9 +3253,11 @@ void AlterTableAlterColumnCommand::alterColumn() {
 
   for (const auto& coldef : columns) {
     const auto& column_name = *coldef.get_column_name();
-    if (catalog.getMetadataForColumn(td->tableId, column_name) == nullptr) {
+    const auto cd = catalog.getMetadataForColumn(td->tableId, column_name);
+    if (!cd) {
       throw std::runtime_error("Column " + column_name + " does not exist.");
     }
+    catalog.validateColumnConstraintDependencies(td, cd, "alter");
   }
 
   CHECK(td->fragmenter);
@@ -3330,25 +3334,82 @@ ExecutionResult AlterTableCommand::execute(bool read_only_mode) {
 
   } else if (type == "ALTER_COLUMN") {
     return AlterTableAlterColumnCommand{ddl_data_, session_ptr_}.execute(read_only_mode);
+  } else if (type == "ADD_CONSTRAINT") {
+    if (!ddl_payload.HasMember("constraintData") ||
+        !ddl_payload["constraintData"].IsArray()) {
+      throw std::runtime_error("ALTER TABLE ADD CONSTRAINT is missing constraint data.");
+    }
+    if (ddl_payload["constraintData"].GetArray().Size() != size_t(1)) {
+      throw std::runtime_error(
+          "ALTER TABLE ADD supports one table constraint at a time.");
+    }
+
+    const auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+    auto& catalog = session_ptr_->getCatalog();
+    const auto td_with_lock =
+        lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+            catalog, tableName, false);
+    const auto td = td_with_lock();
+    if (!td) {
+      throw std::runtime_error("Table " + tableName + " does not exist.");
+    }
+    if (!session_ptr_->checkDBAccessPrivileges(
+            DBObjectType::TableDBObjectType, AccessPrivileges::ALTER_TABLE, tableName)) {
+      throw std::runtime_error(
+          "Current user does not have the privilege to alter table: " + tableName);
+    }
+    validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
+    const auto constraint =
+        Parser::table_constraint_from_json(*ddl_payload["constraintData"].Begin());
+    Parser::check_foreign_key_privilege(*session_ptr_, tableName, constraint);
+    catalog.addTableConstraint(td, constraint);
+    return {};
+  } else if (type == "DROP_CONSTRAINT") {
+    if (!ddl_payload.HasMember("constraintName") ||
+        !ddl_payload["constraintName"].IsString()) {
+      throw std::runtime_error(
+          "ALTER TABLE DROP CONSTRAINT is missing a constraint name.");
+    }
+
+    const auto execute_write_lock = legacylockmgr::getExecuteWriteLock();
+    auto& catalog = session_ptr_->getCatalog();
+    const auto td_with_lock =
+        lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+            catalog, tableName, false);
+    const auto td = td_with_lock();
+    if (!td) {
+      throw std::runtime_error("Table " + tableName + " does not exist.");
+    }
+    if (!session_ptr_->checkDBAccessPrivileges(
+            DBObjectType::TableDBObjectType, AccessPrivileges::ALTER_TABLE, tableName)) {
+      throw std::runtime_error(
+          "Current user does not have the privilege to alter table: " + tableName);
+    }
+    validate_table_type(td, ddl_utils::TableType::TABLE, "ALTER");
+    catalog.dropTableConstraint(td, json_str(ddl_payload["constraintName"]));
+    return {};
   } else if (type == "ADD_COLUMN") {
     CHECK(ddl_payload.HasMember("columnData"));
     CHECK(ddl_payload["columnData"].IsArray());
 
-    // New Columns go into this list
-    std::list<Parser::ColumnDef*>* table_element_list_ =
-        new std::list<Parser::ColumnDef*>;
-
+    // Reject table-level elements before allocating column definitions.
     const auto elements = ddl_payload["columnData"].GetArray();
     for (const auto& element : elements) {
       CHECK(element.IsObject());
       CHECK(element.HasMember("type"));
-      if (json_str(element["type"]) == "SQL_COLUMN_DECLARATION") {
-        auto col_def = Parser::column_from_json(element);
-        table_element_list_->emplace_back(col_def.release());
-      } else {
-        LOG(FATAL) << "Unsupported element type for ALTER TABLE: "
-                   << element["type"].GetString();
+      if (json_str(element["type"]) != "SQL_COLUMN_DECLARATION") {
+        throw std::runtime_error(
+            "ALTER TABLE ADD COLUMN does not support table constraints or storage "
+            "directives.");
       }
+    }
+
+    // New Columns go into this list
+    std::list<Parser::ColumnDef*>* table_element_list_ =
+        new std::list<Parser::ColumnDef*>;
+    for (const auto& element : elements) {
+      auto col_def = Parser::column_from_json(element);
+      table_element_list_->emplace_back(col_def.release());
     }
 
     std::unique_ptr<Parser::DDLStmt>(

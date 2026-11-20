@@ -398,15 +398,82 @@ Calcite::Calcite(const SystemParameters& system_parameters,
 }
 
 void Calcite::updateMetadata(std::string catalog, std::string table) {
+  // DDL must complete its invalidation, even if a statistics refresh is in flight.
+  std::lock_guard<std::mutex> refresh_lock(metadata_refresh_mutex_);
+  decltype(dirty_statistics_) pending;
+  // Retire only pre-RPC markers, leaving concurrent writes dirty on success.
+  {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    for (auto it = dirty_statistics_.begin(); it != dirty_statistics_.end();) {
+      const auto current = it++;
+      if (current->first == catalog && (table.empty() || current->second == table)) {
+        pending.insert(dirty_statistics_.extract(current));
+      }
+    }
+  }
+  try {
+    updateMetadataImpl(catalog, table);
+  } catch (...) {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    dirty_statistics_.merge(pending);
+    throw;
+  }
+}
+
+void Calcite::updateMetadataImpl(const std::string& catalog, const std::string& table) {
   if (server_available_) {
     auto ms = measure<>::execution([&]() {
       auto clientP = getClient(remote_calcite_port_);
       clientP.first->updateMetadata(catalog, table);
       clientP.second->close();
     });
-    LOG(INFO) << "Time to updateMetadata " << ms << " (ms)";
+    LOG(INFO) << "Time to updateMetadata " << ms << " (ms), catalog=\"" << catalog
+              << "\", table=\"" << table << "\"";
   } else {
     LOG(INFO) << "Not routing to Calcite, server is not up";
+  }
+}
+
+void Calcite::markTableStatisticsDirty(const std::string& catalog,
+                                       const std::string& table) {
+  std::lock_guard<std::mutex> lock(statistics_mutex_);
+  dirty_statistics_.emplace(catalog, table);
+}
+
+void Calcite::refreshTableStatistics() {
+  // Other planners may use existing estimates while one caller refreshes them.
+  std::unique_lock<std::mutex> refresh_lock(metadata_refresh_mutex_, std::try_to_lock);
+  if (!refresh_lock.owns_lock()) {
+    return;
+  }
+  decltype(dirty_statistics_) pending;
+  {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    pending.swap(dirty_statistics_);
+  }
+  // Drain only this snapshot. Writes during an RPC belong to the next refresh.
+  try {
+    while (!pending.empty()) {
+      const auto it = pending.begin();
+      try {
+        updateMetadataImpl(it->first, it->second);
+      } catch (const apache::thrift::TException& e) {
+        // Stale statistics may affect the plan, but must not fail an unrelated query.
+        // Stop this snapshot so a failed service is not called once per dirty table.
+        LOG(WARNING) << "Statistics refresh failed for " << it->first << "." << it->second
+                     << ": " << e.what() << "; deferring unfinished refreshes";
+        break;
+      }
+      pending.erase(it);
+    }
+  } catch (...) {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    dirty_statistics_.merge(pending);
+    throw;
+  }
+  if (!pending.empty()) {
+    std::lock_guard<std::mutex> lock(statistics_mutex_);
+    dirty_statistics_.merge(pending);
   }
 }
 
@@ -415,6 +482,9 @@ TPlanResult Calcite::process(query_state::QueryStateProxy query_state_proxy,
                              const TQueryParsingOption& query_parsing_option,
                              const TOptimizationOption& optimization_option,
                              const std::string& calcite_session_id) {
+  if (optimization_option.enable_experimental_query_rewrites) {
+    refreshTableStatistics();
+  }
   TPlanResult result = processImpl(query_state_proxy,
                                    std::move(sql_string),
                                    query_parsing_option,
@@ -699,10 +769,16 @@ TQueryParsingOption Calcite::getCalciteQueryParsingOption(bool legacy_syntax,
 TOptimizationOption Calcite::getCalciteOptimizationOption(
     bool is_view_optimize,
     bool enable_watchdog,
-    const std::vector<TFilterPushDownInfo>& filter_push_down_info) {
+    const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+    bool enable_experimental_query_rewrites,
+    bool trust_unenforced_table_constraints) {
   TOptimizationOption optimization_option;
   optimization_option.filter_push_down_info = filter_push_down_info;
   optimization_option.is_view_optimize = is_view_optimize;
   optimization_option.enable_watchdog = enable_watchdog;
+  optimization_option.enable_experimental_query_rewrites =
+      enable_experimental_query_rewrites;
+  optimization_option.trust_unenforced_table_constraints =
+      trust_unenforced_table_constraints;
   return optimization_option;
 }

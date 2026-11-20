@@ -1002,6 +1002,20 @@ void CommandLineOptions::fillDeveloperOptions() {
           ->implicit_value(true),
       "Enable additional calcite (query plan) optimizations when a view is part of the "
       "query.");
+  desc.add_options()(
+      "enable-experimental-query-rewrites",
+      po::value<bool>(&system_parameters.enable_experimental_query_rewrites)
+          ->default_value(system_parameters.enable_experimental_query_rewrites)
+          ->implicit_value(true),
+      "Enable experimental Calcite join and aggregate rewrites.");
+  desc.add_options()(
+      "trust-unenforced-table-constraints",
+      po::value<bool>(&system_parameters.trust_unenforced_table_constraints)
+          ->default_value(system_parameters.trust_unenforced_table_constraints)
+          ->implicit_value(true),
+      "Allow Calcite to use declarative but unenforced PRIMARY KEY, UNIQUE, and "
+      "FOREIGN KEY constraints as optimizer proofs. Only enable this when existing "
+      "and future table data satisfies every declared constraint.");
   desc.add_options()("enable-columnar-output",
                      po::value<bool>(&g_enable_columnar_output)
                          ->default_value(g_enable_columnar_output)
@@ -2395,6 +2409,10 @@ boost::optional<int> CommandLineOptions::parse_command_line(
   LOG(INFO) << " HeavyDB Calcite Port " << system_parameters.calcite_port;
   LOG(INFO) << " Enable Calcite view optimize "
             << system_parameters.enable_calcite_view_optimize;
+  LOG(INFO) << " Enable experimental query rewrites "
+            << system_parameters.enable_experimental_query_rewrites;
+  LOG(INFO) << " Trust unenforced table constraints "
+            << system_parameters.trust_unenforced_table_constraints;
   LOG(INFO) << " Allow Local Auth Fallback: "
             << (authMetadata.allowLocalAuthFallback ? "enabled" : "disabled");
   LOG(INFO) << " ParallelTop min threshold: " << g_parallel_top_min;

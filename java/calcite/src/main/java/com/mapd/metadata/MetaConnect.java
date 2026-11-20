@@ -91,6 +91,20 @@ public class MetaConnect {
           new ConcurrentHashMap<>();
   private static volatile Map<List<String>, Table> DB_TABLE_DETAILS =
           new ConcurrentHashMap<>();
+  private static final Map<String, TableCacheGeneration> TABLE_CACHE_GENERATIONS =
+          new ConcurrentHashMap<>();
+
+  private static final class TableCacheGeneration {
+    // Guarded by this generation's monitor, shared by connections to the database.
+    long value;
+  }
+
+  private static TableCacheGeneration tableCacheGeneration(String database) {
+    // Keep the generation across database removal/recreation so old fetches stay invalid.
+    return TABLE_CACHE_GENERATIONS.computeIfAbsent(
+            database.toUpperCase(), key -> new TableCacheGeneration());
+  }
+
   private final SockTransportProperties sock_transport_properties;
 
   public MetaConnect(int dbPort,
@@ -206,22 +220,38 @@ public class MetaConnect {
       return cTable;
     }
 
-    TTableDetails td = get_table_details(tableName);
+    TableCacheGeneration generation = tableCacheGeneration(default_db);
+    while (true) {
+      final long fetchedGeneration;
+      synchronized (generation) {
+        cTable = DB_TABLE_DETAILS.get(dbTable);
+        if (cTable != null) {
+          return cTable;
+        }
+        fetchedGeneration = generation.value;
+      }
 
-    if (td.getView_sql() == null || td.getView_sql().isEmpty()) {
-      HEAVYDBLOGGER.debug("Processing a table");
-      Table rTable = new HeavyDBTable(td);
-      DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
-      HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get table " + tableName
-              + " details " + rTable + " Not in buffer");
-      return rTable;
-    } else {
-      HEAVYDBLOGGER.debug("Processing a view");
-      Table rTable = new HeavyDBView(getViewSql(tableName), td, parser);
-      DB_TABLE_DETAILS.putIfAbsent(dbTable, rTable);
-      HEAVYDBLOGGER.debug("Metaconnect DB " + default_db + " get view " + tableName
-              + " details " + rTable + " Not in buffer");
-      return rTable;
+      // Neither the metadata RPC nor view SQL lookup may hold the publication lock.
+      TTableDetails td = get_table_details(tableName);
+      String viewSql = td.getView_sql() == null || td.getView_sql().isEmpty()
+              ? null
+              : getViewSql(tableName);
+
+      synchronized (generation) {
+        if (fetchedGeneration != generation.value) {
+          continue;
+        }
+        cTable = DB_TABLE_DETAILS.get(dbTable);
+        if (cTable != null) {
+          return cTable;
+        }
+        // Construction also publishes the row count; do it only for the cache winner.
+        Table rTable = viewSql == null
+                ? new HeavyDBTable(td, default_db, tableName)
+                : new HeavyDBView(viewSql, td, parser, default_db, tableName);
+        DB_TABLE_DETAILS.put(dbTable, rTable);
+        return rTable;
+      }
     }
   }
 
@@ -424,8 +454,8 @@ public class MetaConnect {
       stmt = catConn.createStatement();
       HEAVYDBLOGGER.debug("table id is " + id);
       HEAVYDBLOGGER.debug("table name is " + tableName);
-      String query = String.format(
-              "SELECT * FROM mapd_columns where tableid = %d and not is_deletedcol order by columnid;",
+      String query = String.format("SELECT * FROM mapd_columns where tableid = %d and "
+                      + "not is_deletedcol order by columnid;",
               id);
       HEAVYDBLOGGER.debug(query);
       rs = stmt.executeQuery(query);
@@ -509,7 +539,28 @@ public class MetaConnect {
       td.setView_sqlIsSet(true);
       td.setView_sql(getViewSqlViaSql(id));
     }
+    String keyMetainfo = getKeyMetainfo(id);
+    if (keyMetainfo != null) {
+      td.setKey_metainfo(keyMetainfo);
+    }
     return td;
+  }
+
+  private String getKeyMetainfo(int tableId) {
+    try (Statement stmt = catConn.createStatement();
+            ResultSet rs = stmt.executeQuery(String.format(
+                    "SELECT key_metainfo FROM mapd_tables where tableid = %d;",
+                    tableId))) {
+      if (rs.next()) {
+        return rs.getString("key_metainfo");
+      }
+    } catch (Exception e) {
+      String err = "Error trying to read key metadata from mapd_tables; DB: " + default_db
+              + " data dir " + dataDir + ", error was " + e.getMessage();
+      HEAVYDBLOGGER.error(err);
+      throw new RuntimeException(err);
+    }
+    return null;
   }
 
   private TTableDetails get_table_detail_JSON(String tableName)
@@ -916,6 +967,16 @@ public class MetaConnect {
   }
 
   public void updateMetaData(String schema, String table) {
+    TableCacheGeneration generation = tableCacheGeneration(schema);
+    synchronized (generation) {
+      // Dependent tables and views can still be in flight and absent from the cache.
+      ++generation.value;
+      invalidateMetadataCaches(schema, table);
+    }
+  }
+
+  private void invalidateMetadataCaches(String schema, String table) {
+    HeavyDBTable.invalidateMetadata(schema, table);
     // Check if table is specified, if not we are dropping an entire DB so need to
     // remove all tables for that DB
     if (table.equals("")) {
@@ -935,15 +996,18 @@ public class MetaConnect {
       DB_TABLE_DETAILS.remove(
               ImmutableList.of(schema.toUpperCase(), table.toUpperCase()));
     }
-    // Invalidate views
+    // Views and foreign keys depend on the changed table's current column positions.
     Set<List<String>> all = new HashSet<>(DB_TABLE_DETAILS.keySet());
     for (List<String> keys : all) {
       if (keys.get(0).equals(schema.toUpperCase())) {
         Table ttable = DB_TABLE_DETAILS.get(keys);
-        if (ttable instanceof HeavyDBView) {
+        if (ttable instanceof HeavyDBView
+                || (ttable instanceof HeavyDBTable
+                        && ((HeavyDBTable) ttable).referencesTable(table))) {
           HEAVYDBLOGGER.debug(
                   "removing view in schema " + keys.get(0) + " view " + keys.get(1));
           DB_TABLE_DETAILS.remove(keys);
+          HeavyDBTable.invalidateMetadata(keys.get(0), keys.get(1));
         }
       }
     }
@@ -955,7 +1019,8 @@ public class MetaConnect {
         HEAVYDBLOGGER.debug("removing schema " + schema.toUpperCase());
         DATABASE_TO_TABLES.remove(schema.toUpperCase());
       } else {
-        mSet.clear();
+        // Planning threads may still be iterating the previously published set.
+        DATABASE_TO_TABLES.put(schema.toUpperCase(), new HashSet<String>());
       }
     } else {
       // add a empty database descriptor for new DB, it will be lazily populated when

@@ -194,7 +194,9 @@ public class CalciteServerHandler implements CalciteServer.Iface {
               queryParsingOption.is_explain,
               queryParsingOption.is_explain_detail,
               optimizationOption.is_view_optimize,
-              optimizationOption.enable_watchdog);
+              optimizationOption.enable_watchdog,
+              optimizationOption.enable_experimental_query_rewrites,
+              optimizationOption.trust_unenforced_table_constraints);
 
       if (!buildRATreeFromRAString) {
         HeavyDBParser.ProcessResult res;

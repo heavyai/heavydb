@@ -14,7 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * This file is a modified derivative of Apache Calcite's org.apache.calcite.sql.ddl.SqlKeyConstraint.
+ * This file is a modified derivative of Apache Calcite's
+ * org.apache.calcite.sql.ddl.SqlKeyConstraint.
  *
  * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -38,10 +39,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Parse tree for {@code UNIQUE}, {@code PRIMARY KEY} constraints.
- *
- * <p>
- * And {@code FOREIGN KEY}, when we support it.
+ * Parse tree for table keys, foreign keys, and storage column directives.
  */
 public class SqlKeyConstraint extends SqlCall {
   private static final SqlSpecialOperator UNIQUE =
@@ -50,9 +48,17 @@ public class SqlKeyConstraint extends SqlCall {
   protected static final SqlSpecialOperator PRIMARY =
           new SqlSpecialOperator("PRIMARY KEY", SqlKind.PRIMARY_KEY);
 
+  protected static final SqlSpecialOperator FOREIGN =
+          new SqlSpecialOperator("FOREIGN KEY", SqlKind.FOREIGN_KEY);
+  private static final SqlSpecialOperator SHARD =
+          new SqlSpecialOperator("SHARD KEY", SqlKind.OTHER);
+  private static final SqlSpecialOperator SHARED_DICTIONARY =
+          new SqlSpecialOperator("SHARED DICTIONARY", SqlKind.OTHER);
+
   private final SqlIdentifier name;
   private final SqlNodeList columnList;
-  private final SqlIdentifier referencesCol;
+  private final SqlIdentifier referencesTable;
+  private final SqlNodeList referencesColumnList;
 
   /** Creates a SqlKeyConstraint. */
   SqlKeyConstraint(SqlParserPos pos, SqlIdentifier name, SqlNodeList columnList) {
@@ -64,10 +70,28 @@ public class SqlKeyConstraint extends SqlCall {
           SqlIdentifier name,
           SqlNodeList columnList,
           SqlIdentifier referencesCol) {
+    this(pos,
+            name,
+            columnList,
+            referencesCol != null && !referencesCol.isSimple()
+                    ? referencesCol.getComponent(0)
+                    : null,
+            referencesCol == null ? null
+                                  : SqlNodeList.of(referencesCol.isSimple()
+                                                  ? referencesCol
+                                                  : referencesCol.getComponent(1)));
+  }
+
+  SqlKeyConstraint(SqlParserPos pos,
+          SqlIdentifier name,
+          SqlNodeList columnList,
+          SqlIdentifier referencesTable,
+          SqlNodeList referencesColumnList) {
     super(pos);
     this.name = name;
     this.columnList = columnList;
-    this.referencesCol = referencesCol;
+    this.referencesTable = referencesTable;
+    this.referencesColumnList = referencesColumnList;
   }
 
   /** Creates a UNIQUE constraint. */
@@ -87,18 +111,43 @@ public class SqlKeyConstraint extends SqlCall {
     };
   }
 
+  /** Creates a FOREIGN KEY constraint. */
+  public static SqlKeyConstraint foreign(SqlParserPos pos,
+          SqlIdentifier name,
+          SqlNodeList columnList,
+          SqlIdentifier referencesTable,
+          SqlNodeList referencesColumnList) {
+    return new SqlKeyConstraint(
+            pos, name, columnList, referencesTable, referencesColumnList) {
+      @Override
+      public SqlOperator getOperator() {
+        return FOREIGN;
+      }
+    };
+  }
+
   /** Creates a SHARD KEY constraint */
   public static SqlKeyConstraint shard(SqlParserPos pos, SqlIdentifier colName) {
     SqlNodeList colList = SqlNodeList.of(colName);
-    return new SqlKeyConstraint(pos, new SqlIdentifier("SHARD_KEY", pos), colList);
+    return new SqlKeyConstraint(pos, new SqlIdentifier("SHARD_KEY", pos), colList) {
+      @Override
+      public SqlOperator getOperator() {
+        return SHARD;
+      }
+    };
   }
 
-  /** CReates a SHARED DICTIONARY constraint */
+  /** Creates a SHARED DICTIONARY directive. */
   public static SqlKeyConstraint sharedDict(
           SqlParserPos pos, SqlIdentifier colName, SqlIdentifier referencesCol) {
     SqlNodeList colList = SqlNodeList.of(colName);
     return new SqlKeyConstraint(
-            pos, new SqlIdentifier("SHARED_DICT", pos), colList, referencesCol);
+            pos, new SqlIdentifier("SHARED_DICT", pos), colList, referencesCol) {
+      @Override
+      public SqlOperator getOperator() {
+        return SHARED_DICTIONARY;
+      }
+    };
   }
 
   @Override
@@ -117,8 +166,15 @@ public class SqlKeyConstraint extends SqlCall {
       writer.keyword("CONSTRAINT");
       name.unparse(writer, 0, 0);
     }
-    writer.keyword(getOperator().getName()); // "UNIQUE" or "PRIMARY KEY"
+    writer.keyword(getOperator().getName());
     columnList.unparse(writer, 1, 1);
+    if (referencesTable != null) {
+      writer.keyword("REFERENCES");
+      referencesTable.unparse(writer, 0, 0);
+      if (referencesColumnList != null) {
+        referencesColumnList.unparse(writer, 1, 1);
+      }
+    }
   }
 
   @Override
@@ -129,6 +185,7 @@ public class SqlKeyConstraint extends SqlCall {
     jsonBuilder.put(map, "type", "SQL_COLUMN_CONSTRAINT");
 
     jsonBuilder.put(map, "name", this.name == null ? null : this.name.toString());
+    jsonBuilder.put(map, "constraintType", getOperator().getName());
 
     List<String> colNamesList = new ArrayList<String>();
     for (int i = 0; i < columnList.size(); i++) {
@@ -138,13 +195,18 @@ public class SqlKeyConstraint extends SqlCall {
     jsonBuilder.put(map, "columns", colNamesList);
 
     Map<String, Object> referencesMap = jsonBuilder.map();
-    if (referencesCol != null) {
-      if (referencesCol.isSimple()) {
-        jsonBuilder.put(referencesMap, "column", referencesCol.toString());
-      } else {
-        jsonBuilder.put(referencesMap, "table", referencesCol.getComponent(0).toString());
-        jsonBuilder.put(
-                referencesMap, "column", referencesCol.getComponent(1).toString());
+    if (referencesTable != null) {
+      jsonBuilder.put(referencesMap, "table", referencesTable.toString());
+    }
+    if (referencesColumnList != null) {
+      List<String> referenceColNamesList = new ArrayList<String>();
+      for (int i = 0; i < referencesColumnList.size(); i++) {
+        SqlNode colNode = referencesColumnList.get(i);
+        referenceColNamesList.add(colNode.toString());
+      }
+      jsonBuilder.put(referencesMap, "columns", referenceColNamesList);
+      if (referenceColNamesList.size() == 1) {
+        jsonBuilder.put(referencesMap, "column", referenceColNamesList.get(0));
       }
     }
     jsonBuilder.put(map, "references", referencesMap);
