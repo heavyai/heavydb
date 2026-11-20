@@ -271,16 +271,14 @@ public class SockTransportProperties {
     try {
       SSLContext sc = SSLContext.getInstance("TLS");
       sc.init(null, trustManagers, new java.security.SecureRandom());
+      // Only use our own hostname verifier. By default the library also runs the JDK's
+      // built-in hostname check, which would still reject a certificate with the wrong
+      // name even when server name validation is turned off.
       TlsSocketStrategy tlsSocketStrategy = ClientTlsStrategyBuilder.create()
-                                                    .setSslContext(sc)
-                                                    .setHostnameVerifier(x509HostnameVerifier_)
-                                                    // Only our verifier decides (as with the
-                                                    // old socket factory), so that
-                                                    // validate_server_name=false really
-                                                    // skips the check.
-                                                    .setHostVerificationPolicy(
-                                                            HostnameVerificationPolicy.CLIENT)
-                                                    .buildClassic();
+              .setSslContext(sc)
+              .setHostnameVerifier(x509HostnameVerifier_)
+              .setHostVerificationPolicy(HostnameVerificationPolicy.CLIENT)
+              .buildClassic();
 
       PoolingHttpClientConnectionManager connectionManager =
               PoolingHttpClientConnectionManagerBuilder.create()
