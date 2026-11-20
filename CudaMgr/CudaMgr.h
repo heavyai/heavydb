@@ -6,10 +6,12 @@
 #pragma once
 
 #include <cstdlib>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #ifdef HAVE_CUDA
@@ -27,6 +29,12 @@
 #include "Shared/DeviceGroup.h"
 
 namespace CudaMgr_Namespace {
+
+enum PeerCopyMode {
+  kPeerCopyModeDirect = 0,
+  kPeerCopyModeStaged = 1,
+  kPeerCopyModeHost = 2,
+};
 
 enum class NvidiaDeviceArch {
   Pascal,    // compute major = 6
@@ -71,8 +79,12 @@ class CudaMgr {
   virtual ~CudaMgr();
 
   void synchronizeDevices() const;
+  void synchronizeDevice(int device_num) const;
+  void synchronizeStream(CUstream cuda_stream) const;
+  CUstream getDeviceTransferStream(int device_num) const;
   int getDeviceCount() const { return device_count_; }
   int getStartGpu() const { return start_gpu_; }
+  bool canAccessPeer(const int dest_device_num, const int src_device_num) const;
   const heavyai::DeviceGroup& getDeviceGroup() const { return device_group_; }
   size_t computePaddedBufferSize(size_t buf_size, size_t granularity) const;
   size_t getGranularity(const int device_num) const;
@@ -83,9 +95,38 @@ class CudaMgr {
                         const int device_num,
                         std::optional<std::string_view> tag,
                         CUstream cuda_stream = 0);
+  void copyHostToDeviceDirect(int8_t* device_ptr,
+                              const int8_t* host_ptr,
+                              const size_t num_bytes,
+                              const int device_num,
+                              std::optional<std::string_view> tag,
+                              CUstream cuda_stream = 0);
+  void copyHostToDevice2DDirect(int8_t* device_ptr,
+                                const size_t destination_pitch,
+                                const int8_t* host_ptr,
+                                const size_t source_pitch,
+                                const size_t width_bytes,
+                                const size_t height,
+                                const int device_num,
+                                std::optional<std::string_view> tag,
+                                CUstream cuda_stream = 0);
+  bool copyHostToDeviceFromPinnedProducer(
+      int8_t* device_ptr,
+      const size_t num_bytes,
+      const int device_num,
+      std::optional<std::string_view> tag,
+      const std::function<void(int8_t* host_ptr, size_t num_bytes, size_t offset)>&
+          producer,
+      CUstream cuda_stream = 0);
   void copyDeviceToHost(int8_t* host_ptr,
                         const int8_t* device_ptr,
                         const size_t num_bytes,
+                        std::optional<std::string_view> tag,
+                        CUstream cuda_stream = 0);
+  void copyDeviceToHost(int8_t* host_ptr,
+                        const int8_t* device_ptr,
+                        const size_t num_bytes,
+                        const int device_num,
                         std::optional<std::string_view> tag,
                         CUstream cuda_stream = 0);
   void copyDeviceToDevice(int8_t* dest_ptr,
@@ -94,7 +135,42 @@ class CudaMgr {
                           const int dest_device_num,
                           const int src_device_num,
                           std::optional<std::string_view> tag,
-                          CUstream cuda_stream = 0);
+                          CUstream cuda_stream = 0,
+                          bool synchronize = true);
+  void copyDeviceToDeviceViaHost(int8_t* dest_ptr,
+                                 int8_t* src_ptr,
+                                 const size_t num_bytes,
+                                 const int dest_device_num,
+                                 const int src_device_num,
+                                 std::optional<std::string_view> tag,
+                                 CUstream cuda_stream = 0);
+  void copyDeviceToDeviceViaPeerStaging(int8_t* dest_ptr,
+                                        int8_t* src_ptr,
+                                        const size_t num_bytes,
+                                        const int dest_device_num,
+                                        const int src_device_num,
+                                        std::optional<std::string_view> tag,
+                                        CUstream cuda_stream = 0);
+  int8_t* allocatePeerCopyableDeviceMem(const size_t num_bytes, const int device_num);
+  void freePeerCopyableDeviceMem(int8_t* device_ptr, const int device_num);
+  void copyPeerToPeer(int8_t* dest_ptr,
+                      const int8_t* src_ptr,
+                      const size_t num_bytes,
+                      const int dest_device_num,
+                      const int src_device_num,
+                      std::optional<std::string_view> tag,
+                      CUstream cuda_stream = 0,
+                      bool synchronize = true);
+  bool ensurePeerAccessToDevicePtr(const int dest_device_num,
+                                   const int src_device_num,
+                                   const int8_t* device_ptr,
+                                   const size_t num_bytes);
+  bool canAccessPeerMemoryFromKernel(const int dest_device_num, const int src_device_num);
+
+  std::optional<int8_t*> registerMappedHostMemory(const int8_t* host_ptr,
+                                                  const size_t num_bytes,
+                                                  const int device_num);
+  void unregisterMappedHostMemory(const int8_t* host_ptr, const size_t num_bytes);
 
   virtual int8_t* allocateDeviceMem(const size_t num_bytes,
                                     const int device_num,
@@ -194,6 +270,7 @@ class CudaMgr {
 
   void setContext(const int device_num) const;
   int getContext() const;
+  void startBackgroundJumpBufferAllocation();
 
 #ifdef HAVE_CUDA
 
@@ -229,11 +306,13 @@ class CudaMgr {
 
   DeviceMemoryAllocationMap& getDeviceMemoryAllocationMap();
   int exportHandle(const uint64_t handle) const;
+  void ensurePeerAccess(const int dest_device_num, const int src_device_num) const;
   void enableMemoryActivityLog();
   bool logMemoryActivity() const;
 
   int getDeviceNumFromDevicePtr(CUdeviceptr cu_device_ptr,
                                 const size_t allocated_mem_bytes);
+  bool isDeviceMemoryPointer(CUdeviceptr cu_device_ptr, const size_t allocated_mem_bytes);
 #endif
 
  private:
@@ -241,6 +320,13 @@ class CudaMgr {
   void fillDeviceProperties();
   void initDeviceGroup();
   void createDeviceContexts();
+  void enablePeerAccess(const int dest_device_num, const int src_device_num) const;
+  void copyDeviceToDeviceOnDevice(int8_t* dest_ptr,
+                                  const int8_t* src_ptr,
+                                  const size_t num_bytes,
+                                  const int device_num,
+                                  CUstream cuda_stream = 0,
+                                  bool synchronize = true) const;
   size_t computeMinSharedMemoryPerBlockForAllDevices() const;
   size_t computeMinNumMPsForAllDevices() const;
   void checkError(CUresult cu_result) const;
@@ -255,6 +341,7 @@ class CudaMgr {
   std::vector<DeviceProperties> device_properties_;
   heavyai::DeviceGroup device_group_;
   std::vector<CUcontext> device_contexts_;
+  std::vector<CUstream> device_transfer_streams_;
   mutable std::mutex device_mutex_;
   bool device_properties_initialized_{false};
 
@@ -262,6 +349,40 @@ class CudaMgr {
   bool log_memory_activity_;
   DeviceMemoryAllocationMapUqPtr device_memory_allocation_map_;
   std::unique_ptr<JumpBufferTransferMgr> jump_buffer_transfer_mgr_;
+  struct PeerCopyableDeviceAllocation {
+    size_t size;
+    int device_num;
+  };
+  struct PeerCopyStagingBuffers {
+    std::mutex mutex;
+    size_t size{0};
+    int src_device_num{-1};
+    int dest_device_num{-1};
+    int8_t* src_buffer{nullptr};
+    int8_t* dest_buffer{nullptr};
+  };
+  PeerCopyStagingBuffers& getPeerCopyStagingBuffers(const int src_device_num,
+                                                    const int dest_device_num);
+  void ensurePeerCopyStagingBuffers(PeerCopyStagingBuffers& staging_buffers,
+                                    const size_t required_size);
+  void releasePeerCopyStagingBuffers();
+  std::map<CUdeviceptr, PeerCopyableDeviceAllocation> peer_copyable_device_allocations_;
+  std::map<std::pair<int, int>, std::unique_ptr<PeerCopyStagingBuffers>>
+      peer_copy_staging_buffers_;
+  std::map<std::pair<int, int>, bool> peer_kernel_access_cache_;
+  struct MappedHostMemoryKey {
+    const int8_t* host_ptr;
+    size_t num_bytes;
+
+    bool operator<(const MappedHostMemoryKey& that) const {
+      return std::tie(host_ptr, num_bytes) < std::tie(that.host_ptr, that.num_bytes);
+    }
+  };
+  struct MappedHostMemoryEntry {
+    size_t ref_count{0};
+  };
+  std::mutex mapped_host_memory_mutex_;
+  std::map<MappedHostMemoryKey, MappedHostMemoryEntry> mapped_host_memory_;
 #endif
 };
 
@@ -269,3 +390,6 @@ class CudaMgr {
 
 extern std::string get_cuda_home(void);
 extern std::string get_cuda_libdevice_dir(void);
+extern std::string g_peer_copy_mode_name;
+extern int g_peer_copy_mode;
+extern size_t g_peer_copy_staging_buffer_size;
