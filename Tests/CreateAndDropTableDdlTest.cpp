@@ -1684,6 +1684,100 @@ TEST_F(TableConstraintTest, ArchivePreservesConstraintsAndSelfReference) {
                       {{int64_t(1), int64_t(1)}});
 }
 
+class TableConstraintArchiveTest
+    : public TableConstraintTest,
+      public testing::WithParamInterface<std::tuple<bool, std::string>> {};
+
+TEST_P(TableConstraintArchiveTest, ExternalReferencesDoNotFollowSingleTableArchive) {
+  const auto& [sharded, destination] = GetParam();
+  sql("CREATE TABLE constraint_archive_parent (id INT, PRIMARY KEY(id));");
+  sql(std::string("CREATE TABLE constraint_archive_child ("
+                  "id INT, parent_id INT, manager_id INT, code INT, "
+                  "CONSTRAINT child_pk PRIMARY KEY(id), "
+                  "CONSTRAINT child_uq UNIQUE(code), "
+                  "CONSTRAINT child_parent_fk FOREIGN KEY(parent_id) "
+                  "REFERENCES constraint_archive_parent(id), "
+                  "CONSTRAINT child_manager_fk FOREIGN KEY(manager_id) "
+                  "REFERENCES constraint_archive_child(id)") +
+      (sharded ? ", SHARD KEY(id)) WITH (SHARD_COUNT=2);" : ");"));
+  sql("INSERT INTO constraint_archive_parent VALUES(1),(2);");
+  sql("INSERT INTO constraint_archive_child VALUES(7,1,7,70),(8,2,7,80);");
+
+  const auto& source_catalog = getCatalog();
+  const auto source =
+      source_catalog.getMetadataForTable("constraint_archive_child", false);
+  ASSERT_NE(nullptr, source);
+  ASSERT_EQ(size_t(4), source_catalog.getTableConstraints(source).size());
+  const auto source_keys = source->keyMetainfo;
+  const auto source_ddl = source_catalog.dumpCreateTable(source, false);
+  EXPECT_NE(std::string::npos, source_ddl.find("REFERENCES constraint_archive_parent"));
+
+  const auto archive =
+      bf::absolute(bf::path(BASE_PATH) / "constraint_external_reference.dump").string();
+  const bool other_database = destination == "other_database";
+  ScopeGuard cleanup = [&] {
+    loginAdmin();
+    if (other_database) {
+      sql("DROP DATABASE IF EXISTS constraint_archive_destination;");
+    }
+    bf::remove_all(archive);
+  };
+  sql("DUMP TABLE constraint_archive_child TO '" + archive +
+      "' WITH (COMPRESSION='none');");
+  EXPECT_EQ(source_keys, source->keyMetainfo);
+  EXPECT_EQ(source_ddl, source_catalog.dumpCreateTable(source, false));
+
+  if (destination == "parent_missing") {
+    sql("DROP TABLE constraint_archive_child;");
+    sql("DROP TABLE constraint_archive_parent;");
+  } else if (other_database) {
+    sql("CREATE DATABASE constraint_archive_destination;");
+    login(getCurrentUser().userName, "", "constraint_archive_destination");
+  }
+
+  // The target name differs from the source so retained self references must
+  // be rewritten, while external references must be absent in every destination.
+  ASSERT_NO_THROW(sql("RESTORE TABLE constraint_archive_restored FROM '" + archive +
+                      "' WITH (COMPRESSION='none');"));
+  sqlAndCompareResult(
+      "SELECT id, parent_id, manager_id, code FROM constraint_archive_restored "
+      "ORDER BY id;",
+      {{i(7), i(1), i(7), i(70)}, {i(8), i(2), i(7), i(80)}});
+  const auto& catalog = getCatalog();
+  const auto restored = catalog.getMetadataForTable("constraint_archive_restored", false);
+  ASSERT_NE(nullptr, restored);
+  EXPECT_EQ(sharded ? 2 : 0, restored->nShards);
+  const auto constraints = catalog.getTableConstraints(restored);
+  ASSERT_EQ(size_t(3), constraints.size());
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::PrimaryKey, constraints[0].type);
+  EXPECT_EQ("child_pk", constraints[0].name);
+  EXPECT_EQ((std::vector<std::string>{"id"}), constraints[0].column_names);
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::Unique, constraints[1].type);
+  EXPECT_EQ("child_uq", constraints[1].name);
+  EXPECT_EQ((std::vector<std::string>{"code"}), constraints[1].column_names);
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::ForeignKey, constraints[2].type);
+  EXPECT_EQ("child_manager_fk", constraints[2].name);
+  EXPECT_EQ((std::vector<std::string>{"manager_id"}), constraints[2].column_names);
+  ASSERT_TRUE(constraints[2].foreign_key_reference);
+  EXPECT_EQ("constraint_archive_restored",
+            constraints[2].foreign_key_reference->table_name);
+  EXPECT_EQ((std::vector<std::string>{"id"}),
+            constraints[2].foreign_key_reference->column_names);
+  for (const auto& constraint : constraints) {
+    EXPECT_FALSE(constraint.enforced);
+  }
+  for (const auto shard : catalog.getPhysicalTablesDescriptors(restored, false)) {
+    EXPECT_EQ(size_t(3), catalog.getTableConstraints(shard).size());
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(Destinations,
+                         TableConstraintArchiveTest,
+                         testing::Combine(testing::Bool(),
+                                          testing::Values("parent_present",
+                                                          "parent_missing",
+                                                          "other_database")));
+
 TEST_F(TableConstraintTest, InlineTableConstraintsMatchAlterTableMetadata) {
   sql("DROP TABLE IF EXISTS test_child_inline;");
   sql("DROP TABLE IF EXISTS test_child_alter;");
