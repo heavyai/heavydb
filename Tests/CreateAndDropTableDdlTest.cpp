@@ -1378,20 +1378,244 @@ TEST_F(TableConstraintTest, ForeignKeyRequiresReferencedTablePrivileges) {
   };
   sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
   login("test_user", "test_pass");
-  EXPECT_ANY_THROW(
-      sql("CREATE TABLE constraint_review_child (id INT, FOREIGN KEY(id) "
-          "REFERENCES constraint_review_parent(id));"));
+  const std::string privilege_error =
+      "Current user does not have SELECT privileges on referenced table: "
+      "constraint_review_parent";
+  queryAndAssertException(
+      "CREATE TABLE constraint_review_child (id INT, FOREIGN KEY(id) "
+      "REFERENCES constraint_review_parent(id));",
+      privilege_error);
   sql("CREATE TABLE constraint_review_child (id INT);");
-  EXPECT_ANY_THROW(
-      sql("ALTER TABLE constraint_review_child ADD CONSTRAINT child_fk "
-          "FOREIGN KEY(id) REFERENCES constraint_review_parent(id);"));
+  queryAndAssertException(
+      "ALTER TABLE constraint_review_child ADD CONSTRAINT child_fk "
+      "FOREIGN KEY(id) REFERENCES constraint_review_parent(id);",
+      privilege_error);
   loginAdmin();
   sql("GRANT SELECT ON TABLE constraint_review_parent TO test_user;");
+  sql("GRANT ALTER ON TABLE constraint_review_parent TO test_user;");
   login("test_user", "test_pass");
   EXPECT_NO_THROW(
       sql("ALTER TABLE constraint_review_child ADD CONSTRAINT child_fk "
           "FOREIGN KEY(id) REFERENCES constraint_review_parent(id);"));
 }
+
+class ForeignKeyParentPrivilegeTest : public TableConstraintTest,
+                                      public testing::WithParamInterface<bool> {
+ protected:
+  void SetUp() override {
+    TableConstraintTest::SetUp();
+    createTestUser();
+    sql("CREATE USER fk_parent_owner (password='owner_pass');");
+    sql("GRANT ACCESS ON DATABASE " + shared::kDefaultDbName + " TO fk_parent_owner;");
+    for (const auto user : {"test_user", "fk_parent_owner"}) {
+      sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO " + user +
+          ";");
+    }
+    login("fk_parent_owner", "owner_pass");
+    sql("CREATE TABLE parent_privilege (id INT, CONSTRAINT parent_pk PRIMARY KEY(id));");
+    login("test_user", "test_pass");
+  }
+
+  void TearDown() override {
+    TableConstraintTest::TearDown();
+    dropTestUser();
+    sql("DROP USER IF EXISTS fk_parent_owner;");
+    sql("DROP ROLE IF EXISTS fk_parent_role;");
+  }
+
+  void grantOnParent(const std::string& privileges) {
+    login("fk_parent_owner", "owner_pass");
+    sql("GRANT " + privileges + " ON TABLE parent_privilege TO test_user;");
+    login("test_user", "test_pass");
+  }
+
+  void prepareChild() {
+    if (GetParam()) {
+      sql("CREATE TABLE child_privilege (id INT);");
+    }
+  }
+
+  std::string addForeignKey() const {
+    return std::string(GetParam() ? "ALTER TABLE child_privilege ADD "
+                                  : "CREATE TABLE child_privilege (id INT, ") +
+           "CONSTRAINT child_fk FOREIGN KEY(id) REFERENCES parent_privilege(id)" +
+           (GetParam() ? ";" : ");");
+  }
+
+  void expectDenied(const std::string& privilege) {
+    const auto before = getCatalog().getMetadataForTable("child_privilege", false);
+    const auto original_metadata = before ? before->keyMetainfo : std::string{};
+    queryAndAssertException(addForeignKey(),
+                            "Current user does not have " + privilege +
+                                " privileges on referenced table: parent_privilege");
+    const auto after = getCatalog().getMetadataForTable("child_privilege", false);
+    if (GetParam()) {
+      ASSERT_NE(nullptr, after);
+      EXPECT_EQ(original_metadata, after->keyMetainfo);
+    } else {
+      EXPECT_EQ(nullptr, after);
+    }
+  }
+
+  void expectForeignKey() {
+    const auto td = getCatalog().getMetadataForTable("child_privilege", false);
+    ASSERT_NE(nullptr, td);
+    const auto constraints = getCatalog().getTableConstraints(td);
+    ASSERT_EQ(1u, constraints.size());
+    EXPECT_EQ(Catalog_Namespace::TableConstraintType::ForeignKey, constraints[0].type);
+    EXPECT_EQ("child_fk", constraints[0].name);
+    EXPECT_EQ((std::vector<std::string>{"id"}), constraints[0].column_names);
+    ASSERT_TRUE(constraints[0].foreign_key_reference);
+    EXPECT_EQ("parent_privilege", constraints[0].foreign_key_reference->table_name);
+    EXPECT_EQ((std::vector<std::string>{"id"}),
+              constraints[0].foreign_key_reference->column_names);
+  }
+};
+
+TEST_P(ForeignKeyParentPrivilegeTest, ReaderCannotBlockOwnerDdl) {
+  grantOnParent("SELECT");
+  prepareChild();
+  expectDenied("ALTER");
+
+  // A rejected declaration must not leave a dependency blocking the parent owner.
+  login("fk_parent_owner", "owner_pass");
+  EXPECT_NO_THROW(sql("ALTER TABLE parent_privilege DROP CONSTRAINT parent_pk;"));
+  EXPECT_NO_THROW(sql("ALTER TABLE parent_privilege RENAME TO renamed_parent;"));
+  EXPECT_NO_THROW(sql("DROP TABLE renamed_parent;"));
+}
+
+TEST_P(ForeignKeyParentPrivilegeTest, AlterDoesNotReplaceSelect) {
+  grantOnParent("ALTER");
+  prepareChild();
+  expectDenied("SELECT");
+}
+
+TEST_P(ForeignKeyParentPrivilegeTest, ExplicitGrantsAllowDependency) {
+  grantOnParent("SELECT, ALTER");
+  prepareChild();
+  sql(addForeignKey());
+  expectForeignKey();
+
+  login("fk_parent_owner", "owner_pass");
+  queryAndAssertException(
+      "ALTER TABLE parent_privilege DROP CONSTRAINT parent_pk;",
+      "Cannot drop constraint parent_pk on table parent_privilege because foreign key "
+      "child_fk on table child_privilege depends on it.");
+  queryAndAssertException(
+      "ALTER TABLE parent_privilege RENAME TO renamed_parent;",
+      "Cannot rename table parent_privilege because foreign key child_fk on table "
+      "child_privilege references it.");
+  queryAndAssertException(
+      "DROP TABLE parent_privilege;",
+      "Cannot drop table parent_privilege because foreign key child_fk on table "
+      "child_privilege references it.");
+}
+
+TEST_P(ForeignKeyParentPrivilegeTest, RoleGrantsAllowDependency) {
+  loginAdmin();
+  sql("CREATE ROLE fk_parent_role;");
+  sql("GRANT SELECT, ALTER ON TABLE parent_privilege TO fk_parent_role;");
+  sql("GRANT fk_parent_role TO test_user;");
+  login("test_user", "test_pass");
+  prepareChild();
+  sql(addForeignKey());
+  expectForeignKey();
+}
+
+TEST_P(ForeignKeyParentPrivilegeTest, OwnerCanReferenceOwnParent) {
+  login("fk_parent_owner", "owner_pass");
+  prepareChild();
+  sql(addForeignKey());
+  expectForeignKey();
+}
+
+TEST_P(ForeignKeyParentPrivilegeTest, RevokedAlterPreventsNewDependency) {
+  grantOnParent("SELECT, ALTER");
+  prepareChild();
+  sql(addForeignKey());
+  login("fk_parent_owner", "owner_pass");
+  sql("REVOKE ALTER ON TABLE parent_privilege FROM test_user;");
+  login("test_user", "test_pass");
+  expectForeignKey();
+  sql("ALTER TABLE child_privilege DROP CONSTRAINT child_fk;");
+  if (!GetParam()) {
+    sql("DROP TABLE child_privilege;");
+  }
+  expectDenied("ALTER");
+}
+
+TEST_P(ForeignKeyParentPrivilegeTest, SelfReferenceUsesSourcePrivileges) {
+  if (GetParam()) {
+    sql("CREATE TABLE child_privilege (id INT, manager_id INT, PRIMARY KEY(id));");
+    sql("ALTER TABLE child_privilege ADD CONSTRAINT self_fk FOREIGN KEY(manager_id) "
+        "REFERENCES child_privilege(id);");
+  } else {
+    sql("CREATE TABLE child_privilege (id INT, manager_id INT, PRIMARY KEY(id), "
+        "CONSTRAINT self_fk FOREIGN KEY(manager_id) REFERENCES child_privilege(id));");
+  }
+  const auto td = getCatalog().getMetadataForTable("child_privilege", false);
+  ASSERT_NE(nullptr, td);
+  const auto constraints = getCatalog().getTableConstraints(td);
+  ASSERT_EQ(2u, constraints.size());
+  ASSERT_TRUE(constraints[1].foreign_key_reference);
+  EXPECT_EQ("child_privilege", constraints[1].foreign_key_reference->table_name);
+}
+
+TEST_P(ForeignKeyParentPrivilegeTest, SelfReferenceRequiresSourcePrivileges) {
+  std::string statement;
+  if (GetParam()) {
+    login("fk_parent_owner", "owner_pass");
+    sql("CREATE TABLE child_privilege (id INT, manager_id INT, PRIMARY KEY(id));");
+    sql("GRANT SELECT ON TABLE child_privilege TO test_user;");
+    const auto td = getCatalog().getMetadataForTable("child_privilege", false);
+    ASSERT_NE(nullptr, td);
+    const auto original_metadata = td->keyMetainfo;
+    statement =
+        "ALTER TABLE child_privilege ADD CONSTRAINT self_fk "
+        "FOREIGN KEY(manager_id) REFERENCES child_privilege(id);";
+    login("test_user", "test_pass");
+    queryAndAssertException(
+        statement,
+        "Current user does not have the privilege to alter table: child_privilege");
+    const auto after = getCatalog().getMetadataForTable("child_privilege", false);
+    ASSERT_NE(nullptr, after);
+    EXPECT_EQ(original_metadata, after->keyMetainfo);
+    login("fk_parent_owner", "owner_pass");
+    sql("GRANT ALTER ON TABLE child_privilege TO test_user;");
+  } else {
+    loginAdmin();
+    sql("REVOKE CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " FROM test_user;");
+    statement =
+        "CREATE TABLE child_privilege (id INT, manager_id INT, PRIMARY KEY(id), "
+        "CONSTRAINT self_fk FOREIGN KEY(manager_id) "
+        "REFERENCES child_privilege(id));";
+    login("test_user", "test_pass");
+    queryAndAssertException(
+        statement,
+        "Table child_privilege will not be created. User has no create privileges.");
+    EXPECT_EQ(nullptr, getCatalog().getMetadataForTable("child_privilege", false));
+    loginAdmin();
+    sql("GRANT CREATE TABLE ON DATABASE " + shared::kDefaultDbName + " TO test_user;");
+  }
+
+  // The same declaration must succeed when only the missing source privilege changes.
+  login("test_user", "test_pass");
+  sql(statement);
+  const auto td = getCatalog().getMetadataForTable("child_privilege", false);
+  ASSERT_NE(nullptr, td);
+  const auto constraints = getCatalog().getTableConstraints(td);
+  ASSERT_EQ(2u, constraints.size());
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::PrimaryKey, constraints[0].type);
+  EXPECT_EQ(Catalog_Namespace::TableConstraintType::ForeignKey, constraints[1].type);
+  EXPECT_EQ("self_fk", constraints[1].name);
+  EXPECT_EQ((std::vector<std::string>{"manager_id"}), constraints[1].column_names);
+  ASSERT_TRUE(constraints[1].foreign_key_reference);
+  EXPECT_EQ("child_privilege", constraints[1].foreign_key_reference->table_name);
+  EXPECT_EQ((std::vector<std::string>{"id"}),
+            constraints[1].foreign_key_reference->column_names);
+}
+
+INSTANTIATE_TEST_SUITE_P(CreateAndAlter, ForeignKeyParentPrivilegeTest, testing::Bool());
 
 class ForeignKeyColumnPrivilegeTest : public TableConstraintTest,
                                       public testing::WithParamInterface<bool> {
@@ -1457,7 +1681,8 @@ TEST_P(ForeignKeyColumnPrivilegeTest, NoPrivilegeOnReferencedTable) {
   expectDenied();
 }
 
-TEST_P(ForeignKeyColumnPrivilegeTest, TableLevelSelect) {
+TEST_P(ForeignKeyColumnPrivilegeTest, TableLevelSelectAndAlter) {
+  grantOnParent("ALTER");
   grantOnParent("SELECT");
   sql(addForeignKey());
   loginAdmin();
@@ -1469,11 +1694,13 @@ TEST_P(ForeignKeyColumnPrivilegeTest, TableLevelSelect) {
 }
 
 TEST_P(ForeignKeyColumnPrivilegeTest, SelectOnReferencedColumnOnly) {
+  grantOnParent("ALTER");
   grantOnParent("SELECT (id)");
   expectDenied();
 }
 
 TEST_P(ForeignKeyColumnPrivilegeTest, SelectOnUnreferencedColumnOnly) {
+  grantOnParent("ALTER");
   grantOnParent("SELECT (other)");
   expectDenied();
 }
