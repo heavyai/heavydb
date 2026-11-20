@@ -16,12 +16,15 @@
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/DataRecycler/HashtableRecycler.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/JoinHashTable/BitmapJoinHashTable.h"
+#include "QueryEngine/JoinHashTable/RankedBitmapJoinHashTable.h"
 #include "QueryEngine/QueryDispatchQueue.h"
 #include "QueryEngine/QueryPlanDagExtractor.h"
 #include "QueryEngine/RelAlgExecutor.h"
 #include "QueryEngine/RelAlgOptimizer.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/ThriftSerializers.h"
+#include "QueryRunner/TestEnvironment.h"
 #include "ThriftHandler/QueryParsing.h"
 #ifdef HAVE_RUNTIME_LIBS
 #include "RuntimeLibManager/RuntimeLibManager.h"
@@ -38,9 +41,9 @@
 #include <csignal>
 #include <random>
 
-#define CALCITEPORT 3279
-
 extern bool g_enable_filter_push_down;
+extern bool g_enable_dynamic_watchdog;
+extern unsigned g_dynamic_watchdog_time_limit;
 
 double g_gpu_mem_limit_percent{0.9};
 
@@ -172,8 +175,8 @@ QueryRunner::QueryRunner(const char* db_path,
 
   setup_signal_handler();
   logger::set_once_fatal_func(&calcite_shutdown_handler);
-  g_calcite =
-      std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, 5000, true, udf_filename);
+  g_calcite = std::make_shared<Calcite>(
+      -1, calcite_port(), db_path, 1024, 5000, true, udf_filename);
   ExtensionFunctionsWhitelist::add(g_calcite->getExtensionFunctionWhitelist());
   if (!udf_filename.empty()) {
     ExtensionFunctionsWhitelist::addUdfs(g_calcite->getUserDefinedFunctionWhitelist());
@@ -370,9 +373,23 @@ RegisteredQueryHint QueryRunner::getParsedQueryHint(const std::string& query_str
 
   auto ra_executor =
       RelAlgExecutor(executor.get(), query_ra, *session_info_, query_state);
-  auto query_hints =
-      ra_executor.getParsedQueryHint(ra_executor.getRootRelAlgNodeShPtr().get());
-  return query_hints ? *query_hints : RegisteredQueryHint::defaults();
+  auto parsed_query_hints = ra_executor.getParsedQueryHints();
+  RegisteredQueryHint combined_hints;
+  bool has_local_hints = false;
+  if (parsed_query_hints) {
+    for (const auto& node_hints : *parsed_query_hints) {
+      for (const auto& hint_by_id : node_hints.second) {
+        combined_hints =
+            has_local_hints ? (combined_hints || hint_by_id.second) : hint_by_id.second;
+        has_local_hints = true;
+      }
+    }
+  }
+  const auto global_hints = ra_executor.getGlobalQueryHint();
+  if (global_hints && global_hints->isAnyQueryHintDelivered()) {
+    combined_hints = has_local_hints ? (combined_hints || *global_hints) : *global_hints;
+  }
+  return combined_hints;
 }
 
 std::shared_ptr<const RelAlgNode> QueryRunner::getRootNodeFromParsedQuery(
@@ -646,6 +663,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
                                                const bool allow_loop_joins) {
   auto co = CompilationOptions::defaults(device_type);
   co.hoist_literals = hoist_literals;
+  co.with_dynamic_watchdog = g_enable_dynamic_watchdog;
   return runSQL(
       query_str, std::move(co), defaultExecutionOptionsForRunSQL(allow_loop_joins));
 }
@@ -660,8 +678,8 @@ ExecutionOptions QueryRunner::defaultExecutionOptionsForRunSQL(bool allow_loop_j
           false,
           false,
           false,
-          false,
-          10000,
+          g_enable_dynamic_watchdog,
+          g_dynamic_watchdog_time_limit,
           false,
           false,
           g_gpu_mem_limit_percent,
@@ -713,6 +731,7 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
             logger::LocalIdsScopeGuard lisg = parent_thread_local_ids.setNewThreadId();
             auto executor = Executor::getExecutor(worker_id);
             CompilationOptions co = CompilationOptions::defaults(device_type);
+            co.with_dynamic_watchdog = g_enable_dynamic_watchdog;
 
             ExecutionOptions eo = {g_enable_columnar_output,
                                    false,
@@ -722,8 +741,8 @@ std::shared_ptr<ResultSet> QueryRunner::runSQLWithAllowingInterrupt(
                                    false,
                                    false,
                                    false,
-                                   false,
-                                   10000,
+                                   g_enable_dynamic_watchdog,
+                                   g_dynamic_watchdog_time_limit,
                                    false,
                                    false,
                                    g_gpu_mem_limit_percent,
@@ -821,6 +840,7 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
   auto executor = Executor::getExecutor(Executor::UNITARY_EXECUTOR_ID);
   CompilationOptions co = CompilationOptions::defaults(device_type);
   co.explain_type = explain_type;
+  co.with_dynamic_watchdog = g_enable_dynamic_watchdog;
 
   ExecutionOptions eo = ExecutionOptions::defaults();
   eo.output_columnar_hint = g_enable_columnar_output;
@@ -828,6 +848,8 @@ std::shared_ptr<ExecutionResult> run_select_query_with_filter_push_down(
   eo.allow_loop_joins = allow_loop_joins;
   eo.find_push_down_candidates = with_filter_push_down;
   eo.gpu_input_mem_limit_percent = g_gpu_mem_limit_percent;
+  eo.with_dynamic_watchdog = g_enable_dynamic_watchdog;
+  eo.dynamic_watchdog_time_limit = g_dynamic_watchdog_time_limit;
 
   auto calcite_mgr = cat.getCalciteMgr();
   const auto calciteQueryParsingOption =
@@ -1284,6 +1306,32 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
         }
       };
 
+  auto get_num_cached_gpu_hashtable =
+      [&item_status, &hash_table_type](HashtableRecycler* hash_table_cache) {
+        size_t total{0};
+        for (DeviceIdentifier device_identifier = 1;
+             device_identifier <= DataRecyclerUtil::MAX_GPU_CACHE_DEVICE_COUNT;
+             ++device_identifier) {
+          switch (item_status) {
+            case CacheItemStatus::ALL:
+              total += hash_table_cache->getCurrentNumCachedItems(hash_table_type,
+                                                                  device_identifier);
+              break;
+            case CacheItemStatus::CLEAN_ONLY:
+              total += hash_table_cache->getCurrentNumCleanCachedItems(hash_table_type,
+                                                                       device_identifier);
+              break;
+            case CacheItemStatus::DIRTY_ONLY:
+              total += hash_table_cache->getCurrentNumDirtyCachedItems(hash_table_type,
+                                                                       device_identifier);
+              break;
+            default:
+              UNREACHABLE();
+          }
+        }
+        return total;
+      };
+
   switch (hash_table_type) {
     case CacheItemType::PERFECT_HT: {
       auto hash_table_cache = PerfectJoinHashTable::getHashTableCache();
@@ -1299,6 +1347,16 @@ size_t QueryRunner::getNumberOfCachedItem(CacheItemStatus item_status,
       auto hash_table_cache = BoundingBoxIntersectJoinHashTable::getHashTableCache();
       CHECK(hash_table_cache);
       return get_num_cached_hashtable(hash_table_cache);
+    }
+    case CacheItemType::BITMAP_HT: {
+      auto hash_table_cache = BitmapJoinHashTable::getHashTableCache();
+      CHECK(hash_table_cache);
+      return get_num_cached_gpu_hashtable(hash_table_cache);
+    }
+    case CacheItemType::RANKED_BITMAP_HT: {
+      auto hash_table_cache = RankedBitmapJoinHashTable::getHashTableCache();
+      CHECK(hash_table_cache);
+      return get_num_cached_gpu_hashtable(hash_table_cache);
     }
     case CacheItemType::BBOX_INTERSECT_AUTO_TUNER_PARAM: {
       return get_num_cached_auto_tuner_param();

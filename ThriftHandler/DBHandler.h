@@ -182,6 +182,7 @@ class DBHandler : public HeavyIf {
             const File_Namespace::DiskCacheConfig& disk_cache_config,
             const bool is_new_db);
   void initialize(const bool is_new_db);
+  void startBackgroundGpuTransferWarmup();
 
   ~DBHandler() override;
 
@@ -840,8 +841,13 @@ class DBHandler : public HeavyIf {
       std::vector<std::string>& table_names,
       query_state::StdLog& stdlog);
 
-  std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>
-  prepare_loader_generic(
+  struct LoadTableLocks {
+    std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>
+        schema_read_lock;
+    std::unique_ptr<lockmgr::WriteLock> insert_data_lock;
+  };
+
+  LoadTableLocks prepare_loader_generic(
       const Catalog_Namespace::SessionInfo& session_info,
       const std::string& table_name,
       size_t num_cols,
