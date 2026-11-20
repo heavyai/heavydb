@@ -30,6 +30,10 @@ std::vector<std::vector<size_t>> compute_row_indices_of_shards(
   const auto n_shard_tables = shard_count * insert_target_count;
   std::vector<std::vector<size_t>> row_indices_of_shards(n_shard_tables);
   if (!duplicated_key_value) {
+    const auto expected_rows_per_shard = row_count / n_shard_tables + 1;
+    for (auto& row_indices_of_shard : row_indices_of_shards) {
+      row_indices_of_shard.reserve(expected_rows_per_shard);
+    }
     for (size_t row = 0; row < row_count; row++) {
       // expecting unsigned data
       // thus, no need for double remainder
@@ -296,8 +300,11 @@ copy_data_of_shard(const Catalog_Namespace::Catalog& cat,
   const auto* table = cat.getMetadataForTable(insert_chunks.table_id);
   const auto* physical_table = cat.getPhysicalTablesDescriptors(table)[shardTableIndex];
 
-  InsertChunks insert_chunks_for_shard{
-      physical_table->tableId, insert_chunks.db_id, {}, {}};
+  InsertChunks insert_chunks_for_shard{physical_table->tableId,
+                                       insert_chunks.db_id,
+                                       {},
+                                       {},
+                                       insert_chunks.num_column_append_threads};
 
   std::list<std::unique_ptr<foreign_storage::ForeignStorageBuffer>> buffers;
 
