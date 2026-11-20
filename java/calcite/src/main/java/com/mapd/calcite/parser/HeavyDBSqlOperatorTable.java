@@ -3471,7 +3471,10 @@ public class HeavyDBSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+      // AVG is NULL for an empty input and for a group containing only NULL values,
+      // regardless of the argument's nullability.
+      return typeFactory.createTypeWithNullability(
+              typeFactory.createSqlType(SqlTypeName.DOUBLE), /*nullable=*/true);
     }
   }
 
