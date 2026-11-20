@@ -27,6 +27,10 @@ void AlterTableAlterColumnCommandRecoveryMgr::rollback(const TableDescriptor* td
         std::find_if(cds.begin(), cds.end(), [&added_column](const ColumnDescriptor* cd) {
           return added_column.columnId == cd->columnId;
         });
+    if (cd_it == cds.end()) {
+      // The failure happened before this column was added
+      continue;
+    }
     auto cd = *cd_it;
     ChunkKey col_key{catalog_.getCurrentDB().dbId, td->tableId, cd->columnId};
     catalog_.dropColumnTransactional(*td, *cd);

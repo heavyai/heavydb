@@ -9,6 +9,7 @@
 #include <boost/iterator/counting_iterator.hpp>
 #include "boost/filesystem.hpp"
 
+#include "Catalog/AlterColumnRecovery.h"
 #include "Catalog/Catalog.h"
 #include "DBHandlerTestHelpers.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
@@ -20,6 +21,7 @@
 #include "Shared/scope.h"
 #include "Tests/TestHelpers.h"
 
+#include <filesystem>
 #include <tuple>
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -31,6 +33,7 @@ using namespace TestHelpers;
 using QR = QueryRunner::QueryRunner;
 
 extern bool g_test_drop_column_rollback;
+extern bool g_test_alter_column_geo_failure_after_rename;
 
 namespace {
 
@@ -1526,6 +1529,70 @@ TEST_F(AlterColumnMalformedGeoTest, MultiPolygon) {
       "ALTER TABLE test_suite_table ALTER COLUMN multipoly TYPE MULTIPOLYGON;",
       "Alter column type: Column multipoly: Failed to extract valid geometry in HeavyDB "
       "column 'multipoly'.");
+  assertDataAndSchemaNotChanged();
+}
+
+class AlterColumnGeoFailureTest : public AlterTableAlterColumnTest {
+ protected:
+  void SetUp() override {
+    AlterTableAlterColumnTest::SetUp();
+    createTextTable({"p", "t"}, {{"POINT (1 2)", "a"}});
+  }
+
+  void TearDown() override {
+    g_test_alter_column_geo_failure_after_rename = false;
+    if (const auto td = getCatalog().getMetadataForTable("test_table", false)) {
+      AlterTableAlterColumnCommandRecoveryMgr recovery_mgr(getCatalog());
+      std::filesystem::remove(recovery_mgr.recoveryFilepath(
+          recovery_mgr.getRecoveryFilepathInfo(td->tableId)));
+    }
+    AlterTableAlterColumnTest::TearDown();
+  }
+
+  void assertDataAndSchemaNotChanged() {
+    sqlAndCompareResult("SELECT * FROM test_table ORDER BY index;",
+                        {{1L, "POINT (1 2)", "a"}});
+    compareSchemaToReference(
+        "test_table",
+        {{"index", "INT"}, {"p", "TEXT ENCODING NONE"}, {"t", "TEXT ENCODING NONE"}});
+  }
+};
+
+TEST_F(AlterColumnGeoFailureTest, FailureBeforeGeoColumnsAreAdded) {
+  g_test_alter_column_geo_failure_after_rename = true;
+  queryAndAssertException(
+      "ALTER TABLE test_table ALTER COLUMN p TYPE POINT;",
+      "Alter column type: Simulated failure after renaming column p.");
+  assertDataAndSchemaNotChanged();
+}
+
+// A crash between the source column rename and the geo column add leaves the renamed
+// column and a recovery file that lists geo columns that were never added.
+TEST_F(AlterColumnGeoFailureTest, RecoveryAfterCrashBeforeGeoColumnsAreAdded) {
+  auto& catalog = getCatalog();
+  const auto td = catalog.getMetadataForTable("test_table", false);
+  ASSERT_NE(td, nullptr);
+  const auto src_cd = catalog.getMetadataForColumn(td->tableId, "p");
+  ASSERT_NE(src_cd, nullptr);
+
+  AlterTableAlterColumnCommandRecoveryMgr::RecoveryInfo recovery_info;
+  recovery_info.table_epoch =
+      catalog.getTableEpochs(catalog.getDatabaseId(), td->tableId).at(0).table_epoch;
+  recovery_info.is_vacuumed = false;
+  recovery_info.renamed_columns.push_back(*src_cd);
+  auto geo_cd = *src_cd;
+  geo_cd.columnId = catalog.getNextAddedColumnId(*td);
+  recovery_info.added_columns.push_back(geo_cd);
+  recovery_info.src_dst_cds.emplace_back(*src_cd, geo_cd);
+  AlterTableAlterColumnCommandRecoveryMgr recovery_mgr(catalog);
+  const auto filepath_info = recovery_mgr.getRecoveryFilepathInfo(td->tableId);
+  recovery_mgr.writeSerializedRecoveryInformation(recovery_info, filepath_info);
+  catalog.renameColumn(td, src_cd, "p_renamed");
+
+  AlterTableAlterColumnCommandRecoveryMgr::
+      resolveIncompleteAlterColumnCommandsForAllCatalogs();
+
+  EXPECT_FALSE(std::filesystem::exists(recovery_mgr.recoveryFilepath(filepath_info)));
   assertDataAndSchemaNotChanged();
 }
 
