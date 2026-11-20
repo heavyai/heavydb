@@ -125,6 +125,14 @@ size_t readPage(FILE* f,
                 int8_t* buf,
                 const std::string& file_path);
 
+size_t readPartialPage(FILE* f,
+                       const size_t pageSize,
+                       const size_t offset,
+                       const size_t readSize,
+                       const size_t pageNum,
+                       int8_t* buf,
+                       const std::string& file_path);
+
 /**
  * @brief Writes a page from buf to the file.
  *
