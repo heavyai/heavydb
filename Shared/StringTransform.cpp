@@ -137,13 +137,15 @@ std::pair<std::string_view, const char*> substring(const std::string& str,
 }
 
 std::string generate_random_string(const size_t len) {
-  static char charset[] =
+  static const char charset[] =
       "0123456789"
       "abcdefghijklmnopqrstuvwxyz"
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-  static std::mt19937 prng{std::random_device{}()};
-  static std::uniform_int_distribution<size_t> dist(0, strlen(charset) - 1);
+  // The generator is per-thread: a shared engine is not safe to call concurrently,
+  // and callers cannot be relied on to serialize access to it.
+  thread_local std::mt19937 prng{std::random_device{}()};
+  std::uniform_int_distribution<size_t> dist(0, strlen(charset) - 1);
 
   std::string str;
   str.reserve(len);
