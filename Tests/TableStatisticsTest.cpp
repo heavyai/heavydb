@@ -56,7 +56,7 @@ class TableStatisticsTest : public DBHandlerTestFixture,
   }
 
   void expectDeferredRefresh(LogCapture& log, int64_t count) {
-    // The maintenance operation must not perform a metadata RPC under its locks.
+    // The mutation must not perform a metadata RPC under its locks.
     EXPECT_FALSE(log.contains(kMetadataRefresh));
     if (!system_parameters_.enable_experimental_query_rewrites) {
       expectVisibleRows(count);
@@ -102,6 +102,86 @@ TEST_P(TableStatisticsTest, VacuumInvalidatesOnlyWhenPhysicalCountChanges) {
   sql("OPTIMIZE TABLE statistics_maintenance WITH (VACUUM='true');");
   expectVisibleRows(4);
   EXPECT_FALSE(log.contains(kMetadataRefresh));
+}
+
+TEST_P(TableStatisticsTest, CopyInvalidatesBeforeNextRewrite) {
+  TempFile file;
+  file << "7\n8\n9\n10\n";
+  file.close();
+
+  system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+  LogCapture log;
+  sql("COPY statistics_maintenance FROM '" + file.path() + "' WITH (header='false');");
+  expectDeferredRefresh(log, 10);
+  sqlAndCompareResult(
+      "SELECT id FROM statistics_maintenance ORDER BY id;",
+      {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}, {i(6)}, {i(7)}, {i(8)}, {i(9)}, {i(10)}});
+  EXPECT_FALSE(log.contains(kMetadataRefresh));
+}
+
+TEST_P(TableStatisticsTest, InsertSelectInvalidatesDestinationBeforeNextRewrite) {
+  sql("DROP TABLE IF EXISTS statistics_source;");
+  ScopeGuard drop_source = [] { sql("DROP TABLE IF EXISTS statistics_source;"); };
+  sql("CREATE TABLE statistics_source (id INT);");
+  sql("INSERT INTO statistics_source VALUES (7),(8),(9),(10);");
+  sqlAndCompareResult("SELECT COUNT(*) FROM statistics_source;", {{i(4)}});
+
+  system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+  LogCapture log;
+  LogCapture source_log;
+  sql("INSERT INTO statistics_maintenance SELECT id FROM statistics_source;");
+  expectDeferredRefresh(log, 10);
+  EXPECT_FALSE(source_log.contains("(ms), catalog=\"" +
+                                   getCatalog().getCurrentDB().dbName +
+                                   "\", table=\"statistics_source\""));
+  sqlAndCompareResult("SELECT id FROM statistics_source ORDER BY id;",
+                      {{i(7)}, {i(8)}, {i(9)}, {i(10)}});
+  EXPECT_FALSE(log.contains(kMetadataRefresh));
+}
+
+TEST_P(TableStatisticsTest, FailedCopyRollsBackBeforeDeferredRefresh) {
+  TempFile file;
+  // With one worker and 16-byte buffers, earlier batches reach the fragmenter
+  // before the malformed final row cancels the load.
+  for (int id = 7; id <= 46; ++id) {
+    file << id << '\n';
+  }
+  file << "47,48\n";  // Two fields for a one-column table.
+  file.close();
+
+  auto [handler, session] = getDbHandlerAndSessionId();
+  const auto& catalog = getCatalog();
+  const auto db_id = catalog.getDatabaseId();
+  const auto table_id =
+      catalog.getMetadataForTable("statistics_maintenance", false)->tableId;
+  std::vector<TTableEpochInfo> saved_epochs;
+  handler->get_table_epochs(saved_epochs, session, db_id, table_id);
+
+  system_parameters_.enable_experimental_query_rewrites = std::get<1>(GetParam());
+  LogCapture log;
+  TQueryResult result;
+  sql(result,
+      "COPY statistics_maintenance FROM '" + file.path() +
+          "' WITH (header='false', threads=1, buffer_size=16, max_reject=0);");
+  ASSERT_EQ(1u, result.row_set.columns.size());
+  const auto& messages = result.row_set.columns.front().data.str_col;
+  ASSERT_EQ(1u, messages.size());
+  EXPECT_EQ(0u, messages.front().find("Loader Failed due to :"));
+  const auto status =
+      getImportStatus(boost::filesystem::path(file.path()).filename().string());
+  EXPECT_GT(status.rows_completed, 16);  // More rows than fit in the failing batch.
+  EXPECT_EQ(1, status.rows_rejected);
+
+  std::vector<TTableEpochInfo> restored_epochs;
+  handler->get_table_epochs(restored_epochs, session, db_id, table_id);
+  EXPECT_EQ(saved_epochs, restored_epochs);
+  expectDeferredRefresh(log, 6);
+  sqlAndCompareResult("SELECT id FROM statistics_maintenance ORDER BY id;",
+                      {{i(1)}, {i(2)}, {i(3)}, {i(4)}, {i(5)}, {i(6)}});
+  EXPECT_FALSE(log.contains(kMetadataRefresh));
+
+  sql("INSERT INTO statistics_maintenance VALUES (7),(8);");
+  expectDeferredRefresh(log, 8);
 }
 
 TEST_P(TableStatisticsTest, EpochRollbackInvalidatesBeforeNextRewrite) {
