@@ -1,0 +1,148 @@
+---
+title: HashTableEntryInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashTable.h>
+```
+
+---
+
+## Constructors
+
+### HashTableEntryInfo [#hashtableentryinfo]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+HashTableEntryInfo::HashTableEntryInfo(
+    size_t num_hash_entries,
+    size_t num_keys,
+    size_t rowid_size_in_bytes,
+    HashType layout,
+    bool for_window_framing = false
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~HashTableEntryInfo
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+virtual HashTableEntryInfo::~HashTableEntryInfo() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### computeTotalNumSlots [#computetotalnumslots]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashTableEntryInfo::computeTotalNumSlots() const
+```
+</CodeBlock>
+
+### computeHashTableSize [#computehashtablesize]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+virtual size_t HashTableEntryInfo::computeHashTableSize() const
+```
+</CodeBlock>
+
+### getNumHashEntries [#getnumhashentries]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t HashTableEntryInfo::getNumHashEntries() const
+```
+</CodeBlock>
+
+### getNumKeys [#getnumkeys]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t HashTableEntryInfo::getNumKeys() const
+```
+</CodeBlock>
+
+### getRowIdSizeInBytes [#getrowidsizeinbytes]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+size_t HashTableEntryInfo::getRowIdSizeInBytes() const
+```
+</CodeBlock>
+
+### getHashTableLayout [#gethashtablelayout]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+HashType HashTableEntryInfo::getHashTableLayout() const
+```
+</CodeBlock>
+
+### setNumHashEntries [#setnumhashentries]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void HashTableEntryInfo::setNumHashEntries(
+    size_t num_hash_entries
+)
+```
+</CodeBlock>
+
+### setNumKeys [#setnumkeys]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void HashTableEntryInfo::setNumKeys(
+    size_t num_keys
+)
+```
+</CodeBlock>
+
+### setRowIdSizeInBytes [#setrowidsizeinbytes]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void HashTableEntryInfo::setRowIdSizeInBytes(
+    size_t rowid_size_in_bytes
+)
+```
+</CodeBlock>
+
+### setHashTableLayout [#sethashtablelayout]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+void HashTableEntryInfo::setHashTableLayout(
+    HashType layout
+)
+```
+</CodeBlock>
+
+### forWindowFraming [#forwindowframing]
+
+<CodeBlock links={{"HashTableEntryInfo": "hashtableentryinfo"}}>
+```cpp showLineNumbers={false}
+bool HashTableEntryInfo::forWindowFraming() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `num_hash_entries_` | `size_t` | |
+| `num_keys_` | `size_t` | |
+| `rowid_size_in_bytes_` | `size_t` | |
+| `layout_` | `HashType` | |
+| `for_window_framing_` | `bool` | |

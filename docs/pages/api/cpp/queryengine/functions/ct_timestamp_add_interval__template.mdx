@@ -1,0 +1,50 @@
+---
+title: ct_timestamp_add_interval__template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_timestamp_add_interval__template(
+    TableFunctionManager &mgr,
+    const Column<Timestamp> &input,
+    const T inter,
+    Column<Timestamp> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Timestamp": "../structs/timestamp", "DayTimeInterval": "../structs/daytimeinterval"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_timestamp_add_interval__template(
+    TableFunctionManager &mgr,
+    const Column<Timestamp> &input,
+    const DayTimeInterval inter,
+    Column<Timestamp> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Timestamp": "../structs/timestamp", "YearMonthTimeInterval": "../structs/yearmonthtimeinterval"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_timestamp_add_interval__template(
+    TableFunctionManager &mgr,
+    const Column<Timestamp> &input,
+    const YearMonthTimeInterval inter,
+    Column<Timestamp> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

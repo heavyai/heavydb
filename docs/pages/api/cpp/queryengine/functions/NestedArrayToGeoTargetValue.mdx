@@ -1,0 +1,19 @@
+---
+title: NestedArrayToGeoTargetValue
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <size_t NDIM,
+          typename GeospatialGeoType,
+          typename GeoTypeTargetValue,
+          typename GeoTypeTargetValuePtr>
+TargetValue NestedArrayToGeoTargetValue(
+    const int8_t *buf,
+    const int64_t index,
+    const SQLTypeInfo &ti,
+    const ResultSet::GeoReturnType return_type
+)
+```
+</CodeBlock>

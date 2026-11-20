@@ -1,0 +1,95 @@
+---
+title: ExecutionKernel
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ExecutionKernel.h>
+```
+
+---
+
+## Constructors
+
+### ExecutionKernel [#executionkernel]
+
+<CodeBlock links={{"ExecutionKernel": "executionkernel", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "ExecutionOptions": "../structs/executionoptions", "ColumnFetcher": "columnfetcher", "QueryCompilationDescriptor": "querycompilationdescriptor", "QueryMemoryDescriptor": "querymemorydescriptor", "RenderInfo": "renderinfo"}}>
+```cpp showLineNumbers={false}
+ExecutionKernel::ExecutionKernel(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    const ExecutorDeviceType chosen_device_type,
+    int chosen_device_id,
+    const ExecutionOptions &eo,
+    const ColumnFetcher &column_fetcher,
+    const QueryCompilationDescriptor &query_comp_desc,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const FragmentsList &frag_list,
+    const ExecutorDispatchMode kernel_dispatch_mode,
+    RenderInfo *render_info,
+    const int64_t rowid_lookup_key
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### run [#run]
+
+<CodeBlock links={{"ExecutionKernel": "executionkernel", "Executor": "executor", "SharedKernelContext": "sharedkernelcontext"}}>
+```cpp showLineNumbers={false}
+void ExecutionKernel::run(
+    Executor *executor,
+    const size_t thread_idx,
+    SharedKernelContext &shared_context
+)
+```
+</CodeBlock>
+
+### get_fragment_list [#getfragmentlist]
+
+<CodeBlock links={{"ExecutionKernel": "executionkernel"}}>
+```cpp showLineNumbers={false}
+FragmentsList ExecutionKernel::get_fragment_list() const
+```
+</CodeBlock>
+
+### get_chosen_device_id [#getchosendeviceid]
+
+<CodeBlock links={{"ExecutionKernel": "executionkernel"}}>
+```cpp showLineNumbers={false}
+int32_t ExecutionKernel::get_chosen_device_id() const
+```
+</CodeBlock>
+
+### runImpl [#runimpl]
+
+<CodeBlock links={{"ExecutionKernel": "executionkernel", "Executor": "executor", "SharedKernelContext": "sharedkernelcontext"}}>
+```cpp showLineNumbers={false}
+void ExecutionKernel::runImpl(
+    Executor *executor,
+    const size_t thread_idx,
+    SharedKernelContext &shared_context
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ra_exe_unit_` | `const RelAlgExecutionUnit &` | |
+| `chosen_device_type` | `const ExecutorDeviceType` | |
+| `chosen_device_id` | `int` | |
+| `eo` | `const ExecutionOptions &` | |
+| `column_fetcher` | `const ColumnFetcher &` | |
+| `query_comp_desc` | `const QueryCompilationDescriptor &` | |
+| `query_mem_desc` | `const QueryMemoryDescriptor &` | |
+| `frag_list` | `const FragmentsList` | |
+| `kernel_dispatch_mode` | `const ExecutorDispatchMode` | |
+| `render_info_` | `RenderInfo *` | |
+| `rowid_lookup_key` | `const int64_t` | |
+| `device_results_` | `ResultSetPtr` | |

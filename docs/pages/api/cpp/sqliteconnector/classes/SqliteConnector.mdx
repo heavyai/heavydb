@@ -1,0 +1,267 @@
+---
+title: SqliteConnector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <SqliteConnector.h>
+```
+
+---
+
+## Constructors
+
+### SqliteConnector [#sqliteconnector]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+SqliteConnector::SqliteConnector(
+    const std::string &dbName,
+    const std::string &dir = "."
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+SqliteConnector::SqliteConnector(
+    sqlite3 *db
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+SqliteConnector::SqliteConnector()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~SqliteConnector
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+SqliteConnector::~SqliteConnector()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### reset [#reset]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+void SqliteConnector::reset(
+    const std::string &path
+)
+```
+</CodeBlock>
+
+### query [#query]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+void SqliteConnector::query(
+    const std::string &queryString
+)
+```
+</CodeBlock>
+
+### query_with_text_params [#querywithtextparams]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge> <Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+virtual void SqliteConnector::query_with_text_params(
+    std::string const &query_only
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+template <typename STRING_CONTAINER>
+void SqliteConnector::query_with_text_params(
+    STRING_CONTAINER const &query_and_text_params
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+void SqliteConnector::query_with_text_params(
+    const std::string &queryString,
+    const std::vector<std::string> &text_param
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+void SqliteConnector::query_with_text_params(
+    const std::string &queryString,
+    const std::vector<std::string> &text_params,
+    const std::vector<BindType> &bind_types
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### query_with_text_param [#querywithtextparam]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+void SqliteConnector::query_with_text_param(
+    const std::string &queryString,
+    const std::string &text_param
+)
+```
+</CodeBlock>
+
+### batch_insert [#batchinsert]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+void SqliteConnector::batch_insert(
+    const std::string &table_name,
+    std::vector<std::vector<std::string>> &insert_vals
+)
+```
+</CodeBlock>
+
+### getNumRows [#getnumrows]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+virtual size_t SqliteConnector::getNumRows() const
+```
+</CodeBlock>
+
+### getNumCols [#getnumcols]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+virtual size_t SqliteConnector::getNumCols() const
+```
+</CodeBlock>
+
+### getData [#getdata]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+T SqliteConnector::getData(
+    const int row,
+    const int col
+)
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+bool SqliteConnector::isNull(
+    const int row,
+    const int col
+) const
+```
+</CodeBlock>
+
+### getSqlitePtr [#getsqliteptr]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+auto SqliteConnector::getSqlitePtr() const
+```
+</CodeBlock>
+
+### throwError [#throwerror]
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+void SqliteConnector::throwError()
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### BindType
+
+| Name | Value | Description |
+|---|---|---|
+| `TEXT` | `= 1` | |
+| `BLOB` | | |
+| `NULL_TYPE` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `columnNames` | `std::vector< std::string >` | |
+| `columnTypes` | `std::vector< int >` | |
+| `db_` | `sqlite3 *` | |
+| `dbName_` | `std::string` | |
+| `atFirstResult_` | `bool` | |
+| `results_` | `std::vector< std::vector< NullableResult > >` | |
+| `numCols_` | `size_t` | |
+| `numRows_` | `size_t` | |
+
+---
+
+## Inner classes
+
+### NullableResult
+
+<CodeBlock links={{"SqliteConnector": "sqliteconnector"}}>
+```cpp showLineNumbers={false}
+struct SqliteConnector::NullableResult
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `result` | `const std::string` | |
+| `is_null` | `const bool` | |

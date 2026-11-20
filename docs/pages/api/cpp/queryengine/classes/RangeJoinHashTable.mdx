@@ -1,0 +1,1141 @@
+---
+title: RangeJoinHashTable
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RangeJoinHashTable.h>
+```
+
+**Inherits from:** `BoundingBoxIntersectJoinHashTable` (public)
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Constructors
+
+### RangeJoinHashTable [#rangejoinhashtable]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "InputTableInfo": "../structs/inputtableinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+RangeJoinHashTable::RangeJoinHashTable(
+    const std::shared_ptr<Analyzer::BinOper> condition,
+    const JoinType join_type,
+    const Analyzer::RangeOper *range_expr,
+    std::shared_ptr<Analyzer::ColumnVar> inner_col_expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    ColumnCacheMap &column_cache,
+    Executor *executor,
+    const std::vector<InnerOuter> &inner_outer_pairs,
+    const std::set<int> &device_ids,
+    const RegisteredQueryHint &query_hints,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const TableIdToNodeMap &table_id_to_node_map
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~RangeJoinHashTable
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable"}}>
+```cpp showLineNumbers={false}
+RangeJoinHashTable::~RangeJoinHashTable() override = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegenKey [#codegenkey]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * RangeJoinHashTable::codegenKey(
+    const CompilationOptions &co,
+    llvm::Value *offset
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "CompilationOptions": "../structs/compilationoptions", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+llvm::Value * RangeJoinHashTable::codegenKey(
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### codegenMatchingSetWithOffset [#codegenmatchingsetwithoffset]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "CompilationOptions": "../structs/compilationoptions", "HashJoinMatchingSet": "../structs/hashjoinmatchingset"}}>
+```cpp showLineNumbers={false}
+HashJoinMatchingSet RangeJoinHashTable::codegenMatchingSetWithOffset(
+    const CompilationOptions &,
+    const size_t,
+    llvm::Value *
+)
+```
+</CodeBlock>
+
+### toStringFlat64 [#tostringflat64]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::string HashJoin::toStringFlat64(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### toStringFlat32 [#tostringflat32]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::string HashJoin::toStringFlat32(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### fetchJoinColumn [#fetchjoincolumn]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "Executor": "executor", "JoinColumn": "../structs/joincolumn", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+JoinColumn HashJoin::fetchJoinColumn(
+    const Analyzer::ColumnVar *hash_col,
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragment_info,
+    const Data_Namespace::MemoryLevel effective_memory_level,
+    const int device_id,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> &chunks_owner,
+    DeviceAllocator *dev_buff_owner,
+    std::vector<std::shared_ptr<void>> &malloc_owner,
+    Executor *executor,
+    ColumnCacheMap *column_cache
+)
+```
+</CodeBlock>
+
+fetchJoinColumn() calls ColumnFetcher::makeJoinColumn(), then copies the [JoinColumn](../structs/joincolumn)'s col_chunks_buff memory onto the GPU if required by the effective_memory_level parameter. The dev_buff_owner parameter will manage the GPU memory.
+
+### getJoinHashBufferSize [#getjoinhashbuffersize]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t HashJoin::getJoinHashBufferSize(
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t HashJoin::getJoinHashBufferSize(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getJoinHashBuffer [#getjoinhashbuffer]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+int8_t * HashJoin::getJoinHashBuffer(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const
+```
+</CodeBlock>
+
+### freeHashBufferMemory [#freehashbuffermemory]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void HashJoin::freeHashBufferMemory()
+```
+</CodeBlock>
+
+### getHashTableForDevice [#gethashtablefordevice]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "HashTable": "hashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> HashJoin::getHashTableForDevice(
+    int device_id
+) const
+```
+</CodeBlock>
+
+### replaceHashTableForDevice [#replacehashtablefordevice]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "HashTable": "hashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void HashJoin::replaceHashTableForDevice(
+    std::shared_ptr<HashTable> &&hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### getAnyHashTableForDevice [#getanyhashtablefordevice]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "HashTable": "hashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> HashJoin::getAnyHashTableForDevice() const
+```
+</CodeBlock>
+
+### moveHashTableForDevice [#movehashtablefordevice]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "HashTable": "hashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void HashJoin::moveHashTableForDevice(
+    std::shared_ptr<HashTable> &&hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### putHashTableForDevice [#puthashtablefordevice]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "HashTable": "hashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void HashJoin::putHashTableForDevice(
+    std::shared_ptr<HashTable> hash_table,
+    int device_id
+)
+```
+</CodeBlock>
+
+### clearHashTableForDevice [#clearhashtablefordevice]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void HashJoin::clearHashTableForDevice()
+```
+</CodeBlock>
+
+### reifyWithLayout [#reifywithlayout]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable"}}>
+```cpp showLineNumbers={false}
+void RangeJoinHashTable::reifyWithLayout(
+    const HashType layout
+) override
+```
+</CodeBlock>
+
+### reifyForDevice [#reifyfordevice]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice"}}>
+```cpp showLineNumbers={false}
+void RangeJoinHashTable::reifyForDevice(
+    const ColumnsForDevice &columns_for_device,
+    const HashType layout,
+    const size_t entry_count,
+    const size_t emitted_keys_count,
+    const int device_id,
+    const logger::ThreadLocalIds parent_thread_local_ids
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void RangeJoinHashTable::reifyForDevice(
+    const ColumnsForDevice &columns_for_device,
+    const HashType layout,
+    const size_t entry_count,
+    const size_t emitted_keys_count,
+    const bool skip_hashtable_caching,
+    const int device_id,
+    const logger::ThreadLocalIds parent_thread_local_ids
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### initHashTableOnCpu [#inithashtableoncpu]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo", "JoinBucketInfo": "../structs/joinbucketinfo", "BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "BaselineHashTable": "baselinehashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
+    const std::vector<JoinColumn> &join_columns,
+    const std::vector<JoinColumnTypeInfo> &join_column_types,
+    const std::vector<JoinBucketInfo> &join_bucket_info,
+    const BaselineHashTableEntryInfo hash_table_entry_info
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo", "JoinBucketInfo": "../structs/joinbucketinfo", "BaselineHashTableEntryInfo": "baselinehashtableentryinfo", "BaselineHashTable": "baselinehashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<BaselineHashTable> RangeJoinHashTable::initHashTableOnCpu(
+    const std::vector<JoinColumn> &join_columns,
+    const std::vector<JoinColumnTypeInfo> &join_column_types,
+    const std::vector<JoinBucketInfo> &join_bucket_info,
+    const BaselineHashTableEntryInfo hash_table_entry_info,
+    const bool skip_hashtable_caching
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getHashType [#gethashtype]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable"}}>
+```cpp showLineNumbers={false}
+HashType RangeJoinHashTable::getHashType() const noexcept override
+```
+</CodeBlock>
+
+### approximateTupleCount [#approximatetuplecount]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> RangeJoinHashTable::approximateTupleCount(
+    const std::vector<double> &inverse_bucket_sizes_for_dimension,
+    std::unordered_map<int, ColumnsForDevice> &columns_per_device,
+    const size_t chosen_max_hashtable_size,
+    const double chosen_bucket_threshold
+) override
+```
+</CodeBlock>
+
+### computeRangeHashTableCounts [#computerangehashtablecounts]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> RangeJoinHashTable::computeRangeHashTableCounts(
+    const size_t shard_count,
+    std::unordered_map<int, ColumnsForDevice> &columns_per_device
+)
+```
+</CodeBlock>
+
+### reify [#reify]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void RangeJoinHashTable::reify(
+    const HashType preferred_layout
+)
+```
+</CodeBlock>
+
+### reifyImpl [#reifyimpl]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void RangeJoinHashTable::reifyImpl(
+    std::unordered_map<int, ColumnsForDevice> &columns_per_device,
+    const Fragmenter_Namespace::TableInfo &query_info,
+    const HashType layout,
+    const size_t shard_count,
+    const size_t entry_count,
+    const size_t emitted_keys_count,
+    const bool skip_hashtable_caching,
+    const size_t chosen_max_hashtable_size,
+    const double chosen_bucket_threshold
+)
+```
+</CodeBlock>
+
+### calculateHashTableSize [#calculatehashtablesize]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::calculateHashTableSize(
+    size_t number_of_dimensions,
+    size_t emitted_keys_count,
+    size_t entry_count
+) const
+```
+</CodeBlock>
+
+### fetchColumnsForDevice [#fetchcolumnsfordevice]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+ColumnsForDevice RangeJoinHashTable::fetchColumnsForDevice(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments,
+    const int device_id,
+    DeviceAllocator *dev_buff_owner
+)
+```
+</CodeBlock>
+
+### computeHashTableCounts [#computehashtablecounts]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::pair<size_t, size_t> RangeJoinHashTable::computeHashTableCounts(
+    const size_t shard_count,
+    const std::vector<double> &inverse_bucket_sizes_for_dimension,
+    std::unordered_map<int, ColumnsForDevice> &columns_per_device,
+    const size_t chosen_max_hashtable_size,
+    const double chosen_bucket_threshold
+)
+```
+</CodeBlock>
+
+### setInverseBucketSizeInfo [#setinversebucketsizeinfo]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "ColumnsForDevice": "../structs/columnsfordevice", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void RangeJoinHashTable::setInverseBucketSizeInfo(
+    const std::vector<double> &inverse_bucket_sizes,
+    std::unordered_map<int, ColumnsForDevice> &columns_per_device
+)
+```
+</CodeBlock>
+
+### getKeyComponentWidth [#getkeycomponentwidth]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::getKeyComponentWidth() const
+```
+</CodeBlock>
+
+### getKeyComponentCount [#getkeycomponentcount]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::getKeyComponentCount() const
+```
+</CodeBlock>
+
+### getMemoryLevel [#getmemorylevel]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::MemoryLevel RangeJoinHashTable::getMemoryLevel() const noexcept override
+```
+</CodeBlock>
+
+### codegenMatchingSet [#codegenmatchingset]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "CompilationOptions": "../structs/compilationoptions", "HashJoinMatchingSet": "../structs/hashjoinmatchingset", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+HashJoinMatchingSet RangeJoinHashTable::codegenMatchingSet(
+    const CompilationOptions &,
+    const size_t
+) override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::string RangeJoinHashTable::toString(
+    const ExecutorDeviceType device_type,
+    const int device_id = 0,
+    bool raw = false
+) const override
+```
+</CodeBlock>
+
+### toSet [#toset]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::set<DecodedJoinHashBufferEntry> RangeJoinHashTable::toSet(
+    const ExecutorDeviceType device_type,
+    const int device_id
+) const override
+```
+</CodeBlock>
+
+### codegenSlot [#codegenslot]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "CompilationOptions": "../structs/compilationoptions", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+llvm::Value * RangeJoinHashTable::codegenSlot(
+    const CompilationOptions &,
+    const size_t
+) override
+```
+</CodeBlock>
+
+### getRegisteredQueryHint [#getregisteredqueryhint]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "RegisteredQueryHint": "../structs/registeredqueryhint", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+const RegisteredQueryHint & RangeJoinHashTable::getRegisteredQueryHint()
+```
+</CodeBlock>
+
+### getEntryCount [#getentrycount]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::getEntryCount() const
+```
+</CodeBlock>
+
+### getEmittedKeysCount [#getemittedkeyscount]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::getEmittedKeysCount() const
+```
+</CodeBlock>
+
+### getComponentBufferSize [#getcomponentbuffersize]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::getComponentBufferSize() const noexcept override
+```
+</CodeBlock>
+
+### shardCount [#shardcount]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::shardCount() const
+```
+</CodeBlock>
+
+### getEffectiveMemoryLevel [#geteffectivememorylevel]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::MemoryLevel RangeJoinHashTable::getEffectiveMemoryLevel(
+    const std::vector<InnerOuter> &inner_outer_pairs
+) const
+```
+</CodeBlock>
+
+### getInnerTableId [#getinnertableid]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+shared::TableKey RangeJoinHashTable::getInnerTableId() const noexcept override
+```
+</CodeBlock>
+
+### getInnerTableRteIdx [#getinnertablerteidx]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+int RangeJoinHashTable::getInnerTableRteIdx() const noexcept override
+```
+</CodeBlock>
+
+### getKeyBufferSize [#getkeybuffersize]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::getKeyBufferSize() const noexcept
+```
+</CodeBlock>
+
+### offsetBufferOff [#offsetbufferoff]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::offsetBufferOff() const noexcept override
+```
+</CodeBlock>
+
+### countBufferOff [#countbufferoff]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::countBufferOff() const noexcept override
+```
+</CodeBlock>
+
+### payloadBufferOff [#payloadbufferoff]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t RangeJoinHashTable::payloadBufferOff() const noexcept override
+```
+</CodeBlock>
+
+### getHashJoinType [#gethashjointype]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::string RangeJoinHashTable::getHashJoinType() const
+```
+</CodeBlock>
+
+### isBitwiseEq [#isbitwiseeq]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+bool RangeJoinHashTable::isBitwiseEq() const override
+```
+</CodeBlock>
+
+### initHashTableOnCpuFromCache [#inithashtableoncpufromcache]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "HashTable": "hashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashTable> RangeJoinHashTable::initHashTableOnCpuFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### getApproximateTupleCountFromCache [#getapproximatetuplecountfromcache]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::optional<std::pair<size_t, size_t>> RangeJoinHashTable::getApproximateTupleCountFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### putHashTableOnCpuToCache [#puthashtableoncputocache]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "HashTable": "hashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void RangeJoinHashTable::putHashTableOnCpuToCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    std::shared_ptr<HashTable> hashtable_ptr,
+    DeviceIdentifier device_identifier,
+    size_t hashtable_building_time
+)
+```
+</CodeBlock>
+
+### codegenManyKey [#codegenmanykey]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "CompilationOptions": "../structs/compilationoptions", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> RangeJoinHashTable::codegenManyKey(
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### getBoundingBoxIntersectMetaInfo [#getboundingboxintersectmetainfo]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectMetaInfo": "../structs/boundingboxintersectmetainfo", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::optional<BoundingBoxIntersectMetaInfo> RangeJoinHashTable::getBoundingBoxIntersectMetaInfo()
+```
+</CodeBlock>
+
+### getAlternativeCacheKey [#getalternativecachekey]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "AlternativeCacheKeyForBoundingBoxIntersection": "boundingboxintersectjoinhashtable#alternativecachekeyforboundingboxintersection", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+QueryPlanHash RangeJoinHashTable::getAlternativeCacheKey(
+    AlternativeCacheKeyForBoundingBoxIntersection &info
+)
+```
+</CodeBlock>
+
+### generateCacheKey [#generatecachekey]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void RangeJoinHashTable::generateCacheKey(
+    const size_t max_hashtable_size,
+    const double bucket_threshold,
+    const std::vector<double> &bucket_sizes,
+    std::unordered_map<int, std::vector<Fragmenter_Namespace::FragmentInfo>> &fragments_per_device,
+    const std::set<int> &device_ids
+)
+```
+</CodeBlock>
+
+### getInnerOuterPairs [#getinnerouterpairs]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+const std::vector<InnerOuter> & RangeJoinHashTable::getInnerOuterPairs() const
+```
+</CodeBlock>
+
+### setBoundingBoxIntersectionMetaInfo [#setboundingboxintersectionmetainfo]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+void RangeJoinHashTable::setBoundingBoxIntersectionMetaInfo(
+    size_t max_table_size_bytes,
+    double bucket_threshold,
+    std::vector<double> &bucket_sizes
+)
+```
+</CodeBlock>
+
+### isInnerColCompressed [#isinnercolcompressed]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable"}}>
+```cpp showLineNumbers={false}
+bool RangeJoinHashTable::isInnerColCompressed() const
+```
+</CodeBlock>
+
+### isProbeCompressed [#isprobecompressed]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable"}}>
+```cpp showLineNumbers={false}
+bool RangeJoinHashTable::isProbeCompressed() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getInstance [#getinstance]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "InputTableInfo": "../structs/inputtableinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RangeJoinHashTable> RangeJoinHashTable::getInstance(
+    const std::shared_ptr<Analyzer::BinOper> condition,
+    const Analyzer::RangeOper *range_expr,
+    const std::vector<InputTableInfo> &query_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const RegisteredQueryHint &query_hints,
+    const TableIdToNodeMap &table_id_to_node_map
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "InputTableInfo": "../structs/inputtableinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<BoundingBoxIntersectJoinHashTable> RangeJoinHashTable::getInstance(
+    const std::shared_ptr<Analyzer::BinOper> condition,
+    const std::vector<InputTableInfo> &query_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const RegisteredQueryHint &query_hint,
+    const TableIdToNodeMap &table_id_to_node_map
+)
+```
+</CodeBlock>
+
+Make hash table from an in-flight SQL query's parse tree etc.
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "InputTableInfo": "../structs/inputtableinfo", "Executor": "executor", "RegisteredQueryHint": "../structs/registeredqueryhint", "HashJoin": "hashjoin", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> HashJoin::getInstance(
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const std::vector<InputTableInfo> &query_infos,
+    const Data_Namespace::MemoryLevel memory_level,
+    const JoinType join_type,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor,
+    const HashTableBuildDagMap &hashtable_build_dag_map,
+    const RegisteredQueryHint &query_hint,
+    const TableIdToNodeMap &table_id_to_node_map
+)
+```
+</CodeBlock>
+
+Make hash table from an in-flight SQL query's parse tree etc.
+
+</Tab>
+</Tabs>
+
+### invalidateCache [#invalidatecache]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static void RangeJoinHashTable::invalidateCache()
+```
+</CodeBlock>
+
+### markCachedItemAsDirty [#markcacheditemasdirty]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static void RangeJoinHashTable::markCachedItemAsDirty(
+    size_t table_key
+)
+```
+</CodeBlock>
+
+### getHashTableCache [#gethashtablecache]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "HashtableRecycler": "hashtablerecycler", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static HashtableRecycler * RangeJoinHashTable::getHashTableCache()
+```
+</CodeBlock>
+
+### getBoundingBoxIntersectTuningParamCache [#getboundingboxintersecttuningparamcache]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectTuningParamRecycler": "boundingboxintersecttuningparamrecycler", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static BoundingBoxIntersectTuningParamRecycler * RangeJoinHashTable::getBoundingBoxIntersectTuningParamCache()
+```
+</CodeBlock>
+
+### codegenMatchingSet [#codegenmatchingset]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "Executor": "executor", "HashJoinMatchingSet": "../structs/hashjoinmatchingset", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+HashJoinMatchingSet HashJoin::codegenMatchingSet(
+    const std::vector<llvm::Value *> &hash_join_idx_args_in,
+    const bool is_sharded,
+    const bool col_is_nullable,
+    const bool is_bw_eq,
+    const int64_t sub_buff_size,
+    Executor *executor,
+    const bool is_bucketized = false
+)
+```
+</CodeBlock>
+
+### getInnerTableId [#getinnertableid]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static shared::TableKey HashJoin::getInnerTableId(
+    const std::vector<InnerOuter> &inner_outer_pairs
+)
+```
+</CodeBlock>
+
+### getMaximumNumHashEntriesCanHold [#getmaximumnumhashentriescanhold]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "Executor": "executor", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+size_t HashJoin::getMaximumNumHashEntriesCanHold(
+    MemoryLevel memory_level,
+    const Executor *executor,
+    size_t rowid_size
+) noexcept
+```
+</CodeBlock>
+
+### generateTooManyHashEntriesErrMsg [#generatetoomanyhashentrieserrmsg]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static std::string HashJoin::generateTooManyHashEntriesErrMsg(
+    size_t num_entries,
+    size_t threshold,
+    MemoryLevel memory_level
+)
+```
+</CodeBlock>
+
+### layoutRequiresAdditionalBuffers [#layoutrequiresadditionalbuffers]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static bool HashJoin::layoutRequiresAdditionalBuffers(
+    HashType layout
+) noexcept
+```
+</CodeBlock>
+
+### getHashTypeString [#gethashtypestring]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+static std::string HashJoin::getHashTypeString(
+    HashType ht
+) noexcept
+```
+</CodeBlock>
+
+### codegenHashTableLoad [#codegenhashtableload]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "Executor": "executor", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+llvm::Value * HashJoin::codegenHashTableLoad(
+    const size_t table_idx,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### getSyntheticInstance [#getsyntheticinstance]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "Executor": "executor", "HashJoin": "hashjoin", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
+    std::string_view table1,
+    std::string_view column1,
+    const Catalog_Namespace::Catalog &catalog1,
+    std::string_view table2,
+    std::string_view column2,
+    const Catalog_Namespace::Catalog &catalog2,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+Make hash table from named tables and columns (such as for testing).
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "Executor": "executor", "HashJoin": "hashjoin", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<HashJoin> HashJoin::getSyntheticInstance(
+    const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+Make hash table from named tables and columns (such as for testing).
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "Executor": "executor", "HashJoin": "hashjoin", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::pair<std::string, std::shared_ptr<HashJoin>> HashJoin::getSyntheticInstance(
+    std::vector<std::shared_ptr<Analyzer::BinOper>>,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const std::set<int> &device_ids,
+    ColumnCacheMap &column_cache,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### canAccessHashTable [#canaccesshashtable]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+bool HashJoin::canAccessHashTable(
+    bool allow_hash_table_recycling,
+    bool invalid_cache_key,
+    JoinType join_type
+)
+```
+</CodeBlock>
+
+### normalizeColumnPair [#normalizecolumnpair]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::pair<InnerOuter, InnerOuterStringOpInfos> HashJoin::normalizeColumnPair(
+    const Analyzer::Expr *lhs,
+    const Analyzer::Expr *rhs,
+    const TemporaryTables *temporary_tables,
+    const bool is_bbox_intersect = false
+)
+```
+</CodeBlock>
+
+### getHashJoinColumn [#gethashjoincolumn]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+const T * HashJoin::getHashJoinColumn(
+    const Analyzer::Expr *expr
+)
+```
+</CodeBlock>
+
+### normalizeColumnPairs [#normalizecolumnpairs]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::pair<std::vector<InnerOuter>, std::vector<InnerOuterStringOpInfos>> HashJoin::normalizeColumnPairs(
+    const Analyzer::BinOper *condition,
+    const TemporaryTables *temporary_tables
+)
+```
+</CodeBlock>
+
+### collectFragmentIds [#collectfragmentids]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::vector<int> HashJoin::collectFragmentIds(
+    const std::vector<Fragmenter_Namespace::FragmentInfo> &fragments
+)
+```
+</CodeBlock>
+
+### getCompositeKeyInfo [#getcompositekeyinfo]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "Executor": "executor", "CompositeKeyInfo": "../structs/compositekeyinfo", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+CompositeKeyInfo HashJoin::getCompositeKeyInfo(
+    const std::vector<InnerOuter> &inner_outer_pairs,
+    const Executor *executor,
+    const std::vector<InnerOuterStringOpInfos> &inner_outer_string_op_infos_pairs = {}
+)
+```
+</CodeBlock>
+
+### translateCompositeStrDictProxies [#translatecompositestrdictproxies]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "CompositeKeyInfo": "../structs/compositekeyinfo", "Executor": "executor", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::vector<const StringDictionaryProxy::IdMap *> HashJoin::translateCompositeStrDictProxies(
+    const CompositeKeyInfo &composite_key_info,
+    const std::vector<InnerOuterStringOpInfos> &string_op_infos_for_keys,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### getStrDictProxies [#getstrdictproxies]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "Executor": "executor", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+std::pair<const StringDictionaryProxy *, StringDictionaryProxy *> HashJoin::getStrDictProxies(
+    const InnerOuter &cols,
+    const Executor *executor,
+    const bool has_string_ops
+)
+```
+</CodeBlock>
+
+### translateInnerToOuterStrDictProxies [#translateinnertoouterstrdictproxies]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "ExpressionRange": "expressionrange", "Executor": "executor", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+const StringDictionaryProxy::IdMap * HashJoin::translateInnerToOuterStrDictProxies(
+    const InnerOuter &cols,
+    const InnerOuterStringOpInfos &inner_outer_string_op_infos,
+    ExpressionRange &old_col_range,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### codegenColOrStringOper [#codegencolorstringoper]
+
+<CodeBlock links={{"RangeJoinHashTable": "rangejoinhashtable", "CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions", "BoundingBoxIntersectJoinHashTable": "boundingboxintersectjoinhashtable"}}>
+```cpp showLineNumbers={false}
+llvm::Value * HashJoin::codegenColOrStringOper(
+    const Analyzer::Expr *col_or_string_oper,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    CodeGenerator &code_generator,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `range_expr_` | `const Analyzer::RangeOper *` | |
+| `inner_col_expr_` | `std::shared_ptr< Analyzer::ColumnVar >` | |
+| `effective_memory_level_` | `Data_Namespace::MemoryLevel` | |
+| `bucket_threshold_` | `const double` | |
+| `max_hashtable_size_` | `const size_t` | |
+| `condition_` | `const std::shared_ptr< Analyzer::BinOper >` | |
+| `join_type_` | `const JoinType` | |
+| `query_infos_` | `const std::vector< InputTableInfo > &` | |
+| `memory_level_` | `const Data_Namespace::MemoryLevel` | |
+| `executor_` | `Executor *` | |
+| `column_cache_` | `ColumnCacheMap &` | |
+| `inner_outer_pairs_` | `std::vector< InnerOuter >` | |
+| `device_ids_` | `const std::set< int >` | |
+| `query_hints_` | `RegisteredQueryHint` | |
+| `inverse_bucket_sizes_for_dimension_` | `std::vector< double >` | |
+| `chosen_bbox_intersect_bucket_threshold_` | `double` | |
+| `chosen_bbox_intersect_max_table_size_bytes_` | `size_t` | |
+| `composite_key_info_` | `CompositeKeyInfo` | |
+| `layout_override_` | `std::optional< HashType >` | |
+| `cpu_hash_table_buff_mutex_` | `std::mutex` | |
+| `hashtable_build_dag_map_` | `HashTableBuildDagMap` | |
+| `query_plan_dag_` | `QueryPlanDAG` | |
+| `hashtable_cache_key_` | `std::unordered_map< int, QueryPlanHash >` | |
+| `hashtable_cache_meta_info_` | `HashtableCacheMetaInfo` | |
+| `table_keys_` | `std::unordered_set< size_t >` | |
+| `table_id_to_node_map_` | `const TableIdToNodeMap` | |
+| `hash_tables_mutex_` | `std::shared_mutex` | |
+| `hash_tables_for_device_` | `std::unordered_map< int, std::shared_ptr< HashTable > >` | |
+| `hash_table_cache_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< HashtableRecycler >` | |
+| `auto_tuner_cache_` <Badge intent="note" minimal>static</Badge> | `std::unique_ptr< BoundingBoxIntersectTuningParamRecycler >` | |
+| `MAX_NUM_HASH_ENTRIES` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |

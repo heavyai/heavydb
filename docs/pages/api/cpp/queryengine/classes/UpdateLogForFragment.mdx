@@ -1,0 +1,149 @@
+---
+title: UpdateLogForFragment
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Execute.h>
+```
+
+**Inherits from:** `RowDataProvider` (public)
+
+---
+
+## Constructors
+
+### UpdateLogForFragment [#updatelogforfragment]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+UpdateLogForFragment::UpdateLogForFragment(
+    FragmentInfoType const &fragment_info,
+    size_t const,
+    const std::shared_ptr<ResultSet> &rs
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getEntryAt [#getentryat]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> UpdateLogForFragment::getEntryAt(
+    const size_t index
+) const override
+```
+</CodeBlock>
+
+### getTranslatedEntryAt [#gettranslatedentryat]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+std::vector<TargetValue> UpdateLogForFragment::getTranslatedEntryAt(
+    const size_t index
+) const override
+```
+</CodeBlock>
+
+### getRowCount [#getrowcount]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+size_t const UpdateLogForFragment::getRowCount() const override
+```
+</CodeBlock>
+
+### getLiteralDictionary [#getliteraldictionary]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+StringDictionaryProxy * UpdateLogForFragment::getLiteralDictionary() const override
+```
+</CodeBlock>
+
+### getEntryCount [#getentrycount]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+size_t const UpdateLogForFragment::getEntryCount() const override
+```
+</CodeBlock>
+
+### getFragmentIndex [#getfragmentindex]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+size_t const UpdateLogForFragment::getFragmentIndex() const
+```
+</CodeBlock>
+
+### getFragmentInfo [#getfragmentinfo]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+UpdateLogForFragment::FragmentInfoType const  & UpdateLogForFragment::getFragmentInfo() const
+```
+</CodeBlock>
+
+### getPhysicalTableId [#getphysicaltableid]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+decltype(
+    FragmentInfoType::physicalTableId
+) const
+```
+</CodeBlock>
+
+### getFragmentId [#getfragmentid]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+decltype(
+    FragmentInfoType::fragmentId
+) const
+```
+</CodeBlock>
+
+### getColumnType [#getcolumntype]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo UpdateLogForFragment::getColumnType(
+    const size_t col_idx
+) const
+```
+</CodeBlock>
+
+### getResultSet [#getresultset]
+
+<CodeBlock links={{"UpdateLogForFragment": "updatelogforfragment"}}>
+```cpp showLineNumbers={false}
+auto UpdateLogForFragment::getResultSet() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `FragmentInfoType` | `Fragmenter_Namespace::FragmentInfo` |
+| `Callback` | `std::function< void(const UpdateLogForFragment &, TableUpdateMetadata &)>` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `fragment_info_` | `FragmentInfoType const  &` | |
+| `fragment_index_` | `size_t` | |
+| `rs_` | `std::shared_ptr< ResultSet >` | |

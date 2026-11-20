@@ -1,0 +1,47 @@
+---
+title: CubinResult
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <NvidiaKernel.h>
+```
+
+---
+
+## Constructors
+
+### CubinResult [#cubinresult]
+
+<CodeBlock links={{"CubinResult": "cubinresult"}}>
+```cpp showLineNumbers={false}
+CubinResult::CubinResult()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### jitWallTime [#jitwalltime]
+
+<CodeBlock links={{"CubinResult": "cubinresult"}}>
+```cpp showLineNumbers={false}
+float CubinResult::jitWallTime() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cubin` | `void *` | |
+| `option_keys` | `std::vector< CUjit_option >` | |
+| `option_values` | `std::vector< void * >` | |
+| `link_state` | `CUlinkState` | |
+| `cubin_size` | `size_t` | |
+| `info_log` | `std::string` | |
+| `error_log` | `std::string` | |
+| `jit_wall_time_idx` | `size_t` | |

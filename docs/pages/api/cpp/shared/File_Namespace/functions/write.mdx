@@ -1,0 +1,37 @@
+---
+title: File_Namespace::write
+description: "Writes the specified number of bytes to the offset position in file f from buf."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+size_t File_Namespace::write(
+    FILE *f,
+    const size_t offset,
+    const size_t size,
+    const int8_t *buf
+)
+```
+</CodeBlock>
+
+Writes the specified number of bytes to the offset position in file f from buf.
+
+**Returns:** size_t The number of bytes written.
+
+**Parameters**
+
+<ParamField path="f" type="FILE *">
+Pointer to the FILE.
+</ParamField>
+
+<ParamField path="offset" type="const size_t">
+The location within the file where data is being written.
+</ParamField>
+
+<ParamField path="size" type="const size_t">
+The number of bytes to write to the file.
+</ParamField>
+
+<ParamField path="buf" type="const int8_t *">
+The source buffer containing the data to be written.
+</ParamField>

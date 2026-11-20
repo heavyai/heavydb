@@ -1,0 +1,20 @@
+---
+title: init_columnar_group_by_buffer_gpu_impl
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ void init_columnar_group_by_buffer_gpu_impl(
+    int64_t *groups_buffer,
+    const int64_t *init_vals,
+    const uint32_t groups_buffer_entry_count,
+    const uint32_t key_count,
+    const uint32_t agg_col_count,
+    const int8_t *col_sizes,
+    const bool need_padding,
+    const bool keyless,
+    const int8_t key_size
+)
+```
+</CodeBlock>

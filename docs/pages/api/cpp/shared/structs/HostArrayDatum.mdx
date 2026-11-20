@@ -1,0 +1,114 @@
+---
+title: HostArrayDatum
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <sqltypes.h>
+```
+
+**Inherits from:** `VarlenDatum` (public)
+
+---
+
+## Constructors
+
+### HostArrayDatum [#hostarraydatum]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"HostArrayDatum": "hostarraydatum"}}>
+```cpp showLineNumbers={false}
+HostArrayDatum::HostArrayDatum() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"HostArrayDatum": "hostarraydatum"}}>
+```cpp showLineNumbers={false}
+HostArrayDatum::HostArrayDatum(
+    size_t const l,
+    ManagedPtr p,
+    bool const n
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"HostArrayDatum": "hostarraydatum"}}>
+```cpp showLineNumbers={false}
+HostArrayDatum::HostArrayDatum(
+    size_t const l,
+    int8_t *p,
+    bool const n
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"HostArrayDatum": "hostarraydatum"}}>
+```cpp showLineNumbers={false}
+template <typename CUSTOM_DELETER,
+          typename = std::enable_if_t<                std::is_void<std::invoke_result_t<CUSTOM_DELETER, int8_t*> >::value>>
+HostArrayDatum::HostArrayDatum(
+    size_t const l,
+    int8_t *p,
+    CUSTOM_DELETER custom_deleter
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"HostArrayDatum": "hostarraydatum"}}>
+```cpp showLineNumbers={false}
+template <typename CUSTOM_DELETER,
+          typename = std::enable_if_t<                std::is_void<std::invoke_result_t<CUSTOM_DELETER, int8_t*> >::value>>
+HostArrayDatum::HostArrayDatum(
+    size_t const l,
+    int8_t *p,
+    bool const n,
+    CUSTOM_DELETER custom_deleter
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ManagedPtr` | `std::shared_ptr< int8_t >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `data_ptr` | `ManagedPtr` | |
+| `length` | `size_t` | |
+| `pointer` | `int8_t *` | |
+| `is_null` | `bool` | |

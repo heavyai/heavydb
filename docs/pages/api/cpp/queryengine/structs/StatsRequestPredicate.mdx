@@ -1,0 +1,93 @@
+---
+title: StatsRequestPredicate
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableFunctionsStats.hpp>
+```
+
+---
+
+## Constructors
+
+### StatsRequestPredicate [#statsrequestpredicate]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"StatsRequestPredicate": "statsrequestpredicate"}}>
+```cpp showLineNumbers={false}
+StatsRequestPredicate::StatsRequestPredicate()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"StatsRequestPredicate": "statsrequestpredicate"}}>
+```cpp showLineNumbers={false}
+StatsRequestPredicate::StatsRequestPredicate(
+    const StatsRequestPredicateOp predicate_op,
+    const double filter_val
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"StatsRequestPredicate": "statsrequestpredicate"}}>
+```cpp showLineNumbers={false}
+StatsRequestPredicate::StatsRequestPredicate(
+    const StatsRequestPredicate &other
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### to_string [#tostring]
+
+<CodeBlock links={{"StatsRequestPredicate": "statsrequestpredicate"}}>
+```cpp showLineNumbers={false}
+std::string StatsRequestPredicate::to_string() const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"StatsRequestPredicate": "statsrequestpredicate"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+bool StatsRequestPredicate::operator()(
+    const T val
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"StatsRequestPredicate": "statsrequestpredicate"}}>
+```cpp showLineNumbers={false}
+bool StatsRequestPredicate::operator==(
+    StatsRequestPredicate const &rhs
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `predicate_op` | `StatsRequestPredicateOp` | |
+| `filter_val` | `double` | |
+| `is_gt` | `bool` | |
+| `is_no_op` | `bool` | |

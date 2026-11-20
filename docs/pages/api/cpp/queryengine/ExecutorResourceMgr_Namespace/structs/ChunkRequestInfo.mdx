@@ -1,0 +1,26 @@
+---
+title: ExecutorResourceMgr_Namespace::ChunkRequestInfo
+description: "Specifies all DataMgr chunks needed for a query step/request, along with their sizes in bytes."
+---
+
+Specifies all `DataMgr` chunks needed for a query step/request, along with their sizes in bytes.
+
+It also keeps track of other metadata to avoid having to recompute this info, such as total_bytes and a vector of total byte sizes for each kernel. The latter is relevant if `bytes_scales_per_kernel` is true, as the [`ExecutorResourceMgr`](../classes/executorresourcemgr)/ [`ExecutorResourcePool`](../classes/executorresourcepool) can scale back the number of kernels allowed to run simultaneously to ensure that a query step can run.
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/ResourceRequest.h>
+```
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `device_memory_pool_type` | `ExecutorDeviceType` | |
+| `chunks_with_byte_sizes` | `std::vector< std::pair< ChunkKey, size_t > >` | |
+| `num_chunks` | `size_t` | |
+| `total_bytes` | `size_t` | |
+| `bytes_per_kernel` | `std::vector< size_t >` | |
+| `max_bytes_per_kernel` | `size_t` | |
+| `bytes_scales_per_kernel` | `bool` | |

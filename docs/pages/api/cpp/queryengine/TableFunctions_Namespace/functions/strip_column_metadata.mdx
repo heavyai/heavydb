@@ -1,0 +1,78 @@
+---
+title: TableFunctions_Namespace::strip_column_metadata
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ColumnList": "../../structs/columnlist", "InputData": "../structs/inputdata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+InputData<T> TableFunctions_Namespace::strip_column_metadata(
+    const ColumnList<T> &input_features
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ColumnList": "../../structs/columnlist", "InputData": "../structs/inputdata"}}>
+```cpp showLineNumbers={false}
+template InputData<float> TableFunctions_Namespace::strip_column_metadata(
+    const ColumnList<float> &input_features
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ColumnList": "../../structs/columnlist", "InputData": "../structs/inputdata"}}>
+```cpp showLineNumbers={false}
+template InputData<double> TableFunctions_Namespace::strip_column_metadata(
+    const ColumnList<double> &input_features
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"Column": "../../structs/column", "ColumnList": "../../structs/columnlist", "InputData": "../structs/inputdata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+InputData<T> TableFunctions_Namespace::strip_column_metadata(
+    const Column<T> &input_labels,
+    const ColumnList<T> &input_features
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"Column": "../../structs/column", "ColumnList": "../../structs/columnlist", "InputData": "../structs/inputdata"}}>
+```cpp showLineNumbers={false}
+template InputData<float> TableFunctions_Namespace::strip_column_metadata(
+    const Column<float> &input_labels,
+    const ColumnList<float> &input_features
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"Column": "../../structs/column", "ColumnList": "../../structs/columnlist", "InputData": "../structs/inputdata"}}>
+```cpp showLineNumbers={false}
+template InputData<double> TableFunctions_Namespace::strip_column_metadata(
+    const Column<double> &input_labels,
+    const ColumnList<double> &input_features
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

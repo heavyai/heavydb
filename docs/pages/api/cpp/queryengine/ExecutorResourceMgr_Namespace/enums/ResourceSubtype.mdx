@@ -1,0 +1,31 @@
+---
+title: ExecutorResourceMgr_Namespace::ResourceSubtype
+description: "@type ResourceSubtype"
+---
+
+@type [ResourceSubtype](resourcesubtype)
+
+```cpp showLineNumbers={false}
+enum class ExecutorResourceMgr_Namespace::ResourceSubtype
+```
+
+Stores the resource sub-type for a [ExecutorResourcePool](../classes/executorresourcepool) request
+
+The concept of a [ResourceSubtype](resourcesubtype) needs to be distinguished from [ResourceType](resourcetype) as certain categories of resource requests, i.e. buffer pool mem, can be further distinguished by whether the memory is pinned or pageable (i.e. input chunks, which can be evicted, are considered pageable, while kernel result memory is considered pinned as it cannot currently be evicted or deleted during a query).
+
+---
+
+## Values
+
+| Name | Value |
+| --- | --- |
+| `CPU_SLOTS` | `= 0` |
+| `GPU_SLOTS` | `= 1` |
+| `CPU_RESULT_MEM` | `= 2` |
+| `GPU_RESULT_MEM` | `= 3` |
+| `PINNED_CPU_BUFFER_POOL_MEM` | `= 4` |
+| `PAGEABLE_CPU_BUFFER_POOL_MEM` | `= 5` |
+| `PINNED_GPU_BUFFER_POOL_MEM` | `= 6` |
+| `PAGEABLE_GPU_BUFFER_POOL_MEM` | `= 7` |
+| `INVALID_SUBTYPE` | `= 8` |
+| `NUM_RESOURCE_SUBTYPES` | `= 8` |

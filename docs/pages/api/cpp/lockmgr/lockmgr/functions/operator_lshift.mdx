@@ -1,0 +1,14 @@
+---
+title: "lockmgr::operator<<"
+description: ""
+---
+
+<CodeBlock links={{"TableLockMgrImpl": "../classes/tablelockmgrimpl"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+std::ostream & lockmgr::operator<<(
+    std::ostream &os,
+    const TableLockMgrImpl<T> &lock_mgr
+)
+```
+</CodeBlock>

@@ -1,0 +1,25 @@
+---
+title: geo_rasterize_impl
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename Z>
+TEMPLATE_NOINLINE int32_t geo_rasterize_impl(
+    TableFunctionManager &mgr,
+    const Column<T> &input_x,
+    const Column<T> &input_y,
+    const Column<Z> &input_z,
+    const RasterAggType raster_agg_type,
+    const RasterAggType raster_fill_agg_type,
+    const T bin_dim_meters,
+    const bool geographic_coords,
+    const int64_t neighborhood_fill_radius,
+    const bool fill_only_nulls,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Z> &output_z
+)
+```
+</CodeBlock>

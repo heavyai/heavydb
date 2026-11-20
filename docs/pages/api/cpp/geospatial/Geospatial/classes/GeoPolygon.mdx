@@ -1,0 +1,321 @@
+---
+title: Geospatial::GeoPolygon
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Geospatial/Types.h>
+```
+
+**Inherits from:** `Geospatial::GeoBase` (public)
+
+---
+
+## Constructors
+
+### GeoPolygon [#geopolygon]
+
+<Tabs>
+<Tab title="Copy (with coords and ring sizes)">
+
+<CodeBlock links={{"GeoPolygon": "geopolygon"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoPolygon::GeoPolygon(
+    const std::vector<double> &coords,
+    const std::vector<int32_t> &ring_sizes
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with wkt)">
+
+<CodeBlock links={{"GeoPolygon": "geopolygon"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoPolygon::GeoPolygon(
+    const std::string &wkt
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"GeoPolygon": "geopolygon"}}>
+```cpp showLineNumbers={false}
+Geospatial::GeoPolygon::GeoPolygon(
+    OGRGeometry *geom,
+    const bool owns_geom_obj
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getColumns [#getcolumns]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon"}}>
+```cpp showLineNumbers={false}
+void Geospatial::GeoPolygon::getColumns(
+    std::vector<double> &coords,
+    std::vector<int32_t> &ring_sizes,
+    std::vector<double> &bounds
+) const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon"}}>
+```cpp showLineNumbers={false}
+GeoType Geospatial::GeoPolygon::getType() const
+```
+</CodeBlock>
+
+### getNumInteriorRings [#getnuminteriorrings]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon"}}>
+```cpp showLineNumbers={false}
+int32_t Geospatial::GeoPolygon::getNumInteriorRings() const
+```
+</CodeBlock>
+
+### clone [#clone]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoPolygon::clone() const
+```
+</CodeBlock>
+
+### getWktString [#getwktstring]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::string Geospatial::GeoPolygon::getWktString() const
+```
+</CodeBlock>
+
+### getWkb [#getwkb]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPolygon::getWkb(
+    std::vector<uint8_t> &
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with wkb size)">
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+uint8_t * Geospatial::GeoPolygon::getWkb(
+    size_t &wkb_size
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOGRGeometry [#getogrgeometry]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+const OGRGeometry * Geospatial::GeoPolygon::getOGRGeometry() const
+```
+</CodeBlock>
+
+### getBestPlanarSRID [#getbestplanarsrid]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+int32_t Geospatial::GeoPolygon::getBestPlanarSRID() const
+```
+</CodeBlock>
+
+### transform [#transform]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPolygon::transform(
+    int32_t srid0,
+    int32_t srid1
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPolygon::transform(
+    SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPolygon::operator==(
+    const GeoBase &other
+) const
+```
+</CodeBlock>
+
+### isEmpty [#isempty]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPolygon::isEmpty() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<Tabs>
+<Tab title="Const (with other)">
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoPolygon::run(
+    GeoOp op,
+    const GeoBase &other
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with param)">
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoPolygon::run(
+    GeoOp op,
+    double param
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+bool Geospatial::GeoPolygon::run(
+    GeoOp op
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### optimized_run [#optimizedrun]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<GeoBase> Geospatial::GeoPolygon::optimized_run(
+    GeoOp op,
+    const GeoBase &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### getTransformation [#gettransformation]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<OGRCoordinateTransformation> Geospatial::GeoPolygon::getTransformation(
+    int32_t srid0,
+    int32_t srid1
+)
+```
+</CodeBlock>
+
+### createFromWktString [#createfromwktstring]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+OGRErr Geospatial::GeoPolygon::createFromWktString(
+    const std::string &wkt,
+    OGRGeometry **geom
+)
+```
+</CodeBlock>
+
+### createFromWkbView [#createfromwkbview]
+
+<CodeBlock links={{"GeoPolygon": "geopolygon", "WkbView": "../structs/wkbview", "GeoBase": "geobase"}}>
+```cpp showLineNumbers={false}
+OGRErr Geospatial::GeoPolygon::createFromWkbView(
+    OGRGeometry **geom,
+    WkbView const
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### GeoType
+
+| Name | Value | Description |
+|---|---|---|
+| `kPOINT` | | |
+| `kLINESTRING` | | |
+| `kPOLYGON` | | |
+| `kMULTIPOLYGON` | | |
+| `kGEOMETRY` | | |
+| `kGEOMETRYCOLLECTION` | | |
+| `kMULTILINESTRING` | | |
+| `kMULTIPOINT` | | |
+### GeoOp
+
+| Name | Value | Description |
+|---|---|---|
+| `kPROJECTION` | `= 0` | |
+| `kINTERSECTION` | `= 1` | |
+| `kDIFFERENCE` | `= 2` | |
+| `kUNION` | `= 3` | |
+| `kBUFFER` | `= 4` | |
+| `kISVALID` | `= 5` | |
+| `kISEMPTY` | `= 6` | |
+| `kEQUALS` | `= 7` | |
+| `kCONCAVEHULL` | `= 8` | |
+| `kCONVEXHULL` | `= 9` | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `geom_` | `OGRGeometry *` | |
+| `owns_geom_obj_` | `bool` | |

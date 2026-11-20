@@ -1,0 +1,261 @@
+---
+title: ExecutionResult
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgExecutionDescriptor.h>
+```
+
+---
+
+## Constructors
+
+### ExecutionResult [#executionresult]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult::ExecutionResult()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with rows and targets meta)">
+
+<CodeBlock links={{"ExecutionResult": "executionresult", "ResultSet": "resultset", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+ExecutionResult::ExecutionResult(
+    const std::shared_ptr<ResultSet> &rows,
+    const std::vector<TargetMetaInfo> &targets_meta
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move (with result and targets meta)">
+
+<CodeBlock links={{"ExecutionResult": "executionresult", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+ExecutionResult::ExecutionResult(
+    ResultSetPtr &&result,
+    const std::vector<TargetMetaInfo> &targets_meta
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with that)">
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult::ExecutionResult(
+    const ExecutionResult &that
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move (with that)">
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult::ExecutionResult(
+    ExecutionResult &&that
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with pushed down filter info and filter push down enabled)">
+
+<CodeBlock links={{"ExecutionResult": "executionresult", "PushedDownFilterInfo": "../structs/pusheddownfilterinfo"}}>
+```cpp showLineNumbers={false}
+ExecutionResult::ExecutionResult(
+    const std::vector<PushedDownFilterInfo> &pushed_down_filter_info,
+    bool filter_push_down_enabled
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+ExecutionResult & ExecutionResult::operator=(
+    const ExecutionResult &that
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getRows [#getrows]
+
+<CodeBlock links={{"ExecutionResult": "executionresult", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+const std::shared_ptr<ResultSet> & ExecutionResult::getRows() const
+```
+</CodeBlock>
+
+### empty [#empty]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+bool ExecutionResult::empty() const
+```
+</CodeBlock>
+
+### getDataPtr [#getdataptr]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+const ResultSetPtr & ExecutionResult::getDataPtr() const
+```
+</CodeBlock>
+
+### getTargetsMeta [#gettargetsmeta]
+
+<CodeBlock links={{"ExecutionResult": "executionresult", "TargetMetaInfo": "targetmetainfo"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & ExecutionResult::getTargetsMeta() const
+```
+</CodeBlock>
+
+### getPushedDownFilterInfo [#getpusheddownfilterinfo]
+
+<CodeBlock links={{"ExecutionResult": "executionresult", "PushedDownFilterInfo": "../structs/pusheddownfilterinfo"}}>
+```cpp showLineNumbers={false}
+const std::vector<PushedDownFilterInfo> & ExecutionResult::getPushedDownFilterInfo() const
+```
+</CodeBlock>
+
+### isFilterPushDownEnabled [#isfilterpushdownenabled]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+const bool ExecutionResult::isFilterPushDownEnabled() const
+```
+</CodeBlock>
+
+### setQueueTime [#setqueuetime]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+void ExecutionResult::setQueueTime(
+    const int64_t queue_time_ms
+)
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+std::string ExecutionResult::toString() const
+```
+</CodeBlock>
+
+### getExplanation [#getexplanation]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+std::string ExecutionResult::getExplanation()
+```
+</CodeBlock>
+
+### updateResultSet [#updateresultset]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+void ExecutionResult::updateResultSet(
+    const std::string &query_ra,
+    RType type,
+    bool success = true
+)
+```
+</CodeBlock>
+
+### getResultType [#getresulttype]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+RType ExecutionResult::getResultType() const
+```
+</CodeBlock>
+
+### setResultType [#setresulttype]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+void ExecutionResult::setResultType(
+    RType type
+)
+```
+</CodeBlock>
+
+### getExecutionTime [#getexecutiontime]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+int64_t ExecutionResult::getExecutionTime() const
+```
+</CodeBlock>
+
+### setExecutionTime [#setexecutiontime]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+void ExecutionResult::setExecutionTime(
+    int64_t execution_time_ms
+)
+```
+</CodeBlock>
+
+### addExecutionTime [#addexecutiontime]
+
+<CodeBlock links={{"ExecutionResult": "executionresult"}}>
+```cpp showLineNumbers={false}
+void ExecutionResult::addExecutionTime(
+    int64_t execution_time_ms
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### RType
+
+| Name | Value | Description |
+|---|---|---|
+| `QueryResult` | | |
+| `SimpleResult` | | |
+| `Explanation` | | |
+| `CalciteDdl` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `result_` | `ResultSetPtr` | |
+| `targets_meta_` | `std::vector< TargetMetaInfo >` | |
+| `pushed_down_filter_info_` | `std::vector< PushedDownFilterInfo >` | |
+| `filter_push_down_enabled_` | `bool` | |
+| `success_` | `bool` | |
+| `execution_time_ms_` | `uint64_t` | |
+| `type_` | `RType` | |

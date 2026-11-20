@@ -1,0 +1,91 @@
+---
+title: Parser::ArrayLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Literal` (public)
+
+---
+
+## Constructors
+
+### ArrayLiteral [#arrayliteral]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ArrayLiteral": "arrayliteral"}}>
+```cpp showLineNumbers={false}
+Parser::ArrayLiteral::ArrayLiteral()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"ArrayLiteral": "arrayliteral", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::ArrayLiteral::ArrayLiteral(
+    std::list<Expr *> *v
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_value_list [#getvaluelist]
+
+<CodeBlock links={{"ArrayLiteral": "arrayliteral", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<Expr>> & Parser::ArrayLiteral::get_value_list() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"ArrayLiteral": "arrayliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::ArrayLiteral::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"ArrayLiteral": "arrayliteral"}}>
+```cpp showLineNumbers={false}
+std::string Parser::ArrayLiteral::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `value_list_` | `std::list< std::unique_ptr< Expr > >` | |

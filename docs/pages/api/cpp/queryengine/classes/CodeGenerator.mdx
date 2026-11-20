@@ -1,0 +1,2003 @@
+---
+title: CodeGenerator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CodeGenerator.h>
+```
+
+---
+
+## Constructors
+
+### CodeGenerator [#codegenerator]
+
+<Tabs>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+CodeGenerator::CodeGenerator(
+    Executor *executor
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CgenState": "../structs/cgenstate", "PlanState": "../structs/planstate"}}>
+```cpp showLineNumbers={false}
+CodeGenerator::CodeGenerator(
+    CgenState *cgen_state,
+    PlanState *plan_state
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### codegen [#codegen]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegen(
+    const Analyzer::Expr *,
+    const bool fetch_columns,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegen(
+    const Analyzer::Constant *,
+    const EncodingType enc_type,
+    const shared::StringDictKey &dict_id,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::InValues *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::InIntegerSet *expr,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegen(
+    const Analyzer::CaseExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::ExtractExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::DateaddExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::DatediffExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::DatetruncExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::CharLengthExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::KeyForStringExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::SampleRatioExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::WidthBucketExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::MLPredictExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::PCAProjectExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 16">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::StringOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 17">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::LikeExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 18">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::RegexpExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 19">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::CardinalityExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 20">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::DotProductExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 21">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::BinOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 22">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegen(
+    const Analyzer::UOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### codegenPerRowStringOper [#codegenperrowstringoper]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenPerRowStringOper(
+    const Analyzer::StringOper *string_oper,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenPseudoStringOper [#codegenpseudostringoper]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenPseudoStringOper(
+    const Analyzer::ColumnVar *,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenHoistedConstants [#codegenhoistedconstants]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenHoistedConstants(
+    const std::unordered_map<int, const Analyzer::Constant *> &constants,
+    const EncodingType enc_type,
+    const shared::StringDictKey &dict_id
+)
+```
+</CodeBlock>
+
+### codegenCastBetweenIntTypes [#codegencastbetweeninttypes]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCastBetweenIntTypes(
+    llvm::Value *operand_lv,
+    const SQLTypeInfo &operand_ti,
+    const SQLTypeInfo &ti,
+    bool upscale = true
+)
+```
+</CodeBlock>
+
+### codegenCastBetweenIntTypesOverflowChecks [#codegencastbetweeninttypesoverflowchecks]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::codegenCastBetweenIntTypesOverflowChecks(
+    llvm::Value *operand_lv,
+    const SQLTypeInfo &operand_ti,
+    const SQLTypeInfo &ti,
+    const int64_t scale
+)
+```
+</CodeBlock>
+
+### posArg [#posarg]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::posArg(
+    const Analyzer::Expr *
+) const
+```
+</CodeBlock>
+
+### codegenOffsetInFragment [#codegenoffsetinfragment]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### codegenFragmentId [#codegenfragmentid]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### codegenFragmentIdAndOffset [#codegenfragmentidandoffset]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### toBool [#tobool]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::toBool(
+    llvm::Value *
+)
+```
+</CodeBlock>
+
+### castArrayPointer [#castarraypointer]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::castArrayPointer(
+    llvm::Value *ptr,
+    const SQLTypeInfo &elem_ti
+)
+```
+</CodeBlock>
+
+### codegenCastBetweenTimestamps [#codegencastbetweentimestamps]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCastBetweenTimestamps(
+    llvm::Value *ts_lv,
+    const SQLTypeInfo &operand_dimen,
+    const SQLTypeInfo &target_dimen,
+    const bool nullable
+)
+```
+</CodeBlock>
+
+### codegenWindowPosition [#codegenwindowposition]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenWindowPosition(
+    const WindowFunctionContext *window_func_context,
+    llvm::Value *pos_arg
+)
+```
+</CodeBlock>
+
+### codegenColumn [#codegencolumn]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenColumn(
+    const Analyzer::ColumnVar *,
+    const bool fetch_column,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenArith [#codegenarith]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenArith(
+    const Analyzer::BinOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenUMinus [#codegenuminus]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenUMinus(
+    const Analyzer::UOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenCmp [#codegencmp]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCmp(
+    const Analyzer::BinOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCmp(
+    const SQLOps,
+    const SQLQualifier,
+    std::vector<llvm::Value *>,
+    const SQLTypeInfo &,
+    const Analyzer::Expr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### codegenIsNull [#codegenisnull]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenIsNull(
+    const Analyzer::UOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenIsNullNumber [#codegenisnullnumber]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenIsNullNumber(
+    llvm::Value *,
+    const SQLTypeInfo &
+)
+```
+</CodeBlock>
+
+### codegenLogical [#codegenlogical]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenLogical(
+    const Analyzer::BinOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenLogical(
+    const Analyzer::UOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### codegenCast [#codegencast]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCast(
+    const Analyzer::UOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCast(
+    llvm::Value *operand_lv,
+    const SQLTypeInfo &operand_ti,
+    const SQLTypeInfo &ti,
+    const bool operand_is_const,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### codegenCallStringPackForTextEncodingNone [#codegencallstringpackfortextencodingnone]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCallStringPackForTextEncodingNone(
+    llvm::Value *operand_lv,
+    bool register_buffer_to_rsmo
+)
+```
+</CodeBlock>
+
+### extractTextEncodedNonePtrBufAndSize [#extracttextencodednoneptrbufandsize]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::tuple<llvm::Value *, llvm::Value *> CodeGenerator::extractTextEncodedNonePtrBufAndSize(
+    llvm::Value *struct_ptr_lv
+)
+```
+</CodeBlock>
+
+### isTextEncodingNoneStringPtr [#istextencodingnonestringptr]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+bool CodeGenerator::isTextEncodingNoneStringPtr(
+    SQLTypeInfo const &lv_ti,
+    llvm::Value *struct_ptr_lv
+)
+```
+</CodeBlock>
+
+### codegenConstantWidthBucketExpr [#codegenconstantwidthbucketexpr]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenConstantWidthBucketExpr(
+    const Analyzer::WidthBucketExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenWidthBucketExpr [#codegenwidthbucketexpr]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenWidthBucketExpr(
+    const Analyzer::WidthBucketExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenLinRegPredict [#codegenlinregpredict]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "AbstractMLModel": "abstractmlmodel", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenLinRegPredict(
+    const Analyzer::MLPredictExpr *,
+    const std::shared_ptr<AbstractMLModel> &model,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenTreeRegPredict [#codegentreeregpredict]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "AbstractTreeModel": "abstracttreemodel", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenTreeRegPredict(
+    const Analyzer::MLPredictExpr *,
+    const std::shared_ptr<AbstractTreeModel> &tree_model,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenUnnest [#codegenunnest]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenUnnest(
+    const Analyzer::UOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenArrayAt [#codegenarrayat]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenArrayAt(
+    const Analyzer::BinOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenArrayExpr [#codegenarrayexpr]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenArrayExpr(
+    const Analyzer::ArrayExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenGeoColumnVar [#codegengeocolumnvar]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeoColumnVar(
+    const Analyzer::GeoColumnVar *,
+    const bool fetch_columns,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenGeoExpr [#codegengeoexpr]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeoExpr(
+    const Analyzer::GeoExpr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenGeoConstant [#codegengeoconstant]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeoConstant(
+    const Analyzer::GeoConstant *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenGeoOperator [#codegengeooperator]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeoOperator(
+    const Analyzer::GeoOperator *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenGeoUOper [#codegengeouoper]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeoUOper(
+    const Analyzer::GeoUOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenGeoBinOper [#codegengeobinoper]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeoBinOper(
+    const Analyzer::GeoBinOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenGeoH3Oper [#codegengeoh3oper]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeoH3Oper(
+    const Analyzer::GeoH3Oper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenGeosPredicateCall [#codegengeospredicatecall]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeosPredicateCall(
+    const std::string &,
+    std::vector<llvm::Value *>,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenGeoConstructorCall [#codegengeoconstructorcall]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeoConstructorCall(
+    const std::string &,
+    const SQLTypes output_type,
+    const bool needs_geos,
+    std::vector<llvm::Value *>,
+    llvm::Value *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenGeoArgs [#codegengeoargs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenGeoArgs(
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenFunctionOper [#codegenfunctionoper]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenFunctionOper(
+    const Analyzer::FunctionOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenFunctionOperWithCustomTypeHandling [#codegenfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenHoistedConstantsLoads [#codegenhoistedconstantsloads]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenHoistedConstantsLoads(
+    const SQLTypeInfo &type_info,
+    const EncodingType enc_type,
+    const shared::StringDictKey &dict_id,
+    const int16_t lit_off,
+    const size_t lit_bytes
+)
+```
+</CodeBlock>
+
+### codegenHoistedConstantsPlaceholders [#codegenhoistedconstantsplaceholders]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenHoistedConstantsPlaceholders(
+    const SQLTypeInfo &type_info,
+    const EncodingType enc_type,
+    const int16_t lit_off,
+    const std::vector<llvm::Value *> &literal_loads
+)
+```
+</CodeBlock>
+
+### codegenColVar [#codegencolvar]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenColVar(
+    const Analyzer::ColumnVar *,
+    const bool fetch_column,
+    const bool update_query_plan,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenFixedLengthColVar [#codegenfixedlengthcolvar]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenFixedLengthColVar(
+    const Analyzer::ColumnVar *col_var,
+    llvm::Value *col_byte_stream,
+    llvm::Value *pos_arg,
+    const WindowFunctionContext *window_function_context = nullptr
+)
+```
+</CodeBlock>
+
+### codegenFixedLengthColVarInWindow [#codegenfixedlengthcolvarinwindow]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions", "WindowFunctionContext": "windowfunctioncontext"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenFixedLengthColVarInWindow(
+    const Analyzer::ColumnVar *col_var,
+    llvm::Value *col_byte_stream,
+    llvm::Value *pos_arg,
+    const CompilationOptions &co,
+    const WindowFunctionContext *window_function_context = nullptr
+)
+```
+</CodeBlock>
+
+### codegenVariableLengthStringColVar [#codegenvariablelengthstringcolvar]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenVariableLengthStringColVar(
+    llvm::Value *col_byte_stream,
+    llvm::Value *pos_arg
+)
+```
+</CodeBlock>
+
+### codegenRowId [#codegenrowid]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenRowId(
+    const Analyzer::ColumnVar *col_var,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codgenAdjustFixedEncNull [#codgenadjustfixedencnull]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codgenAdjustFixedEncNull(
+    llvm::Value *,
+    const SQLTypeInfo &
+)
+```
+</CodeBlock>
+
+### codegenOuterJoinNullPlaceholder [#codegenouterjoinnullplaceholder]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenOuterJoinNullPlaceholder(
+    const Analyzer::ColumnVar *col_var,
+    const bool fetch_column,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenIntArith [#codegenintarith]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenIntArith(
+    const Analyzer::BinOper *,
+    llvm::Value *,
+    llvm::Value *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenFpArith [#codegenfparith]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenFpArith(
+    const Analyzer::BinOper *,
+    llvm::Value *,
+    llvm::Value *
+)
+```
+</CodeBlock>
+
+### codegenCastTimestampToTime [#codegencasttimestamptotime]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCastTimestampToTime(
+    llvm::Value *ts_lv,
+    const int dimen,
+    const bool nullable
+)
+```
+</CodeBlock>
+
+### codegenCastTimestampToDate [#codegencasttimestamptodate]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCastTimestampToDate(
+    llvm::Value *ts_lv,
+    const int dimen,
+    const bool nullable
+)
+```
+</CodeBlock>
+
+### codegenCastFromString [#codegencastfromstring]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCastFromString(
+    llvm::Value *operand_lv,
+    const SQLTypeInfo &operand_ti,
+    const SQLTypeInfo &ti,
+    const bool operand_is_const,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenCastNonStringToString [#codegencastnonstringtostring]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCastNonStringToString(
+    llvm::Value *operand_lv,
+    const SQLTypeInfo &operand_ti,
+    const SQLTypeInfo &ti,
+    const bool operand_is_const,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenCastToFp [#codegencasttofp]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCastToFp(
+    llvm::Value *operand_lv,
+    const SQLTypeInfo &operand_ti,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### codegenCastFromFp [#codegencastfromfp]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCastFromFp(
+    llvm::Value *operand_lv,
+    const SQLTypeInfo &operand_ti,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### codegenAdd [#codegenadd]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenAdd(
+    const Analyzer::BinOper *,
+    llvm::Value *,
+    llvm::Value *,
+    const std::string &null_typename,
+    const std::string &null_check_suffix,
+    const SQLTypeInfo &,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenSub [#codegensub]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenSub(
+    const Analyzer::BinOper *,
+    llvm::Value *,
+    llvm::Value *,
+    const std::string &null_typename,
+    const std::string &null_check_suffix,
+    const SQLTypeInfo &,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenSkipOverflowCheckForNull [#codegenskipoverflowcheckfornull]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::codegenSkipOverflowCheckForNull(
+    llvm::Value *lhs_lv,
+    llvm::Value *rhs_lv,
+    llvm::BasicBlock *no_overflow_bb,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### codegenMul [#codegenmul]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenMul(
+    const Analyzer::BinOper *,
+    llvm::Value *,
+    llvm::Value *,
+    const std::string &null_typename,
+    const std::string &null_check_suffix,
+    const SQLTypeInfo &,
+    const CompilationOptions &,
+    bool downscale = true
+)
+```
+</CodeBlock>
+
+### codegenDiv [#codegendiv]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenDiv(
+    llvm::Value *,
+    llvm::Value *,
+    const std::string &null_typename,
+    const std::string &null_check_suffix,
+    const SQLTypeInfo &,
+    const bool upscale = true
+)
+```
+</CodeBlock>
+
+### codegenDeciDiv [#codegendecidiv]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenDeciDiv(
+    const Analyzer::BinOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+Handle decimal / decimal division.
+
+Outline of steps:
+
+- Check if the upscale multiplication can be elided. If so, then return codegenDiv() with upscale=false, skipping any 128-bit arithmetic.
+- Define BasicBlocks.
+- Check for NULL operands.
+- Check if denominator is 0. If it is, then either:
+Set result to NULL if g_null_div_by_zero, otherwise
+Return ErrorCode::DIV_BY_ZERO.
+   - Set result to NULL if g_null_div_by_zero, otherwise
+   - Return ErrorCode::DIV_BY_ZERO.
+- Handle typical case by calling decimal_division(). This calculates lhs * pow10 / rhs where pow10=10^9 in the typical DECIMAL(19,9) case. Use a custom Uint128 class to do the arithmetic. If result is greater than 64 bits then return ErrorCode::OVERFLOW_OR_UNDERFLOW.
+- Final PHINode combines prior branches to the final value.
+
+### codegenDivisorWithoutUpscale [#codegendivisorwithoutupscale]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenDivisorWithoutUpscale(
+    const CompilationOptions &,
+    const SQLTypeInfo &lhs_type,
+    const Analyzer::Expr *rhs
+)
+```
+</CodeBlock>
+
+### codegenMod [#codegenmod]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenMod(
+    llvm::Value *,
+    llvm::Value *,
+    const std::string &null_typename,
+    const std::string &null_check_suffix,
+    const SQLTypeInfo &
+)
+```
+</CodeBlock>
+
+### codegenCase [#codegencase]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCase(
+    const Analyzer::CaseExpr *,
+    llvm::Type *case_llvm_type,
+    const bool is_real_str,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenExtractHighPrecisionTimestamps [#codegenextracthighprecisiontimestamps]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenExtractHighPrecisionTimestamps(
+    llvm::Value *,
+    const SQLTypeInfo &,
+    const ExtractField &
+)
+```
+</CodeBlock>
+
+### codegenDateTruncHighPrecisionTimestamps [#codegendatetrunchighprecisiontimestamps]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
+    llvm::Value *,
+    const SQLTypeInfo &,
+    const DatetruncField &
+)
+```
+</CodeBlock>
+
+### codegenCmpDecimalConst [#codegencmpdecimalconst]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCmpDecimalConst(
+    const SQLOps,
+    const SQLQualifier,
+    const Analyzer::Expr *,
+    const SQLTypeInfo &,
+    const Analyzer::Expr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenBoundingBoxIntersect [#codegenboundingboxintersect]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenBoundingBoxIntersect(
+    const SQLOps,
+    const SQLQualifier,
+    const std::shared_ptr<Analyzer::Expr>,
+    const std::shared_ptr<Analyzer::Expr>,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenStrCmp [#codegenstrcmp]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenStrCmp(
+    const SQLOps,
+    const SQLQualifier,
+    const std::shared_ptr<Analyzer::Expr>,
+    const std::shared_ptr<Analyzer::Expr>,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenQualifierCmp [#codegenqualifiercmp]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenQualifierCmp(
+    const SQLOps,
+    const SQLQualifier,
+    std::vector<llvm::Value *>,
+    const Analyzer::Expr *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenLogicalShortCircuit [#codegenlogicalshortcircuit]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenLogicalShortCircuit(
+    const Analyzer::BinOper *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenDictLike [#codegendictlike]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenDictLike(
+    const std::shared_ptr<Analyzer::Expr> arg,
+    const Analyzer::Constant *pattern,
+    const bool ilike,
+    const bool is_simple,
+    const char escape_char,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenDictStrCmp [#codegendictstrcmp]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenDictStrCmp(
+    const std::shared_ptr<Analyzer::Expr>,
+    const std::shared_ptr<Analyzer::Expr>,
+    const SQLOps,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenDictRegexp [#codegendictregexp]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenDictRegexp(
+    const std::shared_ptr<Analyzer::Expr> arg,
+    const Analyzer::Constant *pattern,
+    const char escape_char,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### foundOuterJoinMatch [#foundouterjoinmatch]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::foundOuterJoinMatch(
+    const size_t nesting_level
+) const
+```
+</CodeBlock>
+
+### resolveGroupedColumnReference [#resolvegroupedcolumnreference]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::resolveGroupedColumnReference(
+    const Analyzer::ColumnVar *
+)
+```
+</CodeBlock>
+
+### colByteStream [#colbytestream]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::colByteStream(
+    const Analyzer::ColumnVar *col_var,
+    const bool fetch_column,
+    const bool hoist_literals
+)
+```
+</CodeBlock>
+
+### hashJoinLhs [#hashjoinlhs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
+    const Analyzer::ColumnVar *rhs
+) const
+```
+</CodeBlock>
+
+### hashJoinLhsTuple [#hashjoinlhstuple]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const Analyzer::ColumnVar> CodeGenerator::hashJoinLhsTuple(
+    const Analyzer::ColumnVar *rhs,
+    const Analyzer::BinOper *tautological_eq
+) const
+```
+</CodeBlock>
+
+### needCastForHashJoinLhs [#needcastforhashjoinlhs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+bool CodeGenerator::needCastForHashJoinLhs(
+    const Analyzer::ColumnVar *rhs
+) const
+```
+</CodeBlock>
+
+### createInValuesBitmap [#createinvaluesbitmap]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions", "InValuesBitmap": "invaluesbitmap"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
+    const Analyzer::InValues *,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### checkExpressionRanges [#checkexpressionranges]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+bool CodeGenerator::checkExpressionRanges(
+    const Analyzer::UOper *,
+    int64_t,
+    int64_t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+bool CodeGenerator::checkExpressionRanges(
+    const Analyzer::BinOper *,
+    int64_t,
+    int64_t
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### beginArgsNullcheck [#beginargsnullcheck]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::tuple<CodeGenerator::ArgNullcheckBBs, llvm::Value *> CodeGenerator::beginArgsNullcheck(
+    const Analyzer::FunctionOper *function_oper,
+    const std::vector<llvm::Value *> &orig_arg_lvs
+)
+```
+</CodeBlock>
+
+### endArgsNullcheck [#endargsnullcheck]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::endArgsNullcheck(
+    const ArgNullcheckBBs &,
+    llvm::Value *,
+    llvm::Value *,
+    const Analyzer::FunctionOper *
+)
+```
+</CodeBlock>
+
+### codegenFunctionOperNullArg [#codegenfunctionopernullarg]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenFunctionOperNullArg(
+    const Analyzer::FunctionOper *,
+    const std::vector<llvm::Value *> &
+)
+```
+</CodeBlock>
+
+### codegenCompression [#codegencompression]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenCompression(
+    const SQLTypeInfo &type_info
+)
+```
+</CodeBlock>
+
+### codegenArrayBuff [#codegenarraybuff]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::pair<llvm::Value *, llvm::Value *> CodeGenerator::codegenArrayBuff(
+    llvm::Value *chunk,
+    llvm::Value *row_pos,
+    SQLTypes array_type,
+    bool cast_and_extend
+)
+```
+</CodeBlock>
+
+### codegenBufferArgs [#codegenbufferargs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::codegenBufferArgs(
+    const std::string &udf_func_name,
+    size_t param_num,
+    llvm::Value *buffer_buf,
+    llvm::Value *buffer_size,
+    llvm::Value *buffer_is_null,
+    std::vector<llvm::Value *> &output_args
+)
+```
+</CodeBlock>
+
+### createPointStructType [#createpointstructtype]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::StructType * CodeGenerator::createPointStructType(
+    const std::string &udf_func_name,
+    size_t param_num
+)
+```
+</CodeBlock>
+
+### codegenGeoPointArgs [#codegengeopointargs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::codegenGeoPointArgs(
+    const std::string &udf_func_name,
+    size_t param_num,
+    llvm::Value *point_buf,
+    llvm::Value *point_size,
+    llvm::Value *compression,
+    llvm::Value *input_srid,
+    llvm::Value *output_srid,
+    std::vector<llvm::Value *> &output_args
+)
+```
+</CodeBlock>
+
+### createMultiPointStructType [#createmultipointstructtype]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::StructType * CodeGenerator::createMultiPointStructType(
+    const std::string &udf_func_name,
+    size_t param_num
+)
+```
+</CodeBlock>
+
+### codegenGeoMultiPointArgs [#codegengeomultipointargs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::codegenGeoMultiPointArgs(
+    const std::string &udf_func_name,
+    size_t param_num,
+    llvm::Value *multi_point_buf,
+    llvm::Value *multi_point_size,
+    llvm::Value *compression,
+    llvm::Value *input_srid,
+    llvm::Value *output_srid,
+    std::vector<llvm::Value *> &output_args
+)
+```
+</CodeBlock>
+
+### createLineStringStructType [#createlinestringstructtype]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::StructType * CodeGenerator::createLineStringStructType(
+    const std::string &udf_func_name,
+    size_t param_num
+)
+```
+</CodeBlock>
+
+### codegenGeoLineStringArgs [#codegengeolinestringargs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::codegenGeoLineStringArgs(
+    const std::string &udf_func_name,
+    size_t param_num,
+    llvm::Value *line_string_buf,
+    llvm::Value *line_string_size,
+    llvm::Value *compression,
+    llvm::Value *input_srid,
+    llvm::Value *output_srid,
+    std::vector<llvm::Value *> &output_args
+)
+```
+</CodeBlock>
+
+### createMultiLineStringStructType [#createmultilinestringstructtype]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::StructType * CodeGenerator::createMultiLineStringStructType(
+    const std::string &udf_func_name,
+    size_t param_num
+)
+```
+</CodeBlock>
+
+### codegenGeoMultiLineStringArgs [#codegengeomultilinestringargs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::codegenGeoMultiLineStringArgs(
+    const std::string &udf_func_name,
+    size_t param_num,
+    llvm::Value *multi_linestring_coords,
+    llvm::Value *multi_linestring_size,
+    llvm::Value *linestring_sizes,
+    llvm::Value *linestring_sizes_size,
+    llvm::Value *compression,
+    llvm::Value *input_srid,
+    llvm::Value *output_srid,
+    std::vector<llvm::Value *> &output_args
+)
+```
+</CodeBlock>
+
+### createPolygonStructType [#createpolygonstructtype]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::StructType * CodeGenerator::createPolygonStructType(
+    const std::string &udf_func_name,
+    size_t param_num
+)
+```
+</CodeBlock>
+
+### codegenGeoPolygonArgs [#codegengeopolygonargs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::codegenGeoPolygonArgs(
+    const std::string &udf_func_name,
+    size_t param_num,
+    llvm::Value *polygon_buf,
+    llvm::Value *polygon_size,
+    llvm::Value *ring_sizes_buf,
+    llvm::Value *num_rings,
+    llvm::Value *compression,
+    llvm::Value *input_srid,
+    llvm::Value *output_srid,
+    std::vector<llvm::Value *> &output_args
+)
+```
+</CodeBlock>
+
+### createMultiPolygonStructType [#createmultipolygonstructtype]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::StructType * CodeGenerator::createMultiPolygonStructType(
+    const std::string &udf_func_name,
+    size_t param_num
+)
+```
+</CodeBlock>
+
+### codegenGeoMultiPolygonArgs [#codegengeomultipolygonargs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::codegenGeoMultiPolygonArgs(
+    const std::string &udf_func_name,
+    size_t param_num,
+    llvm::Value *polygon_coords,
+    llvm::Value *polygon_coords_size,
+    llvm::Value *ring_sizes_buf,
+    llvm::Value *ring_sizes,
+    llvm::Value *polygon_bounds,
+    llvm::Value *polygon_bounds_sizes,
+    llvm::Value *compression,
+    llvm::Value *input_srid,
+    llvm::Value *output_srid,
+    std::vector<llvm::Value *> &output_args
+)
+```
+</CodeBlock>
+
+### codegenFunctionOperCastArgs [#codegenfunctionopercastargs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "ExtensionFunction": "extensionfunction", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> CodeGenerator::codegenFunctionOperCastArgs(
+    const Analyzer::FunctionOper *,
+    const ExtensionFunction *,
+    const std::vector<llvm::Value *> &,
+    const std::vector<size_t> &,
+    const std::unordered_map<llvm::Value *, llvm::Value *> &,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### createStringViewStructType [#createstringviewstructtype]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::StructType * CodeGenerator::createStringViewStructType()
+```
+</CodeBlock>
+
+### getArithWithOverflowIntrinsic [#getarithwithoverflowintrinsic]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Function * CodeGenerator::getArithWithOverflowIntrinsic(
+    const Analyzer::BinOper *bin_oper,
+    llvm::Type *type
+)
+```
+</CodeBlock>
+
+### codegenBinOpWithOverflowForCPU [#codegenbinopwithoverflowforcpu]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenBinOpWithOverflowForCPU(
+    const Analyzer::BinOper *bin_oper,
+    llvm::Value *lhs_lv,
+    llvm::Value *rhs_lv,
+    const std::string &null_check_suffix,
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### codegenStringFetchAndEncode [#codegenstringfetchandencode]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions", "NullCheckCodegen": "#nullcheckcodegen"}}>
+```cpp showLineNumbers={false}
+std::pair<std::vector<llvm::Value *>, std::unique_ptr<CodeGenerator::NullCheckCodegen>> CodeGenerator::codegenStringFetchAndEncode(
+    const Analyzer::StringOper *expr,
+    const CompilationOptions &co,
+    const size_t arg_idx,
+    const bool codegen_nullcheck
+)
+```
+</CodeBlock>
+
+### codegenOffsetInFragmentImpl [#codegenoffsetinfragmentimpl]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenOffsetInFragmentImpl(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### codegenFragmentIdImpl [#codegenfragmentidimpl]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * CodeGenerator::codegenFragmentIdImpl(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### executor [#executor]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+Executor * CodeGenerator::executor() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### codegenIntConst [#codegenintconst]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CgenState": "../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+llvm::ConstantInt * CodeGenerator::codegenIntConst(
+    const Analyzer::Constant *constant,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+### markDeadRuntimeFuncs [#markdeadruntimefuncs]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<llvm::Function *> CodeGenerator::markDeadRuntimeFuncs(
+    llvm::Module &module,
+    const std::vector<llvm::Function *> &roots,
+    const std::vector<llvm::Function *> &leaves
+)
+```
+</CodeBlock>
+
+### generateNativeCPUCode [#generatenativecpucode]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CompilationOptions": "../structs/compilationoptions", "ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
+    llvm::Function *func,
+    const std::unordered_set<llvm::Function *> &live_funcs,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### generatePTX [#generateptx]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::string CodeGenerator::generatePTX(
+    const std::string &cuda_llir,
+    llvm::TargetMachine *nvptx_target_machine,
+    llvm::LLVMContext &context
+)
+```
+</CodeBlock>
+
+### initializeNVPTXBackend [#initializenvptxbackend]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend(
+    const CudaMgr_Namespace::NvidiaDeviceArch arch
+)
+```
+</CodeBlock>
+
+### alwaysCloneRuntimeFunction [#alwayscloneruntimefunction]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+bool CodeGenerator::alwaysCloneRuntimeFunction(
+    const llvm::Function *func
+)
+```
+</CodeBlock>
+
+### linkModuleWithLibdevice [#linkmodulewithlibdevice]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "Executor": "executor", "GPUTarget": "#gputarget"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::linkModuleWithLibdevice(
+    Executor *executor,
+    llvm::Module &module,
+    llvm::PassManagerBuilder &pass_manager_builder,
+    const GPUTarget &gpu_target
+)
+```
+</CodeBlock>
+
+### generateNativeGPUCode [#generatenativegpucode]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "Executor": "executor", "CompilationOptions": "../structs/compilationoptions", "GPUTarget": "#gputarget", "GpuCompilationContext": "gpucompilationcontext"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<GpuCompilationContext> CodeGenerator::generateNativeGPUCode(
+    Executor *executor,
+    llvm::Function *func,
+    llvm::Function *wrapper_func,
+    const std::unordered_set<llvm::Function *> &live_funcs,
+    const bool is_gpu_smem_used,
+    const CompilationOptions &co,
+    const GPUTarget &gpu_target,
+    std::chrono::steady_clock::time_point &compile_start_timer
+)
+```
+</CodeBlock>
+
+### link_udf_module [#linkudfmodule]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CgenState": "../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+void CodeGenerator::link_udf_module(
+    const std::unique_ptr<llvm::Module> &udf_module,
+    llvm::Module &module,
+    CgenState *cgen_state,
+    llvm::Linker::Flags flags = llvm::Linker::Flags::None
+)
+```
+</CodeBlock>
+
+### prioritizeQuals [#prioritizequals]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "RelAlgExecutionUnit": "../structs/relalgexecutionunit"}}>
+```cpp showLineNumbers={false}
+bool CodeGenerator::prioritizeQuals(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    std::vector<Analyzer::Expr *> &primary_quals,
+    std::vector<Analyzer::Expr *> &deferred_quals,
+    const PlanState::HoistedFiltersSet &hoisted_quals
+)
+```
+</CodeBlock>
+
+### codegenGeoArrayLoadAndNullcheck [#codegengeoarrayloadandnullcheck]
+
+<CodeBlock links={{"CodeGenerator": "codegenerator", "CgenState": "../structs/cgenstate", "ArrayLoadCodegen": "../structs/arrayloadcodegen"}}>
+```cpp showLineNumbers={false}
+ArrayLoadCodegen CodeGenerator::codegenGeoArrayLoadAndNullcheck(
+    llvm::Value *byte_stream,
+    llvm::Value *pos,
+    const SQLTypeInfo &ti,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `Executor *` | |
+| `cgen_state_` | `CgenState *` | |
+| `plan_state_` | `PlanState *` | |
+| `initialize_nvptx_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+| `initialize_cpu_backend_mutex_` <Badge intent="note" minimal>static</Badge> | `std::mutex` | |
+
+---
+
+## Inner classes
+
+### GPUTarget
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+struct CodeGenerator::GPUTarget
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `nvptx_target_machine` | `llvm::TargetMachine *` | |
+| `cuda_mgr` | `const CudaMgr_Namespace::CudaMgr *` | |
+| `cgen_state` | `CgenState *` | |
+| `row_func_not_inlined` | `bool` | |
+
+### ExecutorRequired
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+struct CodeGenerator::ExecutorRequired
+```
+</CodeBlock>
+
+**Inherits from:** `std::runtime_error` (public)
+
+### NullCheckCodegen
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+struct CodeGenerator::NullCheckCodegen
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `cgen_state` | `CgenState *` | |
+| `name` | `std::string` | |
+| `nullcheck_bb` | `llvm::BasicBlock *` | |
+| `nullcheck_value` | `llvm::PHINode *` | |
+| `null_check` | `std::unique_ptr< DiamondCodegen >` | |
+
+### ArgNullcheckBBs
+
+<CodeBlock links={{"CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+struct CodeGenerator::ArgNullcheckBBs
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `args_null_bb` | `llvm::BasicBlock *` | |
+| `args_notnull_bb` | `llvm::BasicBlock *` | |
+| `orig_bb` | `llvm::BasicBlock *` | |

@@ -1,0 +1,50 @@
+---
+title: FixedWidthSmallDate
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Codec.h>
+```
+
+**Inherits from:** `Decoder` (public)
+
+---
+
+## Constructors
+
+### FixedWidthSmallDate [#fixedwidthsmalldate]
+
+<CodeBlock links={{"FixedWidthSmallDate": "fixedwidthsmalldate"}}>
+```cpp showLineNumbers={false}
+FixedWidthSmallDate::FixedWidthSmallDate(
+    const size_t byte_width
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### codegenDecode [#codegendecode]
+
+<CodeBlock links={{"FixedWidthSmallDate": "fixedwidthsmalldate"}}>
+```cpp showLineNumbers={false}
+llvm::Instruction * FixedWidthSmallDate::codegenDecode(
+    llvm::Value *byte_stream,
+    llvm::Value *pos,
+    llvm::Module *llvm_module
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `byte_width_` | `const size_t` | |
+| `null_val_` | `const int32_t` | |
+| `ret_null_val_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int64_t` | |

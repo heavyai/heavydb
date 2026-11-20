@@ -1,0 +1,129 @@
+---
+title: RelAlgDagBuilder
+description: "Builder struct to create a RelAlgDag instance."
+---
+
+Builder struct to create a [RelAlgDag](../classes/relalgdag) instance.
+
+Can optionally apply high level optimizations which can be expressed through relational algebra extended with [RelCompound](../classes/relcompound). The [RelCompound](../classes/relcompound) node is an equivalent representation for sequences of [RelFilter](../classes/relfilter), [RelProject](../classes/relproject) and [RelAggregate](../classes/relaggregate) nodes. This coalescing minimizes the amount of intermediate buffers required to evaluate a query. Lower level optimizations are taken care by lower levels, mainly [RelAlgTranslator](../classes/relalgtranslator) and the IR code generation.
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgDagModifier` (public)
+
+---
+
+## Methods
+
+### build [#build]
+
+<CodeBlock links={{"RelAlgDagBuilder": "relalgdagbuilder", "RelAlgDag": "../classes/relalgdag"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RelAlgDag> RelAlgDagBuilder::build(
+    const rapidjson::Value &query_ast,
+    RelAlgDag *root_dag,
+    const bool optimize_dag
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### buildDag [#builddag]
+
+<CodeBlock links={{"RelAlgDagBuilder": "relalgdagbuilder", "RelAlgDag": "../classes/relalgdag"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RelAlgDag> RelAlgDagBuilder::buildDag(
+    const std::string &query_ra,
+    const bool optimize_dag
+)
+```
+</CodeBlock>
+
+Constructs a RelAlg DAG from a relative-algebra JSON representation.
+
+**Parameters**
+
+<ParamField path="query_ra" type="const std::string &">
+A JSON string representation of an RA tree from Calcite.
+</ParamField>
+
+### buildDagForSubquery [#builddagforsubquery]
+
+<CodeBlock links={{"RelAlgDagBuilder": "relalgdagbuilder", "RelAlgDag": "../classes/relalgdag"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RelAlgDag> RelAlgDagBuilder::buildDagForSubquery(
+    RelAlgDag &root_dag,
+    const rapidjson::Value &query_ast
+)
+```
+</CodeBlock>
+
+Constructs a rel-alg DAG for any subqueries.
+
+Should only be called during DAG building.
+
+**Parameters**
+
+<ParamField path="root_dag" type="RelAlgDag &">
+The root DAG builder. The root stores pointers to all subqueries.
+</ParamField>
+
+<ParamField path="query_ast" type="const rapidjson::Value &">
+The current JSON node to build a DAG for.
+</ParamField>
+
+### optimizeDag [#optimizedag]
+
+<CodeBlock links={{"RelAlgDagBuilder": "relalgdagbuilder", "RelAlgDag": "../classes/relalgdag"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagBuilder::optimizeDag(
+    RelAlgDag &rel_alg_dag
+)
+```
+</CodeBlock>
+
+### getNodes [#getnodes]
+
+<CodeBlock links={{"RelAlgDagBuilder": "relalgdagbuilder", "RelAlgDag": "../classes/relalgdag", "RelAlgNode": "../classes/relalgnode", "RelAlgDagModifier": "relalgdagmodifier"}}>
+```cpp showLineNumbers={false}
+static std::vector<std::shared_ptr<RelAlgNode>> & RelAlgDagBuilder::getNodes(
+    RelAlgDag &rel_alg_dag
+)
+```
+</CodeBlock>
+
+### getSubqueries [#getsubqueries]
+
+<CodeBlock links={{"RelAlgDagBuilder": "relalgdagbuilder", "RelAlgDag": "../classes/relalgdag", "RexSubQuery": "../classes/rexsubquery", "RelAlgDagModifier": "relalgdagmodifier"}}>
+```cpp showLineNumbers={false}
+static std::vector<std::shared_ptr<RexSubQuery>> & RelAlgDagBuilder::getSubqueries(
+    RelAlgDag &rel_alg_dag
+)
+```
+</CodeBlock>
+
+### getQueryHints [#getqueryhints]
+
+<CodeBlock links={{"RelAlgDagBuilder": "relalgdagbuilder", "RelAlgDag": "../classes/relalgdag", "RelAlgNode": "../classes/relalgnode", "RegisteredQueryHint": "registeredqueryhint", "RelAlgDagModifier": "relalgdagmodifier"}}>
+```cpp showLineNumbers={false}
+static std::unordered_map<const RelAlgNode *, std::unordered_map<unsigned, RegisteredQueryHint>> & RelAlgDagBuilder::getQueryHints(
+    RelAlgDag &rel_alg_dag
+)
+```
+</CodeBlock>
+
+### setBuildState [#setbuildstate]
+
+<CodeBlock links={{"RelAlgDagBuilder": "relalgdagbuilder", "RelAlgDag": "../classes/relalgdag", "RelAlgDagModifier": "relalgdagmodifier"}}>
+```cpp showLineNumbers={false}
+static void RelAlgDagBuilder::setBuildState(
+    RelAlgDag &rel_alg_dag,
+    const RelAlgDag::BuildState build_state
+)
+```
+</CodeBlock>

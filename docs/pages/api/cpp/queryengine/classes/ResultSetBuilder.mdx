@@ -1,0 +1,45 @@
+---
+title: ResultSetBuilder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetBuilder.h>
+```
+
+---
+
+## Methods
+
+### makeResultSet [#makeresultset]
+
+<CodeBlock links={{"ResultSetBuilder": "resultsetbuilder", "QueryMemoryDescriptor": "querymemorydescriptor", "RowSetMemoryOwner": "rowsetmemoryowner", "Executor": "executor", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ResultSet * ResultSetBuilder::makeResultSet(
+    const std::vector<TargetInfo> &targets,
+    const ExecutorDeviceType device_type,
+    const QueryMemoryDescriptor &query_mem_desc,
+    const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+    const Executor *executor
+)
+```
+</CodeBlock>
+
+### addVarlenBuffer [#addvarlenbuffer]
+
+<CodeBlock links={{"ResultSetBuilder": "resultsetbuilder", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+void ResultSetBuilder::addVarlenBuffer(
+    ResultSet *result_set,
+    std::vector<std::string> &varlen_storage
+)
+```
+</CodeBlock>
+
+### build [#build]
+
+<CodeBlock links={{"ResultSetBuilder": "resultsetbuilder", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+virtual ResultSet * ResultSetBuilder::build()
+```
+</CodeBlock>

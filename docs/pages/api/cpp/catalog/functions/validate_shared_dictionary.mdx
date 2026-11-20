@@ -1,0 +1,16 @@
+---
+title: validate_shared_dictionary
+description: ""
+---
+
+<CodeBlock links={{"ColumnDescriptor": "../structs/columndescriptor", "Catalog": "../catalognamespace/classes/catalog"}}>
+```cpp showLineNumbers={false}
+void validate_shared_dictionary(
+    const Parser::CreateTableBaseStmt *stmt,
+    const Parser::SharedDictionaryDef *shared_dict_def,
+    const std::list<ColumnDescriptor> &columns,
+    const std::vector<Parser::SharedDictionaryDef> &shared_dict_defs_so_far,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>

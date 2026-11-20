@@ -1,0 +1,470 @@
+---
+title: RelScan
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RelAlgNode` (public)
+
+---
+
+## Constructors
+
+### RelScan [#relscan]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+RelScan::RelScan(
+    const TableDescriptor *td,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+RelScan::RelScan(
+    const TableDescriptor *td,
+    const std::vector<std::string> &field_names,
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RelScan": "relscan", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelScan::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RelScan": "relscan", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RelScan::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+size_t RelScan::size() const override
+```
+</CodeBlock>
+
+### getTableDescriptor [#gettabledescriptor]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * RelScan::getTableDescriptor() const
+```
+</CodeBlock>
+
+### getCatalog [#getcatalog]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+const Catalog_Namespace::Catalog & RelScan::getCatalog() const
+```
+</CodeBlock>
+
+### getNumFragments [#getnumfragments]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+const size_t RelScan::getNumFragments() const
+```
+</CodeBlock>
+
+### getNumShards [#getnumshards]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+const size_t RelScan::getNumShards() const
+```
+</CodeBlock>
+
+### getFieldNames [#getfieldnames]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::string> & RelScan::getFieldNames() const
+```
+</CodeBlock>
+
+### getFieldName [#getfieldname]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+const std::string RelScan::getFieldName(
+    const size_t i
+) const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RelScan": "relscan", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RelScan::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<RelAlgNode> RelScan::deepCopy() const override
+```
+</CodeBlock>
+
+### addHint [#addhint]
+
+<CodeBlock links={{"RelScan": "relscan", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+void RelScan::addHint(
+    const ExplainedQueryHint &hint_explained
+)
+```
+</CodeBlock>
+
+### hasHintEnabled [#hashintenabled]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+const bool RelScan::hasHintEnabled(
+    const QueryHint candidate_hint
+) const
+```
+</CodeBlock>
+
+### getHintInfo [#gethintinfo]
+
+<CodeBlock links={{"RelScan": "relscan", "ExplainedQueryHint": "explainedqueryhint"}}>
+```cpp showLineNumbers={false}
+const ExplainedQueryHint & RelScan::getHintInfo(
+    QueryHint hint
+) const
+```
+</CodeBlock>
+
+### hasDeliveredHint [#hasdeliveredhint]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+bool RelScan::hasDeliveredHint()
+```
+</CodeBlock>
+
+### getDeliveredHints [#getdeliveredhints]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+Hints * RelScan::getDeliveredHints()
+```
+</CodeBlock>
+
+### resetQueryExecutionState [#resetqueryexecutionstate]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelScan::resetQueryExecutionState()
+```
+</CodeBlock>
+
+### setContextData [#setcontextdata]
+
+<CodeBlock links={{"RelScan": "relscan", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelScan::setContextData(
+    const RaExecutionDesc *context_data
+) const
+```
+</CodeBlock>
+
+### setOutputMetainfo [#setoutputmetainfo]
+
+<CodeBlock links={{"RelScan": "relscan", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelScan::setOutputMetainfo(
+    std::vector<TargetMetaInfo> targets_metainfo
+) const
+```
+</CodeBlock>
+
+### setQueryPlanDag [#setqueryplandag]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelScan::setQueryPlanDag(
+    const std::string &extracted_query_plan_dag
+) const
+```
+</CodeBlock>
+
+### getQueryPlanDag [#getqueryplandag]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::string RelScan::getQueryPlanDag() const
+```
+</CodeBlock>
+
+### getQueryPlanDagHash [#getqueryplandaghash]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelScan::getQueryPlanDagHash() const
+```
+</CodeBlock>
+
+### getOutputMetainfo [#getoutputmetainfo]
+
+<CodeBlock links={{"RelScan": "relscan", "TargetMetaInfo": "targetmetainfo", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<TargetMetaInfo> & RelScan::getOutputMetainfo() const
+```
+</CodeBlock>
+
+### getId [#getid]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+unsigned RelScan::getId() const
+```
+</CodeBlock>
+
+### hasContextData [#hascontextdata]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelScan::hasContextData() const
+```
+</CodeBlock>
+
+### getContextData [#getcontextdata]
+
+<CodeBlock links={{"RelScan": "relscan", "RaExecutionDesc": "raexecutiondesc", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RaExecutionDesc * RelScan::getContextData() const
+```
+</CodeBlock>
+
+### inputCount [#inputcount]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const size_t RelScan::inputCount() const
+```
+</CodeBlock>
+
+### getInput [#getinput]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const RelAlgNode * RelScan::getInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getInputs [#getinputs]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+const std::vector<RelAlgNode const  *> RelScan::getInputs() const
+```
+</CodeBlock>
+
+### getAndOwnInput [#getandowninput]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<const RelAlgNode> RelScan::getAndOwnInput(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### addManagedInput [#addmanagedinput]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelScan::addManagedInput(
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### hasInput [#hasinput]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelScan::hasInput(
+    const RelAlgNode *needle
+) const
+```
+</CodeBlock>
+
+### replaceInput [#replaceinput]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelScan::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input
+)
+```
+</CodeBlock>
+
+### setRelNodeDagId [#setrelnodedagid]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelScan::setRelNodeDagId(
+    const size_t id
+) const
+```
+</CodeBlock>
+
+### getRelNodeDagId [#getrelnodedagid]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelScan::getRelNodeDagId() const
+```
+</CodeBlock>
+
+### isNop [#isnop]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool RelScan::isNop() const
+```
+</CodeBlock>
+
+### markAsNop [#markasnop]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelScan::markAsNop()
+```
+</CodeBlock>
+
+### clearContextData [#clearcontextdata]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelScan::clearContextData() const
+```
+</CodeBlock>
+
+Clears the ptr to the result for this descriptor.
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+size_t RelScan::toHash() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual size_t RelAlgDagNode::getStepNumber() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+size_t RelScan::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### resetRelAlgFirstId [#resetrelalgfirstid]
+
+<CodeBlock links={{"RelScan": "relscan", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelScan::resetRelAlgFirstId() noexcept
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `td_` | `const TableDescriptor *` | |
+| `field_names_` | `std::vector< std::string >` | |
+| `hint_applied_` | `bool` | |
+| `hints_` | `std::unique_ptr< Hints >` | |
+| `catalog_` | `const Catalog_Namespace::Catalog &` | |
+| `inputs_` | `RelAlgInputs` | |
+| `id_` | `unsigned` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

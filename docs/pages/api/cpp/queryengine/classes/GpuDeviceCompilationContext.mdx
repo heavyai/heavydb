@@ -1,0 +1,95 @@
+---
+title: GpuDeviceCompilationContext
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <NvidiaKernel.h>
+```
+
+---
+
+## Constructors
+
+### GpuDeviceCompilationContext [#gpudevicecompilationcontext]
+
+<CodeBlock links={{"GpuDeviceCompilationContext": "gpudevicecompilationcontext"}}>
+```cpp showLineNumbers={false}
+GpuDeviceCompilationContext::GpuDeviceCompilationContext(
+    const void *image,
+    const size_t module_size,
+    const std::string &kernel_name,
+    const int device_id,
+    const void *cuda_mgr,
+    unsigned int num_options,
+    CUjit_option *options,
+    void **option_vals
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~GpuDeviceCompilationContext
+
+<CodeBlock links={{"GpuDeviceCompilationContext": "gpudevicecompilationcontext"}}>
+```cpp showLineNumbers={false}
+GpuDeviceCompilationContext::~GpuDeviceCompilationContext()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### kernel [#kernel]
+
+<CodeBlock links={{"GpuDeviceCompilationContext": "gpudevicecompilationcontext"}}>
+```cpp showLineNumbers={false}
+CUfunction GpuDeviceCompilationContext::kernel()
+```
+</CodeBlock>
+
+### module [#module]
+
+<CodeBlock links={{"GpuDeviceCompilationContext": "gpudevicecompilationcontext"}}>
+```cpp showLineNumbers={false}
+CUmodule GpuDeviceCompilationContext::module()
+```
+</CodeBlock>
+
+### name [#name]
+
+<CodeBlock links={{"GpuDeviceCompilationContext": "gpudevicecompilationcontext"}}>
+```cpp showLineNumbers={false}
+std::string const  & GpuDeviceCompilationContext::name() const
+```
+</CodeBlock>
+
+### getModuleSize [#getmodulesize]
+
+<CodeBlock links={{"GpuDeviceCompilationContext": "gpudevicecompilationcontext"}}>
+```cpp showLineNumbers={false}
+size_t GpuDeviceCompilationContext::getModuleSize() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"GpuDeviceCompilationContext": "gpudevicecompilationcontext"}}>
+```cpp showLineNumbers={false}
+int GpuDeviceCompilationContext::getDeviceId() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `module_` | `CUmodule` | |
+| `module_size_` | `size_t` | |
+| `kernel_` | `CUfunction` | |
+| `kernel_name_` | `std::string const` | |
+| `device_id_` | `const int` | |

@@ -1,0 +1,72 @@
+---
+title: Parser::UserLiteral
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Literal` (public)
+
+---
+
+## Constructors
+
+### UserLiteral [#userliteral]
+
+<CodeBlock links={{"UserLiteral": "userliteral"}}>
+```cpp showLineNumbers={false}
+Parser::UserLiteral::UserLiteral()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### analyze [#analyze]
+
+<CodeBlock links={{"UserLiteral": "userliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::UserLiteral::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query,
+    TlistRefType allow_tlist_ref = TLIST_NONE
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"UserLiteral": "userliteral"}}>
+```cpp showLineNumbers={false}
+std::string Parser::UserLiteral::to_string() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### get [#get]
+
+<CodeBlock links={{"UserLiteral": "userliteral"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Parser::UserLiteral::get(
+    const std::string &
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### TlistRefType
+
+| Name | Value | Description |
+|---|---|---|
+| `TLIST_NONE` | | |
+| `TLIST_REF` | | |
+| `TLIST_COPY` | | |

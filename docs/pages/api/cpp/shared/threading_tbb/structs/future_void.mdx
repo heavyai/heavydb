@@ -1,0 +1,74 @@
+---
+title: "threading_tbb::future< void >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <threading_tbb/threading_tbb.h>
+```
+
+---
+
+## Methods
+
+### future [#future]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"future< void >": "futurevoid"}}>
+```cpp showLineNumbers={false}
+threading_tbb::future<void>::future() = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"future< void >": "futurevoid"}}>
+```cpp showLineNumbers={false}
+threading_tbb::future<void>::future(
+    future &&
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"future< void >": "futurevoid", "tbb_packaged_task": "tbbpackagedtask"}}>
+```cpp showLineNumbers={false}
+threading_tbb::future<void>::future(
+    std::unique_ptr<tbb_packaged_task<void>> &&p
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### wait [#wait]
+
+<CodeBlock links={{"future< void >": "futurevoid"}}>
+```cpp showLineNumbers={false}
+void threading_tbb::future<void>::wait()
+```
+</CodeBlock>
+
+### get [#get]
+
+<CodeBlock links={{"future< void >": "futurevoid"}}>
+```cpp showLineNumbers={false}
+void threading_tbb::future<void>::get()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `task_` | `std::unique_ptr< tbb_packaged_task< void > >` | |

@@ -1,0 +1,14 @@
+---
+title: Analyzer::is_null_constant
+description: "Return true iff expr is an Analyzer::Constant and get_is_null() is true."
+---
+
+<CodeBlock links={{"Expr": "../classes/expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::is_null_constant(
+    Analyzer::Expr const  *expr
+)
+```
+</CodeBlock>
+
+Return true iff expr is an [Analyzer::Constant](../classes/constant) and get_is_null() is true.

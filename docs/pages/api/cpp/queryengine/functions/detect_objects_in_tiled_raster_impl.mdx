@@ -1,0 +1,20 @@
+---
+title: detect_objects_in_tiled_raster_impl
+description: ""
+---
+
+<CodeBlock links={{"ModelInfo": "../structs/modelinfo", "RasterInfo": "../rasterformatnamespace/structs/rasterinfo", "CpuTimer": "../classes/cputimer", "Detection": "../structs/detection"}}>
+```cpp showLineNumbers={false}
+std::vector<Detection> detect_objects_in_tiled_raster_impl(
+    const std::string &model_path,
+    const ModelInfo &model_info,
+    const bool use_gpu,
+    const int64_t device_num,
+    std::vector<float> &raster_data,
+    const RasterFormat_Namespace::RasterInfo &raster_info,
+    const float min_confidence_threshold,
+    const float iou_threshold,
+    std::shared_ptr<CpuTimer> timer
+)
+```
+</CodeBlock>

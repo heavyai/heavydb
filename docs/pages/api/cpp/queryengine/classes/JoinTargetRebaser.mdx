@@ -1,0 +1,141 @@
+---
+title: JoinTargetRebaser
+description: ""
+---
+
+**Inherits from:** `RexDeepCopyVisitor` (public)
+
+---
+
+## Constructors
+
+### JoinTargetRebaser [#jointargetrebaser]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RelJoin": "reljoin"}}>
+```cpp showLineNumbers={false}
+JoinTargetRebaser::JoinTargetRebaser(
+    const RelJoin *join,
+    const unsigned old_base
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### visitInput [#visitinput]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+RetType JoinTargetRebaser::visitInput(
+    const RexInput *input
+) const override
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RexScalar": "rexscalar", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+virtual std::unique_ptr<const RexScalar> RexVisitorBase<std::unique_ptr<const RexScalar>>::visit(
+    const RexScalar *rex_scalar
+) const
+```
+</CodeBlock>
+
+### visitLiteral [#visitliteral]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RexLiteral": "rexliteral", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType JoinTargetRebaser::visitLiteral(
+    const RexLiteral *literal
+) const override
+```
+</CodeBlock>
+
+### visitSubQuery [#visitsubquery]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RexSubQuery": "rexsubquery", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType JoinTargetRebaser::visitSubQuery(
+    const RexSubQuery *subquery
+) const override
+```
+</CodeBlock>
+
+### visitRef [#visitref]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RexRef": "rexref", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType JoinTargetRebaser::visitRef(
+    const RexRef *ref
+) const override
+```
+</CodeBlock>
+
+### visitOperator [#visitoperator]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RexOperator": "rexoperator", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType JoinTargetRebaser::visitOperator(
+    const RexOperator *rex_operator
+) const override
+```
+</CodeBlock>
+
+### visitWindowFunctionOperator [#visitwindowfunctionoperator]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RexWindowFunctionOperator": "rexwindowfunctionoperator", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType JoinTargetRebaser::visitWindowFunctionOperator(
+    const RexWindowFunctionOperator *rex_window_function_operator
+) const
+```
+</CodeBlock>
+
+### visitCase [#visitcase]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RexCase": "rexcase", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+RetType JoinTargetRebaser::visitCase(
+    const RexCase *rex_case
+) const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### copy [#copy]
+
+<CodeBlock links={{"JoinTargetRebaser": "jointargetrebaser", "RexDeepCopyVisitor": "rexdeepcopyvisitor"}}>
+```cpp showLineNumbers={false}
+static std::vector<RowValues> JoinTargetRebaser::copy(
+    std::vector<RowValues> const &rhs
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `RetType` | `std::unique_ptr< const RexScalar >` |
+| `RowValues` | `std::vector< std::unique_ptr< const RexScalar > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `join_` | `const RelJoin *` | |
+| `old_base_` | `const unsigned` | |
+| `src1_base_` | `const size_t` | |
+| `target_count_` | `const size_t` | |

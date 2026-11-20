@@ -1,0 +1,171 @@
+---
+title: foreign_storage::ForeignServer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ForeignServer.h>
+```
+
+**Inherits from:** `foreign_storage::OptionsContainer` (public)
+
+---
+
+## Constructors
+
+### ForeignServer [#foreignserver]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ForeignServer": "foreignserver"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignServer::ForeignServer()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ForeignServer": "foreignserver"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignServer::ForeignServer(
+    const int32_t server_id,
+    const std::string &server_name,
+    const std::string &data_wrapper_type,
+    const std::string &options_str,
+    const int32_t user_id,
+    const time_t creation_time
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"ForeignServer": "foreignserver"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignServer::ForeignServer(
+    const std::string &server_name,
+    const std::string &data_wrapper_type,
+    const std::map<std::string, std::string, std::less<>> &options,
+    const int32_t user_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### validate [#validate]
+
+<CodeBlock links={{"ForeignServer": "foreignserver"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignServer::validate()
+```
+</CodeBlock>
+
+### populateOptionsMap [#populateoptionsmap]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ForeignServer": "foreignserver", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignServer::populateOptionsMap(
+    OptionsMap &&options_map,
+    bool clear = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ForeignServer": "foreignserver", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignServer::populateOptionsMap(
+    const rapidjson::Value &ddl_options,
+    bool clear = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ForeignServer": "foreignserver", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignServer::populateOptionsMap(
+    const std::string &options_json,
+    bool clear = false
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getOptionsAsJsonString [#getoptionsasjsonstring]
+
+<CodeBlock links={{"ForeignServer": "foreignserver", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignServer::getOptionsAsJsonString() const
+```
+</CodeBlock>
+
+### getOption [#getoption]
+
+<CodeBlock links={{"ForeignServer": "foreignserver", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::optional<std::string> foreign_storage::ForeignServer::getOption(
+    const std::string_view &key
+) const
+```
+</CodeBlock>
+
+### getOptionAsBool [#getoptionasbool]
+
+<CodeBlock links={{"ForeignServer": "foreignserver", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignServer::getOptionAsBool(
+    const std::string_view &key,
+    const bool default_value = false
+) const
+```
+</CodeBlock>
+
+### getOptionAsString [#getoptionasstring]
+
+<CodeBlock links={{"ForeignServer": "foreignserver", "OptionsContainer": "optionscontainer"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignServer::getOptionAsString(
+    const std::string_view &key
+) const
+```
+</CodeBlock>
+
+### validateStorageParameters [#validatestorageparameters]
+
+<CodeBlock links={{"ForeignServer": "foreignserver"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignServer::validateStorageParameters()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `id` | `int32_t` | |
+| `name` | `std::string` | |
+| `data_wrapper_type` | `std::string` | |
+| `user_id` | `int32_t` | |
+| `creation_time` | `time_t` | |
+| `options` | `OptionsMap` | |

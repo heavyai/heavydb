@@ -1,0 +1,135 @@
+---
+title: AbstractMLModel
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <AbstractMLModel.h>
+```
+
+---
+
+## Constructors
+
+### AbstractMLModel [#abstractmlmodel]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+AbstractMLModel::AbstractMLModel(
+    const std::string &model_metadata
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with cat feature keys)">
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+AbstractMLModel::AbstractMLModel(
+    const std::string &model_metadata,
+    const std::vector<std::vector<std::string>> &cat_feature_keys
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~AbstractMLModel
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+virtual AbstractMLModel::~AbstractMLModel() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getModelType [#getmodeltype]
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+virtual MLModelType AbstractMLModel::getModelType() const
+```
+</CodeBlock>
+
+### getModelTypeString [#getmodeltypestring]
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+virtual std::string AbstractMLModel::getModelTypeString() const
+```
+</CodeBlock>
+
+### getNumFeatures [#getnumfeatures]
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+virtual int64_t AbstractMLModel::getNumFeatures() const
+```
+</CodeBlock>
+
+### getModelMetadataStr [#getmodelmetadatastr]
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const std::string & AbstractMLModel::getModelMetadataStr() const
+```
+</CodeBlock>
+
+### getModelMetadata [#getmodelmetadata]
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel", "MLModelMetadata": "mlmodelmetadata"}}>
+```cpp showLineNumbers={false}
+MLModelMetadata AbstractMLModel::getModelMetadata() const
+```
+</CodeBlock>
+
+### getCatFeatureKeys [#getcatfeaturekeys]
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::vector<std::string>> & AbstractMLModel::getCatFeatureKeys() const
+```
+</CodeBlock>
+
+### getNumCatFeatures [#getnumcatfeatures]
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t AbstractMLModel::getNumCatFeatures() const
+```
+</CodeBlock>
+
+### getNumOneHotFeatures [#getnumonehotfeatures]
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t AbstractMLModel::getNumOneHotFeatures() const
+```
+</CodeBlock>
+
+### getNumLogicalFeatures [#getnumlogicalfeatures]
+
+<CodeBlock links={{"AbstractMLModel": "abstractmlmodel"}}>
+```cpp showLineNumbers={false}
+const int64_t AbstractMLModel::getNumLogicalFeatures() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `model_metadata_` | `std::string` | |
+| `cat_feature_keys_` | `std::vector< std::vector< std::string > >` | |

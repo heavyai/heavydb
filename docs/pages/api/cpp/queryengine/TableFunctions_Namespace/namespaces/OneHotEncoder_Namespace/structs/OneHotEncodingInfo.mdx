@@ -1,0 +1,62 @@
+---
+title: TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TableFunctions_Namespace/OneHotEncoder_Namespace/OneHotEncoder.h>
+```
+
+---
+
+## Constructors
+
+### OneHotEncodingInfo [#onehotencodinginfo]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"OneHotEncodingInfo": "onehotencodinginfo"}}>
+```cpp showLineNumbers={false}
+TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo::OneHotEncodingInfo()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"OneHotEncodingInfo": "onehotencodinginfo"}}>
+```cpp showLineNumbers={false}
+TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo::OneHotEncodingInfo(
+    const int32_t top_k_attrs,
+    const float min_attr_proportion,
+    const bool include_others_attr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"OneHotEncodingInfo": "onehotencodinginfo"}}>
+```cpp showLineNumbers={false}
+TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodingInfo::OneHotEncodingInfo(
+    const std::vector<std::string> &cat_features
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_one_hot_encoded` | `bool` | |
+| `top_k_attrs` | `int32_t` | |
+| `min_attr_proportion` | `float` | |
+| `include_others_attr` | `bool` | |
+| `cat_features` | `std::vector< std::string >` | |

@@ -1,0 +1,20 @@
+---
+title: tf_export_ov_grid_mesh__cpu_template
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Array": "../structs/array"}}>
+```cpp showLineNumbers={false}
+template <typename TXY, typename TZ>
+NEVER_INLINE HOST int32_t tf_export_ov_grid_mesh__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TXY> &x,
+    const Column<TXY> &y,
+    const Column<TZ> &z,
+    const int32_t mesh_type,
+    const double tile_origin_x,
+    const double tile_origin_y,
+    Column<Array<int32_t>> &mesh_data_out
+)
+```
+</CodeBlock>

@@ -1,0 +1,33 @@
+---
+title: MurmurHash3
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE uint32_t MurmurHash3(
+    const void *key,
+    int len,
+    const uint32_t seed
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE RUNTIME_EXPORT uint32_t MurmurHash3(
+    const void *key,
+    int len,
+    const uint32_t seed
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

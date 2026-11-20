@@ -1,0 +1,75 @@
+---
+title: Parser::UnionQuery
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::QueryExpr` (public)
+
+---
+
+## Constructors
+
+### UnionQuery [#unionquery]
+
+<CodeBlock links={{"UnionQuery": "unionquery", "QueryExpr": "queryexpr"}}>
+```cpp showLineNumbers={false}
+Parser::UnionQuery::UnionQuery(
+    bool u,
+    QueryExpr *l,
+    QueryExpr *r
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_unionall [#getisunionall]
+
+<CodeBlock links={{"UnionQuery": "unionquery"}}>
+```cpp showLineNumbers={false}
+bool Parser::UnionQuery::get_is_unionall() const
+```
+</CodeBlock>
+
+### get_left [#getleft]
+
+<CodeBlock links={{"UnionQuery": "unionquery", "QueryExpr": "queryexpr"}}>
+```cpp showLineNumbers={false}
+const QueryExpr * Parser::UnionQuery::get_left() const
+```
+</CodeBlock>
+
+### get_right [#getright]
+
+<CodeBlock links={{"UnionQuery": "unionquery", "QueryExpr": "queryexpr"}}>
+```cpp showLineNumbers={false}
+const QueryExpr * Parser::UnionQuery::get_right() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"UnionQuery": "unionquery"}}>
+```cpp showLineNumbers={false}
+void Parser::UnionQuery::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_unionall_` | `bool` | |
+| `left_` | `std::unique_ptr< QueryExpr >` | |
+| `right_` | `std::unique_ptr< QueryExpr >` | |

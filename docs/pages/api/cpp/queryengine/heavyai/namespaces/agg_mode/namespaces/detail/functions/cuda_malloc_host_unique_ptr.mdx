@@ -1,0 +1,13 @@
+---
+title: heavyai::agg_mode::detail::cuda_malloc_host_unique_ptr
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+std::unique_ptr<T, CudaHostDeleter> heavyai::agg_mode::detail::cuda_malloc_host_unique_ptr(
+    size_t const size
+)
+```
+</CodeBlock>

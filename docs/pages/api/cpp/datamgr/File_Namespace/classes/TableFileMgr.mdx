@@ -1,0 +1,132 @@
+---
+title: File_Namespace::TableFileMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/CachingFileMgr.h>
+```
+
+---
+
+## Constructors
+
+### TableFileMgr [#tablefilemgr]
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+File_Namespace::TableFileMgr::TableFileMgr(
+    const std::string &table_path
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~TableFileMgr
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+File_Namespace::TableFileMgr::~TableFileMgr()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### incrementEpoch [#incrementepoch]
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::TableFileMgr::incrementEpoch()
+```
+</CodeBlock>
+
+increment the epoch for this subdir (not synced to disk).
+
+### writeAndSyncEpochToDisk [#writeandsyncepochtodisk]
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::TableFileMgr::writeAndSyncEpochToDisk()
+```
+</CodeBlock>
+
+Write and flush the epoch to the epoch file on disk.
+
+### getEpoch [#getepoch]
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+int32_t File_Namespace::TableFileMgr::getEpoch() const
+```
+</CodeBlock>
+
+Returns the current epoch (locked).
+
+### removeDiskContent [#removediskcontent]
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::TableFileMgr::removeDiskContent() const
+```
+</CodeBlock>
+
+Removes all disk data for the subdir.
+
+### getReservedSpace [#getreservedspace]
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::TableFileMgr::getReservedSpace() const
+```
+</CodeBlock>
+
+Returns the disk space used (in bytes) for the subdir.
+
+### deleteWrapperFile [#deletewrapperfile]
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::TableFileMgr::deleteWrapperFile() const
+```
+</CodeBlock>
+
+Deletes only the wrapper file on disk.
+
+### writeWrapperFile [#writewrapperfile]
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::TableFileMgr::writeWrapperFile(
+    const std::string &doc
+) const
+```
+</CodeBlock>
+
+Writes wrapper file to disk.
+
+### hasWrapperFile [#haswrapperfile]
+
+<CodeBlock links={{"TableFileMgr": "tablefilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::TableFileMgr::hasWrapperFile() const
+```
+</CodeBlock>
+
+Checks if data wrapper file has been written to disk/cached.
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_path_` | `std::string` | |
+| `epoch_file_path_` | `std::string` | |
+| `wrapper_file_path_` | `std::string` | |
+| `epoch_` | `Epoch` | |
+| `is_checkpointed_` | `bool` | |
+| `epoch_file_` | `FILE *` | |
+| `table_mutex_` | `heavyai::shared_mutex` | |

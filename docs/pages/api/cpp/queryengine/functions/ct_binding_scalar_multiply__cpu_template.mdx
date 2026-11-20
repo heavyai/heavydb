@@ -1,0 +1,73 @@
+---
+title: ct_binding_scalar_multiply__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Single item (1)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t ct_binding_scalar_multiply__cpu_template(
+    const Column<T> &input,
+    const T multiplier,
+    Column<T> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (2)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_scalar_multiply__cpu_template(
+    const Column<float> &input,
+    const float multiplier,
+    Column<float> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (3)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_scalar_multiply__cpu_template(
+    const Column<double> &input,
+    const double multiplier,
+    Column<double> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (4)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_scalar_multiply__cpu_template(
+    const Column<int32_t> &input,
+    const int32_t multiplier,
+    Column<int32_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Single item (5)">
+
+<CodeBlock links={{"Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_binding_scalar_multiply__cpu_template(
+    const Column<int64_t> &input,
+    const int64_t multiplier,
+    Column<int64_t> &out
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

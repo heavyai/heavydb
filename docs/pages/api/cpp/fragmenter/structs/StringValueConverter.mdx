@@ -1,0 +1,121 @@
+---
+title: StringValueConverter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <TargetValueConvertersImpl.h>
+```
+
+**Inherits from:** `TargetValueConverter` (public)
+
+---
+
+## Constructors
+
+### StringValueConverter [#stringvalueconverter]
+
+<CodeBlock links={{"StringValueConverter": "stringvalueconverter"}}>
+```cpp showLineNumbers={false}
+StringValueConverter::StringValueConverter(
+    const ColumnDescriptor *cd,
+    size_t num_rows,
+    bool dictEncoded,
+    const shared::StringDictKey &source_dict_key,
+    StringDictionaryProxy *literals_dict
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~StringValueConverter
+
+<CodeBlock links={{"StringValueConverter": "stringvalueconverter"}}>
+```cpp showLineNumbers={false}
+StringValueConverter::~StringValueConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateColumnarData [#allocatecolumnardata]
+
+<CodeBlock links={{"StringValueConverter": "stringvalueconverter"}}>
+```cpp showLineNumbers={false}
+void StringValueConverter::allocateColumnarData(
+    size_t num_rows
+) override
+```
+</CodeBlock>
+
+### convertToColumnarFormatFromDict [#converttocolumnarformatfromdict]
+
+<CodeBlock links={{"StringValueConverter": "stringvalueconverter"}}>
+```cpp showLineNumbers={false}
+void StringValueConverter::convertToColumnarFormatFromDict(
+    size_t row,
+    const TargetValue *value
+)
+```
+</CodeBlock>
+
+### convertToColumnarFormatFromString [#converttocolumnarformatfromstring]
+
+<CodeBlock links={{"StringValueConverter": "stringvalueconverter"}}>
+```cpp showLineNumbers={false}
+void StringValueConverter::convertToColumnarFormatFromString(
+    size_t row,
+    const TargetValue *value
+)
+```
+</CodeBlock>
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"StringValueConverter": "stringvalueconverter"}}>
+```cpp showLineNumbers={false}
+void StringValueConverter::convertToColumnarFormat(
+    size_t row,
+    const TargetValue *value
+) override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"StringValueConverter": "stringvalueconverter", "InsertData": "../fragmenternamespace/structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void StringValueConverter::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+### finalizeDataBlocksForInsertData [#finalizedatablocksforinsertdata]
+
+<CodeBlock links={{"StringValueConverter": "stringvalueconverter", "TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+virtual void StringValueConverter::finalizeDataBlocksForInsertData()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_data_` | `std::unique_ptr< std::vector< std::string > >` | |
+| `SOURCE_TYPE_ACCESSOR` | `boost_variant_accessor< int64_t >` | |
+| `source_dict_` | `StringDictionary *` | |
+| `literals_source_dict_` | `StringDictionaryProxy *` | |
+| `dict_encoded_` | `bool` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `SCALAR_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ScalarTargetValue >` | |
+| `ARRAY_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ArrayTargetValue >` | |
+| `GEO_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `NULLABLE_STRING_ACCESSOR` | `boost_variant_accessor< NullableString >` | |
+| `STRING_ACCESSOR` | `boost_variant_accessor< std::string >` | |

@@ -1,0 +1,130 @@
+---
+title: Parser::ColumnConstraintDef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public)
+
+---
+
+## Constructors
+
+### ColumnConstraintDef [#columnconstraintdef]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef", "Literal": "literal"}}>
+```cpp showLineNumbers={false}
+Parser::ColumnConstraintDef::ColumnConstraintDef(
+    bool n,
+    bool u,
+    bool p,
+    Literal *d
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::ColumnConstraintDef::ColumnConstraintDef(
+    Expr *c
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef"}}>
+```cpp showLineNumbers={false}
+Parser::ColumnConstraintDef::ColumnConstraintDef(
+    std::string *t,
+    std::string *c
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get_notnull [#getnotnull]
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef"}}>
+```cpp showLineNumbers={false}
+bool Parser::ColumnConstraintDef::get_notnull() const
+```
+</CodeBlock>
+
+### get_unique [#getunique]
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef"}}>
+```cpp showLineNumbers={false}
+bool Parser::ColumnConstraintDef::get_unique() const
+```
+</CodeBlock>
+
+### get_is_primarykey [#getisprimarykey]
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef"}}>
+```cpp showLineNumbers={false}
+bool Parser::ColumnConstraintDef::get_is_primarykey() const
+```
+</CodeBlock>
+
+### get_defaultval [#getdefaultval]
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef", "Literal": "literal"}}>
+```cpp showLineNumbers={false}
+const Literal * Parser::ColumnConstraintDef::get_defaultval() const
+```
+</CodeBlock>
+
+### get_check_condition [#getcheckcondition]
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::ColumnConstraintDef::get_check_condition() const
+```
+</CodeBlock>
+
+### get_foreign_table [#getforeigntable]
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::ColumnConstraintDef::get_foreign_table() const
+```
+</CodeBlock>
+
+### get_foreign_column [#getforeigncolumn]
+
+<CodeBlock links={{"ColumnConstraintDef": "columnconstraintdef"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::ColumnConstraintDef::get_foreign_column() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `notnull_` | `bool` | |
+| `unique_` | `bool` | |
+| `is_primarykey_` | `bool` | |
+| `defaultval_` | `std::unique_ptr< Literal >` | |
+| `check_condition_` | `std::unique_ptr< Expr >` | |
+| `foreign_table_` | `std::unique_ptr< std::string >` | |
+| `foreign_column_` | `std::unique_ptr< std::string >` | |

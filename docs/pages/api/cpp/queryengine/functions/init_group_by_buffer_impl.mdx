@@ -1,0 +1,18 @@
+---
+title: init_group_by_buffer_impl
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE void init_group_by_buffer_impl(
+    int64_t *groups_buffer,
+    const int64_t *init_vals,
+    const uint32_t groups_buffer_entry_count,
+    const uint32_t key_qw_count,
+    const uint32_t agg_col_count,
+    const bool keyless,
+    const int8_t warp_size
+)
+```
+</CodeBlock>

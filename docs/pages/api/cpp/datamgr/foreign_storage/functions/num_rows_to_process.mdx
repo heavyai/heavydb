@@ -1,0 +1,16 @@
+---
+title: foreign_storage::num_rows_to_process
+description: "Number of rows to process given the current position defined by start_row_index, the max fragment size and the number of rows left to process."
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+size_t foreign_storage::num_rows_to_process(
+    const size_t start_row_index,
+    const size_t max_fragment_size,
+    const size_t rows_remaining
+)
+```
+</CodeBlock>
+
+Number of rows to process given the current position defined by `start_row_index`, the max fragment size and the number of rows left to process.

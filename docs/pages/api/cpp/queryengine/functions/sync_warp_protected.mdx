@@ -1,0 +1,35 @@
+---
+title: sync_warp_protected
+description: "Protected warp synchornization to make sure all (or none) threads within a warp go through a synchronization barrier."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ void sync_warp_protected(
+    int64_t thread_pos,
+    int64_t row_count
+)
+```
+</CodeBlock>
+
+Protected warp synchornization to make sure all (or none) threads within a warp go through a synchronization barrier.
+
+thread_pos: the current thread position to be used for a memory access row_count: maximum number of rows to be processed The function performs warp sync iff all 32 threads within that warp will process valid data NOTE: it currently assumes that warp size is 32.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+NEVER_INLINE void sync_warp_protected(
+    int64_t thread_pos,
+    int64_t row_count
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

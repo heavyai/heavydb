@@ -1,0 +1,114 @@
+---
+title: CategoricalFeaturesBuilder
+description: ""
+---
+
+<CodeBlock id="CategoricalFeaturesBuilder" links={{"CategoricalFeaturesBuilder": "categoricalfeaturesbuilder"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+struct CategoricalFeaturesBuilder
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <MLTableFunctions.hpp>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### CategoricalFeaturesBuilder [#categoricalfeaturesbuilder]
+
+<Tabs>
+<Tab title="Copy (with numeric features and cat top k and cat min fraction and cat include others)">
+
+<CodeBlock links={{"CategoricalFeaturesBuilder": "categoricalfeaturesbuilder", "ColumnList": "columnlist", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+CategoricalFeaturesBuilder<T>::CategoricalFeaturesBuilder(
+    const ColumnList<TextEncodingDict> &cat_features,
+    const ColumnList<T> &numeric_features,
+    const int32_t cat_top_k,
+    const float cat_min_fraction,
+    const bool cat_include_others
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with cat top k and cat min fraction and cat include others)">
+
+<CodeBlock links={{"CategoricalFeaturesBuilder": "categoricalfeaturesbuilder", "ColumnList": "columnlist", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+CategoricalFeaturesBuilder<T>::CategoricalFeaturesBuilder(
+    const ColumnList<TextEncodingDict> &cat_features,
+    const int32_t cat_top_k,
+    const float cat_min_fraction,
+    const bool cat_include_others
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with numeric features and cat feature keys)">
+
+<CodeBlock links={{"CategoricalFeaturesBuilder": "categoricalfeaturesbuilder", "ColumnList": "columnlist", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+CategoricalFeaturesBuilder<T>::CategoricalFeaturesBuilder(
+    const ColumnList<TextEncodingDict> &cat_features,
+    const ColumnList<T> &numeric_features,
+    const std::vector<std::vector<std::string>> &cat_feature_keys
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with cat feature keys)">
+
+<CodeBlock links={{"CategoricalFeaturesBuilder": "categoricalfeaturesbuilder", "ColumnList": "columnlist", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+CategoricalFeaturesBuilder<T>::CategoricalFeaturesBuilder(
+    const ColumnList<TextEncodingDict> &cat_features,
+    const std::vector<std::vector<std::string>> &cat_feature_keys
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getFeatures [#getfeatures]
+
+<CodeBlock links={{"CategoricalFeaturesBuilder": "categoricalfeaturesbuilder", "ColumnList": "columnlist"}}>
+```cpp showLineNumbers={false}
+ColumnList<T> CategoricalFeaturesBuilder<T>::getFeatures()
+```
+</CodeBlock>
+
+### getCatFeatureKeys [#getcatfeaturekeys]
+
+<CodeBlock links={{"CategoricalFeaturesBuilder": "categoricalfeaturesbuilder"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::vector<std::string>> & CategoricalFeaturesBuilder<T>::getCatFeatureKeys() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `num_rows_` | `int64_t` | |
+| `one_hot_encoded_cols_` | `std::vector< TableFunctions_Namespace::OneHotEncoder_Namespace::OneHotEncodedCol< T > >` | |
+| `cat_feature_keys_` | `std::vector< std::vector< std::string > >` | |
+| `col_ptrs_` | `std::vector< int8_t * >` | |

@@ -1,0 +1,44 @@
+---
+title: Allocator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DeviceAllocator.h>
+```
+
+---
+
+## Constructors
+
+### Allocator [#allocator]
+
+<CodeBlock links={{"Allocator": "allocator"}}>
+```cpp showLineNumbers={false}
+Allocator::Allocator()
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~Allocator
+
+<CodeBlock links={{"Allocator": "allocator"}}>
+```cpp showLineNumbers={false}
+virtual Allocator::~Allocator()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### alloc [#alloc]
+
+<CodeBlock links={{"Allocator": "allocator"}}>
+```cpp showLineNumbers={false}
+virtual int8_t * Allocator::alloc(
+    const size_t num_bytes
+)
+```
+</CodeBlock>

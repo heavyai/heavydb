@@ -1,0 +1,76 @@
+---
+title: DiamondCodegen
+description: "Helper struct for generating a branching instruction in LLVM IR."
+---
+
+Helper struct for generating a branching instruction in LLVM IR.
+
+The diamond refers to both branches, the starting basic block, and the ending block. The true and false basic blocks are created on initialization, and the branches are created at destruction.
+
+```cpp showLineNumbers={false}
+#include <DiamondCodegen.h>
+```
+
+---
+
+## Constructors
+
+### DiamondCodegen [#diamondcodegen]
+
+<CodeBlock links={{"DiamondCodegen": "diamondcodegen", "Executor": "../classes/executor"}}>
+```cpp showLineNumbers={false}
+DiamondCodegen::DiamondCodegen(
+    llvm::Value *cond,
+    Executor *executor,
+    const bool chain_to_next,
+    const std::string &label_prefix,
+    DiamondCodegen *parent,
+    const bool share_false_edge_with_parent
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~DiamondCodegen
+
+<CodeBlock links={{"DiamondCodegen": "diamondcodegen"}}>
+```cpp showLineNumbers={false}
+DiamondCodegen::~DiamondCodegen()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setChainToNext [#setchaintonext]
+
+<CodeBlock links={{"DiamondCodegen": "diamondcodegen"}}>
+```cpp showLineNumbers={false}
+void DiamondCodegen::setChainToNext()
+```
+</CodeBlock>
+
+### setFalseTarget [#setfalsetarget]
+
+<CodeBlock links={{"DiamondCodegen": "diamondcodegen"}}>
+```cpp showLineNumbers={false}
+void DiamondCodegen::setFalseTarget(
+    llvm::BasicBlock *cond_false
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `executor_` | `Executor *` | |
+| `cond_true_` | `llvm::BasicBlock *` | |
+| `cond_false_` | `llvm::BasicBlock *` | |
+| `orig_cond_false_` | `llvm::BasicBlock *` | |
+| `chain_to_next_` | `bool` | |
+| `parent_` | `DiamondCodegen *` | |

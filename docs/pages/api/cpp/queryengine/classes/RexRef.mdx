@@ -1,0 +1,154 @@
+---
+title: RexRef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RexScalar` (public)
+
+---
+
+## Constructors
+
+### RexRef [#rexref]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+RexRef::RexRef()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+RexRef::RexRef(
+    const size_t index
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getIndex [#getindex]
+
+<CodeBlock links={{"RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+size_t RexRef::getIndex() const
+```
+</CodeBlock>
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexRef": "rexref", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexRef::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexRef": "rexref", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexRef::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexRef": "rexref", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexRef::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### deepCopy [#deepcopy]
+
+<CodeBlock links={{"RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<RexRef> RexRef::deepCopy() const
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexRef": "rexref", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual size_t Rex::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexRef": "rexref", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+size_t Rex::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexRef": "rexref", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexRef": "rexref", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexRef": "rexref", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+size_t RexRef::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `index_` | `size_t` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

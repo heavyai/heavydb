@@ -1,0 +1,13 @@
+---
+title: foreign_storage::create_s3_client
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::unique_ptr<Aws::S3::S3Client> foreign_storage::create_s3_client(
+    const ForeignServer *foreign_server,
+    std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_credentials
+)
+```
+</CodeBlock>

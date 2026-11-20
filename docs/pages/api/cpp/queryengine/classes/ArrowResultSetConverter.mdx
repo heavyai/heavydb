@@ -1,0 +1,222 @@
+---
+title: ArrowResultSetConverter
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ArrowResultSet.h>
+```
+
+---
+
+## Constructors
+
+### ArrowResultSetConverter [#arrowresultsetconverter]
+
+<Tabs>
+<Tab title="Copy (with data mgr and device type and device id and transport method)">
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetConverter::ArrowResultSetConverter(
+    const std::shared_ptr<ResultSet> &results,
+    const std::shared_ptr<Data_Namespace::DataMgr> data_mgr,
+    const ExecutorDeviceType device_type,
+    const int32_t device_id,
+    const std::vector<std::string> &col_names,
+    const int32_t first_n,
+    const ArrowTransport transport_method
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with data mgr and device type and device id and transport method and min result size for bulk dictionary fetch and max dictionary to result size ratio for bulk dictionary fetch)">
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetConverter::ArrowResultSetConverter(
+    const std::shared_ptr<ResultSet> &results,
+    const std::shared_ptr<Data_Namespace::DataMgr> data_mgr,
+    const ExecutorDeviceType device_type,
+    const int32_t device_id,
+    const std::vector<std::string> &col_names,
+    const int32_t first_n,
+    const ArrowTransport transport_method,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetConverter::ArrowResultSetConverter(
+    const std::shared_ptr<ResultSet> &results,
+    const std::vector<std::string> &col_names,
+    const int32_t first_n
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with min result size for bulk dictionary fetch and max dictionary to result size ratio for bulk dictionary fetch)">
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter", "ResultSet": "resultset"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetConverter::ArrowResultSetConverter(
+    const std::shared_ptr<ResultSet> &results,
+    const std::vector<std::string> &col_names,
+    const int32_t first_n,
+    const size_t min_result_size_for_bulk_dictionary_fetch,
+    const double max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getArrowResult [#getarrowresult]
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter", "ArrowResult": "../structs/arrowresult"}}>
+```cpp showLineNumbers={false}
+ArrowResult ArrowResultSetConverter::getArrowResult() const
+```
+</CodeBlock>
+
+Serialize an Arrow result to IPC memory. Users are responsible for freeing all CPU IPC buffers using deallocateArrowResultBuffer. GPU buffers will become owned by the caller upon deserialization, and will be automatically freed when they go out of scope.
+
+### convertToArrow [#converttoarrow]
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::convertToArrow() const
+```
+</CodeBlock>
+
+### getArrowBatch [#getarrowbatch]
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
+    const std::shared_ptr<arrow::Schema> &schema
+) const
+```
+</CodeBlock>
+
+### makeField [#makefield]
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<arrow::Field> ArrowResultSetConverter::makeField(
+    const std::string name,
+    const SQLTypeInfo &target_type
+) const
+```
+</CodeBlock>
+
+### getSerializedArrowOutput [#getserializedarrowoutput]
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter"}}>
+```cpp showLineNumbers={false}
+ArrowResultSetConverter::SerializedArrowOutput ArrowResultSetConverter::getSerializedArrowOutput(
+    arrow::ipc::DictionaryFieldMapper *mapper
+) const
+```
+</CodeBlock>
+
+### initializeColumnBuilder [#initializecolumnbuilder]
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter", "ColumnBuilder": "#columnbuilder"}}>
+```cpp showLineNumbers={false}
+void ArrowResultSetConverter::initializeColumnBuilder(
+    ColumnBuilder &column_builder,
+    const SQLTypeInfo &col_type,
+    const size_t result_col_idx,
+    const std::shared_ptr<arrow::Field> &field
+) const
+```
+</CodeBlock>
+
+### append [#append]
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter", "ColumnBuilder": "#columnbuilder"}}>
+```cpp showLineNumbers={false}
+void ArrowResultSetConverter::append(
+    ColumnBuilder &column_builder,
+    const ValueArray &values,
+    const std::shared_ptr<std::vector<bool>> &is_valid
+) const
+```
+</CodeBlock>
+
+### finishColumnBuilder [#finishcolumnbuilder]
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter", "ColumnBuilder": "#columnbuilder"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<arrow::Array> ArrowResultSetConverter::finishColumnBuilder(
+    ColumnBuilder &column_builder
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `default_min_result_size_for_bulk_dictionary_fetch` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `size_t` | |
+| `default_max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `double` | |
+| `results_` | `std::shared_ptr< ResultSet >` | |
+| `data_mgr_` | `std::shared_ptr< Data_Namespace::DataMgr >` | |
+| `device_type_` | `ExecutorDeviceType` | |
+| `device_id_` | `int32_t` | |
+| `col_names_` | `std::vector< std::string >` | |
+| `top_n_` | `int32_t` | |
+| `transport_method_` | `ArrowTransport` | |
+| `min_result_size_for_bulk_dictionary_fetch_` | `const size_t` | |
+| `max_dictionary_to_result_size_ratio_for_bulk_dictionary_fetch_` | `const double` | |
+
+---
+
+## Inner classes
+
+### ColumnBuilder
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter"}}>
+```cpp showLineNumbers={false}
+struct ArrowResultSetConverter::ColumnBuilder
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `field` | `std::shared_ptr< arrow::Field >` | |
+| `builder` | `std::unique_ptr< arrow::ArrayBuilder >` | |
+| `string_array` | `std::shared_ptr< arrow::StringArray >` | |
+| `col_type` | `SQLTypeInfo` | |
+| `physical_type` | `SQLTypes` | |
+| `string_remap_mode` | `ArrowStringRemapMode` | |
+| `string_remapping` | `std::unordered_map< StrId, ArrowStrId >` | |
+
+### SerializedArrowOutput
+
+<CodeBlock links={{"ArrowResultSetConverter": "arrowresultsetconverter"}}>
+```cpp showLineNumbers={false}
+struct ArrowResultSetConverter::SerializedArrowOutput
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `schema` | `std::shared_ptr< arrow::Buffer >` | |
+| `records` | `std::shared_ptr< arrow::Buffer >` | |

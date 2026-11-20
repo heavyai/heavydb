@@ -1,0 +1,19 @@
+---
+title: get_int32_t_value_int64_t_type_in_frame
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE int64_t get_int32_t_value_int64_t_type_in_frame(
+    const int64_t target_row_idx_in_frame,
+    const int64_t frame_start_offset,
+    const int64_t frame_end_offset,
+    const int32_t *col_buf,
+    const int32_t *partition_rowid_buf,
+    const int64_t *ordered_index_buf,
+    const int64_t logical_null_val,
+    const int64_t col_null_val
+)
+```
+</CodeBlock>

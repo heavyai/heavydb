@@ -1,0 +1,86 @@
+---
+title: CommentCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### CommentCommand [#commentcommand]
+
+<CodeBlock links={{"CommentCommand": "commentcommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+CommentCommand::CommentCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"CommentCommand": "commentcommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult CommentCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+### getObjectIdentifiers [#getobjectidentifiers]
+
+<CodeBlock links={{"CommentCommand": "commentcommand"}}>
+```cpp showLineNumbers={false}
+CommentCommand::Identifiers CommentCommand::getObjectIdentifiers() const
+```
+</CodeBlock>
+
+### setComment [#setcomment]
+
+<CodeBlock links={{"CommentCommand": "commentcommand", "TableDescriptor": "../structs/tabledescriptor"}}>
+```cpp showLineNumbers={false}
+void CommentCommand::setComment(
+    const TableDescriptor *td,
+    const Identifiers &ids
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |
+
+---
+
+## Inner classes
+
+### Identifiers
+
+<CodeBlock links={{"CommentCommand": "commentcommand"}}>
+```cpp showLineNumbers={false}
+struct CommentCommand::Identifiers
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `table_name` | `std::string` | |
+| `column_name` | `std::optional< std::string >` | |

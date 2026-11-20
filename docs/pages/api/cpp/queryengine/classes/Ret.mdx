@@ -1,0 +1,93 @@
+---
+title: Ret
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+**Inherits from:** `Instruction` (public)
+
+---
+
+## Constructors
+
+### Ret [#ret]
+
+<Tabs>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"Ret": "ret", "Value": "value"}}>
+```cpp showLineNumbers={false}
+Ret::Ret(
+    const Value *value
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Default">
+
+<CodeBlock links={{"Ret": "ret"}}>
+```cpp showLineNumbers={false}
+Ret::Ret()
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### value [#value]
+
+<CodeBlock links={{"Ret": "ret", "Value": "value"}}>
+```cpp showLineNumbers={false}
+const Value * Ret::value() const
+```
+</CodeBlock>
+
+### run [#run]
+
+<CodeBlock links={{"Ret": "ret", "ReductionInterpreterImpl": "reductioninterpreterimpl"}}>
+```cpp showLineNumbers={false}
+void Ret::run(
+    ReductionInterpreterImpl *interpreter
+) override
+```
+</CodeBlock>
+
+### type [#type]
+
+<CodeBlock links={{"Ret": "ret", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+Type Value::type() const
+```
+</CodeBlock>
+
+### id [#id]
+
+<CodeBlock links={{"Ret": "ret", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+size_t Value::id() const
+```
+</CodeBlock>
+
+### label [#label]
+
+<CodeBlock links={{"Ret": "ret", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::string & Value::label() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `value_` | `const Value *` | |

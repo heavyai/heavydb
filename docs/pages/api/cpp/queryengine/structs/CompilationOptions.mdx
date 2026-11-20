@@ -1,0 +1,48 @@
+---
+title: CompilationOptions
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CompilationOptions.h>
+```
+
+---
+
+## Static methods
+
+### makeCpuOnly [#makecpuonly]
+
+<CodeBlock links={{"CompilationOptions": "compilationoptions"}}>
+```cpp showLineNumbers={false}
+static CompilationOptions CompilationOptions::makeCpuOnly(
+    const CompilationOptions &in
+)
+```
+</CodeBlock>
+
+### defaults [#defaults]
+
+<CodeBlock links={{"CompilationOptions": "compilationoptions"}}>
+```cpp showLineNumbers={false}
+static CompilationOptions CompilationOptions::defaults(
+    const ExecutorDeviceType device_type = ExecutorDeviceType::GPU
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `device_type` | `ExecutorDeviceType` | |
+| `hoist_literals` | `bool` | |
+| `opt_level` | `ExecutorOptLevel` | |
+| `with_dynamic_watchdog` | `bool` | |
+| `allow_lazy_fetch` | `bool` | |
+| `just_validate` | `bool` | |
+| `filter_on_deleted_column` | `bool` | |
+| `explain_type` | `ExecutorExplainType` | |
+| `register_intel_jit_listener` | `bool` | |

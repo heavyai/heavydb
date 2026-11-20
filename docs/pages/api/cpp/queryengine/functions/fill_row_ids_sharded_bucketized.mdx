@@ -1,0 +1,21 @@
+---
+title: fill_row_ids_sharded_bucketized
+description: ""
+---
+
+<CodeBlock links={{"JoinColumn": "../structs/joincolumn", "JoinColumnTypeInfo": "../structs/joincolumntypeinfo", "ShardInfo": "../structs/shardinfo"}}>
+```cpp showLineNumbers={false}
+GLOBAL void SUFFIX fill_row_ids_sharded_bucketized(
+    int32_t *buff,
+    const int64_t hash_entry_count,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const ShardInfo shard_info,
+    const int32_t *sd_inner_to_outer_translation_map,
+    const int32_t min_inner_elem,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count,
+    const int64_t bucket_normalization
+)
+```
+</CodeBlock>

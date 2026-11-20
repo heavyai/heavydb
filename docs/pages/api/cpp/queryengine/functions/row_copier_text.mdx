@@ -1,0 +1,14 @@
+---
+title: row_copier_text
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t row_copier_text(
+    const Column<TextEncodingDict> &input_col,
+    int copy_multiplier,
+    Column<TextEncodingDict> &output_col
+)
+```
+</CodeBlock>

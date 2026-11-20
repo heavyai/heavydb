@@ -1,0 +1,181 @@
+---
+title: QueryPlanDagCache
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <QueryPlanDagCache.h>
+```
+
+---
+
+## Constructors
+
+### QueryPlanDagCache [#queryplandagcache]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+QueryPlanDagCache::QueryPlanDagCache(
+    size_t max_node_cache_size = MAX_NODE_CACHE_SIZE
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Deleted overloads">
+
+The following overloads are deleted to prevent misuse:
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+QueryPlanDagCache::QueryPlanDagCache(QueryPlanDagCache &&other) = delete;
+QueryPlanDagCache::QueryPlanDagCache(const QueryPlanDagCache &) = delete;
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<Tabs>
+<Tab title="Deleted overloads">
+
+The following overloads are deleted to prevent misuse:
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+QueryPlanDagCache & QueryPlanDagCache::operator=(QueryPlanDagCache &&other) = delete;
+QueryPlanDagCache & QueryPlanDagCache::operator=(const QueryPlanDagCache &) = delete;
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### addNodeIfAbsent [#addnodeifabsent]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+std::optional<RelNodeId> QueryPlanDagCache::addNodeIfAbsent(
+    const RelAlgNode *
+)
+```
+</CodeBlock>
+
+### connectNodes [#connectnodes]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagCache::connectNodes(
+    const RelNodeId parent_id,
+    const RelNodeId child_id
+)
+```
+</CodeBlock>
+
+### collectColVars [#collectcolvars]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+std::vector<const Analyzer::ColumnVar *> QueryPlanDagCache::collectColVars(
+    const Analyzer::Expr *target
+)
+```
+</CodeBlock>
+
+### getCurrentNodeMapSize [#getcurrentnodemapsize]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+size_t QueryPlanDagCache::getCurrentNodeMapSize() const
+```
+</CodeBlock>
+
+### setNodeMapMaxSize [#setnodemapmaxsize]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagCache::setNodeMapMaxSize(
+    const size_t map_size
+)
+```
+</CodeBlock>
+
+### getJoinColumnsInfoHash [#getjoincolumnsinfohash]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+size_t QueryPlanDagCache::getJoinColumnsInfoHash(
+    const Analyzer::Expr *join_expr,
+    JoinColumnSide target_side,
+    bool extract_only_col_id
+)
+```
+</CodeBlock>
+
+### translateColVarsToInfoHash [#translatecolvarstoinfohash]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+size_t QueryPlanDagCache::translateColVarsToInfoHash(
+    std::vector<const Analyzer::ColumnVar *> &col_vars,
+    bool col_id_only
+) const
+```
+</CodeBlock>
+
+### clearQueryPlanCache [#clearqueryplancache]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagCache::clearQueryPlanCache()
+```
+</CodeBlock>
+
+### printDag [#printdag]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+void QueryPlanDagCache::printDag()
+```
+</CodeBlock>
+
+### getCurrentNodeMapSizeUnlocked [#getcurrentnodemapsizeunlocked]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+size_t QueryPlanDagCache::getCurrentNodeMapSizeUnlocked() const
+```
+</CodeBlock>
+
+### getCurrentNodeMapCardinality [#getcurrentnodemapcardinality]
+
+<CodeBlock links={{"QueryPlanDagCache": "queryplandagcache"}}>
+```cpp showLineNumbers={false}
+size_t QueryPlanDagCache::getCurrentNodeMapCardinality() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `node_map_` | `RelNodeMap` | |
+| `cached_query_plan_dag_` | `QueryPlanDag` | |
+| `max_node_map_size_` | `size_t` | |
+| `cache_lock_` | `std::mutex` | |
+| `col_var_visitor_` | `ColumnVarsVisitor` | |

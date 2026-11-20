@@ -1,0 +1,21 @@
+---
+title: search_double_aggregation_tree
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE double search_double_aggregation_tree(
+    double *aggregated_tree_for_partition,
+    size_t query_range_start_idx,
+    size_t query_range_end_idx,
+    size_t leaf_level,
+    size_t tree_fanout,
+    bool decimal_type,
+    size_t scale,
+    double invalid_val,
+    double null_val,
+    int32_t agg_type
+)
+```
+</CodeBlock>

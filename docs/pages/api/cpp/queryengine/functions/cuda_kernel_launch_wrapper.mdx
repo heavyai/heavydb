@@ -1,0 +1,15 @@
+---
+title: cuda_kernel_launch_wrapper
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename F, typename... ARGS>
+void cuda_kernel_launch_wrapper(
+    F func,
+    CUstream cuda_stream,
+    ARGS &&... args
+)
+```
+</CodeBlock>

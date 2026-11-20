@@ -1,0 +1,14 @@
+---
+title: row_copier_columnlist__cpu__
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t row_copier_columnlist__cpu__(
+    TableFunctionManager &mgr,
+    const ColumnList<double> &cols,
+    Column<double> &output_col
+)
+```
+</CodeBlock>

@@ -1,0 +1,105 @@
+---
+title: random_forest_reg_fit__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<T> &input_labels,
+    const ColumnList<T> &input_features,
+    const int64_t num_trees,
+    const double obs_per_tree_fraction,
+    const int64_t max_tree_depth,
+    const int64_t features_per_node,
+    const double impurity_threshold,
+    const bool bootstrap,
+    const int64_t min_obs_per_leaf_node,
+    const int64_t min_obs_per_split_node,
+    const double min_weight_fraction_in_leaf_node,
+    const double min_impurity_decrease_in_split_node,
+    const int64_t max_leaf_nodes,
+    const bool use_histogram,
+    const TextEncodingNone &var_importance_metric_str,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<T> &input_labels,
+    const ColumnList<TextEncodingDict> &input_cat_features,
+    const ColumnList<T> &input_numeric_features,
+    const int64_t num_trees,
+    const double obs_per_tree_fraction,
+    const int64_t max_tree_depth,
+    const int64_t features_per_node,
+    const double impurity_threshold,
+    const bool bootstrap,
+    const int64_t min_obs_per_leaf_node,
+    const int64_t min_obs_per_split_node,
+    const double min_weight_fraction_in_leaf_node,
+    const double min_impurity_decrease_in_split_node,
+    const int64_t max_leaf_nodes,
+    const bool use_histogram,
+    const TextEncodingNone &var_importance_metric_str,
+    const int32_t cat_top_k,
+    const float cat_min_fraction,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column", "ColumnList": "../structs/columnlist", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+NEVER_INLINE HOST int32_t random_forest_reg_fit__cpu_template(
+    TableFunctionManager &mgr,
+    const TextEncodingNone &model_name,
+    const Column<T> &input_labels,
+    const ColumnList<TextEncodingDict> &input_cat_features,
+    const int64_t num_trees,
+    const double obs_per_tree_fraction,
+    const int64_t max_tree_depth,
+    const int64_t features_per_node,
+    const double impurity_threshold,
+    const bool bootstrap,
+    const int64_t min_obs_per_leaf_node,
+    const int64_t min_obs_per_split_node,
+    const double min_weight_fraction_in_leaf_node,
+    const double min_impurity_decrease_in_split_node,
+    const int64_t max_leaf_nodes,
+    const bool use_histogram,
+    const TextEncodingNone &var_importance_metric_str,
+    const int32_t cat_top_k,
+    const float cat_min_fraction,
+    const TextEncodingNone &preferred_ml_framework_str,
+    const TextEncodingNone &model_metadata,
+    Column<TextEncodingDict> &output_model_name
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

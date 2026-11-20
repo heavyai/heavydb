@@ -1,0 +1,305 @@
+---
+title: Geo::GeoNestedArray
+description: ""
+---
+
+<CodeBlock id="GeoNestedArray" links={{"GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename ItemType>
+struct GeoNestedArray
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <Geo/heavydbTypes.h>
+```
+
+**Template parameters**
+
+<ParamField path="ItemType" type="typename">
+</ParamField>
+
+**Inherits from:** `flatbuffer::NestedArray< ItemType >` (public)
+
+---
+
+## Methods
+
+### getPoint [#getpoint]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "Point2D": "point2d"}}>
+```cpp showLineNumbers={false}
+DEVICE Point2D Geo::GeoNestedArray<ItemType>::getPoint(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### toCoordsWorker [#tocoordsworker]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename CT, typename VT>
+FlatBufferManager::Status Geo::GeoNestedArray<ItemType>::toCoordsWorker(
+    std::vector<VT> &result
+) const
+```
+</CodeBlock>
+
+### toCoords [#tocoords]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename CT>
+FlatBufferManager::Status Geo::GeoNestedArray<ItemType>::toCoords(
+    std::vector<CT> &result
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename CT>
+FlatBufferManager::Status Geo::GeoNestedArray<ItemType>::toCoords(
+    std::vector<std::vector<CT>> &result
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (3)">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename CT>
+FlatBufferManager::Status Geo::GeoNestedArray<ItemType>::toCoords(
+    std::vector<std::vector<std::vector<CT>>> &result
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### fromCoordsWorker [#fromcoordsworker]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename CT, typename VT>
+FlatBufferManager::Status Geo::GeoNestedArray<ItemType>::fromCoordsWorker(
+    const VT &coords
+)
+```
+</CodeBlock>
+
+### fromCoords [#fromcoords]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename CT>
+FlatBufferManager::Status Geo::GeoNestedArray<ItemType>::fromCoords(
+    const std::vector<CT> &coords
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename CT>
+FlatBufferManager::Status Geo::GeoNestedArray<ItemType>::fromCoords(
+    const std::vector<std::vector<CT>> &coords
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+template <typename CT>
+FlatBufferManager::Status Geo::GeoNestedArray<ItemType>::fromCoords(
+    const std::vector<std::vector<std::vector<CT>>> &coords
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### size [#size]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+size_t flatbuffer::NestedArray<ItemType>::size() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index)">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+size_t flatbuffer::NestedArray<ItemType>::size(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getValuesBuffer [#getvaluesbuffer]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<ItemType>::getValuesBuffer(
+    ItemType *&values,
+    int64_t &nof_values,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+### getRawBuffer [#getrawbuffer]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<ItemType>::getRawBuffer(
+    int8_t *&values,
+    int64_t &nof_values,
+    size_t &value_size,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+### getValue [#getvalue]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+ItemType & flatbuffer::NestedArray<ItemType>::getValue(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+const ItemType flatbuffer::NestedArray<ItemType>::operator[](
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+const ItemType flatbuffer::NestedArray<ItemType>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+bool flatbuffer::NestedArray<ItemType>::isNull() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index)">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+bool flatbuffer::NestedArray<ItemType>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### extend [#extend]
+
+<Tabs>
+<Tab title="Single item">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::NestedArray<ItemType>::extend(
+    const int8_t *data,
+    const int32_t size,
+    bool assign = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<ItemType>::extend(
+    const NestedArray<ItemType> &other,
+    bool assign = false
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator+= [#operator_plus_assign]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+NestedArray<ItemType> & flatbuffer::NestedArray<ItemType>::operator+=(
+    const NestedArray<ItemType> &other
+)
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"GeoNestedArray": "geonestedarray", "NestedArray": "../../flatbuffer/structs/nestedarray"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::NestedArray<ItemType>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `flatbuffer_` | `int8_t *` | |
+| `index_` | `int64_t` | |
+| `n_` | `size_t` | |

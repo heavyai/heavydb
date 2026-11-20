@@ -1,0 +1,23 @@
+---
+title: foreign_storage::ParquetDateInSecondsFromTimestampEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+template <typename V, typename T, T conversion_denominator, typename NullType = V>
+using ParquetDateInSecondsFromTimestampEncoder = ParquetTimestampEncoder<V, T, conversion_denominator, NullType>;
+```
+
+**Template parameters**
+
+<ParamField path="V" type="typename">
+</ParamField>
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+<ParamField path="conversion_denominator" type="T">
+</ParamField>
+
+<ParamField path="NullType" type="typename" default="V">
+</ParamField>

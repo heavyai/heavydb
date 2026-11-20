@@ -1,0 +1,362 @@
+---
+title: RelRexDagVisitor
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelRexDagVisitor.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~RelRexDagVisitor
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+virtual RelRexDagVisitor::~RelRexDagVisitor() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### visit [#visit]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelAlgNode const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexScalar const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelAggregate const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelCompound const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelFilter": "relfilter"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelFilter const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelJoin": "reljoin"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelLeftDeepInnerJoin": "relleftdeepinnerjoin"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelLeftDeepInnerJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelLogicalUnion const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelLogicalValues const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelModify": "relmodify"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelModify const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelProject const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelScan const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelSort const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelTableFunction const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelTranslatedJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 16">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RexAbstractInput const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 17">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexCase const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 18">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexFunctionOperator const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 19">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexInput const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 20">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RexLiteral const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 21">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexOperator const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 22">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RexRef const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 23">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexSubQuery const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 24">
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexWindowFunctionOperator const *
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### castAndVisit [#castandvisit]
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::castAndVisit(
+    RelAlgNode const *
+)
+```
+</CodeBlock>
+
+### cast [#cast]
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename U>
+void RelRexDagVisitor::cast(
+    T const *node
+)
+```
+</CodeBlock>
+
+### make_handlers [#makehandlers]
+
+<CodeBlock links={{"RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename... Ts>
+RelRexDagVisitor::Handlers<T, sizeof...(
+    Ts
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `Cache` | `robin_hood::unordered_set< void const  * >` |
+| `Handlers` | `std::array< TypeHandler< RelRexDagVisitor, T >, N >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `cache_` | `Cache` | |

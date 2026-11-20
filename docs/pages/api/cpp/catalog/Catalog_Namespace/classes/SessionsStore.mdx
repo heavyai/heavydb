@@ -1,0 +1,239 @@
+---
+title: Catalog_Namespace::SessionsStore
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/SessionsStore.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~SessionsStore
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+virtual Catalog_Namespace::SessionsStore::~SessionsStore() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### add [#add]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore", "UserMetadata": "../structs/usermetadata", "Catalog": "catalog"}}>
+```cpp showLineNumbers={false}
+virtual SessionInfoPtr Catalog_Namespace::SessionsStore::add(
+    const Catalog_Namespace::UserMetadata &user_meta,
+    std::shared_ptr<Catalog> cat,
+    ExecutorDeviceType device
+)
+```
+</CodeBlock>
+
+### get [#get]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+virtual SessionInfoPtr Catalog_Namespace::SessionsStore::get(
+    const std::string &session_id
+)
+```
+</CodeBlock>
+
+### erase [#erase]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+void SessionsStore::erase(
+    const std::string &session_id
+)
+```
+</CodeBlock>
+
+### eraseByUser [#erasebyuser]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+void SessionsStore::eraseByUser(
+    const std::string &user_name
+)
+```
+</CodeBlock>
+
+### eraseByDB [#erasebydb]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+void SessionsStore::eraseByDB(
+    const std::string &db_name
+)
+```
+</CodeBlock>
+
+### getAllSessions [#getallsessions]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+std::vector<SessionInfoPtr> SessionsStore::getAllSessions()
+```
+</CodeBlock>
+
+### getUserSessions [#getusersessions]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+std::vector<SessionInfoPtr> SessionsStore::getUserSessions(
+    const std::string &user_name
+)
+```
+</CodeBlock>
+
+### getByPublicID [#getbypublicid]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+SessionInfoPtr SessionsStore::getByPublicID(
+    const std::string &public_id
+)
+```
+</CodeBlock>
+
+### getSessionCopy [#getsessioncopy]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore", "SessionInfo": "sessioninfo"}}>
+```cpp showLineNumbers={false}
+SessionInfo SessionsStore::getSessionCopy(
+    const std::string &session_id
+)
+```
+</CodeBlock>
+
+### disconnect [#disconnect]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+void SessionsStore::disconnect(
+    const std::string session_id
+)
+```
+</CodeBlock>
+
+### isSessionExpired [#issessionexpired]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+bool SessionsStore::isSessionExpired(
+    const SessionInfoPtr &session_ptr,
+    int idle_session_duration,
+    int max_session_duration
+)
+```
+</CodeBlock>
+
+### getSharedLock [#getsharedlock]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+heavyai::shared_lock<heavyai::shared_mutex> SessionsStore::getSharedLock() const
+```
+</CodeBlock>
+
+### getLockGuard [#getlockguard]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+heavyai::lock_guard<heavyai::shared_mutex> SessionsStore::getLockGuard() const
+```
+</CodeBlock>
+
+### isSessionInUse [#issessioninuse]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+virtual bool Catalog_Namespace::SessionsStore::isSessionInUse(
+    const SessionInfoPtr &session_ptr
+)
+```
+</CodeBlock>
+
+### getUnlocked [#getunlocked]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+virtual SessionInfoPtr Catalog_Namespace::SessionsStore::getUnlocked(
+    const std::string &session_id
+)
+```
+</CodeBlock>
+
+### eraseUnlocked [#eraseunlocked]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+virtual void Catalog_Namespace::SessionsStore::eraseUnlocked(
+    const std::string &session_id
+)
+```
+</CodeBlock>
+
+### getDisconnectCallback [#getdisconnectcallback]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+virtual DisconnectCallback Catalog_Namespace::SessionsStore::getDisconnectCallback()
+```
+</CodeBlock>
+
+### getIf [#getif]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<SessionInfoPtr> Catalog_Namespace::SessionsStore::getIf(
+    std::function<bool(const SessionInfoPtr &)> predicate
+)
+```
+</CodeBlock>
+
+### eraseIf [#eraseif]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+virtual void Catalog_Namespace::SessionsStore::eraseIf(
+    std::function<bool(const SessionInfoPtr &)> predicate
+)
+```
+</CodeBlock>
+
+### getMutex [#getmutex]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+virtual heavyai::shared_mutex & Catalog_Namespace::SessionsStore::getMutex() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### create [#create]
+
+<CodeBlock links={{"SessionsStore": "sessionsstore"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<SessionsStore> SessionsStore::create(
+    const std::string &base_path,
+    size_t n_workers,
+    int idle_session_duration,
+    int max_session_duration,
+    int capacity,
+    DisconnectCallback disconnect_callback
+)
+```
+</CodeBlock>

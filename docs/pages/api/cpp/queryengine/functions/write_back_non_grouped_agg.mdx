@@ -1,0 +1,33 @@
+---
+title: write_back_non_grouped_agg
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ void write_back_non_grouped_agg(
+    int64_t *input_buffer,
+    int64_t *output_buffer,
+    const int32_t agg_idx
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+NEVER_INLINE void write_back_non_grouped_agg(
+    int64_t *input_buffer,
+    int64_t *output_buffer,
+    const int32_t num_agg_cols
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,67 @@
+---
+title: WindowFunctionCtx::AggregateTreeForWindowFraming
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <WindowFunctionCtx/WindowContext.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~AggregateTreeForWindowFraming
+
+<CodeBlock links={{"AggregateTreeForWindowFraming": "aggregatetreeforwindowframing"}}>
+```cpp showLineNumbers={false}
+WindowFunctionCtx::AggregateTreeForWindowFraming::~AggregateTreeForWindowFraming()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### resizeStorageForWindowFraming [#resizestorageforwindowframing]
+
+<CodeBlock links={{"AggregateTreeForWindowFraming": "aggregatetreeforwindowframing"}}>
+```cpp showLineNumbers={false}
+void WindowFunctionCtx::AggregateTreeForWindowFraming::resizeStorageForWindowFraming(
+    size_t partition_count
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `aggregate_tree_holder_` | `int8_t *` | |
+| `aggregate_tree_for_integer_type_` | `std::vector< int64_t * >` | |
+| `aggregate_tree_for_double_type_` | `std::vector< double * >` | |
+| `derived_aggregate_tree_for_integer_type_` | `std::vector< SumAndCountPair< int64_t > * >` | |
+| `derived_aggregate_tree_for_double_type_` | `std::vector< SumAndCountPair< double > * >` | |
+| `aggregate_trees_depth_` | `std::vector< size_t >` | |
+| `aggregate_trees_leaf_start_offset_` | `std::vector< size_t >` | |
+| `aggregate_trees_holder_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `aggregate_trees_depth_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `aggregate_trees_leaf_start_offset_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `aggregate_tree_for_integer_type_buf_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `aggregate_tree_for_double_type_buf_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `derived_aggregate_tree_for_integer_type_buf_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `derived_aggregate_tree_for_double_type_buf_gpu_` | `Data_Namespace::AbstractBuffer *` | |
+| `aggregate_tree_for_integer_type_gpu_` | `int64_t **` | |
+| `aggregate_tree_for_double_type_gpu_` | `double **` | |
+| `derived_aggregate_tree_for_integer_type_gpu_` | `SumAndCountPair< int64_t > **` | |
+| `derived_aggregate_tree_for_double_type_gpu_` | `SumAndCountPair< double > **` | |
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `aggregate_tree_sizes_` | `std::vector< size_t >` | |
+| `aggregate_tree_sizes_in_byte_` | `std::vector< size_t >` | |
+| `aggregate_tree_start_offset_` | `std::vector< size_t >` | |
+| `aggregate_tree_infos_` | `std::vector< std::pair< size_t, IndexPair > >` | |
+| `segment_trees_owned_` | `std::vector< std::shared_ptr< void > >` | |

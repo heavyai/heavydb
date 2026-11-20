@@ -1,0 +1,20 @@
+---
+title: collect_order_entry_column
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class K, class I>
+void collect_order_entry_column(
+    thrust::device_ptr<K> &d_oe_col_buffer,
+    const int8_t *d_src_buffer,
+    const thrust::device_ptr<I> &d_idx_first,
+    const size_t idx_count,
+    const size_t oe_offset,
+    const size_t oe_stride,
+    ThrustAllocator &allocator,
+    CUstream cuda_stream
+)
+```
+</CodeBlock>

@@ -1,0 +1,68 @@
+---
+title: Parser::DropColumnStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### DropColumnStmt [#dropcolumnstmt]
+
+<CodeBlock links={{"DropColumnStmt": "dropcolumnstmt"}}>
+```cpp showLineNumbers={false}
+Parser::DropColumnStmt::DropColumnStmt(
+    std::string *tab,
+    std::list<std::string *> *cols
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"DropColumnStmt": "dropcolumnstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropColumnStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### get_table [#gettable]
+
+<CodeBlock links={{"DropColumnStmt": "dropcolumnstmt"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::DropColumnStmt::get_table() const
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"DropColumnStmt": "dropcolumnstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::DropColumnStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_` | `std::unique_ptr< std::string >` | |
+| `columns_` | `std::list< std::unique_ptr< std::string > >` | |

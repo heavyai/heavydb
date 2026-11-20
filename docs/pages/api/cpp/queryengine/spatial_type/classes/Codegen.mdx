@@ -1,0 +1,156 @@
+---
+title: spatial_type::Codegen
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <spatial_type/Codegen.h>
+```
+
+---
+
+## Constructors
+
+### Codegen [#codegen]
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+spatial_type::Codegen::Codegen(
+    const Analyzer::GeoOperator *geo_operator
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~Codegen
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+virtual spatial_type::Codegen::~Codegen()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### isNullable [#isnullable]
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+auto spatial_type::Codegen::isNullable() const
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+auto spatial_type::Codegen::getTypeInfo() const
+```
+</CodeBlock>
+
+### getName [#getname]
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::string spatial_type::Codegen::getName() const
+```
+</CodeBlock>
+
+### getNullCheckCodegen [#getnullcheckcodegen]
+
+<CodeBlock links={{"Codegen": "codegen", "CgenState": "../../structs/cgenstate", "Executor": "../../classes/executor", "NullCheckCodegen": "../../classes/codegenerator#nullcheckcodegen"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<CodeGenerator::NullCheckCodegen> spatial_type::Codegen::getNullCheckCodegen(
+    llvm::Value *null_lv,
+    CgenState *cgen_state,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+virtual size_t spatial_type::Codegen::size() const
+```
+</CodeBlock>
+
+### getNullType [#getnulltype]
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+virtual SQLTypeInfo spatial_type::Codegen::getNullType() const
+```
+</CodeBlock>
+
+### getOperand [#getoperand]
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+const Analyzer::Expr * spatial_type::Codegen::getOperand(
+    const size_t index
+)
+```
+</CodeBlock>
+
+### codegenLoads [#codegenloads]
+
+<CodeBlock links={{"Codegen": "codegen", "CgenState": "../../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+virtual std::tuple<std::vector<llvm::Value *>, llvm::Value *> spatial_type::Codegen::codegenLoads(
+    const std::vector<llvm::Value *> &arg_lvs,
+    const std::vector<llvm::Value *> &pos_lvs,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+### codegen [#codegen]
+
+<CodeBlock links={{"Codegen": "codegen", "NullCheckCodegen": "../../classes/codegenerator#nullcheckcodegen", "CgenState": "../../structs/cgenstate", "CompilationOptions": "../../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+virtual std::vector<llvm::Value *> spatial_type::Codegen::codegen(
+    const std::vector<llvm::Value *> &args,
+    CodeGenerator::NullCheckCodegen *nullcheck_codegen,
+    CgenState *cgen_state,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### init [#init]
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<Codegen> spatial_type::Codegen::init(
+    const Analyzer::GeoOperator *geo_operator
+)
+```
+</CodeBlock>
+
+### pointIsNullFunctionName [#pointisnullfunctionname]
+
+<CodeBlock links={{"Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+char const  * spatial_type::Codegen::pointIsNullFunctionName(
+    SQLTypeInfo const &
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `operator_` | `const Analyzer::GeoOperator *` | |
+| `is_nullable_` | `bool` | |

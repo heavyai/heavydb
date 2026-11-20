@@ -1,0 +1,95 @@
+---
+title: Parser::RenameUserStmt
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::DDLStmt` (public)
+
+---
+
+## Constructors
+
+### RenameUserStmt [#renameuserstmt]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"RenameUserStmt": "renameuserstmt"}}>
+```cpp showLineNumbers={false}
+Parser::RenameUserStmt::RenameUserStmt(
+    const rapidjson::Value &payload
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"RenameUserStmt": "renameuserstmt"}}>
+```cpp showLineNumbers={false}
+Parser::RenameUserStmt::RenameUserStmt(
+    std::string *username,
+    std::string *new_username
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### getOldUserName [#getoldusername]
+
+<CodeBlock links={{"RenameUserStmt": "renameuserstmt"}}>
+```cpp showLineNumbers={false}
+auto const  & Parser::RenameUserStmt::getOldUserName()
+```
+</CodeBlock>
+
+### getNewUserName [#getnewusername]
+
+<CodeBlock links={{"RenameUserStmt": "renameuserstmt"}}>
+```cpp showLineNumbers={false}
+auto const  & Parser::RenameUserStmt::getNewUserName()
+```
+</CodeBlock>
+
+### execute [#execute]
+
+<CodeBlock links={{"RenameUserStmt": "renameuserstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RenameUserStmt::execute(
+    const Catalog_Namespace::SessionInfo &session,
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+### setColumnDescriptor [#setcolumndescriptor]
+
+<CodeBlock links={{"RenameUserStmt": "renameuserstmt", "ColumnDef": "columndef", "DDLStmt": "ddlstmt"}}>
+```cpp showLineNumbers={false}
+void Parser::RenameUserStmt::setColumnDescriptor(
+    ColumnDescriptor &cd,
+    const ColumnDef *coldef
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `username_` | `std::unique_ptr< std::string >` | |
+| `new_username_` | `std::unique_ptr< std::string >` | |

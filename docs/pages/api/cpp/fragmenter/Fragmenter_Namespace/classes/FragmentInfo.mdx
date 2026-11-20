@@ -1,0 +1,155 @@
+---
+title: Fragmenter_Namespace::FragmentInfo
+description: "Used by Fragmenter classes to store info about each fragment - the fragment id and number of tuples(rows) currently stored by that fragment."
+---
+
+Used by Fragmenter classes to store info about each fragment - the fragment id and number of tuples(rows) currently stored by that fragment.
+
+```cpp showLineNumbers={false}
+#include <Fragmenter_Namespace/Fragmenter.h>
+```
+
+---
+
+## Constructors
+
+### FragmentInfo [#fragmentinfo]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+Fragmenter_Namespace::FragmentInfo::FragmentInfo()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setChunkMetadataMap [#setchunkmetadatamap]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::FragmentInfo::setChunkMetadataMap(
+    const ChunkMetadataMap &chunk_metadata_map
+)
+```
+</CodeBlock>
+
+### setChunkMetadata [#setchunkmetadata]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::FragmentInfo::setChunkMetadata(
+    const int col,
+    std::shared_ptr<ChunkMetadata> chunkMetadata
+)
+```
+</CodeBlock>
+
+### getChunkMetadataMap [#getchunkmetadatamap]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+const ChunkMetadataMap & Fragmenter_Namespace::FragmentInfo::getChunkMetadataMap() const
+```
+</CodeBlock>
+
+### getChunkMetadataMapPhysical [#getchunkmetadatamapphysical]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+const ChunkMetadataMap & Fragmenter_Namespace::FragmentInfo::getChunkMetadataMapPhysical() const
+```
+</CodeBlock>
+
+### getChunkMetadataMapPhysicalCopy [#getchunkmetadatamapphysicalcopy]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+ChunkMetadataMap Fragmenter_Namespace::FragmentInfo::getChunkMetadataMapPhysicalCopy() const
+```
+</CodeBlock>
+
+### getNumTuples [#getnumtuples]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::FragmentInfo::getNumTuples() const
+```
+</CodeBlock>
+
+### getPhysicalNumTuples [#getphysicalnumtuples]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+size_t Fragmenter_Namespace::FragmentInfo::getPhysicalNumTuples() const
+```
+</CodeBlock>
+
+### isEmptyPhysicalFragment [#isemptyphysicalfragment]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+bool Fragmenter_Namespace::FragmentInfo::isEmptyPhysicalFragment() const
+```
+</CodeBlock>
+
+### setPhysicalNumTuples [#setphysicalnumtuples]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::FragmentInfo::setPhysicalNumTuples(
+    const size_t physNumTuples
+)
+```
+</CodeBlock>
+
+### invalidateChunkMetadataMap [#invalidatechunkmetadatamap]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::FragmentInfo::invalidateChunkMetadataMap() const
+```
+</CodeBlock>
+
+### invalidateNumTuples [#invalidatenumtuples]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+void Fragmenter_Namespace::FragmentInfo::invalidateNumTuples() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### setUnconditionalVacuum [#setunconditionalvacuum]
+
+<CodeBlock links={{"FragmentInfo": "fragmentinfo"}}>
+```cpp showLineNumbers={false}
+static void Fragmenter_Namespace::FragmentInfo::setUnconditionalVacuum(
+    const double unconditionalVacuum
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `fragmentId` | `int` | |
+| `shadowNumTuples` | `size_t` | |
+| `deviceIds` | `std::vector< int >` | |
+| `physicalTableId` | `int` | |
+| `shard` | `int` | |
+| `shadowChunkMetadataMap` | `ChunkMetadataMap` | |
+| `resultSet` | `ResultSet *` | |
+| `resultSetMutex` | `std::shared_ptr< std::mutex >` | |
+| `numTuples` | `size_t` | |
+| `chunkMetadataMap` | `ChunkMetadataMap` | |
+| `synthesizedNumTuplesIsValid` | `bool` | |
+| `synthesizedMetadataIsValid` | `bool` | |
+| `unconditionalVacuum_` <Badge intent="note" minimal>static</Badge> | `bool` | |

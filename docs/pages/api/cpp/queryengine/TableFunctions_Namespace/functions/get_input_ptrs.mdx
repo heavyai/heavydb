@@ -1,0 +1,31 @@
+---
+title: TableFunctions_Namespace::get_input_ptrs
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ColumnList": "../../structs/columnlist", "InputData": "../structs/inputdata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+InputData<T> TableFunctions_Namespace::get_input_ptrs(
+    const ColumnList<T> &input_features
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"MaskedData": "../structs/maskeddata", "InputData": "../structs/inputdata"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+InputData<T> TableFunctions_Namespace::get_input_ptrs(
+    const MaskedData<T> &masked_input_features
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

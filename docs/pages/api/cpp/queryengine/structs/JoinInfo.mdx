@@ -1,0 +1,33 @@
+---
+title: JoinInfo
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <PlanState.h>
+```
+
+---
+
+## Constructors
+
+### JoinInfo [#joininfo]
+
+<CodeBlock links={{"JoinInfo": "joininfo", "HashJoin": "../classes/hashjoin"}}>
+```cpp showLineNumbers={false}
+JoinInfo::JoinInfo(
+    const std::vector<std::shared_ptr<Analyzer::BinOper>> &equi_join_tautologies,
+    const std::vector<std::shared_ptr<HashJoin>> &join_hash_tables
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `equi_join_tautologies_` | `std::vector< std::shared_ptr< Analyzer::BinOper > >` | |
+| `join_hash_tables_` | `std::vector< std::shared_ptr< HashJoin > >` | |
+| `sharded_range_table_indices_` | `std::unordered_set< size_t >` | |

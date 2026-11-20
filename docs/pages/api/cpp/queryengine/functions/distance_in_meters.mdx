@@ -1,0 +1,130 @@
+---
+title: distance_in_meters
+description: "Computes the distance, in meters, between two WGS-84 positions."
+---
+
+<Tabs>
+<Tab title="Computes the distance (1)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE double distance_in_meters(
+    const double fromlon,
+    const double fromlat,
+    const double tolon,
+    const double tolat
+)
+```
+</CodeBlock>
+
+Computes the distance, in meters, between two WGS-84 positions.
+
+The result is equal to `EARTH_RADIUS_IN_METERS*ArcInRadians(from,to)`
+
+ArcInRadians is equal to `Distance(from,to)/EARTH_RADIUS_IN_METERS` `= 2*asin(sqrt(h(d/EARTH_RADIUS_IN_METERS )))`
+
+where:
+
+- d is the distance in meters between 'from' and 'to' positions.
+- h is the haversine function: `h(x)=sin²(x/2)`
+
+code attribution: [http://blog.julien.cayzac.name/2008/10/arc-and-distance-between-two-points-on.html](http://blog.julien.cayzac.name/2008/10/arc-and-distance-between-two-points-on.html)
+
+The haversine formula gives: `h(d/R) = h(from.lat-to.lat)+h(from.lon-to.lon)+cos(from.lat)*cos(to.lat)`
+
+**See also:**
+[http://en.wikipedia.org/wiki/Law_of_haversines](http://en.wikipedia.org/wiki/Law_of_haversines)
+
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T1, typename T2>
+NEVER_INLINE HOST T1 distance_in_meters(
+    const T1 fromlon,
+    const T1 fromlat,
+    const T2 tolon,
+    const T2 tolat
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST float distance_in_meters(
+    const float fromlon,
+    const float fromlat,
+    const float tolon,
+    const float tolat
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST float distance_in_meters(
+    const float fromlon,
+    const float fromlat,
+    const double tolon,
+    const double tolat
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double distance_in_meters(
+    const double fromlon,
+    const double fromlat,
+    const float tolon,
+    const float tolat
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Computes the distance (2)">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST double distance_in_meters(
+    const double fromlon,
+    const double fromlat,
+    const double tolon,
+    const double tolat
+)
+```
+</CodeBlock>
+
+Computes the distance, in meters, between two WGS-84 positions.
+
+The result is equal to `EARTH_RADIUS_IN_METERS*ArcInRadians(from,to)`
+
+ArcInRadians is equal to `Distance(from,to)/EARTH_RADIUS_IN_METERS` `= 2*asin(sqrt(h(d/EARTH_RADIUS_IN_METERS )))`
+
+where:
+
+- d is the distance in meters between 'from' and 'to' positions.
+- h is the haversine function: `h(x)=sin²(x/2)`
+
+code attribution: [http://blog.julien.cayzac.name/2008/10/arc-and-distance-between-two-points-on.html](http://blog.julien.cayzac.name/2008/10/arc-and-distance-between-two-points-on.html)
+
+The haversine formula gives: `h(d/R) = h(from.lat-to.lat)+h(from.lon-to.lon)+cos(from.lat)*cos(to.lat)`
+
+**See also:**
+[http://en.wikipedia.org/wiki/Law_of_haversines](http://en.wikipedia.org/wiki/Law_of_haversines)
+
+
+</Tab>
+</Tabs>

@@ -1,0 +1,15 @@
+---
+title: ct_coords__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t ct_coords__cpu_(
+    TableFunctionManager &mgr,
+    const Column<GeoPoint> &points,
+    Column<double> &xcoords,
+    Column<double> &ycoords
+)
+```
+</CodeBlock>

@@ -1,0 +1,33 @@
+---
+title: key_hash
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT ALWAYS_INLINE DEVICE uint32_t key_hash(
+    const int64_t *key,
+    const uint32_t key_count,
+    const uint32_t key_byte_width
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT uint32_t key_hash(
+    const int64_t *key,
+    const uint32_t key_qw_count,
+    const uint32_t key_byte_width
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

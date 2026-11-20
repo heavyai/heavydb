@@ -1,0 +1,109 @@
+---
+title: SamlServer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <SamlServer.h>
+```
+
+---
+
+## Constructors
+
+### SamlServer [#samlserver]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"SamlServer": "samlserver"}}>
+```cpp showLineNumbers={false}
+SamlServer::SamlServer()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"SamlServer": "samlserver", "AuthMetadata": "../structs/authmetadata"}}>
+```cpp showLineNumbers={false}
+SamlServer::SamlServer(
+    const AuthMetadata &authMetadata
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~SamlServer
+
+<CodeBlock links={{"SamlServer": "samlserver"}}>
+```cpp showLineNumbers={false}
+SamlServer::~SamlServer()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### login [#login]
+
+<CodeBlock links={{"SamlServer": "samlserver"}}>
+```cpp showLineNumbers={false}
+void SamlServer::login(
+    std::string &username,
+    const std::string &saml_response_base64,
+    Restrictions &restrictions
+)
+```
+</CodeBlock>
+
+### authenticate_user [#authenticateuser]
+
+<CodeBlock links={{"SamlServer": "samlserver"}}>
+```cpp showLineNumbers={false}
+bool SamlServer::authenticate_user(
+    std::string &user_name,
+    const std::string &saml_response_base64,
+    std::vector<std::string> &saml_roles,
+    Restrictions &restrictions,
+    std::optional<std::string> &default_db
+)
+```
+</CodeBlock>
+
+### inUse [#inuse]
+
+<CodeBlock links={{"SamlServer": "samlserver"}}>
+```cpp showLineNumbers={false}
+bool SamlServer::inUse() const
+```
+</CodeBlock>
+
+### isRoleSyncInUse [#isrolesyncinuse]
+
+<CodeBlock links={{"SamlServer": "samlserver"}}>
+```cpp showLineNumbers={false}
+bool SamlServer::isRoleSyncInUse() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `authMetadata_` | `const AuthMetadata *` | |
+| `samlInUse_` | `bool` | |
+| `idp_metadata_` | `std::unique_ptr< opensaml::saml2md::MetadataProvider >` | |
+| `descriptor_` | `const opensaml::saml2md::EntityDescriptor *` | |
+| `policy_` | `std::unique_ptr< opensaml::SecurityPolicy >` | |
+| `policy_mutex_` | `heavyai::shared_mutex` | |
+| `rules_` | `std::vector< opensaml::SecurityPolicyRule * >` | |
+| `credential_` | `const xmltooling::Credential *` | |
+| `sp_url_` | `XMLCh *` | |

@@ -1,0 +1,104 @@
+---
+title: AngleAttenuationsMap
+description: ""
+---
+
+<CodeBlock id="AngleAttenuationsMap" links={{"AngleAttenuationsMap": "angleattenuationsmap"}}>
+```cpp showLineNumbers={false}
+template <typename T1>
+struct AngleAttenuationsMap
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <AngleAttenuations.h>
+```
+
+**Template parameters**
+
+<ParamField path="T1" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### AngleAttenuationsMap [#angleattenuationsmap]
+
+<CodeBlock links={{"AngleAttenuationsMap": "angleattenuationsmap"}}>
+```cpp showLineNumbers={false}
+AngleAttenuationsMap<T1>::AngleAttenuationsMap(
+    const T1 min_angle,
+    const T1 max_angle,
+    const int32_t num_segments,
+    const int32_t divisions_per_level
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### write_angle_attenuation [#writeangleattenuation]
+
+<CodeBlock links={{"AngleAttenuationsMap": "angleattenuationsmap"}}>
+```cpp showLineNumbers={false}
+void AngleAttenuationsMap<T1>::write_angle_attenuation(
+    const int32_t level_idx,
+    const int32_t angle_division,
+    const T1 attenuation_dbm
+)
+```
+</CodeBlock>
+
+### get_angle_attenuation [#getangleattenuation]
+
+<CodeBlock links={{"AngleAttenuationsMap": "angleattenuationsmap"}}>
+```cpp showLineNumbers={false}
+T1 AngleAttenuationsMap<T1>::get_angle_attenuation(
+    const T1 angle
+) const
+```
+</CodeBlock>
+
+### add_partial_attenuations [#addpartialattenuations]
+
+<CodeBlock links={{"AngleAttenuationsMap": "angleattenuationsmap"}}>
+```cpp showLineNumbers={false}
+void AngleAttenuationsMap<T1>::add_partial_attenuations(
+    const int32_t start_angle_segment,
+    const int32_t end_angle_segment,
+    const T1 attenuation_dbm,
+    const int32_t level_idx,
+    const int32_t current_level_divisions
+)
+```
+</CodeBlock>
+
+### add_attenuations [#addattenuations]
+
+<CodeBlock links={{"AngleAttenuationsMap": "angleattenuationsmap"}}>
+```cpp showLineNumbers={false}
+void AngleAttenuationsMap<T1>::add_attenuations(
+    const T1 start_angle,
+    const T1 end_angle,
+    const T1 attenuation_dbm
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `min_angle` | `const T1` | |
+| `max_angle` | `const T1` | |
+| `num_segments` | `const int32_t` | |
+| `divisions_per_level` | `const int32_t` | |
+| `num_levels` | `const int32_t` | |
+| `angle_ratio` | `const T1` | |
+| `angle_segment_ratio` | `const T1` | |
+| `attenuation_map` | `robin_hood::unordered_flat_map< int32_t, T1 >` | |

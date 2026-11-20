@@ -1,0 +1,17 @@
+---
+title: init_columnar_buffer
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename T>
+__device__ int8_t * init_columnar_buffer(
+    T *buffer_ptr,
+    const T init_val,
+    const uint32_t entry_count,
+    const int32_t start,
+    const int32_t step
+)
+```
+</CodeBlock>

@@ -1,0 +1,512 @@
+---
+title: foreign_storage::ForeignStorageMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ForeignStorageMgr.h>
+```
+
+**Inherits from:** `Data_Namespace::AbstractBufferMgr` (public)
+
+---
+
+## Constructors
+
+### ForeignStorageMgr [#foreignstoragemgr]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignStorageMgr::ForeignStorageMgr()
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~ForeignStorageMgr
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignStorageMgr::~ForeignStorageMgr() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### createBuffer [#createbuffer]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::ForeignStorageMgr::createBuffer(
+    const ChunkKey &chunk_key,
+    const size_t page_size,
+    const size_t initial_size
+) override
+```
+</CodeBlock>
+
+### deleteBuffer [#deletebuffer]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::deleteBuffer(
+    const ChunkKey &chunk_key,
+    const bool purge
+) override
+```
+</CodeBlock>
+
+### deleteBuffersWithPrefix [#deletebufferswithprefix]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::deleteBuffersWithPrefix(
+    const ChunkKey &chunk_key_prefix,
+    const bool purge
+) override
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::ForeignStorageMgr::getBuffer(
+    const ChunkKey &chunk_key,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### fetchBuffer [#fetchbuffer]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::fetchBuffer(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### putBuffer [#putbuffer]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::ForeignStorageMgr::putBuffer(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *source_buffer,
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### getChunkMetadataVecForKeyPrefix [#getchunkmetadatavecforkeyprefix]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::getChunkMetadataVecForKeyPrefix(
+    ChunkMetadataVector &chunk_metadata,
+    const ChunkKey &chunk_key_prefix
+) override
+```
+</CodeBlock>
+
+### isBufferOnDevice [#isbufferondevice]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageMgr::isBufferOnDevice(
+    const ChunkKey &chunk_key
+) override
+```
+</CodeBlock>
+
+### printSlabs [#printslabs]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignStorageMgr::printSlabs() override
+```
+</CodeBlock>
+
+### getMaxSize [#getmaxsize]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageMgr::getMaxSize() const override
+```
+</CodeBlock>
+
+### getInUseSize [#getinusesize]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageMgr::getInUseSize() const override
+```
+</CodeBlock>
+
+### getAllocated [#getallocated]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageMgr::getAllocated() const override
+```
+</CodeBlock>
+
+### isAllocationCapped [#isallocationcapped]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageMgr::isAllocationCapped() const override
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::checkpoint() override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::checkpoint(
+    const int db_id,
+    const int tb_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### alloc [#alloc]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::ForeignStorageMgr::alloc(
+    const size_t num_bytes
+) override
+```
+</CodeBlock>
+
+### free [#free]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::free(
+    AbstractBuffer *buffer
+) override
+```
+</CodeBlock>
+
+### getMgrType [#getmgrtype]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+MgrType foreign_storage::ForeignStorageMgr::getMgrType() override
+```
+</CodeBlock>
+
+### getStringMgrType [#getstringmgrtype]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::ForeignStorageMgr::getStringMgrType() override
+```
+</CodeBlock>
+
+### getNumChunks [#getnumchunks]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageMgr::getNumChunks() override
+```
+</CodeBlock>
+
+### removeTableRelatedDS [#removetablerelatedds]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::removeTableRelatedDS(
+    const int db_id,
+    const int table_id
+) override
+```
+</CodeBlock>
+
+### hasDataWrapperForChunk [#hasdatawrapperforchunk]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageMgr::hasDataWrapperForChunk(
+    const ChunkKey &chunk_key
+) const
+```
+</CodeBlock>
+
+### createDataWrapperIfNotExists [#createdatawrapperifnotexists]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageMgr::createDataWrapperIfNotExists(
+    const ChunkKey &chunk_key
+)
+```
+</CodeBlock>
+
+### isDatawrapperRestored [#isdatawrapperrestored]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageMgr::isDatawrapperRestored(
+    const ChunkKey &chunk_key
+)
+```
+</CodeBlock>
+
+### setDataWrapper [#setdatawrapper]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "MockForeignDataWrapper": "mockforeigndatawrapper"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::setDataWrapper(
+    const ChunkKey &table_key,
+    std::shared_ptr<MockForeignDataWrapper> data_wrapper
+)
+```
+</CodeBlock>
+
+### getDataWrapper [#getdatawrapper]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "ForeignDataWrapper": "foreigndatawrapper"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<ForeignDataWrapper> foreign_storage::ForeignStorageMgr::getDataWrapper(
+    const ChunkKey &chunk_key
+) const
+```
+</CodeBlock>
+
+### refreshTable [#refreshtable]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::refreshTable(
+    const ChunkKey &table_key,
+    const bool evict_cached_entries
+)
+```
+</CodeBlock>
+
+### setParallelismHints [#setparallelismhints]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::setParallelismHints(
+    const std::map<ChunkKey, std::set<ParallelismHint>> &hints_per_table
+)
+```
+</CodeBlock>
+
+### maxFetchSize [#maxfetchsize]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageMgr::maxFetchSize(
+    int32_t db_id
+) const
+```
+</CodeBlock>
+
+### hasMaxFetchSize [#hasmaxfetchsize]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageMgr::hasMaxFetchSize() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "AbstractBufferMgr": "../../datanamespace/classes/abstractbuffermgr"}}>
+```cpp showLineNumbers={false}
+int foreign_storage::ForeignStorageMgr::getDeviceId()
+```
+</CodeBlock>
+
+### eraseDataWrapper [#erasedatawrapper]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::eraseDataWrapper(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### updateFragmenterMetadata [#updatefragmentermetadata]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::updateFragmenterMetadata(
+    const ChunkToBufferMap &
+) const
+```
+</CodeBlock>
+
+### createDataWrapperUnlocked [#createdatawrapperunlocked]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::createDataWrapperUnlocked(
+    int32_t db,
+    int32_t tb
+)
+```
+</CodeBlock>
+
+### fetchBufferIfTempBufferMapEntryExists [#fetchbufferiftempbuffermapentryexists]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageMgr::fetchBufferIfTempBufferMapEntryExists(
+    const ChunkKey &chunk_key,
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes
+)
+```
+</CodeBlock>
+
+### allocateTempBuffersForChunks [#allocatetempbuffersforchunks]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+ChunkToBufferMap foreign_storage::ForeignStorageMgr::allocateTempBuffersForChunks(
+    const std::set<ChunkKey> &chunk_keys
+)
+```
+</CodeBlock>
+
+### clearTempChunkBufferMapEntriesForTable [#cleartempchunkbuffermapentriesfortable]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::clearTempChunkBufferMapEntriesForTable(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### clearTempChunkBufferMapEntriesForTableUnlocked [#cleartempchunkbuffermapentriesfortableunlocked]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::clearTempChunkBufferMapEntriesForTableUnlocked(
+    const ChunkKey &table_key
+)
+```
+</CodeBlock>
+
+### getOptionalChunkKeySetAndNormalizeCache [#getoptionalchunkkeysetandnormalizecache]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::set<ChunkKey> foreign_storage::ForeignStorageMgr::getOptionalChunkKeySetAndNormalizeCache(
+    const ChunkKey &chunk_key,
+    const std::set<ChunkKey> &required_chunk_keys,
+    const ForeignDataWrapper::ParallelismLevel parallelism_level
+)
+```
+</CodeBlock>
+
+### getPrefetchSets [#getprefetchsets]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::pair<std::set<ChunkKey, decltype(
+    set_comp
+) const
+```
+</CodeBlock>
+
+### getOptionalKeysWithinSizeLimit [#getoptionalkeyswithinsizelimit]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+std::set<ChunkKey> foreign_storage::ForeignStorageMgr::getOptionalKeysWithinSizeLimit(
+    const ChunkKey &chunk_key,
+    const std::set<ChunkKey, decltype(set_comp) *> &same_fragment_keys,
+    const std::set<ChunkKey, decltype(set_comp) *> &diff_fragment_keys
+) const
+```
+</CodeBlock>
+
+### isChunkCached [#ischunkcached]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageMgr::isChunkCached(
+    const ChunkKey &chunk_key
+) const
+```
+</CodeBlock>
+
+### evictChunkFromCache [#evictchunkfromcache]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::evictChunkFromCache(
+    const ChunkKey &chunk_key
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### checkIfS3NeedsToBeEnabled [#checkifs3needstobeenabled]
+
+<CodeBlock links={{"ForeignStorageMgr": "foreignstoragemgr"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageMgr::checkIfS3NeedsToBeEnabled(
+    const ChunkKey &chunk_key
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ParallelismHint` | `std::pair< int, int >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `data_wrapper_mutex_` | `std::shared_mutex` | |
+| `data_wrapper_map_` | `std::map< ChunkKey, std::shared_ptr< ForeignDataWrapper > >` | |
+| `mocked_wrapper_map_` | `std::map< ChunkKey, std::shared_ptr< MockForeignDataWrapper > >` | |
+| `temp_chunk_buffer_map_` | `std::map< ChunkKey, std::unique_ptr< AbstractBuffer > >` | |
+| `temp_chunk_buffer_map_mutex_` | `std::shared_mutex` | |
+| `parallelism_hints_mutex_` | `std::shared_mutex` | |
+| `parallelism_hints_per_table_` | `std::map< ChunkKey, std::set< ParallelismHint > >` | |
+| `parentMgr_` | `AbstractBufferMgr *` | |
+| `device_id_` | `int` | |

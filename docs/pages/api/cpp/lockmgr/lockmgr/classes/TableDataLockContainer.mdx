@@ -1,0 +1,57 @@
+---
+title: lockmgr::TableDataLockContainer
+description: ""
+---
+
+<CodeBlock id="TableDataLockContainer" links={{"TableDataLockContainer": "tabledatalockcontainer"}}>
+```cpp showLineNumbers={false}
+template <typename LOCK_TYPE>
+class TableDataLockContainer
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <lockmgr/LockMgr.h>
+```
+
+**Template parameters**
+
+<ParamField path="LOCK_TYPE" type="typename">
+</ParamField>
+
+**Inherits from:** `lockmgr::LockContainerImpl< const TableDescriptor *, LOCK_TYPE >` (public)
+
+---
+
+## Constructors
+
+### TableDataLockContainer [#tabledatalockcontainer]
+
+<CodeBlock links={{"TableDataLockContainer": "tabledatalockcontainer"}}>
+```cpp showLineNumbers={false}
+lockmgr::TableDataLockContainer<LOCK_TYPE>::TableDataLockContainer(
+    const TableDataLockContainer &
+) = delete
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"TableDataLockContainer": "tabledatalockcontainer", "LockContainerImpl": "lockcontainerimpl"}}>
+```cpp showLineNumbers={false}
+const TableDescriptor * lockmgr::LockContainerImpl<const TableDescriptor *, LOCK_TYPE>::operator()() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `obj_` | `const TableDescriptor *` | |
+| `lock_` | `LOCK_TYPE` | |

@@ -1,0 +1,16 @@
+---
+title: foreign_storage::scan_metadata
+description: "Consumes and processes metadata scan requests from a pending requests queue and updates existing metadata objects based on newly scanned metadata."
+---
+
+<CodeBlock links={{"MetadataScanMultiThreadingParams": "../structs/metadatascanmultithreadingparams", "TextFileBufferParser": "../classes/textfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::scan_metadata(
+    MetadataScanMultiThreadingParams &multi_threading_params,
+    std::map<int, FileRegions> &fragment_id_to_file_regions_map,
+    const TextFileBufferParser &parser
+)
+```
+</CodeBlock>
+
+Consumes and processes metadata scan requests from a pending requests queue and updates existing metadata objects based on newly scanned metadata.

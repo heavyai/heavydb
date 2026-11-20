@@ -1,0 +1,35 @@
+---
+title: get_hash_slot_bitwise_eq
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+ALWAYS_INLINE DEVICE int32_t *SUFFIX get_hash_slot_bitwise_eq(
+    int32_t *buff,
+    const int64_t key,
+    const int64_t min_key,
+    const int64_t translated_null_val
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT int32_t * get_hash_slot_bitwise_eq(
+    int32_t *buff,
+    const int64_t key,
+    const int64_t min_key,
+    const int64_t translated_null_val
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

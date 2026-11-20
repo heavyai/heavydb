@@ -1,0 +1,84 @@
+---
+title: Catalog_Namespace::CustomExpression
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Catalog_Namespace/CustomExpression.h>
+```
+
+---
+
+## Constructors
+
+### CustomExpression [#customexpression]
+
+<Tabs>
+<Tab title="Copy">
+
+<CodeBlock links={{"CustomExpression": "customexpression"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::CustomExpression::CustomExpression(
+    const std::string &name,
+    const std::string &expression_json,
+    DataSourceType data_source_type,
+    int32_t data_source_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"CustomExpression": "customexpression"}}>
+```cpp showLineNumbers={false}
+Catalog_Namespace::CustomExpression::CustomExpression(
+    int32_t id,
+    const std::string &name,
+    const std::string &expression_json,
+    DataSourceType data_source_type,
+    int32_t data_source_id,
+    bool is_deleted
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Static methods
+
+### dataSourceTypeToString [#datasourcetypetostring]
+
+<CodeBlock links={{"CustomExpression": "customexpression"}}>
+```cpp showLineNumbers={false}
+static std::string Catalog_Namespace::CustomExpression::dataSourceTypeToString(
+    DataSourceType type_enum
+)
+```
+</CodeBlock>
+
+### dataSourceTypeFromString [#datasourcetypefromstring]
+
+<CodeBlock links={{"CustomExpression": "customexpression"}}>
+```cpp showLineNumbers={false}
+static DataSourceType Catalog_Namespace::CustomExpression::dataSourceTypeFromString(
+    const std::string &type_str
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `id` | `int32_t` | |
+| `name` | `std::string` | |
+| `expression_json` | `std::string` | |
+| `data_source_type` | `DataSourceType` | |
+| `data_source_id` | `int32_t` | |
+| `is_deleted` | `bool` | |

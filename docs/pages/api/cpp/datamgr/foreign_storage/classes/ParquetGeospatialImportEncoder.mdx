@@ -1,0 +1,511 @@
+---
+title: foreign_storage::ParquetGeospatialImportEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetGeospatialImportEncoder.h>
+```
+
+**Inherits from:** `foreign_storage::ParquetEncoder` (public), `foreign_storage::GeospatialEncoder` (public), `foreign_storage::ParquetImportEncoder` (public)
+
+---
+
+## Constructors
+
+### ParquetGeospatialImportEncoder [#parquetgeospatialimportencoder]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetGeospatialImportEncoder::ParquetGeospatialImportEncoder(
+    const bool geo_validate_geometry
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ParquetGeospatialImportEncoder::ParquetGeospatialImportEncoder(
+    std::list<Chunk_NS::Chunk> &chunks,
+    const bool geo_validate_geometry
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### validateAndAppendData [#validateandappenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::validateAndAppendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetGeospatialImportEncoder::validateAndAppendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> values,
+    const SQLTypeInfo &column_type,
+    InvalidRowGroupIndices &invalid_indices
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### eraseInvalidIndicesInBuffer [#eraseinvalidindicesinbuffer]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::eraseInvalidIndicesInBuffer(
+    const InvalidRowGroupIndices &invalid_indices
+) override
+```
+</CodeBlock>
+
+### appendData [#appenddata]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::appendData(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetGeospatialImportEncoder::appendData(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### appendDataTrackErrors [#appenddatatrackerrors]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::appendDataTrackErrors(
+    const int16_t *def_levels,
+    const int16_t *rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    int8_t *values
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetGeospatialImportEncoder::appendDataTrackErrors(
+    const std::vector<int16_t *> &def_levels,
+    const std::vector<int16_t *> &rep_levels,
+    const int64_t values_read,
+    const int64_t levels_read,
+    std::vector<int8_t *> &values
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getRowGroupMetadata [#getrowgroupmetadata]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ChunkMetadata": "../../structs/chunkmetadata", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<ChunkMetadata> foreign_storage::ParquetGeospatialImportEncoder::getRowGroupMetadata(
+    const parquet::RowGroupMetaData *group_metadata,
+    const int parquet_column_index,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### getRejectedRowIndices [#getrejectedrowindices]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+RejectedRowIndices foreign_storage::ParquetGeospatialImportEncoder::getRejectedRowIndices() const
+```
+</CodeBlock>
+
+### disableMetadataStatsValidation [#disablemetadatastatsvalidation]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetGeospatialImportEncoder::disableMetadataStatsValidation()
+```
+</CodeBlock>
+
+### initializeErrorTracking [#initializeerrortracking]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetGeospatialImportEncoder::initializeErrorTracking()
+```
+</CodeBlock>
+
+### initializeColumnType [#initializecolumntype]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetGeospatialImportEncoder::initializeColumnType(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### appendArrayDatumsIfApplicable [#appendarraydatumsifapplicable]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "TypedParquetStorageBuffer": "typedparquetstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::appendArrayDatumsIfApplicable(
+    TypedParquetStorageBuffer<ArrayDatum> *column_buffer,
+    const std::vector<ArrayDatum> &datum_buffer
+)
+```
+</CodeBlock>
+
+### appendArrayDatumsToBuffer [#appendarraydatumstobuffer]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::appendArrayDatumsToBuffer()
+```
+</CodeBlock>
+
+### appendBaseData [#appendbasedata]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::appendBaseData(
+    const int64_t row_count
+)
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "Chunk": "../../chunkns/classes/chunk", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * foreign_storage::ParquetGeospatialImportEncoder::getBuffer(
+    std::list<Chunk_NS::Chunk> &chunks,
+    const SQLTypes sql_type,
+    GeoColumnType geo_column_type
+)
+```
+</CodeBlock>
+
+### appendBaseDataAndUpdateMetadata [#appendbasedataandupdatemetadata]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::appendBaseDataAndUpdateMetadata(
+    const int64_t row_count
+)
+```
+</CodeBlock>
+
+### validateChunksSizing [#validatechunkssizing]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "Chunk": "../../chunkns/classes/chunk", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::validateChunksSizing(
+    const std::list<Chunk_NS::Chunk> &chunks
+) const
+```
+</CodeBlock>
+
+### validateMetadataSizing [#validatemetadatasizing]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ChunkMetadata": "../../structs/chunkmetadata", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::validateMetadataSizing(
+    const std::list<std::unique_ptr<ChunkMetadata>> &chunk_metadata
+) const
+```
+</CodeBlock>
+
+### appendArrayDatumsToBufferAndUpdateMetadata [#appendarraydatumstobufferandupdatemetadata]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::appendArrayDatumsToBufferAndUpdateMetadata()
+```
+</CodeBlock>
+
+### appendToArrayEncoderAndUpdateMetadata [#appendtoarrayencoderandupdatemetadata]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "Encoder": "../../classes/encoder", "ChunkMetadata": "../../structs/chunkmetadata", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::appendToArrayEncoderAndUpdateMetadata(
+    const std::vector<ArrayDatum> &datum_parse_buffer,
+    Encoder *encoder,
+    ChunkMetadata *chunk_metadata
+) const
+```
+</CodeBlock>
+
+### processGeoElement [#processgeoelement]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::processGeoElement(
+    std::string_view geo_string_view
+)
+```
+</CodeBlock>
+
+### processNullGeoElement [#processnullgeoelement]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::processNullGeoElement()
+```
+</CodeBlock>
+
+### clearParseBuffers [#clearparsebuffers]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::clearParseBuffers()
+```
+</CodeBlock>
+
+### clearDatumBuffers [#cleardatumbuffers]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ParquetGeospatialImportEncoder::clearDatumBuffers()
+```
+</CodeBlock>
+
+### getIteratorForGeoColumnType [#getiteratorforgeocolumntype]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+std::list<T>::iterator foreign_storage::ParquetGeospatialImportEncoder::getIteratorForGeoColumnType(
+    std::list<T> &list,
+    const SQLTypes column_type,
+    const GeoColumnType geo_column
+)
+```
+</CodeBlock>
+
+### initEncoderAndGetEncoderAndMetadata [#initencoderandgetencoderandmetadata]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata", "Encoder": "../../classes/encoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+std::tuple<Encoder *, ChunkMetadata *, const ColumnDescriptor *> foreign_storage::ParquetGeospatialImportEncoder::initEncoderAndGetEncoderAndMetadata(
+    std::list<Chunk_NS::Chunk> &chunks,
+    std::list<std::unique_ptr<ChunkMetadata>> &chunk_metadata,
+    const SQLTypes sql_type,
+    GeoColumnType geo_column_type
+)
+```
+</CodeBlock>
+
+### getColumnDescriptor [#getcolumndescriptor]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "Chunk": "../../chunkns/classes/chunk", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+const ColumnDescriptor * foreign_storage::ParquetGeospatialImportEncoder::getColumnDescriptor(
+    std::list<Chunk_NS::Chunk> &chunks,
+    const SQLTypes sql_type,
+    GeoColumnType geo_column_type
+)
+```
+</CodeBlock>
+
+### hasBoundsColumn [#hasboundscolumn]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ParquetGeospatialImportEncoder::hasBoundsColumn() const
+```
+</CodeBlock>
+
+### hasRingOrLineSizesColumn [#hasringorlinesizescolumn]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ParquetGeospatialImportEncoder::hasRingOrLineSizesColumn() const
+```
+</CodeBlock>
+
+### hasPolyRingsColumn [#haspolyringscolumn]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ParquetGeospatialImportEncoder::hasPolyRingsColumn() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### createMetadata [#createmetadata]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ChunkMetadata": "../../structs/chunkmetadata", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static std::shared_ptr<ChunkMetadata> foreign_storage::ParquetGeospatialImportEncoder::createMetadata(
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### throwNotNullViolation [#thrownotnullviolation]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetGeospatialImportEncoder::throwNotNullViolation(
+    const std::string &parquet_column_name
+)
+```
+</CodeBlock>
+
+### validateNullCount [#validatenullcount]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetGeospatialImportEncoder::validateNullCount(
+    const std::string &parquet_column_name,
+    int64_t null_count,
+    const SQLTypeInfo &column_type
+)
+```
+</CodeBlock>
+
+### throwMalformedGeoElement [#throwmalformedgeoelement]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetGeospatialImportEncoder::throwMalformedGeoElement(
+    const std::string &omnisci_column_name
+)
+```
+</CodeBlock>
+
+### throwMismatchedGeoElement [#throwmismatchedgeoelement]
+
+<CodeBlock links={{"ParquetGeospatialImportEncoder": "parquetgeospatialimportencoder", "ParquetEncoder": "parquetencoder", "GeospatialEncoder": "geospatialencoder", "ParquetImportEncoder": "parquetimportencoder"}}>
+```cpp showLineNumbers={false}
+static void foreign_storage::ParquetGeospatialImportEncoder::throwMismatchedGeoElement(
+    const std::string &omnisci_column_name
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### GeoColumnType
+
+| Name | Value | Description |
+|---|---|---|
+| `COORDS` | | |
+| `BOUNDS` | | |
+| `RING_OR_LINE_SIZES` | | |
+| `POLY_RINGS` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `current_batch_offset_` | `int64_t` | |
+| `invalid_indices_` | `InvalidRowGroupIndices *` | |
+| `base_column_buffer_` | `TypedParquetStorageBuffer< std::string > *` | |
+| `coords_column_buffer_` | `TypedParquetStorageBuffer< ArrayDatum > *` | |
+| `bounds_column_buffer_` | `TypedParquetStorageBuffer< ArrayDatum > *` | |
+| `ring_or_line_sizes_column_buffer_` | `TypedParquetStorageBuffer< ArrayDatum > *` | |
+| `poly_rings_column_buffer_` | `TypedParquetStorageBuffer< ArrayDatum > *` | |
+| `buffer_` | `Data_Namespace::AbstractBuffer *` | |
+| `is_error_tracking_enabled_` | `bool` | |
+| `current_chunk_offset_` | `size_t` | |
+| `column_type_` | `SQLTypeInfo` | |
+| `validate_metadata_stats_` | `bool` | |
+| `geo_column_descriptor_` | `const ColumnDescriptor *` | |
+| `base_column_encoder_` | `StringNoneEncoder *` | |
+| `coords_column_encoder_` | `Encoder *` | |
+| `bounds_column_encoder_` | `Encoder *` | |
+| `ring_or_line_sizes_column_encoder_` | `Encoder *` | |
+| `poly_rings_column_encoder_` | `Encoder *` | |
+| `base_column_metadata_` | `ChunkMetadata *` | |
+| `coords_column_metadata_` | `ChunkMetadata *` | |
+| `bounds_column_metadata_` | `ChunkMetadata *` | |
+| `ring_or_line_sizes_column_metadata_` | `ChunkMetadata *` | |
+| `poly_rings_column_metadata_` | `ChunkMetadata *` | |
+| `coords_column_descriptor_` | `const ColumnDescriptor *` | |
+| `bounds_column_descriptor_` | `const ColumnDescriptor *` | |
+| `ring_or_line_sizes_column_descriptor_` | `const ColumnDescriptor *` | |
+| `poly_rings_column_descriptor_` | `const ColumnDescriptor *` | |
+| `base_values_` | `std::vector< std::string >` | |
+| `coords_parse_buffer_` | `std::vector< double >` | |
+| `bounds_parse_buffer_` | `std::vector< double >` | |
+| `ring_or_line_sizes_parse_buffer_` | `std::vector< int >` | |
+| `poly_rings_parse_buffer_` | `std::vector< int >` | |
+| `coords_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `bounds_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `ring_or_line_sizes_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `poly_rings_datum_buffer_` | `std::vector< ArrayDatum >` | |
+| `geo_validate_geometry_` | `bool` | |

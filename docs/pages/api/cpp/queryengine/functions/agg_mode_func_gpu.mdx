@@ -1,0 +1,33 @@
+---
+title: agg_mode_func_gpu
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+__device__ int32_t agg_mode_func_gpu(
+    int64_t *const agg,
+    int64_t const val,
+    int64_t const base_dev_addr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+NEVER_INLINE int32_t agg_mode_func_gpu(
+    int64_t *agg,
+    int64_t const val,
+    int64_t const base_dev_addr
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

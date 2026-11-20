@@ -1,0 +1,146 @@
+---
+title: ExecutorResourceMgr_Namespace::OutstandingQueueRequests
+description: "@type OutstandingQueueRequests"
+---
+
+@type `OutstandingQueueRequests`
+
+Stores and allows access to a binary semaphore per [RequestId](../typedefs/requestid) (using an `std::unordered_map`), as well as accessing all outstanding RequestIds for waiting requests
+
+```cpp showLineNumbers={false}
+#include <ExecutorResourceMgr_Namespace/OutstandingQueueRequests.h>
+```
+
+---
+
+## Methods
+
+### queue_request_and_wait [#queuerequestandwait]
+
+<CodeBlock links={{"OutstandingQueueRequests": "outstandingqueuerequests"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::OutstandingQueueRequests::queue_request_and_wait(
+    const RequestId request_id
+)
+```
+</CodeBlock>
+
+Submits a request with id `request_id` into the queue, waiting on a `BinarySemaphore` until [`ExecutorResourceMgr`](executorresourcemgr) decides to grant the request resources and wakes the waiting thread.
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) for this request
+</ParamField>
+
+### queue_request_and_wait_with_timeout [#queuerequestandwaitwithtimeout]
+
+<CodeBlock links={{"OutstandingQueueRequests": "outstandingqueuerequests"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::OutstandingQueueRequests::queue_request_and_wait_with_timeout(
+    const RequestId request_id,
+    const size_t max_wait_in_ms
+)
+```
+</CodeBlock>
+
+Submits a request with id `request_id` into the queue, waiting on a `BinarySemaphore` until [`ExecutorResourceMgr`](executorresourcemgr) decides to grant the request resources and wakes the waiting thread.
+
+If it waits for a period longer than `max_wait_in_ms`, a [`QueryTimedOutWaitingInQueue`](querytimedoutwaitinginqueue) exception is thrown.
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) for this request
+</ParamField>
+
+### get_outstanding_request_ids [#getoutstandingrequestids]
+
+<CodeBlock links={{"OutstandingQueueRequests": "outstandingqueuerequests"}}>
+```cpp showLineNumbers={false}
+std::vector<RequestId> ExecutorResourceMgr_Namespace::OutstandingQueueRequests::get_outstanding_request_ids()
+```
+</CodeBlock>
+
+Get the [`RequestId`](../typedefs/requestid)s of all outsanding requests in the queue.
+
+**Returns:** std::vector&lt;RequestId&gt; - The vector of request ids for outstanding requests in the queue
+
+### wake_request_by_id [#wakerequestbyid]
+
+<CodeBlock links={{"OutstandingQueueRequests": "outstandingqueuerequests"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::OutstandingQueueRequests::wake_request_by_id(
+    const RequestId request_id
+)
+```
+</CodeBlock>
+
+Wakes a waiting thread in the queue.
+
+Invoked by `ExecutorResourceMgr::process_queue_loop()`
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) of the request/thread that should be awoken
+</ParamField>
+
+### get_semaphore_for_request [#getsemaphoreforrequest]
+
+<CodeBlock links={{"OutstandingQueueRequests": "outstandingqueuerequests"}}>
+```cpp showLineNumbers={false}
+SemaphoreShim_Namespace::BinarySemaphore & ExecutorResourceMgr_Namespace::OutstandingQueueRequests::get_semaphore_for_request(
+    const RequestId request_id
+)
+```
+</CodeBlock>
+
+Creates a new entry in `outstanding_requests_map_`, assigning a `BinarySemaphore` for the given requesting thread with id `request_id`.
+
+**Returns:** SemaphoreShim_Namespace::BinarySemaphore& - a reference to the `BinarySemaphore` that was added to `outstanding_requests_map_` for this request
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) for the requesting thread - will be used as a key in `outstanding_requests_map_`
+</ParamField>
+
+### delete_semaphore_for_request [#deletesemaphoreforrequest]
+
+<CodeBlock links={{"OutstandingQueueRequests": "outstandingqueuerequests"}}>
+```cpp showLineNumbers={false}
+void ExecutorResourceMgr_Namespace::OutstandingQueueRequests::delete_semaphore_for_request(
+    const RequestId request_id
+)
+```
+</CodeBlock>
+
+Internal method: removes a [`RequestId`](../typedefs/requestid)-`BinarySemaphore` entry from `outstanding_requests_map_`.
+
+Invoked after a request thread is awoken (including on timeout).
+
+**Parameters**
+
+<ParamField path="request_id" type="const RequestId">
+- [`RequestId`](../typedefs/requestid) key to be removed from the `outstanding_requests_map_`
+</ParamField>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `OutstandingQueueRequestsMap` | `std::unordered_map< RequestId, SemaphoreShim_Namespace::BinarySemaphore >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `outstanding_requests_map_` | `OutstandingQueueRequestsMap` | Stores a map of [`RequestId`](../typedefs/requestid) to `BinarySemaphore`. |
+| `requests_map_mutex_` | `std::shared_mutex` | Read-write lock protecting the `outstanding_requests_map_`. |

@@ -1,0 +1,369 @@
+---
+title: ChunkMetadataRecycler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ChunkMetadataRecycler.h>
+```
+
+**Inherits from:** `DataRecycler< std::optional< ChunkMetadataMap >, ChunkMetadataMetaInfo >` (public)
+
+---
+
+## Constructors
+
+### ChunkMetadataRecycler [#chunkmetadatarecycler]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler"}}>
+```cpp showLineNumbers={false}
+ChunkMetadataRecycler::ChunkMetadataRecycler()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getItemFromCache [#getitemfromcache]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "ChunkMetadataMetaInfo": "../structs/chunkmetadatametainfo"}}>
+```cpp showLineNumbers={false}
+std::optional<ChunkMetadataMap> ChunkMetadataRecycler::getItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::optional<ChunkMetadataMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### putItemToCache [#putitemtocache]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "ChunkMetadataMetaInfo": "../structs/chunkmetadatametainfo"}}>
+```cpp showLineNumbers={false}
+void ChunkMetadataRecycler::putItemToCache(
+    QueryPlanHash key,
+    std::optional<ChunkMetadataMap> item,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    size_t item_size,
+    size_t compute_time,
+    std::optional<ChunkMetadataMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### initCache [#initcache]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler"}}>
+```cpp showLineNumbers={false}
+void ChunkMetadataRecycler::initCache() override
+```
+</CodeBlock>
+
+### clearCache [#clearcache]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler"}}>
+```cpp showLineNumbers={false}
+void ChunkMetadataRecycler::clearCache() override
+```
+</CodeBlock>
+
+### markCachedItemAsDirty [#markcacheditemasdirty]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler"}}>
+```cpp showLineNumbers={false}
+void ChunkMetadataRecycler::markCachedItemAsDirty(
+    size_t table_key,
+    std::unordered_set<QueryPlanHash> &key_set,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler"}}>
+```cpp showLineNumbers={false}
+std::string ChunkMetadataRecycler::toString() const override
+```
+</CodeBlock>
+
+### addQueryPlanDagForTableKeys [#addqueryplandagfortablekeys]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler"}}>
+```cpp showLineNumbers={false}
+void ChunkMetadataRecycler::addQueryPlanDagForTableKeys(
+    size_t hashed_query_plan_dag,
+    const std::unordered_set<size_t> &table_keys,
+    std::lock_guard<std::mutex> &lock
+)
+```
+</CodeBlock>
+
+### getMappedQueryPlanDagsWithTableKey [#getmappedqueryplandagswithtablekey]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler"}}>
+```cpp showLineNumbers={false}
+std::optional<std::unordered_set<size_t>> ChunkMetadataRecycler::getMappedQueryPlanDagsWithTableKey(
+    size_t table_key
+) const
+```
+</CodeBlock>
+
+### removeTableKeyInfoFromQueryPlanDagMap [#removetablekeyinfofromqueryplandagmap]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler"}}>
+```cpp showLineNumbers={false}
+void ChunkMetadataRecycler::removeTableKeyInfoFromQueryPlanDagMap(
+    size_t table_key
+)
+```
+</CodeBlock>
+
+### markCachedItemAsDirtyImpl [#markcacheditemasdirtyimpl]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::markCachedItemAsDirtyImpl(
+    QueryPlanHash key,
+    CachedItemContainer &m
+) const
+```
+</CodeBlock>
+
+### isCachedItemDirty [#iscacheditemdirty]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+bool DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::isCachedItemDirty(
+    QueryPlanHash key,
+    CachedItemContainer &m
+) const
+```
+</CodeBlock>
+
+### getCachedItemContainer [#getcacheditemcontainer]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CachedItemContainer> DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getCachedItemContainer(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCachedItemWithoutConsideringMetaInfo [#getcacheditemwithoutconsideringmetainfo]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "CachedItem": "../structs/cacheditem", "ChunkMetadataMetaInfo": "../structs/chunkmetadatametainfo", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::optional<CachedItem<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>> DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getCachedItemWithoutConsideringMetaInfo(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    CachedItemContainer &m,
+    std::lock_guard<std::mutex> &lock
+)
+```
+</CodeBlock>
+
+### getCurrentNumCachedItems [#getcurrentnumcacheditems]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getCurrentNumCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentNumDirtyCachedItems [#getcurrentnumdirtycacheditems]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getCurrentNumDirtyCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentNumCleanCachedItems [#getcurrentnumcleancacheditems]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getCurrentNumCleanCachedItems(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCurrentCacheSizeForDevice [#getcurrentcachesizefordevice]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+size_t DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getCurrentCacheSizeForDevice(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+) const
+```
+</CodeBlock>
+
+### getCachedItemMetric [#getcacheditemmetric]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "CacheItemMetric": "cacheitemmetric", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<CacheItemMetric> DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getCachedItemMetric(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    QueryPlanHash key
+) const
+```
+</CodeBlock>
+
+### setTotalCacheSize [#settotalcachesize]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::setTotalCacheSize(
+    CacheItemType item_type,
+    size_t new_total_cache_size
+)
+```
+</CodeBlock>
+
+### setMaxCacheItemSize [#setmaxcacheitemsize]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::setMaxCacheItemSize(
+    CacheItemType item_type,
+    size_t new_max_cache_item_size
+)
+```
+</CodeBlock>
+
+### hasItemInCache [#hasitemincache]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "ChunkMetadataMetaInfo": "../structs/chunkmetadatametainfo"}}>
+```cpp showLineNumbers={false}
+bool ChunkMetadataRecycler::hasItemInCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<ChunkMetadataMetaInfo> meta_info = std::nullopt
+) const override
+```
+</CodeBlock>
+
+### removeItemFromCache [#removeitemfromcache]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "ChunkMetadataMetaInfo": "../structs/chunkmetadatametainfo"}}>
+```cpp showLineNumbers={false}
+void ChunkMetadataRecycler::removeItemFromCache(
+    QueryPlanHash key,
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<ChunkMetadataMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### cleanupCacheForInsertion [#cleanupcacheforinsertion]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "ChunkMetadataMetaInfo": "../structs/chunkmetadatametainfo"}}>
+```cpp showLineNumbers={false}
+void ChunkMetadataRecycler::cleanupCacheForInsertion(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    size_t required_size,
+    std::lock_guard<std::mutex> &lock,
+    std::optional<ChunkMetadataMetaInfo> meta_info = std::nullopt
+) override
+```
+</CodeBlock>
+
+### removeCachedItemFromBeginning [#removecacheditemfrombeginning]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::removeCachedItemFromBeginning(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier,
+    int offset
+)
+```
+</CodeBlock>
+
+### sortCacheContainerByQueryMetric [#sortcachecontainerbyquerymetric]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+void DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::sortCacheContainerByQueryMetric(
+    CacheItemType item_type,
+    DeviceIdentifier device_identifier
+)
+```
+</CodeBlock>
+
+### getCacheLock [#getcachelock]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::mutex & DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getCacheLock() const
+```
+</CodeBlock>
+
+### getMetricTracker [#getmetrictracker]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "CacheMetricTracker": "cachemetrictracker", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+CacheMetricTracker & DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getMetricTracker(
+    CacheItemType item_type
+)
+```
+</CodeBlock>
+
+### getCacheItemType [#getcacheitemtype]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<CacheItemType> const & DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getCacheItemType() const
+```
+</CodeBlock>
+
+### getItemCache [#getitemcache]
+
+<CodeBlock links={{"ChunkMetadataRecycler": "chunkmetadatarecycler", "DataRecycler": "datarecycler"}}>
+```cpp showLineNumbers={false}
+PerTypeCacheItemContainer const & DataRecycler<std::optional<ChunkMetadataMap>, ChunkMetadataMetaInfo>::getItemCache() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `CachedItemContainer` | `std::vector< CachedItem< std::optional< ChunkMetadataMap >, ChunkMetadataMetaInfo > >` |
+| `PerDeviceCacheItemContainer` | `std::unordered_map< DeviceIdentifier, std::shared_ptr< CachedItemContainer > >` |
+| `PerTypeCacheItemContainer` | `std::unordered_map< CacheItemType, std::shared_ptr< PerDeviceCacheItemContainer > >` |
+| `PerTypeCacheMetricTracker` | `std::unordered_map< CacheItemType, CacheMetricTracker >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `table_key_to_query_plan_dag_map_` | `std::unordered_map< size_t, std::unordered_set< size_t > >` | |

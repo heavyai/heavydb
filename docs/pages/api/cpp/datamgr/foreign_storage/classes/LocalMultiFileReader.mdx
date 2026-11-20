@@ -1,0 +1,281 @@
+---
+title: foreign_storage::LocalMultiFileReader
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/FileReader.h>
+```
+
+**Inherits from:** `foreign_storage::MultiFileReader` (public)
+
+---
+
+## Constructors
+
+### LocalMultiFileReader [#localmultifilereader]
+
+<Tabs>
+<Tab title="Copy (with options and max file count)">
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader"}}>
+```cpp showLineNumbers={false}
+foreign_storage::LocalMultiFileReader::LocalMultiFileReader(
+    const std::string &file_path,
+    const import_export::CopyParams &copy_params,
+    const shared::FilePathOptions &options,
+    const std::optional<size_t> &max_file_count
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with value)">
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader"}}>
+```cpp showLineNumbers={false}
+foreign_storage::LocalMultiFileReader::LocalMultiFileReader(
+    const std::string &file_path,
+    const import_export::CopyParams &copy_params,
+    const rapidjson::Value &value
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### checkForMoreRows [#checkformorerows]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::LocalMultiFileReader::checkForMoreRows(
+    size_t file_offset,
+    const shared::FilePathOptions &options,
+    const ForeignServer *server_options,
+    const UserMapping *user_mapping
+) override
+```
+</CodeBlock>
+
+Rescan the target files Throws an exception if the rescan fails (ie files are not in a valid appended state or not supported).
+
+**Parameters**
+
+<ParamField path="file_offset" type="size_t">
+- Where to resume the scan from (end of the last row) as not all of the bytes may have been consumed by the upstream compoennet
+</ParamField>
+
+<ParamField path="server_options" type="const ForeignServer *">
+- Only needed for S3 backed files
+</ParamField>
+
+<ParamField path="user_mapping" type="const UserMapping *">
+- Only needed for S3 backed files
+</ParamField>
+
+### getRemainingSize [#getremainingsize]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::LocalMultiFileReader::getRemainingSize() override
+```
+</CodeBlock>
+
+**Returns:** size of the remaining content to be read
+
+### isRemainingSizeKnown [#isremainingsizeknown]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::LocalMultiFileReader::isRemainingSizeKnown() override
+```
+</CodeBlock>
+
+**Returns:** if remaining size is known
+
+### read [#read]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::LocalMultiFileReader::read(
+    void *buffer,
+    size_t max_size
+) override
+```
+</CodeBlock>
+
+Read up to max_size bytes from archive into buffer starting starting from the end of the last read.
+
+**Returns:** number of bytes actually read
+
+**Parameters**
+
+<ParamField path="buffer" type="void *">
+- Buffer to load into
+</ParamField>
+
+<ParamField path="max_size" type="size_t">
+- Maximum number of bytes to read into the buffer
+</ParamField>
+
+### readRegion [#readregion]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::LocalMultiFileReader::readRegion(
+    void *buffer,
+    size_t offset,
+    size_t size
+) override
+```
+</CodeBlock>
+
+Read up to max_size bytes from archive, starting at given offset isScanFinished() must return true to use readRegion.
+
+**Returns:** number of bytes actually read
+
+**Parameters**
+
+<ParamField path="buffer" type="void *">
+- Buffer to load into
+</ParamField>
+
+<ParamField path="offset" type="size_t">
+- Starting point into the archive to read
+</ParamField>
+
+<ParamField path="size" type="size_t">
+- Maximum number of bytes to read into the buffer
+</ParamField>
+
+### isScanFinished [#isscanfinished]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::LocalMultiFileReader::isScanFinished() const override
+```
+</CodeBlock>
+
+**Returns:** true if the entire file has been read
+
+### serialize [#serialize]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::LocalMultiFileReader::serialize(
+    rapidjson::Value &value,
+    rapidjson::Document::AllocatorType &allocator
+) const override
+```
+</CodeBlock>
+
+Serialize internal state to given json object This Json will later be used to restore the reader state through a constructor must be called when isScanFinished() is true.
+
+**Parameters**
+
+<ParamField path="value" type="rapidjson::Value &">
+- Json object to store needed state to this function can store any needed data or none
+</ParamField>
+
+<ParamField path="allocator" type="rapidjson::Document::AllocatorType &">
+- Allocator to use for json contruction
+</ParamField>
+
+### getFirstLineForEachFile [#getfirstlineforeachfile]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+FirstLineByFilePath foreign_storage::LocalMultiFileReader::getFirstLineForEachFile() const override
+```
+</CodeBlock>
+
+Returns a map containing the first line for each file that will be read.
+
+### isEndOfLastFile [#isendoflastfile]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::LocalMultiFileReader::isEndOfLastFile() override
+```
+</CodeBlock>
+
+Returns a boolean indicating whether the reader is at the end of the last file that was read.
+
+### getCurrentFilePath [#getcurrentfilepath]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+std::string foreign_storage::LocalMultiFileReader::getCurrentFilePath() const override
+```
+</CodeBlock>
+
+Returns the path of the currently processed file.
+
+### removeFile [#removefile]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::LocalMultiFileReader::removeFile(
+    const std::string &path
+)
+```
+</CodeBlock>
+
+### getNumFiles [#getnumfiles]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::LocalMultiFileReader::getNumFiles() const
+```
+</CodeBlock>
+
+### checkForRolledOffFiles [#checkforrolledofffiles]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+std::set<std::string> foreign_storage::LocalMultiFileReader::checkForRolledOffFiles(
+    const shared::FilePathOptions &file_path_options
+)
+```
+</CodeBlock>
+
+### getAllFilePaths [#getallfilepaths]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> foreign_storage::LocalMultiFileReader::getAllFilePaths(
+    const shared::FilePathOptions &file_path_options
+) const override
+```
+</CodeBlock>
+
+### insertFile [#insertfile]
+
+<CodeBlock links={{"LocalMultiFileReader": "localmultifilereader"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::LocalMultiFileReader::insertFile(
+    std::string location
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `files_` | `std::vector< std::unique_ptr< FileReader > >` | |
+| `file_locations_` | `std::vector< std::string >` | |
+| `cumulative_sizes_` | `std::vector< size_t >` | |
+| `current_index_` | `size_t` | |
+| `current_offset_` | `size_t` | |
+| `starting_offset_` | `size_t` | |
+| `is_end_of_last_file_` | `bool` | |
+| `copy_params_` | `import_export::CopyParams` | |
+| `file_path_` | `std::string` | |

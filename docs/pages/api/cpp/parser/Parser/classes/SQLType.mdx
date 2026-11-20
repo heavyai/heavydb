@@ -1,0 +1,86 @@
+---
+title: Parser::SQLType
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::Node` (public), `ddl_utils::SqlType` (public)
+
+---
+
+## Constructors
+
+### SQLType [#sqltype]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>explicit</Badge>
+
+<CodeBlock links={{"SQLType": "sqltype"}}>
+```cpp showLineNumbers={false}
+Parser::SQLType::SQLType(
+    SQLTypes t
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SQLType": "sqltype"}}>
+```cpp showLineNumbers={false}
+Parser::SQLType::SQLType(
+    SQLTypes t,
+    int p1
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"SQLType": "sqltype"}}>
+```cpp showLineNumbers={false}
+Parser::SQLType::SQLType(
+    SQLTypes t,
+    int p1,
+    int p2,
+    bool a
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"SQLType": "sqltype"}}>
+```cpp showLineNumbers={false}
+Parser::SQLType::SQLType(
+    SQLTypes t,
+    int p1,
+    int p2,
+    bool a,
+    int array_size
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"SQLType": "sqltype"}}>
+```cpp showLineNumbers={false}
+Parser::SQLType::SQLType(
+    SQLTypes t,
+    bool a,
+    int array_size
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

@@ -1,0 +1,23 @@
+---
+title: shared::common_regex_number_comp_
+description: ""
+---
+
+```cpp showLineNumbers={false}
+const std::function<bool(const std::string &, const std::string &)> shared::common_regex_number_comp_ =
+        [](const std::string& lhs, const std::string& rhs) -> bool {
+  int64_t lhs_i;
+  int64_t rhs_i;
+  try {
+    lhs_i = stoll(lhs, 0);
+  } catch (const std::exception& e) {
+    lhs_i = 0;
+  }
+  try {
+    rhs_i = stoll(rhs, 0);
+  } catch (const std::exception& e) {
+    rhs_i = 0;
+  }
+  return lhs_i < rhs_i;
+}
+```

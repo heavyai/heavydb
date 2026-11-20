@@ -1,0 +1,15 @@
+---
+title: lockmgr::validate_table_descriptor_after_lock
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+void lockmgr::validate_table_descriptor_after_lock(
+    const TableDescriptor *td_prelock,
+    const Catalog_Namespace::Catalog &cat,
+    const std::string &table_name,
+    const bool populate_fragmenter
+)
+```
+</CodeBlock>

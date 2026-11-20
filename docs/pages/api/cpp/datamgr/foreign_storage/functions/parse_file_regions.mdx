@@ -1,0 +1,20 @@
+---
+title: foreign_storage::parse_file_regions
+description: "Parses a set of file regions given a handle to the file and range of indexes for the file regions to be parsed."
+---
+
+<CodeBlock links={{"FileReader": "../classes/filereader", "ParseBufferRequest": "../structs/parsebufferrequest", "Chunk": "../../chunkns/classes/chunk", "TextFileBufferParser": "../classes/textfilebufferparser", "ParseFileRegionResult": "../structs/parsefileregionresult"}}>
+```cpp showLineNumbers={false}
+ParseFileRegionResult foreign_storage::parse_file_regions(
+    const FileRegions &file_regions,
+    const size_t start_index,
+    const size_t end_index,
+    FileReader &file_reader,
+    ParseBufferRequest &parse_file_request,
+    const std::map<int, Chunk_NS::Chunk> &column_id_to_chunk_map,
+    const TextFileBufferParser &parser
+)
+```
+</CodeBlock>
+
+Parses a set of file regions given a handle to the file and range of indexes for the file regions to be parsed.

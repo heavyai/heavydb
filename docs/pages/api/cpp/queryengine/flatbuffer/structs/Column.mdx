@@ -1,0 +1,201 @@
+---
+title: flatbuffer::Column
+description: ""
+---
+
+<CodeBlock id="Column" links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+template <typename RowType, typename RowStruct>
+struct Column
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <flatbuffer/heavydbTypes.h>
+```
+
+**Template parameters**
+
+<ParamField path="RowType" type="typename">
+</ParamField>
+
+<ParamField path="RowStruct" type="typename">
+</ParamField>
+
+---
+
+## Constructors
+
+### Column [#column]
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+flatbuffer::Column<RowType, RowStruct>::Column(
+    int8_t *flatbuffer,
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### isNull [#isnull]
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE bool flatbuffer::Column<RowType, RowStruct>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t flatbuffer::Column<RowType, RowStruct>::size() const
+```
+</CodeBlock>
+
+### setNull [#setnull]
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<RowType, RowStruct>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE RowType flatbuffer::Column<RowType, RowStruct>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with extra numel)">
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE RowType flatbuffer::Column<RowType, RowStruct>::getItem(
+    const int64_t index,
+    const int64_t extra_numel
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE RowType flatbuffer::Column<RowType, RowStruct>::operator[](
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE RowStruct flatbuffer::Column<RowType, RowStruct>::operator()(
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### setItem [#setitem]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<RowType, RowStruct>::setItem(
+    int64_t index,
+    const RowType &item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<RowType, RowStruct>::setItem(
+    int64_t index,
+    const RowStruct &item
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNofValues [#getnofvalues]
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+int64_t flatbuffer::Column<RowType, RowStruct>::getNofValues() const
+```
+</CodeBlock>
+
+### concatItem [#concatitem]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<RowType, RowStruct>::concatItem(
+    int64_t index,
+    const RowType &item
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::Column<RowType, RowStruct>::concatItem(
+    int64_t index,
+    const RowStruct &item
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"Column": "column"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::Column<RowType, RowStruct>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `flatbuffer_` | `int8_t *` | |
+| `num_rows_` | `int64_t` | |

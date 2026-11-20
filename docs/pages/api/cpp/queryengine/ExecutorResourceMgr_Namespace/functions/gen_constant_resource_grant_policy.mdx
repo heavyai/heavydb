@@ -1,0 +1,23 @@
+---
+title: ExecutorResourceMgr_Namespace::gen_constant_resource_grant_policy
+description: "Generates a ResourceGrantPolicy with ResourceGrantPolicySizeType::CONSTANT."
+---
+
+<CodeBlock links={{"ResourceGrantPolicy": "../structs/resourcegrantpolicy"}}>
+```cpp showLineNumbers={false}
+ResourceGrantPolicy ExecutorResourceMgr_Namespace::gen_constant_resource_grant_policy(
+    const ResourceSubtype resource_subtype,
+    size_t constant_grant
+)
+```
+</CodeBlock>
+
+Generates a [`ResourceGrantPolicy`](../structs/resourcegrantpolicy) with `ResourceGrantPolicySizeType::CONSTANT`.
+
+**Returns:** [ResourceGrantPolicy](../structs/resourcegrantpolicy) - The generated "constant-sized" [`ResourceGrantPolicy`](../structs/resourcegrantpolicy)
+
+**Parameters**
+
+<ParamField path="resource_subtype" type="const ResourceSubtype">
+- Type of resource subtype to create a [`ResourceGrantPolicy`](../structs/resourcegrantpolicy) for
+</ParamField>

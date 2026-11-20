@@ -1,0 +1,15 @@
+---
+title: foreign_storage::create_request
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+Aws::S3::Model::GetObjectRequest foreign_storage::create_request(
+    const std::string &bucket_name,
+    const std::string &obj_name,
+    size_t start,
+    size_t end
+)
+```
+</CodeBlock>

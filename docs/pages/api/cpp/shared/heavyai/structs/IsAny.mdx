@@ -1,0 +1,35 @@
+---
+title: heavyai::IsAny
+description: ""
+---
+
+<CodeBlock id="IsAny" links={{"IsAny": "isany"}}>
+```cpp showLineNumbers={false}
+template <auto... Values>
+struct IsAny
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <heavyai/define_enum_class.h>
+```
+
+**Template parameters**
+
+<ParamField path="Values..." type="auto...">
+</ParamField>
+
+---
+
+## Static methods
+
+### check [#check]
+
+<CodeBlock links={{"IsAny": "isany"}}>
+```cpp showLineNumbers={false}
+template <typename T>
+static bool heavyai::IsAny<Values>::check(
+    T const value
+)
+```
+</CodeBlock>

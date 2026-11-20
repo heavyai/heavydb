@@ -1,0 +1,108 @@
+---
+title: ThrustAllocator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ThrustAllocator.h>
+```
+
+---
+
+## Constructors
+
+### ThrustAllocator [#thrustallocator]
+
+<CodeBlock links={{"ThrustAllocator": "thrustallocator", "DataMgr": "../datanamespace/classes/datamgr"}}>
+```cpp showLineNumbers={false}
+ThrustAllocator::ThrustAllocator(
+    Data_Namespace::DataMgr *mgr,
+    const int id
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~ThrustAllocator
+
+<CodeBlock links={{"ThrustAllocator": "thrustallocator"}}>
+```cpp showLineNumbers={false}
+ThrustAllocator::~ThrustAllocator()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocate [#allocate]
+
+<CodeBlock links={{"ThrustAllocator": "thrustallocator"}}>
+```cpp showLineNumbers={false}
+int8_t * ThrustAllocator::allocate(
+    std::ptrdiff_t num_bytes
+)
+```
+</CodeBlock>
+
+### deallocate [#deallocate]
+
+<CodeBlock links={{"ThrustAllocator": "thrustallocator"}}>
+```cpp showLineNumbers={false}
+void ThrustAllocator::deallocate(
+    int8_t *ptr,
+    size_t num_bytes
+)
+```
+</CodeBlock>
+
+### allocateScopedBuffer [#allocatescopedbuffer]
+
+<CodeBlock links={{"ThrustAllocator": "thrustallocator"}}>
+```cpp showLineNumbers={false}
+int8_t * ThrustAllocator::allocateScopedBuffer(
+    std::ptrdiff_t num_bytes
+)
+```
+</CodeBlock>
+
+### getDataMgr [#getdatamgr]
+
+<CodeBlock links={{"ThrustAllocator": "thrustallocator", "DataMgr": "../datanamespace/classes/datamgr"}}>
+```cpp showLineNumbers={false}
+Data_Namespace::DataMgr * ThrustAllocator::getDataMgr() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"ThrustAllocator": "thrustallocator"}}>
+```cpp showLineNumbers={false}
+int ThrustAllocator::getDeviceId() const
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `value_type` | `int8_t` |
+| `PtrMapperType` | `std::unordered_map< int8_t *, Data_Namespace::AbstractBuffer * >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `data_mgr_` | `Data_Namespace::DataMgr *` | |
+| `device_id_` | `const int` | |
+| `raw_to_ab_ptr_` | `PtrMapperType` | |
+| `scoped_buffers_` | `std::vector< Data_Namespace::AbstractBuffer * >` | |
+| `default_alloc_scoped_buffers_` | `std::vector< int8_t * >` | |
+| `num_allocations_` | `size_t` | |

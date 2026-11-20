@@ -1,0 +1,168 @@
+---
+title: Parser::QuerySpec
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::QueryExpr` (public)
+
+---
+
+## Constructors
+
+### QuerySpec [#queryspec]
+
+<CodeBlock links={{"QuerySpec": "queryspec", "SelectEntry": "selectentry", "TableRef": "tableref", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Parser::QuerySpec::QuerySpec(
+    bool d,
+    std::list<SelectEntry *> *s,
+    std::list<TableRef *> *f,
+    Expr *w,
+    std::list<Expr *> *g,
+    Expr *h
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_is_distinct [#getisdistinct]
+
+<CodeBlock links={{"QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+bool Parser::QuerySpec::get_is_distinct() const
+```
+</CodeBlock>
+
+### get_select_clause [#getselectclause]
+
+<CodeBlock links={{"QuerySpec": "queryspec", "SelectEntry": "selectentry"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<SelectEntry>> & Parser::QuerySpec::get_select_clause() const
+```
+</CodeBlock>
+
+### get_from_clause [#getfromclause]
+
+<CodeBlock links={{"QuerySpec": "queryspec", "TableRef": "tableref"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<TableRef>> & Parser::QuerySpec::get_from_clause() const
+```
+</CodeBlock>
+
+### get_where_clause [#getwhereclause]
+
+<CodeBlock links={{"QuerySpec": "queryspec", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::QuerySpec::get_where_clause() const
+```
+</CodeBlock>
+
+### get_groupby_clause [#getgroupbyclause]
+
+<CodeBlock links={{"QuerySpec": "queryspec", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::list<std::unique_ptr<Expr>> & Parser::QuerySpec::get_groupby_clause() const
+```
+</CodeBlock>
+
+### get_having_clause [#gethavingclause]
+
+<CodeBlock links={{"QuerySpec": "queryspec", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const Expr * Parser::QuerySpec::get_having_clause() const
+```
+</CodeBlock>
+
+### analyze [#analyze]
+
+<CodeBlock links={{"QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+void Parser::QuerySpec::analyze(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const override
+```
+</CodeBlock>
+
+### to_string [#tostring]
+
+<CodeBlock links={{"QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+std::string Parser::QuerySpec::to_string() const
+```
+</CodeBlock>
+
+### analyze_from_clause [#analyzefromclause]
+
+<CodeBlock links={{"QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+void Parser::QuerySpec::analyze_from_clause(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const
+```
+</CodeBlock>
+
+### analyze_select_clause [#analyzeselectclause]
+
+<CodeBlock links={{"QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+void Parser::QuerySpec::analyze_select_clause(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const
+```
+</CodeBlock>
+
+### analyze_where_clause [#analyzewhereclause]
+
+<CodeBlock links={{"QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+void Parser::QuerySpec::analyze_where_clause(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const
+```
+</CodeBlock>
+
+### analyze_group_by [#analyzegroupby]
+
+<CodeBlock links={{"QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+void Parser::QuerySpec::analyze_group_by(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const
+```
+</CodeBlock>
+
+### analyze_having_clause [#analyzehavingclause]
+
+<CodeBlock links={{"QuerySpec": "queryspec"}}>
+```cpp showLineNumbers={false}
+void Parser::QuerySpec::analyze_having_clause(
+    const Catalog_Namespace::Catalog &catalog,
+    Analyzer::Query &query
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `is_distinct_` | `bool` | |
+| `select_clause_` | `std::list< std::unique_ptr< SelectEntry > >` | |
+| `from_clause_` | `std::list< std::unique_ptr< TableRef > >` | |
+| `where_clause_` | `std::unique_ptr< Expr >` | |
+| `groupby_clause_` | `std::list< std::unique_ptr< Expr > >` | |
+| `having_clause_` | `std::unique_ptr< Expr >` | |

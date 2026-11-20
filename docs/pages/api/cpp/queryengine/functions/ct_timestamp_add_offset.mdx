@@ -1,0 +1,15 @@
+---
+title: ct_timestamp_add_offset
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "Timestamp": "../structs/timestamp"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_timestamp_add_offset(
+    TableFunctionManager &mgr,
+    const Column<Timestamp> &input,
+    const Timestamp offset,
+    Column<Timestamp> &out
+)
+```
+</CodeBlock>

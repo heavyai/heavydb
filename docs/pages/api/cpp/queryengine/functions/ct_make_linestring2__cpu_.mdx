@@ -1,0 +1,17 @@
+---
+title: ct_make_linestring2__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE DEVICE int32_t ct_make_linestring2__cpu_(
+    TableFunctionManager &mgr,
+    const Column<double> &x,
+    const Column<double> &y,
+    double dx,
+    double dy,
+    Column<GeoLineString> &linestrings
+)
+```
+</CodeBlock>

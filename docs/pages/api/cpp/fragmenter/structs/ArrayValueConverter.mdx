@@ -1,0 +1,115 @@
+---
+title: ArrayValueConverter
+description: ""
+---
+
+<CodeBlock id="ArrayValueConverter" links={{"ArrayValueConverter": "arrayvalueconverter"}}>
+```cpp showLineNumbers={false}
+template <typename ELEMENT_CONVERTER>
+struct ArrayValueConverter
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <TargetValueConvertersImpl.h>
+```
+
+**Template parameters**
+
+<ParamField path="ELEMENT_CONVERTER" type="typename">
+</ParamField>
+
+**Inherits from:** `TargetValueConverter` (public)
+
+---
+
+## Constructors
+
+### ArrayValueConverter [#arrayvalueconverter]
+
+<CodeBlock links={{"ArrayValueConverter": "arrayvalueconverter"}}>
+```cpp showLineNumbers={false}
+ArrayValueConverter<ELEMENT_CONVERTER>::ArrayValueConverter(
+    const ColumnDescriptor *cd,
+    size_t num_rows,
+    std::unique_ptr<ELEMENT_CONVERTER> element_converter,
+    bool do_check_null
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~ArrayValueConverter
+
+<CodeBlock links={{"ArrayValueConverter": "arrayvalueconverter"}}>
+```cpp showLineNumbers={false}
+ArrayValueConverter<ELEMENT_CONVERTER>::~ArrayValueConverter() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocateColumnarData [#allocatecolumnardata]
+
+<CodeBlock links={{"ArrayValueConverter": "arrayvalueconverter"}}>
+```cpp showLineNumbers={false}
+void ArrayValueConverter<ELEMENT_CONVERTER>::allocateColumnarData(
+    size_t num_rows
+) override
+```
+</CodeBlock>
+
+### convertToColumnarFormat [#converttocolumnarformat]
+
+<CodeBlock links={{"ArrayValueConverter": "arrayvalueconverter"}}>
+```cpp showLineNumbers={false}
+void ArrayValueConverter<ELEMENT_CONVERTER>::convertToColumnarFormat(
+    size_t row,
+    const TargetValue *value
+) override
+```
+</CodeBlock>
+
+### finalizeDataBlocksForInsertData [#finalizedatablocksforinsertdata]
+
+<CodeBlock links={{"ArrayValueConverter": "arrayvalueconverter"}}>
+```cpp showLineNumbers={false}
+void ArrayValueConverter<ELEMENT_CONVERTER>::finalizeDataBlocksForInsertData() override
+```
+</CodeBlock>
+
+### addDataBlocksToInsertData [#adddatablockstoinsertdata]
+
+<CodeBlock links={{"ArrayValueConverter": "arrayvalueconverter", "InsertData": "../fragmenternamespace/structs/insertdata"}}>
+```cpp showLineNumbers={false}
+void ArrayValueConverter<ELEMENT_CONVERTER>::addDataBlocksToInsertData(
+    Fragmenter_Namespace::InsertData &insertData
+) override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_buffer_` | `std::unique_ptr< std::vector< std::pair< size_t, typename ELEMENT_CONVERTER::ElementsBufferColumnPtr > > >` | |
+| `column_data_` | `std::unique_ptr< std::vector< ArrayDatum > >` | |
+| `element_converter_` | `std::unique_ptr< ELEMENT_CONVERTER >` | |
+| `element_type_info_` | `SQLTypeInfo` | |
+| `do_check_null_` | `bool` | |
+| `data_finalized_` | `bool` | |
+| `fixed_array_null_sentinel_` | `int8_t *` | |
+| `fixed_array_size_` | `size_t` | |
+| `fixed_array_elements_count_` | `size_t` | |
+| `ARRAY_VALUE_ACCESSOR` | `boost_variant_accessor< ArrayTargetValue >` | |
+| `column_descriptor_` | `const ColumnDescriptor *` | |
+| `SCALAR_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ScalarTargetValue >` | |
+| `ARRAY_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< ArrayTargetValue >` | |
+| `GEO_TARGET_VALUE_ACCESSOR` | `boost_variant_accessor< GeoTargetValue >` | |
+| `NULLABLE_STRING_ACCESSOR` | `boost_variant_accessor< NullableString >` | |
+| `STRING_ACCESSOR` | `boost_variant_accessor< std::string >` | |

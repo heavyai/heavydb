@@ -1,0 +1,17 @@
+---
+title: process_detections
+description: ""
+---
+
+<CodeBlock links={{"ModelInfo": "../structs/modelinfo", "RasterInfo": "../rasterformatnamespace/structs/rasterinfo", "CpuTimer": "../classes/cputimer", "Detection": "../structs/detection"}}>
+```cpp showLineNumbers={false}
+std::vector<Detection> process_detections(
+    const torch::Tensor &raw_detections,
+    const float min_confidence_threshold,
+    const float iou_threshold,
+    const ModelInfo &model_info,
+    const RasterFormat_Namespace::RasterInfo &raster_info,
+    std::shared_ptr<CpuTimer> timer
+)
+```
+</CodeBlock>

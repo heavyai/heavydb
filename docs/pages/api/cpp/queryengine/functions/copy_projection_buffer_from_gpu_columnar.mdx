@@ -1,0 +1,51 @@
+---
+title: copy_projection_buffer_from_gpu_columnar
+description: "For projection queries we only copy back as many elements as necessary, not the whole output buffer."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GpuGroupByBuffers": "../structs/gpugroupbybuffers", "QueryMemoryDescriptor": "../classes/querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void copy_projection_buffer_from_gpu_columnar(
+    DeviceAllocator *device_allocator,
+    const GpuGroupByBuffers &gpu_group_by_buffers,
+    const QueryMemoryDescriptor &query_mem_desc,
+    int8_t *projection_buffer,
+    const size_t projection_count,
+    const int device_id
+)
+```
+</CodeBlock>
+
+[For](../classes/for) projection queries we only copy back as many elements as necessary, not the whole output buffer.
+
+The goal is to be able to build a compact [ResultSet](../classes/resultset), particularly useful for columnar outputs.
+
+NOTE: Saman: we should revisit this function when we have a bump allocator
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GpuGroupByBuffers": "../structs/gpugroupbybuffers", "QueryMemoryDescriptor": "../classes/querymemorydescriptor"}}>
+```cpp showLineNumbers={false}
+void copy_projection_buffer_from_gpu_columnar(
+    DeviceAllocator *device_allocator,
+    const GpuGroupByBuffers &gpu_query_buffers,
+    const QueryMemoryDescriptor &query_mem_desc,
+    int8_t *projection_buffer,
+    const size_t projection_count,
+    const int device_id
+)
+```
+</CodeBlock>
+
+[For](../classes/for) projection queries we only copy back as many elements as necessary, not the whole output buffer.
+
+The goal is to be able to build a compact [ResultSet](../classes/resultset), particularly useful for columnar outputs.
+
+NOTE: Saman: we should revisit this function when we have a bump allocator
+
+</Tab>
+</Tabs>

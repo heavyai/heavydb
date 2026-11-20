@@ -1,0 +1,14 @@
+---
+title: ct_binding_str_length__cpu_
+description: ""
+---
+
+<CodeBlock links={{"Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+RUNTIME_EXPORT NEVER_INLINE HOST int32_t ct_binding_str_length__cpu_(
+    const Column<TextEncodingDict> &input_str,
+    Column<TextEncodingDict> &out_str,
+    Column<int64_t> &out_size
+)
+```
+</CodeBlock>

@@ -1,0 +1,37 @@
+---
+title: foreign_storage::ParquetMetadataValidator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ParquetMetadataValidator.h>
+```
+
+---
+
+## Constructors
+
+### Destructor [#destructor]
+
+### ~ParquetMetadataValidator
+
+<CodeBlock links={{"ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+virtual foreign_storage::ParquetMetadataValidator::~ParquetMetadataValidator() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### validate [#validate]
+
+<CodeBlock links={{"ParquetMetadataValidator": "parquetmetadatavalidator"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ParquetMetadataValidator::validate(
+    std::shared_ptr<parquet::Statistics> stats,
+    const SQLTypeInfo &column_type
+) const
+```
+</CodeBlock>

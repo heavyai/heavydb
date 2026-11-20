@@ -1,0 +1,108 @@
+---
+title: import_export::DataStreamSink
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <import_export/Importer.h>
+```
+
+---
+
+## Constructors
+
+### DataStreamSink [#datastreamsink]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"DataStreamSink": "datastreamsink"}}>
+```cpp showLineNumbers={false}
+import_export::DataStreamSink::DataStreamSink()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy">
+
+<CodeBlock links={{"DataStreamSink": "datastreamsink", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+import_export::DataStreamSink::DataStreamSink(
+    const CopyParams &copy_params,
+    const std::string file_path
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~DataStreamSink
+
+<CodeBlock links={{"DataStreamSink": "datastreamsink"}}>
+```cpp showLineNumbers={false}
+virtual import_export::DataStreamSink::~DataStreamSink()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### importDelimited [#importdelimited]
+
+<CodeBlock links={{"DataStreamSink": "datastreamsink", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+virtual ImportStatus import_export::DataStreamSink::importDelimited(
+    const std::string &file_path,
+    const bool decompressed,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### get_copy_params [#getcopyparams]
+
+<CodeBlock links={{"DataStreamSink": "datastreamsink", "CopyParams": "../structs/copyparams"}}>
+```cpp showLineNumbers={false}
+const CopyParams & import_export::DataStreamSink::get_copy_params() const
+```
+</CodeBlock>
+
+### import_compressed [#importcompressed]
+
+<CodeBlock links={{"DataStreamSink": "datastreamsink"}}>
+```cpp showLineNumbers={false}
+void import_export::DataStreamSink::import_compressed(
+    std::vector<std::string> &file_paths,
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+### archivePlumber [#archiveplumber]
+
+<CodeBlock links={{"DataStreamSink": "datastreamsink", "ImportStatus": "../structs/importstatus"}}>
+```cpp showLineNumbers={false}
+ImportStatus import_export::DataStreamSink::archivePlumber(
+    const Catalog_Namespace::SessionInfo *session_info
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `copy_params` | `CopyParams` | |
+| `file_path` | `const std::string` | |
+| `p_file` | `FILE *` | |
+| `import_status_` | `ImportStatus` | |
+| `import_mutex_` | `heavyai::shared_mutex` | |
+| `total_file_size` | `size_t` | |
+| `file_offsets` | `std::vector< size_t >` | |
+| `file_offsets_mutex` | `std::mutex` | |

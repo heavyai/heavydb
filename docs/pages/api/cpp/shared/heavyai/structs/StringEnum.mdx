@@ -1,0 +1,43 @@
+---
+title: heavyai::StringEnum
+description: ""
+---
+
+<CodeBlock id="StringEnum" links={{"StringEnum": "stringenum"}}>
+```cpp showLineNumbers={false}
+template <typename Enum>
+struct StringEnum
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <heavyai/define_enum_class.h>
+```
+
+**Template parameters**
+
+<ParamField path="Enum" type="typename">
+</ParamField>
+
+---
+
+## Methods
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"StringEnum": "stringenum"}}>
+```cpp showLineNumbers={false}
+bool heavyai::StringEnum<Enum>::operator<(
+    std::string_view const name
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name` | `std::string_view` | |
+| `value` | `Enum` | |

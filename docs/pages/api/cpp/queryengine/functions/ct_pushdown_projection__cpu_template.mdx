@@ -1,0 +1,179 @@
+---
+title: ct_pushdown_projection__cpu_template
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template <typename K, typename T, typename Z>
+NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<K> &input_id,
+    const Column<T> &input_x,
+    const Column<T> &input_y,
+    const Column<Z> &input_z,
+    Column<K> &output_id,
+    Column<T> &output_x,
+    Column<T> &output_y,
+    Column<Z> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input_id,
+    const Column<int64_t> &input_x,
+    const Column<int64_t> &input_y,
+    const Column<int64_t> &input_z,
+    Column<int64_t> &output_id,
+    Column<int64_t> &output_x,
+    Column<int64_t> &output_y,
+    Column<int64_t> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input_id,
+    const Column<int64_t> &input_x,
+    const Column<int64_t> &input_y,
+    const Column<double> &input_z,
+    Column<int64_t> &output_id,
+    Column<int64_t> &output_x,
+    Column<int64_t> &output_y,
+    Column<double> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input_id,
+    const Column<int64_t> &input_x,
+    const Column<int64_t> &input_y,
+    const Column<int64_t> &input_z,
+    Column<TextEncodingDict> &output_id,
+    Column<int64_t> &output_x,
+    Column<int64_t> &output_y,
+    Column<int64_t> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input_id,
+    const Column<int64_t> &input_x,
+    const Column<int64_t> &input_y,
+    const Column<double> &input_z,
+    Column<TextEncodingDict> &output_id,
+    Column<int64_t> &output_x,
+    Column<int64_t> &output_y,
+    Column<double> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input_id,
+    const Column<double> &input_x,
+    const Column<double> &input_y,
+    const Column<int64_t> &input_z,
+    Column<int64_t> &output_id,
+    Column<double> &output_x,
+    Column<double> &output_y,
+    Column<int64_t> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<int64_t> &input_id,
+    const Column<double> &input_x,
+    const Column<double> &input_y,
+    const Column<double> &input_z,
+    Column<int64_t> &output_id,
+    Column<double> &output_x,
+    Column<double> &output_y,
+    Column<double> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input_id,
+    const Column<double> &input_x,
+    const Column<double> &input_y,
+    const Column<int64_t> &input_z,
+    Column<TextEncodingDict> &output_id,
+    Column<double> &output_x,
+    Column<double> &output_y,
+    Column<int64_t> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+template NEVER_INLINE HOST int32_t ct_pushdown_projection__cpu_template(
+    TableFunctionManager &mgr,
+    const Column<TextEncodingDict> &input_id,
+    const Column<double> &input_x,
+    const Column<double> &input_y,
+    const Column<double> &input_z,
+    Column<TextEncodingDict> &output_id,
+    Column<double> &output_x,
+    Column<double> &output_y,
+    Column<double> &output_z
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

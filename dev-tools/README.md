@@ -4,8 +4,8 @@ For a complete workflow graph including all commands, options, and blocked paths
 
 `dev-tools/dev.sh` lets you build, test, and interact with the project locally
 using the same toolchain as CI. Most commands run inside the local deps
-container; the docs target uses the Sphinx docs Docker image instead, with
-optional Doxygen on the host.
+container; the docs target instead validates the Fern documentation site
+directly with the `fern` CLI.
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ dev-tools/dev.sh build deps
 #   Back-end (HeavyDB server and renderer)
 #   Front-end (Immerse and Webserver)
 #   GEOS bundle
-#   Sphinx docs
+#   Fern docs (validation)
 # This creates a tarball for bare-metal deployment
 dev-tools/dev.sh build
 
@@ -68,7 +68,7 @@ dev-tools/dev.sh build [target] [options]
 | `webserver` | Build just the web server artifact |
 | `heavyiq` | Build just the HeavyIQ artifact |
 | `geos-dsos` | Build just the GEOS DSO artifact |
-| `docs` | Build Sphinx developer docs into `build/docs/html/` |
+| `docs` | Validate the Fern developer docs site (`fern check`) |
 | `heavydb` | Build heavydb only (using existing component artifacts) |
 | `image` | Build a product Docker image from a pre-existing tarball (no recompile) |
 | `deps` | Build the deps container image (multi-hour) |
@@ -147,20 +147,19 @@ mkdir -p /var/lib/heavyai/libgeos
 tar xJf heavydb-libgeos-<os>-<arch>.tar.xz -C /var/lib/heavyai/libgeos
 ```
 
-**Docs** — Sphinx HTML is written to `build/docs/html/`. Docs build
-outside the heavydb deps container (Sphinx runs in the dedicated docs Docker
-image). The default `build` / `build all` targets run docs after heavydb.
-Doxygen runs only when a configured heavydb build (`Doxyfile`) exists and
-`doxygen` is on the host PATH; otherwise Sphinx builds with placeholder C++
-API pages.
+**Docs** — the Fern documentation site (`fern/`, with pages under
+`docs/pages/` and images under `docs/images/`) is validated with
+`fern check`, run outside the heavydb deps container using the `fern` CLI
+directly. The default `build` / `build all` targets run docs after heavydb.
 
 ```bash
 dev-tools/dev.sh build docs
 ```
 
-Set `HEAVYDB_SPHINX_IMAGE` to override the Sphinx image name (default
-`heavydb-sphinx-doc`). After editing `docs/Dockerfile` or `docs/requirements.txt`,
-rebuild explicitly: `docker build -t heavydb-sphinx-doc docs/`.
+Pass `--regenerate-api` to regenerate the C++ API reference pages
+(`docs/pages/api/cpp/`) from source first via Fern's library docs generator
+(`fern docs md generate --local`, requires Docker). Preview the site with
+`(cd fern && fern docs dev)`; publish with `(cd fern && fern generate --docs)`.
 
 ---
 
@@ -246,8 +245,8 @@ One log file per step:
 | pyheavydb artifact | `pyheavydb.log` or `pyheavydb-<source>.log` |
 | GEOS DSOs | `geos-dsos.log` |
 | heavydb cmake+make | `heavydb.log` |
-| Docs (Doxygen, optional) | `docs-doxygen.log` |
-| Docs (Sphinx) | `docs.log` |
+| Docs (API regenerate, optional) | `docs-api-generate.log` |
+| Docs (validate) | `docs-check.log` |
 | Docker image build | `docker-build.log` |
 
 On failure the last 50 lines of the relevant log are printed automatically.

@@ -1,0 +1,446 @@
+---
+title: ScalarCodeGenerator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CodeGenerator.h>
+```
+
+**Inherits from:** `CodeGenerator` (public)
+
+---
+
+## Constructors
+
+### ScalarCodeGenerator [#scalarcodegenerator]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "Executor": "executor"}}>
+```cpp showLineNumbers={false}
+ScalarCodeGenerator::ScalarCodeGenerator(
+    Executor *executor,
+    std::unique_ptr<llvm::Module> llvm_module
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### compile [#compile]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CompilationOptions": "../structs/compilationoptions", "CompiledExpression": "#compiledexpression"}}>
+```cpp showLineNumbers={false}
+ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
+    const Analyzer::Expr *expr,
+    const bool fetch_columns,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### generateNativeCode [#generatenativecode]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "Executor": "executor", "CompiledExpression": "#compiledexpression", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<int, void *> ScalarCodeGenerator::generateNativeCode(
+    Executor *executor,
+    const CompiledExpression &compiled_expression,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### getCudaMgr [#getcudamgr]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator"}}>
+```cpp showLineNumbers={false}
+CudaMgr_Namespace::CudaMgr * ScalarCodeGenerator::getCudaMgr() const
+```
+</CodeBlock>
+
+### codegen [#codegen]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CompilationOptions": "../structs/compilationoptions", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> ScalarCodeGenerator::codegen(
+    const Analyzer::Expr *,
+    const bool fetch_columns,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenPerRowStringOper [#codegenperrowstringoper]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CompilationOptions": "../structs/compilationoptions", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::codegenPerRowStringOper(
+    const Analyzer::StringOper *string_oper,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### codegenPseudoStringOper [#codegenpseudostringoper]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CompilationOptions": "../structs/compilationoptions", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::codegenPseudoStringOper(
+    const Analyzer::ColumnVar *,
+    const std::vector<StringOps_Namespace::StringOpInfo> &string_op_infos,
+    const CompilationOptions &
+)
+```
+</CodeBlock>
+
+### codegenHoistedConstants [#codegenhoistedconstants]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> ScalarCodeGenerator::codegenHoistedConstants(
+    const std::unordered_map<int, const Analyzer::Constant *> &constants,
+    const EncodingType enc_type,
+    const shared::StringDictKey &dict_id
+)
+```
+</CodeBlock>
+
+### codegenCastBetweenIntTypes [#codegencastbetweeninttypes]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::codegenCastBetweenIntTypes(
+    llvm::Value *operand_lv,
+    const SQLTypeInfo &operand_ti,
+    const SQLTypeInfo &ti,
+    bool upscale = true
+)
+```
+</CodeBlock>
+
+### codegenCastBetweenIntTypesOverflowChecks [#codegencastbetweeninttypesoverflowchecks]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void ScalarCodeGenerator::codegenCastBetweenIntTypesOverflowChecks(
+    llvm::Value *operand_lv,
+    const SQLTypeInfo &operand_ti,
+    const SQLTypeInfo &ti,
+    const int64_t scale
+)
+```
+</CodeBlock>
+
+### posArg [#posarg]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::posArg(
+    const Analyzer::Expr *
+) const
+```
+</CodeBlock>
+
+### codegenOffsetInFragment [#codegenoffsetinfragment]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::codegenOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### codegenFragmentId [#codegenfragmentid]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::codegenFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### codegenFragmentIdAndOffset [#codegenfragmentidandoffset]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::codegenFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### toBool [#tobool]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::toBool(
+    llvm::Value *
+)
+```
+</CodeBlock>
+
+### castArrayPointer [#castarraypointer]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::castArrayPointer(
+    llvm::Value *ptr,
+    const SQLTypeInfo &elem_ti
+)
+```
+</CodeBlock>
+
+### codegenCastBetweenTimestamps [#codegencastbetweentimestamps]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::codegenCastBetweenTimestamps(
+    llvm::Value *ts_lv,
+    const SQLTypeInfo &operand_dimen,
+    const SQLTypeInfo &target_dimen,
+    const bool nullable
+)
+```
+</CodeBlock>
+
+### codegenWindowPosition [#codegenwindowposition]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "WindowFunctionContext": "windowfunctioncontext", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::Value * ScalarCodeGenerator::codegenWindowPosition(
+    const WindowFunctionContext *window_func_context,
+    llvm::Value *pos_arg
+)
+```
+</CodeBlock>
+
+### codegenColumn [#codegencolumn]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> ScalarCodeGenerator::codegenColumn(
+    const Analyzer::ColumnVar *,
+    const bool fetch_column,
+    const CompilationOptions &
+) override
+```
+</CodeBlock>
+
+### prepare [#prepare]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator"}}>
+```cpp showLineNumbers={false}
+ScalarCodeGenerator::ColumnMap ScalarCodeGenerator::prepare(
+    const Analyzer::Expr *
+)
+```
+</CodeBlock>
+
+### generateNativeGPUCode [#generatenativegpucode]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "Executor": "executor", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::unordered_map<int, void *> ScalarCodeGenerator::generateNativeGPUCode(
+    Executor *executor,
+    llvm::Function *func,
+    llvm::Function *wrapper_func,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### executor [#executor]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "Executor": "executor", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+Executor * ScalarCodeGenerator::executor() const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### codegenIntConst [#codegenintconst]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CgenState": "../structs/cgenstate", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+llvm::ConstantInt * ScalarCodeGenerator::codegenIntConst(
+    const Analyzer::Constant *constant,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+### markDeadRuntimeFuncs [#markdeadruntimefuncs]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::unordered_set<llvm::Function *> ScalarCodeGenerator::markDeadRuntimeFuncs(
+    llvm::Module &module,
+    const std::vector<llvm::Function *> &roots,
+    const std::vector<llvm::Function *> &leaves
+)
+```
+</CodeBlock>
+
+### generateNativeCPUCode [#generatenativecpucode]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CompilationOptions": "../structs/compilationoptions", "ExecutionEngineWrapper": "executionenginewrapper", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper ScalarCodeGenerator::generateNativeCPUCode(
+    llvm::Function *func,
+    const std::unordered_set<llvm::Function *> &live_funcs,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### generatePTX [#generateptx]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::string ScalarCodeGenerator::generatePTX(
+    const std::string &cuda_llir,
+    llvm::TargetMachine *nvptx_target_machine,
+    llvm::LLVMContext &context
+)
+```
+</CodeBlock>
+
+### initializeNVPTXBackend [#initializenvptxbackend]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<llvm::TargetMachine> ScalarCodeGenerator::initializeNVPTXBackend(
+    const CudaMgr_Namespace::NvidiaDeviceArch arch
+)
+```
+</CodeBlock>
+
+### alwaysCloneRuntimeFunction [#alwayscloneruntimefunction]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+bool ScalarCodeGenerator::alwaysCloneRuntimeFunction(
+    const llvm::Function *func
+)
+```
+</CodeBlock>
+
+### linkModuleWithLibdevice [#linkmodulewithlibdevice]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "Executor": "executor", "GPUTarget": "codegenerator#gputarget", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void ScalarCodeGenerator::linkModuleWithLibdevice(
+    Executor *executor,
+    llvm::Module &module,
+    llvm::PassManagerBuilder &pass_manager_builder,
+    const GPUTarget &gpu_target
+)
+```
+</CodeBlock>
+
+### generateNativeGPUCode [#generatenativegpucode]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "Executor": "executor", "CompilationOptions": "../structs/compilationoptions", "GPUTarget": "codegenerator#gputarget", "GpuCompilationContext": "gpucompilationcontext", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<GpuCompilationContext> ScalarCodeGenerator::generateNativeGPUCode(
+    Executor *executor,
+    llvm::Function *func,
+    llvm::Function *wrapper_func,
+    const std::unordered_set<llvm::Function *> &live_funcs,
+    const bool is_gpu_smem_used,
+    const CompilationOptions &co,
+    const GPUTarget &gpu_target,
+    std::chrono::steady_clock::time_point &compile_start_timer
+)
+```
+</CodeBlock>
+
+### link_udf_module [#linkudfmodule]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CgenState": "../structs/cgenstate", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+void ScalarCodeGenerator::link_udf_module(
+    const std::unique_ptr<llvm::Module> &udf_module,
+    llvm::Module &module,
+    CgenState *cgen_state,
+    llvm::Linker::Flags flags = llvm::Linker::Flags::None
+)
+```
+</CodeBlock>
+
+### prioritizeQuals [#prioritizequals]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "RelAlgExecutionUnit": "../structs/relalgexecutionunit", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+bool ScalarCodeGenerator::prioritizeQuals(
+    const RelAlgExecutionUnit &ra_exe_unit,
+    std::vector<Analyzer::Expr *> &primary_quals,
+    std::vector<Analyzer::Expr *> &deferred_quals,
+    const PlanState::HoistedFiltersSet &hoisted_quals
+)
+```
+</CodeBlock>
+
+### codegenGeoArrayLoadAndNullcheck [#codegengeoarrayloadandnullcheck]
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator", "CgenState": "../structs/cgenstate", "ArrayLoadCodegen": "../structs/arrayloadcodegen", "CodeGenerator": "codegenerator"}}>
+```cpp showLineNumbers={false}
+ArrayLoadCodegen ScalarCodeGenerator::codegenGeoArrayLoadAndNullcheck(
+    llvm::Value *byte_stream,
+    llvm::Value *pos,
+    const SQLTypeInfo &ti,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ColumnMap` | `std::unordered_map< InputColDescriptor, std::shared_ptr< Analyzer::ColumnVar > >` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `module_` | `std::unique_ptr< llvm::Module >` | |
+| `execution_engine_` | `ExecutionEngineWrapper` | |
+| `own_cgen_state_` | `std::unique_ptr< CgenState >` | |
+| `own_plan_state_` | `std::unique_ptr< PlanState >` | |
+| `cuda_mgr_` | `std::unique_ptr< CudaMgr_Namespace::CudaMgr >` | |
+| `gpu_compilation_context_` | `std::shared_ptr< GpuCompilationContext >` | |
+| `nvptx_target_machine_` | `std::unique_ptr< llvm::TargetMachine >` | |
+| `cgen_state_` | `CgenState *` | |
+| `plan_state_` | `PlanState *` | |
+
+---
+
+## Inner classes
+
+### CompiledExpression
+
+<CodeBlock links={{"ScalarCodeGenerator": "scalarcodegenerator"}}>
+```cpp showLineNumbers={false}
+struct ScalarCodeGenerator::CompiledExpression
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `func` | `llvm::Function *` | |
+| `wrapper_func` | `llvm::Function *` | |
+| `inputs` | `std::vector< std::shared_ptr< Analyzer::ColumnVar > >` | |

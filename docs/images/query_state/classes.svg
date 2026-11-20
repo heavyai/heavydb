@@ -1,0 +1,186 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Creator: fig2dev Version 3.2 Patchlevel 5d -->
+<!-- CreationDate: Thu Jul 11 13:55:02 2019 -->
+<!-- Magnification: 1.050 -->
+<svg	xmlns="http://www.w3.org/2000/svg"
+	xmlns:xlink="http://www.w3.org/1999/xlink"
+	width="10.9in" height="4.9in"
+	viewBox="-1974 932 13137 5930">
+<g style="stroke-width:.025in; fill:none">
+<!-- Line: box -->
+<rect x="3307" y="944" width="2834" height="944" rx="0" 
+style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Text -->
+<text xml:space="preserve" x="4724" y="1511" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="278" text-anchor="middle">QueryStates</text>
+<!-- Line: box -->
+<rect x="3307" y="4724" width="2834" height="944" rx="0" 
+style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Text -->
+<text xml:space="preserve" x="4724" y="5291" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="278" text-anchor="middle">Event</text>
+<!-- Line: box -->
+<rect x="7559" y="4724" width="2834" height="944" rx="0" 
+style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Text -->
+<text xml:space="preserve" x="8976" y="5291" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="278" text-anchor="middle">Timer</text>
+<!-- Line: box -->
+<rect x="3307" y="2834" width="2834" height="944" rx="0" 
+style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Text -->
+<text xml:space="preserve" x="4724" y="3401" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="278" text-anchor="middle">QueryState</text>
+<!-- Line: box -->
+<rect x="7559" y="2834" width="3590" height="944" rx="0" 
+style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Text -->
+<text xml:space="preserve" x="9354" y="3401" fill="#000000"  font-family="Times" font-style="normal" font-weight="normal" font-size="278" text-anchor="middle">QueryStateProxy</text>
+<!-- Arc -->
+<path style="stroke:#000000;stroke-width:8;stroke-linecap:butt;"
+d="M 4724,5669 A 472 472  0  0  1  3779  5669 " />
+<!-- Arrowhead on XXXpoint 3822 5865 - 3779 5669-->
+<polygon points="3884 5851
+3782 5681
+3760 5879
+3884 5851
+
+" style="stroke:#000000;stroke-width:8;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="4724,3779
+4724,4535
+" style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 4724 3779 - 4724 4740-->
+<polygon points="4661 4538
+4724 4727
+4787 4538
+4661 4538
+
+" style="stroke:#000000;stroke-width:8;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="7559,3307
+6329,3307
+" style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 7559 3307 - 6125 3307-->
+<polygon points="6327 3244
+6138 3307
+6327 3370
+6327 3244
+
+" style="stroke:#000000;stroke-width:8;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="7559,3779
+6298,4619
+" style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 7559 3779 - 6128 4732-->
+<polygon points="6260 4567
+6138 4725
+6330 4672
+6260 4567
+
+" style="stroke:#000000;stroke-width:8;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="4724,1889
+4724,2645
+" style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 4724 1889 - 4724 2850-->
+<polygon points="4661 2648
+4724 2837
+4787 2648
+4661 2648
+
+" style="stroke:#000000;stroke-width:8;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="7559,4724
+6298,3883
+" style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 7559 4724 - 6128 3770-->
+<polygon points="6330 3828
+6138 3777
+6260 3933
+6330 3828
+
+" style="stroke:#000000;stroke-width:8;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Line -->
+<polyline points="7559,5196
+6329,5196
+" style="stroke:#000000;stroke-width:8;
+stroke-linejoin:miter; stroke-linecap:butt;
+"/>
+<!-- Arrowhead on XXXpoint 7559 5196 - 6125 5196-->
+<polygon points="6327 5133
+6138 5196
+6327 5259
+6327 5133
+
+" style="stroke:#000000;stroke-width:8;stroke-miterlimit:8;
+fill:#000000;"/>
+<!-- Text -->
+<text xml:space="preserve" x="4629" y="2362" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="end">boost::circular_buffer&#60;std::shared_ptr&#60;QueryState&#62;&#62;</text>
+<!-- Text -->
+<text xml:space="preserve" x="7370" y="4535" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">std::shared_ptr&#60;QueryState&#62;</text>
+<!-- Text -->
+<text xml:space="preserve" x="7370" y="4062" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">Events::iterator</text>
+<!-- Text -->
+<text xml:space="preserve" x="4629" y="4251" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="end">using Events = std::list&#60;Event&#62;</text>
+<!-- Text -->
+<text xml:space="preserve" x="4913" y="3968" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">1</text>
+<!-- Text -->
+<text xml:space="preserve" x="4913" y="4629" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">*</text>
+<!-- Text -->
+<text xml:space="preserve" x="3307" y="5858" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">0,1</text>
+<!-- Text -->
+<text xml:space="preserve" x="4818" y="5858" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">*</text>
+<!-- Text -->
+<text xml:space="preserve" x="4913" y="2078" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">1</text>
+<!-- Text -->
+<text xml:space="preserve" x="4913" y="2740" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">*</text>
+<!-- Text -->
+<text xml:space="preserve" x="6236" y="3118" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">1</text>
+<!-- Text -->
+<text xml:space="preserve" x="6236" y="5480" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">1</text>
+<!-- Text -->
+<text xml:space="preserve" x="5858" y="4535" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">0,1</text>
+<!-- Text -->
+<text xml:space="preserve" x="6047" y="3968" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">1</text>
+<!-- Text -->
+<text xml:space="preserve" x="7370" y="3779" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">*</text>
+<!-- Text -->
+<text xml:space="preserve" x="7370" y="4913" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">*</text>
+<!-- Text -->
+<text xml:space="preserve" x="7370" y="3118" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">*</text>
+<!-- Text -->
+<text xml:space="preserve" x="6897" y="3496" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="middle">ref&#38;</text>
+<!-- Text -->
+<text xml:space="preserve" x="2834" y="6330" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">Events::iterator parent</text>
+<!-- Text -->
+<text xml:space="preserve" x="7133" y="5480" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">0,1</text>
+<!-- Text -->
+<g transform="translate(6614,5385) rotate(-315.00073661)" >
+<text xml:space="preserve" x="0" y="0" fill="#000000"  font-family="Courier" font-style="normal" font-weight="normal" font-size="152" text-anchor="start">Events::iterator</text>
+</g></g>
+</svg>

@@ -1,0 +1,16 @@
+---
+title: generate_random_strings__cpu_
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "Column": "../structs/column", "TextEncodingDict": "../structs/textencodingdict"}}>
+```cpp showLineNumbers={false}
+EXTENSION_NOINLINE_HOST int32_t generate_random_strings__cpu_(
+    TableFunctionManager &mgr,
+    const int64_t num_strings,
+    const int64_t string_length,
+    Column<int64_t> &output_id,
+    Column<TextEncodingDict> &output_strings
+)
+```
+</CodeBlock>

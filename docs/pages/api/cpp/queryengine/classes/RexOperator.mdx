@@ -1,0 +1,196 @@
+---
+title: RexOperator
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RelAlgDag.h>
+```
+
+**Inherits from:** `RexScalar` (public)
+
+---
+
+## Constructors
+
+### RexOperator [#rexoperator]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+RexOperator::RexOperator()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+RexOperator::RexOperator(
+    const SQLOps op,
+    std::vector<std::unique_ptr<const RexScalar>> &operands,
+    const SQLTypeInfo &type
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### acceptChildren [#acceptchildren]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexOperator::acceptChildren(
+    Visitor &v
+) const override
+```
+</CodeBlock>
+
+### accept [#accept]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "Visitor": "relalgdagnode#visitor"}}>
+```cpp showLineNumbers={false}
+virtual void RexOperator::accept(
+    Visitor &v,
+    std::string name
+) const override
+```
+</CodeBlock>
+
+### getDisambiguated [#getdisambiguated]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual std::unique_ptr<const RexOperator> RexOperator::getDisambiguated(
+    std::vector<std::unique_ptr<const RexScalar>> &operands
+) const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+size_t RexOperator::size() const
+```
+</CodeBlock>
+
+### getOperand [#getoperand]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RexOperator::getOperand(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getOperandAndRelease [#getoperandandrelease]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+const RexScalar * RexOperator::getOperandAndRelease(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### getOperator [#getoperator]
+
+<CodeBlock links={{"RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+SQLOps RexOperator::getOperator() const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & RexOperator::getType() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RelRexToStringConfig": "../structs/relrextostringconfig"}}>
+```cpp showLineNumbers={false}
+std::string RexOperator::toString(
+    RelRexToStringConfig config = RelRexToStringConfig::defaults()
+) const override
+```
+</CodeBlock>
+
+### getStepNumber [#getstepnumber]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual size_t Rex::getStepNumber() const
+```
+</CodeBlock>
+
+### toHash [#tohash]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+size_t Rex::toHash() const
+```
+</CodeBlock>
+
+### setStepNumber [#setstepnumber]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+virtual void RelAlgDagNode::setStepNumber(
+    size_t step
+) const
+```
+</CodeBlock>
+
+### getIdInPlanTree [#getidinplantree]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+std::optional<size_t> RelAlgDagNode::getIdInPlanTree() const
+```
+</CodeBlock>
+
+### setIdInPlanTree [#setidinplantree]
+
+<CodeBlock links={{"RexOperator": "rexoperator", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelAlgDagNode::setIdInPlanTree(
+    size_t id
+) const
+```
+</CodeBlock>
+
+### toHashImpl [#tohashimpl]
+
+<CodeBlock links={{"RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+size_t RexOperator::toHashImpl(
+    RelRexNodeHashCache &cache
+) const override
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `op_` | `SQLOps` | |
+| `operands_` | `std::vector< std::unique_ptr< const RexScalar > >` | |
+| `type_` | `SQLTypeInfo` | |
+| `step_` | `size_t` | |
+| `id_in_plan_tree_` | `std::optional< size_t >` | |

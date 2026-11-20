@@ -1,0 +1,94 @@
+---
+title: SharedKernelContext
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ExecutionKernel.h>
+```
+
+---
+
+## Constructors
+
+### SharedKernelContext [#sharedkernelcontext]
+
+<CodeBlock links={{"SharedKernelContext": "sharedkernelcontext", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+SharedKernelContext::SharedKernelContext(
+    const std::vector<InputTableInfo> &query_infos
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getFragOffsets [#getfragoffsets]
+
+<CodeBlock links={{"SharedKernelContext": "sharedkernelcontext"}}>
+```cpp showLineNumbers={false}
+const std::vector<uint64_t> & SharedKernelContext::getFragOffsets()
+```
+</CodeBlock>
+
+### addDeviceResults [#adddeviceresults]
+
+<CodeBlock links={{"SharedKernelContext": "sharedkernelcontext"}}>
+```cpp showLineNumbers={false}
+void SharedKernelContext::addDeviceResults(
+    ResultSetPtr &&device_results,
+    std::vector<size_t> outer_table_fragment_ids
+)
+```
+</CodeBlock>
+
+### getFragmentResults [#getfragmentresults]
+
+<CodeBlock links={{"SharedKernelContext": "sharedkernelcontext"}}>
+```cpp showLineNumbers={false}
+std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> & SharedKernelContext::getFragmentResults()
+```
+</CodeBlock>
+
+### getQueryInfos [#getqueryinfos]
+
+<CodeBlock links={{"SharedKernelContext": "sharedkernelcontext", "InputTableInfo": "../structs/inputtableinfo"}}>
+```cpp showLineNumbers={false}
+const std::vector<InputTableInfo> & SharedKernelContext::getQueryInfos() const
+```
+</CodeBlock>
+
+### setNumAllocatedThreads [#setnumallocatedthreads]
+
+<CodeBlock links={{"SharedKernelContext": "sharedkernelcontext"}}>
+```cpp showLineNumbers={false}
+void SharedKernelContext::setNumAllocatedThreads(
+    size_t num_threads
+)
+```
+</CodeBlock>
+
+### getNumAllocatedThreads [#getnumallocatedthreads]
+
+<CodeBlock links={{"SharedKernelContext": "sharedkernelcontext"}}>
+```cpp showLineNumbers={false}
+size_t SharedKernelContext::getNumAllocatedThreads()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dynamic_watchdog_set` | `std::atomic_flag` | |
+| `reduce_mutex_` | `std::mutex` | |
+| `all_fragment_results_` | `std::vector< std::pair< ResultSetPtr, std::vector< size_t > > >` | |
+| `all_frag_row_offsets_` | `std::vector< uint64_t >` | |
+| `all_frag_row_offsets_mutex_` | `std::mutex` | |
+| `query_infos_` | `const std::vector< InputTableInfo > &` | |
+| `query_hint_` | `const RegisteredQueryHint` | |
+| `num_allocated_threads_` | `size_t` | |

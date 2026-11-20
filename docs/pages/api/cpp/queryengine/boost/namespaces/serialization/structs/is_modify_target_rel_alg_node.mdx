@@ -1,0 +1,22 @@
+---
+title: boost::serialization::is_modify_target_rel_alg_node
+description: ""
+---
+
+<CodeBlock id="is_modify_target_rel_alg_node" links={{"is_modify_target_rel_alg_node": "ismodifytargetrelalgnode"}}>
+```cpp showLineNumbers={false}
+template <class T>
+struct is_modify_target_rel_alg_node
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <boost/serialization/RelAlgDagSerializer.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="class">
+</ParamField>
+
+**Inherits from:** `std::bool_constant< std::is_same_v< RelProject, std::remove_cv_t< T > >||std::is_same_v< RelCompound, std::remove_cv_t< T > > >` (public)

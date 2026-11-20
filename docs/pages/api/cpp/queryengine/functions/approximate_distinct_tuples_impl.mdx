@@ -1,0 +1,19 @@
+---
+title: approximate_distinct_tuples_impl
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename KEY_HANDLER>
+GLOBAL void SUFFIX approximate_distinct_tuples_impl(
+    uint8_t *hll_buffer,
+    int32_t *row_count_buffer,
+    const uint32_t b,
+    const int64_t num_elems,
+    const KEY_HANDLER *f,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count
+)
+```
+</CodeBlock>

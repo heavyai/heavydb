@@ -1,0 +1,75 @@
+---
+title: toString
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const Executor::ExtModuleKinds &kind
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const ExecutorDeviceType device_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const ExtArgumentType &sig_type
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const InnerOuterStringOpInfos &inner_outer_string_op_infos
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+std::string toString(
+    const std::vector<InnerOuterStringOpInfos> &inner_outer_string_op_infos_pairs
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

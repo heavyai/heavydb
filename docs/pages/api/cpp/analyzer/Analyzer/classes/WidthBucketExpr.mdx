@@ -1,0 +1,378 @@
+---
+title: Analyzer::WidthBucketExpr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### WidthBucketExpr [#widthbucketexpr]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::WidthBucketExpr::WidthBucketExpr(
+    const std::shared_ptr<Analyzer::Expr> target_value,
+    const std::shared_ptr<Analyzer::Expr> lower_bound,
+    const std::shared_ptr<Analyzer::Expr> upper_bound,
+    const std::shared_ptr<Analyzer::Expr> partition_count,
+    const bool is_lower_bound_scalar_subquery,
+    const bool is_upper_bound_scalar_subquery
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_target_value [#gettargetvalue]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::WidthBucketExpr::get_target_value() const
+```
+</CodeBlock>
+
+### get_lower_bound [#getlowerbound]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::WidthBucketExpr::get_lower_bound() const
+```
+</CodeBlock>
+
+### get_upper_bound [#getupperbound]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::WidthBucketExpr::get_upper_bound() const
+```
+</CodeBlock>
+
+### get_partition_count [#getpartitioncount]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+const Expr * Analyzer::WidthBucketExpr::get_partition_count() const
+```
+</CodeBlock>
+
+### is_lower_bound_scalar_subquery [#islowerboundscalarsubquery]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WidthBucketExpr::is_lower_bound_scalar_subquery() const
+```
+</CodeBlock>
+
+### is_upper_bound_scalar_subquery [#isupperboundscalarsubquery]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WidthBucketExpr::is_upper_bound_scalar_subquery() const
+```
+</CodeBlock>
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WidthBucketExpr::deep_copy() const override
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WidthBucketExpr::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const override
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WidthBucketExpr::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const override
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "ColumnVar": "columnvar"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WidthBucketExpr::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WidthBucketExpr::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WidthBucketExpr::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WidthBucketExpr::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const override
+```
+</CodeBlock>
+
+### get_bound_val [#getboundval]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+double Analyzer::WidthBucketExpr::get_bound_val(
+    const Analyzer::Expr *bound_expr
+) const
+```
+</CodeBlock>
+
+### get_partition_count_val [#getpartitioncountval]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+int32_t Analyzer::WidthBucketExpr::get_partition_count_val() const
+```
+</CodeBlock>
+
+### compute_bucket [#computebucket]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+int32_t Analyzer::WidthBucketExpr::compute_bucket(
+    double target_const_val
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WidthBucketExpr::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::WidthBucketExpr::toString() const override
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WidthBucketExpr::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const override
+```
+</CodeBlock>
+
+### can_skip_out_of_bound_check [#canskipoutofboundcheck]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WidthBucketExpr::can_skip_out_of_bound_check() const
+```
+</CodeBlock>
+
+### skip_out_of_bound_check [#skipoutofboundcheck]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WidthBucketExpr::skip_out_of_bound_check() const
+```
+</CodeBlock>
+
+### set_constant_expr [#setconstantexpr]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WidthBucketExpr::set_constant_expr() const
+```
+</CodeBlock>
+
+### is_constant_expr [#isconstantexpr]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WidthBucketExpr::is_constant_expr() const
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WidthBucketExpr::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::WidthBucketExpr::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WidthBucketExpr::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WidthBucketExpr::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WidthBucketExpr::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WidthBucketExpr::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WidthBucketExpr::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::WidthBucketExpr::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::WidthBucketExpr::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WidthBucketExpr::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WidthBucketExpr::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WidthBucketExpr::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"WidthBucketExpr": "widthbucketexpr", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WidthBucketExpr::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `target_value_` | `std::shared_ptr< Analyzer::Expr >` | |
+| `lower_bound_` | `std::shared_ptr< Analyzer::Expr >` | |
+| `upper_bound_` | `std::shared_ptr< Analyzer::Expr >` | |
+| `partition_count_` | `std::shared_ptr< Analyzer::Expr >` | |
+| `is_lower_bound_scalar_subquery_` | `bool const` | |
+| `is_upper_bound_scalar_subquery_` | `bool const` | |
+| `constant_expr_` | `bool` | |
+| `skip_out_of_bound_check_` | `bool` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |

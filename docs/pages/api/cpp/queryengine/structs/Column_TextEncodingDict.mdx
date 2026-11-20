@@ -1,0 +1,202 @@
+---
+title: "Column< TextEncodingDict >"
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <heavydbTypes.h>
+```
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict", "Column": "column", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<TextEncodingDict> & Column<TextEncodingDict>::operator=(
+    const Column<TextEncodingDict> &other
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### Column [#column]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict", "Column": "column"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<TextEncodingDict>::Column(
+    const Column &other
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<TextEncodingDict>::Column(
+    TextEncodingDict *ptr,
+    const int64_t num_rows,
+    StringDictionaryProxy *string_dict_proxy
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE Column<TextEncodingDict>::Column(
+    std::vector<TextEncodingDict> &input_vec
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE TextEncodingDict & Column<TextEncodingDict>::operator[](
+    const unsigned int index
+) const
+```
+</CodeBlock>
+
+### getPtr [#getptr]
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE TextEncodingDict * Column<TextEncodingDict>::getPtr() const
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE int64_t Column<TextEncodingDict>::size() const
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<TextEncodingDict>::setSize(
+    int64_t num_rows
+)
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Column<TextEncodingDict>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE bool Column<Timestamp>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### setNull [#setnull]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<TextEncodingDict>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE void Column<Timestamp>::setNull(
+    int64_t index
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getDictDbId [#getdictdbid]
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t Column<TextEncodingDict>::getDictDbId() const
+```
+</CodeBlock>
+
+### getDictId [#getdictid]
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE int32_t Column<TextEncodingDict>::getDictId() const
+```
+</CodeBlock>
+
+### getString [#getstring]
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE const std::string Column<TextEncodingDict>::getString(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+### getOrAddTransient [#getoraddtransient]
+
+<CodeBlock links={{"Column< TextEncodingDict >": "columntextencodingdict", "TextEncodingDict": "textencodingdict"}}>
+```cpp showLineNumbers={false}
+DEVICE const TextEncodingDict Column<TextEncodingDict>::getOrAddTransient(
+    const std::string &str
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ptr_` | `TextEncodingDict *` | |
+| `num_rows_` | `int64_t` | |
+| `string_dict_proxy_` | `StringDictionaryProxy *` | |

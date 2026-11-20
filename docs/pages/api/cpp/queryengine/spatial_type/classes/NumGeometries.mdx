@@ -1,0 +1,159 @@
+---
+title: spatial_type::NumGeometries
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <spatial_type/NumGeometries.h>
+```
+
+**Inherits from:** `spatial_type::Codegen` (public)
+
+---
+
+## Constructors
+
+### NumGeometries [#numgeometries]
+
+<CodeBlock links={{"NumGeometries": "numgeometries"}}>
+```cpp showLineNumbers={false}
+spatial_type::NumGeometries::NumGeometries(
+    const Analyzer::GeoOperator *geo_operator
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### size [#size]
+
+<CodeBlock links={{"NumGeometries": "numgeometries"}}>
+```cpp showLineNumbers={false}
+size_t spatial_type::NumGeometries::size() const
+```
+</CodeBlock>
+
+### getNullType [#getnulltype]
+
+<CodeBlock links={{"NumGeometries": "numgeometries"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo spatial_type::NumGeometries::getNullType() const
+```
+</CodeBlock>
+
+### getOperandTypeInfo [#getoperandtypeinfo]
+
+<CodeBlock links={{"NumGeometries": "numgeometries"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo spatial_type::NumGeometries::getOperandTypeInfo(
+    const size_t index
+)
+```
+</CodeBlock>
+
+### getOperand [#getoperand]
+
+<CodeBlock links={{"NumGeometries": "numgeometries"}}>
+```cpp showLineNumbers={false}
+const Analyzer::Expr * spatial_type::NumGeometries::getOperand(
+    const size_t index
+)
+```
+</CodeBlock>
+
+### codegenLoads [#codegenloads]
+
+<CodeBlock links={{"NumGeometries": "numgeometries", "CgenState": "../../structs/cgenstate"}}>
+```cpp showLineNumbers={false}
+std::tuple<std::vector<llvm::Value *>, llvm::Value *> spatial_type::NumGeometries::codegenLoads(
+    const std::vector<llvm::Value *> &arg_lvs,
+    const std::vector<llvm::Value *> &pos_lvs,
+    CgenState *cgen_state
+)
+```
+</CodeBlock>
+
+### codegen [#codegen]
+
+<CodeBlock links={{"NumGeometries": "numgeometries", "NullCheckCodegen": "../../classes/codegenerator#nullcheckcodegen", "CgenState": "../../structs/cgenstate", "CompilationOptions": "../../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+std::vector<llvm::Value *> spatial_type::NumGeometries::codegen(
+    const std::vector<llvm::Value *> &args,
+    CodeGenerator::NullCheckCodegen *nullcheck_codegen,
+    CgenState *cgen_state,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+### isNullable [#isnullable]
+
+<CodeBlock links={{"NumGeometries": "numgeometries", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+auto spatial_type::NumGeometries::isNullable() const
+```
+</CodeBlock>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"NumGeometries": "numgeometries", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+auto spatial_type::NumGeometries::getTypeInfo() const
+```
+</CodeBlock>
+
+### getName [#getname]
+
+<CodeBlock links={{"NumGeometries": "numgeometries", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::string spatial_type::NumGeometries::getName() const
+```
+</CodeBlock>
+
+### getNullCheckCodegen [#getnullcheckcodegen]
+
+<CodeBlock links={{"NumGeometries": "numgeometries", "CgenState": "../../structs/cgenstate", "Executor": "../../classes/executor", "NullCheckCodegen": "../../classes/codegenerator#nullcheckcodegen", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<CodeGenerator::NullCheckCodegen> spatial_type::NumGeometries::getNullCheckCodegen(
+    llvm::Value *null_lv,
+    CgenState *cgen_state,
+    Executor *executor
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### init [#init]
+
+<CodeBlock links={{"NumGeometries": "numgeometries", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<Codegen> spatial_type::NumGeometries::init(
+    const Analyzer::GeoOperator *geo_operator
+)
+```
+</CodeBlock>
+
+### pointIsNullFunctionName [#pointisnullfunctionname]
+
+<CodeBlock links={{"NumGeometries": "numgeometries", "Codegen": "codegen"}}>
+```cpp showLineNumbers={false}
+char const  * spatial_type::NumGeometries::pointIsNullFunctionName(
+    SQLTypeInfo const &
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `operand_owned_` | `std::unique_ptr< Analyzer::ColumnVar >` | |
+| `operator_` | `const Analyzer::GeoOperator *` | |
+| `is_nullable_` | `bool` | |

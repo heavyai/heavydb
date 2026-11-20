@@ -1,0 +1,113 @@
+---
+title: CacheItemMetric
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DataRecycler.h>
+```
+
+---
+
+## Constructors
+
+### CacheItemMetric [#cacheitemmetric]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+CacheItemMetric::CacheItemMetric(
+    QueryPlanHash query_plan_hash,
+    size_t compute_time,
+    size_t mem_size
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### getQueryPlanHash [#getqueryplanhash]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+QueryPlanHash CacheItemMetric::getQueryPlanHash() const
+```
+</CodeBlock>
+
+### incRefCount [#increfcount]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+void CacheItemMetric::incRefCount()
+```
+</CodeBlock>
+
+### getRefCount [#getrefcount]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+size_t CacheItemMetric::getRefCount() const
+```
+</CodeBlock>
+
+### getComputeTime [#getcomputetime]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+size_t CacheItemMetric::getComputeTime() const
+```
+</CodeBlock>
+
+### getMemSize [#getmemsize]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+size_t CacheItemMetric::getMemSize() const
+```
+</CodeBlock>
+
+### getMetrics [#getmetrics]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+const std::array<size_t, CacheMetricType::NUM_METRIC_TYPE> & CacheItemMetric::getMetrics() const
+```
+</CodeBlock>
+
+### setComputeTime [#setcomputetime]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+void CacheItemMetric::setComputeTime(
+    size_t compute_time
+)
+```
+</CodeBlock>
+
+### setMemSize [#setmemsize]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+void CacheItemMetric::setMemSize(
+    const size_t mem_size
+)
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"CacheItemMetric": "cacheitemmetric"}}>
+```cpp showLineNumbers={false}
+std::string CacheItemMetric::toString() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `query_plan_hash_` | `const QueryPlanHash` | |
+| `metrics_` | `std::array< size_t, CacheMetricType::NUM_METRIC_TYPE >` | |

@@ -1,0 +1,17 @@
+---
+title: ddl_utils::set_column_descriptor
+description: ""
+---
+
+<CodeBlock links={{"SqlType": "../classes/sqltype", "Encoding": "../classes/encoding"}}>
+```cpp showLineNumbers={false}
+void ddl_utils::set_column_descriptor(
+    const std::string &column_name,
+    ColumnDescriptor &cd,
+    SqlType *column_type,
+    const bool not_null,
+    const Encoding *encoding,
+    const std::string *default_value
+)
+```
+</CodeBlock>

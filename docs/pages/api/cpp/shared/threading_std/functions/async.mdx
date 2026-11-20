@@ -1,0 +1,16 @@
+---
+title: threading_std::async
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <typename Fn,
+          typename... Args,
+          typename Result = std::invoke_result_t<Fn&&, Args&&...>>
+future<Result> threading_std::async(
+    Fn &&fn,
+    Args &&... args
+)
+```
+</CodeBlock>

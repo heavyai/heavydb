@@ -1,0 +1,53 @@
+---
+title: boost::serialization::construct_catalog_rel_alg_node
+description: "Construction templates for TableDescriptor dependent classes."
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+template <class RelAlgNodeType>
+void boost::serialization::construct_catalog_rel_alg_node(
+    RelAlgNodeType *node,
+    const Catalog_Namespace::Catalog *cat,
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+Construction templates for TableDescriptor dependent classes.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"RelModify": "../../../../classes/relmodify"}}>
+```cpp showLineNumbers={false}
+void boost::serialization::construct_catalog_rel_alg_node(
+    RelModify *node,
+    const Catalog_Namespace::Catalog &cat,
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+[RelModify](../../../../classes/relmodify) construction specialization, which requires a catalog reference.
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"RelScan": "../../../../classes/relscan"}}>
+```cpp showLineNumbers={false}
+void boost::serialization::construct_catalog_rel_alg_node(
+    RelScan *node,
+    const Catalog_Namespace::Catalog &cat,
+    const TableDescriptor *td
+)
+```
+</CodeBlock>
+
+[RelScan](../../../../classes/relscan) construction specialization, which requires a catalog reference.
+
+</Tab>
+</Tabs>

@@ -1,0 +1,291 @@
+---
+title: Geo::MultiPolygon
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Geo/heavydbTypes.h>
+```
+
+**Inherits from:** `Geo::GeoNestedArray< Polygon >` (public)
+
+---
+
+## Methods
+
+### toCoords [#tocoords]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon"}}>
+```cpp showLineNumbers={false}
+template <typename CT>
+std::vector<std::vector<std::vector<CT>>> Geo::MultiPolygon::toCoords() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon"}}>
+```cpp showLineNumbers={false}
+std::vector<std::vector<std::vector<double>>> Geo::MultiPolygon::toCoords() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with result)">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+FlatBufferManager::Status Geo::GeoNestedArray<Polygon>::toCoords(
+    std::vector<CT> &result
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getPoint [#getpoint]
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "Point2D": "point2d", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+DEVICE Point2D Geo::GeoNestedArray<Polygon>::getPoint(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### toCoordsWorker [#tocoordsworker]
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+FlatBufferManager::Status Geo::GeoNestedArray<Polygon>::toCoordsWorker(
+    std::vector<VT> &result
+) const
+```
+</CodeBlock>
+
+### fromCoordsWorker [#fromcoordsworker]
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+FlatBufferManager::Status Geo::GeoNestedArray<Polygon>::fromCoordsWorker(
+    const VT &coords
+)
+```
+</CodeBlock>
+
+### fromCoords [#fromcoords]
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+FlatBufferManager::Status Geo::GeoNestedArray<Polygon>::fromCoords(
+    const std::vector<CT> &coords
+)
+```
+</CodeBlock>
+
+### size [#size]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+size_t flatbuffer::NestedArray<Polygon>::size() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index)">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+size_t flatbuffer::NestedArray<Polygon>::size(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getValuesBuffer [#getvaluesbuffer]
+
+<Tabs>
+<Tab title="Const (1)">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "Polygon": "polygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<Polygon>::getValuesBuffer(
+    Polygon *&values,
+    int64_t &nof_values,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (2)">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "Polygon": "polygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<Polygon>::getValuesBuffer(
+    Polygon *&values,
+    int64_t &nof_values,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getRawBuffer [#getrawbuffer]
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<Polygon>::getRawBuffer(
+    int8_t *&values,
+    int64_t &nof_values,
+    size_t &value_size,
+    bool &is_null,
+    bool require_1d_item = true
+) const
+```
+</CodeBlock>
+
+### getValue [#getvalue]
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "Polygon": "polygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+Polygon & flatbuffer::NestedArray<Polygon>::getValue(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### operator[] [#operator_subscript]
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "Polygon": "polygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+const Polygon flatbuffer::NestedArray<Polygon>::operator[](
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### getItem [#getitem]
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "Polygon": "polygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+const Polygon flatbuffer::NestedArray<Polygon>::getItem(
+    const int64_t index
+) const
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<Tabs>
+<Tab title="Const">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+bool flatbuffer::NestedArray<Polygon>::isNull() const
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const (with index)">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+bool flatbuffer::NestedArray<Polygon>::isNull(
+    int64_t index
+) const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### extend [#extend]
+
+<Tabs>
+<Tab title="Single item">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+DEVICE void flatbuffer::NestedArray<Polygon>::extend(
+    const int8_t *data,
+    const int32_t size,
+    bool assign = false
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "Polygon": "polygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+void flatbuffer::NestedArray<Polygon>::extend(
+    const NestedArray<Polygon> &other,
+    bool assign = false
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator+= [#operator_plus_assign]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "Polygon": "polygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+NestedArray<Polygon> & flatbuffer::NestedArray<Polygon>::operator+=(
+    const NestedArray<Polygon> &other
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "Polygon": "polygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+NestedArray<Polygon> & flatbuffer::NestedArray<Polygon>::operator+=(
+    const NestedArray<Polygon> &other
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getTypeInfo [#gettypeinfo]
+
+<CodeBlock links={{"MultiPolygon": "multipolygon", "GeoNestedArray": "geonestedarray"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfoLite * flatbuffer::NestedArray<Polygon>::getTypeInfo() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `flatbuffer_` | `int8_t *` | |
+| `index_` | `int64_t` | |
+| `n_` | `size_t` | |

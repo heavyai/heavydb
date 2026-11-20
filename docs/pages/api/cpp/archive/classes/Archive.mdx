@@ -1,0 +1,188 @@
+---
+title: Archive
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Archive.h>
+```
+
+---
+
+## Constructors
+
+### Archive [#archive]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+Archive::Archive(
+    const std::string url,
+    const bool plain_text
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~Archive
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual Archive::~Archive()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### archive_error [#archiveerror]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual std::string Archive::archive_error(
+    int err
+)
+```
+</CodeBlock>
+
+### read_next_header [#readnextheader]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual bool Archive::read_next_header()
+```
+</CodeBlock>
+
+### read_data_block [#readdatablock]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual bool Archive::read_data_block(
+    const void **buff,
+    size_t *size,
+    int64_t *offset
+)
+```
+</CodeBlock>
+
+### get_position_compressed [#getpositioncompressed]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual int64_t Archive::get_position_compressed() const
+```
+</CodeBlock>
+
+### open [#open]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual int Archive::open()
+```
+</CodeBlock>
+
+### close [#close]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual int Archive::close()
+```
+</CodeBlock>
+
+### read [#read]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual ptrdiff_t Archive::read(
+    const void **buff
+)
+```
+</CodeBlock>
+
+### init_for_read [#initforread]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+virtual void Archive::init_for_read()
+```
+</CodeBlock>
+
+### url_part [#urlpart]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+const std::string Archive::url_part(
+    const int i
+)
+```
+</CodeBlock>
+
+### entryName [#entryname]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+std::string Archive::entryName()
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### read [#read]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+static ptrdiff_t Archive::read(
+    struct archive *a,
+    void *client_data,
+    const void **buff
+)
+```
+</CodeBlock>
+
+### open [#open]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+static int Archive::open(
+    struct archive *a,
+    void *client_data
+)
+```
+</CodeBlock>
+
+### close [#close]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+static int Archive::close(
+    struct archive *a,
+    void *client_data
+)
+```
+</CodeBlock>
+
+### parse_url [#parseurl]
+
+<CodeBlock links={{"Archive": "archive"}}>
+```cpp showLineNumbers={false}
+static void Archive::parse_url(
+    const std::string url,
+    std::map<int, std::string> &url_parts
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `url` | `std::string` | |
+| `url_parts` | `std::map< int, std::string >` | |
+| `ar` | `archive *` | |
+| `entry` | `archive_entry *` | |
+| `plain_text` | `bool` | |

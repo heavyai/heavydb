@@ -1,0 +1,80 @@
+---
+title: AlterForeignTableCommand
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DdlCommandExecutor.h>
+```
+
+**Inherits from:** `DdlCommand` (public)
+
+---
+
+## Constructors
+
+### AlterForeignTableCommand [#alterforeigntablecommand]
+
+<CodeBlock links={{"AlterForeignTableCommand": "alterforeigntablecommand", "DdlCommandData": "ddlcommanddata", "SessionInfo": "../catalognamespace/classes/sessioninfo"}}>
+```cpp showLineNumbers={false}
+AlterForeignTableCommand::AlterForeignTableCommand(
+    const DdlCommandData &ddl_data,
+    std::shared_ptr<Catalog_Namespace::SessionInfo const> session_ptr
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### execute [#execute]
+
+<CodeBlock links={{"AlterForeignTableCommand": "alterforeigntablecommand"}}>
+```cpp showLineNumbers={false}
+ExecutionResult AlterForeignTableCommand::execute(
+    bool read_only_mode
+) override
+```
+</CodeBlock>
+
+Executes the DDL command corresponding to provided JSON payload.
+
+### alterOptions [#alteroptions]
+
+<CodeBlock links={{"AlterForeignTableCommand": "alterforeigntablecommand", "ForeignTable": "../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+void AlterForeignTableCommand::alterOptions(
+    const foreign_storage::ForeignTable &foreign_table
+)
+```
+</CodeBlock>
+
+### renameTable [#renametable]
+
+<CodeBlock links={{"AlterForeignTableCommand": "alterforeigntablecommand", "ForeignTable": "../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+void AlterForeignTableCommand::renameTable(
+    const foreign_storage::ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+### renameColumn [#renamecolumn]
+
+<CodeBlock links={{"AlterForeignTableCommand": "alterforeigntablecommand", "ForeignTable": "../foreignstorage/structs/foreigntable"}}>
+```cpp showLineNumbers={false}
+void AlterForeignTableCommand::renameColumn(
+    const foreign_storage::ForeignTable *foreign_table
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `ddl_data_` | `const DdlCommandData &` | |
+| `session_ptr_` | `std::shared_ptr< Catalog_Namespace::SessionInfo const  >` | |

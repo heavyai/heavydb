@@ -1,0 +1,464 @@
+---
+title: GeospatialFunctionFinder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <GeospatialFunctionFinder.h>
+```
+
+**Inherits from:** `ScalarExprVisitor< void * >` (public)
+
+---
+
+## Methods
+
+### getGeoArgCvs [#getgeoargcvs]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder"}}>
+```cpp showLineNumbers={false}
+const std::vector<const Analyzer::ColumnVar *> & GeospatialFunctionFinder::getGeoArgCvs() const
+```
+</CodeBlock>
+
+### getJoinTableKeyPair [#getjointablekeypair]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "GeoJoinOperandsTableKeyPair": "../structs/geojoinoperandstablekeypair"}}>
+```cpp showLineNumbers={false}
+const std::optional<GeoJoinOperandsTableKeyPair> GeospatialFunctionFinder::getJoinTableKeyPair() const
+```
+</CodeBlock>
+
+### getGeoFunctionName [#getgeofunctionname]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder"}}>
+```cpp showLineNumbers={false}
+const std::string & GeospatialFunctionFinder::getGeoFunctionName() const
+```
+</CodeBlock>
+
+### visit [#visit]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+void * ScalarExprVisitor<void *>::visit(
+    const Analyzer::Expr *expr
+) const
+```
+</CodeBlock>
+
+### visitGeoExpr [#visitgeoexpr]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder"}}>
+```cpp showLineNumbers={false}
+void * GeospatialFunctionFinder::visitGeoExpr(
+    const Analyzer::GeoExpr *geo_expr
+) const override
+```
+</CodeBlock>
+
+### visitFunctionOper [#visitfunctionoper]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder"}}>
+```cpp showLineNumbers={false}
+void * GeospatialFunctionFinder::visitFunctionOper(
+    const Analyzer::FunctionOper *func_oper
+) const override
+```
+</CodeBlock>
+
+### visitVar [#visitvar]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitVar(
+    const Analyzer::Var *
+) const
+```
+</CodeBlock>
+
+### visitColumnVar [#visitcolumnvar]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitColumnVar(
+    const Analyzer::ColumnVar *
+) const
+```
+</CodeBlock>
+
+### visitColumnVarTuple [#visitcolumnvartuple]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitColumnVarTuple(
+    const Analyzer::ExpressionTuple *
+) const
+```
+</CodeBlock>
+
+### visitConstant [#visitconstant]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitConstant(
+    const Analyzer::Constant *
+) const
+```
+</CodeBlock>
+
+### visitUOper [#visituoper]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitUOper(
+    const Analyzer::UOper *uoper
+) const
+```
+</CodeBlock>
+
+### visitBinOper [#visitbinoper]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitBinOper(
+    const Analyzer::BinOper *bin_oper
+) const
+```
+</CodeBlock>
+
+### visitInValues [#visitinvalues]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitInValues(
+    const Analyzer::InValues *in_values
+) const
+```
+</CodeBlock>
+
+### visitInIntegerSet [#visitinintegerset]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitInIntegerSet(
+    const Analyzer::InIntegerSet *in_integer_set
+) const
+```
+</CodeBlock>
+
+### visitCharLength [#visitcharlength]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitCharLength(
+    const Analyzer::CharLengthExpr *char_length
+) const
+```
+</CodeBlock>
+
+### visitKeyForString [#visitkeyforstring]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitKeyForString(
+    const Analyzer::KeyForStringExpr *key_for_string
+) const
+```
+</CodeBlock>
+
+### visitSampleRatio [#visitsampleratio]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitSampleRatio(
+    const Analyzer::SampleRatioExpr *sample_ratio
+) const
+```
+</CodeBlock>
+
+### visitStringOper [#visitstringoper]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitStringOper(
+    const Analyzer::StringOper *string_oper
+) const
+```
+</CodeBlock>
+
+### visitCardinality [#visitcardinality]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitCardinality(
+    const Analyzer::CardinalityExpr *cardinality
+) const
+```
+</CodeBlock>
+
+### visitDotProduct [#visitdotproduct]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDotProduct(
+    const Analyzer::DotProductExpr *dot_product
+) const
+```
+</CodeBlock>
+
+### visitLikeExpr [#visitlikeexpr]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitLikeExpr(
+    const Analyzer::LikeExpr *like
+) const
+```
+</CodeBlock>
+
+### visitRegexpExpr [#visitregexpexpr]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitRegexpExpr(
+    const Analyzer::RegexpExpr *regexp
+) const
+```
+</CodeBlock>
+
+### visitWidthBucket [#visitwidthbucket]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitWidthBucket(
+    const Analyzer::WidthBucketExpr *width_bucket_expr
+) const
+```
+</CodeBlock>
+
+### visitMLPredict [#visitmlpredict]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitMLPredict(
+    const Analyzer::MLPredictExpr *ml_predict_expr
+) const
+```
+</CodeBlock>
+
+### visitPCAProject [#visitpcaproject]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitPCAProject(
+    const Analyzer::PCAProjectExpr *pca_project_expr
+) const
+```
+</CodeBlock>
+
+### visitCaseExpr [#visitcaseexpr]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitCaseExpr(
+    const Analyzer::CaseExpr *case_
+) const
+```
+</CodeBlock>
+
+### visitDatetruncExpr [#visitdatetruncexpr]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDatetruncExpr(
+    const Analyzer::DatetruncExpr *datetrunc
+) const
+```
+</CodeBlock>
+
+### visitExtractExpr [#visitextractexpr]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitExtractExpr(
+    const Analyzer::ExtractExpr *extract
+) const
+```
+</CodeBlock>
+
+### visitFunctionOperWithCustomTypeHandling [#visitfunctionoperwithcustomtypehandling]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFunctionOperWithCustomTypeHandling(
+    const Analyzer::FunctionOperWithCustomTypeHandling *func_oper
+) const
+```
+</CodeBlock>
+
+### visitArrayOper [#visitarrayoper]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitArrayOper(
+    Analyzer::ArrayExpr const *array_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoUOper [#visitgeouoper]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoUOper(
+    const Analyzer::GeoUOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoBinOper [#visitgeobinoper]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoBinOper(
+    const Analyzer::GeoBinOper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitGeoH3Oper [#visitgeoh3oper]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitGeoH3Oper(
+    const Analyzer::GeoH3Oper *geo_expr
+) const
+```
+</CodeBlock>
+
+### visitWindowFunction [#visitwindowfunction]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitWindowFunction(
+    const Analyzer::WindowFunction *window_func
+) const
+```
+</CodeBlock>
+
+### visitDatediffExpr [#visitdatediffexpr]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDatediffExpr(
+    const Analyzer::DatediffExpr *datediff
+) const
+```
+</CodeBlock>
+
+### visitDateaddExpr [#visitdateaddexpr]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitDateaddExpr(
+    const Analyzer::DateaddExpr *dateadd
+) const
+```
+</CodeBlock>
+
+### visitLikelihood [#visitlikelihood]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitLikelihood(
+    const Analyzer::LikelihoodExpr *likelihood
+) const
+```
+</CodeBlock>
+
+### visitOffsetInFragment [#visitoffsetinfragment]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitOffsetInFragment(
+    const Analyzer::OffsetInFragment *
+) const
+```
+</CodeBlock>
+
+### visitFragmentId [#visitfragmentid]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFragmentId(
+    const Analyzer::FragmentId *
+) const
+```
+</CodeBlock>
+
+### visitFragmentIdAndOffset [#visitfragmentidandoffset]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitFragmentIdAndOffset(
+    const Analyzer::FragmentIdAndOffset *
+) const
+```
+</CodeBlock>
+
+### visitAggExpr [#visitaggexpr]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitAggExpr(
+    const Analyzer::AggExpr *agg
+) const
+```
+</CodeBlock>
+
+### visitRangeJoinOper [#visitrangejoinoper]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::visitRangeJoinOper(
+    const Analyzer::RangeOper *range_oper
+) const
+```
+</CodeBlock>
+
+### aggregateResult [#aggregateresult]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::aggregateResult(
+    const void *&aggregate,
+    const void *&next_result
+) const
+```
+</CodeBlock>
+
+### visitBegin [#visitbegin]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void ScalarExprVisitor<void *>::visitBegin() const
+```
+</CodeBlock>
+
+### defaultResult [#defaultresult]
+
+<CodeBlock links={{"GeospatialFunctionFinder": "geospatialfunctionfinder", "ScalarExprVisitor": "scalarexprvisitor"}}>
+```cpp showLineNumbers={false}
+virtual void * ScalarExprVisitor<void *>::defaultResult() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `geo_arg_cvs_` | `std::vector< const Analyzer::ColumnVar * >` | |
+| `geo_func_name_` | `std::string` | |

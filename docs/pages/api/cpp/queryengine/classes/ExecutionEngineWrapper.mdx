@@ -1,0 +1,201 @@
+---
+title: ExecutionEngineWrapper
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <CompilationContext.h>
+```
+
+---
+
+## Constructors
+
+### ExecutionEngineWrapper [#executionenginewrapper]
+
+<Tabs>
+<Tab title="Default">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper::ExecutionEngineWrapper()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="From raw pointer">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper::ExecutionEngineWrapper(
+    llvm::ExecutionEngine *execution_engine
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper", "CompilationOptions": "../structs/compilationoptions"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper::ExecutionEngineWrapper(
+    llvm::ExecutionEngine *execution_engine,
+    const CompilationOptions &co
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Move">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper::ExecutionEngineWrapper(
+    ExecutionEngineWrapper &&other
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (deleted)">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper::ExecutionEngineWrapper(
+    const ExecutionEngineWrapper &other
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Assignment operators
+
+### operator= [#operator_assign]
+
+<Tabs>
+<Tab title="Move assign">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper & ExecutionEngineWrapper::operator=(
+    ExecutionEngineWrapper &&other
+) = default
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper & ExecutionEngineWrapper::operator=(
+    llvm::ExecutionEngine *execution_engine
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy assign (deleted)">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+ExecutionEngineWrapper & ExecutionEngineWrapper::operator=(
+    const ExecutionEngineWrapper &other
+) = delete
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Methods
+
+### get [#get]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+llvm::ExecutionEngine * ExecutionEngineWrapper::get()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+const llvm::ExecutionEngine * ExecutionEngineWrapper::get() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator* [#operator_mul]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+llvm::ExecutionEngine & ExecutionEngineWrapper::operator*()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+const llvm::ExecutionEngine & ExecutionEngineWrapper::operator*() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator-&gt; [#operator_arrow]
+
+<Tabs>
+<Tab title="Mutable">
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+llvm::ExecutionEngine * ExecutionEngineWrapper::operator->()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Const">
+
+<Badge intent="note" minimal>const</Badge>
+
+<CodeBlock links={{"ExecutionEngineWrapper": "executionenginewrapper"}}>
+```cpp showLineNumbers={false}
+const llvm::ExecutionEngine * ExecutionEngineWrapper::operator->() const
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `execution_engine_` | `std::unique_ptr< llvm::ExecutionEngine >` | |
+| `intel_jit_listener_` | `std::unique_ptr< llvm::JITEventListener >` | |

@@ -1,0 +1,83 @@
+---
+title: NumericConverterFactory
+description: ""
+---
+
+<CodeBlock id="NumericConverterFactory" links={{"NumericConverterFactory": "numericconverterfactory"}}>
+```cpp showLineNumbers={false}
+template <typename SOURCE_TYPE, typename TARGET_TYPE>
+struct NumericConverterFactory
+```
+</CodeBlock>
+
+**Template parameters**
+
+<ParamField path="SOURCE_TYPE" type="typename">
+</ParamField>
+
+<ParamField path="TARGET_TYPE" type="typename">
+</ParamField>
+
+---
+
+## Methods
+
+### create [#create]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"NumericConverterFactory": "numericconverterfactory", "ConverterCreateParameter": "convertercreateparameter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<ConverterType> NumericConverterFactory<SOURCE_TYPE, TARGET_TYPE>::create(
+    ConverterCreateParameter param
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"NumericConverterFactory": "numericconverterfactory", "ConverterCreateParameter": "convertercreateparameter", "NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<NumericValueConverter<double, double>> NumericConverterFactory<double, double>::create(
+    ConverterCreateParameter param
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"NumericConverterFactory": "numericconverterfactory", "ConverterCreateParameter": "convertercreateparameter", "NumericValueConverter": "numericvalueconverter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<NumericValueConverter<float, float>> NumericConverterFactory<float, float>::create(
+    ConverterCreateParameter param
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### operator() [#operator_call]
+
+<CodeBlock links={{"NumericConverterFactory": "numericconverterfactory", "ConverterCreateParameter": "convertercreateparameter", "TargetValueConverter": "targetvalueconverter"}}>
+```cpp showLineNumbers={false}
+std::unique_ptr<TargetValueConverter> NumericConverterFactory<SOURCE_TYPE, TARGET_TYPE>::operator()(
+    ConverterCreateParameter param
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `ConverterType` | `NumericValueConverter< SOURCE_TYPE, TARGET_TYPE >` |

@@ -1,0 +1,16 @@
+---
+title: sift_up
+description: ""
+---
+
+<CodeBlock links={{"KeyComparator": "../structs/keycomparator", "KeyAccessor": "../structs/keyaccessor"}}>
+```cpp showLineNumbers={false}
+template <typename KeyT = int64_t, typename NodeT = int64_t>
+ALWAYS_INLINE DEVICE void sift_up(
+    NodeT *heap,
+    const NodeT curr_idx,
+    const KeyComparator<KeyT> &compare,
+    const KeyAccessor<KeyT, NodeT> &accessor
+)
+```
+</CodeBlock>

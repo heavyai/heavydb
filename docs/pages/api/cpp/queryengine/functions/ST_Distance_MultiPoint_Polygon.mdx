@@ -1,0 +1,23 @@
+---
+title: ST_Distance_MultiPoint_Polygon
+description: ""
+---
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+EXTENSION_INLINE double ST_Distance_MultiPoint_Polygon(
+    int8_t *mp,
+    int64_t mpsize,
+    int8_t *poly,
+    int64_t polysize,
+    int32_t *poly_ring_sizes,
+    int64_t poly_num_rings,
+    int32_t ic1,
+    int32_t isr1,
+    int32_t ic2,
+    int32_t isr2,
+    int32_t osr,
+    double threshold
+)
+```
+</CodeBlock>

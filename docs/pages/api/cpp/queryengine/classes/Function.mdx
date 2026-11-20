@@ -1,0 +1,140 @@
+---
+title: Function
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <ResultSetReductionOps.h>
+```
+
+---
+
+## Constructors
+
+### Function [#function]
+
+<CodeBlock links={{"Function": "function", "NamedArg": "#namedarg"}}>
+```cpp showLineNumbers={false}
+Function::Function(
+    const std::string name,
+    const std::vector<NamedArg> &arg_types,
+    const Type ret_type,
+    const bool always_inline
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### name [#name]
+
+<CodeBlock links={{"Function": "function"}}>
+```cpp showLineNumbers={false}
+const std::string & Function::name() const
+```
+</CodeBlock>
+
+### arg_types [#argtypes]
+
+<CodeBlock links={{"Function": "function", "NamedArg": "#namedarg"}}>
+```cpp showLineNumbers={false}
+const std::vector<NamedArg> & Function::arg_types() const
+```
+</CodeBlock>
+
+### arg [#arg]
+
+<CodeBlock links={{"Function": "function", "Argument": "argument"}}>
+```cpp showLineNumbers={false}
+Argument * Function::arg(
+    const size_t idx
+) const
+```
+</CodeBlock>
+
+### ret_type [#rettype]
+
+<CodeBlock links={{"Function": "function"}}>
+```cpp showLineNumbers={false}
+Type Function::ret_type() const
+```
+</CodeBlock>
+
+### body [#body]
+
+<CodeBlock links={{"Function": "function", "Instruction": "instruction"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::unique_ptr<Instruction>> & Function::body() const
+```
+</CodeBlock>
+
+### constants [#constants]
+
+<CodeBlock links={{"Function": "function", "Constant": "constant"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::unique_ptr<Constant>> & Function::constants() const
+```
+</CodeBlock>
+
+### always_inline [#alwaysinline]
+
+<CodeBlock links={{"Function": "function"}}>
+```cpp showLineNumbers={false}
+bool Function::always_inline() const
+```
+</CodeBlock>
+
+### add [#add]
+
+<CodeBlock links={{"Function": "function", "Value": "value"}}>
+```cpp showLineNumbers={false}
+template <typename Tp, typename... Args>
+Value * Function::add(
+    Args &&... args
+)
+```
+</CodeBlock>
+
+### addConstant [#addconstant]
+
+<CodeBlock links={{"Function": "function", "Value": "value"}}>
+```cpp showLineNumbers={false}
+template <typename Tp, typename... Args>
+Value * Function::addConstant(
+    Args &&... args
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `name_` | `const std::string` | |
+| `arg_types_` | `const std::vector< NamedArg >` | |
+| `ret_type_` | `const Type` | |
+| `body_` | `std::vector< std::unique_ptr< Instruction > >` | |
+| `always_inline_` | `const bool` | |
+| `arguments_` | `std::vector< std::unique_ptr< Argument > >` | |
+| `constants_` | `std::vector< std::unique_ptr< Constant > >` | |
+
+---
+
+## Inner classes
+
+### NamedArg
+
+<CodeBlock links={{"Function": "function"}}>
+```cpp showLineNumbers={false}
+struct Function::NamedArg
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `name` | `std::string` | |
+| `type` | `Type` | |

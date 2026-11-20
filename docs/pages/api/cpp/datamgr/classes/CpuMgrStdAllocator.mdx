@@ -1,0 +1,95 @@
+---
+title: CpuMgrStdAllocator
+description: ""
+---
+
+<CodeBlock id="CpuMgrStdAllocator" links={{"CpuMgrStdAllocator": "cpumgrstdallocator"}}>
+```cpp showLineNumbers={false}
+template <typename T, bool track_allocations = true>
+class CpuMgrStdAllocator
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <CpuMgrArenaAllocator.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+<ParamField path="track_allocations" type="bool" default="true">
+</ParamField>
+
+**Inherits from:** `std::allocator< T >` (private)
+
+---
+
+## Constructors
+
+### CpuMgrStdAllocator [#cpumgrstdallocator]
+
+<CodeBlock links={{"CpuMgrStdAllocator": "cpumgrstdallocator"}}>
+```cpp showLineNumbers={false}
+CpuMgrStdAllocator<T, track_allocations>::CpuMgrStdAllocator()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### allocate [#allocate]
+
+<CodeBlock links={{"CpuMgrStdAllocator": "cpumgrstdallocator"}}>
+```cpp showLineNumbers={false}
+T * CpuMgrStdAllocator<T, track_allocations>::allocate(
+    std::size_t n
+)
+```
+</CodeBlock>
+
+### deallocate [#deallocate]
+
+<CodeBlock links={{"CpuMgrStdAllocator": "cpumgrstdallocator"}}>
+```cpp showLineNumbers={false}
+void CpuMgrStdAllocator<T, track_allocations>::deallocate(
+    T *p,
+    std::size_t n
+) noexcept
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### Typedefs
+
+| Name | Definition |
+|---|---|
+| `value_type` | `T` |
+| `propagate_on_container_copy_assignment` | `std::true_type` |
+| `propagate_on_container_move_assignment` | `std::true_type` |
+| `propagate_on_container_swap` | `std::true_type` |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `base_allocator_` | `std::unique_ptr< CpuMgrBaseAllocator >` | |
+
+---
+
+## Inner classes
+
+### rebind
+
+<CodeBlock links={{"CpuMgrStdAllocator": "cpumgrstdallocator"}}>
+```cpp showLineNumbers={false}
+struct CpuMgrStdAllocator::rebind
+```
+</CodeBlock>

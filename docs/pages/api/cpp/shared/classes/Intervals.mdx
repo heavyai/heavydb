@@ -1,0 +1,97 @@
+---
+title: Intervals
+description: ""
+---
+
+<CodeBlock id="Intervals" links={{"Intervals": "intervals"}}>
+```cpp showLineNumbers={false}
+template <typename T, typename U = typename std::make_unsigned<T>::type>
+class Intervals
+```
+</CodeBlock>
+
+```cpp showLineNumbers={false}
+#include <Intervals.h>
+```
+
+**Template parameters**
+
+<ParamField path="T" type="typename">
+</ParamField>
+
+<ParamField path="U" type="typename" default="typename std::make_unsigned<T>::type">
+</ParamField>
+
+---
+
+## Constructors
+
+### Intervals [#intervals]
+
+<CodeBlock links={{"Intervals": "intervals"}}>
+```cpp showLineNumbers={false}
+Intervals<T, U>::Intervals(
+    T begin,
+    T end,
+    U n_workers
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### empty [#empty]
+
+<CodeBlock links={{"Intervals": "intervals"}}>
+```cpp showLineNumbers={false}
+bool Intervals<T, U>::empty() const
+```
+</CodeBlock>
+
+### begin [#begin]
+
+<CodeBlock links={{"Intervals": "intervals", "Iterator": "#iterator"}}>
+```cpp showLineNumbers={false}
+Iterator Intervals<T, U>::begin() const
+```
+</CodeBlock>
+
+### end [#end]
+
+<CodeBlock links={{"Intervals": "intervals", "Iterator": "#iterator"}}>
+```cpp showLineNumbers={false}
+Iterator Intervals<T, U>::end() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `begin_` | `T const` | |
+| `total_size_` | `U const` | |
+| `quot_` | `U const` | |
+| `rem_` | `U const` | |
+
+---
+
+## Inner classes
+
+### Iterator
+
+<CodeBlock links={{"Intervals": "intervals"}}>
+```cpp showLineNumbers={false}
+class Intervals::Iterator
+```
+</CodeBlock>
+
+| Name | Type | Description |
+|---|---|---|
+| `begin_` | `T` | |
+| `quot_` | `U` | |
+| `rem_` | `U` | |
+| `index` | `U` | |

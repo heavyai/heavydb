@@ -1,0 +1,41 @@
+---
+title: DecodedJoinHashBufferEntry
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <HashTable.h>
+```
+
+---
+
+## Methods
+
+### operator&lt; [#operator_lt]
+
+<CodeBlock links={{"DecodedJoinHashBufferEntry": "decodedjoinhashbufferentry"}}>
+```cpp showLineNumbers={false}
+bool DecodedJoinHashBufferEntry::operator<(
+    const DecodedJoinHashBufferEntry &other
+) const
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"DecodedJoinHashBufferEntry": "decodedjoinhashbufferentry"}}>
+```cpp showLineNumbers={false}
+bool DecodedJoinHashBufferEntry::operator==(
+    const DecodedJoinHashBufferEntry &other
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `key` | `std::vector< int64_t >` | |
+| `payload` | `std::set< int32_t >` | |

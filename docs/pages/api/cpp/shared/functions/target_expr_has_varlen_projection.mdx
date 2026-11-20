@@ -1,0 +1,29 @@
+---
+title: target_expr_has_varlen_projection
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+bool target_expr_has_varlen_projection(
+    const Analyzer::Expr *target_expr
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock>
+```cpp showLineNumbers={false}
+bool target_expr_has_varlen_projection(
+    const std::shared_ptr<Analyzer::Expr> target_expr
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

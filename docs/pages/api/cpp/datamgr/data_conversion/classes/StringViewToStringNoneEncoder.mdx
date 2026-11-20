@@ -1,0 +1,119 @@
+---
+title: data_conversion::StringViewToStringNoneEncoder
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <data_conversion/StringViewToStringNoneEncoder.h>
+```
+
+**Inherits from:** `data_conversion::BaseConvertEncoder` (public)
+
+---
+
+## Constructors
+
+### StringViewToStringNoneEncoder [#stringviewtostringnoneencoder]
+
+<CodeBlock links={{"StringViewToStringNoneEncoder": "stringviewtostringnoneencoder", "Chunk": "../../chunkns/classes/chunk"}}>
+```cpp showLineNumbers={false}
+data_conversion::StringViewToStringNoneEncoder::StringViewToStringNoneEncoder(
+    const Chunk_NS::Chunk &dst_chunk,
+    const bool error_tracking_enabled
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### encodeAndAppendData [#encodeandappenddata]
+
+<CodeBlock links={{"StringViewToStringNoneEncoder": "stringviewtostringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToStringNoneEncoder::encodeAndAppendData(
+    const int8_t *data,
+    const size_t num_elements
+) override
+```
+</CodeBlock>
+
+### getEncoder [#getencoder]
+
+<CodeBlock links={{"StringViewToStringNoneEncoder": "stringviewtostringnoneencoder", "StringNoneEncoder": "../../classes/stringnoneencoder"}}>
+```cpp showLineNumbers={false}
+StringNoneEncoder * data_conversion::StringViewToStringNoneEncoder::getEncoder() const
+```
+</CodeBlock>
+
+### initializeDeleteBuffer [#initializedeletebuffer]
+
+<CodeBlock links={{"StringViewToStringNoneEncoder": "stringviewtostringnoneencoder", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToStringNoneEncoder::initializeDeleteBuffer(
+    const size_t size_hint
+)
+```
+</CodeBlock>
+
+### finalize [#finalize]
+
+<CodeBlock links={{"StringViewToStringNoneEncoder": "stringviewtostringnoneencoder", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::StringViewToStringNoneEncoder::finalize(
+    const size_t rows_appended
+)
+```
+</CodeBlock>
+
+### getMetadata [#getmetadata]
+
+<CodeBlock links={{"StringViewToStringNoneEncoder": "stringviewtostringnoneencoder", "Chunk": "../../chunkns/classes/chunk", "ChunkMetadata": "../../structs/chunkmetadata", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<ChunkMetadata> data_conversion::StringViewToStringNoneEncoder::getMetadata(
+    const Chunk_NS::Chunk &chunk
+) const
+```
+</CodeBlock>
+
+### initialize [#initialize]
+
+<CodeBlock links={{"StringViewToStringNoneEncoder": "stringviewtostringnoneencoder"}}>
+```cpp showLineNumbers={false}
+void data_conversion::StringViewToStringNoneEncoder::initialize()
+```
+</CodeBlock>
+
+### clear [#clear]
+
+<CodeBlock links={{"StringViewToStringNoneEncoder": "stringviewtostringnoneencoder", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+virtual void data_conversion::StringViewToStringNoneEncoder::clear()
+```
+</CodeBlock>
+
+### isNull [#isnull]
+
+<CodeBlock links={{"StringViewToStringNoneEncoder": "stringviewtostringnoneencoder", "BaseConvertEncoder": "baseconvertencoder"}}>
+```cpp showLineNumbers={false}
+template <typename DataType>
+bool data_conversion::StringViewToStringNoneEncoder::isNull(
+    const DataType &typed_value
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `dst_type_info_` | `SQLTypeInfo` | |
+| `dst_chunk_` | `const Chunk_NS::Chunk &` | |
+| `buffer_` | `AbstractBuffer *` | |
+| `delete_buffer_` | `std::optional< std::vector< bool > >` | |
+| `error_tracking_enabled_` | `const bool` | |
+| `has_nulls_` | `bool` | |
+| `num_elements_` | `size_t` | |

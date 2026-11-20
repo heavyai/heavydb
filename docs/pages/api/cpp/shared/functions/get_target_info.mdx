@@ -1,0 +1,31 @@
+---
+title: get_target_info
+description: ""
+---
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"TargetInfo": "../structs/targetinfo"}}>
+```cpp showLineNumbers={false}
+TargetInfo get_target_info(
+    const Analyzer::Expr *target_expr,
+    const bool bigint_count
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"TargetInfo": "../structs/targetinfo"}}>
+```cpp showLineNumbers={false}
+TargetInfo get_target_info(
+    const std::shared_ptr<Analyzer::Expr> target_expr,
+    const bool bigint_count
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>

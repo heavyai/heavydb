@@ -1,0 +1,338 @@
+---
+title: foreign_storage::ForeignStorageBuffer
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/ForeignStorageBuffer.h>
+```
+
+**Inherits from:** `Data_Namespace::AbstractBuffer` (public)
+
+---
+
+## Constructors
+
+### ForeignStorageBuffer [#foreignstoragebuffer]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+foreign_storage::ForeignStorageBuffer::ForeignStorageBuffer()
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~ForeignStorageBuffer
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+virtual foreign_storage::ForeignStorageBuffer::~ForeignStorageBuffer() = default
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### read [#read]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::read(
+    int8_t *const destination,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel destination_buffer_type = CPU_LEVEL,
+    const int destination_device_id = -1
+) override
+```
+</CodeBlock>
+
+### write [#write]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::write(
+    int8_t *source,
+    const size_t num_bytes,
+    const size_t offset = 0,
+    const MemoryLevel source_buffer_type = CPU_LEVEL,
+    const int source_device_id = -1
+) override
+```
+</CodeBlock>
+
+### reserve [#reserve]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::reserve(
+    size_t additional_num_bytes
+) override
+```
+</CodeBlock>
+
+### append [#append]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::append(
+    int8_t *source,
+    const size_t num_bytes,
+    const MemoryLevel source_buffer_type = CPU_LEVEL,
+    const int device_id = -1
+) override
+```
+</CodeBlock>
+
+### getMemoryPtr [#getmemoryptr]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+int8_t * foreign_storage::ForeignStorageBuffer::getMemoryPtr() override
+```
+</CodeBlock>
+
+### pageCount [#pagecount]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageBuffer::pageCount() const override
+```
+</CodeBlock>
+
+### pageSize [#pagesize]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageBuffer::pageSize() const override
+```
+</CodeBlock>
+
+### reservedSize [#reservedsize]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageBuffer::reservedSize() const override
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer"}}>
+```cpp showLineNumbers={false}
+MemoryLevel foreign_storage::ForeignStorageBuffer::getType() const override
+```
+</CodeBlock>
+
+### setMemoryPtr [#setmemoryptr]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual void foreign_storage::ForeignStorageBuffer::setMemoryPtr(
+    int8_t *new_ptr
+)
+```
+</CodeBlock>
+
+### pin [#pin]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int foreign_storage::ForeignStorageBuffer::pin()
+```
+</CodeBlock>
+
+### unPin [#unpin]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int foreign_storage::ForeignStorageBuffer::unPin()
+```
+</CodeBlock>
+
+### getPinCount [#getpincount]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+virtual int foreign_storage::ForeignStorageBuffer::getPinCount()
+```
+</CodeBlock>
+
+### size [#size]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::ForeignStorageBuffer::size() const
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+int foreign_storage::ForeignStorageBuffer::getDeviceId() const
+```
+</CodeBlock>
+
+### isDirty [#isdirty]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageBuffer::isDirty() const
+```
+</CodeBlock>
+
+### isAppended [#isappended]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageBuffer::isAppended() const
+```
+</CodeBlock>
+
+### isUpdated [#isupdated]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageBuffer::isUpdated() const
+```
+</CodeBlock>
+
+### hasEncoder [#hasencoder]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::ForeignStorageBuffer::hasEncoder() const
+```
+</CodeBlock>
+
+### getSqlType [#getsqltype]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+SQLTypeInfo foreign_storage::ForeignStorageBuffer::getSqlType() const
+```
+</CodeBlock>
+
+### setSqlType [#setsqltype]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::setSqlType(
+    const SQLTypeInfo &sql_type
+)
+```
+</CodeBlock>
+
+### getEncoder [#getencoder]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "Encoder": "../../classes/encoder", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+Encoder * foreign_storage::ForeignStorageBuffer::getEncoder() const
+```
+</CodeBlock>
+
+### setDirty [#setdirty]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::setDirty()
+```
+</CodeBlock>
+
+### setUpdated [#setupdated]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::setUpdated()
+```
+</CodeBlock>
+
+### setAppended [#setappended]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::setAppended()
+```
+</CodeBlock>
+
+### setSize [#setsize]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::setSize(
+    const size_t size
+)
+```
+</CodeBlock>
+
+### clearDirtyBits [#cleardirtybits]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::clearDirtyBits()
+```
+</CodeBlock>
+
+### initEncoder [#initencoder]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::initEncoder(
+    const SQLTypeInfo &tmp_sql_type
+)
+```
+</CodeBlock>
+
+### syncEncoder [#syncencoder]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::syncEncoder(
+    const AbstractBuffer *src_buffer
+)
+```
+</CodeBlock>
+
+### copyTo [#copyto]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::copyTo(
+    AbstractBuffer *destination_buffer,
+    const size_t num_bytes = 0
+)
+```
+</CodeBlock>
+
+### resetToEmpty [#resettoempty]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::resetToEmpty()
+```
+</CodeBlock>
+
+### setMetadata [#setmetadata]
+
+<CodeBlock links={{"ForeignStorageBuffer": "foreignstoragebuffer", "ChunkMetadata": "../../structs/chunkmetadata", "AbstractBuffer": "../../datanamespace/classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::ForeignStorageBuffer::setMetadata(
+    const ChunkMetadata &meta
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `buffer_` | `std::vector< int8_t >` | |
+| `encoder_` | `std::unique_ptr< Encoder >` | |
+| `sql_type_` | `SQLTypeInfo` | |
+| `size_` | `size_t` | |
+| `device_id_` | `int` | |

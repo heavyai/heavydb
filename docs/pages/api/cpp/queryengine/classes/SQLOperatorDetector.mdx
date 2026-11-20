@@ -1,0 +1,335 @@
+---
+title: SQLOperatorDetector
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <SQLOperatorDetector.h>
+```
+
+**Inherits from:** `RelRexDagVisitor` (public)
+
+This class is marked <Badge intent="note" minimal>final</Badge>.
+
+---
+
+## Methods
+
+### visit [#visit]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexOperator": "rexoperator"}}>
+```cpp showLineNumbers={false}
+void SQLOperatorDetector::visit(
+    RexOperator const *op
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelAlgNode const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexScalar": "rexscalar"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexScalar const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelAggregate": "relaggregate"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelAggregate const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 5">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelCompound": "relcompound"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelCompound const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 6">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelFilter": "relfilter"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelFilter const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 7">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelJoin": "reljoin"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 8">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelLeftDeepInnerJoin": "relleftdeepinnerjoin"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelLeftDeepInnerJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 9">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelLogicalUnion": "rellogicalunion"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelLogicalUnion const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 10">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelLogicalValues": "rellogicalvalues"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelLogicalValues const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 11">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelModify": "relmodify"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelModify const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 12">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelProject": "relproject"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelProject const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 13">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelScan": "relscan"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelScan const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 14">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelSort": "relsort"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RelSort const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 15">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelTableFunction": "reltablefunction"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelTableFunction const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 16">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelTranslatedJoin": "reltranslatedjoin"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RelTranslatedJoin const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 17">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexAbstractInput": "rexabstractinput"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RexAbstractInput const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 18">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexCase": "rexcase"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexCase const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 19">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexFunctionOperator": "rexfunctionoperator"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexFunctionOperator const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 20">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexInput": "rexinput"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexInput const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 21">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexLiteral": "rexliteral"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RexLiteral const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 22">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexRef": "rexref"}}>
+```cpp showLineNumbers={false}
+virtual void RelRexDagVisitor::visit(
+    RexRef const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 23">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexSubQuery": "rexsubquery"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexSubQuery const *
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 24">
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RexWindowFunctionOperator": "rexwindowfunctionoperator"}}>
+```cpp showLineNumbers={false}
+void RelRexDagVisitor::visit(
+    RexWindowFunctionOperator const *
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### castAndVisit [#castandvisit]
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelAlgNode": "relalgnode", "RelRexDagVisitor": "relrexdagvisitor"}}>
+```cpp showLineNumbers={false}
+void SQLOperatorDetector::castAndVisit(
+    RelAlgNode const *
+)
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### detect [#detect]
+
+<CodeBlock links={{"SQLOperatorDetector": "sqloperatordetector", "RelAlgNode": "relalgnode"}}>
+```cpp showLineNumbers={false}
+bool SQLOperatorDetector::detect(
+    RelAlgNode const *rel_alg_node,
+    SQLOps target_op
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `has_target_op_` | `bool` | |
+| `target_op_` | `SQLOps` | |

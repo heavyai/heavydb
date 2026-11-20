@@ -1,0 +1,231 @@
+---
+title: foreign_storage::LogFileBufferParser
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <foreign_storage/LogFileBufferParser.h>
+```
+
+**Inherits from:** `foreign_storage::RegexFileBufferParser` (public)
+
+---
+
+## Constructors
+
+### LogFileBufferParser [#logfilebufferparser]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser"}}>
+```cpp showLineNumbers={false}
+foreign_storage::LogFileBufferParser::LogFileBufferParser(
+    const ForeignTable *foreign_table,
+    int32_t db_id
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### optionallyRemoveBadFiles [#optionallyremovebadfiles]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "MultiFileReader": "multifilereader"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::LogFileBufferParser::optionallyRemoveBadFiles(
+    MultiFileReader *mfr
+) const override
+```
+</CodeBlock>
+
+May remove files that violate parsing rules.
+
+Does nothing by default.
+
+### parseBuffer [#parsebuffer]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "ParseBufferRequest": "../structs/parsebufferrequest", "ParseBufferResult": "../structs/parsebufferresult", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+ParseBufferResult foreign_storage::LogFileBufferParser::parseBuffer(
+    ParseBufferRequest &request,
+    bool convert_data_blocks,
+    bool columns_are_pre_filtered = false,
+    bool skip_dict_encoding = false
+) const override
+```
+</CodeBlock>
+
+Parses a given file buffer and returns data blocks for each column in the file along with metadata related to rows and row offsets within the buffer.
+
+### validateAndGetCopyParams [#validateandgetcopyparams]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+import_export::CopyParams foreign_storage::LogFileBufferParser::validateAndGetCopyParams(
+    const ForeignTable *foreign_table
+) const override
+```
+</CodeBlock>
+
+Validates foreign table parse options and returns a CopyParams object upon successful validation.
+
+An exception is thrown if validation fails.
+
+### findRowEndPosition [#findrowendposition]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "FileReader": "filereader", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+size_t foreign_storage::LogFileBufferParser::findRowEndPosition(
+    size_t &alloc_size,
+    std::unique_ptr<char[]> &buffer,
+    size_t &buffer_size,
+    const import_export::CopyParams &copy_params,
+    const size_t buffer_first_row_index,
+    unsigned int &num_rows_in_buffer,
+    FileReader *file_reader
+) const override
+```
+</CodeBlock>
+
+Finds and returns the offset of the end of the last row in the given buffer.
+
+If the buffer does not contain at least one row, the buffer is extended with more content from the file until a row is read. An exception is thrown if the buffer is extended to a maximum threshold and at least one row has still not been read.
+
+### validateFiles [#validatefiles]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "FileReader": "filereader", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::LogFileBufferParser::validateFiles(
+    const FileReader *file_reader,
+    const ForeignTable *foreign_table
+) const override
+```
+</CodeBlock>
+
+Performs basic validation of files to be parsed.
+
+### regexMatchColumns [#regexmatchcolumns]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::LogFileBufferParser::regexMatchColumns(
+    const std::string &row_str,
+    const boost::regex &line_regex,
+    size_t logical_column_count,
+    std::vector<std::string> &parsed_columns_str,
+    std::vector<std::string_view> &parsed_columns_sv,
+    const std::string &file_path
+) const override
+```
+</CodeBlock>
+
+### shouldRemoveNonMatches [#shouldremovenonmatches]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::LogFileBufferParser::shouldRemoveNonMatches() const override
+```
+</CodeBlock>
+
+### shouldTruncateStringValues [#shouldtruncatestringvalues]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::LogFileBufferParser::shouldTruncateStringValues() const override
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### setMaxBufferResize [#setmaxbufferresize]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::LogFileBufferParser::setMaxBufferResize(
+    size_t max_buffer_resize
+)
+```
+</CodeBlock>
+
+### convertImportBuffersToDataBlocks [#convertimportbufferstodatablocks]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+std::map<int, DataBlockPtr> foreign_storage::TextFileBufferParser::convertImportBuffersToDataBlocks(
+    const std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>> &import_buffers,
+    const bool skip_dict_encoding = false
+)
+```
+</CodeBlock>
+
+### isCoordinateScalar [#iscoordinatescalar]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::TextFileBufferParser::isCoordinateScalar(
+    const std::string_view datum
+)
+```
+</CodeBlock>
+
+### processGeoColumn [#processgeocolumn]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TextFileBufferParser::processGeoColumn(
+    std::vector<std::unique_ptr<import_export::UnmanagedTypedImportBuffer>> &import_buffers,
+    size_t &col_idx,
+    const import_export::CopyParams &copy_params,
+    std::list<const ColumnDescriptor *>::iterator &cd_it,
+    std::vector<std::string_view> &row,
+    size_t &import_idx,
+    bool is_null,
+    size_t first_row_index,
+    size_t row_index_plus_one,
+    std::shared_ptr<Catalog_Namespace::Catalog> catalog
+)
+```
+</CodeBlock>
+
+### fillRejectedRowWithInvalidData [#fillrejectedrowwithinvaliddata]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "ParseBufferRequest": "../structs/parsebufferrequest", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+void foreign_storage::TextFileBufferParser::fillRejectedRowWithInvalidData(
+    const std::list<const ColumnDescriptor *> &columns,
+    std::list<const ColumnDescriptor *>::iterator &cd_it,
+    const size_t col_idx,
+    ParseBufferRequest &request
+)
+```
+</CodeBlock>
+
+Fill the current row of the `request` with invalid (null) data as row will be marked as rejected.
+
+### isNullDatum [#isnulldatum]
+
+<CodeBlock links={{"LogFileBufferParser": "logfilebufferparser", "RegexFileBufferParser": "regexfilebufferparser"}}>
+```cpp showLineNumbers={false}
+bool foreign_storage::TextFileBufferParser::isNullDatum(
+    const std::string_view datum,
+    const ColumnDescriptor *column,
+    const std::string &null_indicator
+)
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `foreign_table_` | `const ForeignTable *` | |
+| `db_id_` | `const int32_t` | |
+| `LINE_REGEX_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `LINE_START_REGEX_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `HEADER_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `BUFFER_SIZE_KEY` <Badge intent="note" minimal>static</Badge> | `const std::string` | |
+| `line_start_regex_` | `std::optional< boost::regex >` | |

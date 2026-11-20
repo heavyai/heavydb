@@ -1,0 +1,587 @@
+---
+title: File_Namespace::GlobalFileMgr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <File_Namespace/GlobalFileMgr.h>
+```
+
+**Inherits from:** `Data_Namespace::AbstractBufferMgr` (public)
+
+---
+
+## Constructors
+
+### GlobalFileMgr [#globalfilemgr]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+File_Namespace::GlobalFileMgr::GlobalFileMgr(
+    const int32_t device_id,
+    std::string base_path = ".",
+    const size_t num_reader_threads = 0,
+    const size_t page_size = DEFAULT_PAGE_SIZE,
+    const size_t metadata_page_size = DEFAULT_METADATA_PAGE_SIZE
+)
+```
+</CodeBlock>
+
+Constructor.
+
+### Destructor [#destructor]
+
+### ~GlobalFileMgr
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+File_Namespace::GlobalFileMgr::~GlobalFileMgr() override
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### createBuffer [#createbuffer]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * File_Namespace::GlobalFileMgr::createBuffer(
+    const ChunkKey &key,
+    size_t pageSize = 0,
+    const size_t numBytes = 0
+) override
+```
+</CodeBlock>
+
+Creates a chunk with the specified key and page size.
+
+### isBufferOnDevice [#isbufferondevice]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::GlobalFileMgr::isBufferOnDevice(
+    const ChunkKey &key
+) override
+```
+</CodeBlock>
+
+### deleteBuffer [#deletebuffer]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::deleteBuffer(
+    const ChunkKey &key,
+    const bool purge = true
+) override
+```
+</CodeBlock>
+
+Deletes the chunk with the specified key.
+
+### deleteBuffersWithPrefix [#deletebufferswithprefix]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::deleteBuffersWithPrefix(
+    const ChunkKey &keyPrefix,
+    const bool purge = true
+) override
+```
+</CodeBlock>
+
+### getBuffer [#getbuffer]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * File_Namespace::GlobalFileMgr::getBuffer(
+    const ChunkKey &key,
+    const size_t numBytes = 0
+) override
+```
+</CodeBlock>
+
+Returns the a pointer to the chunk with the specified key.
+
+### fetchBuffer [#fetchbuffer]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::fetchBuffer(
+    const ChunkKey &key,
+    AbstractBuffer *destBuffer,
+    const size_t numBytes
+) override
+```
+</CodeBlock>
+
+### putBuffer [#putbuffer]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * File_Namespace::GlobalFileMgr::putBuffer(
+    const ChunkKey &key,
+    AbstractBuffer *d,
+    const size_t numBytes = 0
+) override
+```
+</CodeBlock>
+
+Puts the contents of d into the [Chunk](../typedefs/chunk) with the given key.
+
+**Returns:** AbstractBuffer*
+
+**Parameters**
+
+<ParamField path="key" type="const ChunkKey &">
+- Unique identifier for a [Chunk](../typedefs/chunk).
+</ParamField>
+
+<ParamField path="d" type="AbstractBuffer *">
+- An object representing the source data for the [Chunk](../typedefs/chunk).
+</ParamField>
+
+### alloc [#alloc]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+AbstractBuffer * File_Namespace::GlobalFileMgr::alloc(
+    const size_t numBytes
+) override
+```
+</CodeBlock>
+
+### free [#free]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "AbstractBuffer": "../../classes/abstractbuffer"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::free(
+    AbstractBuffer *buffer
+) override
+```
+</CodeBlock>
+
+### getMgrType [#getmgrtype]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+MgrType File_Namespace::GlobalFileMgr::getMgrType() override
+```
+</CodeBlock>
+
+### getStringMgrType [#getstringmgrtype]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::GlobalFileMgr::getStringMgrType() override
+```
+</CodeBlock>
+
+### printSlabs [#printslabs]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::GlobalFileMgr::printSlabs() override
+```
+</CodeBlock>
+
+### getMaxSize [#getmaxsize]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::GlobalFileMgr::getMaxSize() const override
+```
+</CodeBlock>
+
+### getInUseSize [#getinusesize]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::GlobalFileMgr::getInUseSize() const override
+```
+</CodeBlock>
+
+### getAllocated [#getallocated]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::GlobalFileMgr::getAllocated() const override
+```
+</CodeBlock>
+
+### isAllocationCapped [#isallocationcapped]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::GlobalFileMgr::isAllocationCapped() const override
+```
+</CodeBlock>
+
+### init [#init]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::init()
+```
+</CodeBlock>
+
+### getChunkMetadataVecForKeyPrefix [#getchunkmetadatavecforkeyprefix]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::getChunkMetadataVecForKeyPrefix(
+    ChunkMetadataVector &chunkMetadataVec,
+    const ChunkKey &keyPrefix
+) override
+```
+</CodeBlock>
+
+### checkpoint [#checkpoint]
+
+<Tabs>
+<Tab title="Fsyncs data files">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::checkpoint() override
+```
+</CodeBlock>
+
+Fsyncs data files, writes out epoch and fsyncs that.
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::checkpoint(
+    const int32_t db_id,
+    const int32_t tb_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "AbstractBufferMgr": "../../datanamespace/classes/abstractbuffermgr"}}>
+```cpp showLineNumbers={false}
+virtual void File_Namespace::GlobalFileMgr::checkpoint(
+    const int db_id,
+    const int tb_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getNumReaderThreads [#getnumreaderthreads]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::GlobalFileMgr::getNumReaderThreads()
+```
+</CodeBlock>
+
+Returns number of threads defined by parameter num-reader-threads which should be used during initial load and consequent read of data.
+
+### getNumChunks [#getnumchunks]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::GlobalFileMgr::getNumChunks() override
+```
+</CodeBlock>
+
+### compactDataFiles [#compactdatafiles]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::compactDataFiles(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### findFileMgr [#findfilemgr]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileMgr * File_Namespace::GlobalFileMgr::findFileMgr(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### setFileMgrParams [#setfilemgrparams]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "FileMgrParams": "../structs/filemgrparams"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::setFileMgrParams(
+    const int32_t db_id,
+    const int32_t tb_id,
+    const FileMgrParams &file_mgr_params
+)
+```
+</CodeBlock>
+
+### getFileMgr [#getfilemgr]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileMgr * File_Namespace::GlobalFileMgr::getFileMgr(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileMgr * File_Namespace::GlobalFileMgr::getFileMgr(
+    const ChunkKey &key
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### getBasePath [#getbasepath]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+std::string File_Namespace::GlobalFileMgr::getBasePath() const
+```
+</CodeBlock>
+
+### getPageSize [#getpagesize]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::GlobalFileMgr::getPageSize() const
+```
+</CodeBlock>
+
+### getMetadataPageSize [#getmetadatapagesize]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::GlobalFileMgr::getMetadataPageSize() const
+```
+</CodeBlock>
+
+### writeFileMgrData [#writefilemgrdata]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::writeFileMgrData(
+    FileMgr *fileMgr = 0
+)
+```
+</CodeBlock>
+
+### getDBConvert [#getdbconvert]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::GlobalFileMgr::getDBConvert() const
+```
+</CodeBlock>
+
+### setDBConvert [#setdbconvert]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::setDBConvert(
+    bool val
+)
+```
+</CodeBlock>
+
+### removeTableRelatedDS [#removetablerelatedds]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::removeTableRelatedDS(
+    const int32_t db_id,
+    const int32_t tb_id
+) override
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<Badge intent="note" minimal>virtual</Badge>
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "AbstractBufferMgr": "../../datanamespace/classes/abstractbuffermgr"}}>
+```cpp showLineNumbers={false}
+virtual void File_Namespace::GlobalFileMgr::removeTableRelatedDS(
+    const int db_id,
+    const int table_id
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### setTableEpoch [#settableepoch]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::setTableEpoch(
+    const int32_t db_id,
+    const int32_t tb_id,
+    const int32_t start_epoch
+)
+```
+</CodeBlock>
+
+### getTableEpoch [#gettableepoch]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+size_t File_Namespace::GlobalFileMgr::getTableEpoch(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### resetTableEpochFloor [#resettableepochfloor]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::resetTableEpochFloor(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### getStorageStats [#getstoragestats]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "StorageStats": "../structs/storagestats"}}>
+```cpp showLineNumbers={false}
+StorageStats File_Namespace::GlobalFileMgr::getStorageStats(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### getSharedFileMgr [#getsharedfilemgr]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<FileMgr> File_Namespace::GlobalFileMgr::getSharedFileMgr(
+    const int db_id,
+    const int table_id
+)
+```
+</CodeBlock>
+
+### setFileMgr [#setfilemgr]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::setFileMgr(
+    const int db_id,
+    const int table_id,
+    std::shared_ptr<FileMgr> file_mgr
+)
+```
+</CodeBlock>
+
+### closeFileMgr [#closefilemgr]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::closeFileMgr(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### getDeviceId [#getdeviceid]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "AbstractBufferMgr": "../../datanamespace/classes/abstractbuffermgr"}}>
+```cpp showLineNumbers={false}
+int File_Namespace::GlobalFileMgr::getDeviceId()
+```
+</CodeBlock>
+
+### findFileMgrUnlocked [#findfilemgrunlocked]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "FileMgr": "filemgr"}}>
+```cpp showLineNumbers={false}
+FileMgr * File_Namespace::GlobalFileMgr::findFileMgrUnlocked(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### deleteFileMgr [#deletefilemgr]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr"}}>
+```cpp showLineNumbers={false}
+void File_Namespace::GlobalFileMgr::deleteFileMgr(
+    const int32_t db_id,
+    const int32_t tb_id
+)
+```
+</CodeBlock>
+
+### existsDiffBetweenFileMgrParamsAndFileMgr [#existsdiffbetweenfilemgrparamsandfilemgr]
+
+<CodeBlock links={{"GlobalFileMgr": "globalfilemgr", "FileMgr": "filemgr", "FileMgrParams": "../structs/filemgrparams"}}>
+```cpp showLineNumbers={false}
+bool File_Namespace::GlobalFileMgr::existsDiffBetweenFileMgrParamsAndFileMgr(
+    FileMgr *file_mgr,
+    const FileMgrParams &file_mgr_params
+) const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `db_version_` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `int32_t` | |
+| `basePath_` | `std::string` | |
+| `num_reader_threads_` | `size_t` | The OS file system path containing the files. |
+| `epoch_` | `int32_t` | number of threads used when loading data |
+| `page_size_` | `const size_t` | |
+| `metadata_page_size_` | `const size_t` | used to set [FileMgr](filemgr) page_size_ |
+| `dbConvert_` | `bool` | used to set [FileMgr](filemgr) metadta_page_size_ |
+| `ownedFileMgrs_` | `std::map< TablePair, std::shared_ptr< FileMgr > >` | true if conversion should be done between different db_version |
+| `max_rollback_epochs_per_table_` | `std::map< TablePair, int32_t >` | |
+| `lazy_initialized_stats_` | `std::map< TablePair, StorageStats >` | |
+| `fileMgrs_mutex_` | `heavyai::shared_mutex` | |
+| `parentMgr_` | `AbstractBufferMgr *` | |
+| `device_id_` | `int` | |

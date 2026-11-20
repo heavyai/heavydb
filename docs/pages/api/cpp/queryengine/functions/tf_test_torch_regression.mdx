@@ -1,0 +1,18 @@
+---
+title: tf_test_torch_regression
+description: ""
+---
+
+<CodeBlock links={{"TableFunctionManager": "../structs/tablefunctionmanager", "ColumnList": "../structs/columnlist", "TextEncodingNone": "../structs/textencodingnone", "Column": "../structs/column"}}>
+```cpp showLineNumbers={false}
+EXTENSION_NOINLINE int32_t tf_test_torch_regression(
+    TableFunctionManager &mgr,
+    const ColumnList<double> &features,
+    int32_t batch_size,
+    bool use_gpu,
+    bool save_model,
+    const TextEncodingNone &model_filename,
+    Column<double> &output
+)
+```
+</CodeBlock>

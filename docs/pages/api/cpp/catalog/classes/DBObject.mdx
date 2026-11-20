@@ -1,0 +1,320 @@
+---
+title: DBObject
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <DBObject.h>
+```
+
+---
+
+## Constructors
+
+### DBObject [#dbobject]
+
+<Tabs>
+<Tab title="Copy (with name and objectAndPermissionType)">
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+DBObject::DBObject(
+    const std::string &name,
+    const DBObjectType &objectAndPermissionType
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with name and objectAndPermissionType and subname)">
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+DBObject::DBObject(
+    const std::string &name,
+    const std::string &subname,
+    const DBObjectType &objectAndPermissionType
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 3">
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+DBObject::DBObject(
+    const int32_t id,
+    const DBObjectType &objectAndPermissionType
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 4">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"DBObject": "dbobject", "DBObjectKey": "../structs/dbobjectkey", "AccessPrivileges": "../structs/accessprivileges"}}>
+```cpp showLineNumbers={false}
+DBObject::DBObject(
+    DBObjectKey key,
+    AccessPrivileges privs,
+    int32_t owner
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with object)">
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+DBObject::DBObject(
+    const DBObject &object
+)
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Copy (with name and type and key and privs and owner)">
+
+<Badge intent="note" minimal>inline</Badge>
+
+<CodeBlock links={{"DBObject": "dbobject", "DBObjectKey": "../structs/dbobjectkey", "AccessPrivileges": "../structs/accessprivileges"}}>
+```cpp showLineNumbers={false}
+DBObject::DBObject(
+    const std::string &name,
+    DBObjectType type,
+    DBObjectKey key,
+    AccessPrivileges privs,
+    int32_t owner
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### Destructor [#destructor]
+
+### ~DBObject
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+DBObject::~DBObject()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### setObjectType [#setobjecttype]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::setObjectType(
+    const DBObjectType &objectType
+)
+```
+</CodeBlock>
+
+### setName [#setname]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::setName(
+    std::string name
+)
+```
+</CodeBlock>
+
+### getName [#getname]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+std::string DBObject::getName() const
+```
+</CodeBlock>
+
+### getType [#gettype]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+DBObjectType DBObject::getType() const
+```
+</CodeBlock>
+
+### getObjectKey [#getobjectkey]
+
+<CodeBlock links={{"DBObject": "dbobject", "DBObjectKey": "../structs/dbobjectkey"}}>
+```cpp showLineNumbers={false}
+DBObjectKey DBObject::getObjectKey() const
+```
+</CodeBlock>
+
+### setObjectKey [#setobjectkey]
+
+<CodeBlock links={{"DBObject": "dbobject", "DBObjectKey": "../structs/dbobjectkey"}}>
+```cpp showLineNumbers={false}
+void DBObject::setObjectKey(
+    const DBObjectKey &objectKey
+)
+```
+</CodeBlock>
+
+### getPrivileges [#getprivileges]
+
+<CodeBlock links={{"DBObject": "dbobject", "AccessPrivileges": "../structs/accessprivileges"}}>
+```cpp showLineNumbers={false}
+const AccessPrivileges & DBObject::getPrivileges() const
+```
+</CodeBlock>
+
+### setPrivileges [#setprivileges]
+
+<CodeBlock links={{"DBObject": "dbobject", "AccessPrivileges": "../structs/accessprivileges"}}>
+```cpp showLineNumbers={false}
+void DBObject::setPrivileges(
+    const AccessPrivileges &privs
+)
+```
+</CodeBlock>
+
+### resetPrivileges [#resetprivileges]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::resetPrivileges()
+```
+</CodeBlock>
+
+### copyPrivileges [#copyprivileges]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::copyPrivileges(
+    const DBObject &object
+)
+```
+</CodeBlock>
+
+### updatePrivileges [#updateprivileges]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::updatePrivileges(
+    const DBObject &object
+)
+```
+</CodeBlock>
+
+### grantPrivileges [#grantprivileges]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::grantPrivileges(
+    const DBObject &object
+)
+```
+</CodeBlock>
+
+### revokePrivileges [#revokeprivileges]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::revokePrivileges(
+    const DBObject &object
+)
+```
+</CodeBlock>
+
+### setPermissionType [#setpermissiontype]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::setPermissionType(
+    const DBObjectType &permissionType
+)
+```
+</CodeBlock>
+
+### getOwner [#getowner]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+int32_t DBObject::getOwner() const
+```
+</CodeBlock>
+
+### setOwner [#setowner]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::setOwner(
+    int32_t userId
+)
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+std::vector<std::string> DBObject::toString() const
+```
+</CodeBlock>
+
+### loadKey [#loadkey]
+
+<Tabs>
+<Tab title="Overload 1">
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+void DBObject::loadKey()
+```
+</CodeBlock>
+
+</Tab>
+<Tab title="Overload 2">
+
+<CodeBlock links={{"DBObject": "dbobject", "Catalog": "../catalognamespace/classes/catalog"}}>
+```cpp showLineNumbers={false}
+void DBObject::loadKey(
+    const Catalog_Namespace::Catalog &catalog
+)
+```
+</CodeBlock>
+
+</Tab>
+</Tabs>
+
+### valid [#valid]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+bool DBObject::valid() const
+```
+</CodeBlock>
+
+### dump [#dump]
+
+<CodeBlock links={{"DBObject": "dbobject"}}>
+```cpp showLineNumbers={false}
+std::string DBObject::dump() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `objectName_` | `std::string` | |
+| `objectType_` | `DBObjectType` | |
+| `objectKey_` | `DBObjectKey` | |
+| `objectPrivs_` | `AccessPrivileges` | |
+| `ownerId_` | `int32_t` | |

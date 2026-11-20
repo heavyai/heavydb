@@ -1,0 +1,74 @@
+---
+title: Parser::ColumnDef
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Parser/ParserNode.h>
+```
+
+**Inherits from:** `Parser::TableElement` (public)
+
+---
+
+## Constructors
+
+### ColumnDef [#columndef]
+
+<CodeBlock links={{"ColumnDef": "columndef", "SQLType": "sqltype", "CompressDef": "compressdef", "ColumnConstraintDef": "columnconstraintdef"}}>
+```cpp showLineNumbers={false}
+Parser::ColumnDef::ColumnDef(
+    std::string *c,
+    SQLType *t,
+    CompressDef *cp,
+    ColumnConstraintDef *cc
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_column_name [#getcolumnname]
+
+<CodeBlock links={{"ColumnDef": "columndef"}}>
+```cpp showLineNumbers={false}
+const std::string * Parser::ColumnDef::get_column_name() const
+```
+</CodeBlock>
+
+### get_column_type [#getcolumntype]
+
+<CodeBlock links={{"ColumnDef": "columndef", "SQLType": "sqltype"}}>
+```cpp showLineNumbers={false}
+SQLType * Parser::ColumnDef::get_column_type() const
+```
+</CodeBlock>
+
+### get_compression [#getcompression]
+
+<CodeBlock links={{"ColumnDef": "columndef", "CompressDef": "compressdef"}}>
+```cpp showLineNumbers={false}
+const CompressDef * Parser::ColumnDef::get_compression() const
+```
+</CodeBlock>
+
+### get_column_constraint [#getcolumnconstraint]
+
+<CodeBlock links={{"ColumnDef": "columndef", "ColumnConstraintDef": "columnconstraintdef"}}>
+```cpp showLineNumbers={false}
+const ColumnConstraintDef * Parser::ColumnDef::get_column_constraint() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `column_name_` | `std::unique_ptr< std::string >` | |
+| `column_type_` | `std::unique_ptr< SQLType >` | |
+| `compression_` | `std::unique_ptr< CompressDef >` | |
+| `column_constraint_` | `std::unique_ptr< ColumnConstraintDef >` | |

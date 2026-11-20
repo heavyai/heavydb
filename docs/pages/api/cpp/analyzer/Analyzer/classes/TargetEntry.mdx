@@ -1,0 +1,116 @@
+---
+title: Analyzer::TargetEntry
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+---
+
+## Constructors
+
+### TargetEntry [#targetentry]
+
+<CodeBlock links={{"TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Analyzer::TargetEntry::TargetEntry(
+    const std::string &n,
+    std::shared_ptr<Analyzer::Expr> e,
+    bool u
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~TargetEntry
+
+<CodeBlock links={{"TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+virtual Analyzer::TargetEntry::~TargetEntry()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### get_resname [#getresname]
+
+<CodeBlock links={{"TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+const std::string & Analyzer::TargetEntry::get_resname() const
+```
+</CodeBlock>
+
+### set_resname [#setresname]
+
+<CodeBlock links={{"TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+void Analyzer::TargetEntry::set_resname(
+    const std::string &name
+)
+```
+</CodeBlock>
+
+### get_expr [#getexpr]
+
+<CodeBlock links={{"TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+Expr * Analyzer::TargetEntry::get_expr() const
+```
+</CodeBlock>
+
+### get_own_expr [#getownexpr]
+
+<CodeBlock links={{"TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Expr> Analyzer::TargetEntry::get_own_expr() const
+```
+</CodeBlock>
+
+### set_expr [#setexpr]
+
+<CodeBlock links={{"TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::TargetEntry::set_expr(
+    std::shared_ptr<Analyzer::Expr> e
+)
+```
+</CodeBlock>
+
+### get_unnest [#getunnest]
+
+<CodeBlock links={{"TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::TargetEntry::get_unnest() const
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::TargetEntry::toString() const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"TargetEntry": "targetentry"}}>
+```cpp showLineNumbers={false}
+void Analyzer::TargetEntry::print() const
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `resname` | `std::string` | |
+| `expr` | `std::shared_ptr< Analyzer::Expr >` | |
+| `unnest` | `bool` | |

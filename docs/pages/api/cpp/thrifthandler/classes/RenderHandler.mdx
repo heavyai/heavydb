@@ -1,0 +1,149 @@
+---
+title: RenderHandler
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <RenderHandler.h>
+```
+
+---
+
+## Constructors
+
+### RenderHandler [#renderhandler]
+
+<CodeBlock links={{"RenderHandler": "renderhandler", "DBHandler": "dbhandler"}}>
+```cpp showLineNumbers={false}
+RenderHandler::RenderHandler(
+    DBHandler *db_handler,
+    gfx::GfxContext *gfx_context,
+    const size_t render_mem_bytes,
+    const size_t max_conncurrent_render_sessions,
+    const bool compositor_use_last_gpu,
+    const bool enable_auto_clear_render_mem,
+    const int render_oom_retry_threshold,
+    const bool renderer_use_parallel_executors,
+    const SystemParameters system_parameters,
+    const bool renderer_enable_slab_allocation
+)
+```
+</CodeBlock>
+
+### Destructor [#destructor]
+
+### ~RenderHandler
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+RenderHandler::~RenderHandler()
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### disconnect [#disconnect]
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+void RenderHandler::disconnect(
+    const TSessionId &session
+)
+```
+</CodeBlock>
+
+### render_vega [#rendervega]
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+void RenderHandler::render_vega(
+    TRenderResult &_return,
+    const std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
+    const int64_t widget_id,
+    std::string &&vega_json,
+    const int32_t compression_level,
+    const std::string &nonce
+)
+```
+</CodeBlock>
+
+### get_result_row_for_pixel [#getresultrowforpixel]
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+void RenderHandler::get_result_row_for_pixel(
+    TPixelTableRowResult &_return,
+    const std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
+    const int64_t widget_id,
+    const TPixel &pixel,
+    const std::map<std::string, std::vector<std::string>> &table_col_names,
+    const bool column_format,
+    const int32_t pixelRadius,
+    const std::string &nonce
+)
+```
+</CodeBlock>
+
+### clear_gpu_memory [#cleargpumemory]
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+void RenderHandler::clear_gpu_memory()
+```
+</CodeBlock>
+
+### clear_cpu_memory [#clearcpumemory]
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+void RenderHandler::clear_cpu_memory()
+```
+</CodeBlock>
+
+### get_renderer_status_json [#getrendererstatusjson]
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+std::string RenderHandler::get_renderer_status_json() const
+```
+</CodeBlock>
+
+### validate_renderer_status_json [#validaterendererstatusjson]
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+bool RenderHandler::validate_renderer_status_json(
+    const std::string &other_renderer_status_json
+) const
+```
+</CodeBlock>
+
+### shutdown [#shutdown]
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+void RenderHandler::shutdown()
+```
+</CodeBlock>
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `impl_` | `std::unique_ptr< Impl >` | |
+
+---
+
+## Inner classes
+
+### Impl
+
+<CodeBlock links={{"RenderHandler": "renderhandler"}}>
+```cpp showLineNumbers={false}
+class RenderHandler::Impl
+```
+</CodeBlock>

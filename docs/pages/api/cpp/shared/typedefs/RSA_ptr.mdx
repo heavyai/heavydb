@@ -1,0 +1,8 @@
+---
+title: RSA_ptr
+description: ""
+---
+
+```cpp showLineNumbers={false}
+using RSA_ptr = std::unique_ptr<RSA, std::function<void(RSA *)>>;
+```

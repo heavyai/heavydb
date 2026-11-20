@@ -1,0 +1,16 @@
+---
+title: Fragmenter_Namespace::get_chunks
+description: ""
+---
+
+<CodeBlock links={{"FragmentInfo": "../classes/fragmentinfo"}}>
+```cpp showLineNumbers={false}
+static int Fragmenter_Namespace::get_chunks(
+    const Catalog_Namespace::Catalog *catalog,
+    const TableDescriptor *td,
+    const FragmentInfo &fragment,
+    const Data_Namespace::MemoryLevel memory_level,
+    std::vector<std::shared_ptr<Chunk_NS::Chunk>> &chunks
+)
+```
+</CodeBlock>

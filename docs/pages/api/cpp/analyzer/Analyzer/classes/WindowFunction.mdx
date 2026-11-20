@@ -1,0 +1,415 @@
+---
+title: Analyzer::WindowFunction
+description: ""
+---
+
+```cpp showLineNumbers={false}
+#include <Analyzer/Analyzer.h>
+```
+
+**Inherits from:** `Analyzer::Expr` (public)
+
+---
+
+## Constructors
+
+### WindowFunction [#windowfunction]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr", "OrderEntry": "../structs/orderentry"}}>
+```cpp showLineNumbers={false}
+Analyzer::WindowFunction::WindowFunction(
+    const SQLTypeInfo &ti,
+    const SqlWindowFunctionKind kind,
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &args,
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &partition_keys,
+    const std::vector<std::shared_ptr<Analyzer::Expr>> &order_keys,
+    const FrameBoundType frame_bound_type,
+    const std::shared_ptr<Expr> frame_start_bound,
+    const std::shared_ptr<Expr> frame_end_bound,
+    const std::vector<OrderEntry> &collation
+)
+```
+</CodeBlock>
+
+---
+
+## Methods
+
+### deep_copy [#deepcopy]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WindowFunction::deep_copy() const override
+```
+</CodeBlock>
+
+### operator== [#operator_eq]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFunction::operator==(
+    const Expr &rhs
+) const override
+```
+</CodeBlock>
+
+### toString [#tostring]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+std::string Analyzer::WindowFunction::toString() const override
+```
+</CodeBlock>
+
+### getKind [#getkind]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+SqlWindowFunctionKind Analyzer::WindowFunction::getKind() const
+```
+</CodeBlock>
+
+### getArgs [#getargs]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<Analyzer::Expr>> & Analyzer::WindowFunction::getArgs() const
+```
+</CodeBlock>
+
+### getPartitionKeys [#getpartitionkeys]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<Analyzer::Expr>> & Analyzer::WindowFunction::getPartitionKeys() const
+```
+</CodeBlock>
+
+### getOrderKeys [#getorderkeys]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const std::vector<std::shared_ptr<Analyzer::Expr>> & Analyzer::WindowFunction::getOrderKeys() const
+```
+</CodeBlock>
+
+### getFrameStartBound [#getframestartbound]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "WindowFrame": "windowframe"}}>
+```cpp showLineNumbers={false}
+const Analyzer::WindowFrame * Analyzer::WindowFunction::getFrameStartBound() const
+```
+</CodeBlock>
+
+### getFrameEndBound [#getframeendbound]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "WindowFrame": "windowframe"}}>
+```cpp showLineNumbers={false}
+const Analyzer::WindowFrame * Analyzer::WindowFunction::getFrameEndBound() const
+```
+</CodeBlock>
+
+### getCollation [#getcollation]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "OrderEntry": "../structs/orderentry"}}>
+```cpp showLineNumbers={false}
+const std::vector<OrderEntry> & Analyzer::WindowFunction::getCollation() const
+```
+</CodeBlock>
+
+### getFrameBoundType [#getframeboundtype]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+Analyzer::WindowFunction::FrameBoundType Analyzer::WindowFunction::getFrameBoundType() const
+```
+</CodeBlock>
+
+### hasRowModeFraming [#hasrowmodeframing]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFunction::hasRowModeFraming() const
+```
+</CodeBlock>
+
+### hasRangeModeFraming [#hasrangemodeframing]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFunction::hasRangeModeFraming() const
+```
+</CodeBlock>
+
+### hasFraming [#hasframing]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFunction::hasFraming() const
+```
+</CodeBlock>
+
+### hasAggregateTreeRequiredWindowFunc [#hasaggregatetreerequiredwindowfunc]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFunction::hasAggregateTreeRequiredWindowFunc() const
+```
+</CodeBlock>
+
+### isFrameNavigateWindowFunction [#isframenavigatewindowfunction]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFunction::isFrameNavigateWindowFunction() const
+```
+</CodeBlock>
+
+### isMissingValueFillingFunction [#ismissingvaluefillingfunction]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFunction::isMissingValueFillingFunction() const
+```
+</CodeBlock>
+
+### get_shared_ptr [#getsharedptr]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WindowFunction::get_shared_ptr()
+```
+</CodeBlock>
+
+### get_type_info [#gettypeinfo]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+const SQLTypeInfo & Analyzer::WindowFunction::get_type_info() const
+```
+</CodeBlock>
+
+### set_type_info [#settypeinfo]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WindowFunction::set_type_info(
+    const SQLTypeInfo &ti
+)
+```
+</CodeBlock>
+
+### get_contains_agg [#getcontainsagg]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+bool Analyzer::WindowFunction::get_contains_agg() const
+```
+</CodeBlock>
+
+### set_contains_agg [#setcontainsagg]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WindowFunction::set_contains_agg(
+    bool a
+)
+```
+</CodeBlock>
+
+### add_cast [#addcast]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WindowFunction::add_cast(
+    const SQLTypeInfo &new_type_info
+)
+```
+</CodeBlock>
+
+### check_group_by [#checkgroupby]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFunction::check_group_by(
+    const std::list<std::shared_ptr<Analyzer::Expr>> &groupby
+) const
+```
+</CodeBlock>
+
+### normalize_simple_predicate [#normalizesimplepredicate]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::WindowFunction::normalize_simple_predicate(
+    int &rte_idx
+) const
+```
+</CodeBlock>
+
+### group_predicates [#grouppredicates]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFunction::group_predicates(
+    std::list<const Expr *> &scan_predicates,
+    std::list<const Expr *> &join_predicates,
+    std::list<const Expr *> &const_predicates
+) const
+```
+</CodeBlock>
+
+### collect_rte_idx [#collectrteidx]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFunction::collect_rte_idx(
+    std::set<int> &rte_idx_set
+) const
+```
+</CodeBlock>
+
+### collect_column_var [#collectcolumnvar]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "ColumnVar": "columnvar", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFunction::collect_column_var(
+    std::set<const ColumnVar *, bool (*)(const ColumnVar *, const ColumnVar *)> &colvar_set,
+    bool include_agg
+) const
+```
+</CodeBlock>
+
+### get_num_column_vars [#getnumcolumnvars]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+size_t Analyzer::WindowFunction::get_num_column_vars(
+    const bool include_agg
+) const
+```
+</CodeBlock>
+
+### rewrite_with_targetlist [#rewritewithtargetlist]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::WindowFunction::rewrite_with_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_with_child_targetlist [#rewritewithchildtargetlist]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::WindowFunction::rewrite_with_child_targetlist(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### rewrite_agg_to_var [#rewriteaggtovar]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "TargetEntry": "targetentry", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual std::shared_ptr<Analyzer::Expr> Analyzer::WindowFunction::rewrite_agg_to_var(
+    const std::vector<std::shared_ptr<TargetEntry>> &tlist
+) const
+```
+</CodeBlock>
+
+### print [#print]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFunction::print() const
+```
+</CodeBlock>
+
+### add_unique [#addunique]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+void Analyzer::WindowFunction::add_unique(
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### find_expr [#findexpr]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFunction::find_expr(
+    std::function<bool(const Expr *)> f,
+    std::list<const Expr *> &expr_list
+) const
+```
+</CodeBlock>
+
+### decompress [#decompress]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+std::shared_ptr<Analyzer::Expr> Analyzer::WindowFunction::decompress()
+```
+</CodeBlock>
+
+### get_domain [#getdomain]
+
+<CodeBlock links={{"WindowFunction": "windowfunction", "Expr": "expr"}}>
+```cpp showLineNumbers={false}
+virtual void Analyzer::WindowFunction::get_domain(
+    DomainSet &domain_set
+) const
+```
+</CodeBlock>
+
+---
+
+## Static methods
+
+### isFramingAvailableWindowFunc [#isframingavailablewindowfunc]
+
+<CodeBlock links={{"WindowFunction": "windowfunction"}}>
+```cpp showLineNumbers={false}
+static bool Analyzer::WindowFunction::isFramingAvailableWindowFunc(
+    SqlWindowFunctionKind kind
+)
+```
+</CodeBlock>
+
+---
+
+## Types
+
+### FrameBoundType
+
+| Name | Value | Description |
+|---|---|---|
+| `NONE` | | |
+| `ROW` | | |
+| `RANGE` | | |
+
+---
+
+## Member variables
+
+| Name | Type | Description |
+|---|---|---|
+| `FRAMING_ALLOWED_WINDOW_FUNCS` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< SqlWindowFunctionKind, 14 >` | |
+| `AGGREGATION_TREE_REQUIRED_WINDOW_FUNCS_FOR_FRAMING` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< SqlWindowFunctionKind, 9 >` | |
+| `FILLING_FUNCS_USING_WINDOW` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< SqlWindowFunctionKind, 2 >` | |
+| `REQUIRE_HASH_TABLE_FOR_FRAMING` <Badge intent="note" minimal>static</Badge> <Badge intent="note" minimal>constexpr</Badge> | `std::array< SqlWindowFunctionKind, 7 >` | |
+| `kind_` | `const SqlWindowFunctionKind` | |
+| `args_` | `const std::vector< std::shared_ptr< Analyzer::Expr > >` | |
+| `partition_keys_` | `const std::vector< std::shared_ptr< Analyzer::Expr > >` | |
+| `order_keys_` | `const std::vector< std::shared_ptr< Analyzer::Expr > >` | |
+| `frame_bound_type_` | `const FrameBoundType` | |
+| `frame_start_bound_` | `const std::shared_ptr< Analyzer::Expr >` | |
+| `frame_end_bound_` | `const std::shared_ptr< Analyzer::Expr >` | |
+| `collation_` | `const std::vector< OrderEntry >` | |
+| `type_info` | `SQLTypeInfo` | |
+| `contains_agg` | `bool` | |
